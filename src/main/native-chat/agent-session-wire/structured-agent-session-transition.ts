@@ -1,10 +1,8 @@
 // Admit each event’s writes whole so producer state cannot advance after partial admission.
 // Execute against the latest fold in one queue turn; failure retains the written prefix and skips later steps.
 
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalStep } from '../agent-session-journal/journal-step-writer'

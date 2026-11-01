@@ -17,7 +17,7 @@ type Props = {
   // Absent: the browser settings pick the network.
   network?: MobileLocalBrowserNetwork
   fullScreen: boolean
-  onEnded: (ending: BridgeBrowserViewEnding) => void
+  onEnded: (ending: BridgeBrowserViewEnding, viewMode?: MobileBrowserViewMode) => void
   onRefused: (error: unknown) => void
 }
 
@@ -66,6 +66,7 @@ export function MobileBrowserPlacedLocal({
   onRefused
 }: Props): React.JSX.Element {
   const ref = useRef<View>(null)
+  const placementId = useRef<string | null>(null)
   const callbacks = useRef({ onEnded, onRefused })
   callbacks.current = { onEnded, onRefused }
   // The tab's first page and layout only: the native view follows its own navigation from there. Older shells
@@ -85,10 +86,11 @@ export function MobileBrowserPlacedLocal({
     let active = true
     let frame = measure(element)
     const id = `placed-${++nextPlacementId}`
+    placementId.current = id
     void placed.show({ id, worktreeId, ...opening.current, frame }).then(
-      (ending) => {
+      ({ ended, viewMode: leftIn }) => {
         if (active) {
-          callbacks.current.onEnded(ending)
+          callbacks.current.onEnded(ended ?? 'hidden', leftIn)
         }
       },
       (error: unknown) => {
@@ -118,6 +120,13 @@ export function MobileBrowserPlacedLocal({
       void placed.remove(id).catch(() => {})
     }
   }, [placed, worktreeId])
+
+  // The view follows its own navigation, so only the shell can tell whether this address still applies.
+  useEffect(() => {
+    if (placementId.current && url !== opening.current.url) {
+      void placed.adopt(placementId.current, url).catch(() => {})
+    }
+  }, [placed, url])
 
   return <View ref={ref} style={mobileBrowserPaneStyles.root} />
 }

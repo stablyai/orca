@@ -3,7 +3,7 @@ import {
   sweepAgentSessionAttachments,
   UNCLAIMED_ATTACHMENT_MAX_AGE_MS
 } from '../agent-session-attachments/agent-session-attachment-sweep'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,10 +11,12 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalThreadGoal,
+  AgentJournalMessageItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
   AgentJournalItemIdentity,
-  AgentJournalMessageItem,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   closeTestJournalHostDatabase,

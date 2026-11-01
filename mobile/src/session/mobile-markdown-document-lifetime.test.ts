@@ -58,6 +58,7 @@ function mountDocuments(readReply: () => Promise<RpcResponse>) {
         closedTabTombstonesRef: { current: new Map() },
         activeSessionTabIdRef: { current: null },
         selectedSessionTabIdRef: { current: null },
+        pendingSelectionRef: { current: null },
         activeSessionTabTypeRef: { current: null },
         activeHandleRef: { current: null },
         setActiveSessionTabId: () => {},

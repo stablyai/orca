@@ -4,9 +4,9 @@ import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
-import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import type { AgentSessionRefusalReason } from '../../../../shared/agent-session-refusal-details'
+import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentSessionRefusalReason } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import { useAppStore } from '@/store'
 import { MessageRow } from './NativeChatMessageRow'
 import {

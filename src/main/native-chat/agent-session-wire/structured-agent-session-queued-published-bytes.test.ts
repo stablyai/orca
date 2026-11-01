@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { agentSessionRefusalNotice } from '../../../shared/agent-session-refusal-notice'
+import { agentSessionRefusalNotice } from '../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { MAX_PROMPT_BYTES } from '../../../shared/rpc-contract/structured-agent-session-params'
 import {
   QUEUED_MESSAGES_PERSON_RESERVE_BYTES,

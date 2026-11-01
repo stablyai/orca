@@ -1,4 +1,4 @@
-import { agentArgOptionTokens } from './agent-session-option-agent-args'
+import { agentArgOptionTokens } from './agent-session/options/agent-session-option-agent-args'
 import { isPrintModeHeadlessOneShotCommand, optionName } from './print-mode-headless-command'
 
 const NON_INTERACTIVE_FLAGS = new Set(['--serve', '--acp', '--bg', '--background'])

@@ -4,12 +4,12 @@ import {
   agentSessionFailureFact,
   providerDiagnostic,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
-} from '../../shared/agent-session-failure-words'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun

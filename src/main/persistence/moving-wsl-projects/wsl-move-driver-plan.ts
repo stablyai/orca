@@ -12,7 +12,7 @@ import {
   WSL_MOVE_CUTOVER_PHASES,
   wslMoveJournalKey
 } from '../../../shared/wsl-move/wsl-move-cutover'
-import { wslHostsGateOpen } from '../../wsl/wsl-host-gate'
+import { wslHostsAcceptNewWork } from '../../wsl/wsl-host-gate'
 import { listWslMoveCutoverChain } from './wsl-move-cutover-journal'
 import type { WslMovePlan } from './wsl-move-delta-plan'
 import { planWslMove } from './wsl-move-delta-plan'
@@ -195,7 +195,8 @@ export async function prepareWslMove(
   /** Settle an earlier move of the distro an interruption left short of commit; false leaves it. */
   settleInterrupted: WslMoveInterruptedSettle | false = false
 ): Promise<WslMovePrepared | WslMoveRefusal> {
-  if (!wslHostsGateOpen()) {
+  // Every new move, dialog or automatic, stops once a block is learned, even mid-run.
+  if (!wslHostsAcceptNewWork()) {
     return refusal('wsl_move_unavailable')
   }
   let host: WslMoveHost | null

@@ -177,6 +177,9 @@ export function registerRuntimeClientIpcBridge(
     if (event.type === 'sidebarInputsChanged') {
       return
     }
+    if (event.type !== 'activateWorktree') {
+      return
+    }
     // Older hosts broadcast local/CLI activation without an address; that is not this viewer's intent.
     if (!event.navigation || !navigationTargetsClients(event.navigation)) {
       return

@@ -7,7 +7,7 @@ import Animated, {
   useSharedValue,
   withTiming
 } from 'react-native-reanimated'
-import { colors, radii } from '../theme/mobile-theme'
+import { colors, feedback, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { triggerSelection } from '../platform/haptics'
@@ -28,6 +28,8 @@ const THUMB = 27
 const INSET = 2
 const TRAVEL = TRACK_WIDTH - THUMB - INSET * 2
 const TOGGLE_MS = 260
+// Reaches a 44 pt target without making the row taller than its siblings.
+const HIT_SLOP = { top: (44 - TRACK_HEIGHT) / 2, bottom: (44 - TRACK_HEIGHT) / 2 } as const
 
 /**
  * The app's switch, drawn rather than native so it looks the same on iOS, Android and the page:
@@ -77,6 +79,7 @@ export function MobileSwitch({
       accessibilityState={{ checked: value, disabled }}
       aria-checked={value}
       testID={testID}
+      hitSlop={HIT_SLOP}
       style={[styles.touch, disabled && styles.disabled]}
     >
       <Animated.View style={[styles.track, trackStyle]}>
@@ -87,8 +90,8 @@ export function MobileSwitch({
 }
 
 const styles = themedStyleSheet(() => ({
-  touch: { minHeight: 44, justifyContent: 'center', flexShrink: 0 },
-  disabled: { opacity: 0.4 },
+  touch: { justifyContent: 'center', flexShrink: 0 },
+  disabled: { opacity: feedback.disabledOpacity },
   track: {
     width: TRACK_WIDTH,
     height: TRACK_HEIGHT,

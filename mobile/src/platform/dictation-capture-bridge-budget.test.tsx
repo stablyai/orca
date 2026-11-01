@@ -14,10 +14,11 @@ vi.mock('../transport/host-client-hooks', () => ({
 }))
 
 import { RpcClientProvider } from '../transport/client-context.web'
-import { BRIDGE_MAX_PENDING_REQUESTS } from '../mobile-web-shell/bridge/bridge-caps'
+import { BRIDGE_MAX_PENDING_DESKTOP_REQUESTS } from '../mobile-web-shell/bridge/bridge-caps'
 import { useNativeVerbs, type NativeVerbs } from '../mobile-web-shell/bridge/use-native-verbs'
 import {
   createFakeBridgePortPair,
+  fillFreeDesktopSlots,
   type BridgePortPair
 } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { MobileDictationPendingAudioBudget } from '../hooks/mobile-dictation-pending-audio-budget'
@@ -133,7 +134,10 @@ async function runDictation(
   }
   const framesToShell = pair.toShell.length - framesBefore.toShell
   const framesToPage = pair.toPage.length - framesBefore.toPage
-  const freeSlots = await probeFreeSlots(pair)
+  // The probe below fills every desktop slot, so end()'s final forward is refused by design; count only session refusals.
+  const sessionRefusals = refusals.length
+  // Dictation’s own count alone cannot prove how much capacity others retain.
+  const freeSlots = await fillFreeDesktopSlots(pair)
   capture.end()
   await pair.flush()
   return {
@@ -144,26 +148,8 @@ async function runDictation(
     chunkRequests: pair.rpc.requests.filter(
       (request) => request.method === 'speech.dictation.chunk'
     ).length,
-    refusals: refusals.length
+    refusals: sessionRefusals
   }
-}
-
-// Fill the remaining window until refusal; dictation’s own count alone cannot prove how much capacity others retain.
-async function probeFreeSlots(pair: BridgePortPair): Promise<number> {
-  let free = 0
-  for (let attempt = 0; attempt <= BRIDGE_MAX_PENDING_REQUESTS; attempt += 1) {
-    let refused = false
-    const pending = pair.client.sendRequest('worktree.list').catch(() => {
-      refused = true
-    })
-    await pair.flush()
-    if (refused) {
-      await pending
-      return free
-    }
-    free += 1
-  }
-  return free
 }
 
 const held: { verbs: NativeVerbs | null } = { verbs: null }
@@ -208,8 +194,8 @@ describe('what one dictation spends of the bridge', () => {
     const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
     await pair.flush()
     const spent = await runDictation(pair, shell, DICTATION_NATIVE_EVENT_INTERVAL_MS)
-    // 31.25 events/second over a two-second link leaves almost no room for other requests.
-    expect(spent.peakInFlight).toBeGreaterThanOrEqual(BRIDGE_MAX_PENDING_REQUESTS - 2)
+    // 31.25 events/second over a two-second link leaves almost no room for other desktop requests.
+    expect(spent.peakInFlight).toBeGreaterThanOrEqual(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS - 2)
     expect(spent.freeSlots).toBeLessThanOrEqual(2)
   }, 60_000)
 
@@ -221,7 +207,7 @@ describe('what one dictation spends of the bridge', () => {
     // Two chunks/second over the same link holds four requests at unchanged audio throughput.
     expect(spent.peakInFlight).toBeLessThanOrEqual(6)
     expect(spent.refusals).toBe(0)
-    expect(spent.freeSlots).toBeGreaterThanOrEqual(BRIDGE_MAX_PENDING_REQUESTS - 8)
+    expect(spent.freeSlots).toBeGreaterThanOrEqual(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS - 8)
     // Ten seconds sends 19 reads and 19 forwards; four forwarded replies remain in flight, keeping total bridge traffic under four frames/second.
     expect({ toShell: spent.framesToShell, toPage: spent.framesToPage }).toEqual({
       toShell: 38,

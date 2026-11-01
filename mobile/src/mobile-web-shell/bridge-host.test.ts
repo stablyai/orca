@@ -11,7 +11,7 @@ import {
 } from './bridge-host-test-fakes'
 import {
   BRIDGE_MAX_MESSAGE_BYTES,
-  BRIDGE_MAX_PENDING_REQUESTS,
+  BRIDGE_MAX_PENDING_DESKTOP_REQUESTS,
   BRIDGE_MAX_REPLY_BYTES,
   BRIDGE_MAX_SUBSCRIPTIONS
 } from './bridge/bridge-caps'
@@ -125,23 +125,27 @@ describe('requests', () => {
 
   it('admits exactly the in-flight cap and refuses the next', () => {
     const bridge = harness({ ready: true })
-    for (let index = 0; index < BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
+    for (let index = 0; index < BRIDGE_MAX_PENDING_DESKTOP_REQUESTS; index += 1) {
       bridge.host.receive(
         clientFrame({ type: 'request', id: bridgeId(index), method: 'status.get' })
       )
     }
-    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS)
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS)
     expect(bridge.frames().filter((frame) => frame.type !== 'init')).toEqual([])
     bridge.host.receive(
-      clientFrame({ type: 'request', id: bridgeId(BRIDGE_MAX_PENDING_REQUESTS), method: 'x.get' })
+      clientFrame({
+        type: 'request',
+        id: bridgeId(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS),
+        method: 'x.get'
+      })
     )
-    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS)
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS)
     expect(bridge.last().type).toBe('error')
   })
 
   it('reopens a slot when a request settles', async () => {
     const bridge = harness({ ready: true })
-    for (let index = 0; index < BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
+    for (let index = 0; index < BRIDGE_MAX_PENDING_DESKTOP_REQUESTS; index += 1) {
       bridge.host.receive(
         clientFrame({ type: 'request', id: bridgeId(index), method: 'status.get' })
       )
@@ -149,37 +153,41 @@ describe('requests', () => {
     bridge.client.requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
     await flushBridge()
     bridge.host.receive(
-      clientFrame({ type: 'request', id: bridgeId(BRIDGE_MAX_PENDING_REQUESTS), method: 'x.get' })
+      clientFrame({
+        type: 'request',
+        id: bridgeId(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS),
+        method: 'x.get'
+      })
     )
-    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS + 1)
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS + 1)
   })
 
   it('holds the cap against a page that closes between batches', async () => {
     const bridge = harness({ ready: true })
     const fill = (offset: number): void => {
-      for (let index = 0; index < BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
+      for (let index = 0; index < BRIDGE_MAX_PENDING_DESKTOP_REQUESTS; index += 1) {
         bridge.host.receive(
           clientFrame({ type: 'request', id: bridgeId(offset + index), method: 'status.get' })
         )
       }
     }
     fill(0)
-    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS)
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS)
     expect(bridge.frames().filter((frame) => frame.type !== 'init')).toEqual([])
-    // Desktop calls survive page close because sendRequest has no cancel; keep their 64 slots occupied instead of resetting the cap.
+    // Desktop calls survive page close because sendRequest has no cancel; keep their slots occupied instead of resetting the cap.
     bridge.host.receive(clientFrame({ type: 'close' }))
     bridge.host.receive(clientFrame({ type: 'ready' }))
     fill(100)
-    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS)
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS)
     expect(bridge.frames().filter((frame) => frame.type === 'error')).toHaveLength(
-      BRIDGE_MAX_PENDING_REQUESTS
+      BRIDGE_MAX_PENDING_DESKTOP_REQUESTS
     )
     for (const request of bridge.client.requests) {
       request.resolve(rpcSuccess('wire-1', 'ok'))
     }
     await flushBridge()
     fill(200)
-    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS * 2)
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS * 2)
   })
 
   it('stops answering a cancelled request without pretending the desktop stopped running it', async () => {

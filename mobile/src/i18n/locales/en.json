@@ -152,7 +152,8 @@
       "dictationMode": "Dictation Mode",
       "dictationModeDescription": "Toggle: press once to start, again to stop. Hold: dictate while held.",
       "speechModelHeading": "SPEECH MODEL",
-      "speechModel": "Speech Model"
+      "speechModel": "Speech Model",
+      "loading": "Loading voice settings…"
     }
   },
   "common": {
@@ -173,7 +174,24 @@
     "close": "Close",
     "edit": "Edit",
     "refresh": "Refresh",
-    "open": "Open"
+    "open": "Open",
+    "hideDetails": "Hide details",
+    "details": "Details",
+    "loadError": {
+      "title": "Unable to Load",
+      "generic": "Something went wrong. Try again.",
+      "unreachable": "Couldn't reach the desktop. Try again."
+    },
+    "offline": {
+      "waitingFor": "Waiting for {{host}}",
+      "waiting": "Waiting for desktop",
+      "message": "Check that your computer is awake and Orca is running.",
+      "reconnect": "Reconnect"
+    },
+    "noMatch": {
+      "title": "No matches",
+      "clearSearch": "Clear search"
+    }
   },
   "host": {
     "edit": {
@@ -282,7 +300,8 @@
       "connecting": "Connecting to host…",
       "loadingAccounts": "Loading accounts…",
       "manageAccountsHint": "Add or re-authenticate accounts from desktop Settings → Accounts.",
-      "useReset": "Use reset"
+      "useReset": "Use reset",
+      "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts."
     }
   },
   "agentHistory": {
@@ -308,7 +327,6 @@
       "refreshSessions": "Refresh agent sessions",
       "unavailable": "Agent Session History Unavailable",
       "updateHost": "Update Orca on this host to browse agent session history.",
-      "loadFailed": "Unable to Load",
       "placeholder": "Search sessions, repo:, path:",
       "skipped_one": "{{count}} transcript skipped",
       "skipped_other": "{{count}} transcripts skipped",
@@ -318,9 +336,7 @@
       "hideDetails": "Hide details",
       "showDetails": "Show details",
       "dismissNotice": "Dismiss",
-      "loading": "Loading agent sessions…",
-      "noMatches": "No matches",
-      "clearSearch": "Clear search"
+      "loading": "Loading agent sessions…"
     },
     "resumeTarget": {
       "runtimeUnavailable": "Resume from history is not available in runtime-hosted workspaces.",
@@ -338,6 +354,9 @@
     "worktreeNavigationActions": {
       "sourceControl": "Source Control",
       "agentSessionHistory": "Agent Session History"
+    },
+    "resume": {
+      "hostConnectionChanged": "Host connection changed. Retry resume."
     }
   },
   "diagnostics": {
@@ -578,7 +597,9 @@
       "pin": "Pin",
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
-      "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later."
+      "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
+      "deleteFailed": "Failed to delete \"{{name}}\"",
+      "deleteAnyway": "Delete Anyway"
     },
     "workspaceDetailsSheet": {
       "merged": "Merged",
@@ -669,6 +690,9 @@
       "activeFilters_other": "Workspace options ({{count}} filters active)",
       "searchWorkspaces": "Search workspaces",
       "newWorkspace": "New workspace"
+    },
+    "identity": {
+      "hostNotFound": "Host not found"
     }
   },
   "webShell": {
@@ -812,12 +836,13 @@
     "hostWorkspaceListStates": {
       "checkHost": "Check that your computer is awake and Orca is running",
       "loadFailed": "Could not load workspaces from this host",
-      "retrying": "worktree.ps failed ({{error}}) — retrying automatically",
       "noMatches": "No matching workspaces",
       "noFilterMatches": "No workspaces match filters",
       "empty": "No workspaces",
       "reopen": "Reopen to update",
-      "reopenDetail": "This host lists workspaces in a way this page does not know yet."
+      "reopenDetail": "This host lists workspaces in a way this page does not know yet.",
+      "loading": "Loading workspaces…",
+      "retryingAutomatically": "Retrying automatically."
     },
     "workspaceListSections": {
       "pinned": "Pinned",
@@ -937,7 +962,7 @@
       "tooLargeMessage": "This diff is too large for the mobile preview.",
       "deletedMessage": "This file was deleted. Add a file note or mark it reviewed.",
       "selectFile": "Select a file to review.",
-      "retryLabel": "Retry loading review"
+      "showAll": "Show all"
     },
     "diffReviewDrawers": {
       "discardTitle": "Discard File",
@@ -1059,8 +1084,6 @@
     },
     "prSidebar": {
       "loading": "Loading pull request…",
-      "loadFailed": "Something went wrong.",
-      "retryLoading": "Retry loading pull request",
       "notPermitted": "Not permitted — your GitHub account is not connected."
     },
     "richMarkdownEditor": {
@@ -1123,7 +1146,8 @@
       "connectTarget": "Connect target",
       "options": "Options",
       "createWorkspace": "Create workspace",
-      "startFrom": "Start from"
+      "startFrom": "Start from",
+      "loadingProjects": "Loading projects…"
     },
     "newWorktreeModal": {
       "remoteRepository": "Remote repository"
@@ -1165,7 +1189,12 @@
       "scriptLabel": "Setup script",
       "runHooks": "Run hooks",
       "alwaysTrustAndRun": "Always trust and run",
-      "dontRun": "Don't run"
+      "dontRun": "Don't run",
+      "runArchiveTitle": "Run archive script from {{repoName}}?",
+      "archiveScriptChangedTitle": "{{repoName}}'s archive script changed",
+      "archiveDescription": "This repository's orca.yaml runs before the workspace is deleted. Only run it if you trust this repository.",
+      "archiveScriptLabel": "Archive script",
+      "newArchiveScriptLabel": "New archive script"
     },
     "smartWorkspaceAdvancedFields": {
       "name": "Name",
@@ -1301,6 +1330,16 @@
     },
     "sheetHeader": {
       "close": "Close"
+    },
+    "svgPreview": {
+      "drawFailed": "Unable to draw this SVG",
+      "label": "{{title}} drawing",
+      "previewDrawing": "Preview drawing",
+      "viewSource": "View SVG source"
+    },
+    "mermaidDiagram": {
+      "label": "Mermaid diagram",
+      "expand": "Expand diagram"
     }
   },
   "pullRequest": {
@@ -1604,6 +1643,13 @@
       "deliveryUnconfirmed": "Delivery unconfirmed — check page before retrying",
       "dialogAnswerFailed": "That answer did not reach the page."
     },
+    "stream": {
+      "updateApp": "Update the Orca app to stream browser tabs here.",
+      "updateDesktop": "Update desktop Orca to stream browser tabs on mobile.",
+      "checking": "Checking desktop browser streaming support.",
+      "pageUnavailable": "Browser page is not available yet.",
+      "timedOut": "Browser stream timed out."
+    },
     "localPane": {
       "streamFromHost": "Stream from the host instead",
       "loadFailed": "Page did not load: {{error}}",
@@ -1632,9 +1678,9 @@
       "truncatedList": "{{worktreeLabel}} - Showing first 5000",
       "emptyState": "No files found",
       "filterPlaceholder": "Filter files",
-      "noMatches": "No matches",
       "noMatchesHint": "Only folders you have opened are searched.",
-      "clearFilter": "Clear filter"
+      "clearFilter": "Clear filter",
+      "loading": "Loading files…"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
@@ -1744,7 +1790,8 @@
       "copySource": "Copy Markdown source",
       "copyLoaded": "Copy loaded",
       "copyPathLabel": "Copy Markdown path",
-      "copyPath": "Copy path"
+      "copyPath": "Copy path",
+      "loading": "Loading document…"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "Collapse"
@@ -1839,7 +1886,8 @@
       "sendReviewNotes": "Send review notes to AI",
       "send": "Send",
       "imageLabel": "{{title}} image",
-      "previewLabel": "{{title}} preview"
+      "previewLabel": "{{title}} preview",
+      "loading": "Loading file…"
     },
     "header": {
       "workspaceDetailsHint": "Shows the full workspace name and where it is",
@@ -2565,6 +2613,37 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "Layout could not be saved",
       "saveFailedMessage": "This layout applies for now. Choose it again to retry saving."
+    },
+    "structuredOpen": {
+      "goneGeneric": "Agent's chat is no longer on this host, so it cannot be reopened here.",
+      "unknownGeneric": "Agent's chat could not be found on this host. Reconnect to its computer and try again.",
+      "unsupportedGeneric": "Agent's chat can't be reopened until Orca is updated.",
+      "unreachableGeneric": "Agent's chat is not available yet. Retry in a moment.",
+      "gone": "{{agent}}'s chat is no longer on this host, so it cannot be reopened here.",
+      "unknown": "{{agent}}'s chat could not be found on this host. Reconnect to its computer and try again.",
+      "unsupported": "{{agent}}'s chat can't be reopened until Orca is updated.",
+      "unreachable": "{{agent}}'s chat is not available yet. Retry in a moment.",
+      "paneUnavailable": "Agent's pane is no longer available."
+    },
+    "nativeChatView": {
+      "loading": "Loading conversation…"
+    },
+    "contentState": {
+      "connectingTo": "Connecting to {{host}}…",
+      "connecting": "Connecting…",
+      "tabsStalled": "Tabs are taking longer than expected"
+    },
+    "presentation": {
+      "loadingTabs": "Loading tabs",
+      "oneTab": "1 tab",
+      "tabCount": "{{tabCount}} tabs",
+      "tapToRetry": "{{status}} — tap to retry"
+    },
+    "documentReaders": {
+      "markdownFailed": "Couldn't load markdown",
+      "diffFailed": "Couldn't load diff preview",
+      "fileFailed": "Couldn't load file preview",
+      "outsideWorkspace": "This file is outside the workspace. Open it on desktop to view it."
     }
   },
   "chat": {
@@ -2574,7 +2653,11 @@
       "placeholder": "Ask anything, @ to mention files, / for commands",
       "cancelEditing": "Cancel editing",
       "saveEditedMessage": "Save edited message",
-      "sendMessage": "Send message"
+      "sendMessage": "Send message",
+      "sendQueue": "Queue",
+      "sendSteer": "Steer",
+      "sendQueueHint": "Runs after the current turn",
+      "sendSteerHint": "Goes into what the agent is doing now"
     },
     "composerAttachments": {
       "file": "File",
@@ -2922,6 +3005,14 @@
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
       "tokens": "{{value0}} tokens"
+    },
+    "agentMessage": {
+      "startedWorker": "Started worker",
+      "taskFromCoordinator": "Task from coordinator",
+      "messageFromCoordinator": "Message from coordinator",
+      "updateFromWorker": "Update from worker",
+      "messageFrom": "Message from",
+      "showMore": "Show more"
     }
   },
   "sourceControl": {
@@ -3117,7 +3208,8 @@
       "retryFiles": "Retry commit files",
       "waitingForDesktop": "Waiting for desktop...",
       "noFileChanges": "No file changes",
-      "noCommits": "No commits."
+      "noCommits": "No commits.",
+      "loading": "Loading commits…"
     },
     "branchCard": {
       "mergeState": "merge",
@@ -3187,7 +3279,7 @@
     },
     "panel": {
       "unavailableTitle": "Source Control Unavailable",
-      "loadFailedTitle": "Unable to Load"
+      "loading": "Loading changes…"
     },
     "prChip": {
       "loading": "Loading pull request…",
@@ -3513,7 +3605,8 @@
       "loadingStates": "Loading states...",
       "noStates": "No states available",
       "jiraFilter": "Jira Filter",
-      "jiraSite": "Jira Site"
+      "jiraSite": "Jira Site",
+      "statesFailed": "Couldn't load states. Reopen to try again."
     },
     "githubProjectList": {
       "chooseProject": "Choose a GitHub project",
@@ -3525,7 +3618,9 @@
       "itemSubtitle": "Project item · {{repository}}{{number}}",
       "emptyField": "Empty",
       "moreFields_one": "+{{count}} field",
-      "moreFields_other": "+{{count}} fields"
+      "moreFields_other": "+{{count}} fields",
+      "loading": "Loading project…",
+      "noMatches": "No project items match."
     },
     "githubProjectPickers": {
       "title": "GitHub Projects",
@@ -3590,7 +3685,8 @@
       "assignee": "Assignee",
       "project": "Project",
       "priority": "Priority",
-      "assignees": "Assignees"
+      "assignees": "Assignees",
+      "loading": "Loading details…"
     },
     "itemDetailDrawer": {
       "refreshDetails": "Refresh details"
@@ -4008,6 +4104,21 @@
     },
     "jiraViewControls": {
       "jqlSearch": "JQL search"
+    },
+    "itemComments": {
+      "noComments": "No comments yet",
+      "oneComment": "1 comment",
+      "commentCount": "{{commentCount}} comments"
+    },
+    "listState": {
+      "loading": "Loading tasks…"
+    },
+    "connectionPresentation": {
+      "connectToHost": "Connect to a host to load tasks",
+      "noMatchingTasks": "No matching tasks"
+    },
+    "runtimeHydration": {
+      "loadFailed": "Failed to load Tasks settings"
     }
   },
   "terminal": {

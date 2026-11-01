@@ -1,6 +1,6 @@
 import type {
   BridgeBrowserLocalParams,
-  BridgeBrowserViewEnding,
+  BridgeBrowserViewResult,
   BridgeBrowserViewFrame,
   BridgeBrowserViewShowParams
 } from '../mobile-web-shell/bridge/bridge-native-verbs'
@@ -10,8 +10,9 @@ export type ShellLocalBrowser = {
   openFullScreen: ((params: BridgeBrowserLocalParams) => Promise<void>) | null
   // A native web view the shell places over the page's pane.
   placed: {
-    show: (params: BridgeBrowserViewShowParams) => Promise<BridgeBrowserViewEnding>
+    show: (params: BridgeBrowserViewShowParams) => Promise<BridgeBrowserViewResult>
     move: (id: string, frame: BridgeBrowserViewFrame) => Promise<void>
     remove: (id: string) => Promise<void>
+    adopt: (id: string, url: string) => Promise<void>
   } | null
 }

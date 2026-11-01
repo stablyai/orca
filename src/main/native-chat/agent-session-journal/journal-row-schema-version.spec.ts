@@ -1,4 +1,4 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,7 +15,7 @@ export function registerJournalRowSchemaVersionTests(): void {
   // Inspect raw rows: upcasting hides the version older readers would see on disk.
   describe('journal row schema versions', () => {
     let root = ''
-    const opener = createTrackedJournalOpener()
+    const opener = createTrackedJournalOpener({ legacyInputs: true })
 
     beforeEach(async () => {
       root = await mkdtemp(join(tmpdir(), 'orca-journal-row-version-'))

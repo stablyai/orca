@@ -36,12 +36,16 @@ describe('plugin theme settings', () => {
         pluginAppThemeLight: 'plugin:samples.dawn/dawn',
         pluginAppThemeDark: 42,
         pluginIconTheme: 'x'.repeat(10_000),
-        themeBeforePlugin: 'neon'
+        themeBeforePlugin: 'neon',
+        editorThemeLight: 'dark',
+        editorThemeDark: 'vs-dark'
       })
     ).toEqual({
       pluginAppTheme: null,
       pluginAppThemeLight: 'plugin:samples.dawn/dawn',
       pluginAppThemeDark: null,
+      editorThemeLight: 'dark',
+      editorThemeDark: null,
       pluginIconTheme: null,
       themeBeforePlugin: null
     })
@@ -91,11 +95,13 @@ describe('plugin theme settings', () => {
           theme: 'system',
           pluginAppThemeLight: 'plugin:other.dawn/dawn',
           pluginAppThemeDark: 'plugin:samples.dusk/dusk',
+          editorThemeLight: 'plugin:samples.dusk/dusk',
+          editorThemeDark: 'light',
           terminalThemeDark: '',
           terminalThemeLight: ''
         },
         'samples.dusk'
       )
-    ).toEqual({ pluginAppThemeDark: null })
+    ).toEqual({ pluginAppThemeDark: null, editorThemeLight: null })
   })
 })

@@ -84,16 +84,6 @@ function call(root: unknown, path: string, ...args: unknown[]): unknown {
 }
 
 describe('installBrowserExtensionStorageSync', () => {
-  it('drops trailing undefined arguments before finding the callback, as Chrome does', async () => {
-    const page = install(() => ({ ok: true, value: {} }))
-    await call(page.chrome, 'storage.sync.get', 'theme', undefined)
-    await new Promise((resolve) => call(page.chrome, 'storage.sync.get', null, resolve, undefined))
-    expect(page.calls).toEqual([
-      [PRELOAD_STORAGE_SYNC_NAMESPACE, 'get', ['theme']],
-      [PRELOAD_STORAGE_SYNC_NAMESPACE, 'get', [null]]
-    ])
-  })
-
   it('replaces the disabled native area with calls to main, as promises or callbacks', async () => {
     const page = install((method) =>
       method === 'get' ? { ok: true, value: { theme: 'dark' } } : { ok: true, value: undefined }

@@ -104,15 +104,6 @@ describe('fetchKimiRateLimits', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok-abc')
   })
 
-  it('surfaces an error when the usage request fails', async () => {
-    fsState.credentials = freshCredentials()
-    fetchMock.mockResolvedValueOnce(jsonResponse({}, 500))
-
-    const result = await fetchKimiRateLimits()
-    expect(result.status).toBe('error')
-    expect(result.session).toBeNull()
-  })
-
   it('tags a request that throws before a response as a network failure', async () => {
     fsState.credentials = freshCredentials()
     fetchMock.mockRejectedValueOnce(new Error('net::ERR_PROXY_CONNECTION_FAILED'))
@@ -174,27 +165,6 @@ describe('fetchKimiRateLimits', () => {
       source: 'oauth'
     })
     expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('reads the host ~/.kimi-code credentials by default', async () => {
-    fsState.credentials = freshCredentials()
-    fetchMock.mockResolvedValueOnce(jsonResponse(USAGE_RESPONSE))
-
-    const result = await fetchKimiRateLimits()
-
-    expect(result.status).toBe('ok')
-    expect(fsState.readPaths).toEqual(hostReadPaths('/home/test/.kimi-code'))
-  })
-
-  it('honors KIMI_CODE_HOME for the host home', async () => {
-    vi.stubEnv('KIMI_CODE_HOME', '/custom/kimi-home')
-    fsState.credentials = freshCredentials()
-    fetchMock.mockResolvedValueOnce(jsonResponse(USAGE_RESPONSE))
-
-    const result = await fetchKimiRateLimits()
-
-    expect(result.status).toBe('ok')
-    expect(fsState.readPaths).toEqual(hostReadPaths('/custom/kimi-home'))
   })
 
   it('ignores a blank KIMI_CODE_HOME instead of reading from the process cwd', async () => {

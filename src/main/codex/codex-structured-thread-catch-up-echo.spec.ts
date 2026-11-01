@@ -1,20 +1,19 @@
 import { journalItemEchoFields } from '../native-chat/agent-session-journal/journal-item-echo'
 import { expect, it } from 'vitest'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   chat as catchUpChat,
   turn as catchUpTurn
 } from './codex-structured-thread-catch-up.test'
-import { agentSessionSendBodyFingerprint } from '../../shared/structured-agent-session-send-mutation'
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
-import { structuredRewindCut } from '../native-chat/agent-session-wire/structured-rewind-cut'
+import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import {
-  applyJournalRow,
-  createJournalReducerState
-} from '../native-chat/agent-session-journal/journal-reducer'
+  type AgentJournalMessageItem,
+  AGENT_JOURNAL_THREAD_SCOPE
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredRewindCut } from '../native-chat/agent-session-wire/structured-rewind-cut'
+import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
 
 export function registerCodexCatchUpEchoTests(input: {
   chat: typeof catchUpChat
@@ -122,15 +121,8 @@ export function registerCodexCatchUpEchoTests(input: {
     await c.open([...native, outside])
     expect(c.journal.snapshot()).toEqual(whole)
     expect(c.journal.queuedMessages.get('draft')).toEqual(draft)
-    const replay = c.journal.readSince({ epoch: c.journal.epoch, sequence: 0 })
-    if (!replay.ok || !draft) {
-      throw new Error('missing replay fixture')
-    }
-    const state = createJournalReducerState(SESSION, c.journal.epoch)
-    for (const row of replay.rows) {
-      applyJournalRow(state, row)
-    }
-    expect(state.queue.cards.get('draft')).toEqual(draft)
+    const restored = restoreJournal(c.db, SESSION)
+    expect(restored?.state.queue.cards.get('draft')).toEqual(draft)
   })
 
   it('keeps native display identity after a real retained cut and disk reopen', async () => {

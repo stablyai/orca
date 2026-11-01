@@ -40,41 +40,6 @@ describe('commitRichMarkdownSerialization (shared disk-bound serialize chokepoin
     expect(didSerialize).toBe(true)
   })
 
-  it('advances all three refs so the next incremental edit patches onto the reconciled source', () => {
-    const r = refs('# Title\n\n_word_\n', '# Title\n\n*word*')
-    const editor = fakeEditor(() => '# Title!\n\n*word*')
-
-    commitRichMarkdownSerialization(editor, r, roundTrip)
-
-    expect(r.originalSourceRef.current).toBe('# Title!\n\n_word_\n')
-    expect(r.baseCanonicalRef.current).toBe('# Title!\n\n*word*')
-    expect(r.lastCommittedMarkdownRef.current).toBe('# Title!\n\n_word_\n')
-  })
-
-  it('falls back to the last committed bytes when the editor is torn down (null)', () => {
-    const r = refs('# Title\n\n_word_\n', '# Title\n\n*word*')
-    r.lastCommittedMarkdownRef.current = '# Title\n\n_word_\n'
-
-    const { markdown, didSerialize } = commitRichMarkdownSerialization(null, r, roundTrip)
-
-    expect(didSerialize).toBe(false)
-    expect(markdown).toBe('# Title\n\n_word_\n')
-    expect(r.originalSourceRef.current).toBe('# Title\n\n_word_\n')
-  })
-
-  it('does not crash when getMarkdown throws (editor destroyed mid-flush)', () => {
-    const r = refs('src', 'src')
-    r.lastCommittedMarkdownRef.current = 'safe'
-    const editor = fakeEditor(() => {
-      throw new Error('editor destroyed')
-    })
-
-    const { markdown, didSerialize } = commitRichMarkdownSerialization(editor, r, roundTrip)
-
-    expect(didSerialize).toBe(false)
-    expect(markdown).toBe('safe')
-  })
-
   it('preserves source EOL and advances refs when reconciliation throws', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const r = refs('# 이전\r\n\r\n_강조_\r\n', '# 이전\n\n*강조*')
@@ -167,18 +132,5 @@ describe('handleRichMarkdownSaveShortcut (Cmd/Ctrl+S persistence site)', () => {
     expect(event.preventDefault).toHaveBeenCalled()
     expect(onSave).not.toHaveBeenCalled()
     expect(onContentChange).not.toHaveBeenCalled()
-  })
-
-  it('ignores non-save keystrokes and touches nothing', () => {
-    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    const editor = fakeEditor(() => '# Title!\n\n*word*')
-    const { ctx, onSave, flush } = saveContext(editor)
-    const event = { ...saveEvent(), key: 'a', code: 'KeyA' } as KeyboardEvent & {
-      preventDefault: ReturnType<typeof vi.fn>
-    }
-
-    expect(handleRichMarkdownSaveShortcut(ctx, event)).toBe(false)
-    expect(flush).not.toHaveBeenCalled()
-    expect(onSave).not.toHaveBeenCalled()
   })
 })

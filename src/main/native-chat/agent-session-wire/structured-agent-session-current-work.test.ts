@@ -2,7 +2,7 @@
 // even when settlement/release writes fail; live generations retain their work.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type {
   AgentSessionStatusEvent,
@@ -19,7 +19,7 @@ import {
   type StructuredAgentSessionState
 } from '../../../shared/structured-agent-session-reducer'
 import {
-  liveTestJournalRows,
+  readTestJournalOutcomes,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
@@ -244,9 +244,10 @@ describe('a waiting card when the generation ahead of it ends', () => {
       expect(journal.queuedMessages.get(card?.messageId ?? '')?.state).toBe('dispatched')
     )
     // Generation-end publication alone must wake delivery without an intervening journal write.
-    const first = liveTestJournalRows(database.db, SESSION).find((row) => row.seq > before)
-    expect(JSON.parse(first?.rowJson ?? '{}')).toMatchObject({
-      kind: 'submission',
+    const first = readTestJournalOutcomes(database.db, SESSION).find(
+      (row) => row.seq > before && row.field === 'submissions'
+    )
+    expect(JSON.parse(first?.json ?? '[null, {}]')[1]).toMatchObject({
       queuedMessageId: card?.messageId
     })
   })

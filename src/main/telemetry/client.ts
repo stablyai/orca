@@ -6,6 +6,7 @@ import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/
 import type { AgentDashboardSurface } from '../../shared/telemetry-agent-dashboard-event-schemas'
 import type { Store } from '../persistence'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
+import { ensureChatUiLaunchTipCohort } from './chat-ui-launch-tip-cohort'
 import { getCohortAtEmit } from './cohort-classifier'
 import { isConsentEnvOverridden, resolveConsent } from './consent'
 import * as postHogStart from './posthog-client-start'
@@ -73,6 +74,8 @@ export function initTelemetry(store: Store, scheduleStart: postHogStart.StartSch
   if (languageCohort === 'control' || languageCohort === 'treatment') {
     commonProps.onboarding_language_v1 = languageCohort
   }
+  // Official builds only, so contributor builds always show the Chat UI launch tip.
+  commonProps.chat_ui_launch_tip_v1 = ensureChatUiLaunchTipCohort(store)
 
   // Validate singleton common properties once; invalid identity would collapse installs into one subject.
   const parsedCommon = commonPropsSchema.safeParse(commonProps)

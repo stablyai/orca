@@ -3,6 +3,7 @@ import { BrowserScreencastOpcode } from '../../transport/browser-screencast-prot
 import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import {
   BRIDGE_MAX_MESSAGE_BYTES,
+  BRIDGE_MAX_PENDING_DESKTOP_REQUESTS,
   BRIDGE_MAX_PENDING_REQUESTS,
   BRIDGE_MAX_SUBSCRIPTIONS
 } from './bridge-caps'
@@ -39,7 +40,12 @@ describe('bridge client handshake', () => {
   it('asks for a session immediately and declares the storage keys it can read', () => {
     const page = createPageClient()
     expect(page.frames()).toEqual([
-      { v: BRIDGE_PROTOCOL_VERSION, type: 'ready', storageKeys: ['orca:terminalSplitLayout'] }
+      {
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'ready',
+        storageKeys: ['orca:terminalSplitLayout'],
+        connectionPathFrames: true
+      }
     ])
   })
 
@@ -115,6 +121,8 @@ describe('bridge client handshake', () => {
     expect(page.client.getLastConnectedAt()).toBe(1700)
     expect(page.client.getLastInboundAt?.()).toBe(1800)
     expect(page.client.getGeneration?.()).toBe(5)
+    // An older shell's init names no proven status; the page then asks the host itself.
+    expect(page.client.getShellHostStatus()).toBeNull()
     expect(page.client.getShellSession()).toEqual({
       sessionId: 'session-a',
       buildId: 'build-a',
@@ -133,8 +141,34 @@ describe('bridge client handshake', () => {
       host: null,
       storage: {},
       storageOversize: [],
-      ownsHostArea: false
+      ownsHostArea: false,
+      hostStatus: null
     })
+  })
+
+  it('reads a path frame without reporting it as a connection transition', () => {
+    const page = createPageClient()
+    page.start()
+    const states: string[] = []
+    let pathChanges = 0
+    page.client.onStateChange((state) => states.push(state))
+    page.client.onConnectionPathChange(() => pathChanges++)
+    expect(page.client.getPendingPath()).toBeNull()
+
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'connectionPath',
+      connection: {
+        ...INIT.connection,
+        pendingPath: 'relay',
+        relayHostReachability: 'host-offline'
+      }
+    })
+
+    expect(states).toEqual([])
+    expect(pathChanges).toBe(1)
+    expect(page.client.getPendingPath()).toBe('relay')
+    expect(page.client.getRelayHostReachability()).toBe('host-offline')
   })
 
   it('posts nothing, and says so, when the shell granted no navigate', () => {
@@ -463,12 +497,12 @@ describe('bridge client caps', () => {
     const page = createPageClient()
     page.start()
     const answers: Promise<unknown>[] = []
-    for (let index = 0; index < BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
+    for (let index = 0; index < BRIDGE_MAX_PENDING_DESKTOP_REQUESTS; index += 1) {
       answers.push(page.client.sendRequest('worktree.ps'))
     }
     const refused = page.client.sendRequest('worktree.ps')
     await expect(refused).rejects.toThrow(BridgeClientCapExceededError)
-    expect(page.sent).toHaveLength(1 + BRIDGE_MAX_PENDING_REQUESTS)
+    expect(page.sent).toHaveLength(1 + BRIDGE_MAX_PENDING_DESKTOP_REQUESTS)
     page.client.close()
     await Promise.allSettled(answers)
   })

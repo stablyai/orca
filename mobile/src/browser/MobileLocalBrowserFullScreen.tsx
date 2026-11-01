@@ -20,6 +20,7 @@ type Props = {
   network?: MobileLocalBrowserNetwork
   viewMode: MobileBrowserViewMode
   tunnel?: MobileBrowserLocalTunnel
+  onViewModeChange?: (viewMode: MobileBrowserViewMode) => void
   onNetworkChange?: (network: MobileLocalBrowserNetwork) => void
   // Leaving full screen hands back the page the view was on.
   onClose: (url: string) => void
@@ -35,6 +36,7 @@ export function MobileLocalBrowserFullScreen({
   network,
   viewMode,
   tunnel,
+  onViewModeChange,
   onNetworkChange,
   onClose,
   onStreamFromHost
@@ -56,6 +58,7 @@ export function MobileLocalBrowserFullScreen({
           initialNetwork={network}
           initialViewMode={viewMode}
           tunnel={tunnel}
+          onViewModeChange={onViewModeChange}
           onNetworkChange={onNetworkChange}
           fullScreen={{ active: true, onToggle: close }}
           pending={

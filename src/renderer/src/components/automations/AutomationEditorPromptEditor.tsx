@@ -4,9 +4,9 @@ import type { editor } from 'monaco-editor'
 import { installMonacoEditorFindShortcut } from '@/components/editor/editor-shortcuts'
 import { syncContentOnMount, syncContentUpdate } from '@/components/editor/monaco-content-sync'
 import { isMonacoFindWidgetOpen } from '@/components/editor/monaco-find-widget'
-import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import { monacoTypographyOptions } from '@/lib/editor-typography'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
 import '@/lib/monaco-setup'
-import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { buildAutomationPromptEditorOptions } from './automation-editor-prompt-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
@@ -59,8 +59,7 @@ export function AutomationEditorPromptEditor({
   onChange,
   onDismiss
 }: AutomationEditorPromptEditorProps): React.JSX.Element {
-  const settings = useAppStore((state) => state.settings)
-  const editorFontZoomLevel = useAppStore((state) => state.editorFontZoomLevel)
+  const typography = useEditorTypography()
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const contentRef = useRef(value)
   const lastSyncedContentRef = useRef(value)
@@ -71,18 +70,15 @@ export function AutomationEditorPromptEditor({
     onDismissRef.current = onDismiss
   }, [onDismiss])
 
-  const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
-  const fontFamily = resolveEditorFontFamily(settings)
   const monacoTheme = useMonacoTheme()
   const options = useMemo(
     () =>
       buildAutomationPromptEditorOptions({
         ariaLabel,
-        fontFamily,
-        fontSize,
+        typography: monacoTypographyOptions(typography),
         placeholder
       }),
-    [ariaLabel, fontFamily, fontSize, placeholder]
+    [ariaLabel, typography, placeholder]
   )
 
   const handleChange = useCallback(
@@ -139,7 +135,7 @@ export function AutomationEditorPromptEditor({
     <div
       data-slot={AUTOMATION_PROMPT_EDITOR_SLOT}
       className={cn(
-        'relative min-h-0 w-full flex-1 overflow-hidden rounded-lg border border-border/70 bg-editor-surface',
+        'code-editor-colors relative min-h-0 w-full flex-1 overflow-hidden rounded-lg border border-border/70 bg-editor-surface',
         'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50',
         // Tint Monaco’s placeholder token as ghost text rather than typed content.
         '[--vscode-editor-placeholder-foreground:color-mix(in_srgb,var(--muted-foreground)_50%,transparent)]'

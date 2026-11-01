@@ -5,15 +5,17 @@
  */
 import { readdir } from 'node:fs/promises'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { wslHostsGateOpen } from './wsl-host-gate'
+import { wslHostsOptedIn } from './wsl-host-gate'
 
 /** The message to show instead of "not a git repository"; null when access wasn't the problem. */
 export async function describeWslUncAccessDenied(
   path: string,
+  settings: { experimentalWslHosts?: boolean } | null | undefined,
   list: (path: string) => Promise<unknown> = readdir
 ): Promise<string | null> {
-  // Gated: the renderer offers "add as folder" only on the usual "not a git repository" text.
-  if (process.platform !== 'win32' || !wslHostsGateOpen() || !parseWslUncPath(path)) {
+  // Opt-in (Stage 1): the renderer offers "add as folder" only on the usual "not a git repository"
+  // text, which a user who hasn't turned WSL hosts on keeps.
+  if (process.platform !== 'win32' || !wslHostsOptedIn(settings) || !parseWslUncPath(path)) {
     return null
   }
   try {

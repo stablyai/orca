@@ -137,7 +137,13 @@ export const browserViewParamsSchema = z.discriminatedUnion('action', [
     id: browserViewIdSchema,
     frame: browserViewFrameSchema
   }),
-  z.strictObject({ action: z.literal('hide'), id: browserViewIdSchema })
+  z.strictObject({ action: z.literal('hide'), id: browserViewIdSchema }),
+  // The host's first address for a new tab; the shell ignores it once the user has gone somewhere.
+  z.strictObject({
+    action: z.literal('adopt'),
+    id: browserViewIdSchema,
+    url: z.string().max(8192)
+  })
 ])
 // streamed: the user chose streaming (streamedFullScreen: from full screen, which stays); setting: the browser
 // settings stream tabs; replaced: another pane took the view; failed: the tunnel through the host failed.
@@ -150,9 +156,12 @@ export const BRIDGE_BROWSER_VIEW_ENDINGS = [
   'failed'
 ] as const
 export const browserViewResultSchema = z.strictObject({
-  ended: z.enum(BRIDGE_BROWSER_VIEW_ENDINGS).optional()
+  ended: z.enum(BRIDGE_BROWSER_VIEW_ENDINGS).optional(),
+  // The layout the user left the view in, which the streamed pane carries on with.
+  viewMode: browserViewModeSchema.optional()
 })
 
+export type BridgeBrowserViewResult = z.infer<typeof browserViewResultSchema>
 export type BridgeBrowserViewParams = z.infer<typeof browserViewParamsSchema>
 export type BridgeBrowserViewShowParams = Omit<
   Extract<BridgeBrowserViewParams, { action: 'show' }>,

@@ -157,6 +157,8 @@ export function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     bundledPlan: () => Promise.reject(new Error('Updating Orca skills requires the desktop app.')),
     bundledExecute: () =>
       Promise.reject(new Error('Updating Orca skills requires the desktop app.')),
+    bundledAutoUpdate: () =>
+      Promise.reject(new Error('Updating Orca skills requires the desktop app.')),
     prepareShare: () => Promise.reject(new Error('Skill publishing requires the desktop app.')),
     publishShare: () => Promise.reject(new Error('Skill publishing requires the desktop app.')),
     cancelShare: () => Promise.resolve(),

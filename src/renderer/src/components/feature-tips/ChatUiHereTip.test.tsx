@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, useRef, useState, type ReactNode } from 'react'
+import { act, useCallback, useRef, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FEATURE_TIPS } from '../../../../shared/feature-tips'
@@ -85,6 +85,11 @@ function SettingsOwner({ retained }: { retained: boolean }): React.JSX.Element {
   const [choice, setSettingsHostChoice] = useState<RuntimeClientTarget | null>(
     retained ? { kind: 'environment', environmentId: 'paired' } : null
   )
+  const consumeSettingsNavigation = useCallback<
+    Parameters<typeof useSettingsPageEffects>[0]['consumeSettingsNavigation']
+  >((target) => {
+    setSettingsHostChoice((previous) => target.hostScope ?? previous)
+  }, [])
   const pendingScrollTargetRef = useRef<string | null>(null)
   const scope = resolveSettingsHostScope({
     choice,
@@ -97,7 +102,7 @@ function SettingsOwner({ retained }: { retained: boolean }): React.JSX.Element {
     {
       settings,
       settingsNavigationTarget,
-      setSettingsHostChoice,
+      consumeSettingsNavigation,
       clearSettingsTarget: useAppStore.getState().clearSettingsTarget,
       fetchSettings: vi.fn(),
       fetchKeybindings: vi.fn(),
@@ -195,9 +200,15 @@ describe('Chat UI is here tip', () => {
     expect(useAppStore.getState().activeModal).toBe('none')
     expect(updateSettingsOrThrow).toHaveBeenCalledExactlyOnceWith({ agentDefaultSurface: 'chat' })
     expect(updateSettings).not.toHaveBeenCalled()
-    expect(track).toHaveBeenLastCalledWith('chat_ui_feature_tip_action', {
+    expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
       variant: 'chat_ui_off',
       action: 'use_chat_ui'
+    })
+    expect(track).toHaveBeenLastCalledWith('agent_default_surface_changed', {
+      from_mode: 'terminal',
+      to_mode: 'chat',
+      source: 'launch_card',
+      launch_tip_shown: true
     })
   })
 

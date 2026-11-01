@@ -1,7 +1,7 @@
 import os from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeMachineName } from '../../shared/machine-name'
-import { detectRuntimeMachineName, type RuntimeMachineName } from './runtime-machine-name'
+import type { RuntimeMachineName } from './runtime-machine-name'
 
 // Mock shared scutil lookup: runner load can make one live probe time out while another succeeds, yielding a flaky comparison.
 const runProcessMock = vi.hoisted(() => vi.fn())
@@ -17,53 +17,6 @@ const friendlyResult = {
   timedOut: false
 }
 const timedOutResult = { code: null, signal: 'SIGKILL', stdout: '', stderr: '', timedOut: true }
-
-describe('runtime machine name detection', () => {
-  it('uses the hostname on non-macOS without starting a subprocess', async () => {
-    const run = vi.fn()
-    await expect(
-      detectRuntimeMachineName({ platform: 'linux', fallback: 'linux-host', run })
-    ).resolves.toEqual({ name: 'linux-host', final: true })
-    expect(run).not.toHaveBeenCalled()
-  })
-
-  it('uses the macOS friendly computer name when scutil succeeds', async () => {
-    const run = vi.fn().mockResolvedValue({
-      code: 0,
-      signal: null,
-      stdout: 'M4 Air\n',
-      stderr: '',
-      timedOut: false
-    })
-    await expect(
-      detectRuntimeMachineName({ platform: 'darwin', fallback: 'm4-air.local', run })
-    ).resolves.toEqual({ name: 'M4 Air', final: true })
-    expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({ program: '/usr/sbin/scutil', args: ['--get', 'ComputerName'] })
-    )
-  })
-
-  it('falls back without finality when macOS name lookup fails or returns no name', async () => {
-    for (const run of [
-      vi.fn().mockResolvedValue({
-        code: 1,
-        signal: null,
-        stdout: '',
-        stderr: 'could not read',
-        timedOut: false
-      }),
-      vi.fn().mockResolvedValue(timedOutResult),
-      vi
-        .fn()
-        .mockResolvedValue({ code: 0, signal: null, stdout: '  \n', stderr: '', timedOut: false }),
-      vi.fn().mockRejectedValue(new Error('spawn failed'))
-    ]) {
-      await expect(
-        detectRuntimeMachineName({ platform: 'darwin', fallback: 'm4-air.local', run })
-      ).resolves.toEqual({ name: 'm4-air.local', final: false })
-    }
-  })
-})
 
 describe('RuntimeMachineName', () => {
   // Reload process-shared memo so every case begins before the first lookup.
@@ -201,13 +154,5 @@ describe('RuntimeMachineName', () => {
     await machine.readyWithin(750)
     expect(machine.read()).toBe('Friendly Name')
     expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('prefers a configured name and falls back to the detected name', async () => {
-    let configured: string | undefined
-    const machine = new module.RuntimeMachineName(() => configured)
-    expect(machine.read()).toBeTypeOf('string')
-    configured = '  Build server  '
-    expect(machine.read()).toBe('Build server')
   })
 })

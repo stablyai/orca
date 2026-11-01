@@ -2,8 +2,13 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Components } from 'react-markdown'
 import type { editor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
-import { computeEditorFontSize, resolveEditorFontStack } from '@/lib/editor-font-zoom'
-import { useAppStore } from '@/store'
+import {
+  EDITOR_TYPOGRAPHY_SURFACE_CLASS,
+  editorTypographyTextStyle,
+  monacoTypographyOptions
+} from '@/lib/editor-typography'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
+import { cn } from '@/lib/utils'
 import { installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { syncContentUpdate } from './monaco-content-sync'
 import {
@@ -21,7 +26,6 @@ const NO_MARKDOWN_COMPONENTS: Components = {}
 const CODE_LAYOUT = { lineHeight: 20, paddingY: 4, paddingX: 12 } as const
 // Fixed rows keep colorized blank lines one line tall; preflight gives <code> its own font.
 const CODE_ROW_STYLE = {
-  height: CODE_LAYOUT.lineHeight,
   paddingInline: CODE_LAYOUT.paddingX,
   fontFamily: 'inherit'
 } as const
@@ -79,7 +83,7 @@ export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element 
   }
 
   return (
-    <div className="ipynb-code-surface overflow-hidden rounded-md border border-border bg-muted/60 focus-within:border-ring">
+    <div className="ipynb-code-surface code-editor-colors overflow-hidden rounded-md border border-border bg-muted/60 focus-within:border-ring">
       {active ? (
         <IpynbSourceEditor {...props} pressedAt={pressedAt} />
       ) : (
@@ -114,17 +118,16 @@ function IpynbCodePreview({
   source: string
   language: string
 }): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
-  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const typography = useEditorTypography()
+  const lineHeight = typography.lineHeight || CODE_LAYOUT.lineHeight
   const lines = useMemo(() => getIpynbCodeCellPreviewLines(source), [source])
   const htmlLines = useMonacoColorizedLines(lines, language)
   return (
     <div
-      className="overflow-x-auto text-foreground"
+      className={cn('overflow-x-auto text-foreground', EDITOR_TYPOGRAPHY_SURFACE_CLASS)}
       style={{
-        fontFamily: resolveEditorFontStack(settings),
-        fontSize: computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel),
-        lineHeight: `${CODE_LAYOUT.lineHeight}px`,
+        ...editorTypographyTextStyle(typography),
+        lineHeight: `${lineHeight}px`,
         paddingBlock: CODE_LAYOUT.paddingY,
         // Monaco renders code without the app's body tracking.
         letterSpacing: 0
@@ -134,7 +137,7 @@ function IpynbCodePreview({
         <code
           key={index}
           className="block whitespace-pre"
-          style={CODE_ROW_STYLE}
+          style={{ ...CODE_ROW_STYLE, height: lineHeight }}
           dangerouslySetInnerHTML={{ __html: htmlLines[index] || escapeHtml(line) }}
         />
       ))}
@@ -150,16 +153,24 @@ function IpynbSourceEditor({
   onDeactivate,
   onChange
 }: IpynbCellSourceProps & { pressedAt: ClientPoint | null }): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
-  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const monacoTheme = useMonacoTheme()
-  const fontFamily = resolveEditorFontStack(settings)
-  const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
+  const typography = useEditorTypography()
+  // Monaco gets the CSS stack so cells match their DOM previews.
+  const typographyOptions = useMemo(
+    () => ({
+      ...monacoTypographyOptions(typography),
+      fontFamily: typography.cssFontFamily,
+      lineHeight: typography.lineHeight || CODE_LAYOUT.lineHeight
+    }),
+    [typography]
+  )
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const callbacksRef = useRef({ onChange, onDeactivate })
   const syncingSourceRef = useRef(false)
   const fitHeightRef = useRef<(() => void) | null>(null)
+  // The mount-once fit closure must cap height with the live line height, which typography can change.
+  const lineHeightRef = useRef(typographyOptions.lineHeight)
 
   useLayoutEffect(() => {
     callbacksRef.current = { onChange, onDeactivate }
@@ -175,7 +186,7 @@ function IpynbSourceEditor({
     if (!container) {
       return
     }
-    const { lineHeight, paddingX, paddingY } = CODE_LAYOUT
+    const { paddingX, paddingY } = CODE_LAYOUT
     // Monaco restores undo for disposed models with this scheme; no other Monaco feature special-cases it.
     const uri =
       modelKey === null
@@ -190,10 +201,8 @@ function IpynbSourceEditor({
       dropIntoEditor: { enabled: false },
       model,
       automaticLayout: true,
-      fontFamily,
-      fontSize,
       // Match preview geometry; the decorations lane supplies the inset without a gutter.
-      lineHeight,
+      ...typographyOptions,
       padding: { top: paddingY, bottom: paddingY },
       lineNumbers: 'off',
       glyphMargin: false,
@@ -212,8 +221,8 @@ function IpynbSourceEditor({
       wordWrap: cell.kind === 'code' ? 'off' : 'on'
     })
     editorRef.current = editorInstance
-    const maxHeight = IPYNB_CODE_CELL_PREVIEW_MAX_LINES * lineHeight
     const fitHeight = (): void => {
+      const maxHeight = IPYNB_CODE_CELL_PREVIEW_MAX_LINES * lineHeightRef.current
       container.style.height = `${Math.min(editorInstance.getContentHeight(), maxHeight)}px`
       editorInstance.layout()
     }
@@ -259,9 +268,9 @@ function IpynbSourceEditor({
     if (model.getLanguageId() !== cell.language) {
       monaco.editor.setModelLanguage(model, cell.language)
     }
+    lineHeightRef.current = typographyOptions.lineHeight
     editorInstance.updateOptions({
-      fontFamily,
-      fontSize,
+      ...typographyOptions,
       wordWrap: cell.kind === 'code' ? 'off' : 'on'
     })
     syncingSourceRef.current = true
@@ -271,7 +280,7 @@ function IpynbSourceEditor({
       syncingSourceRef.current = false
     }
     fitHeightRef.current?.()
-  }, [source, cell.language, cell.kind, fontFamily, fontSize])
+  }, [source, cell.language, cell.kind, typographyOptions])
 
   return <div ref={containerRef} />
 }

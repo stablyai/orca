@@ -306,3 +306,14 @@ it('refuses a target-less ambiguous workspace twin while an explicit local targe
   )
   expect(explicit.result.current.dot).toBe('working')
 })
+
+it('prefers the live row to saved kind and falls back without retaining its status', () => {
+  const view = renderHook(() =>
+    useAgentMessageSenderView({ ...from.senders[0], agent: 'codex' }, 'workspace', {
+      kind: 'local'
+    })
+  )
+  expect(view.result.current).toEqual({ agentType: 'claude', dot: 'working', progress: undefined })
+  act(() => useAppStore.setState({ agentStatusByPaneKey: {}, agentStatusEpoch: 2 }))
+  expect(view.result.current).toEqual({ agentType: 'codex', dot: undefined, progress: undefined })
+})

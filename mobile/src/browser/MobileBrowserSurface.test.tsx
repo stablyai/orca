@@ -6,13 +6,15 @@ import { MobileBrowserPane } from './MobileBrowserPane'
 import { MobileBrowserPlacedLocal } from './MobileBrowserPlacedLocal'
 import { MobileBrowserSurface } from './MobileBrowserSurface'
 
+const saved = vi.hoisted(() => vi.fn())
+
 vi.mock('react-native', () => ({ View: 'View' }))
 vi.mock('../i18n/mobile-i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('../storage/preferences', () => ({ loadBrowserDrawing: vi.fn() }))
 vi.mock('./mobile-browser-pane-styles', () => ({ mobileBrowserPaneStyles: { root: {} } }))
 vi.mock('./mobile-browser-view-mode-state', () => ({
   getInitialMobileBrowserViewMode: () => 'mobile',
-  saveMobileBrowserViewMode: () => {}
+  saveMobileBrowserViewMode: (...args: unknown[]) => saved(...args)
 }))
 vi.mock('./use-mobile-browser-local-tunnel', () => ({
   canRenderBrowserLocally: () => false,
@@ -21,7 +23,7 @@ vi.mock('./use-mobile-browser-local-tunnel', () => ({
 vi.mock('../platform/shell-local-browser', () => ({
   useShellLocalBrowser: () => ({
     openFullScreen: null,
-    placed: { show: vi.fn(), move: vi.fn(), remove: vi.fn() }
+    placed: { show: vi.fn(), move: vi.fn(), remove: vi.fn(), adopt: vi.fn() }
   })
 }))
 vi.mock('./MobileBrowserPane', () => ({ MobileBrowserPane: () => null }))
@@ -77,6 +79,12 @@ describe('a served tab the app shell draws', () => {
 
     expect(fullScreenFrames()).toHaveLength(1)
     expect(streamedPane().props.drawing.fullScreen.active).toBe(true)
+  })
+
+  it('keeps the layout the user left the drawn tab in when it streams', () => {
+    act(() => placedView()[0]!.props.onEnded('streamed', 'web'))
+
+    expect(saved).toHaveBeenCalledWith('wt-1', 'page-1', 'web')
   })
 
   it('offers drawing on the phone again once streamed, on the network the user picks', () => {

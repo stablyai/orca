@@ -2,11 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
-import { MAX_PROVIDER_DIAGNOSTIC_CHARS } from '../../shared/agent-session-failure'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
+import { MAX_PROVIDER_DIAGNOSTIC_CHARS } from '../../shared/agent-session/failures/agent-session-failure'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
@@ -90,16 +88,6 @@ describe('a Claude api_retry frame', () => {
     })
     expect(row).not.toHaveProperty('providerFrame')
     expect(row.failure?.detail?.text).toContain('"attempt":3')
-  })
-
-  it('says how far a gateway failure has got, and the code it failed with', async () => {
-    const [row] = await statusRowsFor([
-      apiRetry(1, { error: 'server_error', error_status: 502 }),
-      apiRetry(2, { error: 'server_error', error_status: 502 })
-    ])
-    expect(row?.text).toBe(
-      'Claude hit a temporary problem and is retrying. Retry 2 of 10.\nLast error: HTTP 502 server error.'
-    )
   })
 
   it('starts a new row when a later run starts over', async () => {

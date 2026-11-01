@@ -9,8 +9,8 @@ import {
   useRef,
   useState
 } from 'react'
-import type { AgentSessionQueuedMessageUpdateResult } from '../../../src/shared/agent-session-wire'
-import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
+import type { AgentSessionQueuedMessageUpdateResult } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import { agentSessionSendBodyFingerprint } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { queuedMessageWithEdit } from '../../../src/shared/queued-message-edit'
 import {
   mobileQueuedEditValueKey,

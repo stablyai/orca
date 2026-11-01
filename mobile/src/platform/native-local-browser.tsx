@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { View, type LayoutChangeEvent } from 'react-native'
+import { isBlankBrowserUrl } from '../browser/browser-url'
 import { MobileLocalBrowser } from '../browser/MobileLocalBrowser'
 import { MobileLocalBrowserFullScreen } from '../browser/MobileLocalBrowserFullScreen'
 import { MobileLocalBrowserToast } from '../browser/MobileLocalBrowserToast'
@@ -37,7 +38,7 @@ type Placed = Tab & {
   frame: BridgeBrowserViewFrame
   // Bumped when full screen hands a page back, so the placed view reopens it.
   generation: number
-  end: (ending: BridgeBrowserViewEnding) => void
+  end: (ending: BridgeBrowserViewEnding, viewMode?: MobileBrowserViewMode) => void
 }
 
 type FullScreen = Tab & { fromPlaced: boolean }
@@ -68,6 +69,8 @@ export function useNativeLocalBrowser(
   const wanted = useRef<string | null>(null)
   // Moves the page sends while that show is starting; the view opens at the latest one.
   const startingFrame = useRef<BridgeBrowserViewFrame | null>(null)
+  // The same for an address the host reports while that show is starting.
+  const startingUrl = useRef<string | null>(null)
   // The placed tab's page, layout and network as the user changes them.
   const live = useRef<Tab | null>(null)
   const [pageOrigin, setPageOrigin] = useState({ x: 0, y: 0 })
@@ -80,7 +83,7 @@ export function useNativeLocalBrowser(
   }, [])
   const endPlaced = useCallback(
     (ending: BridgeBrowserViewEnding) => {
-      placedRef.current?.end(ending)
+      placedRef.current?.end(ending, live.current?.viewMode)
       live.current = null
       place(null)
     },
@@ -133,6 +136,18 @@ export function useNativeLocalBrowser(
         }
         return {}
       }
+      if (parsed.action === 'adopt') {
+        const tab = live.current
+        if (current?.id === parsed.id && tab && isBlankBrowserUrl(tab.url)) {
+          const next = { ...tab, url: parsed.url }
+          live.current = next
+          place({ ...current, ...next, generation: current.generation + 1 })
+        }
+        if (current?.id !== parsed.id && wanted.current === parsed.id) {
+          startingUrl.current = parsed.url
+        }
+        return {}
+      }
       if (parsed.action === 'hide') {
         if (wanted.current === parsed.id) {
           wanted.current = null
@@ -145,6 +160,7 @@ export function useNativeLocalBrowser(
       requireLocal()
       wanted.current = parsed.id
       startingFrame.current = null
+      startingUrl.current = null
       const drawing = await loadBrowserDrawing()
       if (wanted.current !== parsed.id) {
         return { ended: 'hidden' }
@@ -153,25 +169,27 @@ export function useNativeLocalBrowser(
         return { ended: 'setting' }
       }
       endPlaced('replaced')
-      return new Promise<{ ended: BridgeBrowserViewEnding }>((resolve) => {
-        const tab = {
-          worktreeId: parsed.worktreeId,
-          url: parsed.url,
-          viewMode: parsed.viewMode,
-          network: parsed.network ?? settingNetwork(drawing)
+      return new Promise<{ ended: BridgeBrowserViewEnding; viewMode?: MobileBrowserViewMode }>(
+        (resolve) => {
+          const tab = {
+            worktreeId: parsed.worktreeId,
+            url: startingUrl.current ?? parsed.url,
+            viewMode: parsed.viewMode,
+            network: parsed.network ?? settingNetwork(drawing)
+          }
+          live.current = tab
+          place({
+            ...tab,
+            id: parsed.id,
+            frame: startingFrame.current ?? parsed.frame,
+            generation: 0,
+            end: (ended, viewMode) => resolve({ ended, ...(viewMode ? { viewMode } : {}) })
+          })
+          if (parsed.fullScreen) {
+            setFullScreen({ ...tab, fromPlaced: true })
+          }
         }
-        live.current = tab
-        place({
-          ...tab,
-          id: parsed.id,
-          frame: startingFrame.current ?? parsed.frame,
-          generation: 0,
-          end: (ended) => resolve({ ended })
-        })
-        if (parsed.fullScreen) {
-          setFullScreen({ ...tab, fromPlaced: true })
-        }
-      })
+      )
     },
     [endPlaced, place, requireLocal]
   )
@@ -257,6 +275,11 @@ export function useNativeLocalBrowser(
           network={fullScreen.network}
           viewMode={fullScreen.viewMode}
           tunnel={tunnel}
+          onViewModeChange={(viewMode) => {
+            if (fullScreen.fromPlaced) {
+              updateLive({ viewMode })
+            }
+          }}
           onNetworkChange={(network) =>
             setFullScreen((current) => current && { ...current, network })
           }

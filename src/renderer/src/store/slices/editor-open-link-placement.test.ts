@@ -228,9 +228,9 @@ describe('file links open beside their source', () => {
     expect(b).not.toBe(c)
   })
 
-  it('opens a second view in the neighbor when only the source holds the file', async () => {
+  it('reuses the existing view when only the source holds the file', async () => {
     const store = createEditorTabsStore()
-    const { a, b } = seedColumns(store, 'terminal', 'terminal', 'terminal')
+    const { a } = seedColumns(store, 'terminal', 'terminal', 'terminal')
     addEditor(store, '/repo/link.ts', a)
     store.getState().activateTab('source')
 
@@ -241,9 +241,9 @@ describe('file links open beside their source', () => {
     await main.settle()
     main.close()
 
-    expect(groupOfFile(store, '/repo/link.ts').sort()).toEqual([a, b].sort())
+    expect(groupOfFile(store, '/repo/link.ts')).toEqual([a])
     expect(store.getState().openFiles.filter((f) => f.filePath === '/repo/link.ts')).toHaveLength(1)
-    expect(opened?.groupId).toBe(b)
+    expect(opened?.groupId).toBe(a)
   })
 
   it('keeps placement on the captured source when focus moves during resolution', async () => {
@@ -381,16 +381,30 @@ describe('file links open beside their source', () => {
     })
   })
 
-  it('keeps the source in place when it is the only group', () => {
+  it('opens beside the source when it is the only group', async () => {
     const store = createEditorTabsStore()
     addTab(store, 'terminal', 'source')
     const a = store.getState().groupsByWorktree['wt-1']![0]!.id
+    const main = await drawTabsFromMain(store)
 
     const opened = store
       .getState()
       .openFileForLink(fileInput('/repo/link.ts'), {}, linkIntent(store))
+    await main.settle()
 
-    expect(opened?.groupId).toBe(a)
-    expect(store.getState().groupsByWorktree['wt-1']).toHaveLength(1)
+    expect(opened?.groupId).toBeTruthy()
+    expect(opened?.groupId).not.toBe(a)
+    expect(groupOfFile(store, '/repo/link.ts')).toEqual([opened?.groupId])
+    expect(store.getState().groupsByWorktree['wt-1']).toHaveLength(2)
+    expect(store.getState().groupsByWorktree['wt-1']!.find((g) => g.id === a)?.activeTabId).toBe(
+      'source'
+    )
+
+    store.getState().openFileForLink(fileInput('/repo/second.ts'), {}, linkIntent(store))
+    await main.settle()
+    expect(store.getState().groupsByWorktree['wt-1']).toHaveLength(2)
+    expect(groupOfFile(store, '/repo/link.ts')).toEqual([opened?.groupId])
+    expect(groupOfFile(store, '/repo/second.ts')).toEqual([opened?.groupId])
+    main.close()
   })
 })

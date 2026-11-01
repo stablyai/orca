@@ -79,7 +79,7 @@ describe('native.browser.view', () => {
     })
     expect(drawn()).toHaveLength(1)
     act(() => drawn()[0]!.props.onStreamFromHost())
-    await expect(shown).resolves.toEqual({ ended: 'streamed' })
+    await expect(shown).resolves.toEqual({ ended: 'streamed', viewMode: 'mobile' })
     expect(drawn()).toHaveLength(0)
   })
 
@@ -123,7 +123,7 @@ describe('native.browser.view', () => {
     await act(async () => {
       void show('b')
     })
-    await expect(first).resolves.toEqual({ ended: 'replaced' })
+    await expect(first).resolves.toEqual({ ended: 'replaced', viewMode: 'mobile' })
     await act(async () => {
       await shell.serveView({ action: 'hide', id: 'a' })
     })
@@ -148,7 +148,54 @@ describe('native.browser.view', () => {
     expect(fullScreen()[0]!.props.tunnel).toBe(TUNNEL)
     expect(drawn()[0]!.props.tunnel).toBe(TUNNEL)
     act(() => fullScreen()[0]!.props.onStreamFromHost())
-    await expect(shown).resolves.toEqual({ ended: 'streamedFullScreen' })
+    await expect(shown).resolves.toEqual({ ended: 'streamedFullScreen', viewMode: 'mobile' })
     expect(fullScreen()).toHaveLength(0)
+  })
+
+  it('tells the page the layout the user left the view in, also from full screen', async () => {
+    vi.mocked(loadBrowserDrawing).mockResolvedValue('host')
+    let shown: Promise<unknown> = Promise.resolve()
+    await act(async () => {
+      shown = show('a', { fullScreen: true })
+    })
+    act(() => fullScreen()[0]!.props.onViewModeChange('web'))
+    act(() => fullScreen()[0]!.props.onStreamFromHost())
+    await expect(shown).resolves.toEqual({ ended: 'streamedFullScreen', viewMode: 'web' })
+  })
+
+  it('opens the address the host reports on a view that is still blank', async () => {
+    vi.mocked(loadBrowserDrawing).mockResolvedValue('host')
+    await act(async () => {
+      void show('a', { url: 'about:blank' })
+    })
+    await act(async () => {
+      await shell.serveView({ action: 'adopt', id: 'a', url: 'https://example.com/' })
+    })
+    expect(drawn()[0]!.props.initialUrl).toBe('https://example.com/')
+  })
+
+  it('leaves the page the user already went to when the host reports its address', async () => {
+    vi.mocked(loadBrowserDrawing).mockResolvedValue('host')
+    await act(async () => {
+      void show('a', { url: 'about:blank' })
+    })
+    act(() => drawn()[0]!.props.onUrlChange('https://user.example/'))
+    await act(async () => {
+      await shell.serveView({ action: 'adopt', id: 'a', url: 'https://example.com/' })
+    })
+    expect(drawn()[0]!.props.initialUrl).toBe('about:blank')
+  })
+
+  it('opens at the address the host reported while the show was starting', async () => {
+    let finishRead = (_drawing: 'host') => {}
+    vi.mocked(loadBrowserDrawing).mockImplementation(
+      () => new Promise((resolve) => (finishRead = resolve))
+    )
+    await act(async () => {
+      void show('a', { url: 'about:blank' })
+      await shell.serveView({ action: 'adopt', id: 'a', url: 'https://example.com/' })
+      finishRead('host')
+    })
+    expect(drawn()[0]!.props.initialUrl).toBe('https://example.com/')
   })
 })

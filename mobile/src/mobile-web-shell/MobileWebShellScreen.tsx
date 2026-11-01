@@ -100,7 +100,8 @@ export function MobileWebShellScreen({
     pageReady,
     pageFrame,
     backClaimed,
-    ownsHostArea
+    ownsHostArea,
+    hostStatus
   } = useMobileWebShellSession({
     hostId,
     routePathname: route.pathname,
@@ -189,6 +190,7 @@ export function MobileWebShellScreen({
 
   const bridge = useMobileWebShellBridge({
     hostId,
+    hostStatus,
     route,
     safeAreaInsets: pageInsets,
     keyboardInset,

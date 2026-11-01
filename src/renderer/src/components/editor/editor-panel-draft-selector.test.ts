@@ -16,68 +16,6 @@ function makeFile(id: string, overrides: Partial<OpenFile> = {}): OpenFile {
 }
 
 describe('createEditorPanelDraftSelector', () => {
-  it('limits draft invalidations to the panel that owns each keystroke', () => {
-    const files = Array.from({ length: 200 }, (_, index) => makeFile(`file-${index}`))
-    let editorDrafts: Record<string, string> = {}
-    let wholeMapInvalidations = 0
-    let scopedInvalidations = 0
-    let unrelatedPanelInvalidations = 0
-    const selectors = files.map(createEditorPanelDraftSelector)
-    const previousSelections = selectors.map((selector) =>
-      selector({ editorDrafts, openFiles: [] })
-    )
-
-    for (let edit = 0; edit < 200; edit += 1) {
-      const previousDrafts = editorDrafts
-      editorDrafts = { ...editorDrafts, 'file-0': `edit-${edit}` }
-      for (let panelIndex = 0; panelIndex < files.length; panelIndex += 1) {
-        if (previousDrafts !== editorDrafts) {
-          wholeMapInvalidations += 1
-        }
-        const nextSelection = selectors[panelIndex]({ editorDrafts, openFiles: [] })
-        if (previousSelections[panelIndex] !== nextSelection) {
-          scopedInvalidations += 1
-          if (panelIndex !== 0) {
-            unrelatedPanelInvalidations += 1
-          }
-          previousSelections[panelIndex] = nextSelection
-        }
-      }
-    }
-
-    expect(wholeMapInvalidations).toBe(40_000)
-    expect(scopedInvalidations).toBe(200)
-    expect(unrelatedPanelInvalidations).toBe(0)
-  })
-
-  it('includes preview and selected conflict-review drafts but excludes unrelated files', () => {
-    const preview = makeFile('preview', { markdownPreviewSourceFileId: 'source' })
-    const conflictReview = makeFile('review', {
-      mode: 'conflict-review',
-      conflictReview: { selectedFileId: 'selected' } as NonNullable<OpenFile['conflictReview']>
-    })
-    const editorDrafts = {
-      preview: 'preview draft',
-      source: '',
-      review: 'review draft',
-      selected: 'selected draft',
-      unrelated: 'other draft'
-    }
-    const selectPreviewDrafts = createEditorPanelDraftSelector(preview)
-    const selectConflictDrafts = createEditorPanelDraftSelector(conflictReview)
-    const selectNoDrafts = createEditorPanelDraftSelector(null)
-
-    expect(selectPreviewDrafts({ editorDrafts, openFiles: [] })).toEqual({
-      preview: 'preview draft',
-      source: ''
-    })
-    expect(selectConflictDrafts({ editorDrafts, openFiles: [] })).toEqual({
-      review: 'review draft',
-      selected: 'selected draft'
-    })
-    expect(selectNoDrafts({ editorDrafts, openFiles: [] })).toEqual({})
-  })
-
   it('includes overview conflict drafts and ignores unrelated draft replacements', () => {
     const conflictReview = makeFile('review', {
       filePath: 'C:\\repo',

@@ -1,3 +1,5 @@
+import type { CodexAccountSelectionTarget } from './codex-selection-lane'
+
 export type ManagedDataAccountProvider = 'opencode' | 'devin'
 
 export type ManagedDataAccountSummary = {
@@ -126,6 +128,13 @@ export type ClaudeRateLimitAccountsState = {
   systemDefaultHome?: string
   /** An older Orca's copy-based switching once wrote an account's login into System default. */
   systemDefaultMayBeCopied?: boolean
+}
+
+/** A Claude switch made over runtime RPC, e.g. from the phone. */
+export type ClaudeAccountSelectionChange = {
+  target: CodexAccountSelectionTarget
+  before: { state: ClaudeRateLimitAccountsState; accountId: string | null }
+  after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
 }
 
 export type ClaudeManagedAccountRuntimeSelection = {

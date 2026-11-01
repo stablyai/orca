@@ -4,6 +4,7 @@ import { translate } from '../i18n/mobile-i18n'
 import type { BridgeBrowserViewEnding } from '../mobile-web-shell/bridge/bridge-native-verbs'
 import { useShellLocalBrowser } from '../platform/shell-local-browser'
 import { loadBrowserDrawing, type MobileBrowserDrawing } from '../storage/preferences'
+import type { MobileBrowserViewMode } from './browser-screencast-request'
 import { isBlankBrowserUrl } from './browser-url'
 import { mobileBrowserPaneStyles } from './mobile-browser-pane-styles'
 import {
@@ -46,18 +47,20 @@ export function MobileBrowserSurface({ hostId, ...paneProps }: Props): React.JSX
   // Bumped when the drawn tab must reopen: full screen came or went, or the tab came back from streaming.
   const [resume, setResume] = useState({ url: tab.url, generation: 0 })
   // A new tab opens blank and learns its address from the host a moment later; reopen the drawn tab there. The drawn
-  // tab does not report where it went, so later addresses are the host's page moving, not the tab's first page.
+  // tab does not report where it went, so later addresses are the host's page moving, not the tab's first page. The
+  // shell keeps a placed view open and decides itself, so the placed view is not reopened here.
   const [openedAt] = useState(() => Date.now())
+  const placesViews = shell.placed !== null
   useEffect(() => {
     if (isBlankBrowserUrl(tab.url) || Date.now() - openedAt > FIRST_ADDRESS_WAIT_MS) {
       return
     }
     setResume((current) =>
       isBlankBrowserUrl(current.url)
-        ? { url: tab.url, generation: current.generation + 1 }
+        ? { url: tab.url, generation: current.generation + (placesViews ? 0 : 1) }
         : current
     )
-  }, [openedAt, tab.url])
+  }, [openedAt, placesViews, tab.url])
   const mode = picked ?? (localPossible ? drawing : null)
   // The host serves one tunnel per connection, so it outlives the drawn tab moving in and out of full screen.
   const tunnel = useMobileBrowserLocalTunnel(client, hostId, worktreeId, mode === 'host')
@@ -143,7 +146,10 @@ export function MobileBrowserSurface({ hostId, ...paneProps }: Props): React.JSX
   if (placed) {
     if (picked !== 'stream') {
       // The shell draws full screen itself; the page streams there only after the user picks streaming in it.
-      const onEnded = (ending: BridgeBrowserViewEnding): void => {
+      const onEnded = (ending: BridgeBrowserViewEnding, leftIn?: MobileBrowserViewMode): void => {
+        if (leftIn) {
+          saveMobileBrowserViewMode(worktreeId, tab.browserPageId, leftIn)
+        }
         setShellFullScreen(false)
         if (ending !== 'hidden') {
           setPicked('stream')

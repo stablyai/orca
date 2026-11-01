@@ -96,6 +96,24 @@ export const chatUiFeatureTipActionSchema = z
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+// Fires in both arms when the tip would open, so control has the same exposure moment as treatment.
+export const chatUiFeatureTipExposureSchema = z
+  .object({
+    variant: chatUiFeatureTipVariantSchema,
+    launch_tip_cohort: z.enum(['control', 'treatment', 'unassigned']),
+    shown: z.boolean(),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+export const agentDefaultSurfaceChangedSchema = z
+  .object({
+    from_mode: nativeChatViewModeSchema,
+    to_mode: nativeChatViewModeSchema,
+    source: z.enum(['launch_card', 'settings']),
+    launch_tip_shown: z.boolean(),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
 
 export const featureWallOpenedSchema = z
   .object({

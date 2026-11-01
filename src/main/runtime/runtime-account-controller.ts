@@ -23,13 +23,18 @@ import type {
 import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
-import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import {
+  getClaudeSelectionTargetForAccount,
+  getSelectedClaudeAccountIdForTarget,
+  type ClaudeAccountSelectionTarget
+} from '../claude-accounts/runtime-selection'
 import {
   hostAccountsManagedByDesktopMessage,
   type HostAccountLaunchEnv
 } from '../../shared/host-account-launch-env'
 import type { HostClaudeProfileRefresh } from './host-claude-profile-refresh'
 import { HostAccountLaunchEnvState } from './host-account-launch-env-state'
+import type { RuntimeNotifier } from './runtime-notifier-contract'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -57,10 +62,14 @@ export type CodexRateLimitResetRpcResult = {
     }
 )
 
+type ClaudeSelectionNotifier = Pick<RuntimeNotifier, 'claudeAccountSelected'>
+
 export class RuntimeAccountController {
   private services: RuntimeAccountServices | null = null
   private commitMessageAgentEnvironment: CommitMessageAgentEnvironmentResolvers | null = null
   private readonly hostAccounts = new HostAccountLaunchEnvState(() => this.services !== null)
+
+  constructor(private readonly getNotifier: () => ClaudeSelectionNotifier | null = () => null) {}
 
   setServices(services: RuntimeAccountServices): void {
     this.services = services
@@ -195,8 +204,27 @@ export class RuntimeAccountController {
     ])
   }
 
-  selectClaude(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
-    return this.requireServices().claudeAccounts.selectAccount(accountId)
+  /** Desktop switches go through IPC and handle their own sessions; this path tells the window. */
+  async selectClaude(
+    accountId: string | null,
+    options: { movesRunningSessions?: true } = {}
+  ): Promise<ClaudeRateLimitAccountsState> {
+    const { claudeAccounts } = this.requireServices()
+    if (options.movesRunningSessions) {
+      return claudeAccounts.selectAccount(accountId)
+    }
+    const before = claudeAccounts.listAccounts()
+    const after = await claudeAccounts.selectAccount(accountId)
+    const account = before.accounts.find((candidate) => candidate.id === accountId)
+    const target: ClaudeAccountSelectionTarget = account
+      ? getClaudeSelectionTargetForAccount(account)
+      : { runtime: 'host' }
+    this.getNotifier()?.claudeAccountSelected?.({
+      target,
+      before: { state: before, accountId: selectedClaudeAccountId(before, target) },
+      after: { state: after, accountId: selectedClaudeAccountId(after, target) }
+    })
+    return after
   }
 
   selectCodex(accountId: string | null): Promise<CodexRateLimitAccountsState> {
@@ -302,4 +330,17 @@ export class RuntimeAccountController {
     }
     return this.services
   }
+}
+
+function selectedClaudeAccountId(
+  state: ClaudeRateLimitAccountsState,
+  target: ClaudeAccountSelectionTarget
+): string | null {
+  return getSelectedClaudeAccountIdForTarget(
+    {
+      activeClaudeManagedAccountId: state.activeAccountId,
+      activeClaudeManagedAccountIdsByRuntime: state.activeAccountIdsByRuntime
+    },
+    target
+  )
 }

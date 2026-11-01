@@ -1,7 +1,7 @@
 // Keep every retry in the journal but draw only each agent run’s latest retry row, preserving intervening non-retry rows.
 
-import { agentJournalItemSubagentId } from '../agent-session-journal-producer'
-import type { NativeChatMessage } from '../native-chat-types'
+import { agentJournalItemSubagentId } from '../agent-session/journal/agent-session-journal-producer'
+import type { NativeChatMessage } from './native-chat-types'
 import { isNativeChatContextClear } from '../agent-session-context-clear'
 
 function isProviderRetryRow(message: NativeChatMessage): boolean {

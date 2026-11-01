@@ -45,7 +45,7 @@ describe('resolveHttpLinkBrowserPlacement', () => {
     ).toEqual({ targetGroupId: 'right' })
   })
 
-  it('ignores a browser hidden behind another tab and splits beside the source instead', () => {
+  it('reuses the neighboring group when its browser is hidden behind another tab', () => {
     const editor = { id: 'editor', contentType: 'editor' } as const
     expect(
       resolveHttpLinkBrowserPlacement(
@@ -57,7 +57,7 @@ describe('resolveHttpLinkBrowserPlacement', () => {
         WT
       )
     ).toEqual({
-      split: { sourceGroupId: 'left', splitDirection: 'right', activate: false }
+      targetGroupId: 'right'
     })
   })
 

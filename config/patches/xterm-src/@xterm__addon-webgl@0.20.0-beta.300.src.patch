@@ -21,7 +21,7 @@ index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf9
  }
  
 diff --git a/src/TextureAtlas.ts b/src/TextureAtlas.ts
-index 4977ad741065e26bbfd35bc50e7558a033b13340..2ee2c11eb830116aca1370d89bef1daa203f8bf8 100644
+index 4977ad741065e26bbfd35bc50e7558a033b13340..e9086d08e4185873e5c12e2fb6aa1d9351afc567 100644
 --- a/src/TextureAtlas.ts
 +++ b/src/TextureAtlas.ts
 @@ -3,6 +3,7 @@
@@ -32,7 +32,26 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..2ee2c11eb830116aca1370d89bef1daa
  import { IColorContrastCache } from 'browser/Types';
  import { DIM_OPACITY, TEXT_BASELINE } from './Constants';
  import { tryDrawCustomGlyph } from './customGlyphs/CustomGlyphRasterizer';
-@@ -112,20 +113,25 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -56,6 +57,9 @@ let $glyph = undefined;
+ 
+ export class TextureAtlas implements ITextureAtlas {
+   private _didWarmUp: boolean = false;
++  // Orca: warm-up tasks draw into the DOM container, so a disposed atlas must cancel them or its
++  // scratch canvas is re-appended to the terminal element and never removed.
++  private _warmUpQueue: InstanceType<typeof IdleTaskQueue> | undefined;
+ 
+   private _cacheMap: FourKeyMap<number, number, number, number, IRasterizedGlyph> = new FourKeyMap();
+   private _cacheMapCombined: FourKeyMap<string, number, number, number, IRasterizedGlyph> = new FourKeyMap();
+@@ -104,6 +108,8 @@ export class TextureAtlas implements ITextureAtlas {
+   }
+ 
+   public dispose(): void {
++    this._warmUpQueue?.clear();
++    this._warmUpQueue = undefined;
+     this._tmpCanvas.remove();
+     for (const page of this.pages) {
+       page.canvas.remove();
+@@ -112,20 +118,27 @@ export class TextureAtlas implements ITextureAtlas {
      this._onRemoveTextureAtlasCanvas.dispose();
    }
  
@@ -48,7 +67,9 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..2ee2c11eb830116aca1370d89bef1daa
 -  private _doWarmUp(): void {
 +  private _doWarmUp(domContainer: HTMLElement | undefined): void {
      // Pre-fill with ASCII 33-126, this is not urgent and done in idle callbacks
++    this._warmUpQueue?.clear();
      const queue = new IdleTaskQueue(this._logService);
++    this._warmUpQueue = queue;
      for (let i = 33; i < 126; i++) {
        queue.enqueue(() => {
 +        // Orca: a canvas outside the document ignores the page's font smoothing and rasterizes
@@ -62,7 +83,7 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..2ee2c11eb830116aca1370d89bef1daa
            this._cacheMap.set(i, DEFAULT_COLOR, DEFAULT_COLOR, DEFAULT_EXT, rasterizedGlyph);
          }
        });
-@@ -135,21 +141,23 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -135,21 +148,23 @@ export class TextureAtlas implements ITextureAtlas {
    private _pageLayoutVersion = 0;
    public get pageLayoutVersion(): number { return this._pageLayoutVersion; }
  
@@ -98,7 +119,7 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..2ee2c11eb830116aca1370d89bef1daa
    }
  
    private _createNewPage(): AtlasPage {
-@@ -465,6 +473,36 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -465,6 +480,36 @@ export class TextureAtlas implements ITextureAtlas {
      return this._config.colors.contrastCache;
    }
  
@@ -135,7 +156,7 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..2ee2c11eb830116aca1370d89bef1daa
    private _drawToCache(codeOrChars: number | string, bg: number, fg: number, ext: number, restrictToCellHeight: boolean, domContainer: HTMLElement | undefined): IRasterizedGlyph {
      const chars = typeof codeOrChars === 'number' ? String.fromCharCode(codeOrChars) : codeOrChars;
  
-@@ -536,6 +574,7 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -536,6 +581,7 @@ export class TextureAtlas implements ITextureAtlas {
      const fontStyle = italic ? 'italic' : '';
      this._tmpCtx.font =
        `${fontStyle} ${fontWeight} ${this._config.fontSize * this._config.devicePixelRatio}px ${this._config.fontFamily}`;
@@ -157,7 +178,7 @@ index bfd6fd76cebe8f55dce7bfad5406d4f7cd184320..0bd283ea7b2bb72d5d3f20b6e7e11e7c
    /**
     * Incremented whenever cached glyph texture page mappings may be stale, such as after atlas page
 diff --git a/src/WebglRenderer.ts b/src/WebglRenderer.ts
-index a951efba5c75e82735cd39b6b22c4b5d5fad5928..3543141cede0175e01e9395fda934a944fd3a623 100644
+index a951efba5c75e82735cd39b6b22c4b5d5fad5928..86a86162bce43e2560874b4d2088e09891284921 100644
 --- a/src/WebglRenderer.ts
 +++ b/src/WebglRenderer.ts
 @@ -316,7 +316,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
@@ -181,6 +202,27 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..3543141cede0175e01e9395fda934a94
        merged = true;
        this._clearModel(true);
        this._updateModel(0, this._terminal.rows - 1);
+@@ -396,6 +399,20 @@ export class WebglRenderer extends Disposable implements IRenderer {
+     }
+ 
+     // Render
++    // A transparent framebuffer keeps the previous draw, so re-blending translucent
++    // backgrounds accumulated opacity on every redraw and flickered (Orca #6491).
++    if (this._terminal.options.allowTransparency) {
++      // Keep the RGB blend but write source alpha as-is; SRC_ALPHA on alpha
++      // itself would turn the configured opacity `a` into `a²`.
++      this._gl.blendFuncSeparate(
++        this._gl.SRC_ALPHA,
++        this._gl.ONE_MINUS_SRC_ALPHA,
++        this._gl.ONE,
++        this._gl.ONE_MINUS_SRC_ALPHA
++      );
++      this._gl.clearColor(0, 0, 0, 0);
++      this._gl.clear(this._gl.COLOR_BUFFER_BIT);
++    }
+     this._rectangleRenderer.value.renderBackgrounds();
+     this._glyphRenderer.value.render(this._model);
+     if (!this._cursorBlinkStateManager.value || this._cursorBlinkStateManager.value.isCursorVisible) {
 diff --git a/src/renderLayer/BaseRenderLayer.ts b/src/renderLayer/BaseRenderLayer.ts
 index 5b11615328957b6f5d41a174284c11e061910d91..1654e5ae39baf65a7243cbe7b1395c28824b269e 100644
 --- a/src/renderLayer/BaseRenderLayer.ts

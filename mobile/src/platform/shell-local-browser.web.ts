@@ -12,7 +12,8 @@ export function useShellLocalBrowser(): ShellLocalBrowser {
         ? {
             show: verbs.placeLocalBrowser,
             move: verbs.moveLocalBrowser,
-            remove: verbs.removeLocalBrowser
+            remove: verbs.removeLocalBrowser,
+            adopt: verbs.adoptLocalBrowserUrl
           }
         : null
     }),

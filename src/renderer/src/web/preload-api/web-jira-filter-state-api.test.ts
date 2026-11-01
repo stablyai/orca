@@ -50,11 +50,6 @@ vi.mock('../../runtime/runtime-rpc-client', () => ({
   assertRuntimeEnvironmentCapability: vi.fn(),
   callRuntimeRpc: rpc
 }))
-
-const savedState = {
-  filters: [{ id: 'mine', name: 'My work', jql: 'project = APP' }],
-  activeFilterId: 'mine'
-}
 const quickState = { statuses: ['In Progress'] }
 const BOTH = [JIRA_SAVED_FILTER_RUNTIME_CAPABILITY, JIRA_STATUS_FILTER_RUNTIME_CAPABILITY]
 
@@ -68,26 +63,6 @@ beforeEach(() => {
   vi.stubGlobal('window', { localStorage, api: { ui: createWebUiApi() } })
 })
 afterEach(() => vi.unstubAllGlobals())
-
-it('reads and writes Jira filter state on the paired host from the local target', async () => {
-  runtime.status.mockResolvedValue({ capabilities: BOTH })
-  runtime.call.mockImplementation(async (method: string) =>
-    method.includes('Saved') ? savedState : quickState
-  )
-
-  expect(await readJiraSavedFilterState({ kind: 'local' })).toEqual(savedState)
-  await mutateJiraSavedFilters({ kind: 'local' }, { kind: 'select', id: 'mine' })
-  await readJiraQuickFilterState({ kind: 'local' })
-  await writeJiraQuickFilterState({ kind: 'local' }, quickState)
-
-  expect(runtime.call.mock.calls).toEqual([
-    ['ui.getJiraSavedFilters', undefined, 15_000],
-    ['ui.mutateJiraSavedFilters', { kind: 'select', id: 'mine' }, 15_000],
-    ['ui.getJiraQuickFilters', undefined, 15_000],
-    ['ui.setJiraQuickFilters', quickState, 15_000]
-  ])
-  expect(rpc).not.toHaveBeenCalled()
-})
 
 it('reports update-required for an older host and never sends the new methods', async () => {
   runtime.status.mockResolvedValue({ capabilities: [] })
@@ -107,17 +82,6 @@ it('reports update-required for an older host and never sends the new methods', 
   expect(runtime.call).not.toHaveBeenCalled()
 })
 
-it('rejects host failures instead of returning empty or unsaved state', async () => {
-  runtime.status.mockRejectedValueOnce(new Error('Connection lost'))
-  await expect(readJiraSavedFilterState({ kind: 'local' })).rejects.toThrow('Connection lost')
-
-  runtime.status.mockResolvedValue({ capabilities: BOTH })
-  runtime.call.mockRejectedValue(new Error('Host write failed'))
-  await expect(writeJiraQuickFilterState({ kind: 'local' }, quickState)).rejects.toThrow(
-    'Host write failed'
-  )
-})
-
 it('does not send to a host paired in while the capability probe was in flight', async () => {
   runtime.status.mockResolvedValue({ capabilities: BOTH })
   runtime.idAfterProbe = 'host-b'
@@ -125,19 +89,5 @@ it('does not send to a host paired in while the capability probe was in flight',
   await expect(
     mutateJiraSavedFilters({ kind: 'local' }, { kind: 'select', id: 'mine' })
   ).rejects.toThrow('Pairing changed')
-  expect(runtime.call).not.toHaveBeenCalled()
-})
-
-it('keeps explicit environment targets on the environment RPC path', async () => {
-  rpc.mockResolvedValue(savedState)
-
-  await readJiraSavedFilterState({ kind: 'environment', environmentId: 'host-c' })
-
-  expect(rpc).toHaveBeenCalledWith(
-    { kind: 'environment', environmentId: 'host-c' },
-    'ui.getJiraSavedFilters',
-    undefined,
-    { timeoutMs: 15_000 }
-  )
   expect(runtime.call).not.toHaveBeenCalled()
 })

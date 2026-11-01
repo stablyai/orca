@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../../src/shared/agent-session-journal-types'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../../../src/main/native-chat/agent-session-wire/agent-session-history-page-bounds'
 import {
   createReleasedStopNoteRig,
@@ -68,10 +68,11 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
           const after = reduce(before, replies)
           expect(render(after)).toEqual({ type: 'text', text: ordinary.text })
           expect(rig.journal.itemBody(noteId)).toEqual(unconfirmed)
+          // The turn end is one saved sequence that touches only the turn, whichever writer made it.
           const since = rig.journal.readSince(before.cursor!)
           expect(since).toMatchObject({
             ok: true,
-            rows: [expect.objectContaining({ kind: batch ? 'lifecycle-batch' : 'item' })]
+            rows: [expect.objectContaining({ kind: 'outcome', itemIds: [turnItemId] })]
           })
         }
       )

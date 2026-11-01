@@ -1,4 +1,4 @@
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { isAgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
@@ -224,7 +224,7 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
       }
       context.deliveryOrder.reconcile(
         envelope.sessionId,
-        context.sessions.get(envelope.sessionId)?.journal.submissions() ?? []
+        context.sessions.get(envelope.sessionId)?.journal
       )
       const place = context.deliveryOrder.reserve(envelope.sessionId)
       return {

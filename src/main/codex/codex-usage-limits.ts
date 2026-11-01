@@ -1,9 +1,12 @@
-import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   usageLimitResetsAt,
   type AgentSessionUsageLimit,
   type AgentSessionUsageLimitWindow
-} from '../../shared/agent-session-usage-limit'
+} from '../../shared/agent-session/failures/agent-session-usage-limit'
 import type { CodexRateLimitWindowsSnapshot } from '../rate-limits/codex-rate-limit-window-classification'
 import {
   readCodexErrorAdditionalDetails,
