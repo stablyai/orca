@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionRuntimeDeps } from '../../runtime/structured-agent-session-runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import {
@@ -352,18 +353,19 @@ describe('a chat permission mode', () => {
     const environment = createStructuredAgentEnvironmentResolvers({})
     shell.mockClear()
     capture.mockClear()
+    const deps: StructuredAgentSessionRuntimeDeps = {
+      stateDirectory: rig.root,
+      hostId: 'local',
+      claimKeyId: 'key-1',
+      resolveWorkspacePath: async () => rig.root,
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'system' }),
+      resolveCodexCommand: () => ({ command: 'codex-pr-30107-missing', prefixArgs: [] }),
+      logger: { warn: vi.fn(), error: vi.fn() }
+    }
     const discovery = codexModelCatalogDiscovery({
       environment,
-      deps: {
-        stateDirectory: rig.root,
-        hostId: 'local',
-        claimKeyId: 'key-1',
-        resolveWorkspacePath: async () => rig.root,
-        resolveLaunchArgs: () => [],
-        resolveClaudeAuthPolicy: () => ({ account: 'system' }),
-        resolveCodexCommand: () => ({ command: 'codex-pr-30107-missing', prefixArgs: [] }),
-        logger: { warn: vi.fn(), error: vi.fn() }
-      }
+      deps
     })
     if (discovery.kind !== 'probe') {
       throw new Error('Codex must have discovery')

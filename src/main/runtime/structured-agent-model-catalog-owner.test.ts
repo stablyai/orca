@@ -33,7 +33,7 @@ vi.mock('../orca-profiles/profile-storage-paths', async (importOriginal) => ({
   getProfileUserDataPath: () => profile.root
 }))
 let root: string
-let releases: ReturnType<typeof vi.fn>
+let releases: ReturnType<typeof vi.fn<() => void>>
 const installedDeps = () => ({
   stateDirectory: root,
   hostId: 'local',

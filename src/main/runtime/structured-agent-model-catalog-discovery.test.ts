@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -30,16 +31,17 @@ function context(): StructuredAgentModelCatalogContext {
   const unused = async (): Promise<never> => {
     throw new Error('building a probe resolves nothing')
   }
+  const deps: StructuredAgentSessionRuntimeDeps = {
+    stateDirectory: '/state',
+    hostId: 'local',
+    claimKeyId: 'catalog-test',
+    resolveWorkspacePath: unused,
+    resolveLaunchArgs: () => [],
+    resolveClaudeAuthPolicy: () => ({ account: 'system' }),
+    logger: { warn: vi.fn(), error: vi.fn() }
+  }
   return {
-    deps: {
-      stateDirectory: '/state',
-      hostId: 'local',
-      claimKeyId: 'catalog-test',
-      resolveWorkspacePath: unused,
-      resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ account: 'system' }),
-      logger: { warn: vi.fn(), error: vi.fn() }
-    },
+    deps,
     environment: {
       resolveBaseEnvironment: unused,
       resolveAgentEnvironment: unused,

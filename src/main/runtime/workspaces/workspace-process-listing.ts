@@ -236,13 +236,14 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         logger
       )
     )
+    const { stateDirectory, ...catalogDeps } = this.structuredAgentCatalogDependencies()
     await installStructuredAgentSessionHost({
-      stateDirectory: getProfileUserDataPath(),
+      stateDirectory,
       legacySessionTabIds: this.legacyStructuredSessionTabIds,
       hostId: LOCAL_EXECUTION_HOST_ID,
       claimKeyId: this.agentSessionClaimSigner.keyId,
       logger,
-      ...this.structuredAgentCatalogDependencies(),
+      ...catalogDeps,
       claudeCliFlags: claudeCliFlagSupport,
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
