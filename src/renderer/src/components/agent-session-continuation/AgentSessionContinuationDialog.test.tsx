@@ -407,8 +407,9 @@ it('ignores a detected agent this build does not know when explaining the exclud
         .map((agent) => agent.id)
     }
   })
-  // A newer paired host can report an agent id this build has no config for.
-  const detectedIds = ['claude', 'future-agent'] as TuiAgent[]
+  // A newer paired host can report an agent id this build has no config for; parse it as the
+  // wire data it arrives as, since no TuiAgent literal can name it.
+  const detectedIds: TuiAgent[] = JSON.parse('["claude", "future-agent"]')
   mocks.detection.mockReturnValue({ ...detection, detectedIds })
   render(
     <AgentSessionContinuationDialog
