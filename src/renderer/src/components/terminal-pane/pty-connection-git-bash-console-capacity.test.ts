@@ -517,6 +517,7 @@ describe('Git Bash console-capacity pane retention', () => {
             command: { id: 'status', label: 'Status', command: 'git status', appendEnter: true },
             pane: { leafId: view.pane.leafId, terminal: { focus: vi.fn() } },
             tabId: 'tab-1',
+            worktreeId: 'worktree-1',
             transport: view.transport
           })
         ).toBe(true)
