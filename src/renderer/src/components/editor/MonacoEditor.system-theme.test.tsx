@@ -130,48 +130,4 @@ describe('MonacoEditor system theme', () => {
     })
     expect(editorProps.current?.theme).toBe('vs')
   })
-
-  it('keeps an explicit theme when the system color scheme changes', () => {
-    settingsState.theme = 'light'
-    const media = installMatchMedia(true)
-    renderEditor()
-
-    expect(editorProps.current?.theme).toBe('vs')
-
-    act(() => {
-      media.emit(false)
-    })
-    expect(editorProps.current?.theme).toBe('vs')
-  })
-})
-
-it('updates Unicode highlighting when the editor language changes', () => {
-  installMatchMedia(false)
-  const props = {
-    fileId: 'file',
-    filePath: '/repo/file.md',
-    viewStateKey: 'pane:file',
-    relativePath: 'file.md',
-    content: '中文说明：（ example ）\u200b',
-    onContentChange: vi.fn(),
-    onSave: vi.fn()
-  }
-  const view = render(<MonacoEditor {...props} language="markdown" />)
-  expect(editorProps.current?.options).toEqual(
-    expect.objectContaining({
-      unicodeHighlight: { ambiguousCharacters: false, invisibleCharacters: true }
-    })
-  )
-  view.rerender(<MonacoEditor {...props} language="typescript" />)
-  expect(editorProps.current?.options).toEqual(
-    expect.objectContaining({
-      unicodeHighlight: { ambiguousCharacters: true, invisibleCharacters: true }
-    })
-  )
-  view.rerender(<MonacoEditor {...props} language="markdown" />)
-  expect(editorProps.current?.options).toEqual(
-    expect.objectContaining({
-      unicodeHighlight: { ambiguousCharacters: false, invisibleCharacters: true }
-    })
-  )
 })

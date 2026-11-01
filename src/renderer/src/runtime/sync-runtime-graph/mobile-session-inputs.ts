@@ -1,3 +1,5 @@
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { hostSessionTabIdsByLocalTabForWorktree } from '../web-session-tabs-sync/tracking-mappings'
 import type { AppState } from '@/store/types'
 import { parsePaneKey, makePaneKey } from '../../../../shared/stable-pane-id'
 import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/native-chat-leaf-routing'
@@ -127,8 +129,13 @@ export function buildMobileSessionWorktreeInputs(
   const activeEditorFileId =
     resolvedActiveFileId && openFilesById?.has(resolvedActiveFileId) ? resolvedActiveFileId : null
   const activeTabId = state.activeTabId
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
   return {
     worktreeId,
+    hostTabIds:
+      owner.kind === 'resolved'
+        ? hostSessionTabIdsByLocalTabForWorktree(owner.environmentId ?? 'local', worktreeId)
+        : EMPTY_NARROWED_BY_KEY,
     worktreeInstanceId: resolveWorktreeInstanceId(state, worktreeId),
     terminalTabs,
     browserWorkspaces,

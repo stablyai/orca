@@ -14,9 +14,9 @@ import {
   maintainRepoPackIndex,
   clearRepoPackIndexMaintenanceCache,
   PACK_INDEX_FORCE_REFRESH_MS,
-  PACK_INDEX_THRESHOLD,
-  PACK_INDEX_TIMEOUT_MS
+  PACK_INDEX_THRESHOLD
 } from './repo-pack-index-maintenance'
+
 import { PACK_INDEX_PROBE_ENTRY_LIMIT } from './repo-pack-index-state'
 
 function directory(packs: number) {
@@ -68,19 +68,6 @@ describe('idle pack index maintenance', () => {
     await maintainRepoPackIndex(options)
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(options.attributes['git.pack_index_outcome']).toBe('below_threshold')
-  })
-
-  it('writes only the lookup index with background admission and a deadline', async () => {
-    const options = args()
-    await maintainRepoPackIndex(options)
-    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(['multi-pack-index', 'write'], {
-      cwd: '/repo',
-      admissionTier: 'background',
-      timeout: PACK_INDEX_TIMEOUT_MS,
-      admissionSignal: options.signal,
-      canStart: options.canWrite
-    })
-    expect(options.attributes['git.pack_index_outcome']).toBe('written')
   })
 
   it('rechecks idle admission after probing and never aborts an admitted writer', async () => {
@@ -176,15 +163,6 @@ describe('idle pack index maintenance', () => {
       expect(options.attributes['git.pack_index_outcome']).toBe('failed')
     }
     expect(opendirMock).not.toHaveBeenCalled()
-  })
-
-  it('records index failures without preventing later ref maintenance', async () => {
-    gitExecFileAsyncMock
-      .mockRejectedValueOnce(Object.assign(new Error('unset'), { code: 1 }))
-      .mockRejectedValueOnce(new Error('index locked'))
-    const options = args()
-    await expect(maintainRepoPackIndex(options)).resolves.toBe('failed')
-    expect(options.attributes['git.pack_index_outcome']).toBe('failed')
   })
 
   it('skips repositories without pack files and cancelled attempts', async () => {

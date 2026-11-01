@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { injectedSessionAddress } from '../../../shared/agent-session-caller-env'
+import { injectedSessionAddress } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import {
   mintStructuredWorkerHandle,

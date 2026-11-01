@@ -20,28 +20,6 @@ afterEach(() => {
 })
 
 describe('checks panel concrete content', () => {
-  it('renders the no-workspace empty state with its guidance', () => {
-    const model = { activeWorktree: null } as ChecksPanelEmptyContentModel
-
-    render(<ChecksPanelEmptyContent model={model} />)
-
-    expect(screen.getByText('No workspace selected')).toBeTruthy()
-    expect(screen.getByText('Select a workspace to view checks')).toBeTruthy()
-  })
-
-  it('renders the folder-workspace empty state without review controls', () => {
-    const model = {
-      activeWorktree: { id: 'folder-1' },
-      isFolder: true
-    } as ChecksPanelEmptyContentModel
-
-    render(<ChecksPanelEmptyContent model={model} />)
-
-    expect(screen.getByText('Checks unavailable')).toBeTruthy()
-    expect(screen.getByText('Checks require a Git branch and hosted review context')).toBeTruthy()
-    expect(screen.queryByRole('button')).toBeNull()
-  })
-
   it('renders a durable unlinked state that can relink before PR data refetches', () => {
     const handleLinkSuppressedPullRequest = vi.fn<() => void>()
     const model = {

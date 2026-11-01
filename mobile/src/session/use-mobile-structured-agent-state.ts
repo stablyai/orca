@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
+import { isRootAgentJournalItem } from '../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import type {
-  AgentSessionHistoryResult,
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
-} from '../../../src/shared/agent-session-wire'
-import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../src/shared/agent-session-wire'
-import { structuredAgentSessionHolderId } from '../../../src/shared/structured-agent-session-holder'
-import { startStructuredAgentSessionLiveRead } from '../../../src/shared/structured-agent-session-live-read'
-import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import {
+  type AgentSessionHistoryResult,
+  AGENT_SESSION_HISTORY_MAX_LIMIT
+} from '../../../src/shared/agent-session/agent-session-wire'
+import { structuredAgentSessionHolderId } from '../../../src/shared/agent-session/view/structured-agent-session-holder'
+import { startStructuredAgentSessionLiveRead } from '../../../src/shared/agent-session/structured-agent-session-live-read'
+import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
   reduceStructuredAgentSession,
   type StructuredAgentSessionAction,
   type StructuredAgentSessionState
-} from '../../../src/shared/structured-agent-session-reducer'
+} from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import { subscribeConnectionRevival } from '../transport/connection-revival-signal'
 import type { RpcClient } from '../transport/rpc-client'
 import {

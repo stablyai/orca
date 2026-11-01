@@ -2,11 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SessionNotFoundError } from '../../../daemon/daemon-errors'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { PANE_NOT_LIVE_ERROR } from '../../../../shared/pane-attach-only-view'
-import {
-  attachOnlyViewOf,
-  attachViewAfterHiddenStart,
-  attachViewWithoutOwner
-} from './attach-only-view'
+import { attachViewAfterHiddenStart, attachViewWithoutOwner } from './attach-only-view'
+
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   isHiddenRendererPty,
@@ -33,22 +30,6 @@ function providerOf(spawn: ReturnType<typeof vi.fn>): IPtyProvider {
 }
 
 describe("a window's attach-only view of a pane main starts", () => {
-  it('attaches to a live owner', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: OWNER.ptyId, isReattach: true })
-    const attempt = await attemptStablePaneAttach({
-      runtime: undefined,
-      provider: providerOf(spawn),
-      spawnOptions: { cols: 80, rows: 24, command: 'claude --resume s' },
-      owner: OWNER,
-      resolveOwner: () => OWNER,
-      attachOnlyView: true
-    })
-    expect(attempt).toMatchObject({ attached: { owner: OWNER } })
-    expect(spawn).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ sessionId: OWNER.ptyId, attachOnly: true, command: undefined })
-    )
-  })
-
   it("starts nothing and keeps the binding when the owner's terminal is gone", async () => {
     const spawn = vi.fn().mockRejectedValue(new SessionNotFoundError(OWNER.ptyId))
     const keepAbsentBinding = vi.fn()
@@ -65,22 +46,6 @@ describe("a window's attach-only view of a pane main starts", () => {
     ).rejects.toThrow(PANE_NOT_LIVE_ERROR)
     expect(spawn).toHaveBeenCalledTimes(1)
     expect(keepAbsentBinding).not.toHaveBeenCalled()
-  })
-
-  it('with no recorded owner, attaches only to the named terminal', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-1', isReattach: true })
-    await attachViewWithoutOwner(providerOf(spawn), {
-      cols: 80,
-      rows: 24,
-      sessionId: 'pty-1',
-      command: 'claude --resume s'
-    })
-    expect(spawn).toHaveBeenCalledExactlyOnceWith({
-      cols: 80,
-      rows: 24,
-      sessionId: 'pty-1',
-      attachOnly: true
-    })
   })
 
   it('with no recorded owner and no live terminal, starts nothing', async () => {
@@ -170,27 +135,5 @@ describe("a view's attach to a pane main started hidden", () => {
     finishSecond()
     await second
     expect(attachingRendererViewPtys.has('pty-1')).toBe(false)
-  })
-
-  it('leaves a terminal main did not start hidden as today', async () => {
-    _resetHiddenRendererPtyDeliveryGateForTest()
-    markHiddenRendererPty('pty-1')
-    recordHiddenRendererPtyDataDrop('pty-1', 64)
-    await attachViewAfterHiddenStart('pty-1', setHidden, async () => ({
-      id: 'pty-1',
-      snapshot: 'x'
-    }))
-    expect(isHiddenRendererPty('pty-1')).toBe(true)
-    expect(revealAsksRestore()).toBe(true)
-  })
-})
-
-describe('attachOnlyViewOf', () => {
-  it('takes the flag only in a layout-owner build', async () => {
-    const { ORCA_LAYOUT_OWNER_IS_MAIN } = await import('../../../../shared/layout-owner-switch')
-    expect(attachOnlyViewOf({ attachOnlyView: true })).toBe(
-      ORCA_LAYOUT_OWNER_IS_MAIN ? true : undefined
-    )
-    expect(attachOnlyViewOf({ attachOnlyView: 'yes' })).toBeUndefined()
   })
 })

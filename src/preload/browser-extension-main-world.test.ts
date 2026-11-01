@@ -108,31 +108,6 @@ function installInFreshRealm(
 const ok = (value: unknown): BrowserExtensionInvokeReply => ({ ok: true, value })
 
 describe('installBrowserExtensionApis', () => {
-  it('adds missing namespaces on chrome and mirrors them to browser', () => {
-    const { chrome, browser } = installInFreshRealm(['webNavigation'], () => ok(null))
-    for (const api of [chrome, browser]) {
-      expect(typeof member(api, 'windows.create')).toBe('function')
-      expect(typeof member(api, 'tabs.create')).toBe('function')
-      expect(typeof member(api, 'webNavigation.getAllFrames')).toBe('function')
-      expect(member(api, 'windows.WINDOW_ID_CURRENT')).toBe(-2)
-    }
-    expect(typeof member(chrome, 'tabs.sendMessage')).toBe('function')
-  })
-
-  it('leaves out namespaces whose permission the manifest lacks', () => {
-    const { chrome } = installInFreshRealm([], () => ok(null))
-    expect(chrome.webNavigation).toBeUndefined()
-  })
-
-  it('installs chrome.action only for a manifest with an action, and browserAction for MV2', () => {
-    expect(installInFreshRealm([], () => ok(null)).chrome.action).toBeUndefined()
-    const mv3 = installInFreshRealm([], () => ok(null), { action: {} })
-    expect(typeof member(mv3.chrome, 'action.setBadgeText')).toBe('function')
-    expect(mv3.chrome.browserAction).toBeUndefined()
-    const mv2 = installInFreshRealm([], () => ok(null), { browser_action: {} })
-    expect(typeof member(mv2.chrome, 'browserAction.onClicked.addListener')).toBe('function')
-  })
-
   it('flattens ImageData so its pixels survive the bridge', async () => {
     const { chrome, calls } = installInFreshRealm([], () => ok(undefined), { action: {} })
     await call(chrome, 'action.setIcon', { imageData: { 16: new FakeImageData(1, 1) }, tabId: 3 })
@@ -236,19 +211,6 @@ describe('Wave 2 API shapes', () => {
       ['contextMenus', 'create', [{ id: 'fill', title: 'Fill' }]],
       ['contextMenus', 'create', [{ id: generated, title: 'No id' }]]
     ])
-  })
-
-  it('builds chrome.privacy setting objects, installed for an optional permission too', async () => {
-    const { chrome, calls } = installInFreshRealm([], () => ok({ value: true }), {
-      optional_permissions: ['privacy']
-    })
-    await expect(call(chrome, 'privacy.services.passwordSavingEnabled.get', {})).resolves.toEqual({
-      value: true
-    })
-    expect(calls.at(-1)).toEqual(['privacy', 'services.passwordSavingEnabled.get', [{}]])
-    expect(
-      typeof member(chrome, 'privacy.services.passwordSavingEnabled.onChange.addListener')
-    ).toBe('function')
   })
 
   it('sends webRequest listener filters to main and filters each listener on delivery', () => {

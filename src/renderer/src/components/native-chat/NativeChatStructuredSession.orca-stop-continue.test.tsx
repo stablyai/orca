@@ -25,7 +25,7 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 vi.mock('@/runtime/structured-agent-session-host-capability', async (importOriginal) => {
   const original = await importOriginal<typeof HostCapabilityModule>()
   const { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } =
-    await import('../../../../shared/agent-session-continue-interrupted-capability')
+    await import('../../../../shared/agent-session/agent-session-continue-interrupted-capability')
   return {
     ...original,
     useStructuredAgentSessionHostCapabilityState: (
@@ -44,7 +44,7 @@ vi.mock('@/runtime/structured-chat-host-permission', () => ({
 vi.mock('./NativeChatMessageList', async () => {
   const { MessageRow } = await import('./NativeChatMessageRow')
   const { projectStructuredItemsToNativeChat } =
-    await import('../../../../shared/structured-agent-session-projection')
+    await import('../../../../shared/agent-session/view/structured-agent-session-projection')
   return {
     NativeChatMessageList: (props: {
       ref?: React.Ref<unknown>
@@ -69,8 +69,8 @@ vi.mock('./NativeChatMessageList', async () => {
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
-import { agentJournalItemKey } from '../../../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const TURN = agentJournalItemKey({ provider: 'codex', threadId: 't', turnId: 'cut', ordinal: 1 })
 

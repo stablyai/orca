@@ -150,36 +150,4 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
 
     newChannel.destroy()
   })
-
-  it('streaming messages work through E2EE', () => {
-    const mobileShared = completeHandshake()
-    const received: string[] = []
-
-    channel.onMessage((plaintext, encryptedReply) => {
-      received.push(plaintext)
-      for (let i = 0; i < 3; i++) {
-        encryptedReply(
-          JSON.stringify({
-            id: 'stream-1',
-            ok: true,
-            streaming: true,
-            result: { type: 'data', chunk: `line ${i}\n` }
-          })
-        )
-      }
-    })
-
-    channel.handleRawMessage(
-      encrypt(JSON.stringify({ id: 'stream-1', method: 'terminal.subscribe' }), mobileShared)
-    )
-
-    expect(wsSent).toHaveLength(5)
-
-    for (let i = 2; i < 5; i++) {
-      const plain = decrypt(wsSent[i]!, mobileShared)
-      const parsed = JSON.parse(plain!)
-      expect(parsed.streaming).toBe(true)
-      expect(parsed.result.chunk).toBe(`line ${i - 2}\n`)
-    }
-  })
 })

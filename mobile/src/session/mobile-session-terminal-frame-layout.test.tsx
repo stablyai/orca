@@ -20,7 +20,12 @@ const { FRAME, WebView } = await vi.hoisted(async () => {
   return { FRAME: frame, WebView: View }
 })
 
+vi.mock('expo-router', async () => {
+  const React = await import('react')
+  return { useFocusEffect: (effect: () => () => void) => React.useEffect(effect, [effect]) }
+})
 vi.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   Platform: { OS: 'web' },
   View: WebView,
   Text: WebView,
@@ -55,6 +60,7 @@ function controller(
     isPendingTerminalRecoveryParked: false,
     showEmptyState: false,
     terminals: [],
+    sessionTabs: [],
     notifyTerminalFrame,
     dictation: { isRecording: false },
     nativeChatSendError: { message: null, clear: () => {} }

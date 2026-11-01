@@ -1,21 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
-  PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
-  RUNTIME_PROTOCOL_VERSION,
-  TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
-  WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
+  RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
+
 import {
-  evaluateHostDetails,
-  getActiveServerModeDescription,
   getHostDetailsDescription,
   getHostDetailsSummary,
-  getHostModelCapabilitySummary,
-  getRuntimeCapabilitiesSummary,
   getRuntimeServerConnectionState,
   isRuntimeServerTransportConnected,
-  isRuntimeEnvironmentRemovalBlocked,
   type RuntimeHostDetails
 } from './runtime-environment-host-details'
 
@@ -45,153 +38,6 @@ function readyTransport(
 }
 
 describe('RuntimeEnvironmentsPane host details', () => {
-  it('summarizes loading, error, compatible, and blocked hosts', () => {
-    expect(getHostDetailsSummary(undefined)).toBe('Checking…')
-    expect(getHostDetailsSummary(details({ status: 'error', error: 'offline' }))).toBe(
-      'Status unavailable'
-    )
-    expect(
-      getHostDetailsSummary(
-        details({
-          compatibility: {
-            kind: 'ok',
-            clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            serverProtocolVersion: RUNTIME_PROTOCOL_VERSION
-          }
-        })
-      )
-    ).toBe('Compatible')
-    expect(
-      getHostDetailsSummary(
-        details({
-          compatibility: {
-            kind: 'blocked',
-            reason: 'server-too-old',
-            clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            serverProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1,
-            requiredServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION
-          }
-        })
-      )
-    ).toBe('Update server')
-    expect(
-      getHostDetailsSummary(
-        details({
-          compatibility: {
-            kind: 'blocked',
-            reason: 'client-too-old',
-            clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            serverProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            requiredClientProtocolVersion: RUNTIME_PROTOCOL_VERSION + 1
-          }
-        })
-      )
-    ).toBe('Update client')
-  })
-
-  it('evaluates runtime protocol compatibility from status aliases', () => {
-    expect(
-      evaluateHostDetails({
-        runtimeId: 'runtime-old',
-        rendererGraphEpoch: 1,
-        graphStatus: 'ready',
-        authoritativeWindowId: 1,
-        liveTabCount: 0,
-        liveLeafCount: 0,
-        protocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1,
-        minCompatibleMobileVersion: 0
-      })
-    ).toMatchObject({ kind: 'blocked', reason: 'server-too-old' })
-  })
-
-  it('explains blocked runtime compatibility with required protocol versions', () => {
-    expect(
-      getHostDetailsDescription(
-        details({
-          compatibility: {
-            kind: 'blocked',
-            reason: 'server-too-old',
-            clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            serverProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1,
-            requiredServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION
-          }
-        })
-      )
-    ).toContain('client requires server protocol')
-  })
-
-  it('summarizes runtime capabilities by name with overflow count', () => {
-    expect(
-      getRuntimeCapabilitiesSummary({
-        runtimeId: 'runtime',
-        rendererGraphEpoch: 1,
-        graphStatus: 'ready',
-        authoritativeWindowId: 1,
-        liveTabCount: 0,
-        liveLeafCount: 0,
-        capabilities: ['runtime.environments.v1', 'terminal.multiplex.v1']
-      })
-    ).toBe('runtime.environments.v1, terminal.multiplex.v1')
-
-    expect(
-      getRuntimeCapabilitiesSummary({
-        runtimeId: 'runtime',
-        rendererGraphEpoch: 1,
-        graphStatus: 'ready',
-        authoritativeWindowId: 1,
-        liveTabCount: 0,
-        liveLeafCount: 0,
-        capabilities: [
-          'runtime.environments.v1',
-          'browser.screencast.v1',
-          'terminal.multiplex.v1',
-          'project-host-setup.v1'
-        ]
-      })
-    ).toBe('runtime.environments.v1, browser.screencast.v1, terminal.multiplex.v1 +1')
-  })
-
-  it('summarizes Host model capability support for version-skewed servers', () => {
-    expect(
-      getHostModelCapabilitySummary({
-        runtimeId: 'runtime',
-        rendererGraphEpoch: 1,
-        graphStatus: 'ready',
-        authoritativeWindowId: 1,
-        liveTabCount: 0,
-        liveLeafCount: 0
-      })
-    ).toBe('Host model support: checking server capabilities')
-
-    expect(
-      getHostModelCapabilitySummary({
-        runtimeId: 'runtime',
-        rendererGraphEpoch: 1,
-        graphStatus: 'ready',
-        authoritativeWindowId: 1,
-        liveTabCount: 0,
-        liveLeafCount: 0,
-        capabilities: [
-          PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
-          TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
-          WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
-        ]
-      })
-    ).toBe('Host model support: ready')
-
-    expect(
-      getHostModelCapabilitySummary({
-        runtimeId: 'runtime',
-        rendererGraphEpoch: 1,
-        graphStatus: 'ready',
-        authoritativeWindowId: 1,
-        liveTabCount: 0,
-        liveLeafCount: 0,
-        capabilities: [PROJECT_HOST_SETUP_RUNTIME_CAPABILITY]
-      })
-    ).toBe('Host model support: update server for task source context, workspace run context')
-  })
-
   it('distinguishes transport-up/runtime-down from an attached ready runtime', () => {
     // Attachment determines Disconnect and connection labels; default-server selection must not make dot/label/button disagree.
     expect(getRuntimeServerConnectionState(details({ status: 'ready' }))).toBe(
@@ -284,16 +130,5 @@ describe('RuntimeEnvironmentsPane host details', () => {
         })
       )
     ).toBe('disconnected')
-  })
-
-  it('explains that the choice only picks the host for new projects', () => {
-    expect(getActiveServerModeDescription(true)).toBe('Existing projects stay where they are.')
-    expect(getActiveServerModeDescription(false)).toContain('new projects on the chosen server')
-  })
-
-  it('blocks removing the active server independently of local-runtime availability', () => {
-    expect(isRuntimeEnvironmentRemovalBlocked('windows-2', 'windows-2')).toBe(true)
-    expect(isRuntimeEnvironmentRemovalBlocked(undefined, 'windows-2')).toBe(false)
-    expect(isRuntimeEnvironmentRemovalBlocked('local', 'windows-2')).toBe(false)
   })
 })

@@ -1,17 +1,17 @@
 import { createHash } from 'node:crypto'
 import { open } from 'node:fs/promises'
 import { extname } from 'node:path'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import type { NativeChatBlock } from '../../shared/native-chat-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 import {
   agentSessionFailureFact,
   type AgentSessionAttachmentProblem,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
-} from '../../shared/agent-session-failure-words'
+} from '../../shared/agent-session/failures/agent-session-failure-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import { claudeRecord } from './claude-structured-item-translation'
 

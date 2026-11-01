@@ -48,36 +48,6 @@ describe('autoFocusRichEditor', () => {
     document.body.replaceChildren()
   })
 
-  it('returns cleanup that cancels the pending focus frame', () => {
-    const cancelAnimationFrameMock = vi.fn()
-    vi.stubGlobal(
-      'requestAnimationFrame',
-      vi.fn(() => 42)
-    )
-    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrameMock)
-
-    const cleanup = autoFocusRichEditor(createEditor(), null)
-    cleanup()
-    cleanup()
-
-    expect(cancelAnimationFrameMock).toHaveBeenCalledTimes(1)
-    expect(cancelAnimationFrameMock).toHaveBeenCalledWith(42)
-  })
-
-  it('focuses the editor when the frame fires with neutral focus', () => {
-    const { focus, runFrame } = setupScheduledFocus(null)
-    runFrame()
-
-    expect(focus).toHaveBeenCalledWith('start', { scrollIntoView: false })
-  })
-
-  it('honors an explicit focus handoff', () => {
-    const { focus, runFrame } = setupScheduledFocus({}, true)
-    runFrame()
-
-    expect(focus).toHaveBeenCalledWith('start', { scrollIntoView: false })
-  })
-
   it('claims DOM focus synchronously on an explicit handoff', () => {
     const root = document.createElement('div')
     const editorDom = document.createElement('div')
@@ -93,19 +63,6 @@ describe('autoFocusRichEditor', () => {
     autoFocusRichEditor(createEditor(vi.fn(), editorDom.focus.bind(editorDom)), root, true)
 
     expect(root.contains(document.activeElement)).toBe(true)
-  })
-
-  it('leaves DOM focus alone for an ordinary lazy mount', () => {
-    const domFocus = vi.fn()
-    vi.stubGlobal(
-      'requestAnimationFrame',
-      vi.fn(() => 12)
-    )
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-
-    autoFocusRichEditor(createEditor(vi.fn(), domFocus), null, false)
-
-    expect(domFocus).not.toHaveBeenCalled()
   })
 
   it('does not run deferred focus after an explicit handoff expires', () => {

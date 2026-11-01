@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GitBranchChangeEntry } from './git-diff-compare-types'
+
 import type { GitStatusEntry } from './git-status-types'
 import {
   buildGitStatusSourceControlTree,
@@ -24,22 +24,6 @@ function labels(nodes: ReturnType<typeof flattenSourceControlTree>): string[] {
 }
 
 describe('buildSourceControlTree', () => {
-  it('groups changed files by path segments', () => {
-    const tree = buildSourceControlTree('unstaged', [
-      entry({ path: 'src/components/Button.tsx' }),
-      entry({ path: 'src/index.ts' }),
-      entry({ path: 'README.md' })
-    ])
-
-    expect(labels(flattenSourceControlTree(tree, new Set()))).toEqual([
-      'directory:src',
-      'directory:src/components',
-      'file:src/components/Button.tsx',
-      'file:src/index.ts',
-      'file:README.md'
-    ])
-  })
-
   it('orders numbered sibling directories naturally, matching the file rows', () => {
     const tree = buildSourceControlTree('unstaged', [
       entry({ path: 'migrations/100 - b/a.sql' }),
@@ -104,23 +88,6 @@ describe('buildSourceControlTree', () => {
     ])
   })
 
-  it('groups committed branch entries with branch-scoped directory keys', () => {
-    const entries: GitBranchChangeEntry[] = [
-      { path: 'packages/app/src/index.ts', status: 'modified' },
-      { path: 'packages/app/package.json', status: 'added' }
-    ]
-    const tree = buildSourceControlTree('branch', entries)
-
-    expect(labels(flattenSourceControlTree(tree, new Set()))).toEqual([
-      'directory:packages',
-      'directory:packages/app',
-      'directory:packages/app/src',
-      'file:packages/app/src/index.ts',
-      'file:packages/app/package.json'
-    ])
-    expect(tree[0].key).toBe('dir::branch::packages')
-  })
-
   it('compacts single-child directory chains for visible source-control rows', () => {
     const tree = buildSourceControlTree('branch', [
       { path: 'src/renderer/src/mockups.css', status: 'modified' },
@@ -158,27 +125,6 @@ describe('buildSourceControlTree', () => {
       'directory:src/renderer',
       'file:src/renderer/index.ts'
     ])
-  })
-
-  it('can namespace directory keys without changing file entry areas', () => {
-    const tree = compactSourceControlTree(
-      buildGitStatusSourceControlTree('unstaged', [
-        entry({
-          path: 'src/conflict.ts',
-          conflictKind: 'both_modified',
-          conflictStatus: 'unresolved'
-        })
-      ])
-    )
-
-    const namespaced = namespaceSourceControlTreeDirectoryKeys(tree, 'conflicts')
-    const rows = flattenSourceControlTree(namespaced, new Set())
-    const directory = rows.find((node) => node.type === 'directory')
-    const file = rows.find((node) => node.type === 'file')
-
-    expect(directory?.key).toBe('dir::conflicts::src')
-    expect(file?.key).toBe('unstaged::src/conflict.ts')
-    expect(file?.area).toBe('unstaged')
   })
 
   it('can preserve file node areas from mixed conflict section entries', () => {

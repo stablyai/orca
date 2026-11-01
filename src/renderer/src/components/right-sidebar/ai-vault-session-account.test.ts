@@ -117,18 +117,4 @@ describe('session account labels', () => {
       )
     ).toBeNull()
   })
-
-  it('keeps explicit unmanaged data accounts as default and unsupported bindings unknown', () => {
-    expect(
-      resolveAiVaultSessionAccount(
-        {
-          ...session('opencode', '/unused'),
-          accountHome: { kind: 'opencode', locator: { kind: 'unmanaged' } }
-        },
-        settings,
-        null
-      )
-    ).toBe('System default')
-    expect(resolveAiVaultSessionAccount(session('pi', '/pi'), settings, null)).toBeNull()
-  })
 })

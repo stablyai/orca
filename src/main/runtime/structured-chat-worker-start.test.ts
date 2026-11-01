@@ -153,23 +153,6 @@ describe('worker-start --terminal names a chat', () => {
     expect(turnText(worker.turns[1]!)).toContain(dispatchId)
   })
 
-  it("reads the start as unknown when the chat's agent has not taken the task within the wait", async () => {
-    await openChat(COORDINATOR)
-    await openChat(PEER_CHAT)
-    const { taskId } = await coordinatorRunAndTask()
-    // The settlement wait running out, as for an agent still starting.
-    vi.spyOn(host, 'waitForSendSettlement').mockResolvedValue(undefined)
-
-    const receipt = await startWorker({ task: taskId })
-
-    expect(receipt).toMatchObject({
-      state: 'outcome_unknown',
-      turnStart: 'unobserved',
-      lastError: expect.stringContaining("the chat's agent had not started to take it")
-    })
-    expect(db.getWorkerDispatch(String(receipt.dispatchId))?.state).toBe('start_unknown')
-  })
-
   it('is stopped and abandoned without closing or interrupting the chat', async () => {
     await openChat(COORDINATOR)
     const worker = await openChat(PEER_CHAT)

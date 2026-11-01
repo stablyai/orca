@@ -25,7 +25,7 @@ import { createStructuredAgentSessionLifecycleDelivery } from './structured-agen
 import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
 import { modelCatalogHostDeps } from './structured-agent-model-catalog-wiring'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 export async function installOnJournal(
   deps: StructuredAgentSessionRuntimeDeps,
@@ -88,8 +88,11 @@ export async function installOnJournal(
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
+    ...(deps.launchAccountHome ? { launchAccountHome: deps.launchAccountHome } : {}),
+    ...(deps.parentAccountWork ? { parentAccountWork: deps.parentAccountWork } : {}),
     ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),
     ...(await modelCatalogHostDeps({
+      host: () => host,
       store,
       agents,
       registrations: STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,

@@ -1,14 +1,12 @@
-import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
-import type {
-  AgentJournalCursor,
-  AgentJournalSkillRef
-} from '../../../src/shared/agent-session-journal-types'
+import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
-} from '../../../src/shared/structured-agent-session-send-mutation'
+} from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { structuredAgentSessionBlocksTooLarge } from '../../../src/shared/rpc-contract/structured-agent-session-message-params'
-import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../src/shared/agent-session-refusal-notice'
+import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../src/shared/agent-session/failures/agent-session-refusal-notice'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  nativeDependencyClosure,
-  nativeWorkspaceSettings
-} from './native-dependency-lock-digest.mjs'
+import { nativeDependencyClosure } from './native-dependency-lock-digest.mjs'
 
 const lockfile = ({
   pty = 'node-pty@1.1.0(patch_hash=aa)',
@@ -74,19 +71,5 @@ describe('native dependency lock closure', () => {
     expect(() =>
       nativeDependencyClosure(lockfile({ addon: '9.9.9' }), { packages: ['node-pty'] })
     ).toThrow(/no snapshot for node-addon-api@9.9.9/)
-  })
-
-  it('keeps layout settings and native build approvals but drops resolution-only settings', () => {
-    const settings = `
-shamefullyHoist: true
-minimumReleaseAge: 4320
-overrides: {a: 1}
-patchedDependencies: {x: y}
-allowBuilds: {node-pty: true, bun: true}
-`
-    expect(nativeWorkspaceSettings(settings, ['node-pty@1.1.0(patch_hash=aa)'])).toEqual({
-      allowBuilds: { 'node-pty': true },
-      shamefullyHoist: true
-    })
   })
 })

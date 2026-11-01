@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, vi } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   createRestTestRig,
@@ -10,6 +10,7 @@ import {
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
+import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import type * as fileOperations from 'node:fs/promises'
 import * as contextSnapshots from '../../../native-chat/agent-session-context-snapshots'
@@ -30,13 +31,17 @@ let dispatcher: RpcDispatcher
 
 let requests = 0
 
-export async function call(method: string, params: unknown): Promise<RpcResponse[]> {
+export async function call(
+  method: string,
+  params: unknown,
+  client: RpcDispatchStreamingOptions = CLIENT
+): Promise<RpcResponse[]> {
   const replies: RpcResponse[] = []
   requests += 1
   await dispatcher.dispatchStreaming(
     { id: `request-${requests}`, authToken: 'token', method, params },
     (raw) => replies.push(JSON.parse(raw) as RpcResponse),
-    CLIENT
+    client
   )
   return replies
 }

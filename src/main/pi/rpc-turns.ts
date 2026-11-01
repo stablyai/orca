@@ -1,4 +1,4 @@
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionCommandRun

@@ -1,7 +1,7 @@
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../src/shared/agent-session-resume'
+} from '../../../src/shared/agent-session/lifecycle/agent-session-resume'
 import {
   buildAiVaultLocalResumeStartup,
   type AiVaultResumeCommandSession,

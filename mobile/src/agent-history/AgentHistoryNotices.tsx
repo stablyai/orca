@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { TriangleAlert, X } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -28,6 +28,7 @@ export function AgentHistorySkippedNotice({ issues }: { issues: readonly Transcr
             : t('agentHistory.panel.skipped_other', '{{count}} transcripts skipped', { count })}
         </Text>
         <Pressable
+          style={({ pressed }) => pressed && pressedStyle}
           onPress={() => setShown((value) => !value)}
           hitSlop={10}
           accessibilityRole="button"
@@ -71,6 +72,7 @@ export function AgentHistoryResumeNotice({
     <View style={[styles.notice, styles.noticeRow]}>
       <Text style={styles.noticeText}>{message}</Text>
       <Pressable
+        style={({ pressed }) => pressed && pressedStyle}
         onPress={onDismiss}
         hitSlop={12}
         accessibilityRole="button"

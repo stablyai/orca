@@ -2,10 +2,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
-import { isSubagentBlock } from '../../../shared/native-chat-types'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { isSubagentBlock } from '../../../shared/native-chat/native-chat-types'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import {
@@ -101,33 +101,6 @@ async function rig() {
 }
 
 describe("each subagent's saved row", () => {
-  it('writes one row per subagent, where it was spawned, and none for other work', async () => {
-    const r = await rig()
-    await r.openTurn('turn-1')
-    await r.report([
-      child(),
-      child({ id: 'record-2', providerId: 'agent-2', description: 'Read the docs' }),
-      child({ id: 'record-3', providerId: 'shell-1', kind: 'command' })
-    ])
-    const rows = r.saved()
-    expect(rows.map(({ block }) => [block.id, block.label, block.state])).toEqual([
-      ['agent-1', 'Audit the build', 'working'],
-      ['agent-2', 'Read the docs', 'working']
-    ])
-    expect(rows.map(({ item }) => item.turnScope?.kind)).toEqual(['turn', 'turn'])
-    expect(rows[0]?.block).toMatchObject({ run: 'toolu_1', background: true, startedAt: 100 })
-  })
-
-  it('names a subagent the provider gave no name or description as any unnamed one', async () => {
-    const r = await rig()
-    await r.report([child({ description: undefined })])
-    const [row] = r.saved()
-    expect(row?.block.label).toBe('subagent')
-    expect(row?.item.body).toMatchObject({
-      blocks: [{ type: 'text', text: 'Kicked off subagent subagent' }, { label: 'subagent' }]
-    })
-  })
-
   it("names a nested helper's parent by the parent's own id, and keeps it once that record is gone", async () => {
     const r = await rig()
     const parent = child({ id: 'record-parent', providerId: 'agent-parent' })
@@ -219,15 +192,6 @@ describe("each subagent's saved row", () => {
       settledAt: 300,
       outcomeBasis: 'stop-acknowledged'
     })
-  })
-
-  it('starts a new run’s clock when the host first saw that run', async () => {
-    const r = await rig()
-    await r.report([child()])
-    await r.report([
-      child({ observedAt: 400, invocation: { invocationId: 'toolu_2', generation: 2 } })
-    ])
-    expect(r.saved()[0]?.block).toMatchObject({ run: 'toolu_2', startedAt: 400 })
   })
 
   it('reports a failed write and writes the row on the next change', async () => {

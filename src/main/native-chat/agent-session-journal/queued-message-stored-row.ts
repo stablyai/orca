@@ -1,11 +1,11 @@
 // Unreadable legacy cards remain on disk and must never appear as empty messages.
 
-import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session-failure'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import { readAgentJournalMessageBody } from '../../../shared/agent-session-journal-body-admission'
+import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalMessageBody } from '../../../shared/agent-session/journal/agent-session-journal-body-admission'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
-import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import { storedMessageBody } from './journal-storage-schema'
 import { storageVerdict, strictStorage } from './journal-storage-strict'
 

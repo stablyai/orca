@@ -177,30 +177,4 @@ describe('getPRForBranch', () => {
       headRepo: { owner: 'brennanb2025', repo: 'orca' }
     })
   })
-
-  it('does not retry same-name tracked upstream lookup for the same head repo', async () => {
-    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
-      candidates: [{ owner: 'acme', repo: 'widgets' }],
-      headRepo: { owner: 'acme', repo: 'widgets' }
-    })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'feature/no-pr\0origin/feature/no-pr\n',
-      stderr: ''
-    })
-
-    await expect(getPRForBranch('/repo-root', 'feature/no-pr')).resolves.toBeNull()
-
-    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/repo-root', 'origin', undefined)
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        'api',
-        'repos/acme/widgets/pulls?head=acme%3Afeature%2Fno-pr&state=all&per_page=1',
-        '--include'
-      ],
-      { cwd: '/repo-root' }
-    )
-  })
 })

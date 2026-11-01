@@ -5,7 +5,7 @@ import {
   piClearPtyMock
 } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import type { AgentSessionOwnerBinding } from '../../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../shared/agent-session/agent-session-host-authority'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { registerPtyHandlers } from './register-handlers'
 import { clearProviderPtyState } from './provider/state-cleanup'

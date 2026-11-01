@@ -18,16 +18,16 @@ import {
 import { Fragment, createElement, StrictMode } from 'react'
 import { act, render, waitFor } from '@testing-library/react'
 import { expect, it, describe } from 'vitest'
-import type { AgentJournalRenderItem } from '../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionAttentionSubjectPrefix,
   agentSessionPromptAttentionKey
-} from '../../src/shared/agent-session-attention'
+} from '../../src/shared/agent-session/agent-session-attention'
 import { SESSION } from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
 import {
   projectStructuredAgentSessionStatusState,
   structuredAgentSessionPaneKey
-} from '../../src/shared/structured-agent-session-projection'
+} from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/structured-agent-session-mobile-attention'
 import { makeUnifiedTab } from '@/store/slices/store-test-helpers'

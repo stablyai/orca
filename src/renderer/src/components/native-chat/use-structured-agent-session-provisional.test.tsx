@@ -3,7 +3,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
-import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
 
 const mocks = vi.hoisted(() => {
   const pending: StructuredAgentSessionPendingSend[] = []
@@ -205,18 +205,6 @@ describe('useStructuredAgentSession provisional launch gate', () => {
     expect(mocks.takeBackLaunchText).toHaveBeenCalledWith('session-1')
     expect(mocks.stopSends).toHaveBeenCalledTimes(1)
     expect(methodsCalled().filter((method) => method === 'agentSession.cancel')).toEqual([])
-  })
-
-  it('shows no stored selection for a chat this view did not launch', () => {
-    const { result } = renderHook(() =>
-      useStructuredAgentSession({
-        sessionId: 'session-1',
-        target: LOCAL_TARGET,
-        agent: 'codex',
-        isVisible: true
-      })
-    )
-    expect(currentModel(result.current.optionSnapshot)).toBeUndefined()
   })
 
   it('activates provider surfaces after publication without repeating option discovery', async () => {

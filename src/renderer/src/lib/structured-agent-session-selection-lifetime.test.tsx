@@ -1,6 +1,6 @@
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 import type { StructuredAgentSessionMutate } from '@/components/native-chat/use-structured-agent-session-mutate'
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -8,9 +8,9 @@ import type { StructuredAgentSessionLaunchIntent } from './launch-structured-age
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { useAppStore } from '@/store'
 import { useStructuredAgentSessionOptionState } from '@/components/native-chat/use-structured-agent-session-option-state'
-import { structuredAgentSessionSeedCatalog } from '../../../shared/structured-agent-session-seed-catalog'
-import { structuredAgentSessionMessageSelection } from '../../../shared/structured-agent-session-option-view'
-import { structuredAgentSessionModelId } from '../../../shared/structured-agent-session-option-state'
+import { structuredAgentSessionSeedCatalog } from '../../../shared/agent-session/options/structured-agent-session-seed-catalog'
+import { structuredAgentSessionMessageSelection } from '../../../shared/agent-session/options/structured-agent-session-option-view'
+import { structuredAgentSessionModelId } from '../../../shared/agent-session/options/structured-agent-session-option-state'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import {
   holdStructuredAgentSessionLaunchOption,
@@ -168,6 +168,7 @@ it.each([false, true])(
     )
     const readHook = renderHook(() =>
       useStructuredAgentSessionOptionState({
+        transportEnabled: true,
         agent: 'codex',
         optionCatalog: catalog,
         identity: `codex:${sessionId}`,
@@ -314,6 +315,7 @@ it.each(['present', 'initially-absent', 'already-hydrated'] as const)(
       const hook = renderHook(
         ({ visible }) =>
           useStructuredAgentSessionOptionState({
+            transportEnabled: true,
             agent: 'codex',
             optionCatalog: catalog,
             identity: `codex:${sessionId}`,

@@ -9,7 +9,7 @@ import {
   readUriAsBase64,
   type MobileImageFileFactory
 } from './mobile-image-source-picker'
-import { base64DecodedByteLength } from '../../../src/shared/agent-session-attachments'
+import { base64DecodedByteLength } from '../../../src/shared/agent-session/agent-session-attachments'
 
 const UNKNOWN_FILE_MIME = 'application/octet-stream'
 

@@ -1,14 +1,17 @@
 import type { AgentType } from './agent-status-types'
-import type { AgentSessionSlashCommand } from './agent-session-wire'
+import type { AgentSessionSlashCommand } from './agent-session/agent-session-wire'
 import type { DiscoveredSkill, SkillDiscoveryResult } from './skills'
-import { getNativeChatAgentProfile, readsSkillSource } from './native-chat-agent-profiles'
+import {
+  getNativeChatAgentProfile,
+  readsSkillSource
+} from './native-chat/native-chat-agent-profiles'
 import { classifyPickerCommands } from './native-chat/input/native-chat-picker-items'
 import {
   sessionReportedSkills,
   type NativeChatSessionSkill,
   type SlashCommandSuggestion
 } from './native-chat/input/native-chat-slash-commands'
-import { isStructuredAgentSessionComposerCommand } from './structured-agent-session-composer'
+import { isStructuredAgentSessionComposerCommand } from './agent-session/view/structured-agent-session-composer'
 
 export function isNativeChatSkillForAgent(
   agent: AgentType,

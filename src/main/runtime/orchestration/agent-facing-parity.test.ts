@@ -66,16 +66,17 @@ function runtime(prompts: string[]): OrcaRuntimeService {
   const fake: Pick<
     OrcaRuntimeService,
     'getNestedWorkerMaxDepth' | 'getTerminalOrchestrationCliCommand' | 'sendTerminalAgentPrompt'
-  > & { orchestrationSenderNames: Pick<OrcaRuntimeService['orchestrationSenderNames'], 'nameOf'> } =
-    {
-      orchestrationSenderNames: { nameOf: () => null },
-      getNestedWorkerMaxDepth: () => 2,
-      getTerminalOrchestrationCliCommand: () => 'orca',
-      sendTerminalAgentPrompt: async (handle, text) => {
-        prompts.push(text)
-        return { handle, accepted: true, bytesWritten: text.length }
-      }
+  > & {
+    orchestrationSenderNames: Pick<OrcaRuntimeService['orchestrationSenderNames'], 'snapshotOf'>
+  } = {
+    orchestrationSenderNames: { snapshotOf: () => ({ name: null, agent: null }) },
+    getNestedWorkerMaxDepth: () => 2,
+    getTerminalOrchestrationCliCommand: () => 'orca',
+    sendTerminalAgentPrompt: async (handle, text) => {
+      prompts.push(text)
+      return { handle, accepted: true, bytesWritten: text.length }
     }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preamble delivery reads only the members the fake implements.
   return fake as OrcaRuntimeService
 }
@@ -116,7 +117,7 @@ async function renderChatPointer(mailbox: string): Promise<string> {
     getMessageWaiters: () => undefined,
     resolveStructuredTarget: () => ({ sessionId: CHAT_SESSION, dispatchId: null }),
     getCliCommand: localOrchestrationCliCommand,
-    senderName: () => null,
+    senderSnapshot: () => ({ name: null, agent: null }),
     host: {
       readSessionFacts: async () => ({ submissions: [] }),
       hasActionablePromptNow: () => false,

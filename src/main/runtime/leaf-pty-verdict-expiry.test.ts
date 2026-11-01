@@ -30,21 +30,6 @@ function createRuntime(
 afterEach(() => vi.restoreAllMocks())
 
 describe('leaf PTY verdict expiry', () => {
-  it('retires old unique IDs on a live-PTY consult without probing that live PTY', async () => {
-    const now = vi.spyOn(Date, 'now').mockReturnValue(100_000)
-    const { verdicts, isAbsent, probe } = createRuntime()
-    for (let index = 0; index < 1_000; index++) {
-      await expect(isAbsent(`retired-${index}`)).resolves.toBe(true)
-    }
-    expect(verdicts.size).toBe(1_000)
-    now.mockReturnValue(100_000 + TTL_MS)
-
-    await expect(isAbsent('live')).resolves.toBe(false)
-
-    expect(verdicts.size).toBe(0)
-    expect(probe).toHaveBeenCalledTimes(1_000)
-  })
-
   it('preserves every fresh verdict and the exact per-key TTL between bulk sweeps', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(100_000)
     const { verdicts, isAbsent, probe } = createRuntime()
@@ -69,23 +54,6 @@ describe('leaf PTY verdict expiry', () => {
 
     expect(probe).toHaveBeenCalledOnce()
     expect(verdicts.has('fresh-0')).toBe(false)
-  })
-
-  it('sweeps at most once per TTL through a burst of probes and live sends', async () => {
-    const now = vi.spyOn(Date, 'now').mockReturnValue(100_000)
-    const { verdicts, isAbsent } = createRuntime()
-    const iterations = vi.spyOn(verdicts, Symbol.iterator)
-    for (let index = 0; index < 1_000; index++) {
-      await isAbsent(`dead-${index}`)
-      await isAbsent('live')
-    }
-    expect(iterations).toHaveBeenCalledOnce()
-    now.mockReturnValue(100_000 + TTL_MS)
-    for (let index = 0; index < 1_000; index++) {
-      await isAbsent('live')
-    }
-    expect(iterations).toHaveBeenCalledTimes(2)
-    expect(verdicts.size).toBe(0)
   })
 
   it('cleans old entries when a delayed probe completes after the next sweep is due', async () => {

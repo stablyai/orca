@@ -2,13 +2,15 @@ import type Database from '../../sqlite/sync-database'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalOutcomeSource } from './journal-outcome-format'
 
-/** In-process change index only; the public wire still contains items and submissions. */
-export type JournalOutcomeReadRow = {
+type JournalOutcomeKeys = { itemIds: string[]; submissionIds: string[]; queueCardIds: string[] }
+
+/** In-process change index only; the public wire still contains items and submissions. Each array
+ * names the sequence's touched keys; `deleted` repeats the ones it removed. */
+export type JournalOutcomeReadRow = JournalOutcomeKeys & {
   kind: 'outcome'
   epoch: string
   seq: number
-  itemIds: string[]
-  submissionIds: string[]
+  deleted: JournalOutcomeKeys
 }
 export type JournalReadRow = JournalRow | JournalOutcomeReadRow
 
@@ -24,14 +26,15 @@ export function readJournalOutcomeGroups(
     .prepare(`SELECT DISTINCT seq FROM journal_outcomes
     WHERE generation = ? AND seq > ? AND seq <= ? ORDER BY seq LIMIT ?`)
     .all(source.generation, after, source.through, limit ?? -1)
-  const touched = db.prepare(`SELECT field, entry_key FROM journal_outcomes
-    WHERE generation = ? AND seq = ? AND field IN ('items', 'submissions') ORDER BY field, entry_key`)
+  const touched = db.prepare(`SELECT field, entry_key, deleted FROM journal_outcomes
+    WHERE generation = ? AND seq = ? AND field IN ('items', 'submissions', 'queue.cards')
+    ORDER BY field, entry_key`)
   return groups.map(({ seq }) => {
     if (typeof seq !== 'number') {
       throw new Error('invalid journal outcome group')
     }
-    const itemIds: string[] = []
-    const submissionIds: string[] = []
+    const keys = emptyOutcomeKeys()
+    const deleted = emptyOutcomeKeys()
     for (const entry of touched.iterate(source.generation, seq)) {
       if (typeof entry.entry_key !== 'string') {
         throw new Error('invalid journal outcome key')
@@ -40,12 +43,21 @@ export function readJournalOutcomeGroups(
       if (typeof key !== 'string') {
         throw new Error('invalid journal public outcome key')
       }
-      if (entry.field === 'items') {
-        itemIds.push(key)
-      } else {
-        submissionIds.push(key)
+      const field =
+        entry.field === 'items'
+          ? 'itemIds'
+          : entry.field === 'submissions'
+            ? 'submissionIds'
+            : 'queueCardIds'
+      keys[field].push(key)
+      if (entry.deleted === 1) {
+        deleted[field].push(key)
       }
     }
-    return { kind: 'outcome', epoch, seq, itemIds, submissionIds }
+    return { kind: 'outcome', epoch, seq, ...keys, deleted }
   })
+}
+
+function emptyOutcomeKeys(): JournalOutcomeKeys {
+  return { itemIds: [], submissionIds: [], queueCardIds: [] }
 }

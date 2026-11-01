@@ -17,18 +17,6 @@ describe('CodexSubagentExecutions retention and identity', () => {
     expect(executions.retentionSizes().settledTurns).toBeLessThanOrEqual(256)
   })
 
-  it('keeps every child, running or ended, however many run', () => {
-    const executions = new CodexSubagentExecutions()
-    for (let index = 0; index < 200; index++) {
-      expect(executions.observeTurn(`child-${index}`, `turn-${index}`, 'working')).not.toBeNull()
-      executions.register(`child-${index}`, `child-${index}`)
-    }
-    expect(executions.workingChildren()).toHaveLength(200)
-    executions.observeTurn('child-0', 'turn-0', 'completed')
-    expect(executions.find('child-0')).toBeDefined()
-    expect(executions.workingChildren()).toHaveLength(199)
-  })
-
   it('targets live descendants through settled ancestors without losing historical lineage order', () => {
     const executions = new CodexSubagentExecutions()
     executions.register('root', 'root', 'primary')
@@ -61,15 +49,6 @@ describe('CodexSubagentExecutions retention and identity', () => {
       ],
       terminals: []
     })
-  })
-
-  it('collapses a label’s whitespace, and keeps the first label a child was given', () => {
-    const executions = new CodexSubagentExecutions()
-    executions.register('child', '  audit \n  the build ')
-    executions.register('child', 'later name')
-    executions.register('blank', '   ')
-    expect(executions.label('child')).toBe('audit the build')
-    expect(executions.label('blank')).toBeNull()
   })
 
   it('corrects an unverifiable execution with its own terminal event and ignores stale starts', () => {

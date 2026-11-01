@@ -1,3 +1,4 @@
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type {
   CommandOf,
   LayoutApplyOutcome,
@@ -79,6 +80,7 @@ export class LayoutCommandPersistence {
     command: LayoutCommand,
     hostIds: readonly string[] = [],
     run: {
+      admit?: (partitions?: readonly WorkspaceSessionState[]) => boolean
       live?: LayoutLiveContext
       stopBeforeWrite?: (ptyIds: readonly string[]) => boolean
       onEffects?: (effects: LayoutEffects) => void
@@ -97,15 +99,20 @@ export class LayoutCommandPersistence {
         noteEffects: (noted) => (effects = noted)
       })
     )
+    const admitted = (): DurableProfileStateMutation<LayoutApplyOutcome> =>
+      run.admit &&
+      !run.admit(resolved.map((hostId) => context.sessions.getWorkspaceSession(hostId)))
+        ? { value: { ok: false, code: 'tab_not_found' }, persist: false }
+        : commit()
     // Applied closes must stay closed even when persistence fails.
     const applied: Promise<LayoutApplyOutcome> =
       ORCA_LAYOUT_OWNER_IS_MAIN && context.writeLater && isTerminalClose(command)
         ? keptOnWriteFailure(
             (mutate) => context.runtime.runDurableMutation(mutate),
-            writingOnly(resolved, commit),
+            writingOnly(resolved, admitted),
             context.writeLater
           )
-        : context.runtime.runDurableMutation(writingOnly(resolved, commit))
+        : context.runtime.runDurableMutation(writingOnly(resolved, admitted))
     if (!run.onEffects) {
       return applied
     }

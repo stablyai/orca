@@ -355,19 +355,38 @@ test('adds a WSL distro as a host, adds a project on it, and runs a terminal the
     await hubRuntime.call('terminal.create', { worktree: `path:${hostOnlyPath}` })
     expect(await hubTerminalsIn(hostOnlyPath)).toBeGreaterThan(0)
 
-    // Experiment off: the host stays listed so its projects never seem to vanish, but turned off.
+    // Setting off (Stage 1): it governs new work only, so the host keeps serving its projects,
+    // as in serve-only. Only adding a host and moving projects stop.
     await setWslHostsEnabled(page, false)
+    // Through the desktop's own host connection, not the hub directly: the host still serves.
+    const callHostFromDesktop = (method: string, params: unknown): Promise<boolean> =>
+      page.evaluate(async (args) => (await window.api.runtimeEnvironments.call(args)).ok, {
+        selector: WSL_ENVIRONMENT_ID,
+        method,
+        params,
+        timeoutMs: 30_000
+      })
+    expect(await callHostFromDesktop('terminal.create', { worktree: `path:${hostOnlyPath}` })).toBe(
+      true
+    )
+    await expect.poll(() => hubTerminalsIn(hostOnlyPath), { timeout: 30_000 }).toBeGreaterThan(1)
+    expect(await callHostFromDesktop('terminal.list', {})).toBe(true)
+    expect(
+      await page.evaluate(() => window.api.runtimeEnvironments.wslHosts?.add({ distro: 'Ubuntu' }))
+    ).toMatchObject({ ok: false, kind: 'disabled' })
+    expect(
+      await page.evaluate(() => window.api.wslMove.start({ distro: 'Ubuntu', repoIds: [] }))
+    ).toMatchObject({ outcome: 'refused', code: 'wsl_move_unavailable' })
     await openSidebarProjectDialog(page)
     await page
       .getByRole('dialog', { name: /Add a project/i })
       .getByRole('combobox')
       .click()
     const offRow = page.locator('[cmdk-item]').filter({ hasText: WSL_HOST_LABEL })
-    await expect(offRow).toContainText('Turned off in Settings → Experimental')
-    await expect(offRow.getByRole('button', { name: 'Turn on' })).toBeVisible()
-    await expect(offRow.getByRole('button', { name: 'Connect' })).toHaveCount(0)
+    await expect(offRow).toBeVisible()
+    await expect(offRow).not.toContainText('Turned off in Settings → Experimental')
     await settleAnimations(page)
-    await page.screenshot({ path: testInfo.outputPath('wsl-host-row-turned-off.png') })
+    await page.screenshot({ path: testInfo.outputPath('wsl-host-row-setting-off.png') })
     await page.keyboard.press('Escape')
     const addProjectAgain = page.getByRole('dialog', { name: /Add a project/i })
     await expect(offRow).toBeHidden()
@@ -383,10 +402,12 @@ test('adds a WSL distro as a host, adds a project on it, and runs a terminal the
     await expect(page.getByText('No saved servers', { exact: true })).toBeVisible()
     const section = page.locator('[data-settings-section="wsl-hosts"]')
     await section.scrollIntoViewIfNeeded()
-    await expect(section).toContainText('WSL hosts are turned off in Settings → Experimental')
-    await expect(section.getByRole('button', { name: 'Connect' })).toBeDisabled()
+    await expect(section).toContainText(WSL_HOST_LABEL)
+    await expect(section).not.toContainText('WSL hosts are turned off in Settings → Experimental')
+    // No new host while the setting is off.
+    await expect(section.getByRole('button', { name: 'Add WSL distro' })).toHaveCount(0)
     await settleAnimations(page)
-    await section.screenshot({ path: testInfo.outputPath('wsl-hosts-settings-turned-off.png') })
+    await section.screenshot({ path: testInfo.outputPath('wsl-hosts-settings-setting-off.png') })
 
     // Remove asks first, with WSL-specific copy, then drops the host.
     await setWslHostsEnabled(page, true)

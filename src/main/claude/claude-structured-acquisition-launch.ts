@@ -1,5 +1,5 @@
 import type { ClaudeNamingGeneration } from './claude-naming-generation'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   launchPreparationFailure,
@@ -99,6 +99,7 @@ export async function resolveClaudeAcquisitionLaunch(args: {
       .resolveLaunch({
         identity: launchIdentity,
         spawnToken: input.spawnToken,
+        ...(input.accountRecipe ? { accountRecipe: input.accountRecipe } : {}),
         ...(input.permissionMode ? { permissionMode: input.permissionMode } : {})
       })
       .catch((error: unknown) => {

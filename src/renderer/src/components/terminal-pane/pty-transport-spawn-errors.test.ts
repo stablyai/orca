@@ -222,6 +222,24 @@ describe('createIpcPtyTransport', () => {
     expect(result).toEqual({ id: 'ssh:ssh-1@@pty-3', sessionExpired: true })
   })
 
+  it('calls a local daemon session-absence answer expired so a restored pane respawns silently', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    vi.mocked(window.api.pty.spawn).mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'pty:spawn': SessionNotFoundError: Session not found: repo-1::C:/proj/wt@@deadbeef"
+      )
+    )
+    const onError = vi.fn()
+    const result = await createIpcPtyTransport().connect({
+      url: '',
+      sessionId: 'repo-1::C:/proj/wt@@deadbeef',
+      callbacks: { onError }
+    })
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(result).toEqual({ id: 'repo-1::C:/proj/wt@@deadbeef', sessionExpired: true })
+  })
+
   it('surfaces terminal session state save failures without the Electron IPC wrapper', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const wrappedMessage = `Error invoking remote method 'pty:spawn': Error: ${createTerminalSessionStateSaveFailureMessage()}`

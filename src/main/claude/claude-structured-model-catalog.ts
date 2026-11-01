@@ -1,9 +1,9 @@
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
-} from '../../shared/agent-session-wire'
-import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
-import type { CatalogModel } from '../../shared/agent-session-option-catalog-types'
+} from '../../shared/agent-session/agent-session-wire'
+import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
+import type { CatalogModel } from '../../shared/agent-session/options/agent-session-option-catalog-types'
 
 export type ListedModel = AgentSessionModelOption & { resolvedModel: string | null }
 

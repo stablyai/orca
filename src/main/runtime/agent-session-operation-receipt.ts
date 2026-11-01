@@ -1,5 +1,5 @@
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
-import type { AgentSessionOperationOutcome } from '../../shared/agent-session-operation-ledger'
+import type { AgentSessionOperationOutcome } from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   insertAcceptedAgentSessionOperationInto,
   settleAgentSessionOperationInto,

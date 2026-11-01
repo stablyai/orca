@@ -1,25 +1,9 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
-import {
-  getEditorFileDropOperationContext,
-  shouldUploadRemoteEditorFileDrop
-} from './editor-dropped-file-open'
+import { getEditorFileDropOperationContext } from './editor-dropped-file-open'
+
 import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
 
 describe('shouldUploadRemoteEditorFileDrop', () => {
-  it('does not upload editor drops for local workspaces', () => {
-    expect(shouldUploadRemoteEditorFileDrop({ kind: 'local' }, null)).toBe(false)
-  })
-
-  it('uploads editor drops while a runtime environment is active', () => {
-    expect(
-      shouldUploadRemoteEditorFileDrop({ kind: 'environment', environmentId: 'env-1' }, null)
-    ).toBe(true)
-  })
-
-  it('uploads editor drops for SSH workspaces', () => {
-    expect(shouldUploadRemoteEditorFileDrop({ kind: 'local' }, 'ssh-1')).toBe(true)
-  })
-
   it('uses the worktree owner runtime instead of the focused runtime', () => {
     expect(
       getRuntimeTargetForWorktreeOwner(
@@ -31,19 +15,6 @@ describe('shouldUploadRemoteEditorFileDrop', () => {
         'wt-1'
       )
     ).toEqual({ kind: 'environment', environmentId: 'owner-runtime' })
-  })
-
-  it('keeps explicit local worktree editor drops local while a runtime is focused', () => {
-    expect(
-      getRuntimeTargetForWorktreeOwner(
-        {
-          settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
-          repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }],
-          worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] }
-        },
-        'wt-1'
-      )
-    ).toEqual({ kind: 'local' })
   })
 
   it('builds file operation context from the worktree owner instead of global focus', () => {

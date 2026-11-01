@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitMerge, Link2Off } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { GitHubPRMergeMethod, PRInfo } from '../../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../../transport/rpc-client'
@@ -143,10 +143,11 @@ export function PRActionsSection({
     <View style={styles.actionsBlock}>
       {avail.canMerge ? (
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.actionButton,
             styles.actionButtonMerge,
-            (mergeBusy || !merge.enabled) && styles.actionButtonDisabled
+            (mergeBusy || !merge.enabled) && styles.actionButtonDisabled,
+            pressed && pressedStyle
           ]}
           onPress={() => {
             setUnlinkError(null)
@@ -173,6 +174,7 @@ export function PRActionsSection({
           <Text style={styles.actionHint}>{merge.hint}</Text>
           {/* No mobile surface polls PR state, so a blocked Merge needs its own recheck. */}
           <Pressable
+            style={({ pressed }) => pressed && pressedStyle}
             onPress={() => onRecheck()}
             hitSlop={8}
             accessibilityRole="button"
@@ -190,10 +192,11 @@ export function PRActionsSection({
 
       {showMarkReady ? (
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.actionButton,
             styles.secondaryButton,
-            stateBusy && styles.actionButtonDisabled
+            stateBusy && styles.actionButtonDisabled,
+            pressed && pressedStyle
           ]}
           onPress={() => {
             setUnlinkError(null)
@@ -219,7 +222,11 @@ export function PRActionsSection({
             {t('pullRequest.prActionsSection.autoMergeLabel', 'Auto-merge when ready')}
           </Text>
           <Pressable
-            style={[styles.togglePill, autoMerge && styles.togglePillOn]}
+            style={({ pressed }) => [
+              styles.togglePill,
+              autoMerge && styles.togglePillOn,
+              pressed && pressedStyle
+            ]}
             onPress={() => {
               setUnlinkError(null)
               actions.setAutoMerge(!autoMerge, effectiveMethod)
@@ -249,10 +256,11 @@ export function PRActionsSection({
         <View style={styles.secondaryRow}>
           {avail.canClose || avail.canReopen ? (
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.actionButton,
                 styles.secondaryButton,
-                stateBusy && styles.actionButtonDisabled
+                stateBusy && styles.actionButtonDisabled,
+                pressed && pressedStyle
               ]}
               onPress={() => {
                 setUnlinkError(null)
@@ -284,10 +292,11 @@ export function PRActionsSection({
           ) : null}
           {avail.canUnlink ? (
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.actionButton,
                 styles.secondaryButton,
-                unlinkBusy && styles.actionButtonDisabled
+                unlinkBusy && styles.actionButtonDisabled,
+                pressed && pressedStyle
               ]}
               onPress={() => void unlink()}
               disabled={unlinkBusy}
