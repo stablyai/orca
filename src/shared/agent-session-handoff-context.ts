@@ -1,4 +1,8 @@
-import type { NativeChatMessage } from './native-chat-types'
+import type {
+  NativeChatMessage,
+  NativeChatToolCallBlock,
+  NativeChatToolResultBlock
+} from './native-chat-types'
 import { isWordlessProviderFrameBlock } from './native-chat/native-chat-provider-frame-summary'
 import { pairToolBlocks, type NativeChatToolPair } from './native-chat/tools/native-chat-tool-pairs'
 import { formatToolInputPreview } from './native-chat/tools/native-chat-tool-summary'
@@ -16,6 +20,7 @@ const MIN_ENTRY_CHARS = 256
 const OMISSION_MARKER = '[Orca: some saved chat messages or tool details omitted from this excerpt]'
 const SHORTENING_MARKER = '\n[Orca: middle omitted]\n'
 
+type ToolEvidencePart = { block: NativeChatToolCallBlock | NativeChatToolResultBlock; text: string }
 type ContextEntry = { messageIndex: number; blockIndex: number; text: string }
 type ConversationMessage = {
   messageIndex: number
@@ -53,7 +58,7 @@ export function buildAgentSessionHandoffContext(messages: readonly NativeChatMes
   ].join('\n\n')
 }
 
-function contextEntryChars(entries: readonly ContextEntry[]): number {
+function contextEntryChars(entries: readonly { text: string }[]): number {
   return entries.reduce((chars, entry) => chars + entry.text.length + 2, 0)
 }
 
@@ -121,15 +126,15 @@ function selectToolEvidence(messages: readonly NativeChatMessage[]): {
         return { entries, omitted: true }
       }
       const pair = pairs[index]
-      const block = pair.call ?? pair.result
-      const blockIndex = block && blockIndices.get(block)
-      if (blockIndex === undefined) {
-        continue
-      }
-      const formatted = formatToolPair(pair, remaining - 2)
+      const formatted = formatToolPair(pair, remaining)
       omitted ||= formatted.shortened
-      entries.push({ messageIndex, blockIndex, text: formatted.text })
-      remaining -= formatted.text.length + 2
+      for (const { block, text } of formatted.parts) {
+        const blockIndex = blockIndices.get(block)
+        if (blockIndex !== undefined) {
+          entries.push({ messageIndex, blockIndex, text })
+        }
+      }
+      remaining -= contextEntryChars(formatted.parts)
     }
   }
   return { entries, omitted }
@@ -170,39 +175,52 @@ function sliceConversation(
 function formatToolPair(
   pair: NativeChatToolPair,
   maxChars: number
-): { text: string; shortened: boolean } {
-  const parts: string[] = []
-  let shortened = false
-  let remaining = maxChars
+): { parts: ToolEvidencePart[]; shortened: boolean } {
+  const parts: ToolEvidencePart[] = []
   if (pair.call) {
     const call = pair.call
-    const name = excerpt(call.name, 100)
     const state = agentJournalToolCallLifecycle(call)
-    const label = `[tool ${name}${state ? ` ${state}` : ''} input preview] `
-    const preview = formatToolInputPreview(call.input)
-    const input = excerpt(
-      preview,
-      Math.min(MAX_TOOL_INPUT_CHARS, Math.floor((remaining - label.length) / 2))
-    )
-    const text = label + input
-    parts.push(text)
-    remaining -= text.length + 1
-    shortened ||= name !== call.name || input !== preview
+    parts.push({
+      block: call,
+      text: `[tool ${excerpt(call.name, 100)}${state ? ` ${state}` : ''} input preview] ${toolCallReference(call.callId)}`
+    })
   }
   if (pair.result) {
-    const result = pair.result
-    const callId = !pair.call && result.callId ? ` call=${excerpt(result.callId, 100)}` : ''
-    const label = `[tool result${callId}${result.isError ? ' error' : ''}] `
-    const output = excerpt(result.output, Math.min(MAX_TOOL_OUTPUT_CHARS, remaining - label.length))
-    parts.push(label + output)
-    shortened ||= output !== result.output
+    parts.push({
+      block: pair.result,
+      text: `[tool result${pair.result.isError ? ' error' : ''}] ${toolCallReference(pair.result.callId)}`
+    })
   }
-  return { text: parts.join('\n'), shortened }
+  let remaining = maxChars - contextEntryChars(parts)
+  if (remaining < 0) {
+    return { parts: [], shortened: true }
+  }
+  let shortened = Boolean(pair.call && excerpt(pair.call.name, 100) !== pair.call.name)
+  for (const part of parts) {
+    const input = part.block.type === 'tool-call'
+    const value =
+      part.block.type === 'tool-call' ? formatToolInputPreview(part.block.input) : part.block.output
+    const limit = input
+      ? Math.min(MAX_TOOL_INPUT_CHARS, pair.result ? Math.floor(remaining / 2) : remaining)
+      : Math.min(MAX_TOOL_OUTPUT_CHARS, remaining)
+    const preview = excerpt(value, limit)
+    part.text += preview
+    remaining -= preview.length
+    shortened ||= preview !== value
+  }
+  return { parts, shortened }
+}
+
+function toolCallReference(callId: string | undefined): string {
+  return callId ? `call=${excerpt(callId, 100)} ` : ''
 }
 
 function excerpt(value: string, maxChars: number): string {
   if (value.length <= maxChars) {
     return value
+  }
+  if (maxChars < SHORTENING_MARKER.length) {
+    return sliceAtCodeUnitLimit(value, maxChars)
   }
   const { headEnd, tailStart } = excerptBounds(value, maxChars)
   return value.slice(0, headEnd) + SHORTENING_MARKER + value.slice(tailStart)

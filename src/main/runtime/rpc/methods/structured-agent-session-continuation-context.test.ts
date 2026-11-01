@@ -413,7 +413,9 @@ it('hands off bounded tool evidence with the latest conversation while keeping t
   }
   expect(context.capturedText).toContain('[user] Review the viewer')
   expect(context.capturedText).toContain('[tool shell input preview]')
-  expect(context.capturedText).toContain('[tool result error] AssertionError: CURRENT PART')
+  expect(context.capturedText).toContain(
+    '[tool result error] call=test AssertionError: CURRENT PART'
+  )
   expect(context.capturedText).toContain('Tests: 2 failed')
   expect(context.capturedText).toContain('[assistant] The append resets reader position.')
   expect(context.capturedText).toContain('[user] Should we redo the viewer?')

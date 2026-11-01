@@ -33,7 +33,7 @@ it('keeps the conversation around a huge failed assertion and preserves tool att
   expect(context).toContain('[user] Review the paged tool output')
   expect(context).toContain('[tool shell failed input preview]')
   expect(context).toContain('pnpm test viewer.test.ts')
-  expect(context).toContain('[tool result error] AssertionError: expected CURRENT PART')
+  expect(context).toContain('[tool result error] call=test AssertionError: expected CURRENT PART')
   expect(context).toContain('middle omitted')
   expect(context).toContain('Tests: 2 failed')
   expect(context).toContain('[assistant] Request changes: appends reset the reader position.')
@@ -133,17 +133,30 @@ it('pairs out-of-order tool results by call ID and labels standalone results wit
       { type: 'tool-result', output: 'standalone result', callId: 'unknown' }
     ])
   ])
-  expect(context).toContain('[tool Read input preview] a.ts\n[tool result] file contents')
-  expect(context).toContain('[tool Search input preview] pattern\n[tool result] search result')
-  expect(context).toContain('[tool result call=unknown] standalone result')
+  expect(context).toContain('[tool Read input preview] call=a a.ts')
+  expect(context).toContain('[tool result] call=a file contents')
+  expect(context).toContain('[tool Search input preview] call=b pattern')
+  expect(context).toContain('[tool result] call=b search result')
+  expect(context).toContain('[tool result] call=unknown standalone result')
 })
 
 it('respects the total bound with oversized metadata and a nearly exhausted tool budget', () => {
   const context = buildAgentSessionHandoffContext(
     Array.from({ length: 1_000 }, () =>
       message('assistant', [
-        { type: 'tool-call', name: 'n'.repeat(10_000), input: 'i'.repeat(10_000), state: 'failed' },
-        { type: 'tool-result', output: 'o'.repeat(10_000), isError: true }
+        {
+          type: 'tool-call',
+          name: 'n'.repeat(10_000),
+          input: 'i'.repeat(10_000),
+          callId: 'c'.repeat(10_000),
+          state: 'failed'
+        },
+        {
+          type: 'tool-result',
+          output: 'o'.repeat(10_000),
+          callId: 'c'.repeat(10_000),
+          isError: true
+        }
       ])
     )
   )
@@ -274,4 +287,28 @@ it('omits assistant visual directives while preserving user text and literal cod
   expect(context).toContain(`[user] Explain this:\n${directive}`)
   expect(context).not.toContain(`chart.\n${directive}`)
   expect(context).toContain(code)
+})
+
+it('keeps interleaved prose and out-of-order results at their original block positions', () => {
+  const context = buildAgentSessionHandoffContext([
+    message('assistant', [
+      { type: 'tool-call', name: 'Read', input: 'a.ts', callId: 'a' },
+      { type: 'text', text: 'Search before deciding.' },
+      { type: 'tool-call', name: 'Search', input: 'pattern', callId: 'b' },
+      { type: 'tool-result', output: 'search result', callId: 'b' },
+      { type: 'text', text: 'Still waiting for the file.' },
+      { type: 'tool-result', output: 'file contents', callId: 'a' }
+    ])
+  ])
+  const markers = [
+    '[tool Read',
+    'Search before deciding.',
+    '[tool Search',
+    'search result',
+    'Still waiting for the file.',
+    'file contents'
+  ]
+  for (let index = 1; index < markers.length; index++) {
+    expect(context.indexOf(markers[index - 1])).toBeLessThan(context.indexOf(markers[index]))
+  }
 })
