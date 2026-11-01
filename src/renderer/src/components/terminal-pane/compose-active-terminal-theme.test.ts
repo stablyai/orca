@@ -24,12 +24,13 @@ describe('composeActiveTerminalTheme', () => {
     })
   })
 
-  it('raises a muted dark foreground until the thumb is no fainter than the legacy grey', () => {
+  it('raises the thumb alpha on a muted dark theme to match the legacy grey contrast', () => {
     const base = { background: '#002b36', foreground: '#839496' }
     const result = composeActiveTerminalTheme(base, settingsWith({}))
     expect(result).toMatchObject({
       scrollbarSliderBackground: 'rgba(131, 148, 150, 0.53)',
-      scrollbarSliderHoverBackground: 'rgba(131, 148, 150, 0.8)'
+      scrollbarSliderHoverBackground: 'rgba(131, 148, 150, 0.8)',
+      scrollbarSliderActiveBackground: 'rgba(131, 148, 150, 1)'
     })
   })
 

@@ -55,7 +55,7 @@ export function isHexColor(value: string): boolean {
 
 const LEGACY_SLIDER_GREY: Rgba = [180, 180, 185, 1]
 
-// Why: muted foregrounds (Solarized Dark, One Dark) must never draw a fainter thumb than the old fixed grey.
+// Why: muted foregrounds (Solarized Dark, One Dark) rise to the old fixed grey's contrast, capped at opaque.
 function sliderAlpha(foreground: Rgba, background: Rgba, alpha: number, greyAlpha: number): number {
   const contrastAt = ([r, g, b]: Rgba, a: number): number =>
     contrastRatio(over([r, g, b, a], background), background)
