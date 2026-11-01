@@ -210,6 +210,10 @@ close returns a failing `unverifiable` result rather than claiming the processes
 
 By default, `terminal read` returns the accumulated output stream with terminal escapes stripped. Programs that redraw lines can therefore appear as stacked fragments. Use `--screen` when you need the currently rendered frame; the response's `source` identifies `stream`, `screen`, or `screen-unavailable`. Screen reads have no history to page, so `--screen` and `--cursor` are mutually exclusive.
 
+Rendered reads separate detected composer text into `draft` and report `draftOrigin` as `agent_suggestion`, `user_input`, or `unknown`. Suggestions require dim text entirely to the right of the cursor at the start of a recognized composer, with no undimmed continuation text. Mixed styling or drafts reconstructed from rows above the cursor report `unknown`; grey foreground alone is insufficient to prove a suggestion. Stock placeholders (including Claude Code's `Try "…"` and Codex placeholders) remain excluded from `draft`, with `draftOrigin: "agent_suggestion"` when detected. Real typed text matching a placeholder is preserved.
+
+Coordinators may ignore a draft marked `agent_suggestion` when checking for unsent input. Treat nonempty drafts with `user_input`, `unknown`, or an absent `draftOrigin` as occupied. Older hosts and stream-only reads may omit provenance. This is evidence from a rendered snapshot; it does not make a later send atomic with the read.
+
 For long output, use cursor reads. Save `nextCursor` from one stream read, then pass it back with `--cursor` to fetch only new output.
 
 ## Files

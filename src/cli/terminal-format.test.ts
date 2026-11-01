@@ -285,11 +285,13 @@ describe('formatTerminalRead draft separation', () => {
         truncated: false,
         nextCursor: null,
         source: 'screen',
-        draft: 'proceed with the release'
+        draft: 'proceed with the release',
+        draftOrigin: 'agent_suggestion'
       }
     })
 
     expect(output).toContain('draft: "proceed with the release"')
+    expect(output).toContain('draftOrigin: agent_suggestion')
     expect(output).toContain('\n\nBuild passed\n❯')
   })
 })

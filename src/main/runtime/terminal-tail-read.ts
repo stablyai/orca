@@ -142,7 +142,8 @@ export function buildVisibleSnapshotReadFallback(
   visibleLines: string[],
   limit: number | undefined,
   draft?: string,
-  tailRows?: RuntimeTerminalRowMetadata[]
+  tailRows?: RuntimeTerminalRowMetadata[],
+  draftOrigin?: RuntimeTerminalRead['draftOrigin']
 ): RuntimeTerminalRead {
   const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
   const lineBoundedTail = visibleLines.slice(-lineLimit)
@@ -157,7 +158,12 @@ export function buildVisibleSnapshotReadFallback(
           .slice(charBoundedTail.omittedLineCount)
           .map((row, index) => ({ ...row, wrapped: index > 0 && row.wrapped }))
       : undefined
-  const { tailRows: _priorRows, ...streamRead } = read
+  const {
+    tailRows: _priorRows,
+    draft: _priorDraft,
+    draftOrigin: _priorOrigin,
+    ...streamRead
+  } = read
   return {
     ...streamRead,
     tail: charBoundedTail.tail,
@@ -166,7 +172,8 @@ export function buildVisibleSnapshotReadFallback(
       read.limited || lineBoundedTail.length < visibleLines.length || charBoundedTail.limited,
     returnedLineCount: charBoundedTail.tail.length,
     source: 'screen',
-    ...(draft ? { draft } : {})
+    ...(draft ? { draft } : {}),
+    ...(draftOrigin ? { draftOrigin } : draft ? { draftOrigin: 'unknown' } : {})
   }
 }
 

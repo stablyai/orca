@@ -8,6 +8,7 @@ import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
+import type { TerminalComposerDraftOrigin } from './terminal-composer-draft'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TerminalAgent, TuiAgent } from './terminal-agent'
 export type {
@@ -213,6 +214,8 @@ export type RuntimeTerminalRead = {
   source?: 'stream' | 'screen' | 'screen-unavailable'
   /** UI-only composer text, excluded from `tail`. */
   draft?: string
+  /** Rendered composer evidence; absent on older hosts or when no composer text is detected. */
+  draftOrigin?: TerminalComposerDraftOrigin
 }
 
 export type RuntimeTerminalRename = {

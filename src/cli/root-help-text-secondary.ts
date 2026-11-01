@@ -63,6 +63,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]',
   '  orca terminal show [--terminal <handle>] [--json]',
   '  orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--screen] [--json]',
+  '    Screen reads report draftOrigin: agent_suggestion, user_input, or unknown; absent means unclassified.',
   '  orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--wait-submit <seconds>] [--retry-request <id>] [--json]',
   '  orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
   '  orca agent launch --agent <id> [--worktree <selector>] [--prompt <text>] [--model <id>] [--effort <level>] [--focus] [--json]',

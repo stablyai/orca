@@ -303,7 +303,8 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       projection.lines,
       opts.limit,
       projection.draft,
-      projection.tailRows
+      projection.tailRows,
+      projection.draftOrigin
     )
   }
 }

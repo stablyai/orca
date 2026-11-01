@@ -135,7 +135,8 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
           providerProjection.lines,
           opts.limit,
           providerProjection.draft,
-          providerProjection.tailRows
+          providerProjection.tailRows,
+          providerProjection.draftOrigin
         )
       }
     }
@@ -176,7 +177,8 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       projection.lines,
       opts.limit,
       projection.draft,
-      projection.tailRows
+      projection.tailRows,
+      projection.draftOrigin
     )
   }
 
@@ -194,7 +196,8 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
           projection.lines,
           limit,
           projection.draft,
-          projection.tailRows
+          projection.tailRows,
+          projection.draftOrigin
         )
       : read
   }

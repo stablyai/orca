@@ -30,7 +30,8 @@ describe('projectTerminalTailLines', () => {
     expect(projectTerminalTailLines(emulator, 2)).toEqual({
       lines: ['old output', 'tail output'],
       tailRows: rowsOf(['old output', 'tail output']).map((row) => row.metadata),
-      draft: 'proceed'
+      draft: 'proceed',
+      draftOrigin: 'agent_suggestion'
     })
   })
 
@@ -58,7 +59,8 @@ describe('projectTerminalTailLines', () => {
     expect(projectTerminalTailLines(emulator, 2)).toEqual({
       lines: ['────────', '❯'],
       tailRows: rowsOf(['────────', '❯']).map((row) => row.metadata),
-      draft: 'proceed with release'
+      draft: 'proceed with release',
+      draftOrigin: 'agent_suggestion'
     })
   })
 })
