@@ -21,7 +21,7 @@ export async function removeHostAndCloseClient(
   }
   forgetHostClient(hostId)
   forgetHostDescriptor(hostId)
-  // After commit, cache cleanup must not delay/fail removal; later eviction can reclaim failures.
+  // After commit, cache cleanup must not delay/fail removal; the next launch sweep reclaims a failed delete.
   void forgetHostUpdateFailures(hostId).catch(() => undefined)
   void deleteHostPageCache(hostId).catch(() => undefined)
 }

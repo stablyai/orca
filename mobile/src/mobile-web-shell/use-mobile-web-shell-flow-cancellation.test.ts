@@ -23,6 +23,9 @@ vi.mock('expo-crypto', async () => {
   }
 })
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('../../modules/orca-mobile-web-shell/src', () => ({
+  excludeFromBackup: async () => undefined
+}))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => undefined }
 }))
