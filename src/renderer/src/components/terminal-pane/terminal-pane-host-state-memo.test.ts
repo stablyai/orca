@@ -40,7 +40,6 @@ function makeState(overrides: Partial<Record<string, unknown>> = {}): AppState {
     worktreesByRepo: {},
     detectedWorktreesByRepo: {},
     folderWorkspaces: [],
-    projectGroups: [],
     activeWorktreeId: null,
     activeWorkspaceExecutionHostId: null,
     runtimeEnvironments: [],
@@ -253,6 +252,7 @@ describe('qualified native chat runtime facts', () => {
     'honors the %s default on an ordinary repo-free Windows folder',
     (kind) => {
       const state = makeState({
+        projectGroups: [],
         projects: [],
         settings: createGlobalSettingsFixture({
           localWindowsRuntimeDefault: { kind, distro: 'Ubuntu' }
@@ -344,6 +344,7 @@ describe('qualified native chat runtime facts', () => {
 
   it('waits for a local Windows path instead of retiring from an incomplete row', () => {
     const state = makeState({
+      projectGroups: [],
       settings,
       projects: [],
       repos: [{ id: 'repo', executionHostId: 'local' }],
@@ -420,6 +421,7 @@ describe('qualified native chat runtime facts', () => {
         }
       ]
       const state = makeState({
+        projectGroups: [],
         settings,
         projects: reverse ? projects.toReversed() : projects,
         repos: reverse ? repos.toReversed() : repos,
