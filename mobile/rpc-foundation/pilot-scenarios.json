@@ -11333,8 +11333,8 @@
         {
           "complete": "github.workItemDetails#1",
           "params": {
-            "number": 12,
             "repo": "id:repo-1",
+            "number": 12,
             "type": "pr",
             "ownerRepo": {
               "owner": "owner",
@@ -11399,8 +11399,8 @@
         {
           "complete": "github.workItemDetails#1.native-2",
           "params": {
-            "number": 12,
             "repo": "id:repo-1",
+            "number": 12,
             "type": "pr",
             "ownerRepo": {
               "owner": "owner",
@@ -13042,17 +13042,17 @@
         {
           "complete": "github.updateIssue#1",
           "params": {
-            "number": 9,
             "repo": "id:repo-1",
+            "number": 9,
             "updates": {
+              "title": "Renamed",
               "addLabels": ["triage"],
-              "removeLabels": ["bug"],
-              "title": "Renamed"
+              "removeLabels": ["bug"]
             },
             "ownerRepo": {
+              "host": "github.com",
               "owner": "owner",
-              "repo": "repo",
-              "host": "github.com"
+              "repo": "repo"
             }
           },
           "reply": {
@@ -13086,17 +13086,17 @@
         {
           "complete": "github.updateIssue#1.native-2",
           "params": {
-            "number": 9,
             "repo": "id:repo-1",
+            "number": 9,
             "updates": {
+              "title": "Renamed",
               "addLabels": ["triage"],
-              "removeLabels": ["bug"],
-              "title": "Renamed"
+              "removeLabels": ["bug"]
             },
             "ownerRepo": {
+              "host": "github.com",
               "owner": "owner",
-              "repo": "repo",
-              "host": "github.com"
+              "repo": "repo"
             }
           },
           "reply": {
@@ -14354,15 +14354,15 @@
         {
           "complete": "github.updateIssue#1",
           "params": {
-            "number": 9,
             "repo": "id:repo-1",
+            "number": 9,
             "updates": {
               "state": "closed"
             },
             "ownerRepo": {
+              "host": "github.com",
               "owner": "owner",
-              "repo": "repo",
-              "host": "github.com"
+              "repo": "repo"
             }
           },
           "reply": {
@@ -14396,15 +14396,15 @@
         {
           "complete": "github.updateIssue#1.native-2",
           "params": {
-            "number": 9,
             "repo": "id:repo-1",
+            "number": 9,
             "updates": {
               "state": "closed"
             },
             "ownerRepo": {
+              "host": "github.com",
               "owner": "owner",
-              "repo": "repo",
-              "host": "github.com"
+              "repo": "repo"
             }
           },
           "reply": {
