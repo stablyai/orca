@@ -1,5 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
-import { nativeChatSubagentActivities } from '../../../../shared/native-chat/input/native-chat-activity'
+import {
+  nativeChatSubagentActivities,
+  type NativeChatSubagentActivity
+} from '../../../../shared/native-chat/input/native-chat-activity'
 import type { NativeChatTaskSeedList } from '../../../../shared/native-chat/input/native-chat-claude-task-updates'
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
@@ -20,7 +23,11 @@ export function useNativeChatSubagentTranscript({
   activityText,
   lifecycleWorking
 }: {
-  session: { sessionId: string | null; taskList?: NativeChatTaskSeedList | null }
+  session: {
+    sessionId: string | null
+    taskList?: NativeChatTaskSeedList | null
+    subagentSeed?: readonly NativeChatSubagentActivity[] | null
+  }
   messages: readonly NativeChatMessage[]
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
   subagentRoster: StructuredAgentSubagentRoster | undefined
@@ -44,9 +51,10 @@ export function useNativeChatSubagentTranscript({
     focusedSubagentId: string | null
     onFocusSubagent: (agentId: string | null) => void
     taskList: NativeChatTaskSeedList | null
+    subagentSeed: readonly NativeChatSubagentActivity[] | null
   }
 } {
-  const { sessionId, taskList = null } = session
+  const { sessionId, taskList = null, subagentSeed = null } = session
   const [focus, setFocus] = useState<{ sessionId: string | null; agentId: string | null }>({
     sessionId,
     agentId: null
@@ -56,8 +64,8 @@ export function useNativeChatSubagentTranscript({
   }
   const requestedId = focus.sessionId === sessionId ? focus.agentId : null
   const activities = useMemo(
-    () => nativeChatSubagentActivities(messages, subagentRows),
-    [messages, subagentRows]
+    () => nativeChatSubagentActivities(messages, subagentRows, subagentSeed),
+    [messages, subagentRows, subagentSeed]
   )
   // A roster entry can be focused before its rows load. Drop it only once it leaves the roster.
   const viewingSubagent =
@@ -85,6 +93,13 @@ export function useNativeChatSubagentTranscript({
     shownStopping: viewingSubagent ? false : stopping,
     shownActivityText: viewingSubagent ? undefined : activityText,
     shownLifecycleWorking: viewingSubagent ? false : lifecycleWorking,
-    activity: { messages, subagentRows, focusedSubagentId, onFocusSubagent, taskList }
+    activity: {
+      messages,
+      subagentRows,
+      focusedSubagentId,
+      onFocusSubagent,
+      taskList,
+      subagentSeed
+    }
   }
 }

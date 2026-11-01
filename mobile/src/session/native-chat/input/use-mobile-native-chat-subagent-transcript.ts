@@ -22,7 +22,8 @@ export function useMobileNativeChatSubagentTranscript({
   pending,
   agent,
   sendSurfaceId,
-  taskList: sessionTaskList = null
+  taskList: sessionTaskList = null,
+  subagentSeed = null
 }: {
   messages: readonly NativeChatMessage[]
   folded: NativeChatMessage[]
@@ -31,6 +32,7 @@ export function useMobileNativeChatSubagentTranscript({
   agent: string | null | undefined
   sendSurfaceId: string
   taskList?: NativeChatTaskSeedList | null
+  subagentSeed?: readonly NativeChatSubagentActivity[] | null
 }): {
   shownFolded: NativeChatMessage[]
   shownStreaming: string | null
@@ -45,8 +47,9 @@ export function useMobileNativeChatSubagentTranscript({
 } {
   const projection = useMemo(() => projectNativeChatTranscript(messages), [messages])
   const subagents = useMemo(
-    () => nativeChatSubagentActivities(projection.conversation, projection.subagentRows),
-    [projection]
+    () =>
+      nativeChatSubagentActivities(projection.conversation, projection.subagentRows, subagentSeed),
+    [projection, subagentSeed]
   )
   const [focus, setFocus] = useState<{ surfaceId: string; agentId: string | null }>({
     surfaceId: sendSurfaceId,

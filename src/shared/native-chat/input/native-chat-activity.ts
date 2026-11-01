@@ -5,9 +5,11 @@ import { agentJournalItemSubagentId } from '../../agent-session-journal-producer
 import type { NativeChatMessage, NativeChatSubagentState } from '../native-chat-types'
 import { namedSubagents } from '../transcript/native-chat-subagent-items'
 import {
+  canReplaceSubagentState,
   isSubagentGroupFallbackText,
   normalizeSubagentState
 } from '../transcript/native-chat-subagent-summary'
+import { nativeChatToolSubagentActivities } from './native-chat-tool-subagents'
 import { CODEX_PLAN_UPDATED_FRAME_KIND } from '../native-chat-provider-frame-summary'
 import { pairToolBlocks } from '../tools/native-chat-tool-pairs'
 import {
@@ -164,19 +166,38 @@ export function nativeChatVisibleTaskList(
 
 export function nativeChatSubagentActivities(
   conversation: readonly NativeChatMessage[],
-  subagentRows: ReadonlyMap<string, readonly { message: NativeChatMessage }[]> = new Map()
+  subagentRows: ReadonlyMap<string, readonly { message: NativeChatMessage }[]> = new Map(),
+  seed: readonly NativeChatSubagentActivity[] | null = null
 ): NativeChatSubagentActivity[] {
   const order: string[] = []
-  const known = new Map<string, { label: string; state: NativeChatSubagentState }>()
-  const note = (id: string, label: string, state: NativeChatSubagentState): void => {
+  const known = new Map<
+    string,
+    { label: string; state: NativeChatSubagentState; activity: string | null }
+  >()
+  const note = (
+    id: string,
+    label: string,
+    state: NativeChatSubagentState,
+    activity: string | null = null
+  ): void => {
     const current = known.get(id)
     if (!current) {
       order.push(id)
+      known.set(id, { label: label.trim() || id, state, activity })
+      return
     }
     known.set(id, {
-      label: label.trim() || current?.label || id,
-      state
+      label: label.trim() || current.label,
+      state: canReplaceSubagentState(current.state, state) ? state : current.state,
+      activity: activity ?? current.activity
     })
+  }
+  for (const agent of seed ?? []) {
+    note(agent.id, agent.label, agent.state, agent.activity)
+  }
+  // A tail that still holds the spawn must not walk a settled child back to working.
+  for (const agent of nativeChatToolSubagentActivities(conversation)) {
+    note(agent.id, agent.label, agent.state, agent.activity)
   }
   for (const message of conversation) {
     for (const block of message.blocks) {
@@ -198,7 +219,7 @@ export function nativeChatSubagentActivities(
       id,
       label: entry.label,
       state: entry.state,
-      activity: latestActivity(subagentRows.get(id))
+      activity: latestActivity(subagentRows.get(id)) ?? entry.activity
     }
   })
 }

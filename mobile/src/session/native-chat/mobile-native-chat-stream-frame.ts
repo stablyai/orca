@@ -12,6 +12,7 @@ export type MobileNativeChatStreamFrame = {
   message?: string
   // Whole-file task list. Older clients ignore this frame type.
   taskList?: unknown
+  // Whole-file subagent roster carried on the same frame.
   subagents?: unknown
 } & Partial<Omit<SnapshotFrame, 'type'>>
 

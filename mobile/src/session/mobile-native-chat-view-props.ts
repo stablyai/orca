@@ -21,6 +21,7 @@ import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-
 import type { MobileNativeChatSessionOptionPickersProps } from './native-chat/input/MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatPendingItem } from './mobile-native-chat-render-data'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import type { NativeChatSubagentActivity } from '../../../src/shared/native-chat/input/native-chat-activity'
 import type { NativeChatTaskSeedList } from '../../../src/shared/native-chat/input/native-chat-claude-task-updates'
 import type { OlderPagePhase } from './use-mobile-older-page-loader'
 
@@ -33,6 +34,7 @@ type ChatViewProps = MobileNativeChatSendProps & {
   messages: NativeChatMessage[]
   folded: NativeChatMessage[]
   taskList?: NativeChatTaskSeedList | null
+  subagentSeed?: readonly NativeChatSubagentActivity[] | null
   status: MobileNativeChatStatus
   error?: string
   // Permanent read failure replaces the pane because further chat actions cannot succeed.

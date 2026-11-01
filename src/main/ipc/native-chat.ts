@@ -5,6 +5,7 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat/native-chat-types'
+import type { NativeChatSubagentActivity } from '../../shared/native-chat/input/native-chat-activity'
 import type { NativeChatTaskSeedList } from '../../shared/native-chat/input/native-chat-claude-task-updates'
 import { clearNativeChatTranscriptCache } from '../native-chat/transcript-read-cache'
 import type { ReadTranscriptResult } from '../native-chat/transcript-reader'
@@ -93,7 +94,8 @@ export type NativeChatAppendedPayload = {
       }
     | {
         type: 'task-list'
-        taskList: NativeChatTaskSeedList
+        taskList: NativeChatTaskSeedList | null
+        subagents?: readonly NativeChatSubagentActivity[]
       }
 }
 
