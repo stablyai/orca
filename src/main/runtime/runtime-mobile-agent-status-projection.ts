@@ -226,6 +226,8 @@ export function selectRuntimeHookAgentRowForPane(
   // Unverifiable lasts as long as hydration keeps the row; going quiet is not exit evidence.
   const restoredAfter = now - AGENT_STATUS_HYDRATE_MAX_AGE_MS
   for (const entry of rows) {
+    const isWaitingPrompt =
+      (entry.state === 'waiting' || entry.state === 'blocked') && entry.interactivePrompt != null
     if (entry.providerSession && (!session || entry.receivedAt > session.receivedAt)) {
       session = entry
     }
@@ -233,7 +235,7 @@ export function selectRuntimeHookAgentRowForPane(
       entry.agentType &&
       (entry.providerSessionOnly !== true ||
         (entry.agentType === 'pi' && entry.providerSession != null)) &&
-      (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter &&
+      ((entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter || isWaitingPrompt) &&
       (!agent || entry.receivedAt > agent.receivedAt)
     ) {
       agent = entry
@@ -245,7 +247,7 @@ export function selectRuntimeHookAgentRowForPane(
       entry.providerSessionOnly !== true &&
       // Restored rows cannot prove liveness because the turn may have ended while offline (#12346).
       entry.restoredUnconfirmed !== true &&
-      (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter &&
+      ((entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter || isWaitingPrompt) &&
       (!live || entry.receivedAt > live.receivedAt)
     ) {
       live = entry
