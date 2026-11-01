@@ -28,7 +28,7 @@ export class RuntimeBrowserDriverController {
         return
       }
     }
-    if (next.kind === 'idle') {
+    if (next.kind !== 'mobile') {
       this.drivers.delete(browserPageId)
     } else {
       this.drivers.set(browserPageId, next)

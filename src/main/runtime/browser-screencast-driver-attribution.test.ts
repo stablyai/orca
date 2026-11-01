@@ -83,7 +83,7 @@ describe('browser screencast driver attribution', () => {
 
     runtime.reclaimBrowserForDesktop(PAGE)
     await phone.done
-    expect(driver()).toEqual({ kind: 'desktop' })
+    expect(driver()).toBeUndefined()
     expect(phone.stops()).toBe(1)
     expect(desktop.stops()).toBe(0)
 
