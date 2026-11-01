@@ -315,44 +315,52 @@ describe('Claude owed task notifications outside the captures', () => {
     prompt: `<task-notification>\n<task-id>${id}</task-id>\n<status>${status}</status>`
   })
 
-  it('holds a failed wake-up turn for a shell it launched after the inventory', () => {
-    const post = listener()
-    post({
-      hook_event_name: 'PostToolUse',
-      tool_name: 'Bash',
-      tool_response: { backgroundTaskId: 'b1' }
-    })
-    post({ hook_event_name: 'Stop', background_tasks: [shell('b1')] })
-    post(notify('b1', 'completed'))
-    post({
-      hook_event_name: 'PostToolUse',
-      tool_name: 'Bash',
-      tool_response: { backgroundTaskId: 'b2' }
-    })
-
-    expect(post({ hook_event_name: 'StopFailure', error: 'server_error' })?.payload.state).toBe(
-      'working'
-    )
-    post(notify('b2', 'completed'))
-    expect(post({ hook_event_name: 'StopFailure', error: 'server_error' })?.payload.state).toBe(
-      'done'
-    )
+  const launch = (id: string) => ({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    tool_response: { backgroundTaskId: id }
   })
+  const failedTurn = { hook_event_name: 'StopFailure', error: 'server_error' }
 
-  it('does not hold the pane for a shell whose launch hook arrives after its notification', () => {
-    const post = listener()
-    post({ hook_event_name: 'Stop', background_tasks: [] })
-    post(notify('b1', 'completed'))
-    // Async managed hooks can deliver the launch late.
-    post({
-      hook_event_name: 'PostToolUse',
-      tool_name: 'Bash',
-      tool_response: { backgroundTaskId: 'b1' }
-    })
-
-    expect(post({ hook_event_name: 'StopFailure', error: 'server_error' })?.payload.state).toBe(
+  it.each([
+    [
+      'a listed shell ends',
+      [{ hook_event_name: 'Stop', background_tasks: [shell('b1')] }, notify('b1', 'completed')],
       'done'
-    )
+    ],
+    [
+      'a listed shell ends after an unlisted launch',
+      [
+        { hook_event_name: 'Stop', background_tasks: [shell('b1')] },
+        launch('b2'),
+        notify('b1', 'completed')
+      ],
+      'working'
+    ],
+    [
+      'a listed shell is stopped',
+      [
+        { hook_event_name: 'Stop', background_tasks: [shell('b1')] },
+        { hook_event_name: 'PostToolUse', tool_name: 'TaskStop', tool_response: { task_id: 'b1' } }
+      ],
+      'done'
+    ],
+    // Async hooks can deliver a launch after its own end.
+    [
+      'a launch hook arrives after its notification',
+      [
+        { hook_event_name: 'Stop', background_tasks: [] },
+        notify('b1', 'completed'),
+        { hook_event_name: 'Stop', background_tasks: [] },
+        launch('b1')
+      ],
+      'done'
+    ]
+  ])('settles a failed wake-up turn when %s', (_name, hooks, expected) => {
+    const post = listener()
+    hooks.forEach((hook) => post(hook))
+
+    expect(post(failedTurn)?.payload.state).toBe(expected)
   })
 
   it('does not end a shell on a notification whose status is not final', () => {

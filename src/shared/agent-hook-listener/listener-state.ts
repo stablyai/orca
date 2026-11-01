@@ -53,7 +53,7 @@ export type HookListenerState = {
   /** Panes whose latest authoritative Claude task inventory, or a shell launched since, still has running non-agent work. */
   claudeRunningNonAgentTaskPaneKeys: Set<string>
   /** Running non-agent ids when the latest inventory listed them all (possibly none); notifications and launches keep it current. */
-  claudeRunningNonAgentTaskIdsByPaneKey: Map<string, ClaudeNonAgentTaskIds>
+  claudeRunningNonAgentTaskIdsByPaneKey: Map<string, ReadonlySet<string>>
   /** Panes whose latest authoritative Claude cron inventory still has a scheduled job. */
   claudeActiveSessionCronPaneKeys: Set<string>
   /** Background tasks each pane's main agent launched, and which of them still owe it a notification. */
@@ -86,12 +86,6 @@ export type HookListenerState = {
   lastLaunchTokenByPaneKey: Map<string, string>
   /** Hermes turn per pane, so tool hooks from its post-turn background review can be ignored. */
   hermesTurnByPaneKey: Map<string, HermesPaneTurn>
-}
-
-/** Ended ids stay until the next complete inventory so a late-delivered launch cannot revive them. */
-export type ClaudeNonAgentTaskIds = {
-  running: ReadonlySet<string>
-  ended: ReadonlySet<string>
 }
 
 const legacyStatusAdapterByState = new WeakMap<HookListenerState, AgentStatusLegacyAdapter>()

@@ -291,8 +291,7 @@ describe('AgentHookServer listener replay', () => {
       })
 
       expect([
-        ...(server._getStateForTests().claudeRunningNonAgentTaskIdsByPaneKey.get(PANE)?.running ??
-          [])
+        ...(server._getStateForTests().claudeRunningNonAgentTaskIdsByPaneKey.get(PANE) ?? [])
       ]).toEqual(['b1', 'b2'])
     } finally {
       server.stop()

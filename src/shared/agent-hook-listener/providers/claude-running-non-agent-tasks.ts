@@ -16,31 +16,18 @@ export function updateClaudeRunningNonAgentTask(
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   }
   if (inventory.allRunningNonAgentTasksListed) {
-    state.claudeRunningNonAgentTaskIdsByPaneKey.set(paneKey, {
-      running: new Set(inventory.runningNonAgentTaskIds),
-      ended: new Set()
-    })
+    state.claudeRunningNonAgentTaskIdsByPaneKey.set(
+      paneKey,
+      new Set(inventory.runningNonAgentTaskIds)
+    )
   } else {
     state.claudeRunningNonAgentTaskIdsByPaneKey.delete(paneKey)
   }
 }
 
-/** A shell launched after a complete inventory holds the pane until its own notification. */
-export function recordClaudeLaunchedNonAgentTask(
-  state: HookListenerState,
-  paneKey: string,
-  taskId: string
-): void {
-  // Without a complete inventory, ids alone can never retire the pane, so only inventory holds it.
-  const ids = state.claudeRunningNonAgentTaskIdsByPaneKey.get(paneKey)
-  // Why: async hooks can deliver a launch after its own end.
-  if (ids && !ids.ended.has(taskId)) {
-    state.claudeRunningNonAgentTaskIdsByPaneKey.set(paneKey, {
-      ...ids,
-      running: new Set([...ids.running, taskId])
-    })
-    state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
-  }
+/** A launch hook can arrive after its own end, so a launch never holds; it only leaves the ids incomplete. */
+export function forgetClaudeNonAgentTaskIds(state: HookListenerState, paneKey: string): void {
+  state.claudeRunningNonAgentTaskIdsByPaneKey.delete(paneKey)
 }
 
 /** A shell that ended (notified or stopped) stops holding the pane once no listed shell runs. */
@@ -49,17 +36,14 @@ export function retireClaudeNonAgentTask(
   paneKey: string,
   taskId: string
 ): void {
-  const ids = state.claudeRunningNonAgentTaskIdsByPaneKey.get(paneKey)
-  if (!ids || ids.ended.has(taskId)) {
+  const running = state.claudeRunningNonAgentTaskIdsByPaneKey.get(paneKey)
+  if (!running?.has(taskId)) {
     return
   }
-  const running = new Set(ids.running)
-  const wasRunning = running.delete(taskId)
-  state.claudeRunningNonAgentTaskIdsByPaneKey.set(paneKey, {
-    running,
-    ended: new Set([...ids.ended, taskId])
-  })
-  if (wasRunning && running.size === 0) {
+  const rest = new Set(running)
+  rest.delete(taskId)
+  state.claudeRunningNonAgentTaskIdsByPaneKey.set(paneKey, rest)
+  if (rest.size === 0) {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   }
 }
