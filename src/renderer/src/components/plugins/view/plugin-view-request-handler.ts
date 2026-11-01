@@ -22,6 +22,7 @@ import {
   measurePluginPanelGuest,
   measurePluginPanelSurface,
   nextPaintedFrames,
+  waitForColorScheme,
   waitForPluginPanelDraw
 } from './plugin-view-panel-settle'
 import { restoreActedPanel, settleAndActOnPanel } from './plugin-view-capture-acts'
@@ -99,7 +100,7 @@ async function capturePanel(
   if (status.value?.failure) {
     return fail(requestId, 'panel_failed', `The plugin panel ${status.value.failure}.`)
   }
-  await nextPaintedFrames()
+  await waitForColorScheme(wantDark)
   const prepared = await settleAndActOnPanel(tabKey, status.value?.ui, capture.acts)
   if (!prepared.ok) {
     return fail(requestId, 'act_unsupported', 'Only a drawn components panel takes --act.')
@@ -110,6 +111,8 @@ async function capturePanel(
     usePluginViewCaptureStore
       .getState()
       .setPanelWidth(capture.width + (capture.width - Math.round(rect.width)))
+    // A resize relayouts the panel; let it paint before main captures.
+    await nextPaintedFrames()
     await nextPaintedFrames()
     rect = measurePluginPanelSurface(tabKey)
   }

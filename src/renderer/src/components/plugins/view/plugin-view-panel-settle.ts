@@ -112,3 +112,17 @@ export async function settlePluginPanel(
   })
   await nextPaintedFrames()
 }
+
+// Why a cap: a theme Orca cannot apply must not hold the shot forever.
+const COLOR_SCHEME_MAX_FRAMES = 60
+
+/** Frames until the document shows the asked color scheme, so the capture is of that repaint. */
+export async function waitForColorScheme(wantDark: boolean | null): Promise<void> {
+  for (let frame = 0; wantDark !== null && frame < COLOR_SCHEME_MAX_FRAMES; frame += 1) {
+    if (document.documentElement.classList.contains('dark') === wantDark) {
+      break
+    }
+    await nextFrame()
+  }
+  await nextPaintedFrames()
+}

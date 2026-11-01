@@ -26,6 +26,8 @@ const KEY = 'acme.todos'
 const CAPTURED = {
   isEmpty: () => false,
   getSize: () => ({ width: 300, height: 600 }),
+  // A drawn panel: more than a background and a border.
+  toBitmap: () => Buffer.from([1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0]),
   toPNG: () => Buffer.from('png')
 } as unknown as NativeImage
 

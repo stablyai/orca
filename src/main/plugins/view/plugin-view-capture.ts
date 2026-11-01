@@ -96,6 +96,45 @@ export function compositeBitmap(
   return out
 }
 
+// Why retry: a hidden window's first frame after an override (theme, width) can come back as a
+// bare background on Linux; a drawn panel always has more than a couple of colors.
+const BLANK_RETRY_WAIT_MS = 150
+const BLANK_RETRIES = 8
+
+/** Two colors or fewer: a background and maybe a border, i.e. nothing of the panel drawn yet. */
+export function looksBlank(bitmap: Buffer): boolean {
+  const seen = new Set<number>()
+  for (let offset = 0; offset + 3 < bitmap.byteLength; offset += 4) {
+    seen.add(bitmap.readUInt32LE(offset))
+    if (seen.size > 2) {
+      return false
+    }
+  }
+  return true
+}
+
+async function captureUntilDrawn(
+  contents: WebContents,
+  target: CaptureRect,
+  wait: (ms: number) => Promise<void>
+): Promise<NativeImage> {
+  const grab = async (): Promise<NativeImage> => {
+    const shot = await contents.capturePage(target)
+    return shot.isEmpty() ? shot : atSize(shot, target.width, target.height)
+  }
+  let image = await grab()
+  for (let tries = 0; tries < BLANK_RETRIES && !image.isEmpty(); tries += 1) {
+    if (!looksBlank(image.toBitmap())) {
+      break
+    }
+    await wait(BLANK_RETRY_WAIT_MS)
+    image = await grab()
+  }
+  return image
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
 /**
  * The PNG of exactly that rect, at one image pixel per window point. Why the guest separately:
  * on Linux the window capture leaves a `<webview>` guest blank, so an html panel's guest is
@@ -104,14 +143,18 @@ export function compositeBitmap(
 export async function capturePluginPanelPng(
   contents: WebContents,
   rect: PluginViewDrawnPanel['rect'],
-  guest?: { contents: WebContents; rect: CaptureRect; fromBitmap: BitmapImageFactory }
+  guest?: { contents: WebContents; rect: CaptureRect; fromBitmap: BitmapImageFactory },
+  wait: (ms: number) => Promise<void> = sleep
 ): Promise<{ png: Buffer; width: number; height: number }> {
   const zoom = contents.getZoomFactor()
   const target = pluginPanelCaptureRect(rect, zoom)
   if (target.width < 1 || target.height < 1) {
     throw new Error('The panel has no area to capture; is the right sidebar collapsed?')
   }
-  let image: NativeImage = await contents.capturePage(target)
+  // An html panel's guest is drawn over this capture below, so only a bare host is retried.
+  let image: NativeImage = guest
+    ? await contents.capturePage(target)
+    : await captureUntilDrawn(contents, target, wait)
   if (image.isEmpty()) {
     throw new Error('Orca drew nothing to capture; try again once its window has loaded.')
   }
