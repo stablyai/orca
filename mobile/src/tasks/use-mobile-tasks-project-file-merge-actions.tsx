@@ -73,16 +73,8 @@ export function useMobileTasksProjectFileMergeActions<Model extends ProjectFileM
     setProjectRowDetailError,
     setProjectRowItem
   } = model
-  const toggleProjectGitHubFileExpansion = useCallback(
+  const loadProjectGitHubFileContents = useCallback(
     async (row: GitHubProjectRow, file: GitHubDetailFile): Promise<void> => {
-      if (expandedPrFilePath === file.path) {
-        setExpandedPrFilePath(null)
-        return
-      }
-      setExpandedPrFilePath(file.path)
-      if (prFileContents[file.path]) {
-        return
-      }
       const repo = findProjectRowRepo(row)
       if (
         !client ||
@@ -96,7 +88,11 @@ export function useMobileTasksProjectFileMergeActions<Model extends ProjectFileM
         setProjectRowDetailError('Unable to load file contents for this pull request.')
         return
       }
-      const request = beginFileLoad(file.path, claimPublication(null))
+      const request = beginFileLoad(
+        file.path,
+        claimPublication(null),
+        () => void loadProjectGitHubFileContents(row, file)
+      )
       setProjectRowDetailError('')
       try {
         const reply = await githubPullRequestFileContentsRead.request(
@@ -133,11 +129,24 @@ export function useMobileTasksProjectFileMergeActions<Model extends ProjectFileM
       claimPublication,
       activeGitHubProjectHost,
       client,
-      expandedPrFilePath,
       findProjectRowRepo,
-      prFileContents,
       projectRowDetail
     ]
+  )
+
+  const toggleProjectGitHubFileExpansion = useCallback(
+    async (row: GitHubProjectRow, file: GitHubDetailFile): Promise<void> => {
+      if (expandedPrFilePath === file.path) {
+        setExpandedPrFilePath(null)
+        return
+      }
+      setExpandedPrFilePath(file.path)
+      if (prFileContents[file.path]) {
+        return
+      }
+      await loadProjectGitHubFileContents(row, file)
+    },
+    [expandedPrFilePath, loadProjectGitHubFileContents, prFileContents]
   )
 
   const addProjectGitHubFileReviewComment = useCallback(

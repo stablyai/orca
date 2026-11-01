@@ -219,19 +219,11 @@ export function useMobileTasksGithubCheckFileActions<
     [claimPublication, client, tryBeginMutation]
   )
 
-  const toggleGitHubFileExpansion = useCallback(
+  const loadGitHubFileContents = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }>,
       file: GitHubDetailFile
     ): Promise<void> => {
-      if (expandedPrFilePath === file.path) {
-        setExpandedPrFilePath(null)
-        return
-      }
-      setExpandedPrFilePath(file.path)
-      if (prFileContents[file.path]) {
-        return
-      }
       if (
         !client ||
         item.source.type !== 'pr' ||
@@ -244,7 +236,11 @@ export function useMobileTasksGithubCheckFileActions<
         return
       }
       setError('')
-      const request = beginFileLoad(file.path, claimPublication(item, detailPayload))
+      const request = beginFileLoad(
+        file.path,
+        claimPublication(item, detailPayload),
+        () => void loadGitHubFileContents(item, file)
+      )
       const isCurrent = request.canPublish
       try {
         const reply = await githubPullRequestFileContentsRead.request(
@@ -275,7 +271,25 @@ export function useMobileTasksGithubCheckFileActions<
         request.finish()
       }
     },
-    [beginFileLoad, claimPublication, client, detailPayload, expandedPrFilePath, prFileContents]
+    [beginFileLoad, claimPublication, client, detailPayload]
+  )
+
+  const toggleGitHubFileExpansion = useCallback(
+    async (
+      item: Extract<TaskItem, { provider: 'github' }>,
+      file: GitHubDetailFile
+    ): Promise<void> => {
+      if (expandedPrFilePath === file.path) {
+        setExpandedPrFilePath(null)
+        return
+      }
+      setExpandedPrFilePath(file.path)
+      if (prFileContents[file.path]) {
+        return
+      }
+      await loadGitHubFileContents(item, file)
+    },
+    [expandedPrFilePath, loadGitHubFileContents, prFileContents]
   )
 
   const addGitHubFileReviewComment = useCallback(

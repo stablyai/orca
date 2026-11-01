@@ -292,6 +292,7 @@ export function useMobileTasksItemSelectionEffects(
     | 'connState'
     | 'detailPayload'
     | 'resetPrFiles'
+    | 'reconcilePrFileConnection'
     | 'setExpandedPrFilePath'
     | 'setExpandedResolvedCommentGroups'
     | 'setItemAddAssigneesDraft'
@@ -311,6 +312,7 @@ export function useMobileTasksItemSelectionEffects(
     client,
     connState,
     resetPrFiles,
+    reconcilePrFileConnection,
     setExpandedPrFilePath,
     setExpandedResolvedCommentGroups,
     setItemAddAssigneesDraft,
@@ -337,7 +339,10 @@ export function useMobileTasksItemSelectionEffects(
       : null
   useLayoutEffect(() => {
     resetPrFiles()
-  }, [actionIdentity, client, connState, fileRevision, resetPrFiles])
+  }, [actionIdentity, client, fileRevision, resetPrFiles])
+  useEffect(() => {
+    reconcilePrFileConnection(connState === 'connected')
+  }, [connState, reconcilePrFileConnection])
 
   useEffect(() => {
     if (!actionItem) {

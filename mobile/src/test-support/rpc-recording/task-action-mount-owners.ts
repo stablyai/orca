@@ -147,7 +147,8 @@ export function useTaskFileMountOwner(
     prFileCommentDrafts: state.prFileCommentDrafts,
     setPrFileCommentDrafts: state.setPrFileCommentDrafts,
     beginFileLoad: state.beginFileLoad,
-    resetPrFiles: state.resetPrFiles
+    resetPrFiles: state.resetPrFiles,
+    reconcilePrFileConnection: state.reconcilePrFileConnection
   }
   Object.assign(model, owners)
   useCommittedOwnerProjection(context, owners)

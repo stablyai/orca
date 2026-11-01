@@ -41,7 +41,11 @@ async function flush(): Promise<void> {
 }
 
 describe('useMobilePrSidebarController repo probe', () => {
-  const client = { sendRequest: vi.fn() } as unknown as RpcClient
+  const client = {
+    sendRequest: vi.fn(),
+    getState: () => 'connected',
+    onStateChange: () => () => {}
+  } as unknown as RpcClient
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {

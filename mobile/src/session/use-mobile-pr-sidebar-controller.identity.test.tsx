@@ -122,28 +122,58 @@ it('runs phase-two failure, Retry, prior isolation and late A/B claim settlement
   expect(pending).toHaveLength(1)
   const oldGeneration = pending.shift()!
   generation += 1
-  await act(async () => renderer!.update(<Probe />))
-  // The newly selected scope is hidden before consumers observe its committed layout.
-  expect(beforeEffects).toEqual(['hidden', 'hidden'])
-  expect(controller!.prSidebarState).toEqual({ kind: 'hidden' })
-  await act(async () => oldGeneration.resolve(rpcSuccess('old-generation', details('upstream'))))
-  expect(controller!.prSidebarState).toEqual({ kind: 'hidden' })
-  owner = 'new-generation'
-  await act(async () => controller.openPRSidebar())
+  await act(async () => client.pushState('connected'))
+  // A generation change keeps the same resource and starts its successor before the old reply settles.
+  expect(beforeEffects).toEqual(['hidden', 'ready'])
   expect(pending).toHaveLength(1)
+  expect(controller!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    data: { details: { body: 'upstream body', pullRequestId: 'PR_upstream' } }
+  })
   await act(async () =>
-    pending.shift()!.resolve(rpcSuccess('current-generation', details('new-generation')))
+    oldGeneration.resolve(
+      rpcSuccess('old-generation', { ...details('upstream'), body: 'retired body' })
+    )
   )
   expect(controller!.prSidebarState).toMatchObject({
     kind: 'ready',
-    data: {
-      pr: { title: 'new-generation' },
-      details: { body: 'new-generation body', pullRequestId: 'PR_new-generation' }
-    }
+    data: { details: { body: 'upstream body' } }
+  })
+  await act(async () => client.pushState('connected'))
+  expect(pending).toHaveLength(1)
+  await act(async () =>
+    pending
+      .shift()!
+      .resolve(rpcSuccess('current-generation', { ...details('upstream'), body: 'refreshed body' }))
+  )
+  expect(controller!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    data: { pr: { title: 'upstream' }, details: { body: 'refreshed body' } }
+  })
+
+  // A down/up pair in one batch at an unchanged generation still retires and recovers.
+  await act(async () => controller.retryPRSidebar())
+  const beforeDrop = pending.shift()!
+  await act(async () => {
+    client.pushState('disconnected')
+    client.pushState('connected')
+  })
+  expect(pending).toHaveLength(1)
+  await act(async () =>
+    beforeDrop.resolve(rpcSuccess('before-drop', { ...details('upstream'), body: 'dropped body' }))
+  )
+  await act(async () =>
+    pending
+      .shift()!
+      .resolve(rpcSuccess('after-drop', { ...details('upstream'), body: 'recovered body' }))
+  )
+  expect(controller!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    data: { details: { body: 'recovered body' } }
   })
 })
 
-it('selects fresh branch/client/generation observations while old phase-one, phase-two and ensure work remains pending', async () => {
+it('selects fresh branch/client observations and keeps the same one across a generation change while old phase-one, phase-two and ensure work remains pending', async () => {
   let generation = 1
   let branch: string | null = 'a'
   let responseOwner = 'a'
@@ -289,19 +319,23 @@ it('selects fresh branch/client/generation observations while old phase-one, pha
   })
   const oldGeneration = pendingDetails.shift()!
   generation += 1
-  responseOwner = 'generation-two'
+  await act(async () => client.pushState('connected'))
   await update()
-  expect(controller!.prSidebarState).toEqual({ kind: 'hidden' })
-  await act(async () => controller.openPRSidebar())
-  await settleDetails('generation-two')
+  expect(controller!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    data: { details: { body: 'replacement body' } }
+  })
   await act(async () =>
-    oldGeneration.resolve(rpcSuccess('late-generation', details('replacement')))
+    oldGeneration.resolve(
+      rpcSuccess('late-generation', { ...details('replacement'), body: 'late body' })
+    )
   )
   expect(controller!.prSidebarState).toMatchObject({
     kind: 'ready',
-    data: { details: { body: 'generation-two body' } }
+    data: { details: { body: 'replacement body' } }
   })
-  expect(layouts).toEqual(['hidden', 'hidden', 'hidden', 'hidden', 'hidden', 'hidden', 'hidden'])
+  await settleDetails('replacement')
+  expect(layouts).toEqual(['hidden', 'hidden', 'hidden', 'hidden', 'hidden', 'hidden', 'ready'])
 })
 
 it('retires details on accepted chip-only resource departure and none, retaining same-resource details across HEAD refresh', async () => {

@@ -29,27 +29,47 @@ export function useMobileTasksItemState() {
   const [expandedPrFilePath, setExpandedPrFilePath] = useState<string | null>(null)
   const [prFileContents, setPrFileContents] = useState<Record<string, GitHubPRFileContents>>({})
   const [prFileLoadingPath, setPrFileLoadingPath] = useState<string | null>(null)
-  const fileRequest = useRef<object | null>(null)
+  const fileRequest = useRef<{ reload: () => void } | null>(null)
+  const interruptedFileRequest = useRef<{ reload: () => void } | null>(null)
   const resetPrFiles = useCallback(() => {
     fileRequest.current = null
+    interruptedFileRequest.current = null
     setPrFileContents({})
     setPrFileLoadingPath(null)
     setExpandedPrFilePath(null)
   }, [])
-  const beginFileLoad = useCallback((path: string, canObserve: () => boolean) => {
-    const request = {}
-    fileRequest.current = request
-    setPrFileLoadingPath(path)
-    return {
-      canPublish: () => fileRequest.current === request && canObserve(),
-      finish: () => {
-        if (fileRequest.current === request) {
-          fileRequest.current = null
-          setPrFileLoadingPath(null)
+  // A connection loss retires the open file read but keeps accepted contents and expansion; reconnecting reads it again.
+  const reconcilePrFileConnection = useCallback((connected: boolean) => {
+    if (!connected) {
+      if (fileRequest.current) {
+        interruptedFileRequest.current = fileRequest.current
+        fileRequest.current = null
+        setPrFileLoadingPath(null)
+      }
+      return
+    }
+    const interrupted = interruptedFileRequest.current
+    interruptedFileRequest.current = null
+    interrupted?.reload()
+  }, [])
+  const beginFileLoad = useCallback(
+    (path: string, canObserve: () => boolean, reload: () => void) => {
+      const request = { reload }
+      fileRequest.current = request
+      interruptedFileRequest.current = null
+      setPrFileLoadingPath(path)
+      return {
+        canPublish: () => fileRequest.current === request && canObserve(),
+        finish: () => {
+          if (fileRequest.current === request) {
+            fileRequest.current = null
+            setPrFileLoadingPath(null)
+          }
         }
       }
-    }
-  }, [])
+    },
+    []
+  )
   const [prFileCommentDrafts, setPrFileCommentDrafts] = useState<Record<string, string>>({})
   const [copiedLinkKey, setCopiedLinkKey] = useState<string | null>(null)
   const copiedLinkResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -106,6 +126,7 @@ export function useMobileTasksItemState() {
     prFileLoadingPath,
     beginFileLoad,
     resetPrFiles,
+    reconcilePrFileConnection,
     prFileCommentDrafts,
     setPrFileCommentDrafts,
     copiedLinkKey,

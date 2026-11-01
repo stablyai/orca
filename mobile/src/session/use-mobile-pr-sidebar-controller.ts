@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
-import type {
-  PrSidebarControllerInput,
-  PrSidebarObservation,
-  RepoProbeObservation,
-  PrSidebarSelection
+import {
+  buildMobilePrSidebarIdentity,
+  createRepoProbe,
+  createSidebarObservation,
+  subscribePrSidebarConnection,
+  type PrSidebarControllerInput,
+  type PrSidebarSelection
 } from './mobile-pr-sidebar-observation'
 import {
   fetchGithubRepoSlug,
@@ -33,53 +35,23 @@ export type PrSidebarLoadOptions = {
   includeDetails?: boolean
 }
 
-// Keep HEAD out of identity: commits soft-refresh checks without clearing ready UI.
-export function buildMobilePrSidebarIdentity(args: {
-  worktreeId: string
-  branch: string | null
-}): string | null {
-  return args.branch ? `${args.worktreeId}\u0000${args.branch}` : null
-}
-
-function createSidebarObservation(
-  input: PrSidebarControllerInput,
-  generation: number | undefined
-): PrSidebarObservation {
-  return {
-    client: input.client,
-    generation,
-    worktreeId: input.worktreeId,
-    identity: buildMobilePrSidebarIdentity(input),
-    live: false,
-    latest: { kind: 'hidden' },
-    loadSeq: 0,
-    detailsSeq: 0,
-    detailsInFlight: null,
-    headSha: input.headSha
-  }
-}
-
-function createRepoProbe(worktreeId: string): RepoProbeObservation {
-  return { owner: { worktreeId }, isGithubRepo: false, loaded: false }
-}
+export { buildMobilePrSidebarIdentity }
 
 export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   const { client, connState, worktreeId, branch, headSha } = input
-  const connectionGeneration = client?.getGeneration?.()
   const identity = buildMobilePrSidebarIdentity(input)
   const [selection, setSelection] = useState<PrSidebarSelection>(() => {
-    const owner = createSidebarObservation(input, connectionGeneration)
+    const owner = createSidebarObservation(input)
     return { owner, snapshot: owner.latest, probe: createRepoProbe(worktreeId) }
   })
   const [showPRSidebar, setShowPRSidebar] = useState(false)
   let selected = selection
   if (
     selection.owner.client !== client ||
-    !Object.is(selection.owner.generation, connectionGeneration) ||
     selection.owner.worktreeId !== worktreeId ||
     selection.owner.identity !== identity
   ) {
-    const owner = createSidebarObservation(input, connectionGeneration)
+    const owner = createSidebarObservation(input)
     selected = { ...selected, owner, snapshot: owner.latest }
   }
   if (selection.probe.owner.worktreeId !== worktreeId) {
@@ -100,6 +72,9 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       owner.detailsInFlight = null
     }
   }, [owner])
+
+  // One committed reconciler retires attempts on connection changes and recovers in place.
+  useLayoutEffect(() => subscribePrSidebarConnection(owner), [owner])
 
   const publishState = useCallback(
     (next: PrSidebarState) => {
@@ -171,6 +146,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (!owner.live || !deps || !branch || !loadIdentity) {
         return
       }
+      // A chip refresh never downgrades a full query this observation was already asked for.
+      owner.demand = { includeDetails: includeDetails || owner.demand?.includeDetails === true }
       const seq = owner.loadSeq + 1
       owner.loadSeq = seq
       // Refresh this observation in place; a fresh scope begins hidden.
@@ -183,6 +160,13 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       }
       const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
       if (!owner.live || !shouldApplyResult(seq, owner.loadSeq)) {
+        return
+      }
+      // A failed refresh is not a departure: keep the accepted PR or no-PR result in place.
+      if (
+        (next.kind === 'error' || next.kind === 'blocked') &&
+        (owner.latest.kind === 'ready' || owner.latest.kind === 'none')
+      ) {
         return
       }
 
@@ -252,6 +236,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     if (!deps || !loadIdentity) {
       return
     }
+    owner.demand = { includeDetails: true }
     const resourceKey = prSidebarResourceKey(current.data.pr)
     const inFlight = owner.detailsInFlight
     if (inFlight && inFlight.resourceKey === resourceKey && inFlight.seq === owner.detailsSeq) {
@@ -298,14 +283,24 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     })
   }, [headSha, load, owner])
 
+  useLayoutEffect(() => {
+    owner.recover = () => {
+      if (owner.demand) {
+        void load(owner.demand)
+      }
+    }
+  }, [owner, load])
+
   const openPRSidebar = useCallback(() => {
+    // Opening is full demand even when loaded content needs no request now.
+    owner.demand = { includeDetails: true }
     setShowPRSidebar(true)
     if (state.kind !== 'ready' && state.kind !== 'loading') {
       void load({ includeDetails: true })
     } else if (state.kind === 'ready' && prSidebarDetailsNeedFetch(state.data.details)) {
       void ensurePrSidebarDetails()
     }
-  }, [state, load, ensurePrSidebarDetails])
+  }, [owner, state, load, ensurePrSidebarDetails])
 
   const retry = useCallback(() => {
     void load({ includeDetails: true })
