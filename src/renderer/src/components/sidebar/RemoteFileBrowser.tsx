@@ -6,12 +6,20 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { filterEntries, joinPath, parentPath, type DirEntry } from './remote-file-browser-helpers'
 import { RemoteFileBrowserBreadcrumbs } from './RemoteFileBrowserBreadcrumbs'
-import { RemoteFileBrowserEntryList } from './RemoteFileBrowserEntryList'
+import {
+  RemoteFileBrowserEntryList,
+  remoteFileBrowserProjectFolderOptionId
+} from './RemoteFileBrowserEntryList'
 import { initialRemoteFileBrowserHighlight } from './remote-file-browser-highlight'
 import type { PreviewState } from './remote-file-browser-path-preview-resolver'
 import { useRemoteFileBrowserFilterKeyCommands } from './use-remote-file-browser-filter-key-commands'
 import { useRemoteFileBrowserListing } from './use-remote-file-browser-listing'
 import { useRemoteFileBrowserPathPreview } from './use-remote-file-browser-path-preview'
+import {
+  useRemoteFileBrowserProjectFolderKeys,
+  useRemoteFileBrowserHomeAnchor,
+  useRemoteFileBrowserProjectFolders
+} from './use-remote-file-browser-project-folders'
 import { translate } from '@/i18n/i18n'
 import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
 
@@ -42,9 +50,11 @@ export function RemoteFileBrowser({
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [fileHint, setFileHint] = useState(false)
+  const [homePath, setHomePath] = useState<string | null>(null)
   // Tied to the list, preview and text it was moved on, so any new listing, preview or keystroke starts
   // from its own default (a cached listing reappears as the same array; a typed path waits on a debounce).
   const [highlight, setHighlight] = useState<{
+    projectFolders: readonly string[]
     entries: readonly DirEntry[]
     preview: PreviewState | null
     filter: string
@@ -122,6 +132,7 @@ export function RemoteFileBrowser({
         // Only bare ~ resolves the home anchor; ~/sub must not replace it.
         if (dirPath === '~') {
           homePathRef.current = result.resolvedPath
+          setHomePath(result.resolvedPath)
         }
       } catch (err) {
         if (gen !== genRef.current) {
@@ -174,17 +185,38 @@ export function RemoteFileBrowser({
   )
   // Why: while a listing loads only the spinner renders, so the prior rows can't be targeted.
   const displayEntries = loading ? NO_ENTRIES : (previewFilteredEntries ?? filteredEntries)
+  const projectFolders = useRemoteFileBrowserProjectFolders(
+    { targetId, runtimeEnvironmentId },
+    resolvedPath,
+    !loading && !error && filter === '' && preview === null
+  )
+  useRemoteFileBrowserHomeAnchor(projectFolders.length > 0, fetchListing, homePathRef, setHomePath)
+  // Folder rows sit above the entries; the default highlight stays on the entries so Enter keeps its target.
+  const defaultEntryIndex = initialRemoteFileBrowserHighlight(
+    displayEntries,
+    preview !== null && preview.filter === ''
+  )
   // Why: a resolving preview keeps its prior rows on screen, but they are no longer targetable.
   const activeIndex = preview?.loading
     ? -1
-    : highlight?.entries === displayEntries &&
+    : highlight?.projectFolders === projectFolders &&
+        highlight.entries === displayEntries &&
         highlight.preview === preview &&
         highlight.filter === filter
       ? highlight.index
-      : initialRemoteFileBrowserHighlight(displayEntries, preview !== null && preview.filter === '')
+      : defaultEntryIndex < 0
+        ? -1
+        : defaultEntryIndex + projectFolders.length
+  const activeEntryIndex =
+    activeIndex < projectFolders.length ? -1 : activeIndex - projectFolders.length
   const moveHighlight = useCallback(
-    (index: number) => setHighlight({ entries: displayEntries, preview, filter, index }),
-    [displayEntries, preview, filter]
+    (index: number) =>
+      setHighlight({ projectFolders, entries: displayEntries, preview, filter, index }),
+    [projectFolders, displayEntries, preview, filter]
+  )
+  const moveEntryHighlight = useCallback(
+    (index: number) => moveHighlight(index < 0 ? index : index + projectFolders.length),
+    [moveHighlight, projectFolders.length]
   )
 
   const triggerFileHint = useCallback(() => {
@@ -205,25 +237,44 @@ export function RemoteFileBrowser({
   // Preview rows resolve against their preview path rather than the committed directory.
   const listParentPath = preview?.resolvedPath ?? resolvedPath
 
+  // Null is a file row, which only shows the hint. Delayed so a double click can select instead.
+  const handlePathClick = useCallback(
+    (dirPath: string | null) => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current)
+      }
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null
+        if (dirPath === null) {
+          triggerFileHint()
+        } else {
+          navigate(dirPath)
+        }
+      }, 220)
+    },
+    [navigate, triggerFileHint]
+  )
+
+  const handlePathDoubleClick = useCallback(
+    (dirPath: string) => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current)
+        clickTimerRef.current = null
+      }
+      onSelect(dirPath)
+    },
+    [onSelect]
+  )
+
   const handleRowClick = useCallback(
     (entry: DirEntry) => {
       // Old rows can remain during preview resolution; ignore clicks until their parent path is known.
       if (preview?.loading) {
         return
       }
-      if (clickTimerRef.current) {
-        clearTimeout(clickTimerRef.current)
-      }
-      clickTimerRef.current = setTimeout(() => {
-        clickTimerRef.current = null
-        if (entry.isDirectory) {
-          navigate(joinPath(listParentPath, entry.name, pathFlavor))
-        } else {
-          triggerFileHint()
-        }
-      }, 220)
+      handlePathClick(entry.isDirectory ? joinPath(listParentPath, entry.name, pathFlavor) : null)
     },
-    [navigate, triggerFileHint, listParentPath, preview?.loading, pathFlavor]
+    [handlePathClick, listParentPath, preview?.loading, pathFlavor]
   )
 
   const handleRowDoubleClick = useCallback(
@@ -231,23 +282,19 @@ export function RemoteFileBrowser({
       if (!entry.isDirectory || preview?.loading) {
         return
       }
-      if (clickTimerRef.current) {
-        clearTimeout(clickTimerRef.current)
-        clickTimerRef.current = null
-      }
-      onSelect(joinPath(listParentPath, entry.name, pathFlavor))
+      handlePathDoubleClick(joinPath(listParentPath, entry.name, pathFlavor))
     },
-    [listParentPath, onSelect, preview?.loading, pathFlavor]
+    [handlePathDoubleClick, listParentPath, preview?.loading, pathFlavor]
   )
 
-  const handleFilterKeyDown = useRemoteFileBrowserFilterKeyCommands({
+  const handleEntryKeyDown = useRemoteFileBrowserFilterKeyCommands({
     loading,
     filter,
     setFilter,
     filteredEntries,
     displayEntries,
-    activeIndex,
-    moveHighlight,
+    activeIndex: activeEntryIndex,
+    moveHighlight: moveEntryHighlight,
     listParentPath,
     preview,
     previewMatchesInput,
@@ -260,6 +307,14 @@ export function RemoteFileBrowser({
     triggerFileHint,
     clearFileHint,
     onCancel
+  })
+  const handleFilterKeyDown = useRemoteFileBrowserProjectFolderKeys({
+    projectFolders,
+    entryCount: displayEntries.length,
+    activeIndex,
+    moveHighlight,
+    navigate,
+    handleEntryKeyDown
   })
 
   const isPreviewActive = preview !== null
@@ -300,7 +355,13 @@ export function RemoteFileBrowser({
             'Type to filter or enter a path…'
           )}
           aria-controls={listboxId}
-          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined}
+          aria-activedescendant={
+            activeEntryIndex >= 0
+              ? `${listboxId}-${activeEntryIndex}`
+              : activeIndex >= 0
+                ? remoteFileBrowserProjectFolderOptionId(listboxId, activeIndex)
+                : undefined
+          }
           aria-invalid={!!preview?.error}
           aria-describedby={preview?.error ? 'remote-file-browser-path-error' : undefined}
           className={cn(
@@ -329,7 +390,10 @@ export function RemoteFileBrowser({
         error={error}
         entries={entries}
         displayEntries={displayEntries}
-        activeIndex={activeIndex}
+        activeIndex={activeEntryIndex}
+        projectFolders={projectFolders}
+        homePath={homePath}
+        activeProjectFolderIndex={activeEntryIndex >= 0 ? -1 : activeIndex}
         listboxId={listboxId}
         filter={filter}
         preview={preview}
@@ -337,6 +401,8 @@ export function RemoteFileBrowser({
         inputRef={inputRef}
         handleRowClick={handleRowClick}
         handleRowDoubleClick={handleRowDoubleClick}
+        handlePathClick={handlePathClick}
+        handlePathDoubleClick={handlePathDoubleClick}
       />
 
       <p
