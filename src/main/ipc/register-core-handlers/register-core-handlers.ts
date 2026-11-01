@@ -64,6 +64,7 @@ import { registerPluginHandlers } from '../plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerEmulatorFrameStreamHandlers } from '../emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from '../emulator-video-stream'
+import { registerEmulatorScrcpyTouchHandler } from '../emulator-scrcpy-touch'
 import { registerSpeechHandlers } from '../speech'
 import { registerTerminalRenderDesyncEvidenceHandler } from '../terminal-render-desync-evidence'
 import { registerOrcaProfileHandlers } from '../orca-profiles'
@@ -235,7 +236,7 @@ export function registerCoreHandlers(
     })
   }
   if (pluginService) {
-    registerPluginHandlers(store, pluginService, runtime, marketplaceServices)
+    registerPluginHandlers(store, pluginService, marketplaceServices)
   }
   registerTelemetryHandlers(store)
   registerOrcaProfileHandlers(store, {
@@ -251,6 +252,7 @@ export function registerCoreHandlers(
   registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()
   registerEmulatorVideoStreamHandlers()
+  registerEmulatorScrcpyTouchHandler()
   registerWorkspaceSpaceHandlers(store)
   registerWorkspacePortHandlers(store)
   registerLinkPreviewHandlers()

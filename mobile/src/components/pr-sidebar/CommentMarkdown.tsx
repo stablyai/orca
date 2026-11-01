@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { openExternalLink } from '../../platform/external-link'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MermaidDiagram } from './MermaidDiagram'
@@ -63,7 +63,7 @@ function DetailsBlock({
   return (
     <View style={styles.details}>
       <Pressable
-        style={styles.detailsSummary}
+        style={({ pressed }) => [styles.detailsSummary, pressed && pressedStyle]}
         onPress={() => setOpen((v) => !v)}
         accessibilityRole="button"
       >

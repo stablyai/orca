@@ -18,8 +18,23 @@ import {
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
 import type { AiVaultSessionListKeyboard } from './use-ai-vault-session-keyboard-navigation'
 import type { AiVaultResumeHere } from './ai-vault-session-resume-here'
-import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
+import {
+  activateAiVaultStructuredSession,
+  openDesktopStructuredSession
+} from '@/lib/activate-ai-vault-structured-session'
 import * as resumeHere from './ai-vault-session-resume-here'
+
+vi.mock('@/lib/activate-ai-vault-structured-session', async (importOriginal) => {
+  const original = await importOriginal<{
+    openDesktopStructuredSession: typeof openDesktopStructuredSession
+    activateAiVaultStructuredSession: typeof activateAiVaultStructuredSession
+  }>()
+  return {
+    ...original,
+    openDesktopStructuredSession: vi.fn(original.openDesktopStructuredSession),
+    activateAiVaultStructuredSession: vi.fn(original.activateAiVaultStructuredSession)
+  }
+})
 
 const VIEWPORT_PX = 600
 const ROW_PX = 98
@@ -72,43 +87,32 @@ vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: vi.fn()
 }))
-// Opening a chat by id: switches to its tab, or the host republishes a closed one as a new tab.
-vi.mock('@/lib/activate-ai-vault-structured-session', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  activateAiVaultStructuredSession: vi.fn(
-    async ({
-      structuredSession: s
-    }: {
-      structuredSession: { sessionId: string; workspaceId: string }
-    }) => {
-      const tabs = useAppStore.getState().unifiedTabsByWorktree[s.workspaceId] ?? []
-      if (tabs.some((tab) => tab.entityId === s.sessionId)) {
-        return true
-      }
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // Switch-on, the host's republished chat reaches the window as main's frame.
-        await layoutApplyTestTransport.call({
-          command: {
-            type: 'openAgentSessionTab',
-            workspace: s.workspaceId,
-            tabId: s.sessionId,
-            sessionId: s.sessionId,
-            agent: 'claude'
-          }
-        })
-        await layoutApplyTestTransport.settle()
-      } else {
-        useAppStore.getState().createUnifiedTab(s.workspaceId, 'agent-session', {
-          id: s.sessionId,
-          entityId: s.sessionId,
-          executionHostId: LOCAL_EXECUTION_HOST_ID,
-          agentSessionAgent: 'claude'
-        })
-      }
-      return true
-    }
-  )
+const opening = vi.hoisted(() => ({ successor: false, refused: false }))
+vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
+  refreshLocalStructuredSessionWorktreeTabs: async () => undefined
 }))
+
+async function publishOpenedChat(workspace: string, sessionId: string) {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    await layoutApplyTestTransport.call({
+      command: {
+        type: 'openAgentSessionTab',
+        workspace,
+        tabId: sessionId,
+        sessionId,
+        agent: 'claude'
+      }
+    })
+    await layoutApplyTestTransport.settle()
+  } else {
+    useAppStore.getState().createUnifiedTab(workspace, 'agent-session', {
+      id: sessionId,
+      entityId: sessionId,
+      executionHostId: LOCAL_EXECUTION_HOST_ID,
+      agentSessionAgent: 'claude'
+    })
+  }
+}
 
 // Switch-on, main opens and closes the chat tabs and its frames draw them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
@@ -117,8 +121,30 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
   return {
     ...rpc,
-    callRuntimeRpc: (...args: Parameters<typeof rpc.callRuntimeRpc>) =>
-      args[1] === 'agentSession.history'
+    callRuntimeRpc: async (...args: Parameters<typeof rpc.callRuntimeRpc>) => {
+      const workspace = useAppStore.getState().activeWorktreeId!
+      if (args[1] === 'orchestration.partyLocation') {
+        if (opening.refused) {
+          throw new Error('unavailable')
+        }
+        const address = z.object({ address: z.string() }).parse(args[2]).address
+        return {
+          location: {
+            kind: 'chat',
+            worktreeId: workspace,
+            sessionId: opening.successor ? 'successor' : address.slice('orca_session_id:'.length)
+          }
+        }
+      }
+      if (args[1] === 'agentSession.reveal') {
+        const sessionId = z.object({ sessionId: z.string() }).parse(args[2]).sessionId
+        await publishOpenedChat(workspace, sessionId)
+        return { ok: true, sessionId, workspaceId: workspace, agent: 'claude', readable: true }
+      }
+      if (args[1] === 'session.tabs.activate') {
+        return { ok: true }
+      }
+      return args[1] === 'agentSession.history'
         ? Promise.resolve({
             ok: true,
             page: {
@@ -139,6 +165,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
             }
           })
         : rpc.callRuntimeRpc(...args)
+    }
   }
 })
 vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
@@ -271,6 +298,9 @@ function selectedTitle(): string | null {
 
 beforeEach(() => {
   toastError.mockClear()
+  opening.successor = false
+  opening.refused = false
+  vi.mocked(openDesktopStructuredSession).mockClear()
   vi.mocked(activateAiVaultStructuredSession).mockClear()
   launch.settlement = { kind: 'structured', sessionId: 'new' }
   // Why: happy-dom has no layout; give the virtualizer a bounded viewport and fixed rows.
@@ -304,6 +334,15 @@ describe('Session History keyboard selection', () => {
       const owner = {
         sessionId: 'picked-owner',
         workspaceId: kind === 'adopted-elsewhere' ? 'folder:elsewhere' : workspaceId
+      }
+      if (kind === 'adopted-elsewhere') {
+        vi.mocked(activateAiVaultStructuredSession).mockResolvedValueOnce(true)
+      } else {
+        vi.mocked(openDesktopStructuredSession).mockResolvedValueOnce({
+          kind: 'opened',
+          target: { sessionId: owner.sessionId, worktreeId: owner.workspaceId },
+          tab: { id: owner.sessionId, sessionId: owner.sessionId }
+        })
       }
       const picked: AiVaultSession = {
         ...session(0),
@@ -346,10 +385,17 @@ describe('Session History keyboard selection', () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
         await main?.settle()
       })
-      expect(activateAiVaultStructuredSession).toHaveBeenCalledExactlyOnceWith({
-        structuredSession: owner,
-        executionHostId: picked.executionHostId
-      })
+      if (kind === 'adopted-elsewhere') {
+        expect(activateAiVaultStructuredSession).toHaveBeenCalledExactlyOnceWith({
+          structuredSession: owner,
+          executionHostId: picked.executionHostId
+        })
+      } else {
+        expect(openDesktopStructuredSession).toHaveBeenCalledExactlyOnceWith(
+          { kind: 'history', structuredSession: owner },
+          { kind: 'environment', environmentId: 'selected-host' }
+        )
+      }
       expect(toastError).not.toHaveBeenCalled()
     }
   )
@@ -496,6 +542,36 @@ describe('Session History keyboard selection', () => {
     launch.sessionId = 'new'
   })
 
+  it.each([false, true])(
+    'native replacement uses the actual R→S result and retains its source on refusal=%s',
+    async (refused) => {
+      const workspaceId = 'repo-1::/repo'
+      useAppStore.setState(useAppStore.getInitialState(), true)
+      useAppStore.setState({ activeWorktreeId: workspaceId })
+      useAppStore.getState().createUnifiedTab(workspaceId, 'agent-session', {
+        id: 'old',
+        entityId: 'old',
+        executionHostId: LOCAL_EXECUTION_HOST_ID,
+        agentSessionAgent: 'claude'
+      })
+      main = await drawTabsFromMain(useAppStore)
+      opening.successor = true
+      opening.refused = refused
+      const picked = { ...session(0), structuredSession: { workspaceId, sessionId: 'historical' } }
+      await resumeHere.resumeAiVaultSessionHere({
+        session: picked,
+        here: { tabId: 'old', workspaceId, agent: 'claude', dismiss: vi.fn(), confirm: vi.fn() },
+        actions: { canJumpToOriginalPane: false, resumeInNewChatWorkspaceId: workspaceId },
+        jump: vi.fn()
+      })
+      await main?.settle()
+      expect(useAppStore.getState().groupsByWorktree[workspaceId]?.[0]?.tabOrder).toEqual(
+        refused ? ['old'] : ['successor']
+      )
+      expect(toastError).toHaveBeenCalledTimes(refused ? 1 : 0)
+    }
+  )
+
   it('follows the chat the host says holds the row: this one, another open one, or a closed one', async () => {
     const workspaceId = 'repo-1::/repo'
     useAppStore.setState(useAppStore.getInitialState(), true)
@@ -541,8 +617,9 @@ describe('Session History keyboard selection', () => {
     expect(dismiss).toHaveBeenCalledOnce()
     await refusedBy('other')
     expect(order()).toEqual(['old', 'other'])
+    opening.successor = true
     await refusedBy('held')
-    expect(order()).toEqual(['held', 'other'])
+    expect(order()).toEqual(['successor', 'other'])
     expect(toastError).not.toHaveBeenCalled()
     launch.settlement = { kind: 'structured', sessionId: 'new' }
   })

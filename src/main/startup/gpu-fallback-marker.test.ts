@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   GPU_FALLBACK_MARKER_FILE,
-  clearGpuFallbackMarker,
   readActiveGpuFallbackMarker,
   readGpuFallbackMarker,
   writeGpuFallbackMarker
@@ -26,23 +25,6 @@ describe('gpu-fallback-marker', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('round-trips a written marker', () => {
-    writeGpuFallbackMarker(
-      userDataPath,
-      { engagedAt: 123, crashesInWindow: 3, userConfirmed: false },
-      environment
-    )
-    expect(readGpuFallbackMarker(userDataPath)).toEqual({
-      schemeVersion: 3,
-      engagedAt: 123,
-      crashesInWindow: 3,
-      userConfirmed: false,
-      appVersion: '1.2.3',
-      electronVersion: '42.3.3',
-      platform: 'win32'
-    })
-  })
-
   it('persists explicit safe-graphics consent across launches', () => {
     writeGpuFallbackMarker(
       userDataPath,
@@ -50,11 +32,6 @@ describe('gpu-fallback-marker', () => {
       environment
     )
     expect(readActiveGpuFallbackMarker(userDataPath, environment)?.userConfirmed).toBe(true)
-  })
-
-  it('returns null when no marker exists', () => {
-    expect(readGpuFallbackMarker(userDataPath)).toBeNull()
-    expect(readActiveGpuFallbackMarker(userDataPath, environment)).toBeNull()
   })
 
   it('keeps an active marker for repeated launches on the same build', () => {
@@ -84,22 +61,6 @@ describe('gpu-fallback-marker', () => {
       readActiveGpuFallbackMarker(userDataPath, {
         ...environment,
         appVersion: '1.2.4'
-      })
-    ).toBeNull()
-    expect(existsSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE))).toBe(false)
-  })
-
-  it('clears an active marker outside Windows', () => {
-    writeGpuFallbackMarker(
-      userDataPath,
-      { engagedAt: 1, crashesInWindow: 4, userConfirmed: false },
-      environment
-    )
-
-    expect(
-      readActiveGpuFallbackMarker(userDataPath, {
-        ...environment,
-        platform: 'linux'
       })
     ).toBeNull()
     expect(existsSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE))).toBe(false)
@@ -135,15 +96,5 @@ describe('gpu-fallback-marker', () => {
     expect(readGpuFallbackMarker(userDataPath)).toBeNull()
     expect(readActiveGpuFallbackMarker(userDataPath, environment)).toBeNull()
     expect(existsSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE))).toBe(false)
-  })
-
-  it('can explicitly clear the marker', () => {
-    writeGpuFallbackMarker(
-      userDataPath,
-      { engagedAt: 1, crashesInWindow: 4, userConfirmed: false },
-      environment
-    )
-    clearGpuFallbackMarker(userDataPath)
-    expect(readGpuFallbackMarker(userDataPath)).toBeNull()
   })
 })

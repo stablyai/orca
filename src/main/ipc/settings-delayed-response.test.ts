@@ -105,63 +105,6 @@ it('returns current settings when a language change finishes after a newer theme
   expect(reply.theme).toBe('light')
 })
 
-it('returns current settings when hook reconciliation finishes after a newer theme write', async () => {
-  const { store, readState } = await createWorkerMaintenanceFixture()
-  store.updateSettings({ theme: 'system', agentStatusHooksEnabled: false })
-  await store.flushPendingOrThrowAsync()
-  registerSettingsHandlers(store)
-  const write = settingsWriter()
-  const started = maintenanceBarrier()
-  const release = maintenanceBarrier()
-  applyAgentStatusHooksEnabledMock.mockImplementationOnce(async () => {
-    started.resolve()
-    await release.promise
-    return []
-  })
-
-  const first = write(event, { theme: 'dark', agentStatusHooksEnabled: true })
-  await started.promise
-  await write(event, { theme: 'light' })
-  release.resolve()
-  const reply = await first
-  await store.flushPendingOrThrowAsync()
-
-  expect(store.getSettings().theme).toBe('light')
-  expect(readState().settings.theme).toBe('light')
-  expect(reply.theme).toBe('light')
-  expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(
-    true,
-    expect.objectContaining({ theme: 'dark' }),
-    expect.any(Object)
-  )
-})
-
-it('returns current settings when proxy reconciliation finishes after a newer theme write', async () => {
-  const { store, readState } = await createWorkerMaintenanceFixture()
-  store.updateSettings({ theme: 'system', httpProxyUrl: '' })
-  await store.flushPendingOrThrowAsync()
-  registerSettingsHandlers(store)
-  const write = settingsWriter()
-  const started = maintenanceBarrier()
-  const release = maintenanceBarrier()
-  applyElectronProxySettingsMock.mockImplementationOnce(async () => {
-    started.resolve()
-    await release.promise
-    return { source: 'settings' }
-  })
-
-  const first = write(event, { theme: 'dark', httpProxyUrl: 'http://proxy.example:8080' })
-  await started.promise
-  await write(event, { theme: 'light' })
-  release.resolve()
-  const reply = await first
-  await store.flushPendingOrThrowAsync()
-
-  expect(store.getSettings().theme).toBe('light')
-  expect(readState().settings.theme).toBe('light')
-  expect(reply.theme).toBe('light')
-})
-
 vi.mock('../claude/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))

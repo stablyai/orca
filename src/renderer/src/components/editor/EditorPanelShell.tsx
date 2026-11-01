@@ -106,6 +106,7 @@ export function EditorPanelShell({
           isMarkdown={model.isMarkdown}
           isCsv={model.isCsv}
           isNotebook={model.isNotebook}
+          isSvg={model.isSvg}
           customEditorTitles={model.customEditorTitles}
           hasEditorToggle={model.hasEditorToggle}
           availableEditorToggleModes={model.availableEditorToggleModes}
@@ -145,6 +146,7 @@ export function EditorPanelShell({
           resolvedLanguage={model.resolvedLanguage}
           isMarkdown={model.isMarkdown}
           isMermaid={model.isMermaid}
+          isSvg={model.isSvg}
           isCsv={model.isCsv}
           isNotebook={model.isNotebook}
           customEditor={model.activeCustomEditor}

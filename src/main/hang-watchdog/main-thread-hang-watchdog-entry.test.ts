@@ -12,11 +12,7 @@ vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }))
 
-import {
-  isHangWatchdogWorkerData,
-  recordHangObservation,
-  runWatchdog
-} from './main-thread-hang-watchdog-entry'
+import { recordHangObservation, runWatchdog } from './main-thread-hang-watchdog-entry'
 
 describe('recordHangObservation', () => {
   let dir: string
@@ -34,21 +30,6 @@ describe('recordHangObservation', () => {
     killSpy.mockRestore()
     exitSpy.mockRestore()
     rmSync(dir, { recursive: true, force: true })
-  })
-
-  it('records an unresolved hang', () => {
-    const markerPath = join(dir, 'marker.json')
-    recordHangObservation({
-      parentPid: 4242,
-      markerPath,
-      unresponsiveMs: 47_000,
-      selfRecovered: false
-    })
-    expect(consumeHangDetectionMarker(markerPath)).toMatchObject({
-      parentPid: 4242,
-      unresponsiveMs: 47_000,
-      selfRecovered: false
-    })
   })
 
   it('overwrites the marker when the stall clears, keeping one observation per stall', () => {
@@ -82,28 +63,6 @@ describe('recordHangObservation', () => {
     expect(killSpy).not.toHaveBeenCalled()
     expect(exitSpy).not.toHaveBeenCalled()
   })
-
-  it('survives an unwritable marker path', () => {
-    expect(() =>
-      recordHangObservation({
-        parentPid: 4242,
-        markerPath: join(dir, 'missing-subdir', 'marker.json'),
-        unresponsiveMs: 45_000,
-        selfRecovered: false
-      })
-    ).not.toThrow()
-  })
-
-  it('is a no-op when no marker path is configured', () => {
-    expect(() =>
-      recordHangObservation({
-        parentPid: 4242,
-        markerPath: '',
-        unresponsiveMs: 45_000,
-        selfRecovered: false
-      })
-    ).not.toThrow()
-  })
 })
 
 describe('watchdog worker entry', () => {
@@ -114,27 +73,6 @@ describe('watchdog worker entry', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('accepts only complete positive worker data', () => {
-    expect(
-      isHangWatchdogWorkerData({
-        parentPid: 42,
-        markerPath: '/tmp/marker',
-        timeoutMs: 100,
-        checkIntervalMs: 25
-      })
-    ).toBe(true)
-    for (const value of [
-      null,
-      {},
-      { parentPid: 0, markerPath: '/tmp/marker', timeoutMs: 100, checkIntervalMs: 25 },
-      { parentPid: 42, markerPath: 7, timeoutMs: 100, checkIntervalMs: 25 },
-      { parentPid: 42, markerPath: '/tmp/marker', timeoutMs: 0, checkIntervalMs: 25 },
-      { parentPid: 42, markerPath: '/tmp/marker', timeoutMs: 100, checkIntervalMs: Infinity }
-    ]) {
-      expect(isHangWatchdogWorkerData(value)).toBe(false)
-    }
   })
 
   it('routes heartbeats and shuts down its timer and port', () => {

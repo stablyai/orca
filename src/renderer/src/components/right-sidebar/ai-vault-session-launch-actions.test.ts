@@ -5,6 +5,7 @@ import type * as ForkStartup from '@/lib/ai-vault-session-fork-startup'
 // @vitest-environment happy-dom
 import { cleanup, render, fireEvent, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { OrchestrationPartyLocationResult } from '../../../../shared/orchestration-caller-status'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session-types'
 
@@ -271,7 +272,16 @@ it('intercepts an ordinary structured Resume and actual pane drop on handled ref
     if (method === 'session.tabs.list') {
       throw new Error('advisory inventory unavailable')
     }
-    return { ok: false, refusal: { code: 'agent_session_identity_required' } }
+    if (method === 'orchestration.partyLocation') {
+      const location: OrchestrationPartyLocationResult = {
+        location: { kind: 'chat', sessionId: 'chat-1', worktreeId: 'worktree-1' }
+      }
+      return location
+    }
+    if (method === 'agentSession.reveal') {
+      return { ok: false, refusal: { code: 'agent_session_identity_required' } }
+    }
+    throw new Error(`Unexpected RPC method: ${method}`)
   })
   const actions = renderActions()
   actions.handleResume(owned)

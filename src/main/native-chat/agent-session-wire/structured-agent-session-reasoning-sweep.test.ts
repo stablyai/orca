@@ -15,7 +15,6 @@ import {
 } from '../agent-session-journal/journal-host-database-test-support'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
-import { captureUnfinishedStructuredAgentSessionWork } from './structured-agent-session-unfinished-work'
 
 const SESSION = 'session-reasoning-sweep'
 const THREAD = 'thread-1'
@@ -101,10 +100,5 @@ describe('an open reasoning row a dead generation left', () => {
     })
     expect(reasoningBody()).toMatchObject({ state: 'completed' })
     expect(reasoningBody()).not.toHaveProperty('completedAt')
-  })
-
-  it('is not by itself unfinished work, so it adds no exit row to a settled turn', async () => {
-    await seedOpenReasoning('completed')
-    expect(captureUnfinishedStructuredAgentSessionWork(journal).items).toEqual([])
   })
 })

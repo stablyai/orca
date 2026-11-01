@@ -17,7 +17,7 @@ import {
   STALE_SESSION_ROW_PREFIX
 } from '../../agent-session-stop-row-identity'
 import { isStructuredAgentSessionStartFailureRow } from '../../structured-agent-session-start-failure-row-key'
-import { hostStatesTurnScopes } from '../../native-chat-turn-membership'
+import { hostStatesTurnScopes } from './native-chat-turn-membership'
 
 const CUT_TURN_NOTICE_ROW = 'cut-turn-notice:'
 

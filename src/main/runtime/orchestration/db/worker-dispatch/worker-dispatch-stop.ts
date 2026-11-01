@@ -8,6 +8,7 @@ import { isEquivalentPaneKey } from '../pane-key-match'
 import { refuseStopWhileKeptOpen } from '../worker-terminal/worker-terminal-user-keep'
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
+import { markUnreadFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
 import {
   beginLifecycleWriteTransaction,
   commitLifecycleWriteTransaction,
@@ -140,6 +141,8 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
     // Move helper mail received while the creator was stopping.
     this.closeQuestionsForDispatch(dispatchId)
+    // Mail it never read stays for the next send, as a report would keep it.
+    markUnreadFollowUpMail(this, dispatchId)
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { resolveNewWorktreeFormSheetVisible } from './new-worktree-form-sheet-visibility'
 
 export type NewWorktreeDrawerView =
   | 'form'
@@ -65,7 +64,8 @@ export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
 
   return {
     drawerView,
-    formSheetVisible: resolveNewWorktreeFormSheetVisible({ modalVisible, drawerView }),
+    // Pickers stack over the pinned form, so closing one reveals it in place and the host is never empty (#16165).
+    formSheetVisible: modalVisible,
     formSheetInteractive: drawerView === 'form',
     transitionDrawer,
     openSourceDrawer

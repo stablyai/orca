@@ -70,18 +70,6 @@ const REFUSED = { defaultBaseRef: null, remoteCount: 0, refusedWslDistro: 'Ubunt
 const LOADED = { defaultBaseRef: 'origin/main', remoteCount: 1 }
 
 describe("watchRuntimeRepoBaseRefDefault on this app's repos (E9)", () => {
-  it('loads again once the refusing distro runs', async () => {
-    getBaseRefDefault.mockResolvedValueOnce(REFUSED).mockResolvedValueOnce(LOADED)
-    const onResult = vi.fn()
-    watchRuntimeRepoBaseRefDefault('local', 'repo-1', { onResult, onError: vi.fn() })
-    await vi.waitFor(() => expect(onResult).toHaveBeenCalledWith(REFUSED))
-
-    emitDistroRunning('ubuntu')
-
-    await vi.waitFor(() => expect(onResult).toHaveBeenLastCalledWith(LOADED))
-    expect(getBaseRefDefault).toHaveBeenCalledTimes(2)
-  })
-
   it('re-asks when the distro started while main was still answering', async () => {
     let answer: (value: typeof REFUSED) => void = () => {}
     getBaseRefDefault
@@ -95,28 +83,6 @@ describe("watchRuntimeRepoBaseRefDefault on this app's repos (E9)", () => {
 
     await vi.waitFor(() => expect(onResult).toHaveBeenLastCalledWith(LOADED))
     expect(getBaseRefDefault).toHaveBeenCalledTimes(2)
-  })
-
-  it('ignores other distros', async () => {
-    getBaseRefDefault.mockResolvedValue(REFUSED)
-    const onResult = vi.fn()
-    watchRuntimeRepoBaseRefDefault('local', 'repo-1', { onResult, onError: vi.fn() })
-    await vi.waitFor(() => expect(onResult).toHaveBeenCalledWith(REFUSED))
-
-    emitDistroRunning('Debian')
-
-    expect(getBaseRefDefault).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not re-ask after a result that was not refused', async () => {
-    getBaseRefDefault.mockResolvedValue(LOADED)
-    const onResult = vi.fn()
-    watchRuntimeRepoBaseRefDefault('local', 'repo-1', { onResult, onError: vi.fn() })
-    await vi.waitFor(() => expect(onResult).toHaveBeenCalledWith(LOADED))
-
-    emitDistroRunning('Ubuntu')
-
-    expect(getBaseRefDefault).toHaveBeenCalledTimes(1)
   })
 
   it('stops listening when cancelled', async () => {

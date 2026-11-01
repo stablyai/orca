@@ -3,6 +3,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
+import { journalQueueReopenRowBuilder } from './journal-stop-and-resume-rows'
 import type { JournalQueuedMessages, JournalQueuePlan } from './journal-queued-messages'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalReducerState } from './journal-reducer'
@@ -17,6 +18,7 @@ import type {
 
 export type JournalSubmissionWriterDeps = {
   state: () => JournalReducerState
+  reopenFloor: () => AgentJournalCursor | null
   identity: AgentSessionJournalIdentity
   rowWriter: JournalRowWriter
   queuedMessages: JournalQueuedMessages
@@ -41,8 +43,13 @@ export class JournalSubmissionWriter {
     return rowWriter
       .enqueueRows(
         () => {
+          const floor = this.deps.reopenFloor()
+          const reopen =
+            floor?.epoch === state().epoch
+              ? [journalQueueReopenRowBuilder(state, input.fence, floor.sequence)]
+              : []
           if (!consume) {
-            return [submission]
+            return [...reopen, submission]
           }
           queuedMessages.assertConsumable({
             ...consume,
@@ -51,7 +58,7 @@ export class JournalSubmissionWriter {
           })
           // Adopt legacy cards in the handoff transaction.
           card = queuedMessages.plan([{ messageId: consume.messageId }])
-          return [...card.rows, submission]
+          return [...reopen, ...card.rows, submission]
         },
         {
           write: (db, row) => {

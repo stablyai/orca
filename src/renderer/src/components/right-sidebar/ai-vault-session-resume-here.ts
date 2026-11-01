@@ -1,6 +1,11 @@
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
 import { useAppStore } from '@/store'
-import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
+import {
+  activateAiVaultStructuredSession,
+  structuredSessionOpenFeedback,
+  openDesktopStructuredSession
+} from '@/lib/activate-ai-vault-structured-session'
 import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
@@ -192,20 +197,29 @@ function revealInPlaceOf(
   structured: NonNullable<AiVaultSession['structuredSession']>,
   executionHostId: AiVaultSession['executionHostId']
 ): Promise<void> {
-  return activateAiVaultStructuredSession({ structuredSession: structured, executionHostId }).then(
-    () => {
-      // Reported reopen success may lack a tab; replace this chat only when the reopened tab exists.
-      const reopened = findChatTabWhere(
-        here.workspaceId,
-        (tab) => tab.entityId === structured.sessionId
-      )
-      if (reopened) {
-        // Reveal appends to the group; take this chat's slot as a new chat does (a no-op across splits).
-        insertUnifiedTabAfterAnchor(here.workspaceId, reopened.id, here.tabId)
-        closeReplacedChat(here)
-      }
+  const target = ipcOrRuntimeTargetForHostId(executionHostId)
+  if (!target) {
+    structuredSessionOpenFeedback.hostCannotOpen()
+    return Promise.resolve()
+  }
+  return openDesktopStructuredSession(
+    { kind: 'history', structuredSession: structured },
+    target
+  ).then((result) => {
+    if (result.kind !== 'opened' || !here.current()) {
+      return
     }
-  )
+    // Reported reopen success may lack a tab; replace this chat only when the reopened tab exists.
+    const reopened = findChatTabWhere(
+      result.target.worktreeId,
+      (tab) => tab.id === result.tab.id && tab.entityId === result.target.sessionId
+    )
+    if (reopened) {
+      // Reveal appends to the group; take this chat's slot as a new chat does (a no-op across splits).
+      insertUnifiedTabAfterAnchor(result.target.worktreeId, reopened.id, here.tabId)
+      closeReplacedChat(here)
+    }
+  })
 }
 
 function findChatTabWhere(workspaceId: string, matches: (tab: Tab) => boolean): Tab | undefined {

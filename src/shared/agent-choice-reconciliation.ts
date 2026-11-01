@@ -1,9 +1,9 @@
-import { composeAgentLaunchModel } from './agent-session-option-launch'
+import { composeAgentLaunchModel } from './agent-session/options/agent-session-option-launch'
 import { analyzeAgentChoiceArgs, type AgentChoicePublicationContext } from './agent-choice-args'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
-} from './agent-session-option-catalog'
+} from './agent-session/options/agent-session-option-catalog'
 import {
   normalizeAgentModelOptionChoices,
   type AgentChoicePatch,

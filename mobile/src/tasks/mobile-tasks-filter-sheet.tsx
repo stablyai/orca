@@ -12,9 +12,7 @@ import {
 } from './mobile-tasks-legacy-foundation'
 import { cycleMobileTasksGitHubProjectSort } from './mobile-tasks-github-project-pickers'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
-import { ListGroup } from '../components/list/ListGroup'
-import { ListRow } from '../components/list/ListRow'
-import { SectionHeader } from '../components/list/SectionHeader'
+import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 
 /** How many Filter & display settings differ from their defaults; the Filter chip shows it. */
 export function mobileTasksFilterCount(model: ConnectionPresentationModel): number {

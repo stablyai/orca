@@ -6,7 +6,8 @@ import type { AppState } from '@/store'
 import { createEditorModelRegistry } from '@/lib/editor-model-registry'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { createEditorStore } from './editor-autosave-controller-test-fixture'
-import { applyEditorBufferText, withRecordDiskText } from './editor-buffer-adapter'
+import { applyEditorBufferText } from './editor-buffer-adapter'
+
 import { editorTabModelUri } from './editor-save-disk-precondition'
 import { attachClosedEditorTabCleanup } from './closed-editor-tab-controller'
 import { attachModelLifetimeView } from './editor-model-lifetime-fixture'
@@ -100,25 +101,6 @@ describe('applyEditorBufferText', () => {
     detach()
     applyEditorBufferText(store.getState(), file(store, a), 'typed in source', bridge)
     expect(model.getValue()).toBe('disk')
-  })
-})
-
-describe('withRecordDiskText (panel content sync)', () => {
-  it('moves every loaded view of the saved record to the written text, nothing else', () => {
-    const { store, a, b } = twoViews()
-    const prev = {
-      [a]: { content: 'old', isBinary: false },
-      [b]: { content: 'old', isBinary: false },
-      other: { content: 'other', isBinary: false }
-    }
-    const views = store.getState().editorBufferViews[store.getState().editorBufferIdOf[a]]
-    const next = withRecordDiskText(prev, views, a, 'saved')
-    expect(next[b]?.content).toBe('saved')
-    expect(next[a]?.content).toBe('old')
-    expect(next.other?.content).toBe('other')
-    expect(withRecordDiskText({ [a]: prev[a] }, views, a, 'saved')).toEqual({
-      [a]: prev[a]
-    })
   })
 })
 

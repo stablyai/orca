@@ -5,11 +5,7 @@ import {
 import { onLiveAccount } from './agent-model-catalog-running-account'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-launch-directory'
-import {
-  agentSessionConversationView,
-  type AgentSessionConversationView
-} from '../../../shared/agent-session-conversation-view'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
 import { agentModelCatalogResultFromEntry } from './agent-model-catalog-entry'
 import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
@@ -32,6 +28,34 @@ export type AgentModelCatalogBinding = {
   workspacePath?: string | null
   keepDefault: boolean
   projecting?: Promise<void>
+}
+
+/** Canonical authority survives folder churn and preliminary same-account refreshes until replacement. */
+export function bindAgentModelCatalogScope(
+  bindings: Map<string, AgentModelCatalogBinding>,
+  key: string,
+  bound: AgentModelCatalogBinding,
+  requestKey: (params: AgentModelCatalogReadParams) => string,
+  preliminary = false
+): void {
+  const held = preliminary ? bindings.get(key) : undefined
+  if (held?.current() && held.identity === bound.identity && held.base === bound.base) {
+    return
+  }
+  bindings.set(key, bound)
+  const canonical = ['claude', 'codex'].map((agent) => requestKey({ agent }))
+  const limit = 256 + canonical.filter((key) => bindings.has(key)).length
+  if (bindings.size <= limit) {
+    return
+  }
+  for (const candidate of bindings.keys()) {
+    if (!canonical.includes(candidate)) {
+      bindings.delete(candidate)
+      if (bindings.size <= limit) {
+        break
+      }
+    }
+  }
 }
 
 export function agentModelCatalogReleasedOwner(
@@ -194,7 +218,8 @@ export function projectAgentModelCatalogSnapshot(
         display,
         independent &&
           !params.legacyOptionsDisplay &&
-          (!deps.store.verified(display) || (!bound.exact && !params.legacy))
+          // The account's list stands in for this folder's; it names no default here.
+          (display !== listed || !deps.store.verified(display) || (!bound.exact && !params.legacy))
           ? false
           : verified || bound.keepDefault,
         deps.listingNamesConfiguredModel?.has(params.agent) === true,
@@ -207,7 +232,7 @@ export function projectAgentModelCatalogSnapshot(
     deps.agentReadsProjectModelConfig?.(params.agent) === false
       ? { defaultHoldsInEveryWorkspace: true as const }
       : {}),
-    ...(result && (bound.folder !== undefined || bound.exact)
+    ...(result && ((independent && !params.legacy) || bound.folder !== undefined || bound.exact)
       ? { modelsDifferByWorkspace: true as const }
       : {}),
     ...(!params.savedOnly &&
@@ -259,27 +284,6 @@ export function retireAgentModelCatalogRequests(
       bound.cancel()
       bindings.delete(key)
     }
-  }
-}
-
-/** The invocation-qualified binding may differ from a live listing's account key. */
-export function expireAgentModelCatalogBoundFailure(
-  deps: AgentModelCatalogServiceDeps,
-  bindings: ReadonlyMap<string, AgentModelCatalogBinding>,
-  record: AgentSessionRecord,
-  source?: () => boolean
-): void {
-  const view = agentSessionConversationView(record)
-  const bound = bindings.get(
-    agentModelCatalogRequestKey(deps, {
-      agent: record.provider,
-      sessionId: record.sessionId,
-      inSessionWorkspace: true,
-      records: { record: view, scoped: onLiveAccount(deps, view), savedOnly: false }
-    })
-  )
-  if (bound?.current() && source?.() !== false) {
-    deps.store.expireFailure(bound.fingerprint)
   }
 }
 

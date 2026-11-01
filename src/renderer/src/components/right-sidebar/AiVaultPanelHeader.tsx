@@ -184,7 +184,7 @@ export function AiVaultPanelHeader({
                   'Search sessions'
                 )
           }
-          className="min-w-0 flex-1 bg-transparent py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
+          className="min-w-0 flex-1 bg-transparent py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground"
           aria-label={translate(
             'auto.components.right.sidebar.AiVaultPanel.searchSessions',
             'Search sessions'
