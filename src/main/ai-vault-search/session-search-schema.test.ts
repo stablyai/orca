@@ -302,6 +302,41 @@ it('opens with the pragmas the write path depends on', async () => {
   }
 })
 
+it('configures FTS segment merging for a write-heavy index', async () => {
+  const db = openSessionSearchDatabase(await tempDatabasePath())
+  try {
+    // Steady transcript appends otherwise make FTS merge whole segment levels
+    // repeatedly, which is what reaches tens of GB of daily writes (#36666);
+    // 8 merges wider than the default 4 so fewer levels are rewritten.
+    const automerge = db
+      .prepare("SELECT v FROM messages_fts_config WHERE k = 'automerge'")
+      .get() as { v: number } | undefined
+    expect(automerge?.v).toBe(8)
+  } finally {
+    db.close()
+  }
+})
+
+it('re-applies the FTS merge setting when reopening an existing index', async () => {
+  const path = await tempDatabasePath()
+  const first = openSessionSearchDatabase(path)
+  first.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
+  // Simulate a database from before the setting: the config row holds another value.
+  first.prepare("INSERT INTO messages_fts(messages_fts, rank) VALUES ('automerge', 4)").run()
+  first.close()
+
+  const second = openSessionSearchDatabase(path)
+  try {
+    const automerge = second
+      .prepare("SELECT v FROM messages_fts_config WHERE k = 'automerge'")
+      .get() as { v: number } | undefined
+    expect(automerge?.v).toBe(8)
+    expect(second.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({ c: 1 })
+  } finally {
+    second.close()
+  }
+})
+
 it("walks a session's rows through an index rather than scanning the table", async () => {
   const db = openSessionSearchDatabase(await tempDatabasePath())
   try {
