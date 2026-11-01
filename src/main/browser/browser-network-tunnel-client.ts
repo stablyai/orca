@@ -281,12 +281,13 @@ export class BrowserNetworkTunnelClient {
     if (!this.isCurrent(stream)) {
       return
     }
+    // Retire first so the Error frame's queue claim can use the bytes this stream held.
+    this.retireStream(stream, error)
     this.frameSender.send(
       BrowserNetworkTunnelOpcode.Error,
       stream.id,
       new TextEncoder().encode(error.message)
     )
-    this.retireStream(stream, error)
   }
 
   private retireStream(
