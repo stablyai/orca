@@ -12,6 +12,7 @@ import {
   scanNativeChatTranscriptTasks
 } from '../../../native-chat/native-chat-transcript-task-scan'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
+import { windowNativeChatWithChildren } from '../../../native-chat/transcript-subagent-children'
 import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
 import {
   boundNativeChatRpcPageByBytes,
@@ -49,7 +50,7 @@ function windowTranscript(
   limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
 ): NativeChatMessage[] {
   const window = Math.min(Math.max(limit, 1), MOBILE_NATIVE_CHAT_MAX_WINDOW)
-  return messages.length > window ? messages.slice(-window) : messages.slice()
+  return windowNativeChatWithChildren(messages, window)
 }
 
 function pageForClient(
