@@ -23,7 +23,11 @@ export default function GitLabItemDialog({
   onCreateWorkspace
 }: GitLabItemDialogProps) {
   const itemId = item?.id ?? null
-  const state = useGitLabItemDialogState(itemId)
+  // Details belong to this item on this repo and host; a provider id alone does not span hosts.
+  const detailsIdentity = item
+    ? [itemId, item.repoHostId ?? '', repoId ?? '', repoPath ?? ''].join('\0')
+    : null
+  const state = useGitLabItemDialogState(itemId, detailsIdentity)
   const { setRefreshNonce } = state
   const repoSelector = useMemo<GitLabDialogRepoSelector | null>(() => {
     if (!repoPath) {

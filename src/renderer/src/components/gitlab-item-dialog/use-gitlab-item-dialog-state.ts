@@ -3,8 +3,14 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GitLabAssignableUser, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
 import type { JobTraceState } from '../gitlab-item-dialog-parts'
 
-export function useGitLabItemDialogState(itemId: string | null) {
+export function useGitLabItemDialogState(itemId: string | null, detailsIdentity: string | null) {
   const [details, setDetails] = useState<GitLabWorkItemDetails | null>(null)
+  const [detailsOwner, setDetailsOwner] = useState(detailsIdentity)
+  if (detailsOwner !== detailsIdentity) {
+    // Why: drop before paint so a switched item never shows, or edits, the previous item's details (reviewers included).
+    setDetailsOwner(detailsIdentity)
+    setDetails(null)
+  }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshNonce, setRefreshNonce] = useState(0)

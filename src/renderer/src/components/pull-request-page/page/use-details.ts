@@ -16,6 +16,7 @@ import {
   workItemDetailsCache,
   workItemDetailsCacheGeneration
 } from '../cache/work-item-details'
+import { useRetainedWorkItemDetails } from '@/components/github/use-retained-work-item-details'
 
 export function usePullRequestDetails(args: {
   workItem: GitHubWorkItem | null
@@ -79,9 +80,10 @@ export function usePullRequestDetails(args: {
   // Cold opens need a local tick to reveal optimistic comments; warm cache writes notify subscribers.
   const [optimisticTick, setOptimisticTick] = useState(0)
 
+  const shownDetails = useRetainedWorkItemDetails(detailsCacheKey, cachedEntry?.details ?? null)
   // Merge optimistic comments only when stable cached-entry identity or explicit cold-open state changes.
   const details = useMemo<GitHubWorkItemDetails | null>(() => {
-    const cachedDetails = cachedEntry?.details ?? null
+    const cachedDetails = shownDetails
     const opt = optimisticCommentsRef.current
     if (!cachedDetails) {
       // Build a minimal shell while cold-loading so just-posted comments are visible immediately.
@@ -104,11 +106,11 @@ export function usePullRequestDetails(args: {
     }
     // Why: optimisticTick isn't read in the body but is the rerender signal for cold-open writes (memo reads a ref); removing it breaks the optimistic shell.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cachedEntry, workItem, optimisticTick])
+  }, [shownDetails, workItem, optimisticTick])
 
-  const loading = !!cachedEntry?.pending && !cachedEntry?.details
-  const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
-  const detailsLoaded = Boolean(cachedEntry?.details)
+  const loading = !!cachedEntry?.pending && !shownDetails
+  const error = cachedEntry?.error && !shownDetails ? cachedEntry.error : null
+  const detailsLoaded = Boolean(shownDetails)
 
   // Cross-window invalidation can drop an open entry without changing fetch dependencies; trigger refetch explicitly.
   const [refetchTick, setRefetchTick] = useState(0)
