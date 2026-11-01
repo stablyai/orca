@@ -5,6 +5,10 @@ import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 // Without placing-director contact, memory-only reserve ownership cannot supersede hosts; flip back to db and re-register as a switch flip would.
 export const RESERVE_DEAD_MAN_MS = 60_000
 const RESERVE_DEAD_MAN_SPREAD_MS = 60_000
+// A fresh process waits for its load balancer before any director poll can reach it: up to about
+// 110 s after the switch file applied on 2026-11-01 rolls, past several cells' windows. Until its
+// first contact a new process gets this much more (autohealing's 180 s initial delay).
+export const RESERVE_DEAD_MAN_BOOT_GRACE_MS = 180_000
 
 // Stable 60–120s per-cell windows stagger fleet-wide fallback DB re-registration over one minute.
 export function reserveDeadManWindowMs(cellId: string): number {
@@ -19,12 +23,14 @@ export class ReserveDeadMan {
   // With deadManTripSlots set, a silent cell trips only once it holds one of the fleet's slots.
   private permittedGeneration: number | null = null
   private pending: { generation: number; slots: number } | null = null
+  private contacted = false
 
   constructor(
     private readonly cellId: string,
     private readonly now: () => number = Date.now,
     private readonly windowMs = RESERVE_DEAD_MAN_MS,
-    private readonly log: (line: string) => void = (line) => console.error(line)
+    private readonly log: (line: string) => void = (line) => console.error(line),
+    private readonly bootGraceMs = 0
   ) {
     this.lastContactAt = now()
   }
@@ -32,6 +38,7 @@ export class ReserveDeadMan {
   // A feed poll marked reserver=1, or a real (not dry-run) booking.
   contact(): void {
     this.lastContactAt = this.now()
+    this.contacted = true
     // A claim still in flight is for a silence that has ended.
     this.pending = null
     this.permittedGeneration = null
@@ -53,7 +60,8 @@ export class ReserveDeadMan {
       this.lastContactAt = Math.max(this.lastContactAt, now)
     }
     if (this.trippedGeneration === applied.generation) return 'db'
-    if (now - this.lastContactAt <= this.windowMs) {
+    const windowMs = this.contacted ? this.windowMs : this.windowMs + this.bootGraceMs
+    if (now - this.lastContactAt <= windowMs) {
       this.pending = null
       return 'reserve'
     }
