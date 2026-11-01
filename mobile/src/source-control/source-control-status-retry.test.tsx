@@ -31,9 +31,27 @@ vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: 'SafeAreaView',
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
-// Panel modules read icons at import time; render every one as nothing.
-vi.mock('lucide-react-native', async (importOriginal) =>
-  Object.fromEntries(Object.keys(await importOriginal<object>()).map((name) => [name, () => null]))
+// Panel modules read icons at import time; render each one the mounted tree imports as nothing.
+vi.mock('lucide-react-native', () =>
+  Object.fromEntries(
+    [
+      'ArrowDown',
+      'ArrowDownUp',
+      'ArrowUp',
+      'Check',
+      'ChevronDown',
+      'ChevronRight',
+      'CloudUpload',
+      'GitBranch',
+      'GitPullRequestArrow',
+      'History',
+      'RefreshCw',
+      'RotateCw',
+      'Search',
+      'UserPlus',
+      'X'
+    ].map((name) => [name, () => null])
+  )
 )
 // Thin native adapters: the real composer, picker and search own their state; these forward it.
 vi.mock('../components/composer-input/MessageBox', async () => {
@@ -105,8 +123,7 @@ vi.mock('../session/use-mobile-pr-ai-triage', () => ({
     launch: () => {}
   })
 }))
-vi.mock('../components/host-protocol-gates-context', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
+vi.mock('../components/host-protocol-gates-context', () => ({
   useHostProtocolGates: () => ({ hostCapabilities: [], statusPending: false, statusReadable: true })
 }))
 vi.mock('../session/use-pr-bot-author-overrides', () => ({
