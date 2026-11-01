@@ -16,10 +16,10 @@ export function BranchPrefixFeedback({
   rawPrefix,
   separator = DEFAULT_BRANCH_PREFIX_SEPARATOR
 }: BranchPrefixFeedbackProps): ReactNode {
-  const issue = getBranchPrefixIssue(rawPrefix)
-  const sepIssue = getBranchPrefixSeparatorIssue(separator)
   const effectiveSep = separator || DEFAULT_BRANCH_PREFIX_SEPARATOR
   const normalized = normalizeBranchPrefix(rawPrefix, effectiveSep)
+  const issue = getBranchPrefixIssue(normalized || rawPrefix)
+  const sepIssue = getBranchPrefixSeparatorIssue(separator)
 
   let message: ReactNode = null
   if (issue) {

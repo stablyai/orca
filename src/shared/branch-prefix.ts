@@ -67,7 +67,9 @@ export function getBranchPrefixSeparatorIssue(rawSeparator: string): 'invalid-ch
     hasControlOrSpace(rawSeparator) ||
     INVALID_BRANCH_PREFIX_CHARS.test(rawSeparator) ||
     rawSeparator.includes('..') ||
-    rawSeparator.includes('@{')
+    rawSeparator.includes('//') ||
+    rawSeparator.includes('@{') ||
+    rawSeparator.endsWith('.lock')
   ) {
     return 'invalid-characters'
   }
@@ -107,6 +109,12 @@ export function assertBranchPrefixValid(
     )
   }
   if (getBranchPrefixSeparatorIssue(separator) !== null) {
+    throw new Error(
+      `Branch prefix separator "${separator}" contains characters git rejects — update it in Settings → Git`
+    )
+  }
+  const assembled = `${prefix}${separator}test`
+  if (assembled.includes('//')) {
     throw new Error(
       `Branch prefix separator "${separator}" contains characters git rejects — update it in Settings → Git`
     )

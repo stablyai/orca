@@ -47,6 +47,7 @@ describe('getBranchPrefixSeparatorIssue', () => {
     expect(getBranchPrefixSeparatorIssue(':')).toBe('invalid-characters')
     expect(getBranchPrefixSeparatorIssue('?')).toBe('invalid-characters')
     expect(getBranchPrefixSeparatorIssue('..')).toBe('invalid-characters')
+    expect(getBranchPrefixSeparatorIssue('//')).toBe('invalid-characters')
     expect(getBranchPrefixSeparatorIssue('@{')).toBe('invalid-characters')
   })
 })

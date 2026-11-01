@@ -402,6 +402,23 @@ describe('computeValidatedBranchName', () => {
       )
     ).toBe('feature')
   })
+
+  it('strips existing prefix from branch name to avoid double-prefixing', () => {
+    expect(
+      computeValidatedBranchName(
+        'team-feature',
+        { branchPrefix: 'custom', branchPrefixCustom: 'team', branchPrefixSeparator: '-' },
+        null
+      )
+    ).toBe('team-feature')
+    expect(
+      computeValidatedBranchName(
+        'team/feature',
+        { branchPrefix: 'custom', branchPrefixCustom: 'team', branchPrefixSeparator: '/' },
+        null
+      )
+    ).toBe('team/feature')
+  })
 })
 
 describe('computeWorktreePath', () => {

@@ -24,8 +24,16 @@ export function computeBranchName(
   gitUsername: string | null
 ): string {
   const prefix = getConfiguredBranchPrefix(settings, gitUsername)
+  if (!prefix) {
+    return sanitizedName
+  }
   const separator = getBranchPrefixSeparator(settings)
-  return prefix ? `${prefix}${separator}${sanitizedName}` : sanitizedName
+  const existingPrefix = `${prefix}${separator}`
+  const leaf =
+    sanitizedName.startsWith(existingPrefix) && sanitizedName.length > existingPrefix.length
+      ? sanitizedName.slice(existingPrefix.length)
+      : sanitizedName
+  return `${prefix}${separator}${leaf}`
 }
 
 /** Validate prefix settings early so creation errors identify configuration rather than opaque Git failures. */
@@ -51,5 +59,10 @@ export function computeValidatedBranchName(
     }
     assertBranchPrefixValid(prefix, separator)
   }
-  return `${prefix}${separator}${sanitizedName}`
+  const existingPrefix = `${prefix}${separator}`
+  const leaf =
+    sanitizedName.startsWith(existingPrefix) && sanitizedName.length > existingPrefix.length
+      ? sanitizedName.slice(existingPrefix.length)
+      : sanitizedName
+  return `${prefix}${separator}${leaf}`
 }
