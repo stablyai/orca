@@ -21,9 +21,9 @@ export const REQUIRED_SCHEDULES = [
   'reject-peer-pending'
 ] as const
 
-// These run on the default 30-second deadline, so the sibling timeout ends them before their replies (the goldens
-// record each as timed out).
-const SIBLING_TIMEOUT_LATE_REPLIES: Readonly<Record<string, readonly string[]>> = {
+// The sibling timeout (their default 30-second deadline, as the goldens record) and the disconnect both end these
+// before their replies arrive.
+const SIBLING_INTERRUPTION_LATE_REPLIES: Readonly<Record<string, readonly string[]>> = {
   'settings-workspace-context-fulfilled': ['preflight.check#1', 'linear.status#1', 'jira.status#1'],
   'settings-task-hydration-fulfilled': ['preflight.check#1', 'linear.status#1', 'jira.status#1']
 }
@@ -47,10 +47,11 @@ export function siblingSchedules(
     // The stable logical site names the request in every execution mode.
     reject: { message: `${step.site ?? step.complete} rejected`, deliveryUnknown: true }
   })
-  // Only the declared reply a 30-second deadline has already ended arrives late; the rest stay live.
-  const lateAfterTimeout = SIBLING_TIMEOUT_LATE_REPLIES[base.lineage?.baseScenario ?? base.id] ?? []
-  const timeoutSuffix = suffix.map((step): ScenarioStep =>
-    'complete' in step && lateAfterTimeout.includes(step.site ?? step.complete)
+  // Only the declared replies the interruption has already ended arrive late; the rest stay live.
+  const lateAfterInterruption =
+    SIBLING_INTERRUPTION_LATE_REPLIES[base.lineage?.baseScenario ?? base.id] ?? []
+  const interruptedSuffix = suffix.map((step): ScenarioStep =>
+    'complete' in step && lateAfterInterruption.includes(step.site ?? step.complete)
       ? { ...step, late: true }
       : step
   )
@@ -72,7 +73,7 @@ export function siblingSchedules(
     steps: [
       ...prefix,
       ...steps,
-      ...(schedule === 'timeout' ? timeoutSuffix : suffix),
+      ...(schedule === 'timeout' || schedule === 'disconnect' ? interruptedSuffix : suffix),
       { checkpoint: 'settled' }
     ]
   }))
