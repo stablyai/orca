@@ -662,7 +662,6 @@
 1 test-no-real-time-wait:tests/e2e/tab-create-entry-file-paths.spec.ts
 11 test-no-real-time-wait:tests/e2e/tab-hover-card.spec.ts
 4 test-no-real-time-wait:tests/e2e/tab-strip-scroll-render-isolation.spec.ts
-2 test-no-real-time-wait:tests/e2e/tab-strip-tab-render-isolation.spec.ts
 2 test-no-real-time-wait:tests/e2e/tasks-page.spec.ts
 2 test-no-real-time-wait:tests/e2e/terminal-ai-vault-typing-latency.spec.ts
 1 test-no-real-time-wait:tests/e2e/terminal-attention.spec.ts
