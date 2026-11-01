@@ -6,6 +6,7 @@ import {
   getDaemonProvider
 } from '../../daemon/daemon-provider-state'
 import { restartDaemon } from '../../daemon/daemon-provider-restart'
+import { didDaemonStartupFallBack } from '../../daemon/daemon-startup-fallback'
 import {
   readSeveredDaemonStatus,
   restartSeveredDaemon,
@@ -122,6 +123,16 @@ export function registerDaemonManagementHandlers(): void {
   ipcMain.removeHandler('pty:management:severedDaemon')
   ipcMain.removeHandler('pty:management:restartSeveredDaemon')
   ipcMain.removeHandler('pty:management:asyncIoHealth')
+  ipcMain.removeHandler('pty:management:startupFallback')
+
+  // Startup fell back and no installed daemon has taken fresh terminals back since.
+  ipcMain.handle(
+    'pty:management:startupFallback',
+    async (): Promise<{ freshTerminalsInProcess: boolean }> => ({
+      freshTerminalsInProcess:
+        didDaemonStartupFallBack() && (getDaemonProvider() === null || isDaemonDegraded())
+    })
+  )
 
   ipcMain.handle('pty:management:asyncIoHealth', async (): Promise<DaemonAsyncIoStatus> => {
     const provider = getDaemonProvider()

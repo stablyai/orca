@@ -51,6 +51,8 @@ export type PtyManagementSeveredDaemonRestartResult =
 
 export type PtyManagementApi = {
   asyncIoHealth: () => Promise<DaemonAsyncIoStatus>
+  // Daemon startup failed this launch, so fresh terminals end when Orca quits.
+  startupFallback: () => Promise<{ freshTerminalsInProcess: boolean }>
   // degraded: new PTYs fall back to local spawning without daemon persistence.
   listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
   killAll: () => Promise<{

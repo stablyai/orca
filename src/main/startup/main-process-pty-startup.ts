@@ -6,6 +6,7 @@ import { track } from '../telemetry/client'
 import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
 import { getDaemonProvider, listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
 import { initDaemonPtyProvider } from '../daemon/daemon-provider-init'
+import { noteDaemonStartupFallback } from '../daemon/daemon-startup-fallback'
 import { restartLocalTerminalsAfterElevation } from '../windows/windows-administrator-restart'
 import { resolveTerminalSpawnAdmissionMode } from '../daemon/terminal-spawn-gate'
 import {
@@ -184,6 +185,7 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
     onDaemonError: (error) => {
       // Daemon failure silently loses persistence via local PTY fallback; retain fleet-level diagnostics.
       const reason = error instanceof Error ? error.message : String(error)
+      noteDaemonStartupFallback()
       console.error(
         `[daemon] STARTUP FAILED — falling back to local PTYs; terminals will not persist across quit. Reason: ${reason}`
       )
