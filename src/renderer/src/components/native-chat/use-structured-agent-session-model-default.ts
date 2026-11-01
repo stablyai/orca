@@ -1,8 +1,9 @@
+import type { AgentSessionOptionResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import { structuredAgentSessionOptionSnapshot } from '../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { useCallback, type RefObject } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { AgentSessionOptionResult } from '../../../../shared/agent-session-wire'
+
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   commitStructuredAgentSessionModelDefault,

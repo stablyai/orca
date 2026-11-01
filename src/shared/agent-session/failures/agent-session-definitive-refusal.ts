@@ -1,6 +1,9 @@
 /** Fallback needs an allowlisted proof that nothing was created; unknown outcomes/timeouts never qualify. Do not reuse agentSessionRefusalOperationState: unsupported is pending-admission for settlement but permits fallback. */
 
-import type { AgentSessionWireRefusal, AgentSessionWireRefusalCode } from './agent-session-wire'
+import type {
+  AgentSessionWireRefusal,
+  AgentSessionWireRefusalCode
+} from './agent-session-wire-refusals'
 
 /** Admission reasons eligible for attempt-level proof, only at a boundary before commit. */
 export function isAgentSessionCreateAdmissionRefusal(

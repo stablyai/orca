@@ -1,3 +1,4 @@
+import type { AgentSessionOptionResult } from '../../../shared/agent-session/options/agent-session-options-result'
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
 import { readNoChoiceOptionResult } from './structured-agent-session-option-observation'
@@ -13,7 +14,6 @@ import type { AgentSessionOperationOutcome } from '../../../shared/agent-session
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
-  AgentSessionOptionResult,
   AgentSessionPromptResult,
   AgentSessionQueuedSendReceipt,
   AgentSessionSendResult

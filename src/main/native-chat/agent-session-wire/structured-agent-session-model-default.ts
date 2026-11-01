@@ -1,9 +1,10 @@
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type {
+  AgentSessionOptionResult,
+  AgentSessionOptionsResult
+} from '../../../shared/agent-session/options/agent-session-options-result'
 import { effectiveAgentSessionOptions } from '../../../shared/agent-session-default-model'
-import {
-  refuse,
-  type AgentSessionOptionResult,
-  type AgentSessionOptionsResult
-} from '../../../shared/agent-session-wire'
+
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 

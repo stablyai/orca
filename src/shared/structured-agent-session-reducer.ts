@@ -28,7 +28,7 @@ import type {
   AgentSessionQueuePause
 } from './agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionBackgroundTaskState } from './agent-session/agent-session-background-task-wire'
-import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
+import type { AgentSessionRefusalReference } from './agent-session/failures/agent-session-wire-refusals'
 import { backgroundTaskStatesEqual } from './agent-session/agent-session-background-task-state-equality'
 import { admitAgentSessionBackgroundTaskState } from './agent-session/agent-session-background-task-state-admission'
 import {

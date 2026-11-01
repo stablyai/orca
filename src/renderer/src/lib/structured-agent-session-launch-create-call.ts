@@ -7,9 +7,9 @@ import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import {
   isAgentSessionCreateAdmissionRefusal,
   isDefinitiveAgentSessionCreateRefusal
-} from '../../../shared/agent-session-definitive-refusal'
-import { readAgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
-import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
+} from '../../../shared/agent-session/failures/agent-session-definitive-refusal'
+import { readAgentSessionRefusalReference } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from '../../../shared/agent-session/failures/agent-session-write-failure'
 import {
   callStructuredAgentSession,
   supportsStructuredAgentSessionCreateOptionsMode,

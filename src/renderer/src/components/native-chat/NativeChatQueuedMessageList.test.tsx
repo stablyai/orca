@@ -22,7 +22,7 @@ import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
 } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 
 function renderList(
   owner: StructuredAgentSessionQueuedMessagesController,

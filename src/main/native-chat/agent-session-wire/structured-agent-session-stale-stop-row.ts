@@ -1,7 +1,7 @@
 // Key notices by matching death/replacement proof so settlement retries cannot duplicate them.
 
 import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalRenderItem,
   AgentJournalStatusItem

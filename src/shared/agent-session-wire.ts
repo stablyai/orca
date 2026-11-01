@@ -1,3 +1,4 @@
+export type { AgentSessionOptionResult } from './agent-session/options/agent-session-options-result'
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type { AgentSessionFrameFields } from './agent-session-frame-fields'
 import type { AgentSessionCurrentWorkFields } from './agent-session/requests/agent-session-current-work-wire'
@@ -6,18 +7,13 @@ import type {
   AgentSessionBackgroundTaskState
 } from './agent-session/agent-session-background-task-wire'
 import type { AgentSessionRewindReason } from './agent-session-rewind'
-import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
+import type { AgentSessionWireRefusal } from './agent-session/failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
 } from './agent-session/requests/agent-session-queued-message-wire'
 
-export type {
-  AgentSessionOptionsResult,
-  AgentSessionOptionResult
-} from './agent-session/options/agent-session-options-result'
-export * from './agent-session-wire-refusals'
 export * from './agent-session-turn-completion-wire'
 // Use plain JSON and optional additions after structured.v1; hosts/clients update independently (docs/reference/remote-wire-compatibility.md).
 

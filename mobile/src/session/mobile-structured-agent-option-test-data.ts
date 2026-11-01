@@ -1,4 +1,4 @@
-import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 
 export const OPTIONS: AgentSessionOptionsResult = {
   models: [

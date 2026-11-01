@@ -8,7 +8,6 @@ import { structuredSendResultFixture } from './structured-agent-send-result.test
 import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalDispatchState } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -33,7 +32,7 @@ import {
   structuredAgentSessionHostSupport,
   type StructuredAgentSessionHostSupport
 } from './mobile-structured-agent-session-host-support'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import {

@@ -28,8 +28,8 @@ import {
   agentSessionFailureFact,
   providerDiagnostic,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
-import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
+} from '../../shared/agent-session/failures/agent-session-failure'
+import type { AgentJournalDispatchRejection } from '../../shared/agent-session/failures/agent-session-failure-words'
 import {
   claudeUnwrittenUserMessageError,
   claudeUserMessageWasProvablyUnwritten

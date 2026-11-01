@@ -2,10 +2,10 @@ import {
   agentSessionFailureFact,
   providerDiagnostic,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { BoundedMap } from '../../shared/bounded-map'
-import type { AgentSessionUsageLimit } from '../../shared/agent-session-usage-limit'
+import type { AgentSessionUsageLimit } from '../../shared/agent-session/failures/agent-session-usage-limit'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpAgentError, AcpAuthRequiredError, AcpSignInPromptError } from './acp-errors'

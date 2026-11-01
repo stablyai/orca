@@ -2,7 +2,7 @@ import {
   agentSessionFailureFact,
   type AgentSessionFailureFact,
   type ProviderDiagnostic
-} from '../../../shared/agent-session-failure'
+} from '../../../shared/agent-session/failures/agent-session-failure'
 
 export type StructuredConversationCommandOutcome = {
   outcome: 'success' | 'failure' | 'cancellation'

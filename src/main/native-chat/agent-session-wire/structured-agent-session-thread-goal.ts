@@ -1,8 +1,8 @@
 import {
   refuse,
-  type AgentSessionRefusalReason,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import type {
   AgentJournalCursor,
   AgentJournalItemIdentity

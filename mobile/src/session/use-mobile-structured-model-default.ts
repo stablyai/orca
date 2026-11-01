@@ -1,3 +1,4 @@
+import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import { lockedStructuredAgentSessionOptionSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
 import { useCallback, type RefObject } from 'react'
 import { structuredAgentSessionDefaultModelChoice } from '../../../src/shared/structured-agent-session-default-model-choice'
@@ -7,7 +8,7 @@ import {
   structuredOptionPickCommit
 } from '../../../src/shared/structured-agent-session-option-pick-book'
 import type { RpcClient } from '../transport/rpc-client'
-import type { AgentSessionOptionResult } from '../../../src/shared/agent-session-wire'
+
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import {
   commitStructuredAgentSessionModelDefault,

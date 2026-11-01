@@ -1,10 +1,8 @@
+import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import { createElement, useLayoutEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { vi } from 'vitest'
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionOptionResult
-} from '../../../src/shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'

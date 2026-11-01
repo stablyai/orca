@@ -1,6 +1,7 @@
+import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import { act } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionOptionResult } from '../../../src/shared/agent-session-wire'
+
 import type { PersistedNativeChatSessionOptions } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import {

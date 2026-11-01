@@ -4,8 +4,8 @@ import {
   AgentJournalRenderItemSchema
 } from '../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { AgentJournalSubmissionSchema } from '../../../shared/agent-session/journal/agent-session-journal-submission-schema'
-import { AgentSessionFailureFactSchema } from '../../../shared/agent-session-failure-fact-schema'
-import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { AgentSessionFailureFactSchema } from '../../../shared/agent-session/failures/agent-session-failure-fact-schema'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission

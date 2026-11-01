@@ -15,9 +15,9 @@ import {
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   refuse,
-  type AgentSessionRefusalReason,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 
 /** Provider open-work evidence decides admission; stored views only word the refusal. */
 export type ConversationCommandChildWork = {
