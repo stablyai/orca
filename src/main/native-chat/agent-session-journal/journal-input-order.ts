@@ -5,11 +5,11 @@ import {
   journalInputOrderChanged,
   isJournalInputOverride
 } from './journal-input-order-state'
-export type { JournalInputPlace } from './journal-input-order-state'
 
 import { JournalSubmissionLinks } from './journal-submission-links'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { JournalNewestTurn } from './journal-newest-turn'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
@@ -35,7 +35,6 @@ export function setJournalInputOrder(state: JournalReducerState, owner: JournalI
   owners.set(state, owner)
 }
 
-/** Own admission places and shared command witnesses are reconstructed by the journal fold. */
 export class JournalInputOrder {
   private readonly links = new JournalSubmissionLinks()
   private reconstructing = false
@@ -52,6 +51,7 @@ export class JournalInputOrder {
   private receiptCount = 0
   private queueRevision = 0
   private revision = 0
+  readonly newestTurn = new JournalNewestTurn()
 
   constructor(
     private readonly state: JournalReducerState,
@@ -122,6 +122,7 @@ export class JournalInputOrder {
   linkedVersion(): number {
     return this.links.version()
   }
+
   linkedTo(id: string): Iterable<AgentJournalSubmission> {
     return this.links.to(id)
   }
@@ -218,6 +219,7 @@ export class JournalInputOrder {
   }
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
+    this.newestTurn.afterRow(state, row)
     if (journalInputOrderChanged(state, row, (key) => this[key])) {
       this.revision++
     }

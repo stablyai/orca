@@ -21,6 +21,7 @@ import {
   heldStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWorkHost
 } from './structured-agent-session-host-current-work'
+import { structuredInputExecutionWorking } from './structured-agent-session-input-selection'
 
 export type QueuePublication = {
   queuedMessages: AgentSessionQueuedMessage[]
@@ -115,26 +116,31 @@ export function readQueuePublication(
   gate: QueueSendGate
 ): QueuePublication {
   const queuedMessages = readPublishedQueuedMessages(journal)
-  // Show personal Stop only when Resume can send a card; hide old pauses after clear/reopen.
+  // Show pauses only when Resume can send a card; hide old pauses after clear/reopen.
   // Re-derive per emit because submission acceptance can lift a pause.
   const pauses = structuredQueuePauses(journal)
-  const stop = pauses.find((pause) => pause.reason === 'stopped')?.since
+  const visible = Math.max(
+    0,
+    ...pauses
+      .filter((pause) => pause.reason === 'stopped' || pause.reason === 'failed')
+      .map((pause) => pause.since?.sequence ?? 0)
+  )
   const silent = pauses.some(
     (pause) =>
       pause.reason === 'cleared' ||
-      (pause.reason === 'restarted' &&
-        (!stop ||
-          !pause.since ||
-          stop.epoch !== pause.since.epoch ||
-          stop.sequence < pause.since.sequence))
+      (pause.reason === 'restarted' && (!visible || !pause.since || visible < pause.since.sequence))
   )
   const resumable = silent ? null : resumableQueuePause(pauses, journal.queuedMessages.list())
   // Avoid scanning submissions when no pause can show.
   const pause =
     resumable && !queuePauseLiftOnItsWay(resumable, journal.submissions()) ? resumable : null
-  const queuePause = pause?.reason === 'stopped' ? { reason: pause.reason } : null
-  const nextQueuedMessageId =
-    nextStructuredQueuedMessage({ journal, ...gate(journal) })?.messageId ?? null
+  const input = gate(journal)
+  const queuePause =
+    pause?.reason === 'stopped' ||
+    (pause?.reason === 'failed' && !structuredInputExecutionWorking(journal, input.work))
+      ? { reason: pause.reason }
+      : null
+  const nextQueuedMessageId = nextStructuredQueuedMessage({ journal, ...input })?.messageId ?? null
   const previous = publications.get(journal)
   if (
     previous &&
