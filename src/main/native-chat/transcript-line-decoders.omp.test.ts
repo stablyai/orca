@@ -90,7 +90,7 @@ describe('decodeOmpTranscriptLine', () => {
       'f'
     )
     expect(decoded?.role).toBe('tool')
-    expect(decoded?.blocks).toEqual([{ type: 'tool-result', output: 'ok' }])
+    expect(decoded?.blocks).toEqual([{ type: 'tool-result', callId: 'call-1', output: 'ok' }])
   })
 
   it('flags an errored tool result', () => {
@@ -101,7 +101,12 @@ describe('decodeOmpTranscriptLine', () => {
       }),
       'f'
     )
-    expect(decoded?.blocks[0]).toEqual({ type: 'tool-result', output: 'boom', isError: true })
+    expect(decoded?.blocks[0]).toEqual({
+      type: 'tool-result',
+      callId: 'call-2',
+      output: 'boom',
+      isError: true
+    })
   })
 
   it('surfaces a displayed custom_message, and hides a state-only one', () => {
