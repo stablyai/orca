@@ -14,6 +14,7 @@ export const LINT_STEPS = [
   'verify:localization-extraction',
   'audit:anti-slop',
   'audit:code-quality:type-aware',
+  'check:code-quality:changed',
   'check:test-file-runners',
   'verify:localization-catalogs',
   'verify:localization-coverage',

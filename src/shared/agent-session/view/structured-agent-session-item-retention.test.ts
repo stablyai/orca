@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import * as producers from '../journal/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../agent-session-wire'
 import {
@@ -349,6 +350,43 @@ describe('structured agent session item retention', () => {
     })
 
     expect(unchanged.items).toBe(hydrated.items)
+  })
+
+  it('advances the cursor of a batch with no journal change without rescanning the window', () => {
+    for (const length of [1_000, 10_000]) {
+      let paged = hydrate(range(length - 200, 200).map(item), true)
+      for (let end = length - 200; end > 0; end -= 200) {
+        paged = reduceStructuredAgentSession(paged, {
+          type: 'older-page',
+          requestedCursor: { epoch: 'epoch-a', sequence: end },
+          page: page(range(end - 200, 200).map(item), end > 200)
+        })
+      }
+      expect(paged.items).toHaveLength(length)
+      const checks = vi.spyOn(producers, 'isRootAgentJournalItem')
+      try {
+        const advanced = reduceStructuredAgentSession(paged, {
+          type: 'event',
+          event: {
+            type: 'batch',
+            sessionId: 'session-a',
+            batch: {
+              cursor: { epoch: 'epoch-a', sequence: length + 1 },
+              items: [],
+              removedItemIds: [],
+              submissions: []
+            }
+          }
+        })
+
+        expect(advanced.cursor).toEqual({ epoch: 'epoch-a', sequence: length + 1 })
+        expect(advanced.items).toBe(paged.items)
+        expect(advanced.hasOlder).toBe(paged.hasOlder)
+        expect(checks).not.toHaveBeenCalled()
+      } finally {
+        checks.mockRestore()
+      }
+    }
   })
 
   it("counts the session's own rows, so a subagent's burst keeps the rows before it", () => {

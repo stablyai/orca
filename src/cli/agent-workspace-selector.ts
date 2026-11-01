@@ -5,6 +5,8 @@ import { resolveFolderWorkspaceHost } from '../shared/folder-workspace-execution
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import {
   getCallerExecutionHostId,
+  hasEnclosingWorktreeOnHost,
+  type WorkspaceSelectionPurpose,
   selectEnclosingWorktreeOnHost
 } from './caller-host-worktree-selection'
 import { RuntimeRpcFailureError, type RuntimeClient } from './runtime-client'
@@ -13,7 +15,8 @@ import { resolveCurrentWorktreeSelector } from './selectors'
 /** Native folders take precedence over enclosing Git checkouts; remote cwd keeps its host rules. */
 export async function resolveCurrentAgentWorkspaceSelector(
   cwd: string,
-  client: RuntimeClient
+  client: RuntimeClient,
+  purpose: WorkspaceSelectionPurpose = 'worktree'
 ): Promise<string> {
   if (!client.isRemote && getCallerExecutionHostId() === LOCAL_EXECUTION_HOST_ID) {
     try {
@@ -24,7 +27,7 @@ export async function resolveCurrentAgentWorkspaceSelector(
         id: `folder:${folder.id}`,
         path: folder.folderPath
       }))
-      if (selectEnclosingWorktreeOnHost(catalog, cwd, LOCAL_EXECUTION_HOST_ID)) {
+      if (hasEnclosingWorktreeOnHost(catalog, cwd, LOCAL_EXECUTION_HOST_ID)) {
         const [groups, repos] = await Promise.all([
           client.call<{ groups: ProjectGroup[] }>('projectGroup.list'),
           client.call<{ repos: Repo[] }>('repo.list')
@@ -41,8 +44,8 @@ export async function resolveCurrentAgentWorkspaceSelector(
         const callerWorkspace = process.env.ORCA_WORKSPACE_ID ?? process.env.ORCA_WORKTREE_ID
         const callerCatalog = nativeCatalog.filter((row) => row.id === callerWorkspace)
         const selector =
-          selectEnclosingWorktreeOnHost(callerCatalog, cwd, LOCAL_EXECUTION_HOST_ID) ??
-          selectEnclosingWorktreeOnHost(nativeCatalog, cwd, LOCAL_EXECUTION_HOST_ID)
+          selectEnclosingWorktreeOnHost(callerCatalog, cwd, LOCAL_EXECUTION_HOST_ID, purpose) ??
+          selectEnclosingWorktreeOnHost(nativeCatalog, cwd, LOCAL_EXECUTION_HOST_ID, purpose)
         if (selector) {
           return selector
         }
@@ -54,5 +57,5 @@ export async function resolveCurrentAgentWorkspaceSelector(
       }
     }
   }
-  return resolveCurrentWorktreeSelector(cwd, client)
+  return resolveCurrentWorktreeSelector(cwd, client, purpose)
 }

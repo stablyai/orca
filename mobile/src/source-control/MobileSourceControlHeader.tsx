@@ -20,6 +20,8 @@ type Props = {
   prNumber?: number | null
   /** The Changes / Pull Request / Commits switch, under the title like every other screen's. */
   accessory?: ReactNode
+  /** The active tab's own menu, e.g. the PR tab's; replaces the default refresh/open items. */
+  menuGroups?: ActionSheetAction[][] | null
 }
 
 export function MobileSourceControlHeader({
@@ -31,7 +33,8 @@ export function MobileSourceControlHeader({
   onRefresh,
   onOpenPrWeb,
   prNumber = null,
-  accessory
+  accessory,
+  menuGroups = null
 }: Props) {
   const t = useMobileTranslation()
   const moreRef = useRef<View>(null)
@@ -101,7 +104,7 @@ export function MobileSourceControlHeader({
       <PullDownMenu
         visible={menuOpen}
         anchorRef={moreRef}
-        groups={[actions]}
+        groups={menuGroups ?? [actions]}
         onClose={() => setMenuOpen(false)}
       />
     </>
