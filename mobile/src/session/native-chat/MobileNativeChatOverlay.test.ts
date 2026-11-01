@@ -5,14 +5,33 @@ import type { NativeChatMessage } from '../../../../src/shared/native-chat/nativ
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import type { MobileImageSource } from '../../platform/media-picker-contract'
+import type { MobileComposerPastedImage } from './composer/mobile-native-chat-composer-image-paste'
 import { findByHostType } from '../../test-support/react-test-renderer-host-nodes'
+
+const seenPaste = vi.hoisted(() => ({
+  handler: undefined as
+    | ((
+        images: readonly MobileComposerPastedImage[] | Promise<readonly MobileComposerPastedImage[]>
+      ) => void | Promise<void>)
+    | undefined
+}))
 
 vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
   View: 'View'
 }))
 
-vi.mock('./MobileNativeChatView', () => ({ MobileNativeChatView: 'ChatView' }))
+vi.mock('./MobileNativeChatView', async () => {
+  const React = await import('react')
+  const { MobileNativeChatImagePasteContext } =
+    await import('./composer/mobile-native-chat-image-paste-context')
+  return {
+    MobileNativeChatView: (props: Record<string, unknown>) => {
+      seenPaste.handler = React.useContext(MobileNativeChatImagePasteContext)
+      return React.createElement('ChatView', props)
+    }
+  }
+})
 vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
 vi.mock('./input/MobileNativeChatQueuedMessages', () => ({
   MobileNativeChatQueuedMessages: 'Queued'
@@ -37,6 +56,9 @@ type Tick = {
   activeTabId?: string | null
   setTabView?: (tabId: string, view: 'terminal') => void
   attachImage?: (source: MobileImageSource) => Promise<void>
+  attachPickedImages?: (
+    images: readonly MobileComposerPastedImage[] | Promise<readonly MobileComposerPastedImage[]>
+  ) => Promise<void>
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
@@ -75,6 +97,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
       attachments: [],
       isAttaching: false,
       attachImage: tick.attachImage ?? vi.fn(async () => {}),
+      attachPickedImages: tick.attachPickedImages ?? vi.fn(async () => {}),
       removeAttachment: vi.fn(),
       sendNativeChat: vi.fn(async () => true)
     },
@@ -127,6 +150,7 @@ describe('MobileNativeChatOverlay attach button', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    seenPaste.handler = undefined
   })
 
   it('opens the exact active terminal tab for an OMP bridge question', async () => {
@@ -162,16 +186,27 @@ describe('MobileNativeChatOverlay attach button', () => {
 
   it.each([true, false])('offers attach only when the agent takes images (%s)', async (accepts) => {
     const attachImage = vi.fn(async () => {})
+    const attachPickedImages = vi.fn(
+      async (
+        _images:
+          | readonly MobileComposerPastedImage[]
+          | Promise<readonly MobileComposerPastedImage[]>
+      ) => {}
+    )
     await act(async () => {
-      renderer = create(overlayElement({ acceptsImages: accepts, attachImage }))
+      renderer = create(overlayElement({ acceptsImages: accepts, attachImage, attachPickedImages }))
     })
     const view = findByHostType(renderer!.root, 'ChatView')
     expect(typeof view.props.onAttachImage === 'function').toBe(accepts)
+    expect(typeof seenPaste.handler).toBe(accepts ? 'function' : 'undefined')
     if (accepts) {
       await act(async () => view.props.onAttachImage())
       expect(attachImage).toHaveBeenCalledExactlyOnceWith('library')
+      await act(async () => seenPaste.handler?.([{ base64: 'AAAA' }]))
+      expect(await attachPickedImages.mock.calls[0]?.[0]).toEqual([{ base64: 'AAAA' }])
     } else {
       expect(attachImage).not.toHaveBeenCalled()
+      expect(attachPickedImages).not.toHaveBeenCalled()
     }
   })
 })

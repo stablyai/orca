@@ -20,6 +20,9 @@ import { nativeChatAskRequiresTerminal } from '../../../../src/shared/native-cha
 import { tuiAgentDisplayName } from '../../../../src/shared/tui-agent-display-names'
 import { MobileNativeChatNoticeContext } from '../mobile-native-chat-notice-context'
 import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-image-preview'
+import { prepareMobileComposerPastedImages } from './composer/prepare-mobile-composer-pasted-image'
+import { MobileNativeChatImagePasteContext } from './composer/mobile-native-chat-image-paste-context'
+import type { MobileComposerImagePasteHandler } from './composer/mobile-native-chat-composer-image-paste'
 
 type Props = {
   controller: MobileNativeChatController
@@ -168,6 +171,15 @@ export function MobileNativeChatOverlay({
     () => ({ hostName, ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}) }),
     [hostName, agent]
   )
+  const pasteImages = useMemo<MobileComposerImagePasteHandler | undefined>(
+    () =>
+      controller.nativeChatAcceptsImages
+        ? (pasted) => {
+            void images.attachPickedImages(prepareMobileComposerPastedImages(pasted))
+          }
+        : undefined,
+    [controller.nativeChatAcceptsImages, images]
+  )
   if (!controller.showNativeChat) {
     return null
   }
@@ -182,89 +194,91 @@ export function MobileNativeChatOverlay({
             <MobileNativeChatRootItemSourceContext.Provider value={detailSource}>
               <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
                 <MobileNativeChatNoticeContext.Provider value={noticeNames}>
-                  <MobileNativeChatView
-                    messages={session.messages}
-                    folded={folded}
-                    status={session.status}
-                    error={session.error}
-                    readFailedFinally={session.readFailedFinally === true}
-                    agent={controller.nativeChatAgent}
-                    sessionLive={controller.nativeChatSessionLive}
-                    agentWorking={controller.nativeChatTurnActive}
-                    awaitingInput={controller.nativeChatAwaitingInput}
-                    canStop={controller.nativeChatCanStop}
-                    sendFollowUp={controller.nativeChatSendFollowUp}
-                    structuredActivityUi={controller.nativeChatStructured}
-                    turnIndicator={controller.nativeChatTurnIndicator}
-                    workingStartedAt={controller.nativeChatWorkingStartedAt}
-                    settledTurns={controller.nativeChatSettledTurns}
-                    turnJournal={controller.nativeChatTurnJournal}
-                    receipts={controller.nativeChatReceipts}
-                    actionablePromptIds={controller.nativeChatActionablePromptIds}
-                    streaming={streaming}
-                    onStop={controller.handleNativeChatStop}
-                    ask={controller.nativeChatAsk}
-                    askKey={controller.nativeChatAskKey}
-                    promptKey={controller.nativeChatPromptKey}
-                    onDismissAsk={controller.dismissNativeChatAsk}
-                    onAnswerAsk={controller.handleNativeChatAnswerAsk}
-                    askRequiresTerminal={
-                      !controller.nativeChatStructured && nativeChatAskRequiresTerminal(agent)
-                    }
-                    onAnswerInTerminal={
-                      activeSessionTabId
-                        ? () => controller.setTabView(activeSessionTabId, 'terminal')
-                        : undefined
-                    }
-                    onCancelAsk={controller.handleNativeChatCancelAsk}
-                    onCancelPrompt={controller.handleNativeChatCancelPrompt}
-                    onCollapseAsk={controller.collapseNativeChatAsk}
-                    onCollapsePrompt={controller.collapseNativeChatPrompt}
-                    collapsedPrompt={controller.nativeChatCollapsedPrompt}
-                    question={controller.nativeChatQuestion}
-                    onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
-                    permission={controller.nativeChatPermission}
-                    onRespondPermission={controller.handleNativeChatRespondPermission}
-                    composerTray={composerTray}
-                    onOpenFile={onOpenFile}
-                    hasMore={session.hasMore}
-                    olderPages={session.olderPages}
-                    onLoadEarlier={session.loadEarlier}
-                    onSend={images.sendNativeChat}
-                    sendSurfaceId={sendSurfaceId}
-                    getSendCompletionGeneration={getSendCompletionGeneration}
-                    getComposerEditGeneration={controller.getChatComposerEditGeneration}
-                    pending={controller.chatPending}
-                    imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
-                    composerScopeKey={controller.chatComposerScopeKey}
-                    draftKey={controller.chatDraftKey}
-                    onComposerTextChange={controller.setChatComposerText}
-                    onAttachImage={
-                      controller.nativeChatAcceptsImages
-                        ? () => void images.attachImage('library')
-                        : undefined
-                    }
-                    attachments={images.attachments}
-                    onRemoveAttachment={images.removeAttachment}
-                    isAttaching={images.isAttaching}
-                    onMicPress={onMicPress}
-                    micActive={micActive}
-                    micStarting={micStarting}
-                    micProcessing={micProcessing}
-                    dictationMode={dictationMode}
-                    onMicPressIn={onMicPressIn}
-                    onMicPressOut={onMicPressOut}
-                    inputLockReason={inputLockReason}
-                    sendErrorMessage={sendErrorMessage}
-                    onClearSendError={onClearSendError}
-                    filePaths={controller.nativeChatFilePaths}
-                    onNeedFiles={controller.loadNativeChatFiles}
-                    skillDiscovery={controller.nativeChatSkills}
-                    onNeedSkills={controller.loadNativeChatSkills}
-                    sessionOptions={controller.nativeChatSessionOptions}
-                    structuredComposer={structuredComposer}
-                    keyboardInset={keyboardInset}
-                  />
+                  <MobileNativeChatImagePasteContext.Provider value={pasteImages}>
+                    <MobileNativeChatView
+                      messages={session.messages}
+                      folded={folded}
+                      status={session.status}
+                      error={session.error}
+                      readFailedFinally={session.readFailedFinally === true}
+                      agent={controller.nativeChatAgent}
+                      sessionLive={controller.nativeChatSessionLive}
+                      agentWorking={controller.nativeChatTurnActive}
+                      awaitingInput={controller.nativeChatAwaitingInput}
+                      canStop={controller.nativeChatCanStop}
+                      sendFollowUp={controller.nativeChatSendFollowUp}
+                      structuredActivityUi={controller.nativeChatStructured}
+                      turnIndicator={controller.nativeChatTurnIndicator}
+                      workingStartedAt={controller.nativeChatWorkingStartedAt}
+                      settledTurns={controller.nativeChatSettledTurns}
+                      turnJournal={controller.nativeChatTurnJournal}
+                      receipts={controller.nativeChatReceipts}
+                      actionablePromptIds={controller.nativeChatActionablePromptIds}
+                      streaming={streaming}
+                      onStop={controller.handleNativeChatStop}
+                      ask={controller.nativeChatAsk}
+                      askKey={controller.nativeChatAskKey}
+                      promptKey={controller.nativeChatPromptKey}
+                      onDismissAsk={controller.dismissNativeChatAsk}
+                      onAnswerAsk={controller.handleNativeChatAnswerAsk}
+                      askRequiresTerminal={
+                        !controller.nativeChatStructured && nativeChatAskRequiresTerminal(agent)
+                      }
+                      onAnswerInTerminal={
+                        activeSessionTabId
+                          ? () => controller.setTabView(activeSessionTabId, 'terminal')
+                          : undefined
+                      }
+                      onCancelAsk={controller.handleNativeChatCancelAsk}
+                      onCancelPrompt={controller.handleNativeChatCancelPrompt}
+                      onCollapseAsk={controller.collapseNativeChatAsk}
+                      onCollapsePrompt={controller.collapseNativeChatPrompt}
+                      collapsedPrompt={controller.nativeChatCollapsedPrompt}
+                      question={controller.nativeChatQuestion}
+                      onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
+                      permission={controller.nativeChatPermission}
+                      onRespondPermission={controller.handleNativeChatRespondPermission}
+                      composerTray={composerTray}
+                      onOpenFile={onOpenFile}
+                      hasMore={session.hasMore}
+                      olderPages={session.olderPages}
+                      onLoadEarlier={session.loadEarlier}
+                      onSend={images.sendNativeChat}
+                      sendSurfaceId={sendSurfaceId}
+                      getSendCompletionGeneration={getSendCompletionGeneration}
+                      getComposerEditGeneration={controller.getChatComposerEditGeneration}
+                      pending={controller.chatPending}
+                      imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
+                      composerScopeKey={controller.chatComposerScopeKey}
+                      draftKey={controller.chatDraftKey}
+                      onComposerTextChange={controller.setChatComposerText}
+                      onAttachImage={
+                        controller.nativeChatAcceptsImages
+                          ? () => void images.attachImage('library')
+                          : undefined
+                      }
+                      attachments={images.attachments}
+                      onRemoveAttachment={images.removeAttachment}
+                      isAttaching={images.isAttaching}
+                      onMicPress={onMicPress}
+                      micActive={micActive}
+                      micStarting={micStarting}
+                      micProcessing={micProcessing}
+                      dictationMode={dictationMode}
+                      onMicPressIn={onMicPressIn}
+                      onMicPressOut={onMicPressOut}
+                      inputLockReason={inputLockReason}
+                      sendErrorMessage={sendErrorMessage}
+                      onClearSendError={onClearSendError}
+                      filePaths={controller.nativeChatFilePaths}
+                      onNeedFiles={controller.loadNativeChatFiles}
+                      skillDiscovery={controller.nativeChatSkills}
+                      onNeedSkills={controller.loadNativeChatSkills}
+                      sessionOptions={controller.nativeChatSessionOptions}
+                      structuredComposer={structuredComposer}
+                      keyboardInset={keyboardInset}
+                    />
+                  </MobileNativeChatImagePasteContext.Provider>
                 </MobileNativeChatNoticeContext.Provider>
               </MobileNativeChatReplyRevealsContext.Provider>
             </MobileNativeChatRootItemSourceContext.Provider>

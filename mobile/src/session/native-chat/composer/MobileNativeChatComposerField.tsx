@@ -14,6 +14,8 @@ export function MobileNativeChatComposerField({
   dictationPreview,
   placeholder,
   ref,
+  onPasteImages: _onPasteImages,
+  readClipboardImage: _readClipboardImage,
   ...props
 }: MobileNativeChatComposerFieldProps) {
   useMobileColorScheme()

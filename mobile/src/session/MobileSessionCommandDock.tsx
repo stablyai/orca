@@ -31,6 +31,8 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useMobileComposerClipboardImageReader } from './native-chat/composer/use-mobile-composer-clipboard-image'
+import { useMobileTerminalComposerImagePaste } from './use-mobile-terminal-composer-image-paste'
 
 const ESC = '\x1b'
 
@@ -76,7 +78,17 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     attachImage,
     keyboardLift
   } = controller
-  if (!sessionCommandDockShown(controller)) {
+  const dockShown = sessionCommandDockShown(controller)
+  const clipboardImage = useMobileComposerClipboardImageReader()
+  useMobileTerminalComposerImagePaste({
+    enabled: dockShown,
+    fieldRefs: [liveInputRef, commandInputRef],
+    onImagePaste: () => {
+      void controller.handlePaste()
+    },
+    readClipboardImage: clipboardImage.read
+  })
+  if (!dockShown) {
     return null
   }
   const terminalTab = activeSessionTab?.type === 'terminal' ? activeSessionTab : null
@@ -112,6 +124,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
       ]}
     >
       <View>
+        {clipboardImage.host}
         <View
           style={[dockStyles.keysBar, !liveInputEnabled && inactiveFieldStyle]}
           pointerEvents={liveInputEnabled ? 'auto' : 'none'}

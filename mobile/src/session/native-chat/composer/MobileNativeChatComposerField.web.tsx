@@ -1,5 +1,13 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, TextInput, View, useWindowDimensions } from 'react-native'
+import {
+  MOBILE_COMPOSER_IMAGE_PASTE_EVENT,
+  spliceMobileComposerPasteText
+} from './mobile-native-chat-composer-image-paste'
+import {
+  claimMobileComposerImagePaste,
+  readMobileComposerImageFile
+} from './mobile-native-chat-composer-image-paste-claim.web'
 import { useKeyboardOcclusion } from '../../../platform/keyboard-occlusion'
 import { useTextInputContentHeight } from '../../../platform/text-input-content-height'
 import { colors } from '../../../theme/mobile-theme'
@@ -32,12 +40,19 @@ function scrollTopOf(event: unknown): number {
     : 0
 }
 
+function composerTextarea(node: TextInput | null): HTMLTextAreaElement | null {
+  return node instanceof HTMLTextAreaElement ? node : null
+}
+
 export function MobileNativeChatComposerField({
   value,
   skillToken,
   dictationPreview,
   placeholder,
   ref,
+  onPasteImages,
+  onChangeText,
+  readClipboardImage,
   ...props
 }: MobileNativeChatComposerFieldProps) {
   useMobileColorScheme()
@@ -45,6 +60,81 @@ export function MobileNativeChatComposerField({
   const [fieldHeight, setFieldHeight] = useState(0)
   const ownRef = useRef<TextInput>(null)
   const input = ref ?? ownRef
+  const onPasteImagesRef = useRef(onPasteImages)
+  onPasteImagesRef.current = onPasteImages
+  const onChangeTextRef = useRef(onChangeText)
+  onChangeTextRef.current = onChangeText
+  const readClipboardImageRef = useRef(readClipboardImage)
+  readClipboardImageRef.current = readClipboardImage
+  const valueRef = useRef(value)
+  valueRef.current = value
+  useEffect(() => {
+    const node = composerTextarea(input.current)
+    if (!node) {
+      return
+    }
+    const insertPrompt = (prompt: string, start: number, end: number): void => {
+      if (prompt.length === 0) {
+        return
+      }
+      const next = spliceMobileComposerPasteText(valueRef.current, prompt, { start, end })
+      onChangeTextRef.current?.(next.text)
+      queueMicrotask(() => node.setSelectionRange(next.caret, next.caret))
+    }
+    const attachNativeImage = (): void => {
+      const handler = onPasteImagesRef.current
+      const read = readClipboardImageRef.current
+      if (!handler || !read) {
+        return
+      }
+      void read().then(
+        (image) => {
+          if (image) {
+            void handler([image])
+          }
+        },
+        (error: unknown) => {
+          void handler(Promise.reject(error instanceof Error ? error : new Error(String(error))))
+        }
+      )
+    }
+    const onPaste = (event: ClipboardEvent): void => {
+      if (event.target !== node || event.defaultPrevented || !onPasteImagesRef.current) {
+        return
+      }
+      const claimed = claimMobileComposerImagePaste(event.clipboardData)
+      if (!claimed) {
+        return
+      }
+      event.preventDefault()
+      if (claimed.kind === 'files') {
+        insertPrompt(
+          claimed.promptText,
+          node.selectionStart ?? valueRef.current.length,
+          node.selectionEnd ?? node.selectionStart ?? valueRef.current.length
+        )
+        void onPasteImagesRef.current(
+          Promise.all(claimed.files.map((file) => readMobileComposerImageFile(file)))
+        )
+        return
+      }
+      // iOS WKWebView omits image items from a textarea paste, so an empty paste asks the pasteboard.
+      attachNativeImage()
+    }
+    const onNativePaste = (event: Event): void => {
+      if (document.activeElement !== node) {
+        return
+      }
+      event.preventDefault()
+      attachNativeImage()
+    }
+    document.addEventListener('paste', onPaste, true)
+    document.addEventListener(MOBILE_COMPOSER_IMAGE_PASTE_EVENT, onNativePaste)
+    return () => {
+      document.removeEventListener('paste', onPaste, true)
+      document.removeEventListener(MOBILE_COMPOSER_IMAGE_PASTE_EVENT, onNativePaste)
+    }
+  }, [input])
   const shown = dictationPreview
     ? `${dictationPreview.before}${dictationPreview.text}${dictationPreview.after}`
     : value || placeholder || ''
@@ -78,6 +168,7 @@ export function MobileNativeChatComposerField({
       <TextInput
         ref={input}
         value={value}
+        onChangeText={onChangeText}
         style={[composerInputStyles.messageText, sizing, copied ? clearText().field : null]}
         onScroll={skillToken ? (event) => setScrollTop(scrollTopOf(event)) : undefined}
         placeholder={dictationPreview ? undefined : placeholder}
