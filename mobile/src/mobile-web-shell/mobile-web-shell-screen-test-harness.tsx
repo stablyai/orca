@@ -47,6 +47,7 @@ export type ScreenDependencies = {
   keyboardListeners: Map<string, (event: { endCoordinates: { height: number } }) => void>
   backHandlers: Map<string, () => boolean>
   setScreenOptions: Mock
+  setParentScreenOptions: Mock
   backClaimed: boolean
   ownsHostArea: boolean
   screenFocused: boolean
@@ -106,6 +107,7 @@ export function createScreenDependencies(): ScreenDependencies {
     keyboardListeners: new Map(),
     backHandlers: new Map(),
     setScreenOptions: vi.fn(),
+    setParentScreenOptions: vi.fn(),
     backClaimed: false,
     ownsHostArea: false,
     screenFocused: true,
@@ -146,6 +148,7 @@ export function resetScreenDependencies(dependencies: ScreenDependencies): void 
   dependencies.updateNotice = null
   dependencies.backHandlers.clear()
   dependencies.setScreenOptions.mockReset()
+  dependencies.setParentScreenOptions.mockReset()
   dependencies.reportPageBackClaim.mockReset()
   dependencies.backClaimed = false
   dependencies.ownsHostArea = false

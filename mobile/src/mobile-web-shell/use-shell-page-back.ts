@@ -1,13 +1,15 @@
 import { useEffect, useRef } from 'react'
 import { BackHandler, Platform } from 'react-native'
 
-// Android intercepts/posts hardware Back; iOS disables swipe-back while claimed so an open sheet cannot lose its screen. No live claim leaves navigation unchanged.
+// Android takes hardware Back. On iOS a claim disables this screen and its parent: the host document is often the only screen, so the swipe belongs to the parent and would pop that document to the server list.
 export function useShellPageBack(args: {
   claimed: boolean
   isFocused: () => boolean
   // Return false for an undeliverable press so navigation can handle it.
   sendBack: () => boolean
   setOptions: (options: { gestureEnabled: boolean }) => void
+  // The host document is often the only screen in its stack. The swipe then belongs to the parent and pops that document to the server list.
+  setParentOptions?: (options: { gestureEnabled: boolean }) => void
 }): void {
   const { claimed } = args
   // Hold fresh caller callbacks without tearing down key registration on every render.
@@ -33,5 +35,12 @@ export function useShellPageBack(args: {
       return
     }
     latest.current.setOptions({ gestureEnabled: !claimed })
+    if (!claimed) {
+      return
+    }
+    latest.current.setParentOptions?.({ gestureEnabled: false })
+    return () => {
+      latest.current.setParentOptions?.({ gestureEnabled: true })
+    }
   }, [claimed])
 }
