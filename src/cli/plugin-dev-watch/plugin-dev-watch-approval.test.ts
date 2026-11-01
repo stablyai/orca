@@ -107,13 +107,16 @@ describe('first-load approval prompt', () => {
     expect(host.devUnload).toHaveBeenCalledTimes(1)
   })
 
-  it('on no or no answer, rethrows approval_required with the re-run command', async () => {
+  it('on no or no answer, fails approval_required with only the re-run command', async () => {
     const confirm = vi.fn(async () => false)
     const { run, devLoad } = watch(confirm)
     await expect(run).rejects.toMatchObject({
       code: 'approval_required',
-      data: { command: COMMAND }
+      message: `Not approved. To approve later, run: ${COMMAND}`,
+      data: { command: COMMAND, nextSteps: [] }
     })
+    // The grants were just on screen; the error does not print them again.
+    await expect(run).rejects.not.toHaveProperty('data.grants')
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(devLoad).toHaveBeenCalledTimes(1)
   })

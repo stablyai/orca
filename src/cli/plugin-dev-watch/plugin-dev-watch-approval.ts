@@ -42,7 +42,7 @@ export function pluginDevWatchApprovalQuestion(approval: FirstLoadApproval): str
 }
 
 /** The first dev load; with `confirm` (a person at a terminal) an approval is asked, never assumed.
- *  A declined or unanswered ask rethrows the host's error, which prints the re-run command. */
+ *  A declined or unanswered ask fails with approval_required (exit 3) and only the re-run command. */
 export async function devLoadWithApproval(
   devLoad: (approvalFingerprint?: string) => Promise<DevLoadResult>,
   confirm: PluginDevWatchConfirm | undefined
@@ -51,11 +51,36 @@ export async function devLoadWithApproval(
     return await devLoad()
   } catch (error) {
     const approval = confirm ? firstLoadApprovalOf(error) : null
-    if (!confirm || !approval || !(await confirm(pluginDevWatchApprovalQuestion(approval)))) {
+    if (!confirm || !approval) {
       throw error
+    }
+    if (!(await confirm(pluginDevWatchApprovalQuestion(approval)))) {
+      throw declinedApprovalError(error, approval)
     }
     return devLoad(approval.approvalFingerprint)
   }
+}
+
+/** Why trimmed: the person just read the grants; repeating them buries the re-run command. */
+function declinedApprovalError(error: unknown, approval: FirstLoadApproval): RuntimeClientError {
+  const data = error instanceof RuntimeClientError ? error.data : undefined
+  const command =
+    typeof data === 'object' &&
+    data !== null &&
+    'command' in data &&
+    typeof data.command === 'string'
+      ? data.command
+      : null
+  return new RuntimeClientError(
+    'approval_required',
+    command ? `Not approved. To approve later, run: ${command}` : 'Not approved.',
+    {
+      pluginKey: approval.pluginKey,
+      approvalFingerprint: approval.approvalFingerprint,
+      command,
+      nextSteps: []
+    }
+  )
 }
 
 type PromptStreams = {
