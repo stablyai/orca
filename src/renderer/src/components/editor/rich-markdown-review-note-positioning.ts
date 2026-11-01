@@ -25,9 +25,13 @@ export function measureRichMarkdownReviewNotePositions({
   const nextPositions = markdownComments
     .map((comment): RichMarkdownReviewNotePosition | null => {
       const bodyLineNumber = Math.max(1, comment.lineNumber - markdownSourceLineOffset)
-      const block = blocks.find(
-        (candidate) => candidate.startLine <= bodyLineNumber && bodyLineNumber <= candidate.endLine
-      )
+      const block =
+        blocks.find(
+          (candidate) =>
+            candidate.startLine <= bodyLineNumber && bodyLineNumber <= candidate.endLine
+        ) ??
+        // Removed and separator lines still have notes; keep their cards by the preceding block.
+        blocks.findLast((candidate) => candidate.startLine <= bodyLineNumber)
       if (!block) {
         return null
       }
