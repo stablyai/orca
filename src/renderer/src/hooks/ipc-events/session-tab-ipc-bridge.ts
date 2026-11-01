@@ -20,6 +20,7 @@ import {
 } from '@/components/tab-group/tab-group-layout-owner-commands'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
+import { moveTerminalPaneToNewTabForClient } from '@/components/terminal-pane/terminal-pane-move-request-routing'
 
 export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -140,6 +141,25 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         ...(move.kind === 'move-to-group' ? { index: move.index } : {}),
         ...(move.kind === 'split' ? { splitDirection: move.splitDirection } : {})
       })
+    })
+  )
+
+  registerTerminalPaneMoveRequests(unsubs)
+}
+
+/** Moves a client's pane in this window, which owns the layout, and answers main with the result. */
+function registerTerminalPaneMoveRequests(unsubs: (() => void)[]): void {
+  const { onTerminalPaneMoveToNewTabRequest, replyTerminalPaneMoveToNewTab } = window.api.ui
+  // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
+  if (!onTerminalPaneMoveToNewTabRequest || !replyTerminalPaneMoveToNewTab) {
+    return
+  }
+  unsubs.push(
+    onTerminalPaneMoveToNewTabRequest(({ requestId, ...move }) => {
+      void moveTerminalPaneToNewTabForClient({
+        ...move,
+        sourceTabId: resolveWindowTabIdForHostTab(move.worktreeId, move.sourceTabId)
+      }).then((result) => replyTerminalPaneMoveToNewTab({ requestId, result }))
     })
   )
 }

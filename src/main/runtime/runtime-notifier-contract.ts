@@ -14,6 +14,10 @@ import type {
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
 import type { TerminalPaneRevealTarget } from '../../shared/terminal-pane-reveal'
+import type {
+  TerminalLeafMoveResult,
+  TerminalPaneMoveToNewTabRequest
+} from '../../shared/terminal-leaf-move'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorkspaceSleepNotice } from '../../shared/workspace-sleep'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
@@ -134,6 +138,10 @@ export type RuntimeNotifier = {
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
+  /** The window moves a client's pane to a new tab, since it owns the layout; rejects when it cannot answer. */
+  movePaneToNewTab?(
+    move: Omit<TerminalPaneMoveToNewTabRequest, 'requestId'>
+  ): Promise<TerminalLeafMoveResult>
   /** Host window only: host/all move it; caller/clients open without moving it; absence keeps legacy switching. Paired clients never navigate (all means host). */
   openFile?(
     worktreeId: string,

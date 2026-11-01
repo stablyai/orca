@@ -8,6 +8,7 @@ import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-per
 import { useTerminalPaneLayoutBindings } from './use-terminal-pane-layout-bindings'
 import { useHostPaneTitleSync } from './use-host-pane-title-sync'
 import { useTerminalPaneCloseActions } from './use-terminal-pane-close-actions'
+import { useTerminalPaneTabDetachActions } from './use-terminal-pane-tab-detach-actions'
 import { useTerminalPaneLifecycleStage } from './use-terminal-pane-lifecycle-stage'
 import { useTerminalPaneReconciliation } from './use-terminal-pane-reconciliation'
 import { useTerminalPaneGlobalListeners } from './use-terminal-pane-global-listeners'
@@ -33,7 +34,11 @@ export function useTerminalPaneController(props: TerminalPaneProps) {
   const layout = Object.assign(startup, useTerminalPaneLayoutPersistence(startup))
   useHostPaneTitleSync(layout)
   const bindings = Object.assign(layout, useTerminalPaneLayoutBindings(layout))
-  const close = Object.assign(bindings, useTerminalPaneCloseActions(bindings))
+  const close = Object.assign(
+    bindings,
+    useTerminalPaneCloseActions(bindings),
+    useTerminalPaneTabDetachActions(bindings)
+  )
   useTerminalPaneLifecycleStage(close)
   const reconciliation = Object.assign(close, useTerminalPaneReconciliation(close))
   useLayoutOwnerPaneTreeWhenMain(close)

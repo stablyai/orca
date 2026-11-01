@@ -30,7 +30,23 @@ export type TerminalLeafMoveResult =
         | 'pty_mismatch'
         | 'leaf_in_other_tab'
         | 'last_pane'
+        /** A host window had no open pane to move, or could not move it. */
+        | 'pane_unavailable'
     }
+
+/** Main asks its window to move a client's pane; the window names the new tab as the client did. */
+export type TerminalPaneMoveToNewTabRequest = {
+  requestId: string
+  worktreeId: string
+  sourceTabId: string
+  targetTabId: string
+  leafId: string
+  /** The drop's group and position in the host's order; without them the tab joins its source's group. */
+  targetGroupId?: string
+  index?: number
+}
+
+export type TerminalPaneMoveToNewTabReply = { requestId: string; result: TerminalLeafMoveResult }
 
 export function terminalLeafMovePaneKeys(request: TerminalLeafMoveRequest): {
   from: PaneKey

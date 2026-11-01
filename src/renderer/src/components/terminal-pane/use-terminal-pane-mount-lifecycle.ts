@@ -117,7 +117,8 @@ export function useTerminalPaneMountLifecycle(
         showPaneTitle: deps.showPaneTitle,
         persistLayoutSnapshot: deps.persistLayoutSnapshot,
         syncCanExpandState: preparation.syncCanExpandState,
-        queueResizeAll
+        queueResizeAll,
+        detachPaneToNewTab: deps.detachPaneToNewTab
       },
       ptyDeps
     })

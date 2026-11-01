@@ -212,9 +212,9 @@ test('a pane moved to a new tab on a paired server workspace stays in its new ta
   }
 })
 
-// A server with a desktop window keeps its layout in that window and refuses the move; this
-// desktop must put the pane back at once, terminal intact, not keep a tab the server never had.
-test('a pane move the server refuses goes back into its split, terminal intact', async ({
+// A server with a desktop window keeps its layout in that window, so the window makes the move;
+// the pane must stay in the tab this desktop drew, not flash and go back into its split.
+test('a pane moved to a new tab on a server with a desktop window stays in its new tab', async ({
   orcaPage
 }, testInfo) => {
   // Why: launches a second, paired Electron client next to the server's own window.
@@ -224,7 +224,7 @@ test('a pane move the server refuses goes back into its split, terminal intact',
     throw new Error('Window host has no active seeded workspace')
   }
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
-  const desktop = await launchPairedElectronClient(offer, testInfo, 'refused pane move')
+  const desktop = await launchPairedElectronClient(offer, testInfo, 'window host pane move')
   const page = desktop.page
   try {
     await waitForPairedClientWorktree(page, worktreeId)
@@ -261,8 +261,7 @@ test('a pane move the server refuses goes back into its split, terminal intact',
     const tabCount = await page.locator(TAB).count()
     await expect.poll(() => hostTerminalOf(movedLeafId)).toBe(created.tab.parentTabId)
 
-    // The move is asynchronous, so only a tab that appeared and went proves the window moved it and
-    // then put it back.
+    // The move is asynchronous, so a tab that appeared and was taken away again is the flicker.
     await page.evaluate((id) => {
       const count = (): number => (window.__store?.getState().tabsByWorktree[id] ?? []).length
       const before = count()
@@ -274,18 +273,50 @@ test('a pane move the server refuses goes back into its split, terminal intact',
       })
     }, worktreeId)
     await dragPaneOutToTabStrip(page, worktreeId, movedLeafId)
+    await expect(page.locator(TAB)).toHaveCount(tabCount + 1, { timeout: 15_000 })
+
+    let hostTabOfMovedLeaf = ''
     await expect
-      .poll(() => page.evaluate(() => document.body.dataset.paneMoveTabCounts ?? null), {
-        timeout: 15_000,
-        message: 'the refused move was never drawn and put back'
-      })
-      .toBe('1/0')
-    await expect(page.locator(TAB)).toHaveCount(tabCount)
-    await expect(page.locator(`${PANE}[data-leaf-id="${movedLeafId}"]`)).toHaveCount(1, {
-      timeout: 15_000
+      .poll(
+        async () => {
+          // The server briefly cannot name a terminal's surface while its window is moving it.
+          hostTabOfMovedLeaf = (await hostTerminalOf(movedLeafId).catch(() => null)) ?? ''
+          return hostTabOfMovedLeaf !== '' && hostTabOfMovedLeaf !== created.tab.parentTabId
+        },
+        { timeout: 15_000, message: 'the server window never moved the pane' }
+      )
+      .toBe(true)
+    // The window keeps the tab id this desktop drew, so the next snapshot does not swap tabs.
+    const movedTab = page.locator(
+      `${TAB}[data-tab-id="${toWebTerminalSurfaceTabId(hostTabOfMovedLeaf)}"]`
+    )
+    await expect(movedTab).toHaveCount(1)
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(
+          ({ tabId, leafId }) => {
+            const root = window.__store?.getState().terminalLayoutsByTabId[tabId]?.root
+            return root?.type === 'leaf' && root.leafId === leafId
+          },
+          { tabId: hostTabOfMovedLeaf, leafId: movedLeafId }
+        )
+      )
+      .toBe(true)
+
+    // A rename published after the move fences the check: once this desktop draws it, it has
+    // applied every server snapshot since the move, any of which would have pulled the pane back.
+    const fence = `moved-${Date.now()}`
+    await callPairedRuntime(page, desktop.environmentId, 'session.tabs.setTabProps', {
+      worktree: `id:${worktreeId}`,
+      tabId: hostTabOfMovedLeaf,
+      customTitle: fence
     })
-    await expect(page.locator(PANE)).toHaveCount(2)
-    expect(await hostTerminalOf(movedLeafId)).toBe(created.tab.parentTabId)
+    await expect(movedTab).toContainText(fence, { timeout: 15_000 })
+    expect(await page.evaluate(() => document.body.dataset.paneMoveTabCounts ?? null)).toBe('1/1')
+    await sourceTab.click()
+    await waitForBoundPanes(page, 1)
+    await expect(page.locator(`${PANE}[data-leaf-id="${movedLeafId}"]`)).toHaveCount(0)
+    expect(await hostTerminalOf(firstLeafId)).toBe(created.tab.parentTabId)
   } finally {
     await desktop.dispose()
   }

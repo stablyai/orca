@@ -1,12 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { OrcaRuntimeService, setRuntimeDesktopSurface } from './orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
+  TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
 import type { RuntimeStore } from './runtime-store-contract'
+import type { RuntimeNotifier } from './runtime-notifier-contract'
 import { planTerminalLeafMove } from '../persistence/terminal-topology/terminal-leaf-move'
 import type { TerminalLeafMoveRequest } from '../../shared/terminal-leaf-move'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -285,6 +287,74 @@ describe('moveMobileSessionLeafToNewTab on a headless host', () => {
     expect(commit).not.toHaveBeenCalled()
     expect(published).toHaveLength(0)
   })
+})
+
+describe('moveMobileSessionLeafToNewTab on a host with a window', () => {
+  afterEach(() => setRuntimeDesktopSurface(null))
+  async function setupWithWindow(movePaneToNewTab?: RuntimeNotifier['movePaneToNewTab']) {
+    const context = await setup()
+    context.runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn(),
+      ...(movePaneToNewTab ? { movePaneToNewTab } : {})
+    })
+    setRuntimeDesktopSurface({
+      showNotification: () => false,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the move only asks whether a live window exists.
+      findWindowById: () => ({ isDestroyed: () => false }) as never,
+      onIpc: () => {},
+      removeIpcListener: () => {}
+    })
+    context.runtime.attachWindow(TEST_WINDOW_ID)
+    return context
+  }
+
+  it('has the window move the pane under the tab id the client drew, and answers with its result', async () => {
+    const movePaneToNewTab = vi.fn(async () => ({ status: 'moved' as const, ptyId: 'sibling-pty' }))
+    const { getSession, commit, move } = await setupWithWindow(movePaneToNewTab)
+    const before = getSession()
+    await expect(move('host-new-tab', { targetGroupId: 'group-1', index: 0 })).resolves.toEqual({
+      status: 'moved',
+      ptyId: 'sibling-pty'
+    })
+    expect(movePaneToNewTab).toHaveBeenCalledWith({
+      worktreeId: TEST_WORKTREE_ID,
+      sourceTabId: 'host-tab',
+      targetTabId: 'host-new-tab',
+      leafId: SIBLING_LEAF_ID,
+      targetGroupId: 'group-1',
+      index: 0
+    })
+    // The window commits through its own leaf-move IPC; main does not write the layout here.
+    expect(commit).not.toHaveBeenCalled()
+    expect(getSession()).toBe(before)
+  })
+
+  it('leaves the pane to the client when the window cannot be asked to move it', async () => {
+    const { commit, move } = await setupWithWindow()
+    await expect(move()).resolves.toEqual({ status: 'not_held' })
+    expect(commit).not.toHaveBeenCalled()
+  })
+
+  it.each(['renderer_unavailable', 'terminal_pane_move_timeout'])(
+    'refuses the move when the window cannot answer (%s), so the client puts the pane back',
+    async (reason) => {
+      const { commit, move } = await setupWithWindow(() => Promise.reject(new Error(reason)))
+      await expect(move('host-new-tab')).resolves.toEqual({
+        status: 'refused',
+        reason: 'pane_unavailable'
+      })
+      expect(commit).not.toHaveBeenCalled()
+    }
+  )
 })
 
 /** A session whose worktree also has an editor open beside its two terminal tabs. */
