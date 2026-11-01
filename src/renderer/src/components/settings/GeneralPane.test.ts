@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createAutoSaveDelayDraftState,
+  getAutoHideSingleTabStripSearchKeywords,
   shouldShowProjectRuntimeSection,
   updateAutoSaveDelayDraftState
 } from './GeneralPane'
@@ -34,6 +35,20 @@ describe('GeneralPane auto-save delay drafts', () => {
       sourceDelayMs: 1250,
       draft: '1750'
     })
+  })
+})
+
+describe('GeneralPane navigation search keywords', () => {
+  it('binds the auto-hide row to its own catalog entry, not a neighbour', () => {
+    // A rebase that inserted a sibling setting above this one silently rebound the row to the
+    // neighbour's keywords, so the row filtered itself out of a query that matched the section.
+    const keywords = getAutoHideSingleTabStripSearchKeywords()
+
+    expect(keywords).toContain('single')
+    expect(keywords).toContain('strip')
+    expect(keywords).toContain('auto hide')
+    expect(keywords).not.toContain('running')
+    expect(keywords).not.toContain('OMP')
   })
 })
 
