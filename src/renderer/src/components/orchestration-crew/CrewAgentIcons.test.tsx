@@ -191,7 +191,7 @@ it.each([10, 100])(
     })
     const normalize = vi.spyOn(presentation, 'resolveRowProgramStatus')
     const labels = vi.spyOn(worktreeStatus, 'getWorktreeStatusLabel')
-    const listeners = readStoreListenerCount()
+    const listeners = readStoreListenerCount() ?? 0
     const mounted = render(panel(Array.from({ length: n }, (_, i) => row(i))))
     await act(async () => {})
     expect(readStoreListenerCount()).toBe(listeners + 1)
