@@ -11,7 +11,6 @@ import type {
 import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
 import { finishPointerWriteAndStageEnter } from './mailbox-pointer-stage'
 import { formatMessagePointer } from './formatter'
-import { isHeldAgentPromptDraft } from '../../../shared/agent-prompt-injection'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
   MAILBOX_POINTER_ENTER_ATTEMPTED,
@@ -133,16 +132,25 @@ function submitPointerLeftInComposer<TWaiter extends OrchestrationMessageWaiter>
   flight.processIncarnation = target.processIncarnation
   flight.stagedMessageIds = messageIds
   args.state.setWatermark(args.mailboxHandle, newestSequence, ptyId)
-  // The flight holds this terminal's other mail, so a stalled screen read must not hold it long.
-  void withTimeout(args.deps.readComposerDraft(ptyId), COMPOSER_DRAFT_READ_TIMEOUT_MS, undefined)
-    .then((draft) => {
+  // Reread before every Enter attempt: the user may edit the composer during the delay or a deferral.
+  const composerHoldsPointer = async (): Promise<boolean> => {
+    // The flight holds this terminal's other mail, so a stalled screen read must not hold it long.
+    const draft = await withTimeout(
+      args.deps.readComposerDraft(ptyId),
+      COMPOSER_DRAFT_READ_TIMEOUT_MS,
+      undefined
+    )
+    return pointers.some((pointer) => isComposerExactlyPointer(draft, pointer))
+  }
+  void composerHoldsPointer()
+    .then((holdsPointer) => {
       if (!args.state.isCurrentFlight(ptyId, flight)) {
         return
       }
-      if (pointers.some((pointer) => isHeldAgentPromptDraft(draft, pointer, 0))) {
+      if (holdsPointer) {
         // Resume as if the write just settled, so Enter keeps its usual delay and idle deferral.
         finishPointerWriteAndStageEnter(
-          { ...args, newestSequence },
+          { ...args, newestSequence, confirmEnter: composerHoldsPointer },
           ptyId,
           flight,
           expectedTarget,
@@ -164,4 +172,10 @@ function submitPointerLeftInComposer<TWaiter extends OrchestrationMessageWaiter>
       }
     })
     .catch(() => undefined)
+}
+
+/** Only the whole pointer as literal text: a tail or a paste placeholder could hide the user's text. */
+function isComposerExactlyPointer(draft: string | undefined, pointer: string): boolean {
+  const collapse = (text: string): string => text.replace(/\s+/g, ' ').trim()
+  return draft !== undefined && collapse(draft) === collapse(pointer)
 }

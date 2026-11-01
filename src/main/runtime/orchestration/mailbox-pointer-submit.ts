@@ -40,6 +40,8 @@ export function submitOrchestrationMailboxPointer(
     ptyId: string
     flight: OrchestrationMailboxDeliveryFlight
     expectedTarget: OrchestrationMailboxPointerSubmitTarget
+    /** Re-proves, before every Enter attempt, that this Enter may still go out. */
+    confirmEnter?: () => Promise<boolean>
   }
 ): void {
   let clearAndRedrive = false
@@ -62,6 +64,8 @@ export function submitOrchestrationMailboxPointer(
         clearAndRedrive = true
         return
       }
+      // Ahead of the gates below, so they judge the state after this read.
+      const confirmed = input.confirmEnter ? await input.confirmEnter().catch(() => false) : true
       if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
         finalizeReservation = false
         return
@@ -86,7 +90,7 @@ export function submitOrchestrationMailboxPointer(
         deps.state.deferFlightUntilIdle(input.ptyId)
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
         deferredUntilIdle = true
-      } else if (!queueSafe) {
+      } else if (!queueSafe || !confirmed) {
         releaseWithoutRedrive = true
       } else {
         preserveAmbiguousDelivery = true

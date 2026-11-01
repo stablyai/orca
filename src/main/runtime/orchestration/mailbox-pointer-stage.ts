@@ -25,6 +25,7 @@ type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   heldDeliveryId?: string
   newestSequence: number
   enterDelayMs: number
+  confirmEnter?: () => Promise<boolean>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
@@ -149,7 +150,8 @@ export function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMes
           newestSequence: args.newestSequence,
           ptyId,
           flight,
-          expectedTarget
+          expectedTarget,
+          confirmEnter: args.confirmEnter
         }
       )
     flight.submitEnter = submitEnter

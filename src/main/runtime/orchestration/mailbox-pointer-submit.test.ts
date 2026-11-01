@@ -592,6 +592,70 @@ describe('orchestration mailbox pointer submit', () => {
     expect(state.hasActiveWatermark(mailboxHandle)).toBe(false)
   })
 
+  it('rechecks the composer on the retry after a dialog deferral', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'edited while a dialog was open'
+    })
+    const ptyId = 'pty-deferred'
+    const reservation = { ptyId, processIncarnation: 'inc-deferred' }
+    const terminal = {
+      ptyId,
+      handle: 'term-deferred',
+      paneKeys: ['tab-1:leaf-1'],
+      lastAgentStatus: 'idle' as const,
+      lastAgentStatusObservedLive: true
+    }
+    const expectedTarget = { terminal, processIncarnation: reservation.processIncarnation }
+    const state = new OrchestrationMailboxPointerState()
+    const flight = state.beginFlight(ptyId)
+    state.setWatermark('run:run-1', 1, ptyId)
+    expect(db.stageMailboxPointerEnter([message.id], reservation)).toBe(true)
+    expect(db.markMailboxPointerWriteAttempted([message.id], reservation)).toBe(true)
+    let dialogOpen = true
+    // The user replaces the composer while the dialog holds the Enter.
+    const confirmEnter = vi.fn(async () => confirmEnter.mock.calls.length === 1)
+    const writePty = vi.fn(settledWriteStub())
+    const settle = vi.fn(() => state.settleFlight(ptyId, flight))
+
+    submitOrchestrationMailboxPointer(
+      {
+        mailboxOwner: { resolve: () => 'run:run-1' } as never,
+        state,
+        getDb: () => db,
+        resolveSubmitTarget: () => expectedTarget,
+        isLeafPtyProvenAbsent: async () => false,
+        isPtyAwaitingUserInput: () => dialogOpen,
+        writePty,
+        settle,
+        redrive: vi.fn()
+      },
+      {
+        mailboxHandle: 'run:run-1',
+        messages: [{ id: message.id, type: 'status' }],
+        newestSequence: 1,
+        ptyId,
+        flight,
+        expectedTarget,
+        confirmEnter
+      }
+    )
+    await vi.waitFor(() => expect(flight.submitEnter).not.toBeNull())
+    dialogOpen = false
+    state.takeDeferredEnter(ptyId)?.()
+
+    await vi.waitFor(() => expect(settle).toHaveBeenCalledOnce())
+    expect(confirmEnter).toHaveBeenCalledTimes(2)
+    expect(writePty).not.toHaveBeenCalled()
+    expect(db.getMessageById(message.id)).toMatchObject({
+      delivered_at: expect.any(String),
+      pointer_enter_pending: 0
+    })
+  })
+
   describe('a pointer whose mail a check read before Enter', () => {
     function submitAfterRead(
       options: {
