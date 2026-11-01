@@ -7,7 +7,7 @@ import type {
   AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournalBatch } from '../../../shared/agent-session-wire'
+import type { AgentSessionJournalBatch } from '../../../shared/agent-session/agent-session-wire'
 import { isStructuredAgentSessionStopNote } from './structured-agent-session-command-turn'
 import { findSequenceGap } from '../agent-session-journal/journal-cursor'
 import type { JournalReadRow } from '../agent-session-journal/journal-read-row'

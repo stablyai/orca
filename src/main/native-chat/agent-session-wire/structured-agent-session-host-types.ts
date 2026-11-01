@@ -27,7 +27,7 @@ import type { AgentSessionAccountHome } from '../../../shared/agent-session/life
 import type {
   AgentSessionNamingError,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionUserNameWrite } from '../../runtime/agent-session-record-conversation-name'

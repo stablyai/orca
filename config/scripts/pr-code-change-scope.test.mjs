@@ -374,7 +374,7 @@ describe('per-job path classification', () => {
     for (const file of [
       'src/shared/protocol-version.ts',
       'src/shared/terminal-stream-protocol.ts',
-      'src/shared/agent-session-wire.ts',
+      'src/shared/agent-session/agent-session-wire.ts',
       'src/shared/agent-session/lifecycle/agent-session-provider-handle.ts',
       'src/shared/agent-session/lifecycle/agent-session-mutation-envelope.ts',
       'src/shared/agent-session/journal/agent-session-journal-item-key.ts',
@@ -398,7 +398,7 @@ describe('per-job path classification', () => {
       'src/main/runtime/runtime-worktree-pty-agent-sources.ts',
       'src/shared/runtime-worktree-contracts.ts',
       'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts',
-      'src/shared/structured-agent-session-projection.ts',
+      'src/shared/agent-session/view/structured-agent-session-projection.ts',
       'src/shared/agent-turn-outcome.ts',
       'src/main/runtime/orchestration/db.ts',
       'src/main/runtime/orchestration/orchestration-schema-version-skew.ts'

@@ -1,6 +1,6 @@
 import { vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { activeProviderContext } from '../../../shared/agent-session-provider-context'
+import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
 import {
   claudeProviderHandle,
   codexProviderHandle

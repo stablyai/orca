@@ -8,7 +8,7 @@ import { resolveNotificationTabOwner } from '@/attention/notification-subject-ow
 import type {
   AgentSessionPromptAttention,
   AgentSessionTurnCompletion
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import {
   agentSessionAttentionKey,
   agentSessionAttentionNews,
@@ -16,8 +16,8 @@ import {
   structuredAttentionOrigin,
   type AgentSessionAttentionEdge,
   type StructuredAttentionRead
-} from '../../../../shared/agent-session-attention'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/agent-session-attention'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
 import {
   deliverAgentAttentionNotification,

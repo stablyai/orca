@@ -21,7 +21,7 @@ import { createAutomationRunWorkspaceAction } from '../../../src/renderer/src/co
 import { getAutomationRunViewState } from '../../../src/renderer/src/components/automations/automation-run-view-state'
 import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'
 import { makeRepo } from '../../../src/main/persistence/persistence-test-harness'
-import { structuredAgentSessionTabId } from '../../../src/shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { retireStructuredAgentSessionTab } from '../../../src/renderer/src/runtime/structured-agent-session-tab-retirement'
 
 export const CHAT = 'claude_saved_reopen',

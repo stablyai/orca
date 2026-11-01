@@ -7,7 +7,7 @@ import type {
   AgentLaunchPreferences,
   AgentSessionExecutionClaim,
   RuntimeCreateAgentSessionResult
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig

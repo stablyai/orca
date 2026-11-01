@@ -16,7 +16,7 @@ import {
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint

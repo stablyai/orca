@@ -1,6 +1,6 @@
 // Persist durable write-failure facts with queued cards; choose words at display via agent-session-refusal-notice.ts.
 
-import type { AgentSessionAccountKind } from '../../agent-session-availability'
+import type { AgentSessionAccountKind } from '../agent-session-availability'
 import {
   readAgentSessionRefusalDetails,
   type AgentSessionRefusalReason

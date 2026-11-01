@@ -6,7 +6,7 @@ import {
   created,
   createParams
 } from '../../src/renderer/src/lib/structured-agent-session-launch-create-message.test-fixture'
-import type { AgentSessionModelCatalogResult } from '../../src/shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../src/shared/agent-session/agent-session-wire'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'

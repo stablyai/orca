@@ -6,7 +6,7 @@ import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/j
 import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'

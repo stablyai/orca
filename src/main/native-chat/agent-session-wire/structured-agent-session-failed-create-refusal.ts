@@ -8,7 +8,7 @@ import {
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionRefusalDetailsByCode } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import type {
   AgentSessionOperationOutcome,

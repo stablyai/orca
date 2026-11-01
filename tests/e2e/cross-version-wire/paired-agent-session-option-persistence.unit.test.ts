@@ -28,7 +28,7 @@ import { getDefaultSettings } from '../../../src/shared/constants'
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import { CODEX_SESSION_OPTION_CATALOG } from '../../../src/shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {

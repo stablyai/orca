@@ -1,4 +1,4 @@
-import type { AgentSessionMutationResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionMutationResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type {
   AgentSessionWireRefusalCode,
   AgentSessionRefusalReference

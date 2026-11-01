@@ -3,7 +3,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session/jo
 import {
   agentSessionTranscriptRows,
   latestAgentSessionContextClearSequence
-} from '../../../../shared/agent-session-context-clear'
+} from '../../../../shared/agent-session/agent-session-context-clear'
 
 /** Matches the transcript's `duration-150` fade, so the swap happens while it is invisible. */
 export const NATIVE_CHAT_CONTEXT_CLEAR_FADE_MS = 150

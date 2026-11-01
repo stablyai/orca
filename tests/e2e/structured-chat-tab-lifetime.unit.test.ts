@@ -5,11 +5,11 @@ import {
 import { expect, it, vi } from 'vitest'
 import { resolveActiveSessionTab } from '../../mobile/src/session/active-session-tab'
 import { notificationPaneTab } from '../../mobile/src/session/notification-pane-tab'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../src/shared/structured-agent-session-projection'
+} from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_SESSION

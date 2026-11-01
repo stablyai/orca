@@ -10,7 +10,7 @@ import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import {
   currentAgentPickerAcquisition,

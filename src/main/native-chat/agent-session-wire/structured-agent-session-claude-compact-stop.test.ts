@@ -14,10 +14,8 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
-import {
-  structuredAgentSessionCommandTurn,
-  structuredAgentSessionCommandWasStopped
-} from './structured-agent-session-command-turn'
+import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
+import { structuredAgentSessionCommandWasStopped } from './structured-agent-session-command-turn'
 import type * as CommandTurnModule from './structured-agent-session-command-turn'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {

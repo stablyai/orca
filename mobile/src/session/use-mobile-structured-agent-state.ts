@@ -7,8 +7,8 @@ import type {
 import {
   type AgentSessionHistoryResult,
   AGENT_SESSION_HISTORY_MAX_LIMIT
-} from '../../../src/shared/agent-session-wire'
-import { structuredAgentSessionHolderId } from '../../../src/shared/structured-agent-session-holder'
+} from '../../../src/shared/agent-session/agent-session-wire'
+import { structuredAgentSessionHolderId } from '../../../src/shared/agent-session/view/structured-agent-session-holder'
 import { startStructuredAgentSessionLiveRead } from '../../../src/shared/agent-session/structured-agent-session-live-read'
 import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
@@ -17,7 +17,7 @@ import {
   reduceStructuredAgentSession,
   type StructuredAgentSessionAction,
   type StructuredAgentSessionState
-} from '../../../src/shared/structured-agent-session-reducer'
+} from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import { subscribeConnectionRevival } from '../transport/connection-revival-signal'
 import type { RpcClient } from '../transport/rpc-client'
 import {

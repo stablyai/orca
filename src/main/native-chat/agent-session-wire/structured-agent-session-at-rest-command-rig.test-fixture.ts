@@ -18,7 +18,7 @@ import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import type {
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   ClaudeAtRestCommandCatalog,
   type ClaudeAtRestCommandsDeps

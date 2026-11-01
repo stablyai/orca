@@ -11,7 +11,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { activeStructuredAgentSessionTurnId } from '../../shared/structured-agent-session-projection'
+import { activeStructuredAgentSessionTurnId } from '../../shared/agent-session/view/structured-agent-session-live-turn'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import {
   createDeferredStructuredAgentSessionEventSink,

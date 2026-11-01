@@ -17,7 +17,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import {
   type AgentSessionSubscribeEvent,
   agentSessionSendSubmission as submission
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import {

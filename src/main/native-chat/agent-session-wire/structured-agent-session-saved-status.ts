@@ -13,7 +13,7 @@ import type { AgentSessionExecutionLocation } from '../../../shared/agent-sessio
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { structuredSummaryConversationNaming } from './structured-agent-session-status-summary'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-launch-directory'

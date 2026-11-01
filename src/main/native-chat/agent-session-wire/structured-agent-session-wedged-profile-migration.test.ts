@@ -11,8 +11,8 @@ import {
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
 } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type {
   AgentSessionClaimStatus,

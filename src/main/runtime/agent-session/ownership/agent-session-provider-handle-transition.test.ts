@@ -6,7 +6,7 @@ import {
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { isPersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { encodeAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
-import { activeProviderContext } from '../../../../shared/agent-session-provider-context'
+import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
 import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint

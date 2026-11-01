@@ -4,7 +4,7 @@ import { AGENT_SESSION_GOAL_CONTROL_COPY as GOAL_COPY } from '../../../../shared
 import { agentSessionGoalControlWords } from './agent-session-goal-control-words'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import type { AgentSessionMutationResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionMutationResult } from '../../../../shared/agent-session/agent-session-wire'
 import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure,

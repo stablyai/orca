@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalToolCallItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { interruptedAgentJournalToolCall } from '../../../../shared/agent-journal-tool-call-lifecycle'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
-import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import { projectStructuredItemToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 

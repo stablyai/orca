@@ -47,11 +47,9 @@ vi.mock('./use-structured-agent-session-sends', () => ({
 }))
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
-import {
-  useStructuredAgentSession,
-  type StructuredPromptItem
-} from './use-structured-agent-session'
+import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session/agent-session-question-answer'
+import { useStructuredAgentSession } from './use-structured-agent-session'
+import type { StructuredPromptItem } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 
 let fence = 3
 let items: AgentJournalRenderItem[] = []

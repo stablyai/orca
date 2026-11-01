@@ -9,7 +9,7 @@ import {
   agentSessionPastedImageName,
   sanitizeAgentSessionAttachmentName,
   type AgentSessionAttachmentClipboardTarget
-} from '../../shared/agent-session-attachments'
+} from '../../shared/agent-session/agent-session-attachments'
 import { nativeChatPasteFolder } from './native-chat-paste-files'
 
 export type SaveClipboardImageAsTempFileArgs = {

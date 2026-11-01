@@ -10,7 +10,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle
 import type {
   AgentSessionStatusSummary,
   AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
@@ -18,7 +18,7 @@ import { describeNativeChatTurnStatus } from '../../../shared/native-chat/transc
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
-} from '../../../shared/structured-agent-session-turn-timing'
+} from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,

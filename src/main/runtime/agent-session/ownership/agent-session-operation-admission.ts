@@ -24,7 +24,7 @@ import {
   agentSessionLedgerRefusal,
   type AgentSessionMutationAdmission
 } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session-wire'
+import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 export type AgentSessionOperationAdmission = {

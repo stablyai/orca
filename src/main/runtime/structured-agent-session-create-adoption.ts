@@ -5,7 +5,7 @@ import {
 } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import { prepareCodexAdoption } from '../native-chat/codex-adoption-preparation'
 import type { NativeCodexResumePreparation } from '../codex/codex-ai-vault-session-resume'
-import type { StructuredAgentSessionResumeSource } from '../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionResumeSource } from '../../shared/agent-session/structured-agent-session-create'
 import type {
   StructuredAgentCliSourceEvidence,
   StructuredAgentCliSourceLocator

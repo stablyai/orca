@@ -15,7 +15,7 @@ import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-
 import { structuredAgentSessionHostRefusal } from '../../src/main/runtime/structured-agent-session-host-refusal'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { SESSION_TAB_CLOSE_METHODS } from '../../src/main/runtime/rpc/methods/session-tab-close-methods'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-types'
 import { createMobileCreateTestNotifier } from '../../src/main/runtime/orca-runtime-test-scenario-builders.spec'
 import { sessionTabClose } from '../../mobile/src/session/mobile-session-write-operations'
