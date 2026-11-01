@@ -217,7 +217,9 @@ describe('mobile tool result availability', () => {
     press(button(tree.root, 'command 17'))
     expect(textIn(tree.root)).toContain('late named output')
     press(button(tree.root, 'command 17'))
-    expect(button(tree.root, 'command 0').props.disabled).toBe(true)
+    expect(button(tree.root, 'command 0').props.disabled).toBe(false)
+    press(button(tree.root, 'command 0'))
+    expect(textIn(tree.root)).not.toContain('late named output')
   })
 
   it('pairs nothing while its run is collapsed', () => {

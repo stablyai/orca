@@ -52,7 +52,9 @@ import { i18n } from '@/i18n/i18n'
       fireEvent.click(screen.getByRole('button'))
       openToolRunMembers()
 
-      expect(container.querySelector('pre')).toHaveTextContent(command)
+      expect(
+        [...container.querySelectorAll('pre')].find((pre) => pre.textContent === command)
+      ).toHaveTextContent(command)
     })
   })
 }
