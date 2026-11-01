@@ -307,11 +307,11 @@
       "pushCommits_one": "Push {{count}} commit.",
       "pushCommits_other": "Push {{count}} commits."
     },
-    "branchCompare": {
+    "changesHeader": {
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
-      "files_one": "{{count}} file",
-      "files_other": "{{count}} files"
+      "filesNeedDecision_one": "{{count}} file needs a decision before you can finish.",
+      "filesNeedDecision_other": "{{count}} files need a decision before you can finish."
     },
     "commitDetail": {
       "files_one": "{{count}} file",
@@ -354,10 +354,6 @@
       "checksFailing_other": "{{count}} checks failing",
       "checksRunning_one": "{{count}} check still running",
       "checksRunning_other": "{{count}} checks still running"
-    },
-    "prChip": {
-      "openWithComments_one": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.",
-      "openWithComments_other": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request."
     },
     "primaryAction": {
       "commitFiles_one": "Commit {{count}} file",
