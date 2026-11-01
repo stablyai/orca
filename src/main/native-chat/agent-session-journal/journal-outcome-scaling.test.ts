@@ -681,7 +681,7 @@ it('admits each row and record an existing chat reads or writes once, at N and 1
     parses.mockRestore()
     const open = { ...admission, parsed, entries: entries.records, read: watched.take().read }
     admission.rows = 0
-    const page = readJournalRowsAfterCursor(database.db, sessionId, epoch, 0, 100)
+    const { rows: page } = readJournalRowsAfterCursor(database.db, sessionId, epoch, 0, 100)
     const paged = { walks: admission.rows, rows: page.filter((row) => row.kind !== 'outcome') }
     admission.rows = 0
     admission.records = 0
