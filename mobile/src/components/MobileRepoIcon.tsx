@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   Bot,
   Box,
@@ -61,12 +62,20 @@ type Props = {
 // Render desktop-style custom image/emoji/lucide with Folder fallback, never bare project dot.
 export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSecondary }: Props) {
   useMobileColorScheme()
-  if (repoIcon?.type === 'image') {
+  const [imageFailed, setImageFailed] = useState(false)
+  const imageSrc = repoIcon?.type === 'image' ? repoIcon.src : undefined
+
+  useEffect(() => {
+    setImageFailed(false)
+  }, [imageSrc])
+
+  if (repoIcon?.type === 'image' && !imageFailed) {
     return (
       <Image
         source={{ uri: repoIcon.src }}
         style={{ width: size, height: size, borderRadius: radii.mark }}
         accessibilityLabel={repoIcon.label}
+        onError={() => setImageFailed(true)}
       />
     )
   }
