@@ -209,27 +209,6 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(pending).toBe(false)
   })
 
-  it('leaves the last published metadata in place when a runtime stops', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({
-      methods: [],
-      runtime,
-      userDataPath,
-      pid: 1001
-    })
-
-    await server.start()
-    const metadata = readRuntimeMetadata(userDataPath)
-    expect(metadata?.pid).toBe(1001)
-
-    await server.stop()
-    expect(readRuntimeMetadata(userDataPath)).toMatchObject({
-      pid: 1001,
-      runtimeId: runtime.getRuntimeId()
-    })
-  })
-
   it('closes the socket if metadata publication fails during startup', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()

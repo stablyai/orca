@@ -29,7 +29,6 @@ import type {
 } from './managed-account-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
-import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
 import type { ZcodePlanSite } from './zcode-plan-sites'
@@ -136,7 +135,6 @@ export type GlobalSettings = GlobalSettingsBase & {
    *  background-luminance-gated floor (3 dark / 4.5 light); 1 disables contrast correction so TUIs
    *  that rely on deliberately low contrast (Powerline seams, dimmed secondary text) render as sent. */
   terminalMinimumContrastRatio?: number
-  terminalColorOverrides?: TerminalColorOverrides
   terminalPaddingX?: number
   terminalPaddingY?: number
   terminalMouseHideWhileTyping?: boolean
@@ -208,7 +206,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
   /** Opt-in resume of working structured chats after restart; off still lists them for review before token spending. */
   nativeChatResumeWorkOnRestart?: boolean
-  /** Queue editable mid-turn follow-ups until turn end on capable hosts. Absent means on; off sends immediately. */
+  /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean
@@ -470,6 +468,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalEphemeralVms?: boolean
   /** Experimental (Windows): add WSL distros as hosts, each running its own Orca server. */
   experimentalWslHosts?: boolean
+  /** Declined the add-project offer to run a `\\wsl.localhost` project's distro as a host. */
+  wslHostOfferDismissed?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
   compactWorktreeCards: boolean
   /** Legacy persisted key from the Experimental rollout; new writes use compactWorktreeCards. */

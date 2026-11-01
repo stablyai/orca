@@ -35,7 +35,7 @@ it('keeps actual phone operations and correlated acceptance through a stable-cli
   const stale = deferred<AgentSessionOptionsResult>()
   let oldReads = 0
   const physical = optionsClient(() =>
-    ++oldReads === 1 ? Promise.resolve(OPTIONS) : stale.promise
+    ++oldReads === 1 ? Promise.resolve({ ...OPTIONS, acceptsImages: true }) : stale.promise
   )
   const currentReads: ReturnType<typeof deferred<AgentSessionOptionsResult>>[] = []
   const next = optionsClient(() => {
@@ -77,8 +77,11 @@ it('keeps actual phone operations and correlated acceptance through a stable-cli
     await client.migrateTo(next.client, 'relay')
   })
   await settle()
-  await act(async () => stale.resolve({ ...OPTIONS, conversationCommands: ['compact'] }))
+  await act(async () =>
+    stale.resolve({ ...OPTIONS, acceptsImages: false, conversationCommands: ['compact'] })
+  )
   expect(view.current().conversationCommands).toEqual([])
+  expect(view.current().acceptsImages).toBe(true)
   expect(currentValueOf(view.current().optionSnapshot, 'model')).toBe('gpt-fast')
   expect(view.current().sendSelection()).toMatchObject({ selection: { model: 'gpt-fast' } })
   await act(async () =>
@@ -215,6 +218,33 @@ it('reads the new physical path after an idle connected-to-connected migration w
   expect(next.methods('agentSession.setOption')).toHaveLength(0)
   await view.unmount()
   client.close()
+})
+
+it('coalesces a burst of turns into one running and one trailing options read', async () => {
+  const reads: ReturnType<typeof deferred<AgentSessionOptionsResult>>[] = []
+  const rpc = optionsClient(() => {
+    const read = deferred<AgentSessionOptionsResult>()
+    reads.push(read)
+    return read.promise
+  })
+  const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
+  const view = await mountOptions({ ...BASE, client: rpc.client, mutate })
+  expect(reads).toHaveLength(1)
+  await act(async () => reads[0].resolve(OPTIONS))
+  await settle()
+  for (let turn = 1; turn <= 10; turn++) {
+    await view.rerender({ turnId: `turn-${turn}` })
+  }
+  expect(reads).toHaveLength(2)
+  await act(async () => reads[1].resolve({ ...OPTIONS, conversationCommands: ['clear'] }))
+  await settle()
+  expect(view.current().conversationCommands).toEqual([])
+  expect(reads).toHaveLength(3)
+  await act(async () => reads[2].resolve({ ...OPTIONS, conversationCommands: ['compact'] }))
+  await settle()
+  expect(reads).toHaveLength(3)
+  expect(view.current().conversationCommands).toEqual(['compact'])
+  await view.unmount()
 })
 
 it.each(['current', 'failed-then-wake', 'true-end'] as const)(

@@ -2,7 +2,10 @@ import { useCallback } from 'react'
 import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
-import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
+import type {
+  MobileNativeChatSendIntent,
+  MobileNativeChatSendOutcome
+} from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
@@ -19,7 +22,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     images?: string[],
     deadline?: number,
     attachments?: readonly StructuredMobileSendAttachment[],
-    skills?: readonly AgentJournalSkillRef[]
+    skills?: readonly AgentJournalSkillRef[],
+    intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
@@ -31,7 +35,9 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly StructuredMobileSendAttachment[]
+    attachments?: readonly StructuredMobileSendAttachment[],
+    sentAt?: number,
+    intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
 } {
   const {
@@ -48,7 +54,9 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[],
+      _sentAt?: number,
+      intent?: MobileNativeChatSendIntent
     ): Promise<MobileNativeChatSendOutcome> => {
       const origin = captureSendOrigin(text.trimEnd())
       if (!origin) {
@@ -58,7 +66,9 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent, sessionCommands)
       const skills = readMobileNativeChatPickedSkills(origin.draftKey)
       clearDraftForSend(origin, text)
-      const outcome = await sendStructured(text, images, deadline, attachments, skills)
+      const outcome = await (intent
+        ? sendStructured(text, images, deadline, attachments, skills, intent)
+        : sendStructured(text, images, deadline, attachments, skills))
       // Accepted messages remain host-owned; restore commands whose reply was lost.
       if (outcome === 'rejected' || (outcome === 'unknown' && isHostCommand)) {
         restoreRejectedDraft(origin, text)

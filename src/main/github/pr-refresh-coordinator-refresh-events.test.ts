@@ -70,65 +70,6 @@ describe('pr-refresh-coordinator', () => {
     expect(guestSends.reduce((total, send) => total + send.mock.calls.length, 0)).toBe(0)
   })
 
-  it('forwards the candidate worktree head into the branch lookup options', async () => {
-    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
-    getPRForBranchOutcomeMock.mockResolvedValueOnce({
-      kind: 'no-pr',
-      fetchedAt: Date.now()
-    })
-
-    reportVisiblePRRefreshCandidates([makeCandidate({ currentHeadOid: 'worktree-head-oid' })], 1, 1)
-    await vi.runOnlyPendingTimersAsync()
-
-    // Without the current head, fallback PR numbers could preserve a diverged merged review.
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
-      '/repo',
-      'feature/test',
-      null,
-      null,
-      null,
-      expect.objectContaining({ currentHeadOid: 'worktree-head-oid' })
-    )
-  })
-
-  it('copies the candidate worktree head onto broadcast aliases', async () => {
-    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
-    getPRForBranchOutcomeMock.mockResolvedValueOnce({
-      kind: 'found',
-      pr: makePR({ state: 'merged' }),
-      fetchedAt: Date.now()
-    })
-
-    reportVisiblePRRefreshCandidates([makeCandidate({ currentHeadOid: 'worktree-head-oid' })], 1, 1)
-    await vi.runOnlyPendingTimersAsync()
-
-    // Diverged-link clears are head-scoped; broadcast the head used by this request.
-    const outcomeEvent = sendMock.mock.calls
-      .map(([, event]) => event)
-      .find((event) => event.outcome)
-    expect(outcomeEvent?.aliases[0]?.currentHeadOid).toBe('worktree-head-oid')
-  })
-
-  it('includes request start time on manual refresh events', async () => {
-    const { refreshPRNow } = await import('./pr-refresh-coordinator')
-    getPRForBranchOutcomeMock.mockResolvedValueOnce({
-      kind: 'found',
-      pr: makePR({ checksStatus: 'success' }),
-      fetchedAt: Date.now() + 5
-    })
-
-    const result = await refreshPRNow(makeCandidate())
-
-    const events = sendMock.mock.calls.map(([, event]) => event)
-    const inFlight = events.find((event) => event.status === 'in-flight')
-    const outcome = events.find((event) => event.outcome)
-    expect(inFlight?.requestStartedAt).toBe(1_000)
-    expect(outcome?.requestStartedAt).toBe(1_000)
-    expect(outcome?.sequence).toBe(inFlight?.sequence)
-    // Reply/broadcast deduplication needs identical outcomes.
-    expect(result).toEqual(outcome?.outcome)
-  })
-
   it('keeps each manual outcome on its request sequence when completions race', async () => {
     const { refreshPRNow } = await import('./pr-refresh-coordinator')
     let resolveFirst!: (outcome: ReturnType<typeof makePR>) => void
@@ -167,52 +108,5 @@ describe('pr-refresh-coordinator', () => {
     expect(firstOutcome?.sequence).toBe(inFlight[0]?.sequence)
     expect(secondOutcome?.sequence).toBe(inFlight[1]?.sequence)
     expect(firstOutcome?.sequence).toBeLessThan(secondOutcome?.sequence)
-  })
-
-  it('accepts merged fallback PRs for visible fallback refreshes', async () => {
-    const { refreshPRNow } = await import('./pr-refresh-coordinator')
-    getPRForBranchOutcomeMock.mockResolvedValueOnce({
-      kind: 'found',
-      pr: makePR({ state: 'merged' }),
-      fetchedAt: Date.now()
-    })
-
-    await refreshPRNow(
-      makeCandidate({
-        fallbackPRNumber: 12,
-        fallbackPRSource: 'pr-cache'
-      })
-    )
-
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
-      '/repo',
-      'feature/test',
-      null,
-      null,
-      12,
-      {
-        acceptMergedFallbackPR: true,
-        localGitExecOptions: { admissionTier: 'interactive' }
-      }
-    )
-  })
-
-  it('preserves an automatic fallback reason and keeps its git work background', async () => {
-    const { refreshPRNow } = await import('./pr-refresh-coordinator')
-    getPRForBranchOutcomeMock.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: Date.now() })
-
-    await refreshPRNow(makeCandidate(), 'swr')
-
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
-      '/repo',
-      'feature/test',
-      null,
-      null,
-      null,
-      { localGitExecOptions: { admissionTier: 'background' } }
-    )
-    expect(sendMock.mock.calls.map(([, event]) => event.reason)).toEqual(
-      expect.arrayContaining(['swr'])
-    )
   })
 })

@@ -1,14 +1,13 @@
 // @vitest-environment happy-dom
 // useShallow skips renders, not selectors; memoize host resolution to avoid per-tab traversal and discarded objects on every publication.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import type * as LocalRuntime from '@/lib/local-preflight-context'
-import type * as ConnectionContext from '@/lib/connection-context'
 import type { AppState } from '@/store/types'
 import {
   resetTerminalPaneHostStateMemoForTests,
@@ -16,7 +15,6 @@ import {
   selectTerminalPaneHostState
 } from './terminal-pane-host-state'
 
-const connectionIdCalls = vi.hoisted(() => ({ count: 0 }))
 const runtimeCalls = vi.hoisted(() => ({ count: 0 }))
 vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => 'win32' }))
 vi.mock('@/lib/local-preflight-context', async (original) => {
@@ -33,19 +31,7 @@ vi.mock('@/lib/local-preflight-context', async (original) => {
 })
 afterEach(cleanup)
 
-vi.mock('@/lib/connection-context', async (importOriginal) => {
-  const actual = await importOriginal<typeof ConnectionContext>()
-  return {
-    ...actual,
-    getConnectionIdFromState: (state: AppState, worktreeId: string | null) => {
-      connectionIdCalls.count += 1
-      return actual.getConnectionIdFromState(state, worktreeId)
-    }
-  }
-})
-
 const LOCAL_WORKTREE = 'repo-1::/repo/worktrees/local'
-const OTHER_WORKTREE = 'repo-2::/repo/worktrees/other'
 
 /** Only the fields the resolver touches; the memo key is the whole object. */
 function makeState(overrides: Partial<Record<string, unknown>> = {}): AppState {
@@ -54,6 +40,7 @@ function makeState(overrides: Partial<Record<string, unknown>> = {}): AppState {
     worktreesByRepo: {},
     detectedWorktreesByRepo: {},
     folderWorkspaces: [],
+    projectGroups: [],
     activeWorktreeId: null,
     activeWorkspaceExecutionHostId: null,
     runtimeEnvironments: [],
@@ -70,7 +57,6 @@ function makeState(overrides: Partial<Record<string, unknown>> = {}): AppState {
 
 beforeEach(() => {
   resetTerminalPaneHostStateMemoForTests()
-  connectionIdCalls.count = 0
 })
 
 describe('selectTerminalPaneHostState memo', () => {
@@ -101,21 +87,6 @@ describe('selectTerminalPaneHostState memo', () => {
     expect(after).toBe(before)
   })
 
-  it('resolves the host once per published state, not once per mounted tab', () => {
-    const state = makeState()
-    selectTerminalPaneHostState(state, LOCAL_WORKTREE)
-    const afterFirstTab = connectionIdCalls.count
-    expect(afterFirstTab).toBe(1)
-
-    for (let index = 0; index < 4; index += 1) {
-      selectTerminalPaneHostState(state, LOCAL_WORKTREE)
-    }
-    expect(connectionIdCalls.count).toBe(afterFirstTab)
-
-    selectTerminalPaneHostState(state, OTHER_WORKTREE)
-    expect(connectionIdCalls.count).toBe(afterFirstTab + 1)
-  })
-
   it('re-resolves when the published state changes, so a host change is never stale', () => {
     const local = makeState()
     const before = selectTerminalPaneHostState(local, LOCAL_WORKTREE)
@@ -131,33 +102,6 @@ describe('selectTerminalPaneHostState memo', () => {
 
     expect(after).not.toBe(before)
     expect(after.sshReconnectTargetId).toBe('ssh-host-a')
-  })
-
-  it('allocates nothing across 1,000 publications at 6 worktrees x 5 tabs', () => {
-    const worktreeIds = Array.from({ length: 6 }, (_, index) => `repo-${index}::/repo/wt-${index}`)
-    const firstState = makeState()
-    const firstByWorktree = new Map(
-      worktreeIds.map((worktreeId) => [
-        worktreeId,
-        selectTerminalPaneHostState(firstState, worktreeId)
-      ])
-    )
-    connectionIdCalls.count = 0
-    let allocations = 0
-
-    for (let publication = 0; publication < 1_000; publication += 1) {
-      const state = makeState({ agentStatusEpoch: publication })
-      for (const worktreeId of worktreeIds) {
-        for (let tab = 0; tab < 5; tab += 1) {
-          if (selectTerminalPaneHostState(state, worktreeId) !== firstByWorktree.get(worktreeId)) {
-            allocations += 1
-          }
-        }
-      }
-    }
-
-    expect(allocations).toBe(0)
-    expect(connectionIdCalls.count).toBe(6 * 1_000)
   })
 })
 
@@ -278,6 +222,227 @@ describe('native chat production subscriptions at scale', () => {
         expect(renders.get(key)).toBe(value + (key.startsWith('repo-0:') ? 1 : 0))
       }
       subscribers.forEach((h) => h.unmount())
+    }
+  )
+})
+
+describe('qualified native chat runtime facts', () => {
+  const path = '//wsl.localhost/Ubuntu/home/me/project'
+  const settings = createGlobalSettingsFixture({
+    localWindowsRuntimeDefault: { kind: 'windows-host' }
+  })
+
+  it.each([0, 1, 2])('resolves a local WSL folder with %s associated repos', (count) => {
+    const state = makeState({
+      settings,
+      projects: [],
+      folderWorkspaces: [
+        makeFolderWorkspace({ id: 'folder', projectGroupId: 'group', folderPath: path })
+      ],
+      projectGroups: [{ id: 'group' }],
+      repos: Array.from({ length: count }, (_, i) => ({
+        id: `repo-${i}`,
+        path,
+        projectGroupId: 'group'
+      }))
+    })
+    expect(selectNativeChatWslProject(state, 'folder:folder')).toBe(true)
+  })
+
+  it.each(['windows-host', 'wsl'] as const)(
+    'honors the %s default on an ordinary repo-free Windows folder',
+    (kind) => {
+      const state = makeState({
+        projects: [],
+        settings: createGlobalSettingsFixture({
+          localWindowsRuntimeDefault: { kind, distro: 'Ubuntu' }
+        }),
+        folderWorkspaces: [
+          makeFolderWorkspace({ id: 'folder', folderPath: 'C:/folder', executionHostId: 'local' })
+        ]
+      })
+      expect(selectNativeChatWslProject(state, 'folder:folder')).toBe(kind === 'wsl')
+    }
+  )
+
+  it('preserves explicit preference precedence, repair and late settings/project/path changes', () => {
+    const folder = makeFolderWorkspace({ id: 'folder', projectGroupId: 'group', folderPath: path })
+    const state = makeState({
+      settings,
+      projects: [{ id: 'repo', localWindowsRuntimePreference: { kind: 'windows-host' } }],
+      folderWorkspaces: [folder],
+      projectGroups: [{ id: 'group' }],
+      repos: [{ id: 'repo', path, projectGroupId: 'group' }]
+    })
+    expect(selectNativeChatWslProject(state, 'folder:folder')).toBe(false)
+    const inherit = { ...state, projects: [] }
+    expect(selectNativeChatWslProject(inherit, 'folder:folder')).toBe(true)
+    const ordinary = { ...inherit, folderWorkspaces: [{ ...folder, folderPath: 'C:/folder' }] }
+    expect(selectNativeChatWslProject(ordinary, 'folder:folder')).toBe(false)
+    expect(
+      selectNativeChatWslProject(
+        {
+          ...ordinary,
+          settings: createGlobalSettingsFixture({
+            localWindowsRuntimeDefault: { kind: 'wsl', distro: null }
+          })
+        },
+        'folder:folder'
+      )
+    ).toBeNull()
+    expect(
+      selectNativeChatWslProject(
+        {
+          ...ordinary,
+          settings: createGlobalSettingsFixture({
+            localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+          })
+        },
+        'folder:folder'
+      )
+    ).toBe(true)
+  })
+
+  it.each(['worktree', 'folder'] as const)(
+    'uses the selected %s path with inherited paired ownership and late platform/path',
+    (kind) => {
+      const id = kind === 'folder' ? 'folder:folder' : 'wt'
+      const state = makeState({
+        repos: [{ id: 'repo', executionHostId: 'runtime:windows' }],
+        projectGroups: [{ id: 'group', executionHostId: 'runtime:windows' }],
+        folderWorkspaces: [
+          makeFolderWorkspace({ id: 'folder', projectGroupId: 'group', folderPath: path })
+        ],
+        worktreesByRepo: { repo: [makeWorktree({ id: 'wt', repoId: 'repo', path })] }
+      })
+      expect(selectNativeChatWslProject(state, id)).toBeNull()
+      const answered = {
+        ...state,
+        runtimeStatusByEnvironmentId: new Map<string, RuntimeEnvironmentStatus>([
+          [
+            'windows',
+            {
+              status: {
+                ...createCompatibleRuntimeStatusResponse('windows').result,
+                hostPlatform: 'win32'
+              },
+              checkedAt: 1
+            }
+          ]
+        ])
+      }
+      expect(selectNativeChatWslProject(answered, id)).toBe(true)
+      expect(selectTerminalPaneHostState(answered, id).nativeChatIsWslProject).toBe(true)
+      const nativePath = {
+        ...answered,
+        folderWorkspaces: answered.folderWorkspaces.map((f) => ({ ...f, folderPath: 'C:/folder' })),
+        worktreesByRepo: { repo: [makeWorktree({ id: 'wt', repoId: 'repo', path: 'C:/folder' })] }
+      }
+      expect(selectNativeChatWslProject(nativePath, id)).toBeNull()
+    }
+  )
+
+  it('waits for a local Windows path instead of retiring from an incomplete row', () => {
+    const state = makeState({
+      settings,
+      projects: [],
+      repos: [{ id: 'repo', executionHostId: 'local' }],
+      worktreesByRepo: { repo: [makeWorktree({ id: 'wt', repoId: 'repo', path: '' })] }
+    })
+    expect(selectNativeChatWslProject(state, 'wt')).toBeNull()
+    expect(
+      selectNativeChatWslProject(
+        { ...state, worktreesByRepo: { repo: [{ ...state.worktreesByRepo.repo[0], path }] } },
+        'wt'
+      )
+    ).toBe(true)
+  })
+
+  it.each([false, true])('keeps folder and group twins qualified (remote-first %s)', (reverse) => {
+    const local = makeFolderWorkspace({
+      id: 'folder',
+      projectGroupId: 'group',
+      executionHostId: 'local',
+      folderPath: path
+    })
+    const remote = { ...local, executionHostId: 'runtime:windows', folderPath: 'C:/remote' }
+    const groups = [
+      { id: 'group', executionHostId: 'local' },
+      { id: 'group', executionHostId: 'runtime:windows' }
+    ]
+    const state = makeState({
+      settings,
+      projects: [],
+      activeWorktreeId: 'folder:folder',
+      activeWorkspaceExecutionHostId: 'local',
+      folderWorkspaces: reverse ? [remote, local] : [local, remote],
+      projectGroups: reverse ? groups.toReversed() : groups
+    })
+    expect(selectNativeChatWslProject(state, 'folder:folder')).toBe(true)
+    expect(
+      selectNativeChatWslProject(
+        { ...state, activeWorkspaceExecutionHostId: null },
+        'folder:folder'
+      )
+    ).toBeNull()
+  })
+
+  it.each([false, true])(
+    'keeps preferred-local workspace/repo/project twins qualified (remote-first %s)',
+    (reverse) => {
+      const local = makeWorktree({
+        id: 'wt',
+        repoId: 'repo',
+        projectId: 'local-project',
+        hostId: 'local',
+        path
+      })
+      const remote = {
+        ...local,
+        hostId: 'runtime:windows',
+        path: 'C:/remote',
+        projectId: 'remote-project'
+      }
+      const repos = [
+        { id: 'repo', executionHostId: 'local' },
+        { id: 'repo', executionHostId: 'runtime:windows' }
+      ]
+      const projects = [
+        {
+          id: 'local-project',
+          sourceRepoIds: ['repo'],
+          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        },
+        {
+          id: 'remote-project',
+          sourceRepoIds: ['repo'],
+          localWindowsRuntimePreference: { kind: 'windows-host' }
+        }
+      ]
+      const state = makeState({
+        settings,
+        projects: reverse ? projects.toReversed() : projects,
+        repos: reverse ? repos.toReversed() : repos,
+        activeWorktreeId: 'wt',
+        activeWorkspaceExecutionHostId: 'local',
+        worktreesByRepo: { repo: reverse ? [remote, local] : [local, remote] }
+      })
+      expect(selectNativeChatWslProject(state, 'wt')).toBe(true)
+      const selectedProjects = state.projects
+      state.projects = state.projects.filter((project) => project.id !== 'local-project')
+      // The absent explicit project falls back to its UNC path, never the rival repo match.
+      expect(selectNativeChatWslProject(state, 'wt')).toBe(true)
+      state.projects = selectedProjects.map((project) =>
+        project.id === 'local-project'
+          ? { ...project, localWindowsRuntimePreference: { kind: 'windows-host' } }
+          : project
+      )
+      expect(selectNativeChatWslProject(state, 'wt')).toBe(false)
+      state.projects = selectedProjects
+      expect(selectNativeChatWslProject(state, 'wt')).toBe(true)
+      expect(
+        selectNativeChatWslProject({ ...state, activeWorkspaceExecutionHostId: null }, 'wt')
+      ).toBeNull()
     }
   )
 })

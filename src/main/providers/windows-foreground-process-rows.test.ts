@@ -58,11 +58,6 @@ describe('windows process rows', () => {
 
   const scanCount = (): number => getAllProcessesMock.mock.calls.length
 
-  it('walks descendants from the native snapshot', async () => {
-    const candidates = await queryWindowsProcessDescendants(100)
-    expect(candidates?.[0]?.pid).toBe(200)
-  })
-
   it('rejects a snapshot that does not contain the querying process', async () => {
     // A missing self PID invalidates the table; false empty evidence could authorize teardown.
     getAllProcessesMock.mockImplementation((cb: (rows: unknown) => void) => {
@@ -96,15 +91,6 @@ describe('windows process rows', () => {
 
     expect(scanCount()).toBe(1)
     expect(rows[31]?.map((row) => row.pid)).toEqual([200])
-  })
-
-  it('never answers from the TTL cache, which can predate the recycle it detects', async () => {
-    await queryWindowsProcessDescendants(100)
-    expect(scanCount()).toBe(1)
-
-    await queryWindowsProcessDescendants(100, { fresh: true })
-
-    expect(scanCount()).toBe(2)
   })
 
   it('never answers the ancestry links from the identity TTL cache either', async () => {

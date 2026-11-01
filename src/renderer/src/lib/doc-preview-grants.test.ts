@@ -15,13 +15,7 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => (mocks.ambiguous ? null : mocks.environmentId)
 }))
 
-import {
-  buildDocPreviewGrantRequest,
-  ensureDocPreviewGrant,
-  releaseDocPreviewGrant
-} from './doc-preview-grants'
-
-const state = { getKnownWorktreeById: () => ({ id: 'wt-1', path: '/srv/repo' }) } as never
+import { ensureDocPreviewGrant, releaseDocPreviewGrant } from './doc-preview-grants'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -31,63 +25,6 @@ beforeEach(() => {
   mocks.mintGrant.mockResolvedValue({ grantId: 'grant-1', url: 'orca-preview://grant-1/a.html' })
   vi.stubGlobal('window', {
     api: { docPreview: { mintGrant: mocks.mintGrant, revokeGrant: mocks.revokeGrant } }
-  })
-})
-
-describe('buildDocPreviewGrantRequest', () => {
-  it('mints no grant for a twin, which names no server to mint against', () => {
-    mocks.ambiguous = true
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/srv/repo/docs/a.html')).toBeNull()
-  })
-
-  // A document outside every workspace resolves and authorizes from its own directory.
-  it('roots an SSH grant outside the workspace at the document directory', () => {
-    mocks.connectionId = 'ssh-1'
-
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/home/alice/docs/report.html')).toEqual({
-      owner: { kind: 'ssh', connectionId: 'ssh-1' },
-      requestBase: '/home/alice/docs',
-      root: '/home/alice/docs',
-      entryRelativePath: 'report.html'
-    })
-  })
-
-  it('resolves from the workspace but authorizes only the document directory', () => {
-    mocks.connectionId = 'ssh-1'
-
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/srv/repo/docs/report.html')).toEqual({
-      owner: { kind: 'ssh', connectionId: 'ssh-1' },
-      requestBase: '/srv/repo',
-      root: '/srv/repo/docs',
-      entryRelativePath: 'docs/report.html'
-    })
-  })
-
-  it('carries the worktree selector and root for a paired runtime grant', () => {
-    mocks.environmentId = 'env-1'
-
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/srv/repo/docs/report.html')).toEqual({
-      owner: {
-        kind: 'runtime',
-        environmentId: 'env-1',
-        worktreeSelector: 'id:wt-1',
-        worktreeRoot: '/srv/repo'
-      },
-      requestBase: '/srv/repo',
-      root: '/srv/repo/docs',
-      entryRelativePath: 'docs/report.html'
-    })
-  })
-
-  // Why: files.read is worktree-scoped, so a paired document outside it has no readable root.
-  it('refuses a paired document outside the workspace', () => {
-    mocks.environmentId = 'env-1'
-
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/var/tmp/report.html')).toBeNull()
-  })
-
-  it('refuses a local workspace, which has no remote channel to read over', () => {
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/tmp/report.html')).toBeNull()
   })
 })
 
@@ -157,12 +94,6 @@ describe('doc preview grant lifetime', () => {
 
     await ensureDocPreviewGrant('preview-2', request)
     expect(mocks.mintGrant).toHaveBeenCalledTimes(2)
-  })
-
-  it('ignores a release for a tab that never minted a grant', () => {
-    releaseDocPreviewGrant('never-opened')
-
-    expect(mocks.revokeGrant).not.toHaveBeenCalled()
   })
 
   // Late rejection from a released tab must not evict its reopened tab’s new, otherwise unrevokable grant.

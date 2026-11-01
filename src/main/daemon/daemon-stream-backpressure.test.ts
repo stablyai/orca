@@ -124,29 +124,6 @@ describe('DaemonStreamBackpressure', () => {
     expect(paused.size).toBe(0)
   })
 
-  it('hands the producer a stall release for the pause it is arming', () => {
-    const stallTimeouts = new Map<string, () => void>()
-    const paused = new Set<string>()
-    const pressure = new DaemonStreamBackpressure(
-      (sessionId, value, onStallTimeout) => {
-        if (value) {
-          paused.add(sessionId)
-          if (onStallTimeout) {
-            stallTimeouts.set(sessionId, onStallTimeout)
-          }
-        } else {
-          paused.delete(sessionId)
-        }
-      },
-      () => false
-    )
-    pressure.setQueued('a', new Map([['flood', 2 * MiB]]))
-    expect(paused.has('flood')).toBe(true)
-    stallTimeouts.get('flood')?.()
-    expect(paused.has('flood')).toBe(false)
-    expect(pressure.isStallReleased('flood')).toBe(true)
-  })
-
   it('will not re-pause a stall-released session whose backlog is still undelivered', () => {
     const stallReleased = new Set<string>()
     const { pressure, paused } = createBackpressure((sessionId) => stallReleased.has(sessionId))

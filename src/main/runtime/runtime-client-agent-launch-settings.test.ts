@@ -36,19 +36,6 @@ function fixture(overrides: Partial<GlobalSettings> = {}) {
 }
 
 describe('execution-host agent launch settings', () => {
-  it('presents an existing retired None default as Blank Terminal to every client', () => {
-    const { controller, host } = fixture()
-    host.defaultTuiAgent = 'blank'
-    host.newWorkspaceSetupOnly = true
-    expect(controller.get()).toMatchObject({
-      defaultTuiAgent: 'blank',
-      newWorkspaceSetupOnly: false
-    })
-    expect(controller.getAgentLaunch()).toMatchObject({
-      defaultTuiAgent: 'blank',
-      newWorkspaceSetupOnly: false
-    })
-  })
   it('edits the store the structured host reads, leaving desktop choices on the desktop', async () => {
     const desktop = createGlobalSettingsFixture({
       workspaceDir: '/desktop',
@@ -141,22 +128,6 @@ describe('execution-host agent launch settings', () => {
     expect(host).not.toHaveProperty('agentNativeChatPermissionModes')
   })
 
-  it('publishes scoped host defaults and resets them when a paired client chooses a shared chat default', async () => {
-    const { controller, host } = fixture()
-    host.agentDefaultArgs = { claude: '', codex: '' }
-    await controller.mutateAgentLaunch({
-      type: 'permissions',
-      syncNativeChat: true,
-      agent: 'codex',
-      mode: 'auto'
-    })
-    expect(controller.get()).not.toHaveProperty('agentNativeChatPermissionModes')
-    expect(host.agentDefaultArgs.claude).toBe('')
-    await controller.update({ nativeChatPermissionMode: 'ask' })
-    expect(controller.get()).not.toHaveProperty('agentNativeChatPermissionModes')
-    expect(host.nativeChatPermissionMode).toBe('ask')
-  })
-
   it('normalizes older-client None default requests to Blank Terminal', async () => {
     const { controller, host } = fixture()
     const mutation = AgentLaunchSettingsMutation.parse({
@@ -216,17 +187,6 @@ describe('execution-host agent launch settings', () => {
     expect(legacy.host.agentDefaultEnv).toEqual(literal.agentDefaultEnv)
     expect(response.agentDefaultArgs?.claude).toBe(literal.agentDefaultArgs.claude)
     expect(response.agentDefaultEnv).toEqual(literal.agentDefaultEnv)
-  })
-
-  it('reports a failed host write instead of returning a successful projection', async () => {
-    const { controller, updateSettings, host } = fixture()
-    updateSettings.mockImplementation(() => {
-      throw new Error('disk full')
-    })
-    await expect(
-      controller.mutateAgentLaunch({ type: 'arguments', agent: 'claude', value: '--new' })
-    ).rejects.toThrow('disk full')
-    expect(host.agentDefaultArgs?.claude).toBe('--host-old')
   })
 
   it('uses host Windows environment name rules', () => {

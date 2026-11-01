@@ -12,11 +12,11 @@ import {
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
 import type {
-  AgentSessionBackgroundTaskState,
   AgentSessionQueuedMessage,
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-wire'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'

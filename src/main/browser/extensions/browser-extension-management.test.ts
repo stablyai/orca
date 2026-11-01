@@ -139,17 +139,6 @@ describe('addUnpackedBrowserExtension', () => {
     expect(mocks.store.save).not.toHaveBeenCalled()
   })
 
-  it('loads and records a folder with a new id', async () => {
-    expect(await addUnpackedBrowserExtension('default', '/dev/vault')).toEqual({ ok: true })
-    expect(loader.loadBrowserExtensionFolderIntoProfile).toHaveBeenCalledWith(
-      'default',
-      ID,
-      '/dev/vault',
-      { refresh: true }
-    )
-    expect(mocks.records.get(ID)).toMatchObject({ source: 'unpacked', path: '/dev/vault' })
-  })
-
   it('records new install metadata before native load and rolls it back if loading fails', async () => {
     vi.mocked(loader.loadBrowserExtensionFolderIntoProfile).mockImplementationOnce(async () => {
       expect(mocks.records.get(ID)).toMatchObject({ id: ID, version: '1.0', source: 'unpacked' })

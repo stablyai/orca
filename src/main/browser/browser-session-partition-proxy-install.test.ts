@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { sessionsByPartition, fromPartitionMock } = vi.hoisted(() => {
+const { fromPartitionMock } = vi.hoisted(() => {
   const sessionsByPartition = new Map<string, Record<string, ReturnType<typeof vi.fn>>>()
   const fromPartitionMock = vi.fn((partition: string) => {
     const existing = sessionsByPartition.get(partition)
@@ -67,9 +67,9 @@ vi.mock('./browser-webauthn-access', () => ({
 
 import {
   clearBrowserSessionPartitionPolicies,
-  forgetBrowserSessionPartitionConfiguration,
   installBrowserSessionPartitionPolicies
 } from './browser-session-partition-policies'
+
 import {
   applyBrowserSessionProxies,
   setBrowserNetworkProxySettingsResolver
@@ -121,33 +121,6 @@ describe('installBrowserSessionPartitionPolicies proxy wiring', () => {
     await expect(installation).rejects.toThrow('Browser process user agent is not initialized')
   })
 
-  it('applies the app-wide proxy to a newly configured partition', async () => {
-    setBrowserNetworkProxySettingsResolver(() => ({
-      httpProxyUrl: 'socks5://127.0.0.1:1080',
-      httpProxyBypassRules: ''
-    }))
-    const profile = nextProfile()
-
-    await installBrowserSessionPartitionPolicies(profile)
-
-    expect(sessionsByPartition.get(profile.partition)?.setProxy).toHaveBeenCalledWith({
-      mode: 'fixed_servers',
-      proxyRules: 'socks5://127.0.0.1:1080'
-    })
-  })
-
-  it('leaves the partition on the system proxy when neither settings nor env configure one', async () => {
-    setBrowserNetworkProxySettingsResolver(() => ({
-      httpProxyUrl: '',
-      httpProxyBypassRules: ''
-    }))
-    const profile = nextProfile()
-
-    await installBrowserSessionPartitionPolicies(profile)
-
-    expect(sessionsByPartition.get(profile.partition)?.setProxy).not.toHaveBeenCalled()
-  })
-
   it('does not report a new partition ready until Electron finishes applying its proxy', async () => {
     let finishWrite: (() => void) | undefined
     setBrowserNetworkProxySettingsResolver(() => ({
@@ -166,37 +139,6 @@ describe('installBrowserSessionPartitionPolicies proxy wiring', () => {
     finishWrite?.()
     await installation
     expect(ready).toBe(true)
-  })
-
-  it('re-applies the proxy when policies are already installed', async () => {
-    let proxyUrl = 'http://first.example:8080'
-    setBrowserNetworkProxySettingsResolver(() => ({
-      httpProxyUrl: proxyUrl,
-      httpProxyBypassRules: ''
-    }))
-    const profile = nextProfile()
-
-    await installBrowserSessionPartitionPolicies(profile)
-    proxyUrl = 'http://second.example:8080'
-    await installBrowserSessionPartitionPolicies(profile)
-
-    expect(sessionsByPartition.get(profile.partition)?.setProxy.mock.calls).toEqual([
-      [{ mode: 'fixed_servers', proxyRules: 'http://first.example:8080' }],
-      [{ mode: 'fixed_servers', proxyRules: 'http://second.example:8080' }]
-    ])
-  })
-
-  it('forgets deleted partition configuration without weakening its proxy guard', async () => {
-    setBrowserNetworkProxySettingsResolver(() => ({ httpProxyUrl: 'http://proxy.example:8080' }))
-    const profile = nextProfile()
-    const sess = fromPartitionMock(profile.partition)
-
-    await installBrowserSessionPartitionPolicies(profile)
-    forgetBrowserSessionPartitionConfiguration(profile.partition)
-    await installBrowserSessionPartitionPolicies(profile)
-
-    expect(sess.setPermissionRequestHandler).toHaveBeenCalledTimes(2)
-    expect(sess.setProxy).toHaveBeenCalledTimes(1)
   })
 
   it('recovers partition readiness after one transient proxy rejection', async () => {

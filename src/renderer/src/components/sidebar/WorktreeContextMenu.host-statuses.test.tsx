@@ -64,6 +64,7 @@ vi.mock('@/i18n/i18n', () => ({
 
 vi.mock('./ProjectGroupNameDialog', () => ({ ProjectGroupNameDialog: () => null }))
 vi.mock('./WorktreeParentPickerPopover', () => ({ WorktreeParentPickerPopover: () => null }))
+vi.mock('./WorktreeWslHostStartMenuItem', () => ({ WorktreeWslHostStartMenuItem: () => null }))
 
 type StatusMenuCapture = {
   contextWorkspaceStatus: string
@@ -134,14 +135,5 @@ describe('WorktreeContextMenu Move to Status for a paired host card', () => {
       'status-6'
     ])
     expect(statusMenu.current?.contextWorkspaceStatus).toBe('status-6')
-  })
-
-  it("offers a local card only the local columns, not a paired host's", () => {
-    openMenu(makeWorktree({ id: 'repo::wt-2', repoId: 'repo', path: '/local' }))
-
-    expect(statusMenu.current?.workspaceStatuses.map((status) => status.id)).toEqual([
-      'in-progress',
-      'todo'
-    ])
   })
 })

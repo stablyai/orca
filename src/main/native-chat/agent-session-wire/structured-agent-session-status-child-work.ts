@@ -2,10 +2,10 @@
 
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionBackgroundTask } from '../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTask } from '../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentChildWorkViewsEqual } from '../../../shared/agent-status-child-work-view-wire'
-import { structuredChildWorkLegacyTasks } from '../../../shared/structured-agent-session-child-work-legacy'
+import { structuredChildWorkLegacyTasks } from '../../../shared/agent-session/structured-agent-session-child-work-legacy'
 import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
 
 /** Summary readers show minute-level staleness; index-wise comparison requires stable insertion order. */

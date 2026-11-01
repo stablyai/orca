@@ -1,5 +1,4 @@
-import { StyleSheet } from 'react-native'
-import { colors, concentricRadius, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const filePreviewStyles = themedStyleSheet(() => ({
@@ -29,10 +28,10 @@ export const filePreviewStyles = themedStyleSheet(() => ({
   },
   scroll: {
     flex: 1,
-    backgroundColor: colors.editorSurface
+    backgroundColor: colors.bgBase
   },
   textContent: {
-    padding: spacing.md,
+    padding: spacing.lg,
     paddingBottom: spacing.xl
   },
   textPreview: {
@@ -42,36 +41,19 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     lineHeight: 19
   },
   markdownContent: {
-    padding: spacing.md,
+    padding: spacing.lg,
     paddingBottom: spacing.xl
   },
-  modeContainer: {
-    flex: 1,
-    backgroundColor: colors.editorSurface
-  },
-  modeToolbar: {
+  modeBar: {
     flexDirection: 'row',
-    alignSelf: 'flex-start',
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.sm,
-    padding: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgPanel
-  },
-  modeToggle: {
-    width: 34,
-    height: 28,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: concentricRadius(radii.control, 2),
-    backgroundColor: 'transparent',
-    opacity: 0.72
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs
   },
-  modeToggleActive: {
-    backgroundColor: colors.bgRaised,
-    opacity: 1
+  modeSwitch: {
+    backgroundColor: colors.bgPanel
   },
   truncatedNote: {
     marginBottom: spacing.md,
@@ -80,24 +62,21 @@ export const filePreviewStyles = themedStyleSheet(() => ({
   },
   imageContainer: {
     flex: 1,
-    backgroundColor: colors.editorSurface
-  },
-  imageScrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md
-  },
-  image: {
-    backgroundColor: colors.editorSurface
+    backgroundColor: colors.bgBase
   },
   editContainer: {
     flex: 1,
-    backgroundColor: colors.editorSurface,
-    padding: spacing.md
+    backgroundColor: colors.bgBase,
+    padding: spacing.lg
   },
   saveErrorText: {
     marginBottom: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
+  previewSaveErrorText: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     color: colors.statusRed,
     fontSize: typography.metaSize
   },

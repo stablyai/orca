@@ -4,7 +4,7 @@ import type { AgentSessionCurrentWorkFields } from './agent-session-current-work
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
-} from './agent-session-background-task-wire'
+} from './agent-session/agent-session-background-task-wire'
 import type { AgentSessionRewindReason } from './agent-session-rewind'
 import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
@@ -34,13 +34,6 @@ import type { NativeChatSubagentEntry } from './native-chat-types'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
 export type { AgentSessionHandoffStatus } from './agent-session-handoff-status'
-
-export type {
-  AgentSessionBackgroundTask,
-  AgentSessionBackgroundTaskRunState,
-  AgentSessionBackgroundTaskState
-} from './agent-session-background-task-wire'
-export { agentSessionBackgroundTasksEqual } from './agent-session-background-task-wire'
 
 export type AgentSessionTurnActivity = {
   turnId: string
@@ -322,7 +315,7 @@ export type AgentSessionAttachResult = {
   tabId?: string
 }
 
-/** Only queue-if-active callers with queued-messages.v1 receive this draft arm; non-waiting states occur only on settled-draft replays. */
+/** Only queue-if-active callers with queued-messages.v2 receive this draft arm; non-waiting states occur only on settled-draft replays. */
 export type AgentSessionQueuedSendReceipt = {
   messageId: string
   position: number

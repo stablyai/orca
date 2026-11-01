@@ -15,7 +15,6 @@ import type { WslHostStatus } from '../../shared/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import { RemoteNodeRuntimeSelfTestError } from '../ssh/orcad-remote-node-runtime-report'
 import { WslHostService, type WslHostConnector } from './wsl-host-service'
-import { wakeRememberedWslHosts } from './wsl-host-early-wake'
 import { WslOrcadLaunchDeferredError } from './wsl-orcad-connection-errors'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { isRecoverableRemoteRuntimeConnectionError } from '../../shared/remote-runtime/remote-runtime-client-error-classification'
@@ -398,7 +397,7 @@ describe('WslHostService', () => {
     expect(connector.connect).not.toHaveBeenCalled()
   })
 
-  it('keeps a confirmed-stopped host down for polls until the user switches back to it (E9)', async () => {
+  it('keeps a confirmed-stopped host down for polls and for a switch back to it; only a running distro reconnects (E9)', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
     await service.add({ distro: 'Ubuntu' })
@@ -414,16 +413,24 @@ describe('WslHostService', () => {
 
     // The focused host's polls get a refusal, not a boot, however often they come.
     await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
-    service.setVisibleWork(['wsl:ubuntu'])
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
     expect(connector.connect).not.toHaveBeenCalled()
 
-    // Switching to one of its workspaces is the user acting on it.
+    // Switching back to one of its workspaces is navigation: it re-checks, never starts it.
+    service.focusHost('wsl:ubuntu')
+    await vi.waitFor(() =>
+      expect(connector.reachability).toHaveBeenCalledWith('Ubuntu', 'wsl:ubuntu')
+    )
+    expect(connector.connect).not.toHaveBeenCalled()
+    expect(published.at(-1)).toMatchObject({ environmentId: 'wsl:ubuntu', state: 'distro-stopped' })
+
+    // Once the distro runs (the user's Start or a terminal), a switch connects without booting.
+    connector.distro.state = 'running'
     service.focusHost('wsl:ubuntu')
     await vi.waitFor(() => expect(connector.connect).toHaveBeenCalledTimes(1))
+    expect(connector.connect).toHaveBeenCalledWith('Ubuntu', { noBoot: true })
   })
 
-  it('focus connects without probing WSL while this process has no bridge, but polls still read the running list', async () => {
+  it('focus reads the running list before connecting, even with no bridge in this process', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
     await service.add({ distro: 'Ubuntu' })
@@ -433,15 +440,8 @@ describe('WslHostService', () => {
 
     service.focusHost('wsl:ubuntu')
     await vi.waitFor(() => expect(connector.connect).toHaveBeenCalledTimes(1))
-    expect(connector.reachability).not.toHaveBeenCalled()
-
-    // A poll never takes that shortcut: it reads the running list and refuses a stopped distro.
-    await connector.disconnect('Ubuntu')
-    connector.distro.state = 'stopped'
-    connector.connect.mockClear()
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
     expect(connector.reachability).toHaveBeenCalledWith('Ubuntu', 'wsl:ubuntu')
-    expect(connector.connect).not.toHaveBeenCalled()
+    expect(connector.connect).toHaveBeenCalledWith('Ubuntu', { noBoot: true })
   })
 
   it('focus with a bridge still asks whether the host answers before connecting again', async () => {
@@ -526,19 +526,49 @@ describe('WslHostService', () => {
     expect(connector.connect).not.toHaveBeenCalled()
   })
 
-  it('a poll after a focus boot failed does not retry the boot', async () => {
+  it('a launch restore or switch to a stopped host never connects it and shows it stopped (E9)', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
     await service.add({ distro: 'Ubuntu' })
-    service.setVisibleWork(['wsl:ubuntu'])
     await connector.disconnect('Ubuntu')
     connector.distro.state = 'stopped'
     connector.connect.mockClear()
-    connector.connect.mockRejectedValueOnce(new Error('boot failed'))
+
+    // The window reports the restored active workspace's host at launch, before any user act.
     service.focusHost('wsl:ubuntu')
-    await vi.waitFor(() => expect(connector.connect).toHaveBeenCalledTimes(1))
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
-    expect(connector.connect).toHaveBeenCalledTimes(1)
+
+    await vi.waitFor(() =>
+      expect(published.at(-1)).toMatchObject({
+        environmentId: 'wsl:ubuntu',
+        state: 'distro-stopped'
+      })
+    )
+    expect(connector.connect).not.toHaveBeenCalled()
+  })
+
+  it('a focus re-check overtaken by a user Start never publishes stopped over the live host', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    await connector.disconnect('Ubuntu')
+    connector.distro.state = 'stopped'
+    let finishRead: (state: 'stopped') => void = () => {}
+    connector.reachability.mockImplementationOnce(
+      () => new Promise((resolve) => (finishRead = resolve))
+    )
+
+    service.focusHost('wsl:ubuntu')
+    await vi.waitFor(() => expect(connector.reachability).toHaveBeenCalled())
+    // The user's Start boots and connects while the focus read is still out.
+    connector.distro.state = 'running'
+    await service.connect('wsl:ubuntu')
+    service.handleConnectionChange('Ubuntu', connection('Ubuntu'), { state: 'ready', census: null })
+    finishRead('stopped')
+
+    await vi.waitFor(() => expect(connector.reachability).toHaveBeenCalledTimes(2))
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).resolves.toBeUndefined()
+    expect(published.at(-1)).toMatchObject({ environmentId: 'wsl:ubuntu', state: 'ready' })
+    expect(published.filter((status) => status.state === 'distro-stopped')).toEqual([])
   })
 
   it('never boots for a poll: not visible, or unconfirmed, is a refusal; lost contact never parks', async () => {
@@ -711,36 +741,6 @@ describe('WslHostService', () => {
     })
     await service.add({ distro: 'Ubuntu' })
     expect(knownWhileAdding).toBe(true)
-  })
-
-  it('remembers only the focused host for an early boot next launch (E9)', async () => {
-    const connector = makeConnector([UBUNTU])
-    const service = makeService(connector)
-    await service.add({ distro: 'Ubuntu' })
-    const spawn = vi.fn()
-    // Open work alone is not remembered.
-    service.setVisibleWork(['wsl:ubuntu'])
-    expect(wakeRememberedWslHosts(userDataPath, spawn)).toEqual([])
-    service.focusHost('wsl:ubuntu')
-    expect(wakeRememberedWslHosts(userDataPath, spawn)).toEqual(['Ubuntu'])
-    service.focusHost(null)
-    expect(wakeRememberedWslHosts(userDataPath, spawn)).toEqual([])
-    service.focusHost('wsl:ubuntu')
-    enabled = false
-    await service.enabledChanged(false)
-    expect(wakeRememberedWslHosts(userDataPath, spawn)).toEqual([])
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
-  it('forgets the early-wake host when it is removed', async () => {
-    const connector = makeConnector([UBUNTU])
-    const service = makeService(connector)
-    await service.add({ distro: 'Ubuntu' })
-    service.focusHost('wsl:ubuntu')
-    await service.remove('wsl:ubuntu')
-    // Re-registering the distro must not bring the old early wake back.
-    await service.add({ distro: 'Ubuntu' })
-    expect(wakeRememberedWslHosts(userDataPath, vi.fn())).toEqual([])
   })
 
   it('keeps the startup holders of its hosts and releases orphans', async () => {

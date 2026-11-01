@@ -68,7 +68,8 @@ export async function deliverWorkerDispatchPreamble(args: {
           ? formatOrcaSessionAddress(chat)
           : terminalHandle,
     devMode: args.devMode,
-    cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+    cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
+    unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
   })
   if (chat) {
     const dispatch = args.db.getDispatchContextById(args.dispatchId)
@@ -134,6 +135,7 @@ function chatTaskTurnStart(delivery: ChatTaskDelivery): WorkerTurnStartObservati
     case 'queued':
       return {
         verdict: 'unobserved',
+        queued: true,
         reason:
           "The task is waiting as a card in the chat's queue and is sent when the queue reaches " +
           'it. If the worker then reports, this Dispatch settles normally. worker-abandon ' +
