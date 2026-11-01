@@ -363,6 +363,19 @@ async function probeCase(
         title: 'A pull request',
         source: { number: 12, prRepo: { owner: 'owner', repo: 'repo', host: 'github.com' } }
       })
+    } else if (source.id === 'tk-item-status-gitlab') {
+      // The edit opens the GitHub issue first; a cutover after its claim leaves only that selection.
+      expect(baseline).toBeDefined()
+      expect(checkpoint.state).toEqual({
+        ...(isKeyedObject(baseline) ? baseline : {}),
+        item: checkpoint.state.item,
+        error: lifecycle === 'before-probe' && !allowed ? probeFailure(partition, lifecycle) : ''
+      })
+      expect(checkpoint.state.item).toMatchObject(
+        allowed
+          ? { title: 'Renamed', source: { id: 'github:issue:9', labels: ['triage'] } }
+          : { title: 'An issue', source: { id: 'github:issue:9', labels: ['bug'] } }
+      )
     } else {
       // These actions target an unselected item; the committed selected detail/row must survive either outcome.
       expect(baseline).toBeDefined()

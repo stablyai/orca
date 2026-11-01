@@ -246,12 +246,15 @@ export function taskItemChecksStatusMountAdapters(
         },
         actions: ({ actions }) => ({
           'gitlab-status': () => actions().toggleGitLabStatus(mountFixture(item)),
-          'github-metadata': () =>
-            actions().updateGitHubIssueMetadata(mountFixture(GITHUB_ISSUE_ITEM), {
+          'github-metadata': () => {
+            // The screen edits only the open issue, so open it first as a user does.
+            actions().setActionItem(mountFixture(GITHUB_ISSUE_ITEM))
+            return actions().updateGitHubIssueMetadata(mountFixture(GITHUB_ISSUE_ITEM), {
               title: 'Renamed',
               addLabels: ['triage'],
               removeLabels: ['bug']
             })
+          }
         }),
         state: (model) => ({
           payload: model.detailPayload,
