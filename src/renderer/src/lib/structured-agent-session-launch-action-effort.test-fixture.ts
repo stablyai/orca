@@ -36,7 +36,7 @@ export function registerActionEffortCreateTests(
       const {
         STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
         STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
-      } = await import('../../../shared/protocol-version')
+      } = await import('../../../shared/agent-session/agent-session-runtime-capabilities')
       const { readStructuredAgentLaunchRecord } =
         await import('./agent-session/launch/structured-agent-session-launch-persistence')
       const { getStructuredLaunchStateBySessionId } =
