@@ -146,10 +146,8 @@ export function useEmulatorControlStream(
 
   const sendTouch = useCallback(
     (touch: ServeSimTouchFrame): boolean => {
+      // The frame only begins touches while it can interact; later phases must still release.
       if (scrcpyDeviceId) {
-        if (!enabled) {
-          return false
-        }
         window.api.emulator.sendScrcpyTouch({
           deviceId: scrcpyDeviceId,
           type: touch.type,
@@ -169,7 +167,7 @@ export function useEmulatorControlStream(
         return false
       }
     },
-    [enabled, getOpenSocket, scrcpyDeviceId]
+    [getOpenSocket, scrcpyDeviceId]
   )
 
   const sendKeyboardFrames = useCallback(
