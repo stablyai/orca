@@ -112,21 +112,36 @@ for (const kind of ['dropdown', 'context'] as const) {
       })
     }
 
-    test('resting over the next submenu completes the pointer handoff', async ({ page }) => {
+    test('submenu hover and keyboard navigation do not synthesize clicks', async ({ page }) => {
       const first = page.getByRole('menuitem', { name: 'First', exact: true })
       const second = page.getByRole('menuitem', { name: 'Second', exact: true })
       const start = await center(first)
       const destination = await center(second)
       await page.mouse.move(start.x, start.y)
       await expect(page.getByRole('menuitem', { name: 'First child', exact: true })).toBeVisible()
-      // Move toward the submenu while crossing onto its sibling, then stop inside the safe triangle.
-      await page.mouse.move(start.x + 5, start.y)
-      await page.mouse.move(destination.x + 35, destination.y)
+      await page.evaluate(() => {
+        document.documentElement.setAttribute('data-menu-clicks', '0')
+        document.addEventListener('click', () => {
+          const count = Number(document.documentElement.getAttribute('data-menu-clicks'))
+          document.documentElement.setAttribute('data-menu-clicks', String(count + 1))
+        })
+      })
+      // Moving away from the submenu uses Radix's normal sibling hover behavior.
+      await page.mouse.move(destination.x - 35, destination.y, { steps: 5 })
       await expect(second).toBeFocused()
       await expect(second).toHaveAttribute('data-state', 'open')
       await expect(first).toHaveAttribute('data-state', 'closed')
       await expect(page.getByRole('menuitem', { name: 'Second child', exact: true })).toBeVisible()
       await expect(page.getByRole('menuitem', { name: 'First child', exact: true })).toBeHidden()
+      await page.keyboard.press('ArrowRight')
+      await expect(page.getByRole('menuitem', { name: 'Second child', exact: true })).toBeFocused()
+      await page.keyboard.press('ArrowLeft')
+      await expect(second).toBeFocused()
+      await page.keyboard.press('ArrowUp')
+      await expect(first).toBeFocused()
+      await page.keyboard.press('ArrowRight')
+      await expect(page.getByRole('menuitem', { name: 'First child', exact: true })).toBeFocused()
+      await expect(page.locator('html')).toHaveAttribute('data-menu-clicks', '0')
     })
   })
 }
