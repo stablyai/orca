@@ -7,7 +7,8 @@ export const PLUGIN_TEMPLATE_NAMES = [
   'language-pack',
   'editor',
   'panel',
-  'components'
+  'components',
+  'worker-panel'
 ] as const
 
 export type PluginTemplateName = (typeof PLUGIN_TEMPLATE_NAMES)[number]

@@ -13,20 +13,25 @@ function summary(node) {
   return doc ? oneLine(ts.getTextOfJSDocComment(doc.comment) ?? '') : ''
 }
 
-/** Parses `declare module '<name>' { ... }` and indexes its declarations by name. */
+/** Parses `declare module '<name>' { ... }` (every block of it, as split files merge) and indexes
+ *  its declarations by name. */
 export function readTypingsModule(text, fileName, moduleName) {
   const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true)
-  const block = source.statements.find(
-    (statement) => ts.isModuleDeclaration(statement) && statement.name.text === moduleName
+  const blocks = source.statements.filter(
+    (statement) =>
+      ts.isModuleDeclaration(statement) &&
+      statement.name.text === moduleName &&
+      statement.body &&
+      ts.isModuleBlock(statement.body)
   )
-  if (!block?.body || !ts.isModuleBlock(block.body)) {
+  if (blocks.length === 0) {
     throw new Error(`${fileName} declares no module ${moduleName}`)
   }
   const print = (node) => oneLine(printer.printNode(ts.EmitHint.Unspecified, node, source))
   const types = new Map()
   const values = new Map()
   const functions = []
-  for (const statement of block.body.statements) {
+  for (const statement of blocks.flatMap((block) => block.body.statements)) {
     if (ts.isTypeAliasDeclaration(statement)) {
       types.set(statement.name.text, statement)
     } else if (ts.isFunctionDeclaration(statement) && statement.name) {

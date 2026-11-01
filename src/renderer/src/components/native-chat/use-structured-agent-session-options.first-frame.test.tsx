@@ -3,7 +3,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'
-import type * as LaunchOptions from '@/lib/structured-agent-session-launch-options'
+import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), coherent: false }))
 
@@ -20,7 +20,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
 }))
-vi.mock('@/lib/structured-agent-session-launch-options', async (original) => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', async (original) => ({
   ...(await original<typeof LaunchOptions>()),
   holdStructuredAgentSessionLaunchOption: vi.fn(),
   getStructuredAgentSessionLaunchSelection: () => null

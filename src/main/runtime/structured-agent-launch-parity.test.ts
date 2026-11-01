@@ -9,7 +9,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type * as ProcessHostModule from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import type * as AcpAdapterModule from '../acp/acp-structured-session-adapter'
-import type * as ClaudeAdapterModule from '../claude/claude-structured-session-adapter'
+import type * as ClaudeAdapterModule from '../claude/structured/claude-structured-session-adapter'
 import type * as CodexAdapterModule from '../codex/codex-structured-session-adapter'
 import type * as PiAdapterModule from '../pi/rpc-session-adapter'
 import type * as ManagedProviderProcessModule from '../provider-process/managed-provider-process'
@@ -76,7 +76,7 @@ vi.mock('../codex/codex-structured-session-adapter', async (importOriginal) => {
   }
   return { ...actual, CodexStructuredSessionAdapter: RecordingAdapter }
 })
-vi.mock('../claude/claude-structured-session-adapter', async (importOriginal) => {
+vi.mock('../claude/structured/claude-structured-session-adapter', async (importOriginal) => {
   const actual = await importOriginal<typeof ClaudeAdapterModule>()
   class RecordingAdapter extends actual.ClaudeStructuredSessionAdapter {
     constructor(deps: ConstructorParameters<typeof actual.ClaudeStructuredSessionAdapter>[0]) {

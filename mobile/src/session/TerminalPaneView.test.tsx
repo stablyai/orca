@@ -31,7 +31,7 @@ vi.mock('react-native', () => ({
 vi.mock('../terminal/TerminalWebView', () => ({ TerminalWebView: hosts.TerminalWebView }))
 vi.mock('../storage/preferences', () => ({ saveTerminalTextScale: () => Promise.resolve() }))
 vi.mock('../browser/MobileBrowserPane', () => ({ MobileBrowserPane: () => null }))
-vi.mock('./MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
+vi.mock('./native-chat/MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
 vi.mock('./MobileSessionFileReader', () => ({ FileReader: () => null }))
 vi.mock('./MobileSessionMarkdownReader', () => ({ MarkdownReader: () => null }))
 vi.mock('./mobile-session-styles', () => ({ styles: {} }))

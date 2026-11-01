@@ -6,6 +6,10 @@ import type {
 
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import type { NotificationSettings } from '../../shared/notification-settings-types'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 
 import {
   createStructuredAttentionMobileDelivery,
@@ -57,6 +61,7 @@ function settings(overrides: Partial<NotificationSettings> = {}): NotificationSe
   return {
     enabled: true,
     agentTaskComplete: true,
+    agentNeedsInput: true,
     terminalBell: true,
     suppressWhenFocused: false,
     customSoundId: 'system',
@@ -75,6 +80,7 @@ function harness(overrides: Partial<StructuredAttentionMobileDeliveryDeps> = {})
     readNotificationSettings: () => settings(),
     readWorkspaceLabels: () => ({ repoLabel: 'orca', worktreeLabel: 'feature' }),
     isWorkspaceMuted: () => false,
+    readOrchestration: () => undefined,
     dispatch: (event) => sent.push(event),
     reconcile: (state) => reconciled.push(state),
     now: () => 42,
@@ -93,6 +99,26 @@ describe('structured attention mobile delivery', () => {
     expect(isWorkspaceMuted).toHaveBeenCalledWith(SCOPE)
   })
 
+  it('leaves a dispatched chat worker’s finished turn to its coordinator, and still sends its prompts', () => {
+    const readOrchestration = vi.fn(() => ({
+      taskId: 'task_1',
+      dispatchId: 'ctx_1',
+      parentPaneKey: 'tab-c:leaf-c'
+    }))
+    const h = harness({ readOrchestration })
+    h.delivery.deliver(completion('success'), SUMMARY)
+    h.delivery.deliver(completion('failure'), SUMMARY)
+    h.delivery.deliver(completion('success', true), SUMMARY)
+    // A failed turn that leaves a prompt waiting is still the person's to answer.
+    h.delivery.deliver(completion('failure', true), SUMMARY)
+    h.delivery.deliver(PROMPT, SUMMARY)
+    expect(h.sent.map((event) => event.agentState)).toEqual(['blocked', 'done', 'blocked'])
+    // The key the session's chat row carries in the host's orchestration projection.
+    expect(readOrchestration).toHaveBeenCalledWith(
+      structuredAgentSessionPaneKey(structuredAgentSessionTabId('session-1'), 'session-1')
+    )
+  })
+
   it('still sends when labels cannot be read, worded generically', () => {
     const h = harness({
       readWorkspaceLabels: () => {
@@ -104,12 +130,19 @@ describe('structured attention mobile delivery', () => {
     expect(h.sent[0]?.title).toContain('needs input')
   })
 
-  it('marks the push ineligible when agent notifications are off, as the desktop fan-out does', () => {
-    const h = harness({
+  it('gates a prompt on the needs-input setting and a completion on the finished one', () => {
+    const finishedOff = harness({
       readNotificationSettings: () => settings({ agentTaskComplete: false })
     })
-    h.delivery.deliver(PROMPT, SUMMARY)
-    expect(h.sent[0]).toMatchObject({ desktopAllowed: false })
+    finishedOff.delivery.deliver(PROMPT, SUMMARY)
+    finishedOff.delivery.deliver(completion('success'), SUMMARY)
+    expect(finishedOff.sent.map((event) => event.desktopAllowed)).toEqual([undefined, false])
+
+    const needsInputOff = harness({
+      readNotificationSettings: () => settings({ agentNeedsInput: false })
+    })
+    needsInputOff.delivery.deliver(PROMPT, SUMMARY)
+    expect(needsInputOff.sent[0]).toMatchObject({ desktopAllowed: false })
   })
 
   it('announces nothing for a completion with no verdict', () => {

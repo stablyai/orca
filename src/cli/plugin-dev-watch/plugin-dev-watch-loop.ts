@@ -6,10 +6,16 @@ import type {
   PluginDevWatchStatus
 } from './plugin-dev-watch-events'
 import { PluginLogFollower } from './plugin-log-follower'
+import { PluginFrameLogDedupe, type PluginDevWatchLogLine } from './plugin-frame-log-dedupe'
 import {
   createPluginDevWatchCheckQueue,
   type PluginDevWatchCheckResult
 } from './plugin-dev-watch-check'
+import {
+  createPluginDevWatchShooter,
+  PLUGIN_DEV_WATCH_SHOOTABLE,
+  type PluginDevWatchShotHost
+} from './plugin-dev-watch-shot'
 
 /** What the loop asks of the Orca host; the handler binds it to RPC for one folder. */
 export type PluginDevWatchHost = {
@@ -22,6 +28,8 @@ export type PluginDevWatchHost = {
   devUnload(): Promise<void>
   /** `--check` only: validates the folder and renders its components panels once. */
   check?: () => Promise<PluginDevWatchCheckResult>
+  /** `--shot` only: a PNG of one panel after each good reload, while it stays on screen. */
+  shot?: PluginDevWatchShotHost
 }
 
 export type PluginDevWatchDeps = {
@@ -76,8 +84,50 @@ function findEntry(
   return strays.length === 1 ? strays[0] : undefined
 }
 
+/** A check that renders still fails while Orca itself does not run the plugin. */
+function checkEvent(
+  pluginKey: string,
+  result: PluginDevWatchCheckResult,
+  snapshot: Snapshot
+): PluginDevWatchEvent {
+  return {
+    type: 'check',
+    pluginKey,
+    ...result,
+    ok: result.ok && PLUGIN_DEV_WATCH_SHOOTABLE.has(snapshot.status),
+    checkOk: result.ok,
+    pluginStatus: snapshot.status,
+    ...(snapshot.error ? { pluginError: snapshot.error } : {})
+  }
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** `--shot`: picks the panel once; an unknown `--shot-panel` unloads what this run loaded and fails. */
+async function startShooter(
+  host: PluginDevWatchHost,
+  loaded: DevLoadResult,
+  emit: (event: PluginDevWatchEvent) => void
+): Promise<(() => Promise<void>) | null> {
+  if (!host.shot) {
+    return null
+  }
+  let panelId: string | null
+  try {
+    panelId = host.shot.panelOf(loaded.plugin)
+  } catch (error) {
+    if (loaded.added) {
+      await host.devUnload().catch(() => undefined)
+    }
+    throw error
+  }
+  if (panelId === null) {
+    emit({ type: 'warning', message: `${loaded.pluginKey} has no panel for --shot to capture` })
+    return null
+  }
+  return createPluginDevWatchShooter(host.shot, loaded.pluginKey, panelId, emit)
 }
 
 /** Loads the folder, then streams its logs and reload status until interrupted. Returns the exit
@@ -109,24 +159,36 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
     stop.abort()
   })
   const runCheck = host.check
-  const checks = runCheck
-    ? createPluginDevWatchCheckQueue(async () => {
-        try {
-          emit({ type: 'check', pluginKey, ...(await runCheck()) })
-        } catch (error) {
-          emit({ type: 'warning', message: `check could not run: ${errorMessage(error)}` })
-        }
-      })
-    : null
-  checks?.request()
+  const shoot = await startShooter(host, loaded, emit)
+  // Check, then shot: one at a time, and saves during a run coalesce into one more.
+  const afterLoad =
+    runCheck || shoot
+      ? createPluginDevWatchCheckQueue(async () => {
+          if (runCheck) {
+            try {
+              emit(checkEvent(pluginKey, await runCheck(), snapshot))
+            } catch (error) {
+              emit({ type: 'warning', message: `check could not run: ${errorMessage(error)}` })
+            }
+          }
+          if (shoot && PLUGIN_DEV_WATCH_SHOOTABLE.has(snapshot.status)) {
+            await shoot()
+          }
+        })
+      : null
+  afterLoad?.request()
   const follower = new PluginLogFollower()
+  const dedupe = new PluginFrameLogDedupe()
+  const emitLogs = (lines: readonly PluginDevWatchLogLine[]): void => {
+    for (const line of lines) {
+      emit({ type: 'log', pluginKey, ...line })
+    }
+  }
   let otherKeys: ReadonlySet<string> | null = null
   let lastWarning: string | null = null
 
   const pollLogs = async (): Promise<void> => {
-    for (const line of follower.take(await host.logs(pluginKey, follower.cursor))) {
-      emit({ type: 'log', pluginKey, ...line })
-    }
+    emitLogs(dedupe.take(follower.take(await host.logs(pluginKey, follower.cursor))))
   }
 
   const pollStatus = async (): Promise<void> => {
@@ -139,8 +201,8 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
         : 0
     const error = next.error ? { error: next.error } : {}
     if (changes > 0) {
+      emitLogs(dedupe.flush())
       emit({ type: 'reloaded', pluginKey, changes, status: next.status, ...error })
-      checks?.request()
     } else if (next.status !== snapshot.status || next.error !== snapshot.error) {
       emit({
         type: 'status',
@@ -152,6 +214,9 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
     }
     const newlyNeedsApproval = next.needsApproval && !snapshot.needsApproval
     snapshot = next
+    if (changes > 0) {
+      afterLoad?.request()
+    }
     if (newlyNeedsApproval) {
       const approval = await host.approvalNeeded()
       if (approval) {
@@ -168,10 +233,11 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
           // Baseline: only lines written from now on are streamed.
           follower.take(await host.logs(pluginKey, undefined))
         } else {
-          await pollLogs()
+          // Status first, so a reload's `reloaded` line precedes the lines its new code logs.
           if (polls % LIST_EVERY_POLLS === 0) {
             await pollStatus()
           }
+          await pollLogs()
         }
         lastWarning = null
       } catch (error) {
@@ -189,8 +255,9 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
       polls += 1
       await deps.wait(PLUGIN_DEV_WATCH_POLL_MS, stop.signal)
     }
-    // A check that is still rendering reports before the unload line.
-    await checks?.idle()
+    // A check or shot that is still running reports before the unload line.
+    await afterLoad?.idle()
+    emitLogs(dedupe.flush())
     if (!loaded.added) {
       emit({ type: 'unloaded', pluginKey, path: loaded.path, removed: false })
       return 0

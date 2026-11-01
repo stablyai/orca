@@ -1,6 +1,7 @@
 import type { WebContents } from 'electron'
 import {
   parsePluginFrameUrl,
+  PLUGIN_FRAME_RESERVED_SEGMENT,
   pluginFrameOrigin
 } from '../../../shared/plugins/frames/plugin-frame-guest'
 
@@ -67,6 +68,19 @@ export function pluginFrameSourceLocation(
   return lineNumber > 0 ? `${path}:${lineNumber}` : path
 }
 
+// After shortening, Orca's own guest files read `__orca/…`; authors only need their own frames.
+const ORCA_STACK_FRAME = new RegExp(`^\\s+at (?:.*\\()?${PLUGIN_FRAME_RESERVED_SEGMENT}/`)
+// `at Array.forEach (<anonymous>)`, `at new Promise (<anonymous>)`: engine frames with no source.
+const SOURCELESS_STACK_FRAME = /^\s+at (?:.*\((?:<anonymous>|native)\)|<anonymous>|native)\s*$/
+
+/** Drops stack lines inside Orca's guest runtime (`__orca/orca-runtime.mjs`) and the engine's. */
+export function withoutOrcaStackFrames(text: string): string {
+  return text
+    .split('\n')
+    .filter((line) => !ORCA_STACK_FRAME.test(line) && !SOURCELESS_STACK_FRAME.test(line))
+    .join('\n')
+}
+
 export function formatPluginFrameConsoleLine(
   details: PluginFrameConsoleDetails,
   frameKey: string
@@ -75,7 +89,7 @@ export function formatPluginFrameConsoleLine(
   if (!level) {
     return null
   }
-  let message = shortenPluginFrameUrls(details.message, frameKey)
+  let message = withoutOrcaStackFrames(shortenPluginFrameUrls(details.message, frameKey))
   if (message.length > MESSAGE_CHAR_LIMIT) {
     message = `${message.slice(0, MESSAGE_CHAR_LIMIT)}… (truncated)`
   }
@@ -163,4 +177,9 @@ export function openPluginFrameGuestDevTools(pluginKey: string): number {
     }
   }
   return opened
+}
+
+/** The plugin's live guests, for `orca plugin shot` to wait on the one it captures. */
+export function livePluginFrameGuests(pluginKey: string): WebContents[] {
+  return [...(guestsByPlugin.get(pluginKey) ?? [])].filter((guest) => !guest.isDestroyed())
 }

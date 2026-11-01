@@ -9,46 +9,58 @@ import {
   PLUGIN_DECLARATIVE_TONES
 } from './plugin-declarative-catalog'
 import { spliceOrcaHostTypings } from './plugin-declarative-host-typings'
+import * as orcaModule from './runtime/orca-module'
 
-const TYPINGS = path.resolve(
-  import.meta.dirname,
-  '../../../../resources/plugins/declarative/orca.d.ts'
-)
-const source = ts.createSourceFile(TYPINGS, readFileSync(TYPINGS, 'utf8'), ts.ScriptTarget.Latest)
+const DECLARATIVE = path.resolve(import.meta.dirname, '../../../../resources/plugins/declarative')
+const TYPINGS = path.join(DECLARATIVE, 'orca.d.ts')
+// The `orca` module spans these files; `orca plugin types` writes them as one.
+const FILES = [
+  'orca.d.ts',
+  'orca-components.d.ts',
+  'orca-components-layout.d.ts',
+  'orca-components-data.d.ts'
+]
 
-function orcaModule(): ts.ModuleBlock {
-  for (const statement of source.statements) {
-    if (
+function orcaModules(): ts.ModuleBlock[] {
+  return FILES.flatMap((file) => {
+    const full = path.join(DECLARATIVE, file)
+    const source = ts.createSourceFile(
+      full,
+      readFileSync(full, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true
+    )
+    return source.statements.flatMap((statement) =>
       ts.isModuleDeclaration(statement) &&
       ts.isStringLiteral(statement.name) &&
       statement.name.text === 'orca' &&
       statement.body &&
       ts.isModuleBlock(statement.body)
-    ) {
-      return statement.body
-    }
-  }
-  throw new Error("orca.d.ts declares no module 'orca'")
+        ? [statement.body]
+        : []
+    )
+  })
 }
 
-const block = orcaModule()
 const aliases = new Map<string, ts.TypeNode>()
 const components = new Map<string, string>()
-for (const statement of block.statements) {
-  if (ts.isTypeAliasDeclaration(statement)) {
-    aliases.set(statement.name.text, statement.type)
-  }
-  if (ts.isVariableStatement(statement)) {
-    for (const declaration of statement.declarationList.declarations) {
-      const type = declaration.type
-      if (
-        ts.isIdentifier(declaration.name) &&
-        type &&
-        ts.isTypeReferenceNode(type) &&
-        type.typeName.getText(source) === 'OrcaComponent' &&
-        type.typeArguments?.[0]
-      ) {
-        components.set(declaration.name.text, type.typeArguments[0].getText(source))
+for (const block of orcaModules()) {
+  for (const statement of block.statements) {
+    if (ts.isTypeAliasDeclaration(statement)) {
+      aliases.set(statement.name.text, statement.type)
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        const type = declaration.type
+        if (
+          ts.isIdentifier(declaration.name) &&
+          type &&
+          ts.isTypeReferenceNode(type) &&
+          type.typeName.getText() === 'OrcaComponent' &&
+          type.typeArguments?.[0]
+        ) {
+          components.set(declaration.name.text, type.typeArguments[0].getText())
+        }
       }
     }
   }
@@ -57,7 +69,7 @@ for (const statement of block.statements) {
 /** String literals of a union, following local aliases; null when it is not a literal union. */
 function literals(node: ts.TypeNode): string[] | null {
   if (ts.isTypeReferenceNode(node)) {
-    const target = aliases.get(node.typeName.getText(source))
+    const target = aliases.get(node.typeName.getText())
     return target ? literals(target) : null
   }
   if (ts.isUnionTypeNode(node)) {
@@ -83,11 +95,11 @@ function propsOf(alias: string): { members: Map<string, Member>; leaf: boolean }
   let leaf = false
   for (const part of parts) {
     if (ts.isTypeReferenceNode(part)) {
-      leaf ||= part.typeName.getText(source) === 'Leaf'
+      leaf ||= part.typeName.getText() === 'Leaf'
     } else if (ts.isTypeLiteralNode(part)) {
       for (const member of part.members) {
         if (ts.isPropertySignature(member) && member.name) {
-          members.set(member.name.getText(source), {
+          members.set(member.name.getText(), {
             optional: member.questionToken !== undefined,
             type: member.type
           })
@@ -147,6 +159,13 @@ describe('orca.d.ts matches the catalog', () => {
     )
     const file = readFileSync(TYPINGS, 'utf8')
     expect(spliceOrcaHostTypings(file)).toBe(file)
+  })
+
+  it('exports every catalog component from the guest `orca` module, as its own tag', () => {
+    const exported: Record<string, unknown> = { ...orcaModule }
+    for (const name of PLUGIN_DECLARATIVE_COMPONENT_NAMES) {
+      expect({ name, tag: exported[name] }).toEqual({ name, tag: name })
+    }
   })
 
   it('names the same tones and icons', () => {
