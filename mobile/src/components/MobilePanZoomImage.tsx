@@ -1,6 +1,6 @@
 import { useState, type SyntheticEvent } from 'react'
 import type { PanZoomSize } from '../../../src/shared/pan-zoom-view'
-import { useMobilePanZoom } from './use-mobile-pan-zoom'
+import { useMobilePanZoom, type MobilePanZoomDismiss } from './use-mobile-pan-zoom'
 
 type Props = {
   uri: string
@@ -10,13 +10,22 @@ type Props = {
   /** Let fit enlarge past natural size; vectors stay sharp. */
   upscale?: boolean
   onError?: () => void
+  /** Fitted vertical drags. Omitted for previews that should keep panning. */
+  dismiss?: MobilePanZoomDismiss | null
 }
 
 // DOM elements, not RN views: pointer capture and touch-action are what make pinch work in Android's WebView.
-export function MobilePanZoomImage({ uri, label, size = null, upscale = false, onError }: Props) {
+export function MobilePanZoomImage({
+  uri,
+  label,
+  size = null,
+  upscale = false,
+  onError,
+  dismiss = null
+}: Props) {
   const [loaded, setLoaded] = useState<{ uri: string; size: PanZoomSize } | null>(null)
   const content = size ?? (loaded?.uri === uri ? loaded.size : null)
-  const panZoom = useMobilePanZoom(content, upscale)
+  const panZoom = useMobilePanZoom(content, upscale, dismiss)
 
   const onLoad = (event: SyntheticEvent<HTMLImageElement>): void => {
     const { naturalWidth: width, naturalHeight: height } = event.currentTarget
