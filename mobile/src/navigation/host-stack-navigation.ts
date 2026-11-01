@@ -23,11 +23,18 @@ export type HostStackReplaceAction = Readonly<{
   payload: HostStackRouteTarget
 }>
 
+export type HostStackPushAction = Readonly<{
+  type: 'PUSH'
+  target: string
+  payload: HostStackRouteTarget
+}>
+
 export type HostStackRootNavigation = {
   addListener: (event: 'state', listener: () => void) => () => void
   dispatch: (
     action:
       | HostStackReplaceAction
+      | HostStackPushAction
       | Readonly<{
           type: 'SET_PARAMS'
           target: string
@@ -47,9 +54,12 @@ export type HostStackRouteHref = Readonly<{
 }>
 
 export type HostStackRouter = {
-  push: (route: HostStackHostRoute) => void
+  push: (route: HostStackHostRoute | HostStackRouteHref) => void
   replace: (route: HostStackRouteHref) => void
 }
+
+const HOST_INDEX_SCREEN = '[hostId]/index'
+const HOST_SESSION_SCREEN = '[hostId]/session/[worktreeId]'
 
 export type HostStackNavigationController = Readonly<{
   cancel: () => void
@@ -109,7 +119,7 @@ function mountedHostStack(
   const hostRoute = hostState?.routes[hostState.index]
   if (
     !hostState?.key ||
-    hostRoute?.name !== '[hostId]/index' ||
+    hostRoute?.name !== HOST_INDEX_SCREEN ||
     !hostRoute.key ||
     !hostParamMatches(hostRoute.params?.hostId, expectedHostId)
   ) {
@@ -118,7 +128,29 @@ function mountedHostStack(
   return { key: hostState.key, routeKey: hostRoute.key }
 }
 
-// Mount the host first, then replace after its stack commits; a cold nested push otherwise resolves to a blank index without hostId.
+function isHostSessionTarget(target: HostStackRouteTarget): boolean {
+  return target.name === HOST_SESSION_SCREEN
+}
+
+function openCommittedHostTarget(
+  navigation: HostStackRootNavigation,
+  hostStack: { key: string; routeKey: string },
+  target: HostStackRouteTarget
+): void {
+  // Leave the host list under a session so Back returns to it. Other screens still replace that list.
+  if (isHostSessionTarget(target)) {
+    navigation.dispatch({ type: 'PUSH', target: hostStack.key, payload: target })
+    return
+  }
+  navigation.dispatch({
+    type: 'REPLACE',
+    target: hostStack.key,
+    source: hostStack.routeKey,
+    payload: target
+  })
+}
+
+// Mount the host first, then open the target after its stack commits. A cold nested push otherwise resolves to a blank index without hostId.
 export function navigateToHostStackRoute(
   navigation: HostStackRootNavigation,
   router: HostStackRouter,
@@ -175,22 +207,26 @@ export function navigateToHostStackRoute(
     if (!hostStack) {
       if (hostContainer && hostParamMatches(hostContainer.params?.hostId, hostId)) {
         dispose()
-        router.replace(hostStackRouteHref(selectedTarget))
+        const href = hostStackRouteHref(selectedTarget)
+        if (isHostSessionTarget(selectedTarget)) {
+          router.push(href)
+        } else {
+          router.replace(href)
+        }
       }
       return
     }
     dispose()
-    navigation.dispatch({
-      type: 'REPLACE',
-      target: hostStack.key,
-      source: hostStack.routeKey,
-      payload: selectedTarget
-    })
+    openCommittedHostTarget(navigation, hostStack, selectedTarget)
   }
 
   try {
     unsubscribeState = navigation.addListener('state', onState)
-    router.push(hostStackHostRoute(hostId))
+    // A host list that is already mounted may not emit state for another push of the same host.
+    onState()
+    if (active) {
+      router.push(hostStackHostRoute(hostId))
+    }
   } catch (error) {
     dispose()
     throw error
@@ -222,4 +258,60 @@ export function coordinateHostStackNavigation(
     hostId,
     controller: navigateToHostStackRoute(navigation, router, hostId, target)
   }
+}
+
+function levelContainsHostSession(level: HostStackNavigationState, hostId: string): boolean {
+  return level.routes.some(
+    (route) => route.name === HOST_SESSION_SCREEN && hostParamMatches(route.params?.hostId, hostId)
+  )
+}
+
+// Prefer the focused host's nested stack. A screen already inside that stack sees the session directly.
+export function sessionHostStackLevel(
+  state: HostStackNavigationState,
+  hostId: string
+): HostStackNavigationState | null {
+  const nested = focusedHostRoute(state)?.state
+  if (nested && levelContainsHostSession(nested, hostId)) {
+    return nested
+  }
+  if (levelContainsHostSession(state, hostId)) {
+    return state
+  }
+  return null
+}
+
+// Insert the host list immediately before its session. Null when that list is already underneath.
+export function withHostSessionListBeneath(
+  level: HostStackNavigationState,
+  hostId: string
+): { index: number; routes: HostStackNavigationRoute[] } | null {
+  let sessionIndex = -1
+  for (let index = level.index; index >= 0; index -= 1) {
+    const route = level.routes[index]
+    if (route?.name === HOST_SESSION_SCREEN && hostParamMatches(route.params?.hostId, hostId)) {
+      sessionIndex = index
+      break
+    }
+  }
+  if (sessionIndex < 0) {
+    return null
+  }
+  for (let index = 0; index < sessionIndex; index += 1) {
+    const route = level.routes[index]
+    if (route?.name === HOST_INDEX_SCREEN && hostParamMatches(route.params?.hostId, hostId)) {
+      return null
+    }
+  }
+  const sessionHostId = level.routes[sessionIndex]?.params?.hostId
+  const routes = [
+    ...level.routes.slice(0, sessionIndex),
+    {
+      key: `host-session-list:${hostId}`,
+      name: HOST_INDEX_SCREEN,
+      params: { hostId: typeof sessionHostId === 'string' ? sessionHostId : hostId }
+    },
+    ...level.routes.slice(sessionIndex)
+  ]
+  return { index: level.index >= sessionIndex ? level.index + 1 : level.index, routes }
 }
