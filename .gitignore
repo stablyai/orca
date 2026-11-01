@@ -31,6 +31,8 @@ native/windows-registry/build/
 native/windows-registry/bin/
 native/windows-security/build/
 native/windows-security/bin/
+native/history-filesystem/build/
+native/history-filesystem/bin/
 .build/windows-security/
 
 .pnpm-store/

@@ -226,10 +226,14 @@ describe('findSlotProblems', () => {
     const dir = temp()
     mkdirSync(join(dir, 'darwin-arm64'))
     writeFileSync(join(dir, 'darwin-arm64', 'pty.node'), 'binary')
+    writeFileSync(join(dir, 'darwin-arm64', 'history-filesystem.node'), 'history')
     const manifest = mergeManifest(
       null,
       next('darwin-arm64', {
-        entry: entry({ 'pty.node': sha256Of(join(dir, 'darwin-arm64', 'pty.node')) })
+        entry: entry({
+          'pty.node': sha256Of(join(dir, 'darwin-arm64', 'pty.node')),
+          'history-filesystem.node': sha256Of(join(dir, 'darwin-arm64', 'history-filesystem.node'))
+        })
       })
     )
     expect(findSlotProblems(manifest, dir, ['darwin-arm64'])).toEqual([])
@@ -255,6 +259,7 @@ describe('findSlotProblems', () => {
       next(slot, { entry: entry({ 'pty.node': sha256Of(join(dir, slot, 'pty.node')) }) })
     )
     expect(findSlotProblems(manifest, dir, [slot])).toEqual([
+      `${slot}/history-filesystem.node: not built`,
       `${slot}/parcel-watcher/watcher.node: not built`
     ])
   })
@@ -275,6 +280,6 @@ describe('compat addon coverage', () => {
     const target = 'linux-x64-glibc217'
     expect(
       findCompatAddonGaps(orcadTemplateTargetFilenames(target), new Set(nodePtySources(target)))
-    ).toEqual(['node_modules/@parcel/watcher/watcher.node'])
+    ).toEqual(['node_modules/@parcel/watcher/watcher.node', 'history-filesystem.node'])
   })
 })

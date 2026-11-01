@@ -12,7 +12,11 @@ export const NATIVE_MODULE_BUILD_PACKAGES = [
 ]
 // Only the release matters: it fixes the ABI and headers; its downloader closure does not.
 export const NATIVE_MODULE_TARGET_PACKAGES = ['electron']
-export const NATIVE_MODULE_WORKSPACES = ['native/windows-registry', 'native/windows-security']
+export const NATIVE_MODULE_WORKSPACES = [
+  'native/windows-registry',
+  'native/windows-security',
+  'native/history-filesystem'
+]
 // Resolution-only settings, plus patches, whose native effect already shows in snapshot ids.
 const RESOLUTION_ONLY_WORKSPACE_SETTINGS = new Set([
   'addMissingPeerTypes',

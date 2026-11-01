@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import { lstat, readFile } from 'node:fs/promises'
 import { join, posix } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -7,11 +6,10 @@ import {
   CLAUDE_PROFILE_POINTER_ENV,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from '../../shared/claude-profile-routing'
-import { WSL_CLAUDE_PROFILE_HELPER_FILENAME } from '../../shared/remote-bundle-artifacts'
 import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { getWslHomeAsync, listRunningWslDistrosAsync } from '../wsl'
-import { ensureWslPinnedRuntime } from '../wsl/wsl-pinned-runtime'
-import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
+import { ensureWslPinnedRuntimeTarget } from '../wsl/wsl-pinned-runtime'
+import { materializeOrcadArtifact } from '../orcad/orcad-artifact-materializer'
 import { runWslProcess, type WslSpec } from '../wsl/wsl-runner'
 import { describeWslProcessFailure } from '../wsl/wsl-process-failure'
 import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
@@ -277,18 +275,17 @@ async function runGuest(distro: string, spec: WslSpec, timeoutMs = 15_000): Prom
 
 /** Run guest setup with the pinned Node runtime. */
 const runWslSetup: WslSetup = async (distro, home, accountId) => {
-  const helper = relayBundleCandidates('wsl')
-    .map((dir) => join(dir, WSL_CLAUDE_PROFILE_HELPER_FILENAME))
-    .find(existsSync)
-  if (!helper) {
-    throw new Error('The bundled WSL Claude account helper is missing. Reinstall Orca.')
-  }
   const run = (spec: WslSpec, timeoutMs?: number) => runGuest(distro, spec, timeoutMs)
-  const node = await ensureWslPinnedRuntime(
-    run,
-    join(getAppEnvironment().getPath('userData'), 'orcad-artifacts'),
-    AbortSignal.timeout(180_000)
-  )
+  const cacheRoot = join(getAppEnvironment().getPath('userData'), 'orcad-artifacts')
+  const signal = AbortSignal.timeout(180_000)
+  const { executable: node, target } = await ensureWslPinnedRuntimeTarget(run, cacheRoot, signal)
+  // The same local WSL cache the orcad deploy trusts; rehashing it would run on every launch refresh.
+  const slot = await materializeOrcadArtifact(target, {
+    cacheRoot,
+    signal,
+    trustVerificationRecord: true
+  })
+  const helper = join(slot, 'claude-profile-wsl-entry.js')
   const guestHelper = await run({
     program: 'wslpath',
     args: ['-a', '-u', helper],

@@ -205,6 +205,9 @@ importers:
       '@linear/sdk':
         specifier: ^97.0.0
         version: 97.0.0(graphql@16.14.2)
+      '@orca/history-filesystem':
+        specifier: workspace:*
+        version: link:native/history-filesystem
       '@orca/process-host':
         specifier: workspace:*
         version: link:src/packages/process-host
@@ -681,6 +684,12 @@ importers:
       sherpa-onnx-win-x64:
         specifier: 1.12.37
         version: 1.12.37
+
+  native/history-filesystem:
+    dependencies:
+      node-addon-api:
+        specifier: ^8.5.0
+        version: 8.9.2
 
   native/windows-registry:
     dependencies:

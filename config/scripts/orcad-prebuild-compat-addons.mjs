@@ -1,3 +1,4 @@
+import { compileHistoryFilesystemAddon } from './build-history-filesystem-addon.mjs'
 // Compat glibc 2.17 slots build @parcel/watcher with static C++ runtime; upstream prebuilds need newer libstdc++ (design D6 rung B).
 import { cpSync, mkdirSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -9,6 +10,8 @@ import { COMPAT_SLOT_ADDONS, SLOT_NAPI_VERSION } from './orcad-prebuild-slot-con
 const require = createRequire(import.meta.url)
 
 const BUILDERS = {
+  'history-filesystem.node': (options) =>
+    compileHistoryFilesystemAddon({ ...options, staticCxxRuntime: true }),
   'parcel-watcher/watcher.node': compileParcelWatcher
 }
 

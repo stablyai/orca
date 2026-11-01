@@ -14,5 +14,3 @@ export const REMOTE_BUNDLE_PLATFORMS = [
 export type RemoteBundlePlatform = (typeof REMOTE_BUNDLE_PLATFORMS)[number]
 
 export const OPENCODE_SQLITE_READER_FILENAME = 'opencode-sqlite-reader.cjs'
-/** Built into the WSL guest bundle dir (out/relay/wsl). */
-export const WSL_CLAUDE_PROFILE_HELPER_FILENAME = 'claude-profile-wsl.cjs'

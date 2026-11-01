@@ -1,14 +1,7 @@
-import {
-  mkdirSync,
-  readdirSync,
-  realpathSync,
-  rmdirSync,
-  statSync,
-  symlinkSync,
-  unlinkSync
-} from 'node:fs'
-import { join } from 'node:path'
-import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
+import { mkdirSync, realpathSync, rmdirSync, unlinkSync } from 'node:fs'
+import { join, resolve, toNamespacedPath } from 'node:path'
+import { loadHistoryFilesystem, type HistoryDirectory } from '../../shared/history-filesystem'
+import { drainDirectory, retry } from './claude-profile-history-drain'
 import { resolveClaudeDefaultHome } from './claude-profile-paths'
 import {
   ClaudeProfileSurfaceError,
@@ -19,11 +12,11 @@ import {
   type ClaudeProfileSurfaceOutcome
 } from './claude-profile-report'
 import {
-  CLAUDE_PROFILE_MERGE_SUFFIX,
   crossFilesystem,
   lstatIfPresent,
   mergeClaudeProfilePromptHistory
 } from './claude-profile-prompt-history'
+import { CLAUDE_PROFILE_MERGE_SUFFIX } from './claude-profile-prompt-history-pending'
 
 // Exclude `sessions`: its live-process registry belongs to each folder's daemon.
 export const CLAUDE_PROFILE_HISTORY_DIRS = [
@@ -38,111 +31,127 @@ export const CLAUDE_PROFILE_HISTORY_DIRS = [
   'transcripts'
 ] as const
 
-type MoveResult = { retained: number; failed: unknown[] }
-
-// One locked entry must not prevent merging the rest.
-function moveHistoryTree(source: string, destination: string, result: MoveResult): void {
-  for (const item of readdirSync(source, { withFileTypes: true })) {
-    const from = join(source, item.name)
-    const to = join(destination, item.name)
-    try {
-      const existing = lstatIfPresent(to)
-      if (!existing) {
-        renameFileWithWindowsRetry(from, to)
-      } else if (item.isDirectory() && existing.isDirectory()) {
-        moveHistoryTree(from, to, result)
-      } else {
-        result.retained += 1
-      }
-    } catch (error) {
-      result.failed.push(error)
-    }
-  }
-  if (readdirSync(source).length === 0) {
-    rmdirSync(source)
-  }
-}
-
-function drainDirectory(
-  pending: string,
-  destination: string,
-  report: ClaudeProfileReport,
-  name: string
-): void {
-  const result: MoveResult = { retained: 0, failed: [] }
-  moveHistoryTree(pending, destination, result)
-  if (result.failed.length > 0) {
-    warnClaudeProfile(report, name, result.failed[0])
-  }
-  if (result.retained > 0) {
-    const detail = `${result.retained} conflicting entries kept in ${pending}`
-    warnClaudeProfile(report, name, new ClaudeProfileSurfaceError('retained-conflict', detail))
-  }
-}
-
-/** Link the default home's `name` folder in place of the profile's, moving its entries there. */
+/** Pending entries are never traversal paths. */
 export function mergeClaudeProfileDirectory(
   profile: string,
   home: string,
   name: string,
-  platform: NodeJS.Platform,
+  _platform: NodeJS.Platform,
   report: ClaudeProfileReport
 ): ClaudeProfileSurfaceOutcome {
-  const source = join(profile, name)
-  const destination = join(home, name)
-  const pending = `${source}${CLAUDE_PROFILE_MERGE_SUFFIX}`
-  mkdirSync(destination, { recursive: true })
-  const sameDevice = (file: string): boolean => statSync(file).dev === statSync(destination).dev
-  if (lstatIfPresent(pending)?.isDirectory()) {
-    if (!sameDevice(pending)) {
-      if (!lstatIfPresent(source)) {
-        renameFileWithWindowsRetry(pending, source)
+  const binding = loadHistoryFilesystem()
+  const destinationPath = resolve(home, name)
+  const pending = `${name}${CLAUDE_PROFILE_MERGE_SUFFIX}`
+  const pendingPath = join(profile, pending)
+  const parent = binding.openDirectory(profile, false)
+  let destination: HistoryDirectory | undefined
+  try {
+    mkdirSync(destinationPath, { recursive: true })
+    destination = binding.openDirectory(destinationPath, true)
+    const target = destination
+    const restore = (): void => {
+      if (retry(() => parent.move(pending, parent, name)) === 'collision') {
+        if (parent.kind(pending) === 'directory' && parent.kind(name) === 'directory') {
+          const original = retry(() => parent.open(name))
+          try {
+            drainDirectory(parent, pending, original, report, name, pendingPath)
+          } finally {
+            original.close()
+          }
+        } else {
+          throw new ClaudeProfileSurfaceError(
+            'retained-conflict',
+            `Earlier entries kept in ${pendingPath}`
+          )
+        }
       }
-      throw crossFilesystem()
+    }
+    const previous = parent.kind(pending)
+    if (previous === 'directory') {
+      try {
+        const captured = retry(() => parent.open(pending))
+        let sameDevice: boolean
+        try {
+          sameDevice = captured.sameDevice(target)
+        } finally {
+          captured.close()
+        }
+        if (!sameDevice) {
+          // Restore only into an absent H; an occupied H keeps P where it is.
+          retry(() => parent.move(pending, parent, name))
+          throw crossFilesystem()
+        }
+        drainDirectory(parent, pending, target, report, name, pendingPath)
+      } catch (error) {
+        if (error instanceof ClaudeProfileSurfaceError && error.code === 'cross-filesystem') {
+          throw error
+        }
+        warnClaudeProfile(report, name, error)
+      }
+    } else if (previous !== null) {
+      // A stale staged link is opaque, including on the first call after interruption.
+      restore()
+    }
+    let staged = false
+    const current = parent.kind(name)
+    if (current === 'link') {
+      const linked = resolve(profile, parent.readLink(name))
+      return realpathSync(linked) === realpathSync(destinationPath) ? 'unchanged' : 'user-owned'
+    }
+    if (current !== null && current !== 'directory') {
+      return 'user-owned'
+    }
+    if (current === 'directory') {
+      const captured = retry(() => parent.open(name))
+      let sameDevice: boolean
+      try {
+        if (captured.same(target)) {
+          return 'unchanged'
+        }
+        sameDevice = captured.sameDevice(target)
+      } finally {
+        captured.close()
+      }
+      if (!sameDevice) {
+        throw crossFilesystem()
+      }
+      const moved = retry(() => parent.move(name, parent, pending, true))
+      staged = moved === 'moved'
+      if (moved === 'collision') {
+        throw new ClaudeProfileSurfaceError(
+          'retained-conflict',
+          `Earlier conflicts kept in ${pendingPath}`
+        )
+      }
+      if (parent.kind(pending) !== 'directory' && parent.kind(pending) !== null) {
+        restore()
+        throw new ClaudeProfileSurfaceError(
+          'retained-conflict',
+          `Changed source restored from ${pendingPath}`
+        )
+      }
     }
     try {
-      drainDirectory(pending, destination, report, name)
+      retry(() => parent.link(name, toNamespacedPath(destinationPath)))
     } catch (error) {
-      // Preserve unreadable leftovers without preventing link publication.
-      warnClaudeProfile(report, name, error)
-    }
-  }
-  const current = lstatIfPresent(source)
-  if (current?.isSymbolicLink()) {
-    return realpathSync(source) === realpathSync(destination) ? 'unchanged' : 'user-owned'
-  }
-  if (current && !current.isDirectory()) {
-    return 'user-owned'
-  }
-  if (current) {
-    if (!sameDevice(source)) {
-      throw crossFilesystem()
-    }
-    if (lstatIfPresent(pending)) {
-      throw new ClaudeProfileSurfaceError(
-        'retained-conflict',
-        `Earlier conflicts kept in ${pending}`
-      )
-    }
-    renameFileWithWindowsRetry(source, pending)
-  }
-  try {
-    // Junctions avoid Windows symlink privilege requirements.
-    symlinkSync(destination, source, platform === 'win32' ? 'junction' : 'dir')
-  } catch (error) {
-    if (current) {
-      if (!lstatIfPresent(source)) {
-        renameFileWithWindowsRetry(pending, source)
-      } else if (lstatIfPresent(source)?.isDirectory()) {
-        moveHistoryTree(pending, source, { retained: 0, failed: [] })
+      // A rival's staged P is its own to restore.
+      if (staged) {
+        try {
+          restore()
+        } catch (restoreError) {
+          warnClaudeProfile(report, name, restoreError)
+        }
       }
+      throw new ClaudeProfileSurfaceError('link-failed', String(error))
     }
-    throw new ClaudeProfileSurfaceError('link-failed', String(error))
+    if (staged && parent.kind(pending) === 'directory') {
+      drainDirectory(parent, pending, target, report, name, pendingPath)
+    }
+    return 'linked'
+  } finally {
+    destination?.close()
+    parent.close()
   }
-  if (current) {
-    drainDirectory(pending, destination, report, name)
-  }
-  return 'linked'
 }
 
 // Undo legacy session sharing; Claude recreates its per-folder process registry.
@@ -171,6 +180,7 @@ export async function shareClaudeProfileHistory(args: {
   userConfigDir?: string
   platform?: NodeJS.Platform
 }): Promise<ClaudeProfileReport> {
+  loadHistoryFilesystem()
   const report = createClaudeProfileReport()
   const platform = args.platform ?? process.platform
   const defaultHome = resolveClaudeDefaultHome(args.userHome, args.userConfigDir)

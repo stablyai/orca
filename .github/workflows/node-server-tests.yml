@@ -211,6 +211,11 @@ jobs:
             (github.event_name == 'pull_request' ||
             (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)))) }}
           restore-windows-cache: ${{ inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'push' }}
+      - name: Stage the built history addon for the source contract tests
+        shell: bash
+        run: node -e "const fs=require('node:fs'); fs.mkdirSync('native/history-filesystem/build/Release',{recursive:true}); fs.copyFileSync('out/orcad-prebuilds/'+process.argv[1]+'/history-filesystem.node','native/history-filesystem/build/Release/history_filesystem.node')" "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
+      - name: Verify history directory capabilities on this platform
+        run: node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/shared/history-filesystem.test.ts src/shared/history-filesystem.win32.test.ts src/main/claude-accounts/claude-profile-history.test.ts src/main/claude-accounts/claude-profile-history-windows.test.ts src/main/claude-accounts/claude-profile-wsl-router.test.ts
       # The template lane cross-compiles arm64 too, as it does for the process-table addon.
       - uses: ./.github/actions/prepare-windows-cli-launcher
         if: runner.os == 'Windows'

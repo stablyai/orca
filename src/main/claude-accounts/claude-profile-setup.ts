@@ -1,3 +1,4 @@
+import { loadHistoryFilesystem } from '../../shared/history-filesystem'
 import { existsSync } from 'node:fs'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { shareClaudeProfileHistory } from './claude-profile-history'
@@ -73,6 +74,13 @@ export async function provisionClaudeAccountProfile(args: {
     }
     return 'merged'
   })
+  // A missing history binding is a build defect: history failed before mutating anything and the
+  // launch proceeds, but setup stays unmarked so the next launch retries and warns again.
+  try {
+    loadHistoryFilesystem()
+  } catch {
+    return { outcome: 'prepared', ...report }
+  }
   // Mark last so interrupted setup is retried before the next launch.
   markSetUp()
   return { outcome: 'prepared', ...report }

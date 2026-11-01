@@ -18,14 +18,23 @@ import {
 const require = createRequire(import.meta.url)
 const root = resolve(import.meta.dirname, '../..')
 const ownership = require('./node-pty-job-ownership.cjs')
-// The locked node-pty and node-gyp closures stand in for pnpm-lock.yaml and package.json.
+// The locked node-pty, node-gyp and history addon closures stand in for pnpm-lock.yaml and package.json.
 export const WINDOWS_PREBUILD_LOCKED_PACKAGES = ['node-pty', 'node-gyp']
+const WINDOWS_PREBUILD_LOCKED_WORKSPACES = ['native/history-filesystem']
 const WINDOWS_PREBUILD_PACKAGE_SCRIPTS = ['build:orcad-prebuilds', 'build:packages']
 export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   '.github/actions/prepare-orcad-prebuilds/action.yml',
   'config/patches/node-pty@1.1.0.patch',
   'src/shared/node-runtime-pin.ts',
   'config/scripts/build-orcad-prebuilds.mjs',
+  'config/scripts/build-history-filesystem-addon.mjs',
+  'config/scripts/history-filesystem-probe.cjs',
+  'native/history-filesystem/package.json',
+  'native/history-filesystem/binding.gyp',
+  'native/history-filesystem/src/addon.cc',
+  'native/history-filesystem/src/history-filesystem.h',
+  'native/history-filesystem/src/posix.cc',
+  'native/history-filesystem/src/windows.cc',
   'config/scripts/orcad-prebuild-node-gyp.mjs',
   'config/scripts/initialize-windows-native-toolchain.mjs',
   'config/scripts/capture-windows-native-environment.cmd',
@@ -78,7 +87,8 @@ export function windowsPrebuildCacheIdentity({
   const { scripts } = JSON.parse(readFileSync(join(repository, 'package.json'), 'utf8'))
   const locked = nativeDependencyLockDigest({
     repository,
-    packages: WINDOWS_PREBUILD_LOCKED_PACKAGES
+    packages: WINDOWS_PREBUILD_LOCKED_PACKAGES,
+    workspaces: WINDOWS_PREBUILD_LOCKED_WORKSPACES
   }).digest
   const digest = createHash('sha256').update(
     JSON.stringify({
@@ -153,7 +163,7 @@ export function validateWindowsPrebuildCache({
   }
   const slotDir = join(prebuildsDir, slot)
   const sources = slotSourceFiles({ platform, arch, buildDir: slotDir, nodePtyDir: sourceDir })
-  const expected = sources.map(([relative]) => relative).sort()
+  const expected = [...sources.map(([relative]) => relative), 'history-filesystem.node'].sort()
   const sameFiles = (files, expectedFiles) =>
     JSON.stringify(files.sort()) === JSON.stringify(expectedFiles.sort())
   if (
@@ -178,6 +188,10 @@ export function validateWindowsPrebuildCache({
         `Cached ${slot}/${relative} imports ${newer.join(', ')}, above N-API ${SLOT_NAPI_VERSION}`
       )
     }
+  }
+  const { PE_MACHINE, readPeMachine } = require('./windows-pe-machine.cjs')
+  if (readPeMachine(join(slotDir, 'history-filesystem.node')) !== PE_MACHINE[arch]) {
+    throw new Error(`Cached ${slot}/history-filesystem.node has the wrong architecture`)
   }
   const addon = join(slotDir, 'conpty.node')
   ownership.assertRebuiltConptyMatchesArch(addon, arch)

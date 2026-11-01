@@ -18,6 +18,7 @@ import { DEFAULT_MAX_OUTPUT_BYTES } from '@orca/process-host/process-spec'
 import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution.ts'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
+import { writeFakeHistoryFilesystem } from './rebuild-native-deps-test-fixtures.mjs'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 import {
   nodeGypRebuildInvocation,
@@ -27,6 +28,7 @@ import {
 const sourceScriptPath = fileURLToPath(new URL('./ensure-native-runtime.mjs', import.meta.url))
 // Fixture import walk misses createRequire CJS edges; name siblings explicitly or temp project cannot load.
 const REQUIRED_CJS_SIBLINGS = [
+  'history-filesystem-probe.cjs',
   'node-pty-job-ownership.cjs',
   'windows-process-tree-creation-time.cjs'
 ]
@@ -296,6 +298,7 @@ export function runProcessSync(options) {
       join(projectDir, 'config', 'scripts', name)
     )
   }
+  writeFakeHistoryFilesystem(projectDir)
   return projectDir
 }
 

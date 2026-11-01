@@ -17,8 +17,12 @@ vi.mock('../codex-accounts/fs-utils', async (original) => {
   const actual = await original<typeof FsUtils>()
   return { ...actual, writeFileAtomically: vi.fn(actual.writeFileAtomically) }
 })
+import { loadHistoryFilesystem } from '../../shared/history-filesystem'
+import { observeHistoryFilesystem } from '../../shared/history-filesystem-test-boundary'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { shareClaudeProfileHistory } from './claude-profile-history'
+import { mergeClaudeProfilePromptHistory } from './claude-profile-prompt-history'
+import { createClaudeProfileReport } from './claude-profile-report'
 
 // Junctions and hardlinks need no Windows privilege; POSIX uses symlinks for junctions.
 const roots: string[] = []
@@ -61,11 +65,6 @@ describe('Claude profile history sharing on Windows', () => {
     expect(report.warnings).toEqual([])
     expect(report.surfaces.projects).toBe('linked')
     expect(report.surfaces['history.jsonl']).toBe('linked')
-    expect(fs.symlinkSync).toHaveBeenCalledWith(
-      join(f.defaultHome, 'projects'),
-      join(f.profileHome, 'projects'),
-      'junction'
-    )
     expect(fs.lstatSync(join(f.profileHome, 'projects')).isSymbolicLink()).toBe(true)
     expect(fs.readFileSync(join(f.defaultHome, 'projects/session.jsonl'), 'utf8')).toBe('own')
     expect(f.isHardlinked()).toBe(true)
@@ -178,6 +177,76 @@ describe('Claude profile history sharing on Windows', () => {
     )
     expect(f.isHardlinked()).toBe(false)
     expect(fs.readFileSync(join(f.profileHome, 'history.jsonl'), 'utf8')).toBe('private\n')
+  })
+  it('keeps the file Claude wrote over the new link when the record then fails', async () => {
+    const f = fixture()
+    const source = join(f.profileHome, 'history.jsonl')
+    fs.writeFileSync(source, 'private\n')
+    vi.mocked(writeFileAtomically).mockImplementationOnce(() => {
+      // Claude rewrites its copy through a new file and rename after the link was published.
+      fs.writeFileSync(join(f.profileHome, 'rewrite'), 'native\n')
+      fs.renameSync(join(f.profileHome, 'rewrite'), source)
+      throw Object.assign(new Error('busy'), { code: 'EBUSY' })
+    })
+    const report = await f.share()
+    expect(report.warnings).toContainEqual(
+      expect.objectContaining({ surface: 'history.jsonl', code: 'link-failed' })
+    )
+    expect(fs.readFileSync(source, 'utf8')).toBe('native\n')
+    await f.share()
+    expect(f.history()).toBe('private\nnative\n')
+    expect(f.isHardlinked()).toBe(true)
+  })
+  it("keeps Claude's rewrite when another setup recovers while a failed link is undone", async () => {
+    const f = fixture()
+    const source = join(f.profileHome, 'history.jsonl')
+    fs.writeFileSync(source, 'private\n')
+    vi.mocked(writeFileAtomically).mockImplementationOnce(() => {
+      fs.writeFileSync(join(f.profileHome, 'rewrite'), 'native\n')
+      fs.renameSync(join(f.profileHome, 'rewrite'), source)
+      throw Object.assign(new Error('busy'), { code: 'EBUSY' })
+    })
+    let made: string | undefined
+    let claim: string | undefined
+    let seenEmpty = false
+    let kept: string | undefined
+    const stop = observeHistoryFilesystem(loadHistoryFilesystem(), (operation, path, args) => {
+      if (operation === 'mkdir' && path === f.profileHome) {
+        made = join(f.profileHome, String(args[0]))
+      } else if (
+        !claim &&
+        operation === 'move' &&
+        path === f.profileHome &&
+        args[0] === 'history.jsonl' &&
+        vi.mocked(writeFileAtomically).mock.calls.length > 0
+      ) {
+        // The rollback claim is made and open but not yet filled when another setup recovers.
+        claim = made!
+        mergeClaudeProfilePromptHistory(
+          f.profileHome,
+          f.defaultHome,
+          'win32',
+          createClaudeProfileReport()
+        )
+        const slot = join(claim, 'history.jsonl')
+        kept = fs.existsSync(slot) ? fs.readFileSync(slot, 'utf8') : 'deleted'
+      } else if (claim && path === claim && !kept) {
+        if (operation === 'read' && args[0] === 'history.jsonl') {
+          seenEmpty = !fs.existsSync(join(claim, 'history.jsonl'))
+        } else if (seenEmpty && fs.existsSync(source)) {
+          // The creator's fill lands right after that setup read the slot as empty.
+          fs.renameSync(source, join(claim, 'history.jsonl'))
+        }
+      }
+    })
+    await f.share().finally(stop)
+    expect(seenEmpty).toBe(true)
+    expect(kept).toBe('native\n')
+    await f.share()
+    await f.share()
+    expect(f.history()).toBe('private\nnative\n')
+    expect(f.isHardlinked()).toBe(true)
+    expect(fs.readdirSync(f.profileHome).filter((name) => name.includes('claim'))).toEqual([])
   })
   it('finishes a share that was interrupted before the links were made', async () => {
     const f = fixture()
