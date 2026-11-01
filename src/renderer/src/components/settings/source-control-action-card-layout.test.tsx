@@ -153,13 +153,16 @@ it('hides an unresolved launch even with chat off, but always shows text action 
   expect(screen.getByDisplayValue('--saved')).toBeDefined()
 })
 
-it('edits launch arguments in the common setup and keeps the recipe when chat availability changes', async () => {
+it('keeps launch models, permissions and Arguments when chat availability changes', async () => {
   configure({ nativeChatProviders: {} })
   render(<Row />)
   const trigger = screen.getByRole('button', { name: 'Select agent' })
   await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
   fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+  expect(screen.getByRole('option', { name: 'Sonnet' })).toBeDefined()
+  expect(screen.queryByRole('option', { name: /^Same as default/ })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Claude permissions' })).toBeDefined()
   const input = screen.getByRole('textbox', { name: 'Arguments' })
   expect(input).toHaveProperty('value', '--saved')
   fireEvent.change(input, { target: { value: '--draft' } })

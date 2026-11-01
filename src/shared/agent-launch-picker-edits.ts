@@ -3,6 +3,7 @@ import { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
 import { agentPickerPanelArguments } from './agent-launch-picker-arguments'
 import {
+  TEXT_ACTION_DEFAULT_MODEL,
   agentPickerArgumentsText,
   agentPickerEffectiveChoices,
   type AgentPickerDraft,
@@ -135,6 +136,31 @@ export function applyAgentPickerEdit(
   draft: AgentPickerDraft,
   edit: AgentPickerEdit
 ): AgentPickerDraft {
+  if (entry.textGeneration && edit.kind === 'choice') {
+    const choices = { ...draft.choices, options: { ...draft.choices.options } }
+    const changed = new Set(draft.textChanges)
+    if (edit.patch.model !== undefined) {
+      changed.add('model')
+      if (edit.patch.model === TEXT_ACTION_DEFAULT_MODEL) {
+        delete choices.model
+      } else if (edit.patch.model) {
+        choices.model = edit.patch.model
+      }
+      const model = choices.model ?? entry.terminal.model
+      const effort = entry.textGeneration.effortByModel[model ?? '']
+      choices.options = effort ? { effort } : {}
+      changed.delete('effort')
+    }
+    if (edit.patch.options?.effort !== undefined) {
+      changed.add('effort')
+      if (edit.patch.options.effort === TEXT_ACTION_DEFAULT_MODEL) {
+        delete choices.options.effort
+      } else if (edit.patch.options.effort) {
+        choices.options.effort = edit.patch.options.effort
+      }
+    }
+    return { ...draft, choices, textChanges: [...changed] }
+  }
   if (edit.kind === 'arguments') {
     return agentPickerArgumentsText(entry, draft) === undefined
       ? draft

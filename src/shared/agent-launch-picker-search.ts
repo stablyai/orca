@@ -1,6 +1,14 @@
 import { agentPickerModels } from './agent-launch-picker-catalog'
 import { resolveAgentChoiceLayers } from './agent-choice-layers'
-import type { AgentPickerEntry, AgentPickerSetup } from './agent-launch-picker'
+import type { AgentPickerEntry, AgentPickerModel } from './agent-launch-picker'
+import type { AgentDedicatedChoices } from './agent-launch-choices'
+
+export type AgentPickerSetup = {
+  entry: AgentPickerEntry
+  model: AgentPickerModel
+  choices: AgentDedicatedChoices
+  label: string
+}
 
 const tokens = (value: string): string[] =>
   value

@@ -1,11 +1,12 @@
+import { AgentLaunchSetupActions } from './AgentLaunchSetupActions'
+import { AgentLaunchTextModelDefault } from './AgentLaunchTextModelDefault'
 import {
   agentLaunchSetupOptionRows,
   agentLaunchSetupCatalogState as catalogState
 } from './agent-launch-setup-option-rows'
 import { useState } from 'react'
-import { Check, ChevronDown, ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session-option-catalog'
-import { Button } from '@/components/ui/button'
 import {
   Command,
   CommandInput,
@@ -28,7 +29,6 @@ import {
   type AgentPickerEdit
 } from '../../../../shared/agent-launch-picker-edits'
 import {
-  agentPickerButtonOrder,
   agentPickerArgumentsKnown,
   agentPickerEffectiveChoices,
   agentPickerModels,
@@ -83,6 +83,9 @@ export function AgentLaunchSetupPanel({
       : undefined)
   // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
   const { hasModels, catalogPending, catalogMessage } = catalogState(entry, models, currentModel)
+  const modelInArguments =
+    entry.textGeneration?.modelInArguments &&
+    (!draft.textChanges?.includes('model') || entry.textGeneration.modelArgumentsUnrecognized)
   const modelDisabled = disabled || defaultsPending || catalogPending
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   const optionRows = agentLaunchSetupOptionRows({
@@ -104,21 +107,16 @@ export function AgentLaunchSetupPanel({
         pendingIds={new Set()}
         divided={false}
         layout="settings"
-        onSet={(option, value) =>
+        onSet={(option, value) => {
+          if (entry.textGeneration && value === 'arguments') {
+            return
+          }
           editDraft(
             option.id === 'fastMode' || option.id === 'serviceTier'
-              ? {
-                  kind: 'speed',
-                  key: option.id,
-                  value: String(value),
-                  model: currentModel
-                }
-              : {
-                  kind: 'choice',
-                  patch: { options: { [option.id]: String(value) } }
-                }
+              ? { kind: 'speed', key: option.id, value: String(value), model: currentModel }
+              : { kind: 'choice', patch: { options: { [option.id]: String(value) } } }
           )
-        }
+        }}
         onAction={() => {}}
       />
     ) : null
@@ -229,6 +227,12 @@ export function AgentLaunchSetupPanel({
             </CommandEmpty>
           ) : null}
           <CommandGroup>
+            <AgentLaunchTextModelDefault
+              entry={entry}
+              disabled={modelDisabled}
+              modelInArguments={modelInArguments}
+              onSelect={editDraft}
+            />
             {legacy && !modelQuery ? (
               <CommandItem value="__back__" disabled={disabled} onSelect={() => setLegacy(false)}>
                 <ChevronLeft className="size-3.5 text-muted-foreground" />
@@ -247,12 +251,12 @@ export function AgentLaunchSetupPanel({
                   value={model.id}
                   keywords={[model.label]}
                   disabled={modelDisabled}
-                  data-current={currentModel === model.id}
+                  data-current={currentModel === model.id && !modelInArguments}
                   onSelect={() => editDraft({ kind: 'choice', patch: { model: model.id } })}
                 >
                   {model.label}
                   <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
-                    {currentModel === model.id ? (
+                    {currentModel === model.id && !modelInArguments ? (
                       <Check className="size-3.5 text-muted-foreground" />
                     ) : null}
                   </span>
@@ -289,38 +293,40 @@ export function AgentLaunchSetupPanel({
         {renderOptions(
           optionRows.filter((row) => row.id !== 'fastMode' && row.id !== 'serviceTier')
         )}
-        <div>
-          <AgentPermissionMenu
-            agentId={entry.agent}
-            label={entry.label}
-            layout="row"
-            showInherited={false}
-            rawValue={argumentsView.selectedPermission ? undefined : argumentsView.permission}
-            disabled={
-              disabled ||
-              defaultsPending ||
-              !argumentsView.permission ||
-              (entry.surfaces.includes('terminal') && !argumentsKnown)
-            }
-            permission={{
-              choice: argumentsView.selectedPermission ?? 'own',
-              defaultChoice: argumentsView.selectedPermission ?? 'own',
-              choices: agentPickerPermissions(entry.agent, draft.surface),
-              source: 'agent',
-              flag: '',
-              argsSetPermission: false,
-              onSelect: (choice) => {
-                if (choice !== 'default') {
-                  editDraft({ kind: 'permission', value: choice })
-                }
+        {!entry.textGeneration ? (
+          <div>
+            <AgentPermissionMenu
+              agentId={entry.agent}
+              label={entry.label}
+              layout="row"
+              showInherited={false}
+              rawValue={argumentsView.selectedPermission ? undefined : argumentsView.permission}
+              disabled={
+                disabled ||
+                defaultsPending ||
+                !argumentsView.permission ||
+                (entry.surfaces.includes('terminal') && !argumentsKnown)
               }
-            }}
-          />
-        </div>
+              permission={{
+                choice: argumentsView.selectedPermission ?? 'own',
+                defaultChoice: argumentsView.selectedPermission ?? 'own',
+                choices: agentPickerPermissions(entry.agent, draft.surface),
+                source: 'agent',
+                flag: '',
+                argsSetPermission: false,
+                onSelect: (choice) => {
+                  if (choice !== 'default') {
+                    editDraft({ kind: 'permission', value: choice })
+                  }
+                }
+              }}
+            />
+          </div>
+        ) : null}
         {renderOptions(
           optionRows.filter((row) => row.id === 'fastMode' || row.id === 'serviceTier')
         )}
-        {entry.surfaces.includes('terminal') ? (
+        {!entry.textGeneration && entry.surfaces.includes('terminal') ? (
           <div>
             <Collapsible open={argumentsOpen} onOpenChange={setArgumentsOpen}>
               <CollapsibleTrigger asChild>
@@ -367,36 +373,13 @@ export function AgentLaunchSetupPanel({
           </div>
         ) : null}
       </div>
-      <div className="flex items-center justify-end gap-2 border-t border-border px-2.5 py-2">
-        {mode === 'select' ? (
-          <Button
-            type="button"
-            size="xs"
-            disabled={disabled}
-            onClick={() => handleUse(draft.surface)}
-          >
-            {translate('agentPicker.use', 'Use')}
-          </Button>
-        ) : (
-          agentPickerButtonOrder(entry).map((surface) => (
-            <Button
-              key={surface}
-              type="button"
-              size="xs"
-              disabled={disabled}
-              variant={surface === entry.defaultSurface ? 'default' : 'outline'}
-              onClick={() => handleUse(surface)}
-            >
-              {surface === 'chat'
-                ? translate('agentPicker.launchChat', 'Launch chat')
-                : translate('agentPicker.launchTerminal', 'Launch terminal')}
-              {surface === entry.defaultSurface ? (
-                <CornerDownLeft className="size-3 opacity-60" />
-              ) : null}
-            </Button>
-          ))
-        )}
-      </div>
+      <AgentLaunchSetupActions
+        entry={entry}
+        mode={mode}
+        disabled={disabled}
+        surface={draft.surface}
+        onUse={handleUse}
+      />
     </div>
   )
 }

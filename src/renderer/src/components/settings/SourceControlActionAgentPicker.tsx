@@ -43,7 +43,17 @@ type PickerProps = {
   onPick: (agent: TuiAgent | null, choice: Pick<SourceControlActionRecipe, 'surface'>) => void
 }
 
-export function SourceControlActionAgentPicker(props: PickerProps) {
+export function SourceControlActionAgentPicker(
+  props: PickerProps | { text: ComponentProps<typeof AgentLaunchPicker> }
+) {
+  return 'text' in props ? (
+    <AgentLaunchPicker {...props.text} />
+  ) : (
+    <ObservedSourceControlActionAgentPicker {...props} />
+  )
+}
+
+function ObservedSourceControlActionAgentPicker(props: PickerProps) {
   const repo = useAppStore((state) => state.repos.find((repo) => repo.id === props.repoId) ?? null)
   const rows = props.repoId
     ? sourceControlRepoAgentRows(repo)

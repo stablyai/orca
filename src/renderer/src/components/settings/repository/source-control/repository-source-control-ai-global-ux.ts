@@ -230,6 +230,7 @@ export function useRepositorySourceControlAiGlobalUx({
   }
 
   const {
+    updateActionTextModelChoice,
     updateActionLaunchPreferences,
     updateActionTemplate,
     updateActionAgentArgs,
@@ -306,6 +307,7 @@ export function useRepositorySourceControlAiGlobalUx({
     updateHostedReviewDefault,
     updateActionMode,
     updateActionAgent,
+    updateActionTextModelChoice,
     updateActionLaunchPreferences,
     updateActionTemplate,
     updateActionAgentArgs,

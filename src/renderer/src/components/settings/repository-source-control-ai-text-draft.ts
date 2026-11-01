@@ -11,6 +11,7 @@ import type {
 } from '../../../../shared/source-control-ai-actions'
 import type {
   RepoSourceControlAiOverrides,
+  SourceControlAiModelChoice,
   SourceControlAiSettings
 } from '../../../../shared/source-control-ai-types'
 import { liftActionPermissionArgs } from '../../../../shared/source-control-action-permission-lift'
@@ -143,6 +144,18 @@ export function createRepoActionTextDraftEditors(
   }
 
   return {
+    updateActionTextModelChoice: (
+      actionId: SourceControlActionId,
+      modelChoice: SourceControlAiModelChoice | undefined,
+      agentArgs: string
+    ) => {
+      setActionTextDrafts((current) =>
+        patchActionTextDraft(current, immediateRepoAiRef.current, actionId, {
+          modelChoice,
+          agentArgs
+        })
+      )
+    },
     updateActionLaunchPreferences,
     updateActionTemplate,
     updateActionAgentArgs,

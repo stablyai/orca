@@ -7,10 +7,12 @@ import { liftActionPermissionArgs } from '../../../../shared/source-control-acti
 import { useEffect, useMemo, useRef, useState, type SetStateAction } from 'react'
 import type {
   SourceControlAiSettings,
+  SourceControlAiModelChoice,
   SourceControlAiSettingsPatch
 } from '../../../../shared/source-control-ai-types'
 import {
   setSourceControlActionDefault,
+  AI_TEXT_ACTION_IDS,
   type SourceControlActionLaunchPreferences,
   type SourceControlActionId
 } from '../../../../shared/source-control-ai-actions'
@@ -167,6 +169,20 @@ export function useSourceControlActionRecipeDraftState({
     })
   }
 
+  const onTextModelChoiceChange = (
+    actionId: SourceControlActionId,
+    modelChoice: SourceControlAiModelChoice | undefined,
+    agentArgs: string
+  ): void => {
+    setActionRecipeDraftState((current) => ({
+      ...current,
+      values: {
+        ...current.values,
+        [actionId]: { ...current.values[actionId], modelChoice, agentArgs }
+      }
+    }))
+  }
+
   const retireActionAgentDocument = (actionId: SourceControlActionId, agentId: unknown): void => {
     setActionRecipeDraftState((current) => {
       const value = current.values[actionId]
@@ -197,6 +213,14 @@ export function useSourceControlActionRecipeDraftState({
     try {
       await writeConfig((current) => {
         return {
+          ...(AI_TEXT_ACTION_IDS.some((id) => id === actionId)
+            ? {
+                modelOverridesByOperation: {
+                  ...current.modelOverridesByOperation,
+                  [actionId]: nextValue.modelChoice
+                }
+              }
+            : {}),
           actions: setSourceControlActionDefault(current.actions, actionId, {
             commandInputTemplate: nextValue.commandInputTemplate,
             agentArgs: nextValue.agentArgs,
@@ -251,6 +275,7 @@ export function useSourceControlActionRecipeDraftState({
     onActionAgentArgsChange,
     onActionLaunchPreferencesChange,
     retireActionAgentDocument,
+    onTextModelChoiceChange,
     saveActionTemplateDraft,
     discardActionTemplateDraft,
     appendVariable
