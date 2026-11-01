@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type * as GitStatusModule from '../git/status'
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
@@ -268,6 +269,45 @@ describe('RuntimeGitCommands', () => {
         cwd: worktreePath,
         env: expect.objectContaining({ CODEX_HOME: '/managed/codex-home' })
       })
+    )
+  })
+
+  it('runs a phone-initiated commit message with the saved Commit message model and effort', async () => {
+    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+    tempDirs.push(worktreePath)
+    const actual = await vi.importActual<typeof CommitMessageTextGenerationModule>(
+      '../text-generation/commit-message-text-generation'
+    )
+    mocks.resolveCommitMessageSettings.mockImplementation(actual.resolveCommitMessageSettings)
+    mocks.getStagedCommitContext.mockResolvedValue({
+      branch: 'main',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    })
+    mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
+    const settings = getDefaultSettings('/home')
+    settings.sourceControlAi = {
+      ...settings.sourceControlAi!,
+      enabled: true,
+      agentId: 'codex',
+      modelOverridesByOperation: {
+        commitMessage: {
+          selectedModelByAgent: { codex: 'gpt-5.4' },
+          selectedThinkingByModel: { 'gpt-5.4': 'high' }
+        }
+      }
+    }
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => localTarget(worktreePath),
+      getRuntimeSettings: () => settings
+    })
+
+    await commands.generateRuntimeCommitMessage('id:wt-1')
+
+    expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ agentId: 'codex', model: 'gpt-5.4', thinkingLevel: 'high' }),
+      expect.anything()
     )
   })
 

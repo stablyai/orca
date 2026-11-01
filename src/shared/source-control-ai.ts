@@ -43,7 +43,11 @@ import {
   sourceControlAiSettingsFromLegacy as settingsFromLegacy
 } from './source-control-ai-settings'
 import { hasActionAgentRecipe } from './source-control-ai-command-template'
-import type { AiTextOperation, SourceControlAiPrCreationDefaults } from './source-control-ai-types'
+import type {
+  AiTextOperation,
+  SourceControlAiModelChoice,
+  SourceControlAiPrCreationDefaults
+} from './source-control-ai-types'
 
 export const DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS = DEFAULT_PR_CREATION_DEFAULTS
 
@@ -269,7 +273,16 @@ export function resolveSourceControlAiForOperation(
   }
 }
 
-/** Resolve the inherited choice through the generation path, including legacy compatibility. */
+/** Keep what a model-only clear keeps: effort stays saved per model. */
+function withoutModelPick(
+  choice: SourceControlAiModelChoice | undefined
+): SourceControlAiModelChoice | undefined {
+  return choice?.selectedThinkingByModel
+    ? { selectedThinkingByModel: choice.selectedThinkingByModel }
+    : undefined
+}
+
+/** Resolve what clearing the card's model runs, through the generation path and legacy mirror. */
 export function resolveSourceControlAiActionModelDefault(
   input: ResolveSourceControlAiInput,
   scope: 'global' | 'repo' = 'global'
@@ -277,11 +290,14 @@ export function resolveSourceControlAiActionModelDefault(
   const source = normalizeSettings(input.settings.sourceControlAi, input.settings.commitMessageAi)
   const modelOverridesByOperation = { ...source.modelOverridesByOperation }
   if (scope === 'global') {
-    delete modelOverridesByOperation[input.operation]
+    modelOverridesByOperation[input.operation] = withoutModelPick(
+      modelOverridesByOperation[input.operation]
+    )
   }
   const repoOverrides = { ...input.repo?.sourceControlAi?.modelOverridesByOperation }
   if (input.operation !== 'conversationName') {
-    delete repoOverrides[input.operation]
+    repoOverrides[input.operation] =
+      scope === 'repo' ? withoutModelPick(repoOverrides[input.operation]) : undefined
   }
   const inheritedSource = { ...source, modelOverridesByOperation }
   return resolveSourceControlAiForOperation({

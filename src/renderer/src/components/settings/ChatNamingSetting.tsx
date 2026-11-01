@@ -219,6 +219,7 @@ export function ChatNamingSetting({
                   onTextModelChoiceChange={(_id, modelChoice, agentArgs) =>
                     updateDraft({ ...value, modelChoice, agentArgs })
                   }
+                  writeSourceControlAiSettings={writeSourceControlAiSettings}
                   selectedAgent={recipe?.agentId ?? null}
                   defaultAgentLabel={defaultAgentLabel}
                   defaultAgentSupportText={

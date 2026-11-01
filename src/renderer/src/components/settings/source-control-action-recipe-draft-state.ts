@@ -13,6 +13,7 @@ import type {
 import {
   setSourceControlActionDefault,
   AI_TEXT_ACTION_IDS,
+  SOURCE_CONTROL_TEXT_ACTION_IDS,
   type SourceControlActionLaunchPreferences,
   type SourceControlActionId
 } from '../../../../shared/source-control-ai-actions'
@@ -27,6 +28,23 @@ type UseSourceControlActionRecipeDraftStateArgs = {
   customPromptDiscardSignal?: number
   onCustomPromptDirtyChange?: (dirty: boolean) => void
   writeConfig: (patch: SourceControlAiSettingsPatch) => Promise<void>
+}
+
+/** A model choice the user did not edit follows the saved one, so another editor's newer pick survives Save. */
+function rebaseUneditedModelChoices(
+  current: ActionRecipeDraftState,
+  persisted: ActionRecipeDraftState['values']
+): ActionRecipeDraftState['values'] {
+  const values = { ...current.values }
+  for (const actionId of SOURCE_CONTROL_TEXT_ACTION_IDS) {
+    const value = values[actionId]
+    if (
+      JSON.stringify(value.modelChoice) === JSON.stringify(current.baseValues[actionId].modelChoice)
+    ) {
+      values[actionId] = { ...value, modelChoice: persisted[actionId].modelChoice }
+    }
+  }
+  return values
 }
 
 export function useSourceControlActionRecipeDraftState({
@@ -75,7 +93,7 @@ export function useSourceControlActionRecipeDraftState({
         }
       }
       return {
-        values: current.values,
+        values: rebaseUneditedModelChoices(current, persistedActionRecipeValues),
         baseValues: persistedActionRecipeValues
       }
     })
@@ -209,11 +227,21 @@ export function useSourceControlActionRecipeDraftState({
     ) {
       return
     }
+    // An unedited model choice keeps whatever is saved when the write runs.
+    const modelChoiceEdited =
+      JSON.stringify(nextValue.modelChoice) !==
+      JSON.stringify(actionRecipeDraftState.baseValues[actionId].modelChoice)
+    let savedValue = nextValue
     setSavingActionTemplateIds((current) => ({ ...current, [actionId]: true }))
     try {
       await writeConfig((current) => {
+        if (!modelChoiceEdited) {
+          const choices: Partial<Record<string, SourceControlAiModelChoice>> =
+            current.modelOverridesByOperation ?? {}
+          savedValue = { ...nextValue, modelChoice: choices[actionId] }
+        }
         return {
-          ...(AI_TEXT_ACTION_IDS.some((id) => id === actionId)
+          ...(modelChoiceEdited && AI_TEXT_ACTION_IDS.some((id) => id === actionId)
             ? {
                 modelOverridesByOperation: {
                   ...current.modelOverridesByOperation,
@@ -232,9 +260,9 @@ export function useSourceControlActionRecipeDraftState({
       setActionRecipeDraftState((current) => ({
         values:
           JSON.stringify(current.values[actionId]) === JSON.stringify(submitted)
-            ? { ...current.values, [actionId]: nextValue }
+            ? { ...current.values, [actionId]: savedValue }
             : current.values,
-        baseValues: { ...current.baseValues, [actionId]: nextValue }
+        baseValues: { ...current.baseValues, [actionId]: savedValue }
       }))
     } finally {
       setSavingActionTemplateIds((current) => ({ ...current, [actionId]: false }))

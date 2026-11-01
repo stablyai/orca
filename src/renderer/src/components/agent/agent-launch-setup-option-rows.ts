@@ -21,6 +21,19 @@ type AgentLaunchSetupOptionRowsInput = {
   argumentsKnown: boolean
 }
 
+/** Clearing Effort keeps the selected model, so its default is that model's inherited effort. */
+function textEffortDefaultLabel(kind: {
+  choices: readonly { value: string; label: string }[]
+  defaultValue: string
+}): string {
+  const effort = kind.choices.find((choice) => choice.value === kind.defaultValue)?.label
+  return effort
+    ? translate('agentPicker.sameAsTextDefault', 'Same as default · {{value0}}', {
+        value0: effort
+      })
+    : translate('settings.sourceControl.actionModel.effortDefault', 'Default')
+}
+
 export function agentLaunchSetupOptionRows({
   options,
   models,
@@ -92,7 +105,10 @@ export function agentLaunchSetupOptionRows({
                           }
                         ]
                       : []),
-                    { value: TEXT_ACTION_DEFAULT_MODEL, label: entry.textGeneration.defaultLabel },
+                    {
+                      value: TEXT_ACTION_DEFAULT_MODEL,
+                      label: textEffortDefaultLabel(option.kind)
+                    },
                     ...option.kind.choices
                   ]
                 : current && !option.kind.choices.some((choice) => choice.value === current)

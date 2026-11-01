@@ -1,7 +1,7 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { shallow } from 'zustand/shallow'
 import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
-import { memo, useState, type ReactNode } from 'react'
+import { memo, useEffect, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -40,6 +40,7 @@ export const AgentLaunchPicker = memo(
     emptyLabel,
     children,
     onTriggerEnter,
+    onCatalogOpen,
     onPick
   }: {
     model: NewTabAgentMenuModel
@@ -55,6 +56,8 @@ export const AgentLaunchPicker = memo(
     emptyLabel?: string
     children?: ReactNode
     onTriggerEnter?: () => void
+    /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
+    onCatalogOpen?: (agent: AgentPickerEntry['agent']) => void
     onPick: (
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
@@ -73,6 +76,12 @@ export const AgentLaunchPicker = memo(
       selected ?? agent ?? undefined
     )
     const entries = suppliedEntries ?? observedEntries
+    const catalogAgent = open && suppliedEntries ? (selected ?? agent ?? undefined) : undefined
+    useEffect(() => {
+      if (catalogAgent) {
+        onCatalogOpen?.(catalogAgent)
+      }
+    }, [catalogAgent, onCatalogOpen])
     const entry = entries.find((entry) => entry.agent === agent)
     const draft = entry ? (value ?? draftForEntry?.(entry)) : undefined
     const choices = entry

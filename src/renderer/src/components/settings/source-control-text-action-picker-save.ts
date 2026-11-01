@@ -4,6 +4,14 @@ import {
   type AgentPickerDraft
 } from '../../../../shared/agent-launch-picker'
 import { saveSourceControlAiActionModelChoice } from '../../../../shared/source-control-ai-action-model-choice'
+import {
+  removeSourceControlAiArgumentFlag,
+  rewriteSourceControlAiArgumentFlagValue
+} from '../../../../shared/source-control-ai-argument-flags'
+import {
+  getCommitMessageAgentSpec,
+  type CommitMessageAgentSpec
+} from '../../../../shared/commit-message-agent-spec'
 import type {
   AiTextOperation,
   SourceControlAiSettings,
@@ -12,6 +20,28 @@ import type {
 } from '../../../../shared/source-control-ai-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
+
+/** The model a shared `model#variant` operand in Arguments runs, and whether the menu lists it. */
+function argumentsVariantModel(
+  agent: AgentPickerEntry['agent'],
+  agentArgs: string,
+  entry: AgentPickerEntry
+): { spec: CommitMessageAgentSpec; model: string; listed: boolean } | undefined {
+  const spec = getCommitMessageAgentSpec(agent)
+  if (!spec?.effortFlag.some((flag) => flag.modelVariant)) {
+    return undefined
+  }
+  const operand = removeSourceControlAiArgumentFlag(agentArgs, spec, 'effort').value
+  if (!operand) {
+    return undefined
+  }
+  const variant = operand.lastIndexOf('#')
+  const model = variant !== -1 ? operand.slice(0, variant) : operand
+  const listed =
+    entry.catalog.origin !== 'unknown' &&
+    entry.catalog.models.some((candidate) => candidate.id === model)
+  return { spec, model, listed }
+}
 
 export function saveSourceControlTextPickerDraft({
   source,
@@ -68,6 +98,18 @@ export function saveSourceControlTextPickerDraft({
   let nextChoice = choice
   const effective = agentPickerEffectiveChoices(entry, draft)
   for (const field of draft.textChanges ?? []) {
+    // An effort-only edit keeps the model the Arguments ran; an unlisted one stays in Arguments.
+    const variant =
+      field === 'effort' && !draft.textChanges?.includes('model')
+        ? argumentsVariantModel(agent, nextArgs, entry)
+        : undefined
+    if (variant && !variant.listed) {
+      const effort = draft.choices.options?.effort
+      nextArgs = rewriteSourceControlAiArgumentFlagValue(nextArgs, variant.spec, 'effort', () =>
+        effort ? `${variant.model}#${effort}` : variant.model
+      )
+      continue
+    }
     const saved = saveSourceControlAiActionModelChoice({
       target: repoId ? { type: 'repo', repoId: repoId } : { type: 'global' },
       settings: { ...settings, sourceControlAi: currentSource },
@@ -79,7 +121,7 @@ export function saveSourceControlTextPickerDraft({
           ? { field, value: draft.choices.model }
           : {
               field,
-              modelId: effective.model ?? '',
+              modelId: variant?.model ?? effective.model ?? '',
               value: draft.choices.options?.effort
             }
     })

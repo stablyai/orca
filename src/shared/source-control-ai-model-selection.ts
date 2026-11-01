@@ -121,6 +121,42 @@ export function getDiscoveredModels(
   )
 }
 
+/** Save a host's discovered models where generation, and older builds, read them. */
+export function withDiscoveredModels(
+  config: SourceControlAiSettings,
+  agentId: TuiAgent,
+  models: CommitMessageAiModelCapability[],
+  hostKey: string
+): Pick<SourceControlAiSettings, 'discoveredModelsByAgent' | 'discoveredModelsByAgentByHost'> {
+  return {
+    discoveredModelsByAgent:
+      hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
+        ? { ...config.discoveredModelsByAgent, [agentId]: models }
+        : config.discoveredModelsByAgent,
+    discoveredModelsByAgentByHost: {
+      ...config.discoveredModelsByAgentByHost,
+      [hostKey]: { ...config.discoveredModelsByAgentByHost?.[hostKey], [agentId]: models }
+    }
+  }
+}
+
+/** The models generation can run for an agent on a host, in its lookup order: spec, then saved discovery. */
+export function getTextGenerationModels<T extends CommitMessageAiModelCapability>(
+  specModels: readonly T[],
+  source: SourceControlAiSettings,
+  legacy: CommitMessageAiSettings | null | undefined,
+  hostKey: string,
+  agentId: TuiAgent
+): (T | CommitMessageAiModelCapability)[] {
+  const specIds = new Set(specModels.map((model) => model.id))
+  return [
+    ...specModels,
+    ...getDiscoveredModels(source, legacy, hostKey, agentId).filter(
+      (model) => !specIds.has(model.id)
+    )
+  ]
+}
+
 export function selectPersistedModelId(args: {
   source: SourceControlAiSettings
   legacy: CommitMessageAiSettings | null | undefined

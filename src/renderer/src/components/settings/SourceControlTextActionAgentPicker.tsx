@@ -11,7 +11,6 @@ import {
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
 import {
   getCommitMessageAgentCapability,
-  getCommitMessageAgentSpec,
   isCustomAgentId,
   resolveCommitMessageAgentChoice
 } from '../../../../shared/commit-message-agent-spec'
@@ -26,12 +25,14 @@ import {
   resolveSourceControlAiActionModelDefault
 } from '../../../../shared/source-control-ai'
 import { saveSourceControlTextPickerDraft } from './source-control-text-action-picker-save'
-import { removeSourceControlAiArgumentFlag } from '../../../../shared/source-control-ai-argument-flags'
+import { useTextActionModelDiscovery } from './use-text-action-model-discovery'
+import { textActionPickerEntryView } from './source-control-text-action-picker-entries'
 import { AI_TEXT_ACTION_IDS, type AiActionId } from '../../../../shared/source-control-ai-actions'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiModelChoice,
-  SourceControlAiSettings
+  SourceControlAiSettings,
+  SourceControlAiSettingsPatch
 } from '../../../../shared/source-control-ai-types'
 import {
   agentPickerDraft,
@@ -57,6 +58,8 @@ type TextActionPickerProps = {
   defaultAgentLabel?: string
   onAgentChange: (value: string) => void
   onChange?: (choice: SourceControlAiModelChoice | undefined, agentArgs: string) => void
+  /** Saves model lists the CLI reports; without it the menu shows only saved lists. */
+  writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }
 
 export function SourceControlTextActionAgentPicker(props: TextActionPickerProps) {
@@ -70,7 +73,19 @@ export function SourceControlTextActionAgentPicker(props: TextActionPickerProps)
       current.current.onChange?.(choice, args),
     []
   )
-  return <TextActionPicker {...props} onAgentChange={onAgentChange} onChange={onChange} />
+  const write = useCallback(
+    (patch: SourceControlAiSettingsPatch) =>
+      current.current.writeSourceControlAiSettings?.(patch) ?? Promise.resolve(),
+    []
+  )
+  return (
+    <TextActionPicker
+      {...props}
+      onAgentChange={onAgentChange}
+      onChange={onChange}
+      writeSourceControlAiSettings={props.writeSourceControlAiSettings ? write : undefined}
+    />
+  )
 }
 
 const TextActionPicker = memo(
@@ -87,7 +102,11 @@ const TextActionPicker = memo(
           }
       )
     )
-    const repo = useAppStore((state) => state.repos.find((repo) => repo.id === props.repoId))
+    const repoId = props.repoId
+    // Global cards have no repository; skip the scan on every store publication.
+    const repo = useAppStore((state) =>
+      repoId ? state.repos.find((repo) => repo.id === repoId) : undefined
+    )
     const operation = AI_TEXT_ACTION_IDS.find((id) => id === props.actionId)
     if (!operation) {
       throw new Error('Text action required')
@@ -107,6 +126,7 @@ const TextActionPicker = memo(
           : null
     )
     const scope = props.repoId ? 'repo' : 'global'
+    const discovery = useTextActionModelDiscovery(hostKey, props.writeSourceControlAiSettings)
     const choice = props.draft.modelChoice
     const defaultAgent = settings?.defaultTuiAgent
     const disabledAgents = settings?.disabledTuiAgents
@@ -124,6 +144,27 @@ const TextActionPicker = memo(
       }
       const inheritedRepo = { ...repoAi, modelOverridesByOperation: repoChoices }
       const inheritedLegacy = projectSourceControlAiToLegacyCommitMessageAi(inheritedSource, legacy)
+      // The card's draft choice is what Save writes, so defaults preview clears against it.
+      const ownSource =
+        scope === 'global'
+          ? {
+              ...source,
+              modelOverridesByOperation: {
+                ...source.modelOverridesByOperation,
+                [operation]: choice
+              }
+            }
+          : source
+      const ownRepo =
+        scope === 'repo'
+          ? {
+              ...repoAi,
+              modelOverridesByOperation: {
+                ...repoAi?.modelOverridesByOperation,
+                [operation]: choice
+              }
+            }
+          : undefined
       return getAgentCatalogForAction(operation, null).flatMap((agent): AgentPickerEntry[] => {
         const capability = getCommitMessageAgentCapability(agent.id)
         if (!capability) {
@@ -131,7 +172,7 @@ const TextActionPicker = memo(
         }
         const discovered = getDiscoveredModels(source, legacy, hostKey, agent.id)
         const forcedSource = {
-          ...source,
+          ...ownSource,
           discoveredModelsByAgent: {},
           discoveredModelsByAgentByHost: { [hostKey]: { [agent.id]: discovered } },
           actions: {
@@ -143,7 +184,7 @@ const TextActionPicker = memo(
           operation !== 'conversationName'
             ? {
                 sourceControlAi: {
-                  ...repoAi,
+                  ...(ownRepo ?? repoAi),
                   actionOverrides: {
                     ...repoAi?.actionOverrides,
                     [operation]: { ...repoAi?.actionOverrides?.[operation], agentId: agent.id }
@@ -168,26 +209,6 @@ const TextActionPicker = memo(
         const models = new Map(
           [...discovered, ...capability.models].map((model) => [model.id, model])
         )
-        const ownSource =
-          scope === 'global'
-            ? {
-                ...source,
-                modelOverridesByOperation: {
-                  ...source.modelOverridesByOperation,
-                  [operation]: choice
-                }
-              }
-            : source
-        const ownRepo =
-          scope === 'repo'
-            ? {
-                ...repoAi,
-                modelOverridesByOperation: {
-                  ...repoAi?.modelOverridesByOperation,
-                  [operation]: choice
-                }
-              }
-            : undefined
         const effortByModel = Object.fromEntries(
           [...models.values()].map((model) => [
             model.id,
@@ -245,40 +266,10 @@ const TextActionPicker = memo(
       })
     }, [source, repoAi, operation, scope, hostKey, choice, defaultAgent, legacy])
     const agentArgs = props.draft.agentArgs ?? ''
-    const entries = catalogEntries.map((entry) => {
-      const spec = getCommitMessageAgentSpec(entry.agent)!
-      const model = removeSourceControlAiArgumentFlag(agentArgs, spec, 'model')
-      const effort = removeSourceControlAiArgumentFlag(agentArgs, spec, 'effort')
-      const defaultModel =
-        entry.catalog.origin !== 'unknown'
-          ? entry.catalog.models.find((model) => model.id === entry.terminal.model)
-          : undefined
-      const defaultLabel = translate(
-        'agentPicker.sameAsTextDefault',
-        'Same as default · {{value0}}',
-        {
-          value0: [
-            defaultModel?.label ?? entry.terminal.model,
-            defaultModel?.efforts.find((effort) => effort.value === entry.terminal.options?.effort)
-              ?.label
-          ]
-            .filter(Boolean)
-            .join(' · ')
-        }
-      )
-      return {
-        ...entry,
-        ownerKey: JSON.stringify([operation, hostKey, agentArgs]),
-        textGeneration: {
-          ...entry.textGeneration!,
-          defaultLabel,
-          modelInArguments: model.unrecognized || model.agentArgs !== agentArgs,
-          effortInArguments: effort.unrecognized || effort.agentArgs !== agentArgs,
-          modelArgumentsUnrecognized: model.unrecognized,
-          effortArgumentsUnrecognized: effort.unrecognized
-        }
-      }
-    })
+    const ownerKey = JSON.stringify([operation, hostKey, agentArgs])
+    const entries = catalogEntries.map((entry) =>
+      textActionPickerEntryView(entry, ownerKey, agentArgs, discovery.listing === entry.agent)
+    )
     const draftForEntry = (entry: AgentPickerEntry): AgentPickerDraft => {
       const saved = readSourceControlAiActionModelChoice(choice, hostKey, entry.agent)
       const models = entry.catalog.origin !== 'unknown' ? entry.catalog.models : []
@@ -356,6 +347,7 @@ const TextActionPicker = memo(
               refresh: async () => entries.map((entry) => entry.agent)
             }
           },
+          onCatalogOpen: discovery.discover,
           onPick: (agent, draft, entry) => {
             if (props.agent !== agent) {
               props.onAgentChange(agent)

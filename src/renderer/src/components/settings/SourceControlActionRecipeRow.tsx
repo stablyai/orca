@@ -1,7 +1,8 @@
 import { SourceControlTextActionAgentPicker } from './SourceControlTextActionAgentPicker'
 import type {
   SourceControlAiSettings,
-  SourceControlAiModelChoice
+  SourceControlAiModelChoice,
+  SourceControlAiSettingsPatch
 } from '../../../../shared/source-control-ai-types'
 import {
   useAgentPickerDraftScope,
@@ -40,6 +41,8 @@ const DEFAULT_AGENT_VALUE = '__default_agent__'
 type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   actionId: ActionId
   source?: SourceControlAiSettings
+  /** Lets the text picker save model lists the CLI reports. */
+  writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
   onTextModelChoiceChange?: (
     actionId: ActionId,
     choice: SourceControlAiModelChoice | undefined,
@@ -97,6 +100,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   actionId,
   source,
   onTextModelChoiceChange,
+  writeSourceControlAiSettings,
   setupDiscardSignal,
   selectedAgent,
   draftValue,
@@ -180,6 +184,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
               onChange={(choice, agentArgs) =>
                 onTextModelChoiceChange?.(actionId, choice, agentArgs)
               }
+              writeSourceControlAiSettings={writeSourceControlAiSettings}
             />
           )}
           {agentWarningText ? (

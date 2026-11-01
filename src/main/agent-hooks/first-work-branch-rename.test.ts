@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
+import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
@@ -287,6 +289,39 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     )
     expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth')
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
+  it('generates the branch name with the saved Branch name model and effort', async () => {
+    const actual = await vi.importActual<typeof CommitMessageTextGenerationModule>(
+      '../text-generation/commit-message-text-generation'
+    )
+    resolveTextGenerationParamsMock.mockImplementation(actual.resolveTextGenerationParams)
+    const settings = getDefaultSettings('/home')
+    settings.autoRenameBranchFromWork = true
+    settings.sourceControlAi = {
+      ...settings.sourceControlAi!,
+      enabled: true,
+      agentId: 'codex',
+      modelOverridesByOperation: { branchName: { selectedModelByAgent: { codex: 'gpt-5.4' } } }
+    }
+    const repo: Repo = {
+      ...REMOTE_REPO_BASE,
+      sourceControlAi: {
+        modelOverridesByOperation: {
+          branchName: {
+            selectedModelByAgent: { codex: 'gpt-5.4-mini' },
+            selectedThinkingByModel: { 'gpt-5.4-mini': 'high' }
+          }
+        }
+      }
+    }
+    const { deps } = makeDeps({ getSettings: () => settings, getRepo: () => repo })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'high' }),
+      expect.anything()
+    )
   })
 
   it('asks to align the on-disk folder with the generated slug after renaming', async () => {

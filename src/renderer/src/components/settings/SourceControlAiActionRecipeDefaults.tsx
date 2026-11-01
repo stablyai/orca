@@ -228,6 +228,7 @@ export function SourceControlAiActionRecipeDefaults({
             <SourceControlActionRecipeRow
               source={config}
               onTextModelChoiceChange={onTextModelChoiceChange}
+              writeSourceControlAiSettings={writeConfig}
               setupDiscardSignal={customPromptDiscardSignal}
               key={actionId}
               actionId={actionId}

@@ -8,8 +8,17 @@ import { toast } from 'sonner'
 import { setSourceControlActionDefault } from '../../../../shared/source-control-ai-actions'
 import {
   normalizeSourceControlAiSettings,
+  projectSourceControlAiToLegacyCommitMessageAi,
   resolveSourceControlAiForOperation
 } from '../../../../shared/source-control-ai'
+import { planCommitMessageGeneration } from '../../../../shared/commit-message-plan'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type {
+  SourceControlAiSettings,
+  SourceControlAiSettingsPatch
+} from '../../../../shared/source-control-ai-types'
+import { useAiCommitPrSettings } from '../feature-wall/useAiCommitPrSettings'
+import { useSourceControlActionRecipeDraftState } from './source-control-action-recipe-draft-state'
 import { useAppStore } from '../../store'
 import {
   renderChatSettingsSection,
@@ -448,3 +457,245 @@ it.each(['global', 'repo'] as const)(
     )
   }
 )
+
+function renderGlobalCommitCard(sourceControlAi: Partial<SourceControlAiSettings>) {
+  const settings = useAppStore.getState().settings
+  if (!settings) {
+    throw new Error('Missing settings')
+  }
+  useAppStore.setState({
+    settingsSearchQuery: '',
+    settings: {
+      ...settings,
+      defaultTuiAgent: 'codex',
+      sourceControlAi: normalizeSourceControlAiSettings({
+        ...getDefaultSourceControlAiSettings(),
+        enabled: true,
+        ...sourceControlAi
+      })
+    }
+  })
+  const model = settingsModel()
+  function Owner() {
+    const settings = useAppStore((state) => state.settings)!
+    const controller = useSettingsInteractionController(model)
+    return (
+      <CommitMessageAiPane
+        settings={settings}
+        updateSettings={model.updateSettings}
+        writeSourceControlAiSettings={controller.writeSourceControlAiSettingsOrThrow}
+      />
+    )
+  }
+  render(
+    <TooltipProvider>
+      <Owner />
+    </TooltipProvider>
+  )
+  const card = screen.getByText('Commit message').closest('.rounded-md')
+  if (!(card instanceof HTMLElement)) {
+    throw new Error('Missing commit card')
+  }
+  const row = within(card)
+  return {
+    row,
+    open: (agent: string) => {
+      fireEvent.pointerDown(row.getByRole('button', { name: 'Select agent' }), {
+        button: 0,
+        ctrlKey: false
+      })
+      fireEvent.click(screen.getByRole('button', { name: `Configure ${agent}` }))
+    },
+    save: async () => {
+      const calls = persist.mock.calls.length
+      fireEvent.click(row.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(persist.mock.calls.length).toBe(calls + 1))
+      return useAppStore.getState().settings!
+    }
+  }
+}
+
+it.each([
+  ['a listed model moves into the menu', '--model openai/gpt-6.1-sol#high --verbose', '--verbose'],
+  [
+    'an unlisted model stays in Arguments',
+    '--model anthropic/claude-x#high --verbose',
+    '--model anthropic/claude-x#low --verbose'
+  ]
+])(
+  'an OpenCode 2 effort-only pick keeps the Arguments model: %s',
+  async (_case, agentArgs, savedArgs) => {
+    const card = renderGlobalCommitCard({
+      agentId: 'opencode2',
+      selectedModelByAgent: { opencode2: 'opencode/gpt-5.4-mini' },
+      actions: { commitMessage: { agentId: 'opencode2', agentArgs } },
+      discoveredModelsByAgentByHost: {
+        local: {
+          opencode2: [
+            {
+              id: 'openai/gpt-6.1-sol',
+              label: 'GPT-6.1 Sol',
+              thinkingLevels: [
+                { id: 'low', label: 'Low' },
+                { id: 'high', label: 'High' }
+              ],
+              defaultThinkingLevel: 'low'
+            }
+          ]
+        }
+      }
+    })
+    card.open('OpenCode 2')
+    fireEvent.click(
+      within(screen.getByRole('radiogroup', { name: 'Effort' })).getByRole('radio', {
+        name: 'Low'
+      })
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    const settings = await card.save()
+    expect(settings.sourceControlAi?.actions?.commitMessage?.agentArgs).toBe(savedArgs)
+    const resolved = resolveSourceControlAiForOperation({ settings, operation: 'commitMessage' })
+    if (!resolved.ok) {
+      throw new Error(resolved.error)
+    }
+    const plan = planCommitMessageGeneration(resolved.value.params, 'prompt')
+    const model = agentArgs.split(' ')[1].split('#')[0]
+    expect(plan.ok && plan.plan.args).toEqual(expect.arrayContaining([`${model}#low`]))
+  }
+)
+
+it('previews the exact model and effort that clearing Model or Effort runs', async () => {
+  const card = renderGlobalCommitCard({
+    agentId: 'codex',
+    selectedThinkingByModel: { 'gpt-5.4-mini': 'high' },
+    actions: { commitMessage: { agentId: 'codex' } },
+    modelOverridesByOperation: {
+      commitMessage: {
+        selectedModelByAgent: { codex: 'gpt-5.4-mini' },
+        selectedThinkingByModel: { 'gpt-5.4-mini': 'xhigh', 'gpt-5.6-terra': 'high' }
+      }
+    }
+  })
+  const resolve = (settings: GlobalSettings) => {
+    const resolved = resolveSourceControlAiForOperation({ settings, operation: 'commitMessage' })
+    return resolved.ok && resolved.value.params
+  }
+  card.open('Codex')
+  const effort = screen.getByRole('radiogroup', { name: 'Effort' })
+  fireEvent.click(within(effort).getByRole('radio', { name: 'Same as default · High' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  expect(resolve(await card.save())).toMatchObject({ model: 'gpt-5.4-mini', thinkingLevel: 'high' })
+
+  card.open('Codex')
+  const modelDefault = screen.getByRole('option', { name: /^Same as default/ })
+  // The retained Terra effort, not Terra's own Low default, is what a model clear runs.
+  expect(modelDefault.textContent).toBe('Same as default · GPT-5.6 Terra · High')
+  fireEvent.click(modelDefault)
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  expect(resolve(await card.save())).toMatchObject({
+    model: 'gpt-5.6-terra',
+    thinkingLevel: 'high'
+  })
+})
+
+it('lists models the installed CLI reports and saves them where generation reads them', async () => {
+  const discover = vi.fn(async () => ({
+    success: true,
+    models: [{ id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' }],
+    defaultModelId: 'gpt-5.6-terra'
+  }))
+  Object.assign(window.api, { git: { discoverCommitMessageModels: discover } })
+  const card = renderGlobalCommitCard({
+    agentId: 'codex',
+    selectedModelByAgent: { codex: 'gpt-5.4' },
+    actions: { commitMessage: { agentId: 'codex' } }
+  })
+  card.open('Codex')
+  expect(screen.queryByRole('option', { name: 'GPT-6.1 Sol' })).toBeNull()
+  expect(await screen.findByRole('option', { name: 'GPT-6.1 Sol' })).toBeDefined()
+  expect(discover).toHaveBeenCalledWith(expect.objectContaining({ agentId: 'codex' }))
+  const saved = useAppStore.getState().settings?.sourceControlAi
+  expect(saved?.discoveredModelsByAgentByHost?.local?.codex).toEqual([
+    { id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' }
+  ])
+  // Listing models never changes what the user picked.
+  expect(saved?.selectedModelByAgent).toEqual({ codex: 'gpt-5.4' })
+})
+
+it('shows and edits the discovered Commit message model on the AI author card', async () => {
+  const settings = useAppStore.getState().settings!
+  const sourceControlAi = normalizeSourceControlAiSettings({
+    ...getDefaultSourceControlAiSettings(),
+    enabled: true,
+    agentId: 'codex',
+    discoveredModelsByAgent: {
+      codex: [
+        {
+          id: 'gpt-6.1-sol',
+          label: 'GPT-6.1 Sol',
+          thinkingLevels: [
+            { id: 'low', label: 'Low' },
+            { id: 'high', label: 'High' }
+          ],
+          defaultThinkingLevel: 'low'
+        }
+      ]
+    },
+    modelOverridesByOperation: {
+      commitMessage: {
+        selectedModelByAgent: { codex: 'gpt-6.1-sol' },
+        selectedThinkingByModel: { 'gpt-6.1-sol': 'high' }
+      }
+    }
+  })
+  useAppStore.setState({
+    settings: {
+      ...settings,
+      sourceControlAi,
+      commitMessageAi: projectSourceControlAiToLegacyCommitMessageAi(sourceControlAi)
+    }
+  })
+  const { result } = renderHook(() => useAiCommitPrSettings())
+  const generated = resolveSourceControlAiForOperation({
+    settings: useAppStore.getState().settings!,
+    operation: 'commitMessage'
+  })
+  expect(generated.ok && generated.value.params).toMatchObject({
+    model: 'gpt-6.1-sol',
+    thinkingLevel: 'high'
+  })
+  expect(result.current.activeModel?.id).toBe('gpt-6.1-sol')
+  expect(result.current.activeThinking).toBe('high')
+  act(() => result.current.onThinkingChange('low'))
+  await waitFor(() =>
+    expect(
+      useAppStore.getState().settings?.commitMessageAi?.selectedThinkingByModel['gpt-6.1-sol']
+    ).toBe('low')
+  )
+})
+
+it('saving only Arguments keeps a newer model choice saved by another editor', async () => {
+  let current: SourceControlAiSettings = {
+    ...getDefaultSourceControlAiSettings(),
+    agentId: 'codex',
+    modelOverridesByOperation: { commitMessage: { selectedModelByAgent: { codex: 'gpt-5.4' } } }
+  }
+  const writeConfig = async (patch: SourceControlAiSettingsPatch) => {
+    current = { ...current, ...(typeof patch === 'function' ? patch(current) : patch) }
+  }
+  const view = renderHook(
+    ({ config }) => useSourceControlActionRecipeDraftState({ config, writeConfig }),
+    { initialProps: { config: current } }
+  )
+  act(() => view.result.current.onActionAgentArgsChange('commitMessage', '--verbose'))
+  current = {
+    ...current,
+    modelOverridesByOperation: { commitMessage: { selectedModelByAgent: { codex: 'gpt-5.5' } } }
+  }
+  view.rerender({ config: current })
+  await act(() => view.result.current.saveActionTemplateDraft('commitMessage'))
+  expect(current.actions?.commitMessage?.agentArgs).toBe('--verbose')
+  expect(current.modelOverridesByOperation?.commitMessage?.selectedModelByAgent?.codex).toBe(
+    'gpt-5.5'
+  )
+})

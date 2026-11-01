@@ -13,6 +13,7 @@ import {
   selectSourceControlAiModelChoiceForHost
 } from '../../../../shared/source-control-ai'
 import { SOURCE_CONTROL_TEXT_ACTION_IDS } from '../../../../shared/source-control-ai-actions'
+import { withDiscoveredModels } from '../../../../shared/source-control-ai-model-selection'
 import {
   CUSTOM_AGENT_ID,
   isCustomAgentId,
@@ -63,20 +64,7 @@ export function mergeDiscoveredModelsIntoCommitMessageConfig(
       : currentChoice
   return {
     ...config,
-    discoveredModelsByAgent:
-      hostKey === 'local'
-        ? {
-            ...config.discoveredModelsByAgent,
-            [agentId]: models
-          }
-        : config.discoveredModelsByAgent,
-    discoveredModelsByAgentByHost: {
-      ...config.discoveredModelsByAgentByHost,
-      [hostKey]: {
-        ...config.discoveredModelsByAgentByHost?.[hostKey],
-        [agentId]: models
-      }
-    },
+    ...withDiscoveredModels(config, agentId, models, hostKey),
     selectedModelByAgent: selectedModelChoice.selectedModelByAgent ?? config.selectedModelByAgent,
     selectedModelByAgentByHost: selectedModelChoice.selectedModelByAgentByHost
   }
