@@ -19104,6 +19104,21 @@
         "declarative": {
           "PluginDeclarativeView": {
             "unsupported": "{{value0}} is not available in this version of Orca"
+          },
+          "KeyValue": {
+            "yes": "Yes",
+            "no": "No"
+          },
+          "Skeleton": {
+            "loading": "Loading"
+          },
+          "Table": {
+            "yes": "Yes",
+            "empty": "No rows",
+            "loading": "Loading more…"
+          },
+          "Tree": {
+            "loading": "Loading…"
           }
         }
       }

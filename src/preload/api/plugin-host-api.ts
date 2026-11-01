@@ -197,6 +197,11 @@ export type PluginsApi = {
     key: string
     value: PluginJsonValue
   }) => Promise<{ ok: true } | { ok: false; error: string }>
+  /** An image file inside a components panel's plugin, or null; see plugin-panel-image.ts. */
+  panelImage?: (args: {
+    sessionToken: string
+    path: string
+  }) => Promise<{ contentType: string; bytes: Uint8Array } | null>
   /** Pins a Git install input to an exact commit without downloading it. */
   resolveGitSource: (args: { url: string; ref: string }) => Promise<PluginGitSourceResolution>
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>

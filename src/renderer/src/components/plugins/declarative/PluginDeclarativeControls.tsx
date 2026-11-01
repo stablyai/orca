@@ -32,12 +32,12 @@ export type PluginDeclarativeEmit = (
   options?: PluginDeclarativeEmitOptions
 ) => void
 
-function sendValue(emit: PluginDeclarativeEmit) {
-  return (callback: string, value: string | boolean, edit: number): void =>
+export function sendValue(emit: PluginDeclarativeEmit) {
+  return (callback: string, value: PluginDeclarativeEventArg, edit: number): void =>
     emit(callback, [value], { edit })
 }
 
-function LabelledField({
+export function LabelledField({
   id,
   label,
   hidden,

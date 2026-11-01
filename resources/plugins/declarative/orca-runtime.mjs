@@ -361,14 +361,14 @@ var PLUGIN_DECLARATIVE_MESSAGES = {
   /** guest → host, `{ document, entries: [{ key, version, value? }] }`: keyed memory atoms changed. */
   retain: "ui.retain"
 };
-var PLUGIN_DECLARATIVE_CATALOG_VERSION = 1;
+var PLUGIN_DECLARATIVE_CATALOG_VERSION = 2;
 var PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
   Stack: ["gap", "align"],
   Row: ["gap", "align", "justify", "wrap"],
   Text: ["tone", "muted", "size", "weight", "truncate"],
   Heading: ["level"],
-  Button: ["variant", "tone", "size", "icon", "disabled", "onPress"],
-  IconButton: ["icon", "label", "variant", "tone", "size", "disabled", "onPress"],
+  Button: ["variant", "tone", "size", "icon", "tooltip", "disabled", "onPress"],
+  IconButton: ["icon", "label", "tooltip", "variant", "tone", "size", "disabled", "onPress"],
   Badge: ["tone"],
   Card: ["title", "description"],
   List: ["label"],
@@ -402,13 +402,105 @@ var PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
   Spinner: ["label", "labelHidden"],
   EmptyState: ["title", "description", "icon"],
   Link: ["href", "onPress"],
-  Code: ["block"]
+  Code: ["block"],
+  // Catalog 2 (Orca 1.4.247).
+  Textarea: [
+    "label",
+    "labelHidden",
+    "value",
+    "defaultValue",
+    "placeholder",
+    "rows",
+    "maxLength",
+    "invalid",
+    "disabled",
+    "onChange",
+    "onSubmit"
+  ],
+  Checkbox: ["label", "description", "checked", "defaultChecked", "disabled", "onChange"],
+  RadioGroup: [
+    "label",
+    "labelHidden",
+    "value",
+    "defaultValue",
+    "options",
+    "orientation",
+    "disabled",
+    "onChange"
+  ],
+  Slider: [
+    "label",
+    "labelHidden",
+    "value",
+    "defaultValue",
+    "min",
+    "max",
+    "step",
+    "showValue",
+    "disabled",
+    "onChange"
+  ],
+  Field: ["label", "description", "error", "required"],
+  Tabs: ["label", "value", "defaultValue", "onChange"],
+  Tab: ["value", "label", "icon", "disabled"],
+  Collapsible: ["title", "description", "open", "defaultOpen", "disabled", "onChange"],
+  Toolbar: ["label", "gap"],
+  Grid: ["columns", "minItemWidth", "gap"],
+  Table: [
+    "label",
+    "columns",
+    "rows",
+    "sort",
+    "selectionMode",
+    "selected",
+    "defaultSelected",
+    "hasMore",
+    "loading",
+    "emptyText",
+    "maxHeight",
+    "onSortChange",
+    "onSelectionChange",
+    "onRowAction",
+    "onLoadMore"
+  ],
+  Tree: [
+    "label",
+    "items",
+    "selected",
+    "defaultSelected",
+    "expanded",
+    "defaultExpanded",
+    "maxHeight",
+    "onSelect",
+    "onToggle",
+    "onAction"
+  ],
+  Markdown: ["content"],
+  CodeView: ["code", "language", "label", "lineNumbers", "wrap", "maxHeight"],
+  Image: ["src", "alt", "size", "fit", "rounded"],
+  KeyValue: ["label", "items"],
+  Callout: ["tone", "title", "icon"],
+  Skeleton: ["shape", "lines", "label"]
 };
-var PLUGIN_DECLARATIVE_VALUE_CONTROLS = [
-  "Input",
-  "Switch",
-  "Select"
-];
+var PLUGIN_DECLARATIVE_VALUE_CONTROLS = {
+  Input: { value: "value", change: "onChange" },
+  Textarea: { value: "value", change: "onChange" },
+  Switch: { value: "checked", change: "onChange" },
+  Checkbox: { value: "checked", change: "onChange" },
+  Select: { value: "value", change: "onChange" },
+  RadioGroup: { value: "value", change: "onChange" },
+  Slider: { value: "value", change: "onChange" },
+  Tabs: { value: "value", change: "onChange" },
+  Collapsible: { value: "open", change: "onChange" },
+  Table: { value: "selected", change: "onSelectionChange" },
+  Tree: { value: "selected", change: "onSelect" }
+};
+var VALUE_CONTROL_BY_TYPE = new Map(
+  Object.entries(PLUGIN_DECLARATIVE_VALUE_CONTROLS)
+);
+function pluginDeclarativeValueControl(type) {
+  return VALUE_CONTROL_BY_TYPE.get(type) ?? null;
+}
 var PLUGIN_DECLARATIVE_EDIT_PROP = "$edit";
 function isReservedPluginDeclarativeEvent(name) {
   return name.startsWith("ui.") || name.startsWith("editor.") || name === "ready" || name === "hello" || name === "ping" || name === "pong";
@@ -442,7 +534,7 @@ function h(type, props, ...children) {
 
 // src/shared/plugins/declarative/runtime/declarative-evaluate.ts
 var MAX_EVALUATION_DEPTH = 512;
-var MAX_PROP_DEPTH = 16;
+var MAX_PROP_DEPTH = 40;
 var IGNORED_PROPS = /* @__PURE__ */ new Set([
   "children",
   "ref",
@@ -476,12 +568,33 @@ function assertPlainJson(value, where, depth = 0) {
     const prototype = Object.getPrototypeOf(value);
     if (prototype === Object.prototype || prototype === null) {
       for (const [name, item] of Object.entries(value)) {
-        assertPlainJson(item, `${where}.${name}`, depth + 1);
+        if (item !== void 0) {
+          assertPlainJson(item, `${where}.${name}`, depth + 1);
+        }
       }
       return;
     }
   }
   throw new TypeError(`${where} must be plain JSON data, not ${describe(value)}`);
+}
+function plainJsonCopy(value, where) {
+  assertPlainJson(value, where);
+  return withoutUndefined(value);
+}
+function withoutUndefined(value) {
+  if (Array.isArray(value)) {
+    return value.map(withoutUndefined);
+  }
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  const copy = {};
+  for (const [name, item] of Object.entries(value)) {
+    if (item !== void 0) {
+      copy[name] = withoutUndefined(item);
+    }
+  }
+  return copy;
 }
 function assertUniqueKeys(children, parent) {
   const seen = /* @__PURE__ */ new Set();
@@ -505,7 +618,6 @@ function hashId(text) {
   return `c${(a >>> 0).toString(36)}${(b >>> 0).toString(36)}`;
 }
 function evaluateOrcaTree(component, editsSeen = /* @__PURE__ */ new Map()) {
-  const valueControls = new Set(PLUGIN_DECLARATIVE_VALUE_CONTROLS);
   const callbacks = /* @__PURE__ */ new Map();
   function callbackId(path, prop) {
     const base = hashId(`${path}|${prop}`);
@@ -532,12 +644,12 @@ function evaluateOrcaTree(component, editsSeen = /* @__PURE__ */ new Map()) {
         callbacks.set(id, value);
         wireProps[name] = { $callback: id };
       } else {
-        assertPlainJson(value, `<${type}> prop "${name}"`);
-        wireProps[name] = value;
+        wireProps[name] = plainJsonCopy(value, `<${type}> prop "${name}"`);
       }
     }
-    const onChange = wireProps.onChange;
-    if (valueControls.has(type) && typeof onChange === "object" && onChange !== null) {
+    const control = pluginDeclarativeValueControl(type);
+    const onChange = control ? wireProps[control.change] : void 0;
+    if (typeof onChange === "object" && onChange !== null) {
       const id = "$callback" in onChange ? onChange.$callback : void 0;
       wireProps[PLUGIN_DECLARATIVE_EDIT_PROP] = typeof id === "string" ? editsSeen.get(id) ?? 0 : 0;
     }
@@ -1317,27 +1429,63 @@ var Spinner = "Spinner";
 var EmptyState = "EmptyState";
 var Link = "Link";
 var Code = "Code";
+var Textarea = "Textarea";
+var Checkbox = "Checkbox";
+var RadioGroup = "RadioGroup";
+var Slider = "Slider";
+var Field = "Field";
+var Tabs = "Tabs";
+var Tab = "Tab";
+var Collapsible = "Collapsible";
+var Toolbar = "Toolbar";
+var Grid = "Grid";
+var Table = "Table";
+var Tree = "Tree";
+var Markdown = "Markdown";
+var CodeView = "CodeView";
+var Image = "Image";
+var KeyValue = "KeyValue";
+var Callout = "Callout";
+var Skeleton = "Skeleton";
 export {
   Badge,
   Button,
+  Callout,
   Card,
+  Checkbox,
   Code,
+  CodeView,
+  Collapsible,
   EmptyState,
+  Field,
   Fragment,
+  Grid,
   Heading,
   IconButton,
+  Image,
   Input,
+  KeyValue,
   Link,
   List,
   ListItem,
+  Markdown,
   Progress,
+  RadioGroup,
   Row,
   Select,
   Separator,
+  Skeleton,
+  Slider,
   Spinner,
   Stack,
   Switch,
+  Tab,
+  Table,
+  Tabs,
   Text,
+  Textarea,
+  Toolbar,
+  Tree,
   api,
   atom,
   derived,

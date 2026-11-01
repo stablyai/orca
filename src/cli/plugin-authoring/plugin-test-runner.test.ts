@@ -1,3 +1,4 @@
+import { existsSync, readdirSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -8,7 +9,7 @@ import {
   pluginPanelCheckIssues,
   pluginStackLocation
 } from './plugin-panel-check'
-import { findPluginTestFiles, runPluginTests } from './plugin-test-runner'
+import { findPluginTestFiles, PLUGIN_TEST_FILE, runPluginTests } from './plugin-test-runner'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -24,18 +25,6 @@ async function componentsPlugin(): Promise<string> {
 }
 
 describe('orca plugin test', () => {
-  it(
-    "runs the shipped examples' plugin tests (examples/plugins/*/src/*.test.tsx)",
-    async () => {
-      const dir = resolve('examples/plugins/hello-tsx')
-      const files = await findPluginTestFiles(dir)
-      expect(files.length).toBeGreaterThan(0)
-      expect(await runPluginTests({ dir, files, quietStdout: true })).toMatchObject({ code: 0 })
-    },
-    // Starts its own Node process and transpiles the plugin.
-    60_000
-  )
-
   it(
     "runs the components template's own test with node:test on Orca's runtime and passes",
     async () => {
@@ -107,6 +96,38 @@ describe('orca plugin test', () => {
     },
     // Each run starts its own Node (or vitest) process and transpiles the plugin.
     120_000
+  )
+})
+
+const EXAMPLES = resolve(__dirname, '../../../examples/plugins')
+// Every example with its own tests (examples/plugins/*/src/*.test.tsx).
+const TESTED_EXAMPLES = readdirSync(EXAMPLES).filter((name) => {
+  const src = join(EXAMPLES, name, 'src')
+  return existsSync(src) && readdirSync(src).some((file) => PLUGIN_TEST_FILE.test(file))
+})
+
+describe('the example plugins', () => {
+  it('include the build-less and gallery examples', () => {
+    expect(TESTED_EXAMPLES).toEqual(expect.arrayContaining(['hello-tsx', 'components-gallery']))
+  })
+
+  it.each(TESTED_EXAMPLES)(
+    '%s passes its own tests and renders without problems',
+    async (example) => {
+      const dir = join(EXAMPLES, example)
+      const files = await findPluginTestFiles(dir)
+      expect(files.length).toBeGreaterThan(0)
+      expect(await runPluginTests({ dir, files, quietStdout: true })).toMatchObject({
+        runner: 'node',
+        code: 0
+      })
+      const checks = await checkPluginPanels(dir)
+      expect(checks.map(({ issues, warnings }) => ({ issues, warnings }))).toEqual(
+        checks.map(() => ({ issues: [], warnings: [] }))
+      )
+    },
+    // Each run starts its own Node process and transpiles the plugin.
+    60_000
   )
 })
 

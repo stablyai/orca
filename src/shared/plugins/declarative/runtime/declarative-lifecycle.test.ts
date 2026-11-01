@@ -181,6 +181,12 @@ describe('orca SDK facade', () => {
     expect(sdk.ui.has('Input', 'defaultValue')).toBe(true)
     expect(sdk.ui.has('Input', '$edit')).toBe(false)
     expect(sdk.ui.has('Carousel')).toBe(false)
+    // Catalog 2 (Orca 1.4.247).
+    expect(sdk.ui.catalog).toBe(2)
+    expect(sdk.ui.has('Table')).toBe(true)
+    expect(sdk.ui.has('Table', 'onLoadMore')).toBe(true)
+    expect(sdk.ui.has('Button', 'tooltip')).toBe(true)
+    expect(sdk.ui.has('Tree', '$edit')).toBe(false)
     expect(sdk.env).toMatchObject({
       locale: 'en',
       client: 'desktop',

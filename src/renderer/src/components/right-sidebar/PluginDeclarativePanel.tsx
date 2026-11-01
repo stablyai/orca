@@ -4,7 +4,6 @@ import type { PluginFrameGuest } from '../../../../shared/plugins/frames/plugin-
 import { pluginEvent } from '../../../../shared/plugins/frames/plugin-protocol'
 import { PLUGIN_FRAME_USER_METHODS } from '../../../../shared/plugins/workers/plugin-host-api'
 import { PluginDeclarativeView } from '@/components/plugins/declarative/PluginDeclarativeView'
-import { pluginDeclarativeGestureId } from '@/components/plugins/declarative/plugin-declarative-gesture-geometry'
 import type { PluginDeclarativeEmit } from '@/components/plugins/declarative/PluginDeclarativeControls'
 import { callPanelActionViaPreload } from './plugin-frame-host'
 import {
@@ -16,6 +15,7 @@ import { usePluginFrameHost } from './use-plugin-frame-host'
 import { usePluginDeclarativeTree } from './use-plugin-declarative-tree'
 import { usePluginDeclarativeState } from './use-plugin-declarative-state'
 import { useReportDeclarativePanelDraw } from './use-plugin-panel-draw-report'
+import { usePluginDeclarativeImages } from './use-plugin-declarative-images'
 import { useAppStore } from '@/store'
 import {
   PluginDeclarativeIssueNotice,
@@ -92,6 +92,7 @@ export function PluginDeclarativePanel({
     frame?.addEventListener('did-start-loading', resetDocument)
     return () => frame?.removeEventListener('did-start-loading', resetDocument)
   }, [frameKey, resetDocument])
+  const loadImage = usePluginDeclarativeImages(sessionToken)
   const sessionTokenRef = useRef(sessionToken)
   useLayoutEffect(() => {
     sessionTokenRef.current = sessionToken
@@ -128,11 +129,11 @@ export function PluginDeclarativePanel({
     },
     [admitPress, revision, sendToGuest, shownDocument]
   )
-  // A click on Orca's own Link: no frame-activation check, but the Link must have settled, and
-  // main keeps the URL allowlist and rate limit.
-  const onOpenLink = (href: string): void => {
+  // A click on Orca's own Link (or a Markdown link): no frame-activation check, but its control
+  // must have settled, and main keeps the URL allowlist and rate limit.
+  const onOpenLink = (href: string, gestureId: string): void => {
     const token = sessionTokenRef.current
-    if (token && isGestureSettled(pluginDeclarativeGestureId.href(href))) {
+    if (token && isGestureSettled(gestureId)) {
       void callPanelActionViaPreload({
         sessionToken: token,
         action: PLUGIN_FRAME_USER_METHODS.openExternal,
@@ -169,6 +170,7 @@ export function PluginDeclarativePanel({
         tree={rendered?.tree ?? null}
         onEvent={onEvent}
         onOpenLink={onOpenLink}
+        onLoadImage={loadImage}
         gestures={gestures}
       />
     </div>

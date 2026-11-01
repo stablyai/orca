@@ -102,6 +102,18 @@ export class PluginPanelController {
 
   /** The plugin behind this owner's live components-panel session, for its persisted state. */
   componentsPanelPlugin(ownerKey: string, sessionToken: string): string | null {
+    return this.componentsPanelBinding(ownerKey, sessionToken)?.pluginKey ?? null
+  }
+
+  /** That plugin's root folder, for the image files its panel draws. */
+  componentsPanelRoot(ownerKey: string, sessionToken: string): string | null {
+    return this.componentsPanelBinding(ownerKey, sessionToken)?.rootDir ?? null
+  }
+
+  private componentsPanelBinding(
+    ownerKey: string,
+    sessionToken: string
+  ): { pluginKey: string; rootDir: string } | null {
     const binding = this.sessions.resolve(ownerKey, sessionToken)
     if (!binding || binding.surface !== 'panel') {
       return null
@@ -109,7 +121,7 @@ export class PluginPanelController {
     const plugin = this.options.resolveApprovedPlugin(binding.pluginKey)
     const panel = plugin ? findFrameContribution(plugin, 'panel', binding.contributionId) : null
     return plugin && plugin.rootDir === binding.rootDir && panel?.ui === 'components'
-      ? binding.pluginKey
+      ? { pluginKey: binding.pluginKey, rootDir: plugin.rootDir }
       : null
   }
 

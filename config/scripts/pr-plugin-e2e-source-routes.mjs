@@ -135,12 +135,14 @@ const SPECIFIC_PLUGIN_ROUTES = [
   ),
   pluginRoute(
     'plugins.declarative-panels',
-    ['plugin-declarative-panel'],
+    ['plugin-declarative-panel', 'plugin-components-gallery'],
     [
       `${UI}declarative\\/`,
       'src\\/shared\\/plugins\\/(?:declarative\\/|frames\\/plugin-declarative-)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:PluginDeclarativePanel|use-plugin-declarative-|plugin-declarative-)',
-      'resources\\/plugins\\/declarative\\/'
+      'resources\\/plugins\\/declarative\\/',
+      'src\\/main\\/plugins\\/panels\\/plugin-panel-image',
+      'examples\\/plugins\\/components-gallery\\/'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
   ),

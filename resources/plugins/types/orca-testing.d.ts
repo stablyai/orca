@@ -26,7 +26,10 @@ declare module 'orca/testing' {
     disabled: boolean
     path: string
   }
-  /** Every field given must match; `text` and `label` match exactly (whitespace folded) or by RegExp. */
+  /**
+   * Every field given must match; `text` and `label` match exactly (whitespace folded) or by RegExp.
+   * Finders see what Orca draws: not the content of unselected tabs or closed Collapsibles.
+   */
   export type TestQuery = {
     type?: string
     role?: string
@@ -126,9 +129,29 @@ declare module 'orca/testing' {
       options?: { replace?: boolean; submit?: boolean }
     ): Promise<void>
     submit(target: Target): Promise<void>
+    /** A Switch, Checkbox or Collapsible. */
     toggle(target: Target): Promise<void>
+    /** A Select or RadioGroup option, or a Tabs tab, by value. */
     select(target: Target, value: string): Promise<void>
-    /** What Orca shows in an Input, Switch or Select. */
+    slide(target: Target, value: number): Promise<void>
+    /** Table: a header click (ascending first, then flipping). */
+    sort(target: Target, column: string): Promise<void>
+    /** Table: replaces the selection with exactly these rows. */
+    selectRows(target: Target, keys: readonly string[]): Promise<void>
+    /** Table: Enter or a double click on a row. */
+    activateRow(target: Target, key: string): Promise<void>
+    /** Table: scrolls to the end of the loaded rows (needs `hasMore` and `onLoadMore`). */
+    loadMore(target: Target): Promise<void>
+    /** Tree: expand or collapse an item, calling `onToggle`. */
+    expand(target: Target, key: string): Promise<void>
+    collapse(target: Target, key: string): Promise<void>
+    selectItem(target: Target, key: string): Promise<void>
+    activateItem(target: Target, key: string): Promise<void>
+    /** Tree: the items Orca shows expanded. */
+    expandedOf(target: Target): string[]
+    /** Table: row keys in the order Orca draws them. */
+    rowsOf(target: Target): string[]
+    /** What Orca shows in a value control: text, a flag, a number, a tab, or selected keys. */
     valueOf(target: Target): unknown
     /** An Orca event: `theme`, or a workspace or agent event the panel subscribed to. */
     emit<E extends keyof OrcaEvents>(event: E, payload: OrcaEvents[E]): Promise<void>

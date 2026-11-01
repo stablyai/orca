@@ -44,7 +44,53 @@ const ROLES: Record<string, string> = {
   EmptyState: 'group',
   Link: 'link',
   Code: 'code',
+  Textarea: 'textbox',
+  Checkbox: 'checkbox',
+  RadioGroup: 'radiogroup',
+  Slider: 'slider',
+  Field: 'group',
+  Tabs: 'tablist',
+  Tab: 'tab',
+  Collapsible: 'group',
+  Toolbar: 'toolbar',
+  Grid: 'group',
+  Table: 'grid',
+  Tree: 'tree',
+  Markdown: 'document',
+  CodeView: 'code',
+  Image: 'img',
+  KeyValue: 'list',
+  Callout: 'note',
+  Skeleton: 'status',
   Unsupported: 'unsupported'
+}
+
+const OWN_TEXT_PROPS = ['title', 'description', 'content', 'code', 'error', 'alt']
+
+/** Words a data component shows: Table cells, Tree item labels, KeyValue pairs. */
+function dataText(props: Record<string, unknown>): string[] {
+  const words: string[] = []
+  const pending: unknown[] = [props.rows, props.items].flatMap((list) =>
+    Array.isArray(list) ? list : []
+  )
+  for (let next = pending.shift(); next !== undefined; next = pending.shift()) {
+    if (typeof next !== 'object' || next === null) {
+      continue
+    }
+    const entry: Record<string, unknown> = { ...next }
+    if (typeof entry.cells === 'object' && entry.cells !== null) {
+      words.push(...Object.values(entry.cells).map((cell) => String(cell ?? '')))
+    }
+    for (const name of ['label', 'value']) {
+      if (entry[name] !== undefined && entry[name] !== null) {
+        words.push(String(entry[name]))
+      }
+    }
+    if (Array.isArray(entry.children)) {
+      pending.push(...entry.children)
+    }
+  }
+  return words
 }
 
 function textOf(node: PluginDeclarativeChild): string {
@@ -52,10 +98,14 @@ function textOf(node: PluginDeclarativeChild): string {
     return node
   }
   const props: Record<string, unknown> = node.props
-  const own = ['title', 'description']
-    .map((name) => props[name])
-    .filter((value): value is string => typeof value === 'string')
-  return [...own, ...node.children.map(textOf)].join(' ')
+  const own = OWN_TEXT_PROPS.map((name) => props[name]).filter(
+    (value): value is string => typeof value === 'string'
+  )
+  // A tab's words are its label; its children are the panel it shows.
+  if (node.type === 'Tab') {
+    return typeof props.label === 'string' ? props.label : ''
+  }
+  return [...own, ...dataText(props), ...node.children.map(textOf)].join(' ')
 }
 
 const normalize = (text: string): string => text.replace(/\s+/g, ' ').trim()

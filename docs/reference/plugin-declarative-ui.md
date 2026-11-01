@@ -210,10 +210,16 @@ test('adds a task', async () => {
 - Find with `find(query)` (the innermost match, or `null`) and `findAll(query)`. A query matches on
   any of `type`, `role`, `text`, `label` (a control's `label`, a list item's or card's `title`) and
   `testId` (the element's `key`); `text` and `label` match exactly or by RegExp.
-- Act with `press`, `type(el, text, { replace?, submit? })`, `submit`, `toggle` and `select(el, value)`,
-  on an element or a query. Each act resolves once the panel has settled: its renders, its host calls
-  and its persisted writes. `valueOf(el)` is what Orca shows in an Input, Switch or Select, with the
-  same edit protocol as Orca.
+- Act with `press`, `type(el, text, { replace?, submit? })` (Input, Textarea), `submit`, `toggle`
+  (Switch, Checkbox, Collapsible), `select(el, value)` (Select, RadioGroup, Tabs) and `slide(el, n)`
+  (Slider), on an element or a query. Tables take `sort(el, column)`, `selectRows(el, keys)`,
+  `activateRow(el, key)` and `loadMore(el)`; Trees take `expand`/`collapse(el, key)`,
+  `selectItem(el, key)` and `activateItem(el, key)`. Each act resolves once the panel has settled: its
+  renders, its host calls and its persisted writes. `valueOf(el)` is what Orca shows in a value control,
+  with the same edit protocol as Orca; `rowsOf(table)` and `expandedOf(tree)` read a Table's row order
+  and a Tree's open items.
+- Finders see what Orca draws: the content of an unselected tab or a closed `Collapsible` is not
+  there until a `select` or `toggle` shows it.
 - Inspect `tree()` (plain data for snapshots, handlers shown as `[handler]`), `errors` (what the panel
   threw, with its stack, and renders Orca would refuse), `warnings` (props and components Orca would
   drop) and `persisted` (`plugin`, `workspace`, and the plugin's `storage`). `emit(event, payload)`
@@ -267,6 +273,89 @@ vocabulary, `tone`: `neutral` `accent` `success` `warning` `danger`.
 | `Link`       | `href` (`https:`, `http:`, `mailto:`; opened in the OS browser), `onPress()`                                                                                                             | text                               |
 | `Code`       | `block`                                                                                                                                                                                  | text                               |
 
+`Button` and `IconButton` also take `tooltip` (since 1.4.247). A tooltip only names a control: an
+`IconButton`'s defaults to its `label`; on a `Button`, use it for a short hint its text leaves out.
+
+### Added in Orca 1.4.247 (`ui.catalog` 2)
+
+Check `ui.has('Table')` (or `ui.catalog >= 2`) when your `engines.orca` minimum is older; see
+forward compatibility below.
+
+| Component     | Props                                                                                                                                                                                                                                                                                                                         | Children   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `Textarea`    | as `Input` without `type`, plus `rows` (2–20); `onSubmit(value)` fires on Cmd+Enter (Ctrl+Enter off macOS)                                                                                                                                                                                                                    | none       |
+| `Checkbox`    | `label` (required), `description`, `checked`, `defaultChecked`, `disabled`, `onChange(checked)`                                                                                                                                                                                                                               | none       |
+| `RadioGroup`  | `label` (required), `labelHidden`, `value`, `defaultValue`, `options` (`{ value, label, description?, disabled? }[]`), `orientation` (`vertical` `horizontal`), `disabled`, `onChange(value)`                                                                                                                                 | none       |
+| `Slider`      | `label` (required), `labelHidden`, `value`, `defaultValue`, `min` (0), `max` (100), `step` (1), `showValue`, `disabled`, `onChange(value)`                                                                                                                                                                                    | none       |
+| `Field`       | `label` (required), `description`, `error` (shown in the danger tone and announced), `required`                                                                                                                                                                                                                               | any        |
+| `Tabs`        | `label` (required, the tab list's name), `value`, `defaultValue`, `onChange(value)`; only the selected tab's children are drawn                                                                                                                                                                                               | `Tab` only |
+| `Tab`         | `value` and `label` (required), `icon`, `disabled`                                                                                                                                                                                                                                                                            | any        |
+| `Collapsible` | `title` (required), `description`, `open`, `defaultOpen`, `disabled`, `onChange(open)`; stack several for an accordion                                                                                                                                                                                                        | any        |
+| `Toolbar`     | `label` (required), `gap`; arrow keys, Home and End move between its controls                                                                                                                                                                                                                                                 | any        |
+| `Grid`        | `columns` (1–6, default 2) or `minItemWidth` (`xs` `sm` `md` `lg`: as many columns as fit), `gap`                                                                                                                                                                                                                             | any        |
+| `Table`       | `label`, `columns` (`{ key, label, align?, width?, sortable? }[]`) and `rows` (`{ key, cells, disabled? }[]`) required; `sort`, `selectionMode` (`none` `single` `multiple`), `selected`, `defaultSelected`, `hasMore`, `loading`, `emptyText`, `maxHeight`, `onSortChange`, `onSelectionChange`, `onRowAction`, `onLoadMore` | none       |
+| `Tree`        | `label` and `items` (`{ key, label, description?, icon?, disabled?, hasChildren?, children? }[]`) required; `selected`, `defaultSelected`, `expanded`, `defaultExpanded`, `maxHeight`, `onSelect`, `onToggle`, `onAction`                                                                                                     | none       |
+| `Markdown`    | `content` (required, up to 64 KiB)                                                                                                                                                                                                                                                                                            | none       |
+| `CodeView`    | `code` (required, up to 64 KiB), `language`, `label`, `lineNumbers`, `wrap`, `maxHeight`                                                                                                                                                                                                                                      | none       |
+| `Image`       | `src` (required: an image file in the plugin), `alt` (required; `''` for decoration), `size` (`xs` `sm` `md` `lg` `full`), `fit` (`contain` `cover`), `rounded`                                                                                                                                                               | none       |
+| `KeyValue`    | `items` (`{ label, value, tone?, code? }[]`, required), `label`                                                                                                                                                                                                                                                               | none       |
+| `Callout`     | `tone`, `title`, `icon`                                                                                                                                                                                                                                                                                                       | any        |
+| `Skeleton`    | `shape` (`text` `block` `circle`), `lines` (1–10, for `text`), `label` (its screen-reader name; default "Loading")                                                                                                                                                                                                            | none       |
+
+`maxHeight` (`sm` `md` `lg` `none`) gives long content its own scroll area: a `Table` and a `CodeView`
+default to `md`, a `Tree` to `none`.
+
+**Tables** draw only the rows in view, so thousands of rows stay cheap; rows scroll inside the table.
+Sorting is yours: `onSortChange({ column, direction })` reports a header click, and Orca draws `rows` in
+the order you give. A click selects (Cmd/Ctrl-click and Shift-click extend a `multiple` selection, as
+do Space and Shift+arrows), `onSelectionChange({ keys })` reports it, and Enter or a double click calls
+`onRowAction({ key })`. Paging is pull-based: with `hasMore`, scrolling within ten rows of the end
+calls `onLoadMore()` once per length of `rows`; append the next page and Orca asks again when the
+person nears the new end. Cells are strings, numbers, booleans (a check mark) or `null`.
+
+```tsx
+const page = atom<Row[]>([])
+const sort = atom<TableSort>({ column: 'name', direction: 'asc' })
+
+<Table
+  label="Files"
+  columns={[{ key: 'name', label: 'Name', sortable: true }, { key: 'size', label: 'Size', align: 'end' }]}
+  rows={read(page).map((file) => ({ key: file.path, cells: { name: file.name, size: file.size } }))}
+  sort={read(sort)}
+  selectionMode="multiple"
+  hasMore={read(page).length < total}
+  onSortChange={(next) => set(sort, next)}
+  onLoadMore={() => loadNextPage()}
+  onRowAction={({ key }) => open(key)}
+/>
+```
+
+**Trees** take their items as data. Up and Down move, Right expands (or moves to the first child), Left
+collapses (or moves to the parent), Home and End jump, Space selects and Enter calls `onAction({ key })`.
+Orca keeps which items are open (seeded by `defaultExpanded`) and reports each change as
+`onToggle({ key, expanded })`; that record ends when the Tree unmounts (a tab switch), so to keep it,
+hold the open keys yourself and pass them as `expanded`. For lazy children, give an item `hasChildren` and no `children`: when it is
+expanded Orca shows a loading row until a render brings its `children`. Item keys are unique across the
+whole tree.
+
+**Markdown** is GitHub-flavoured and runs through the same sanitizer as Orca's own Markdown. Links to
+`https:`, `http:` and `mailto:` open in the OS browser like a `Link` with an `href` (the block must have
+been stationary for 500 ms; see User gestures); any other link is text. Images show only when their
+source is an image file in the plugin; anything else shows its alt text, so nothing is loaded from the
+network.
+
+**Images** come from the plugin's own folder (`assets/logo.png`): a static PNG, JPEG or WebP up to 8 MiB
+and 4096 pixels a side, read by Orca with the same containment checks as the plugin's other files and the
+same header check as a manifest's images. A URL, an absolute path or `..` is refused; an image that
+cannot be shown draws a neutral placeholder.
+
+**CodeView** colours code with Orca's own highlighter, including languages a syntax plugin adds, when
+`language` names one; an unknown language stays plain.
+
+**Toasts** are a host call, not a component: `host.call('notifications.show', { title, body })` shows a
+desktop notification and resolves `{ delivered }`. Use a `Callout` for anything the person has to read
+or act on.
+
 `labelHidden` keeps the label as the control's accessible name without showing it.
 
 **Icons** are the same names a manifest panel's `icon` takes, for example `add` `delete` `edit`
@@ -305,7 +394,12 @@ screen. `onChange(value)` reports each edit; `onSubmit(value)` fires on Enter.
   the field shows, including a reset to the same value it had before (`''` after submit). A render that
   your panel made before handling their latest keystrokes does not touch their text.
 - `value` without `onChange` makes the field read-only. `Switch` (`checked`/`defaultChecked`) and `Select`
-  (`value`/`defaultValue`) work the same way.
+  (`value`/`defaultValue`) work the same way, and so do (since 1.4.247) `Textarea`, `Checkbox`,
+  `RadioGroup`, `Slider`, `Tabs` (`value`), `Collapsible` (`open`/`defaultOpen`), a `Table`'s selection
+  (`selected`/`defaultSelected` with `onSelectionChange`) and a `Tree`'s (`selected` with `onSelect`).
+
+Handlers receive plain JSON: a string, number or boolean for most controls, and one small object where
+there is more to say (`{ keys }`, `{ key }`, `{ key, expanded }`, `{ column, direction }`).
 
 A handler that throws (or rejects) is reported in a banner attributed to your plugin; the panel keeps its
 last good render.
@@ -313,7 +407,10 @@ last good render.
 ## Limits
 
 A render is refused, and the last good one kept, beyond 5000 nodes, depth 64, about 512 KiB of data,
-16 KiB per text, 1 KiB per label prop, 32 props per node or 500 `Select` options.
+16 KiB per text, 1 KiB per label prop, 32 props per node or 500 `Select` options. A component whose data
+is over its own cap is drawn as a placeholder instead (with a warning): 50 `RadioGroup` options, 32
+`Table` columns, 5000 rows, 2000 `Tree` items nested at most 16 deep, 200 `KeyValue` items, and 64 KiB
+of `Markdown` or `CodeView` text. Row, column and item keys must be unique.
 
 ## User gestures
 
@@ -323,6 +420,10 @@ controls counts (the hidden module never has one of its own). A press on a `Butt
 the same place in the tree, the same label and target, and the same position on screen. Anything that
 moves it (including a sibling growing above it) restarts the wait, so a panel cannot slide a control under
 the pointer just before a click. Scrolling the panel does not count as a move.
+
+Presses on the 1.4.247 controls (tabs, checkboxes, table rows, tree items) never grant a gesture: put
+the call behind a `Button` or `IconButton`. A link in `Markdown` opens only once its block has been
+stationary for 500 ms, and grants nothing to the panel.
 
 A `Link` follows the same rule before anything happens: a press on an unsettled `Link` neither opens its
 `href` nor runs its `onPress`. When a `Link` has both, the `href` open uses the press, and `onPress` runs

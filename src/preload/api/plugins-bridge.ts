@@ -57,6 +57,7 @@ export const pluginsApi = {
   subscribePanelPush: subscribePluginPanelPush,
   getSettings: (args) => ipcRenderer.invoke('plugins:getSettings', args),
   setSetting: (args) => ipcRenderer.invoke('plugins:setSetting', args),
+  panelImage: (args) => ipcRenderer.invoke('plugins:panelImage', args),
   resolveGitSource: (args) => ipcRenderer.invoke('plugins:resolveGitSource', args),
   install: (source: PluginHostInstallSource): Promise<PluginHostInstallResult> =>
     ipcRenderer.invoke('plugins:install', source),

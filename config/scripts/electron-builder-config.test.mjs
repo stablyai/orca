@@ -317,6 +317,9 @@ describe('electron-builder config', () => {
     const isUnpacked = matcher.createFilter()
     for (const typings of [
       join('/app', 'resources', 'plugins', 'declarative', 'orca.d.ts'),
+      join('/app', 'resources', 'plugins', 'declarative', 'orca-components.d.ts'),
+      join('/app', 'resources', 'plugins', 'declarative', 'orca-components-layout.d.ts'),
+      join('/app', 'resources', 'plugins', 'declarative', 'orca-components-data.d.ts'),
       join('/app', 'resources', 'plugins', 'types', 'orca-host.d.ts'),
       join('/app', 'resources', 'plugins', 'types', 'orca-frame.d.ts'),
       join('/app', 'resources', 'plugins', 'types', 'orca-worker.d.ts'),
