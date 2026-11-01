@@ -27,8 +27,8 @@ export type UseNativeChatComposerKeyDownArgs = {
   draft: string
   /** Image chips count as composer content, like typed text. */
   hasAttachments?: boolean
-  /** Shown in the empty composer; Tab takes it. */
-  promptSuggestion?: string | null
+  /** Tab or Right Arrow takes the prompt suggestion the empty composer shows, as in Claude Code. */
+  acceptPromptSuggestion?: (() => void) | undefined
   recall?: NativeChatComposerRecall | undefined
   isComposing: () => boolean
   completePickerItem: (item: NativeChatPickerItem) => void
@@ -50,7 +50,7 @@ export function useNativeChatComposerKeyDown({
   activeSuggestion,
   draft,
   hasAttachments = false,
-  promptSuggestion = null,
+  acceptPromptSuggestion,
   recall,
   isComposing,
   completePickerItem,
@@ -127,10 +127,14 @@ export function useNativeChatComposerKeyDown({
         interrupt()
         return
       }
-      if (event.key === 'Tab' && !event.shiftKey && draft === '' && promptSuggestion) {
+      const unmodified = !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey
+      if (
+        (event.key === 'Tab' || event.key === 'ArrowRight') &&
+        unmodified &&
+        acceptPromptSuggestion
+      ) {
         event.preventDefault()
-        setDraft(promptSuggestion)
-        setCaret(promptSuggestion.length)
+        acceptPromptSuggestion()
         return
       }
       const modified = event.key === 'Enter' && (isMacPlatform() ? event.metaKey : event.ctrlKey)
@@ -154,10 +158,9 @@ export function useNativeChatComposerKeyDown({
         return
       }
       const arrow = event.key === 'ArrowUp' || event.key === 'ArrowDown'
-      // A modified arrow selects or jumps; attachments make the composer non-empty.
-      const plain = !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey
       const recall = recallRef.current
-      if (!arrow || !plain || hasAttachments || !recall) {
+      // A modified arrow selects or jumps; attachments make the composer non-empty.
+      if (!arrow || !unmodified || hasAttachments || !recall) {
         return
       }
       const recalling = isNativeChatRecallActive(recall.position, draft)
@@ -183,6 +186,7 @@ export function useNativeChatComposerKeyDown({
       }
     },
     [
+      acceptPromptSuggestion,
       activeSuggestion,
       autocomplete,
       completeMention,
@@ -194,7 +198,6 @@ export function useNativeChatComposerKeyDown({
       interrupt,
       isComposing,
       mentionFiles,
-      promptSuggestion,
       send,
       steerHead,
       setActiveSuggestion,

@@ -1,4 +1,5 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
+import type { NativeChatPromptSuggestion } from './native-chat-composer-send-state'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
@@ -44,8 +45,8 @@ export type NativeChatComposerFieldProps = {
   hasPty: boolean
   canSend: boolean
   unavailableHint?: string | undefined
-  /** Replaces the placeholder while the draft is empty. */
-  promptSuggestion?: string | null
+  /** Replaces the default placeholder while the draft is empty. */
+  promptSuggestion?: NativeChatPromptSuggestion | null
   autocomplete: ComposerAutocomplete
   mentionFiles: NativeChatMentionFiles
   activeSuggestion: number
@@ -359,7 +360,7 @@ export function NativeChatComposerField({
                         'Describe your goal, define measurable outcomes for best results'
                       )
                     : (unavailableHint ??
-                      (promptSuggestion ||
+                      (promptSuggestion?.text ||
                         nativeChatComposerPlaceholder(hasPty, canSend, afterStop)))
               }
               // Let layout handle wrapping and touch targets; scroll after eight lines without JavaScript measurement.
