@@ -13,6 +13,7 @@ import {
   isPrimarySelectionEnabled,
   setPrimarySelectionText
 } from '@/lib/primary-selection'
+import { translate } from '@/i18n/i18n'
 
 export function setupContextualCopy({
   editorInstance,
@@ -39,10 +40,13 @@ export function setupContextualCopy({
   copyHintNode.className =
     'pointer-events-none rounded-md border border-border/90 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-[0_6px_18px_rgba(15,23,42,0.18)] backdrop-blur whitespace-nowrap'
   const updateCopyHintLabel = (): void => {
-    copyHintNode.textContent = `Copy context ${formatShortcutLabel(
-      'editor.copyContext',
-      useAppStore.getState().keybindings
-    )}`
+    copyHintNode.textContent = translate(
+      'auto.components.editor.contextualCopy.copyContextHint',
+      'Copy context {{shortcut}}',
+      {
+        shortcut: formatShortcutLabel('editor.copyContext', useAppStore.getState().keybindings)
+      }
+    )
   }
   updateCopyHintLabel()
   copyHintNode.style.display = 'none'
@@ -181,8 +185,7 @@ export function setupContextualCopy({
   const refreshCopyHintAndPolling = (): void => {
     updateCopyHint()
     if (editorInstance.hasTextFocus() && isCopyHintVisible()) {
-      // Why: the interval only tracks a visible content widget. Keeping it
-      // alive while the focused editor has no selection burns idle CPU.
+      // Poll only visible hints; selection-free focused editors otherwise burn idle CPU.
       startCopyHintPolling()
     } else {
       stopCopyHintPolling()
@@ -238,8 +241,7 @@ export function setupContextualCopy({
     if (primarySelectionTimer !== null) {
       window.clearTimeout(primarySelectionTimer)
     }
-    // Why: Monaco emits intermediate selection changes during drag; match the
-    // editor selection clipboard debounce so we don't churn the clipboard.
+    // Debounce intermediate drag selections like the editor selection clipboard to avoid clipboard churn.
     primarySelectionTimer = window.setTimeout(() => {
       primarySelectionTimer = null
       updatePrimarySelectionBuffer()
@@ -252,13 +254,9 @@ export function setupContextualCopy({
       return false
     }
 
-    // Why: terminal agents only receive pasted plain text. We write the
-    // contextual payload at copy time so file and line metadata survives
-    // once the snippet leaves Orca and is pasted into a terminal.
+    // Embed file/line context at copy time because terminal agents receive plain text only.
     await window.api.ui.writeClipboardText(copiedText)
-    // Why: once the user has copied this exact selection, surfacing the
-    // affordance again during the confirmation toast reads like duplicate
-    // UI. We keep it suppressed until the selection actually changes.
+    // Suppress the hint for this selection after copying so it does not duplicate the confirmation toast.
     lastCopiedSelectionKey = getSelectionKey()
     copyHintNode.style.display = 'none'
     copyHintWidgetPosition = null
@@ -295,9 +293,7 @@ export function setupContextualCopy({
       return
     }
 
-    // Why: Monaco and Chromium can claim some Cmd/Ctrl+Shift shortcuts before the Monaco
-    // command callback runs. Capturing the shortcut on the editor DOM keeps the
-    // contextual-copy action reliable without changing native Cmd/Ctrl+C.
+    // Capture before Monaco/Chromium claim the chord; preserve ordinary native copy.
     event.preventDefault()
     event.stopPropagation()
     void copySelectionWithContext()
@@ -306,14 +302,11 @@ export function setupContextualCopy({
   editorDomNode.addEventListener('mouseup', refreshCopyHintAndPolling, true)
   editorDomNode.addEventListener('keyup', refreshCopyHintAndPolling, true)
   editorInstance.onDidDispose(() => {
-    // Why: Monaco owns these emitters, but disposing explicitly keeps this
-    // feature's lifecycle symmetrical with the DOM listener cleanup below.
     selectionListener.dispose()
     scrollListener.dispose()
     focusListener.dispose()
     blurListener.dispose()
-    // Why: the confirmation toast timeout belongs to the Monaco editor that
-    // scheduled it, so editor disposal is the earliest reliable cleanup point.
+    // Clear the toast timer when its owning Monaco editor is disposed.
     if (copyToastTimeoutRef.current !== null) {
       window.clearTimeout(copyToastTimeoutRef.current)
       copyToastTimeoutRef.current = null

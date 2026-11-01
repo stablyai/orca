@@ -30,8 +30,7 @@ export function flushPendingProseMirrorSelection(editor: Editor): void {
     return
   }
 
-  // Why: immediate Tab or add-review-note after a mouse click/drag can run
-  // before ProseMirror has copied the native selection into editor state.
+  // Immediate keyboard actions after mouse selection can precede ProseMirror’s native-selection sync.
   observer.currentSelection?.set?.({
     anchorNode: null,
     anchorOffset: 0,

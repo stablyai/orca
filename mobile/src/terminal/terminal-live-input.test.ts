@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  TERMINAL_LIVE_INPUT_MAX_BYTES,
   applyDisabledTerminalLiveInputHandles,
   clearTerminalLiveInputFocusTimer,
   defaultTerminalLiveInputHandles,
@@ -58,7 +57,7 @@ describe('terminal live input', () => {
     ['F10', '\x1b[21~'],
     ['F11', '\x1b[23~'],
     ['F12', '\x1b[24~']
-  ])('maps %s to terminal PTY bytes', (key, bytes) => {
+  ])('maps %s to terminal escape bytes', (key, bytes) => {
     expect(getTerminalLiveSpecialKeyBytes(key)).toBe(bytes)
   })
 
@@ -75,13 +74,9 @@ describe('terminal live input', () => {
 
   it('enforces the paste-sized byte budget', () => {
     expect(isTerminalLiveInputWithinByteLimit('hello')).toBe(true)
-    expect(isTerminalLiveInputWithinByteLimit('x'.repeat(TERMINAL_LIVE_INPUT_MAX_BYTES))).toBe(true)
-    expect(isTerminalLiveInputWithinByteLimit('x'.repeat(TERMINAL_LIVE_INPUT_MAX_BYTES + 1))).toBe(
-      false
-    )
-    expect(
-      isTerminalLiveInputWithinByteLimit('é'.repeat(TERMINAL_LIVE_INPUT_MAX_BYTES / 2 + 1))
-    ).toBe(false)
+    expect(isTerminalLiveInputWithinByteLimit('x'.repeat(262_144))).toBe(true)
+    expect(isTerminalLiveInputWithinByteLimit('x'.repeat(262_144 + 1))).toBe(false)
+    expect(isTerminalLiveInputWithinByteLimit('é'.repeat(262_144 / 2 + 1))).toBe(false)
   })
 
   it('defaults first-seen terminal handles to live input once', () => {

@@ -2,10 +2,7 @@ import type { AppState } from '../../../types'
 
 export type EditorPreviewSettingState = Pick<AppState, 'settings'>
 
-/** Preview is enabled unless the user turned it off; older profiles have no key.
- *  Readers derive preview-ness from this plus the stored flag — the flag is never
- *  rewritten when the setting changes, so sessions, host switches and other windows
- *  can't leave a tab behaving like a preview after previews are off. */
+/** Preview flag is intent; combine with current setting at every reader. Settings changes do not rewrite stored flags, including across hosts/windows/restore; older profiles default enabled. */
 export function areEditorPreviewTabsEnabled(state: EditorPreviewSettingState): boolean {
   return state.settings?.editorPreviewTabsEnabled !== false
 }

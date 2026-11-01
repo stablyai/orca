@@ -13,7 +13,7 @@ import { openFileExplorer } from './helpers/file-explorer'
 import { openTerminalWorkspaceRootLink } from './helpers/terminal-workspace-root-link'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
 import { getWorktreeHostIdentity } from '../../src/shared/worktree/host-qualified-identity'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 import {
   focusActiveTerminalInput,

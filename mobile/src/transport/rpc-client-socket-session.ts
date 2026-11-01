@@ -1,13 +1,15 @@
 import type { PairedE2EEFraming } from '../../../src/shared/paired-e2ee-client-handshake'
+import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../src/shared/paired-e2ee-handshake-deadline'
 import type { PairedE2EEFramingPolicy } from '../../../src/shared/paired-e2ee-framing-policy'
 import { createDirectSocketFraming, type DirectSocketFraming } from './direct-socket-framing'
 import { isRpcResponse } from './rpc-response-shape'
 import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
 import { describeSocketEvent, redactSocketEndpoint } from './socket-event-debug'
+import { reportSocketDeadline, type SocketDeadlineKind } from './socket-deadline-suspension'
+import { startSocketDeadlineClock } from './socket-deadline-clock'
 import type { ConnectionLogEmitter, ConnectionState, RpcRequest, RpcResponse } from './types'
 
 const CONNECT_TIMEOUT_MS = 12_000
-const HANDSHAKE_TIMEOUT_MS = 5_000
 const WEBSOCKET_CONNECTING_STATE = 0
 const UNAUTHORIZED_CLOSE_CODE = 4001
 
@@ -151,8 +153,7 @@ export class RpcClientSocketSession {
     }
   }
 
-  // Why: hosts that predate direct v2 refuse the v2 hello with 4001 before any ready;
-  // that is an auth verdict only for a host already proven to speak v2.
+  // Before v2 ready, old hosts answer 4001 to an unsupported hello; treat it as auth failure only after prior v2 proof.
   private classifyClose(closeCode: number | undefined): number | undefined {
     if (this.framingKind !== 'v2' || this.readyAccepted || closeCode !== UNAUTHORIZED_CLOSE_CODE) {
       return closeCode
@@ -233,44 +234,45 @@ export class RpcClientSocketSession {
   }
 
   private armConnectTimeout(): void {
-    this.connectTimer = setTimeout(() => {
-      this.connectTimer = null
-      if (
-        this.options.getCurrentSocket() === this.socket &&
-        this.socket.readyState === WEBSOCKET_CONNECTING_STATE
-      ) {
-        console.log('[net] connect-timeout fired (onopen never arrived)', {
-          attempt: this.options.getReconnectAttempt(),
-          timeoutMs: CONNECT_TIMEOUT_MS
-        })
-        this.options.emitLog(
-          'error',
-          'WebSocket connect timeout',
-          `No TCP/WS handshake within ${CONNECT_TIMEOUT_MS / 1000}s — endpoint unreachable?`,
-          { code: 'connect-timeout' }
-        )
-        this.options.onForcedClose(this)
-      }
-    }, CONNECT_TIMEOUT_MS)
+    this.armSocketDeadline('connect', CONNECT_TIMEOUT_MS)
   }
 
   private armHandshakeTimeout(): void {
-    this.handshakeTimer = setTimeout(() => {
-      this.handshakeTimer = null
-      if (this.options.getCurrentSocket() !== this.socket || this.authenticated) {
+    this.armSocketDeadline('handshake', PAIRED_E2EE_HANDSHAKE_DEADLINE_MS)
+  }
+
+  private armSocketDeadline(kind: SocketDeadlineKind, timeoutMs: number): void {
+    const elapsedMs = startSocketDeadlineClock()
+    const timer = setTimeout(() => {
+      if (kind === 'connect') {
+        this.connectTimer = null
+      } else {
+        this.handshakeTimer = null
+      }
+      if (
+        this.options.getCurrentSocket() !== this.socket ||
+        (kind === 'connect'
+          ? this.socket.readyState !== WEBSOCKET_CONNECTING_STATE
+          : this.authenticated)
+      ) {
         return
       }
-      console.log('[net] handshake-timeout fired (e2ee_authenticated never arrived)', {
-        timeoutMs: HANDSHAKE_TIMEOUT_MS
-      })
-      this.options.emitLog(
-        'error',
-        'Handshake timeout',
-        `No e2ee_ready/e2ee_authenticated within ${HANDSHAKE_TIMEOUT_MS / 1000}s`,
-        { code: 'handshake-timeout' }
+      reportSocketDeadline(
+        {
+          kind,
+          elapsedMs: elapsedMs(),
+          timeoutMs,
+          ...(kind === 'connect' ? { attempt: this.options.getReconnectAttempt() } : {})
+        },
+        this.options.emitLog,
+        () => this.options.onForcedClose(this)
       )
-      this.options.onForcedClose(this)
-    }, HANDSHAKE_TIMEOUT_MS)
+    }, timeoutMs)
+    if (kind === 'connect') {
+      this.connectTimer = timer
+    } else {
+      this.handshakeTimer = timer
+    }
   }
 
   private clearConnectTimer(): void {

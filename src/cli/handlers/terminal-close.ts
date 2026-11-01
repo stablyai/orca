@@ -21,7 +21,6 @@ function terminalCloseFailure(close: RuntimeTerminalClose): RuntimeClientError |
       { close }
     )
   }
-  // Why: the close itself committed; only the process stop is unproven, so say which.
   return new RuntimeClientError(
     'terminal_stop_unverifiable',
     `Closed terminal ${close.handle}. ${describeUnconfirmedCloseStop(close)}`,
@@ -91,12 +90,10 @@ export const terminalCloseHandler: CommandHandler = async ({ flags, client, cwd,
   const result = await client.call<{ close: RuntimeTerminalClose }>(method, {
     terminal: await getTerminalHandle(flags, cwd, client)
   })
-  // Why: a transport-level success must not hide a live or unverifiable PTY. Keep the receipt in
-  // error.data so JSON callers retain the host's exact evidence while receiving a failing outcome.
+  // A successful RPC can leave a live or unverified PTY; retain the host receipt in error.data.
   const failure = terminalCloseFailure(result.result.close)
   if (failure) {
-    // Keep the established human receipt (including its liveness warning); JSON needs the
-    // standard failure envelope so callers do not mistake transport success for a stopped PTY.
+    // Keep human liveness warnings; JSON needs a failure envelope to distinguish an unconfirmed stop.
     if (json) {
       reportCliError(failure, true)
     } else {

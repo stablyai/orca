@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultRepoHookSettings } from '../../shared/constants'
 import type { Repo } from '../../shared/repo-types'
 import { parsePairingCode } from '../../shared/pairing'
-import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
-import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime-shared-control-connection'
-import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
+import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
+import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
@@ -20,8 +20,7 @@ import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-
 const REMOTE_RUNTIME_TEST_TIMEOUT_MS = 15_000
 const REMOTE_RUNTIME_REQUEST_TIMEOUT_MS = 5_000
 
-// worktree.create routes through the runtime's clientMutationId idempotency
-// wrapper; these stubs run the create straight through (no dedupe).
+// Bypass create idempotency here to test request connection behavior alone.
 const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () => Promise<T>) =>
   run()
 
@@ -44,14 +43,14 @@ describe('remote runtime request connection integration', () => {
           kind: 'git'
         }
       ]
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo.list over the real socket only calls the runtime methods defined below.
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'fetch-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: () => {},
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
-        listRepos: () => repos
+        listVisibleRepos: () => repos
       } as unknown as OrcaRuntimeService
       const server = new OrcaRuntimeRpcServer({
         runtime,
@@ -118,6 +117,7 @@ describe('remote runtime request connection integration', () => {
       ]
       const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
       const subscriptionCleanups = new Map<string, () => void>()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this socket fixture implements every runtime method used by client-events subscribe and repo.list.
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'events-runtime-test',
@@ -137,7 +137,6 @@ describe('remote runtime request connection integration', () => {
           subscriptionCleanups.get(id)?.()
           subscriptionCleanups.delete(id)
         },
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
         showRepo: (selector: string) => {
           if (selector !== repo.id && selector !== `id:${repo.id}`) {
@@ -145,6 +144,7 @@ describe('remote runtime request connection integration', () => {
           }
           return repo
         },
+        getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
@@ -286,6 +286,7 @@ describe('remote runtime request connection integration', () => {
           listener(event)
         }
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this sleep socket fixture implements every runtime method reached by its subscriptions and list requests.
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'remote-sleep-runtime-test',
@@ -305,8 +306,8 @@ describe('remote runtime request connection integration', () => {
           subscriptionCleanups.get(id)?.()
           subscriptionCleanups.delete(id)
         },
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
+        getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
@@ -553,13 +554,14 @@ describe('remote runtime request connection integration', () => {
             }
           }
         },
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
+        getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
         },
         getAccountsSnapshot: () => ({ claude: null, codex: null }),
+        getAccountsStreamSnapshot: () => ({ claude: null, codex: null }),
         refreshAccountsForMobile: async () => {
           for (const listener of accountsListeners) {
             listener({ claude: null, codex: null })
@@ -585,7 +587,7 @@ describe('remote runtime request connection integration', () => {
           return () => sessionTabListeners.delete(listener)
         },
         watchFileExplorer: async () => () => {},
-        listRepos: () => [repo],
+        listVisibleRepos: () => [repo],
         showRepo: (selector: string) => {
           if (selector !== repo.id && selector !== `id:${repo.id}`) {
             throw new Error('repo_not_found')

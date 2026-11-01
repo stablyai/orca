@@ -1,12 +1,9 @@
-/**
- * The runtime surface `agent.launch` reaches, and nothing else.
- *
- * Shared by the RPC-boundary tests and the replay-safety tests so both drive the same host: a stub
- * that diverges between them would let one file prove something the other's launch never does.
- */
+/** Use one runtime stub for RPC and replay tests so they exercise the same host surface. */
 
 import { vi } from 'vitest'
+import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import type { WorktreeLineageWarning } from '../../../../shared/worktree/lineage-types'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch-pane-already-live'
 import type { RpcContext } from '../core'
 import { resolveRpcCallerIdentity } from '../rpc-caller-identity'
@@ -17,8 +14,11 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../../../shared/agent-launch-tab-publication'
 
+/** Every agent set to chat, so default launches open chats. */
 export const STRUCTURED_PREFERENCE = {
-  experimentalNativeChat: true
+  nativeChatProviders: Object.fromEntries(
+    Object.keys(TUI_AGENT_CONFIG).map((agent) => [agent, true])
+  )
 }
 
 export type AgentLaunchRuntimeStubOptions = {
@@ -31,10 +31,12 @@ export type AgentLaunchRuntimeStubOptions = {
   }
   /** What `createManagedWorktree` reports when the workspace exists but is incomplete. */
   createWarning?: string
+  createLineageWarnings?: WorktreeLineageWarning[]
   /** What `createTerminal` reports when the surface itself came up degraded. */
   terminalWarning?: string
-  /** The pane `createTerminal` minted. Off by default so the existing outcome assertions keep
-   *  modelling a runtime that reports none — the arm `RuntimeTerminalCreate.paneKey?` allows. */
+  /** `createTerminal` started at the workspace root because the requested folder was gone. */
+  terminalStartupCwdFallback?: boolean
+  /** Absent by default to model a runtime that reports no optional paneKey. */
   terminalPaneKey?: string
   /** The pane minted with an agent-first worktree's startup terminal. */
   startupTerminalPaneKey?: string
@@ -42,8 +44,7 @@ export type AgentLaunchRuntimeStubOptions = {
   terminalPaneAlreadyLive?: boolean
   /** What the runtime reports about an offered prompt's typed line; unset reports nothing. */
   lineCarriesPrompt?: boolean
-  /** Panes this runtime found already running, by the handle it issued them: a restarted host
-   *  that could not re-adopt a surviving PTY's handle issues a new one for the same pane. */
+  /** Surviving panes under this runtime's current handles, including handles changed during re-adoption. */
   adoptedPanes?: Record<string, string>
   /** A window owning the layout, answering an early tab publish; absent models a host with none. */
   publishAgentLaunchTab?: (
@@ -79,6 +80,9 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
   )
   return {
     getClientSettings: vi.fn(() => options.settings ?? STRUCTURED_PREFERENCE),
+    requireStore: vi.fn(() => ({
+      getSettings: () => options.settings ?? STRUCTURED_PREFERENCE
+    })),
     getStructuredAgentSessionCreateSupport: vi.fn(
       async () => options.createSupport ?? { supported: true }
     ),
@@ -114,7 +118,8 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
             }
           : undefined,
         ...(options.setupReceipt ? { setupReceipt: options.setupReceipt } : {}),
-        ...(options.createWarning ? { warning: options.createWarning } : {})
+        ...(options.createWarning ? { warning: options.createWarning } : {}),
+        ...(options.createLineageWarnings ? { warnings: options.createLineageWarnings } : {})
       }
     }),
     // Args are declared so a test can assert what the launch asked for, not merely that it asked.
@@ -129,7 +134,10 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       return {
         handle: 'term_1',
         ...(options.terminalPaneKey ? { paneKey: options.terminalPaneKey } : {}),
-        ...(options.terminalWarning ? { warning: options.terminalWarning } : {})
+        ...(options.terminalWarning ? { warning: options.terminalWarning } : {}),
+        ...(options.terminalStartupCwdFallback
+          ? { startupCwdFallback: { kind: 'worktree' as const, cwd: '/repo' } }
+          : {})
       }
     }),
     showTerminal: vi.fn(async (handle: string) => ({ handle, worktreeId: 'wt-7' })),
@@ -138,8 +146,7 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     showManagedTerminalWorkspace: vi.fn(async (selector: string) => ({
       id: selector.replace(/^id:/, '')
     })),
-    // The scope resolves for every workspace kind, so unlike the worktree record above it never
-    // refuses the floating sentinel — which is the whole reason the launch asks for this one.
+    // Launch scope supports floating workspaces even though the Git worktree record does not.
     showTerminalWorkspaceLaunchScope: vi.fn(
       async (selector: string): Promise<TerminalWorkspaceLaunchScope> => ({
         id: selector.replace(/^id:/, ''),
@@ -165,7 +172,6 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     reportAgentLaunchPaneVerdict: vi.fn(
       (_pane: { worktreeId: string; tabId: string; leafId: string }, _verdict: unknown) => {}
     ),
-    // A pane this runtime created or adopted is running its process.
     hasLiveTerminalForPaneKey: vi.fn((paneKey: string) => handlesByPaneKey.has(paneKey)),
     openedAgentSessionRecordStore: vi.fn((): AgentSessionRecordStore | null => launchRecordStore),
     closeTerminal: vi.fn(async (_handle: string) => ({}))
@@ -187,8 +193,7 @@ export function methodNamed<TMethod extends { name: string }, TName extends stri
   return found
 }
 
-// The one call the stub cannot satisfy structurally; every method it does implement is asserted.
-// The caller is stamped the way the dispatcher stamps it from the same transport fields.
+// Only this context boundary needs erasure; stamp caller identity as the dispatcher does.
 export function rpcContext(
   runtime: AgentLaunchRuntimeStub,
   context: Partial<RpcContext>

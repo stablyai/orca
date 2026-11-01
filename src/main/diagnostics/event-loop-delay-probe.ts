@@ -22,16 +22,11 @@ export type EventLoopDelayWindow = {
   samples: number
 }
 
-/** E2E runs (local and CI) or an explicit dev opt-in; a packaged build sets neither. */
 export function isEventLoopDelayProbeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return Boolean(env.ORCA_E2E_USER_DATA_DIR) || env[EVENT_LOOP_DELAY_PROBE_ENV] === '1'
 }
 
-/**
- * Latency instrument for main and orcad: every second appends the window's event-loop delay
- * (perf_hooks histogram) to userData. Same windowed-report shape as event-loop-stall-probe, but
- * runs for the whole session because flood and command latency are steady-state.
- */
+/** Record event-loop delay throughout the session to capture steady-state stalls. */
 export function startEventLoopDelayProbe(
   processKind: EventLoopDelayWindow['process'],
   userDataPath: string,

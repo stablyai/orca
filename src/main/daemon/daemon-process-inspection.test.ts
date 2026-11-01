@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type * as WindowsProcessTableModule from '../windows/windows-process-table'
 import {
   mergeProcessLivenessVerdict,
   queryWindowsProcess,
@@ -6,6 +7,14 @@ import {
   readMacosProcessStartedAtMs,
   readProcessCommandLine
 } from './daemon-process-inspection'
+
+const { readWindowsProcessCreationTime } = vi.hoisted(() => ({
+  readWindowsProcessCreationTime: vi.fn((_pid: number): number | null => null)
+}))
+vi.mock('../windows/windows-process-table', async (importOriginal) => ({
+  ...(await importOriginal<typeof WindowsProcessTableModule>()),
+  readWindowsProcessCreationTime
+}))
 
 // btime 1699000000 with 1000 start ticks: 10s after boot at 100Hz, 1s at 1000Hz.
 const readProcStat = async (path: string): Promise<string> =>
@@ -47,6 +56,20 @@ describe('daemon process inspection', () => {
     expect(runCommand).not.toHaveBeenCalled()
   })
 
+  it('falls back to the single-PID creation time when the snapshot row has none', async () => {
+    readWindowsProcessCreationTime.mockReturnValueOnce(9)
+    const readProcessTable = vi.fn(async () => [
+      { pid: 42, ppid: 1, name: 'node.exe', command: 'daemon' }
+    ])
+
+    await expect(queryWindowsProcess(42, { readProcessTable })).resolves.toEqual({
+      status: 'present',
+      commandLine: 'daemon',
+      startedAtMs: 9
+    })
+    expect(readWindowsProcessCreationTime).toHaveBeenCalledWith(42)
+  })
+
   it('keeps an unreadable process table indeterminate instead of proving the process gone', async () => {
     const readProcessTable = vi.fn(async () => {
       throw new Error('windows process table is unreadable')
@@ -76,7 +99,7 @@ describe('daemon process inspection', () => {
     expect(runCommand).toHaveBeenCalledWith('ps', ['-p', '42', '-o', 'lstart='], 2_000)
   })
 
-  // CLK_TCK belongs to the host that runs getconf, so a second runner must not inherit the first's.
+  // Keep each host runner's CLK_TCK cache isolated.
   it('scopes the CLK_TCK cache to the runner that produced it', async () => {
     const hundredHz = vi.fn(async () => '100')
     const thousandHz = vi.fn(async () => '1000')
@@ -89,7 +112,6 @@ describe('daemon process inspection', () => {
     ).resolves.toBe(1_699_000_001_000)
     expect(thousandHz).toHaveBeenCalledWith('getconf', ['CLK_TCK'], 1_000)
 
-    // The first runner stays cached: one spawn per runner, not per call.
     await expect(
       readLinuxProcessStartedAtMs(42, { readTextFile: readProcStat, runCommand: hundredHz })
     ).resolves.toBe(1_699_000_010_000)
@@ -114,9 +136,7 @@ describe('daemon process inspection', () => {
     ).resolves.toBe(1_699_000_010_000)
   })
 
-  // Several daemon-v<N>.pid records can name the same app version; the merged verdict decides
-  // whether pruneOldDaemonHosts may delete that version's host dir, so a wrong winner deletes a
-  // live host. Precedence: live > unverifiable > exited, regardless of record order.
+  // Host pruning must prefer live over unverifiable over exited, regardless of protocol-record order.
   describe('mergeProcessLivenessVerdict', () => {
     const unverifiable = { status: 'unverifiable', reason: 'probe failed' } as const
 

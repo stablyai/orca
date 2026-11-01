@@ -1,13 +1,9 @@
-/**
- * STA-4343: a cleanup row is identified by `repoId::path`, which two execution
- * hosts can both publish. Once a caller confirms ONE host's row, every step of
- * the removal must stay pinned to that host — routing at the ACTIVE workspace's
- * host instead deletes another machine's uncommitted work.
- */
+/** Pin every removal step to confirmed host; same repoId::path on another machine may hold different uncommitted work (STA-4343). */
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { WorktreeSlice } from '../../worktree-helpers'
-import type { RuntimeClientTarget } from '../../../../runtime/runtime-rpc-client'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getWorktreeOperationOwnerHostIds,
@@ -18,14 +14,11 @@ import {
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
-import {
-  WORKTREE_REMOVAL_AMBIGUOUS_ERROR,
-  WORKTREE_REMOVAL_HOST_CHANGED_ERROR
-} from '../listing/worktree-slice-constants'
+import { WORKTREE_REMOVAL_HOST_CHANGED_ERROR } from '../listing/worktree-slice-constants'
 import { translate } from '@/i18n/i18n'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { purgeOrphanedRuntimeSshProjects } from './orphaned-runtime-ssh-project-purge'
-import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
+import { completePreservedBranchCleanup } from './complete-preserved-branch-cleanup'
 
 import { preservedBranchCleanupKey } from '../../../../../../shared/preserved-branch-cleanup'
 import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cleanup-target'
@@ -36,13 +29,14 @@ import {
   preservesSameIdRendererState,
   resolveSameIdSurvivingHostId
 } from './host-qualified-worktree-row-removal'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
 
 export { prepareHostScopedRemovalCompletion, preservesSameIdRendererState }
 
-type PreservedBranchWorktree = Parameters<typeof showPreservedBranchToast>[1]
+type PreservedBranchWorktree = Pick<Worktree, 'displayName' | 'isMainWorktree'> | undefined
 type RemoveWorktreeSliceResult = Awaited<ReturnType<WorktreeSlice['removeWorktree']>>
 
-/** Route at the confirmed host when there is one, else the ordinary active-host route. */
+/** Resolve confirmed host when given, otherwise use focus-free owner routing. */
 function resolveHostQualifiedRemovalRoute(
   get: WorktreeSliceGet,
   worktreeId: string,
@@ -79,13 +73,9 @@ export function beginHostQualifiedRemoval(
     resolveHostQualifiedRemovalRoute(get, worktreeId, requiredExecutionHostId)
   const removalRoute = resolveRemovalRoute()
   if (!removalRoute && (!forgetLocalOnly || !requiredExecutionHostId)) {
-    // Why: callers mark rows deleting up front for immediate sidebar feedback
-    // (worktree-delete-execution.ts), and a refusal returns before the try/catch that
-    // would otherwise clear it. The failure toast auto-dismisses after 10s, so without
-    // this the workspace sits on a "Deleting…" spinner forever with no explanation left
-    // on screen.
+    // Early refusal bypasses removal’s catch; clear optimistic deleting state or its spinner outlives the toast.
     get().clearWorktreeDeleteState(worktreeId)
-    return { ok: false, error: WORKTREE_REMOVAL_AMBIGUOUS_ERROR }
+    return { ok: false, error: ambiguousWorkspaceOwnerMessage(get(), worktreeId) }
   }
   // Fail closed rather than delete on a host the caller never confirmed.
   if (
@@ -115,11 +105,10 @@ export function beginHostQualifiedRemoval(
             new Error(
               requiredExecutionHostId
                 ? WORKTREE_REMOVAL_HOST_CHANGED_ERROR
-                : WORKTREE_REMOVAL_AMBIGUOUS_ERROR
+                : ambiguousWorkspaceOwnerMessage(get(), worktreeId)
             ),
-          // Why: every mid-flight re-check must re-resolve at the CONFIRMED host,
-          // or the active host's route would read as "ownership changed".
-          requiredExecutionHostId ? resolveRemovalRoute : undefined
+          // Recheck with the same confirmed/focus-free resolver or stable ownership can falsely appear changed.
+          resolveRemovalRoute
         )
       : null,
     sameIdSurvivesOnAnotherHost: sameIdSurvivingHostId !== null,
@@ -127,21 +116,7 @@ export function beginHostQualifiedRemoval(
   }
 }
 
-/**
- * The refusal to report when a colliding id would be routed over a transport
- * whose host we cannot prove honours `hostId`, or null when it is safe.
- *
- * Local main always honours it — it ships with this renderer. A paired remote
- * server may not: hosts older than the host-qualified `worktree.rm` silently
- * `.strip()` the field and route by their own preference, which on a colliding
- * id deletes the wrong workspace. #14731 refused EVERY collision; narrowing that
- * to the one transport that can still be an older build keeps this no worse than
- * main while failing CLOSED rather than deleting on an unproven host.
- *
- * TODO(STA-4343): replace with a `worktree.rm` host-qualification capability (see
- * WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY for the established pattern) so
- * a new remote host can route the collision instead of sharing the old refusal.
- */
+/** Refuse remote collisions: older hosts strip hostId and may delete a different owner; local main ships with this renderer and honors it. TODO(STA-4343): gate worktree.rm host qualification like WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY. */
 export function refuseUnprovableRemoteHostRouting(
   get: WorktreeSliceGet,
   worktreeId: string,
@@ -180,17 +155,7 @@ export function findWorktreeOnConfirmedHost(
     )
 }
 
-/**
- * Finish a removal whose id still exists on another host: prune just the
- * confirmed host's row and keep the preserved-branch follow-up pinned to it.
- *
- * Tears down the ephemeral VM even though the shared renderer state survives. A
- * VM is NOT shared: it belongs to the workspace just deleted. The likeliest real
- * collision is one machine reachable as both `runtime:env` and `ssh:target`, so
- * skipping it left the VM running and billing after its row was removed. Safe to
- * do here without the full path's ordering care, because this path tears down no
- * terminals — there is no still-mounted pane to race a disposed relay.
- */
+/** Prune only confirmed host row when a twin survives, retaining its branch follow-up. Still destroy the deleted workspace’s unshared VM or billing continues; no terminal teardown here races relay disposal. */
 export async function completeSameIdHostScopedRemoval(args: {
   set: WorktreeSliceSet
   get: WorktreeSliceGet
@@ -251,16 +216,25 @@ export async function completeSameIdHostScopedRemoval(args: {
     cleanup,
     target
   })
-  if (!suppressPreservedBranchToast) {
-    showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
-      void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead, {
-        hostId: requiredExecutionHostId,
-        ...runtimeEnvironment
-      })
-    })
-  }
+  const branchCleanupOptions = { hostId: requiredExecutionHostId, ...runtimeEnvironment }
+  const autoDeletedBranch = await completePreservedBranchCleanup({
+    get,
+    worktreeId,
+    removalResult,
+    worktreeBeforeRemoval,
+    branchCleanupOptions,
+    suppressToast: suppressPreservedBranchToast
+  })
   return {
     ok: true as const,
-    preservedBranch: { ...preservedBranch, hostId: requiredExecutionHostId, ...runtimeEnvironment }
+    ...(!autoDeletedBranch
+      ? {
+          preservedBranch: {
+            ...preservedBranch,
+            hostId: requiredExecutionHostId,
+            ...runtimeEnvironment
+          }
+        }
+      : {})
   }
 }

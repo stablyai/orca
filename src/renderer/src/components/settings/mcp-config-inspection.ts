@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import {
   getMcpConfigCandidateParentDir,
   getMcpConfigParentDirs,
@@ -9,11 +10,9 @@ import {
 import { joinPath } from '../../lib/path'
 import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import type { LoadedMcpConfigInspection } from './McpConfigFileRow'
-import {
-  readRuntimeDirectory,
-  readRuntimeFileContent,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
+import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 
 function isMissingFileError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
@@ -43,7 +42,12 @@ export async function loadMcpConfigInspections(
       } catch (error) {
         unreadableParentDirMessages.set(
           relativeDir,
-          extractIpcErrorMessage(error, `Unable to inspect ${relativeDir}.`)
+          extractIpcErrorMessage(
+            error,
+            translate('settings.mcp.inspectFailed', 'Unable to inspect {{directory}}.', {
+              directory: relativeDir
+            })
+          )
         )
       }
     })
@@ -89,7 +93,7 @@ export async function loadMcpConfigInspections(
         if (isMissingFileError(error)) {
           return { ...inspectMcpConfigContent(candidate, null), absolutePath }
         }
-        // Why: the listing proved the file exists; an unreadable file must not unlock starter overwrite.
+        // Known existing but unreadable configs must never permit starter overwrite.
         return {
           ...inspectMcpConfigContent(candidate, null),
           exists: true,

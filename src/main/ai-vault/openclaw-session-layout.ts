@@ -4,11 +4,7 @@ import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import type { AiVaultAgentSource } from './session-scanner-agent-sources'
 import { pathSegments } from './session-file-discovery'
 
-/**
- * OpenClaw keeps transcripts at `<state>/agents/<agent id>/sessions/**`. Its siblings,
- * such as `<agent>/agent/codex-home/sessions`, hold other tools' state, so the walk
- * enters only `sessions` below each agent dir (#11394). Depth 0 is an agent dir.
- */
+/** At depth 1, enter only agent sessions directories, excluding embedded tools' histories (#11394). */
 export function openClawSessionDirectoryPredicate(name: string, depth: number): boolean {
   return depth !== 1 || name === 'sessions'
 }
@@ -19,9 +15,7 @@ const OPENCLAW_STATE_DIR = resolveAbsoluteDirOverride(
 )
 
 export const OPENCLAW_AGENT_SOURCE: AiVaultAgentSource = {
-  // Sessions live under <stateDir>/agents; a stateDir already ending in
-  // `agents` is used as-is. The current and legacy state dirs are the same
-  // install, so their discoveries merge.
+  // Current and legacy roots belong to one install; merge their discovered sessions.
   rootDirs: (options, wslHomeDirs) =>
     [
       options.openclawStateDir ?? OPENCLAW_STATE_DIR,

@@ -22,6 +22,7 @@ import {
 import type { ClientHostedBrowserRowSelection } from '@/lib/pane-manager/client-hosted-browser-row-state'
 
 vi.mock('react', async () => await stubHeadlessReact())
+vi.mock('@/store/plugin-new-files', () => ({ usePluginNewFiles: () => [] }))
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
 vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
 vi.mock('@dnd-kit/sortable', () => stubSortableContext())
@@ -71,8 +72,7 @@ function findByComponentName(node: unknown, name: string): Record<string, unknow
   return findByComponentName(el.props?.children, name)
 }
 
-// Why dynamic: `vi.resetModules()` rebuilds the registry per test, so a static import would write
-// the selection into a different copy of the module than the TabBar under test reads.
+// Import after resetModules so selection writes reach the registry instance read by TabBar.
 async function selectRow(selection: ClientHostedBrowserRowSelection): Promise<void> {
   const state = await import('@/lib/pane-manager/client-hosted-browser-row-state')
   state.selectClientHostedBrowserRow(selection)
@@ -111,10 +111,7 @@ async function renderTerminalStrip(): Promise<Record<string, unknown> | null> {
   )
 }
 
-/**
- * The row-level and helper-level suites both reach the derived id directly, so neither notices if
- * the production TabBar stops asking for it — which is the whole fix. Render the shipping component.
- */
+/** Render the shipping TabBar so derived-row wiring is covered beyond row/helper tests. */
 describe('TabBar client-hosted row active state', () => {
   beforeEach(() => {
     vi.clearAllMocks()

@@ -1,7 +1,7 @@
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { useAppStore } from '@/store'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 
 export function captureTerminalDropTransportOwner(
   transport: Pick<PtyTransport, 'getExecutionHostId' | 'getRuntimeEnvironmentId'>

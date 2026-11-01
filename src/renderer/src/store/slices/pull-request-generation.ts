@@ -1,56 +1,15 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { resolveGeneratedFields } from './pull-request-generation-auto-submit'
-
-export type PullRequestFieldName = 'base' | 'title' | 'body' | 'draft'
-export type PullRequestFieldRevisions = Record<PullRequestFieldName, number>
-
-export type PullRequestGenerationFields = {
-  base: string
-  title: string
-  body: string
-  draft: boolean
-}
-
-export type PullRequestGenerationContext = {
-  worktreeId: string | null
-  worktreePath: string
-  connectionId?: string
-  requestId: number
-  repoId: string
-  branch: string
-  /** The worktree owner's transport, captured when the request started. */
-  runtimeTarget: RuntimeClientTarget
-}
-
-export type PullRequestGenerationStatus = 'idle' | 'running' | 'canceled' | 'failed' | 'succeeded'
-
-export type PullRequestGenerationRecord = {
-  context: PullRequestGenerationContext
-  seed: PullRequestGenerationFields
-  seedFieldRevisions: PullRequestFieldRevisions
-  requiresPushBeforeCreate: boolean
-  status: PullRequestGenerationStatus
-  result: PullRequestGenerationFields | null
-  error: string | null
-  hydrated: boolean
-  autoSubmit?: boolean
-}
-
-export type PullRequestGenerationRecords = Record<string, PullRequestGenerationRecord>
-
-export type PullRequestGenerationSlice = {
-  pullRequestGenerationRequestSeq: number
-  pullRequestGenerationRecords: PullRequestGenerationRecords
-  allocatePullRequestGenerationRequestId: () => number
-  setPullRequestGenerationRecord: (key: string, record: PullRequestGenerationRecord) => void
-  updatePullRequestGenerationRecord: (
-    key: string,
-    updater: (record: PullRequestGenerationRecord | null) => PullRequestGenerationRecord | null
-  ) => void
-  prunePullRequestGenerationRecords: (liveWorktreeKeys: ReadonlySet<string>) => void
-}
+import type {
+  PullRequestFieldRevisions,
+  PullRequestGenerationContext,
+  PullRequestGenerationFields,
+  PullRequestGenerationRecord,
+  PullRequestGenerationRecords,
+  PullRequestGenerationSlice
+} from './pull-request-generation-state'
+export type * from './pull-request-generation-state'
 
 export function getPullRequestGenerationWorktreeKey(
   worktreeId: string | null | undefined,
@@ -147,6 +106,35 @@ export function createRunningPullRequestGenerationRecord(
     hydrated: false,
     autoSubmit
   }
+}
+
+export function recordPullRequestGenerationEdits(
+  record: PullRequestGenerationRecord | null,
+  fields: PullRequestGenerationFields,
+  revisions: PullRequestFieldRevisions
+): PullRequestGenerationRecord | null {
+  if (!record || record.status !== 'running' || !record.autoSubmit) {
+    return null
+  }
+  const edited = record.editedFields ?? {
+    fields: record.seed,
+    revisions: record.seedFieldRevisions
+  }
+  const next = { fields: { ...edited.fields }, revisions: { ...edited.revisions } }
+  let changed = false
+  for (const field of ['base', 'title', 'body', 'draft'] as const) {
+    if (revisions[field] <= next.revisions[field]) {
+      continue
+    }
+    if (field === 'draft') {
+      next.fields.draft = fields.draft
+    } else {
+      next.fields[field] = fields[field]
+    }
+    next.revisions[field] = revisions[field]
+    changed = true
+  }
+  return changed ? { ...record, editedFields: next } : null
 }
 
 export function resolvePullRequestGenerationSuccess({

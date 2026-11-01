@@ -1,8 +1,4 @@
-/**
- * The commit fence is the whole point of this cache: an answer that was correct
- * when it was asked for may be wrong by the time it lands, and rendering it
- * would attribute one host's automations to another.
- */
+/** A formerly correct answer can arrive after host replacement; the commit fence must reject it instead of misattributing automations. */
 
 import { describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
@@ -169,16 +165,15 @@ describe('automation host cache invalidation scope', () => {
     expect(cache.freshness(RUNTIME_SELF)).toBe('missing')
   })
 
-  it('evicts a departed entry and caps the retired pool', () => {
+  it('evicts departed entries and rejects work captured before retirement', () => {
     const cache = createCache({ retiredLimit: 1 })
     cache.commit(cache.beginRequest(DESKTOP_SELF), { rows: [row('a')] })
     cache.commit(cache.beginRequest(RUNTIME_SELF), { rows: [row('b')] })
+    const stale = cache.beginRequest(RUNTIME_SELF)
     cache.evict(hostStableKey(DESKTOP_SELF))
     cache.evict(hostStableKey(RUNTIME_SELF))
     expect(cache.keys()).toEqual([])
-    // The revived entry keeps its advanced generation, so nothing captured before eviction commits.
-    const stale = cache.beginRequest(RUNTIME_SELF)
-    cache.invalidate(RUNTIME_SELF)
+    cache.beginRequest(RUNTIME_SELF)
     expect(cache.commit(stale, { rows: [] })).toBe(false)
   })
 
@@ -234,10 +229,7 @@ function catalogOf(entries: AutomationHostCatalogEntry[]): AutomationHostCatalog
   }
 }
 
-/**
- * The fence is only as stable as the catalog generation feeding it, so this
- * covers Step 2's warning from the consumer's side.
- */
+/** Verify offline catalog changes do not invalidate requests through spurious generation churn. */
 describe('offline authority generation churn', () => {
   const withRegistry = (registry: AutomationCatalogGenerationRegistry) =>
     createAutomationHostCache({

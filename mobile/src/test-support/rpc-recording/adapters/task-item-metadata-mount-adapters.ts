@@ -5,7 +5,6 @@ import type { operationModuleLoader } from '../operation-module-loader'
 
 const REPO_ID = 'repo-1'
 
-/** A PR review comment: has a path, a numeric line and a numeric id, so a reply is a review reply. */
 const REVIEW_COMMENT = {
   id: 501,
   author: 'octocat',
@@ -17,7 +16,6 @@ const REVIEW_COMMENT = {
   isResolved: false
 } as const
 
-/** An issue comment: no path or line, so a reply falls back to a plain issue comment. */
 const ISSUE_COMMENT = {
   id: 'comment-2',
   author: 'octocat',
@@ -52,7 +50,6 @@ function githubDetailPayload(): Record<string, unknown> {
   }
 }
 
-/** The one hosted repository every task family queries, shaped the way `isHostedTaskRepo` needs. */
 const HOSTED_REPO = { id: REPO_ID, displayName: 'Repo', path: '/repo', provider: 'github' }
 
 const GITHUB_ISSUE_ITEM = {
@@ -89,10 +86,6 @@ const LINEAR_ITEM = {
   }
 } as const
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
@@ -140,10 +133,7 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * The label and assignee pickers behind one item's metadata sheet, and the Linear team context the
- * composer and the status picker share. Both keep a `stale` guard between request and commit.
- */
+// Drive picker stale-response guards through their published state.
 export function taskItemMetadataMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -196,6 +186,7 @@ export function taskItemMetadataMountAdapters(
         githubMode: 'items',
         githubPreset: 'issues',
         hostedRepos: [HOSTED_REPO],
+        jiraFilter: 'assigned',
         linearConnected: true,
         linearFilter: 'all',
         linearMetadataItem: null,
@@ -205,6 +196,7 @@ export function taskItemMetadataMountAdapters(
         loadTasks: async () => {},
         persistTaskResumeState: () => {},
         provider: 'linear',
+        refreshJiraConnection: async () => {},
         query: '',
         refreshTasks: () => {},
         selectGitHubProject: async () => {},

@@ -1,6 +1,8 @@
 import { worktreeMatchesGitHubNumber } from './github-work-item-workspace-attachment'
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
+import { makeFolderWorkspace } from '@/components/worktree-jump-palette-test-fixtures'
 import {
   referenceWorkspace,
   referenceRepo
@@ -57,6 +59,30 @@ describe('multiple workspace task attachments', () => {
 })
 
 describe('bare GitHub number activation', () => {
+  it.each([
+    { repoId: 'source-repo' },
+    { url: 'https://github.com/acme/product/issues/42' },
+    { repoId: 'source-repo', url: 'https://github.example.com/acme/product/pull/42' }
+  ])('matches an explicitly attached folder task with source metadata: %j', (source) => {
+    const worktree = folderWorkspaceToWorktree(
+      makeFolderWorkspace({
+        linkedItems: [{ provider: 'github', type: 'issue', number: 42, ...source }]
+      })
+    )
+
+    expect(worktreeMatchesGitHubNumber(worktree, 42, undefined)).toBe(true)
+    expect(worktreeMatchesGitHubNumber(worktree, 43, undefined)).toBe(false)
+  })
+
+  it('keeps other providers out of folder GitHub-number matching', () => {
+    const worktree = folderWorkspaceToWorktree(
+      makeFolderWorkspace({
+        linkedItems: [{ provider: 'gitlab', type: 'issue', number: 42 }]
+      })
+    )
+
+    expect(worktreeMatchesGitHubNumber(worktree, 42, undefined)).toBe(false)
+  })
   it.each([
     { repoId: 'foreign' },
     { url: 'https://github.com/foreign/project/pull/42' },

@@ -25,7 +25,6 @@ vi.mock('../../store', () => ({
 vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => mocks.web }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
-/** `element` is the rendered composer field, set when it mounts. */
 type Composer = NativeChatComposerHandle & { element: HTMLElement }
 
 function composerHandle(): Composer {
@@ -48,7 +47,6 @@ function composerHandle(): Composer {
   return handle
 }
 
-/** The real composer key handling, wired as the composer field wires it (onKeyDownCapture). */
 function ComposerField({
   composer,
   interrupt,
@@ -102,15 +100,19 @@ type ChatProps = {
   interrupt?: () => void
   suggestionsOpen?: boolean
   card?: boolean
+  cardField?: boolean
 }
 
-function PromptCard(): React.JSX.Element {
+function PromptCard({ field }: { field: boolean }): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   useNativeChatPromptCardFocus(ref, true)
-  return <div ref={ref} data-testid="card" tabIndex={-1} data-native-chat-prompt-card-focus />
+  return (
+    <div ref={ref} data-testid="card" tabIndex={-1} data-native-chat-prompt-card-focus>
+      {field ? <input data-testid="card-field" data-native-chat-prompt-card-focus-target /> : null}
+    </div>
+  )
 }
 
-/** Mirrors a chat root: pointer focus, root key routing, the find bar over the transcript. */
 function Chat({
   composer,
   transcript,
@@ -118,7 +120,8 @@ function Chat({
   reveal = vi.fn(),
   interrupt = vi.fn(),
   suggestionsOpen = false,
-  card = false
+  card = false,
+  cardField = false
 }: ChatProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   // As in ResolvedView: a card hides the composer and detaches its handle.
@@ -147,7 +150,7 @@ function Chat({
           <div data-native-chat-transcript-column>{transcript}</div>
         </div>
       </div>
-      {card ? <PromptCard /> : null}
+      {card ? <PromptCard field={cardField} /> : null}
       <div hidden={card}>
         <ComposerField
           composer={composer}
@@ -183,7 +186,6 @@ function press(target: EventTarget, key: string, init: KeyboardEventInit = {}): 
   return event
 }
 
-/** The focused find input when two chats have one open, else the only one. */
 function findInput(): HTMLInputElement | null {
   const inputs = screen
     .queryAllByRole('textbox', { name: 'Find in chat' })
@@ -526,7 +528,6 @@ describe('native chat find', () => {
       />
     )
     await nextFrame()
-    // Not "4/6": that index now points at an unrelated row.
     expect(status()).toBe('1/6')
   })
 
@@ -687,6 +688,15 @@ describe('native chat find', () => {
     expect(document.activeElement).toBe(findInput())
     press(findInput()!, 'Escape')
     expect(document.activeElement).toBe(screen.getByTestId('card'))
+  })
+
+  it('hands focus to the answer field when find closes over a card that held focus itself', () => {
+    const composer = composerHandle()
+    const view = render(<Chat composer={composer} transcript={TRANSCRIPT} card />)
+    pressModF(screen.getByTestId('card'))
+    view.rerender(<Chat composer={composer} transcript={TRANSCRIPT} card cardField />)
+    press(findInput()!, 'Escape')
+    expect(document.activeElement).toBe(screen.getByTestId('card-field'))
   })
 
   it('leaves Mod+F to the browser in the web client', () => {

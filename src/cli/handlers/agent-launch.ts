@@ -14,7 +14,9 @@ import { resolveCurrentAgentWorkspaceSelector } from '../agent-workspace-selecto
 
 export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
   'agent launch': async ({ flags, client, cwd, json, rawArgs }) => {
-    const launch = readCliAgentLaunch(flags, parseCliAgent(getRequiredStringFlag(flags, 'agent')))
+    const launch = readCliAgentLaunch(flags, parseCliAgent(getRequiredStringFlag(flags, 'agent')), {
+      createsWorktree: false
+    })
     if (client.isRemote && !flags.has('worktree')) {
       throw new RuntimeClientError(
         'invalid_argument',

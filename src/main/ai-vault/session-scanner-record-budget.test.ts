@@ -57,9 +57,6 @@ function resumeOf(path: string) {
   return getSessionParseCacheEntry(path)?.resume
 }
 
-// Why: the resume cursor counts bytes, so a record dropped mid-file has to leave
-// it on the byte after that record's newline. Off by one and every later
-// incremental scan folds a half-line into the session.
 it('keeps a byte-exact resume cursor across a skipped record', async () => {
   const root = await tempRoot('orca-record-budget-')
   const path = join(root, SESSION_FILE)
@@ -72,8 +69,7 @@ it('keeps a byte-exact resume cursor across a skipped record', async () => {
   expect(await parse(path)).toEqual(['first'])
   expect(resumeOf(path)?.byteOffset).toBe(Buffer.byteLength(first))
 
-  // An append that ends mid-oversized-record: the good record before it lands,
-  // the cursor stays at the unterminated record's start because it may still grow.
+  // Keep the cursor at the growing oversized record while retaining earlier complete records.
   await appendFile(path, second)
   await appendFile(path, OVERSIZED)
   expect(await parse(path)).toEqual(['first', 'second'])
@@ -82,20 +78,17 @@ it('keeps a byte-exact resume cursor across a skipped record', async () => {
     { byteOffset: Buffer.byteLength(first + second), approximateBytes: OVERSIZED.length }
   ])
 
-  // Terminate the oversized record and append a good one after it. Resuming
-  // mid-line or one byte off would corrupt or duplicate a record here.
+  // A misaligned resume cursor would corrupt or duplicate the first record after this skipped span.
   await appendFile(path, `\n${third}`)
   expect(await parse(path)).toEqual(['first', 'second', 'third'])
   const size = (await stat(path)).size
   expect(resumeOf(path)?.byteOffset).toBe(size)
   expect(size).toBe(Buffer.byteLength(first + second + third) + OVERSIZED.length + 1)
-  // Same start offset as the unterminated pass, so the merge replaces rather
-  // than double-reports the record.
+  // Match the earlier offset so the skip notice replaces rather than duplicates the partial observation.
   expect(resumeOf(path)?.skippedRecords).toEqual([
     { byteOffset: Buffer.byteLength(first + second), approximateBytes: OVERSIZED.length }
   ])
 
-  // One more append proves the cursor is still aligned after all of that.
   await appendFile(path, record('fourth'))
   expect(await parse(path)).toEqual(['first', 'second', 'third', 'fourth'])
   expect(resumeOf(path)?.byteOffset).toBe((await stat(path)).size)
@@ -115,8 +108,6 @@ it('folds a cold read around a mid-file oversized record', async () => {
   expect(resumeOf(path)?.byteOffset).toBe((await stat(path)).size)
 })
 
-// Why: before this, the throw aborted the fold and the session vanished from
-// the history list and from search entirely.
 it('still lists a session with an oversized record and reports the loss', async () => {
   const root = await tempRoot('orca-record-budget-scan-')
   const roots = isolatedScanRoots(root)

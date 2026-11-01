@@ -22,7 +22,6 @@ function stubChild() {
 }
 
 describe('Codex app-server exit order', () => {
-  // Stdout can end before the exit is seen, as when the provider supervisor's own exit closes it.
   it('reports an exit whose stdout ended first once the exit is seen, with its usual reason', async () => {
     const { child, spawnImpl } = stubChild()
     const exits: string[] = []

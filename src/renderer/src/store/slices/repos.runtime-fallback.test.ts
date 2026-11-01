@@ -278,10 +278,7 @@ describe('repo slice runtime folder fallback', () => {
   })
 
   it('adds a local non-git folder directly without runtime metadata or a worktree', async () => {
-    // Local analogue of the runtime fallback above: with no active runtime the add
-    // routes through window.api.repos.add (not runtime RPC). A non-git path returns
-    // Orca's own "Not a valid git repository" sentinel, so addRepoPath surfaces the
-    // confirmation modal with no runtime/SSH metadata instead of throwing.
+    // Local non-git sentinel opens folder confirmation through app IPC without runtime/SSH metadata.
     const folderRepo: Repo = {
       id: 'local-folder',
       path: '/local/non-git',
@@ -303,8 +300,7 @@ describe('repo slice runtime folder fallback', () => {
       }
     })
     const store = createTestStore()
-    // fetchWorktrees is stubbed so the post-add activation chain (which needs
-    // worktrees/onboarding APIs absent from this stub) stays out of scope.
+    // Stub activation’s worktree/onboarding calls, absent from this fixture.
     store.setState({ fetchWorktrees: vi.fn().mockResolvedValue(undefined) as never })
 
     await expect(store.getState().addRepoPath('/local/non-git', 'git')).resolves.toBeNull()
@@ -318,8 +314,7 @@ describe('repo slice runtime folder fallback', () => {
     expect(store.getState().modalData).toEqual({ folderPath: '/local/non-git' })
     expect(store.getState().repos).toEqual([])
 
-    // Completing the flow via "Open as Folder" adds a kind:'folder' project whose
-    // workspace path IS the folder itself — proving no git worktree is created.
+    // Open as Folder must use the folder itself without creating a git worktree.
     const added = await store.getState().addNonGitFolder('/local/non-git')
 
     expect(reposAdd).toHaveBeenNthCalledWith(2, {

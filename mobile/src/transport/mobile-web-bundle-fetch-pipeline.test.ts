@@ -1,11 +1,20 @@
 import { sha256 } from '@noble/hashes/sha256'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import { fetchMobileWebBundle } from './mobile-web-bundle-fetch'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import { readMobileWebBundleErrorCode } from './mobile-web-bundle-operations'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
+
+// Hashed before it resolves, as the native module's synchronous digest is.
+vi.mock('expo-crypto', async () => {
+  const { sha256: hash } = await import('@noble/hashes/sha256')
+  return {
+    CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+    digest: async (_algorithm: string, data: Uint8Array) => hash(data).buffer
+  }
+})
 
 const CHUNK_BYTES = 4
 
@@ -21,17 +30,11 @@ type ChunkRequest = { path: string; offset: number }
 type Reply = { error: string } | { result: unknown }
 
 type WaveHostOptions = {
-  /** Host-side read slots left for this client; the host refuses a read that arrives over it. */
   readSlots?: number
-  /** Replaces the reply for one request. */
   intercept?: (request: ChunkRequest) => Reply | undefined
 }
 
-/**
- * A host whose chunk replies wait until the test releases them, a whole wave at a time. A wave is
- * one round trip: every read in flight when it is released answers together, so the number of
- * waves is the number of round trips on the critical path, with no clock involved.
- */
+// Release all in-flight replies as one wave so wave count measures critical-path round trips without a clock.
 function waveHost(files: Record<string, string>, options: WaveHostOptions = {}) {
   const contents = new Map(Object.entries(files).map(([path, text]) => [path, bytesOf(text)]))
   const assets = [...contents.entries()]
@@ -116,10 +119,9 @@ function waveHost(files: Record<string, string>, options: WaveHostOptions = {}) 
     close: vi.fn()
   }
 
-  const settleMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const settleMicrotasks = () => vi.advanceTimersByTimeAsync(0)
 
-  /** Releases wave after wave until `done` settles and returns how many waves that took, then keeps
-   *  draining, so a read that should have been stopped is counted instead of left unreleased. */
+  // Drain after settlement too so unstopped sibling reads remain visible.
   const runWaves = async (
     done: Promise<unknown>,
     beforeWave?: (wave: number) => void
@@ -152,7 +154,6 @@ function waveHost(files: Record<string, string>, options: WaveHostOptions = {}) 
   return { client, manifest, requests, peaks, refusalCount, runWaves }
 }
 
-/** One 71-chunk asset, the shape of the real bundle's largest script, behind five small ones. */
 function syntheticBundle(): Record<string, string> {
   const big = Array.from({ length: 71 * CHUNK_BYTES - 1 }, (_, index) =>
     String.fromCharCode(97 + (index % 26))
@@ -167,6 +168,9 @@ function syntheticBundle(): Record<string, string> {
   }
 }
 
+beforeEach(() => vi.useFakeTimers())
+afterEach(() => vi.useRealTimers())
+
 describe('fetchMobileWebBundle chunk pipeline', () => {
   it('keeps four chunk reads in flight across the whole bundle, largest asset first', async () => {
     const files = syntheticBundle()
@@ -176,7 +180,6 @@ describe('fetchMobileWebBundle chunk pipeline', () => {
     const waves = await host.runWaves(fetched)
     const result = await fetched
 
-    // 71 + 5 chunks at four per round trip is 19; one asset per reader was 1 + 71 = 72.
     expect(waves).toBe(19)
     expect(host.requests).toHaveLength(76)
     expect(host.requests.slice(0, 4)).toEqual([
@@ -200,7 +203,7 @@ describe('fetchMobileWebBundle chunk pipeline', () => {
 
     expect(readMobileWebBundleErrorCode(error)).toBe('mobile_web_bundle_read_limited')
     expect(host.refusalCount()).toBe(1)
-    // The first wave's four, plus one follow-up from each sibling reply that settled before the refusal.
+    // Allow the initial four plus one dispatched by each sibling before refusal.
     expect(host.requests.length).toBeLessThanOrEqual(7)
   })
 
@@ -215,7 +218,6 @@ describe('fetchMobileWebBundle chunk pipeline', () => {
       }
     })
 
-    // Every read is already sent by the last wave, so no later dispatch can notice the abort.
     expect(waves).toBe(19)
     expect(host.requests).toHaveLength(76)
     const error = await fetched.catch((thrown: unknown) => thrown)
@@ -254,8 +256,7 @@ describe('fetchMobileWebBundle chunk pipeline', () => {
     const error = await fetched.catch((thrown: unknown) => thrown)
 
     expect(readMobileWebBundleErrorCode(error)).toBe('mobile_web_bundle_asset_unknown')
-    // The first wave's four, plus at most the one its first sibling reply dispatched before the
-    // failing reply settled.
+    // Allow the initial four plus the one first-sibling follow-up before failure.
     expect(host.requests.length).toBeLessThanOrEqual(5)
   })
 

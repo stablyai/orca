@@ -37,7 +37,7 @@ export function stageOrcadWindowsProcessTree(
   if (inspectWindowsProcessTreeAddon(source) !== 'clean') {
     throw new Error(
       `Orcad ${target} requires a patched process reader. On Windows, run: ` +
-        `node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=${arch}`
+        `node config/scripts/build-windows-process-tree-addon.mjs --arch=${arch}`
     )
   }
   const machine = readPeMachine(source)

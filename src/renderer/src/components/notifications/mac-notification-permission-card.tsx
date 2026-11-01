@@ -11,9 +11,7 @@ export type MacNotificationPermissionState =
   | 'blocked'
 
 const MAC_PROBE_POLL_INTERVAL_MS = 2500
-// Why: bounded so an abandoned onboarding tab doesn't probe forever; ~3
-// minutes comfortably covers answering the dialog or flipping the toggle
-// in System Settings.
+// Bound polling to about three minutes so abandoned onboarding cannot probe forever.
 const MAC_PROBE_POLL_MAX_ATTEMPTS = 72
 
 export function resolveMacNotificationPermissionState(
@@ -29,9 +27,7 @@ export function resolveMacNotificationPermissionState(
   if (probeState === 'awaiting-decision') {
     return 'awaiting-permission'
   }
-  // Why: probe-fallback hosts can't tell "unanswered dialog" from "denied" —
-  // a first-ever probe is what makes macOS show the permission dialog, so
-  // its rejection means "unanswered", not "denied".
+  // Fallback probes trigger the first permission dialog; initial nondelivery means unanswered, not denied.
   return promptedBefore ? 'blocked' : 'awaiting-permission'
 }
 
@@ -42,10 +38,7 @@ export function useMacNotificationPermissionState(
     useState<MacNotificationPermissionState | null>(null)
 
   useEffect(() => {
-    // Why: while Orca's own notifications setting is off, the OS permission
-    // is irrelevant — a green "notifications are enabled" card next to a
-    // disabled toggle reads as a contradiction. Hide the card and skip the
-    // readout polling entirely until the setting is back on.
+    // When app notifications are off, hide permission status and skip polling to avoid contradictory enabled feedback.
     if (!enabled) {
       setMacPermissionState(null)
       return
@@ -65,10 +58,7 @@ export function useMacNotificationPermissionState(
             return
           }
           setMacPermissionState(resolveMacNotificationPermissionState(probe.state, promptedBefore))
-          // Why: authoritative readouts are silent, so keep tracking System
-          // Settings live in every state — flipping the toggle updates the
-          // card within a poll. Probe fallbacks flash a banner when delivery
-          // works, so for them polling stops once the card turns green.
+          // Authoritative reads are silent and keep tracking Settings; fallback probes emit banners, so stop after delivery.
           if (probe.authoritative || probe.state !== 'delivered') {
             schedulePoll(promptedBefore)
           }
@@ -85,9 +75,7 @@ export function useMacNotificationPermissionState(
         return
       }
       setMacPermissionState('checking')
-      // Why: `status.requested` is read before the probe stamps it, so a
-      // fresh install (where the check itself pops the macOS dialog) renders
-      // as "answer the dialog" instead of "blocked" on probe-fallback hosts.
+      // Read requested before probing so fresh-install dialogs show awaiting permission instead of blocked.
       const probe = await window.api.notifications.probeDelivery()
       if (cancelled) {
         return

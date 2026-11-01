@@ -20,6 +20,7 @@ type QuickSubmitSourcePreparationInput = Pick<
 import { useCallback } from 'react'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 
@@ -65,8 +66,9 @@ export function useQuickSubmitSourcePreparation(input: QuickSubmitSourcePreparat
       const submitLinkedPR =
         smartGitHubResolution.kind === 'none' ? effectiveLinkedPR : smartGitHubResolution.linkedPR
 
+      // Why: must match the seed shown in the name field, or an auto-managed Jira name reverts to lowercase on submit.
       const submitTitleName = submitLinkedWorkItem
-        ? getLinkedWorkItemWorkspaceName(submitLinkedWorkItem)
+        ? getLinkedWorkItemWorkspaceName(submitLinkedWorkItem, getJiraIssueKeyCasingSeedOptions())
         : null
 
       const nameIsAutoManaged = !isExplicitWorkspaceNameInput({
@@ -97,11 +99,7 @@ export function useQuickSubmitSourcePreparation(input: QuickSubmitSourcePreparat
         return null
       }
 
-      // Why: only a name Orca generated may be retired — the creature pool contains ordinary words
-      // ("orca", "runner", "molly") a user can type deliberately and expect to reuse.
-      // The identity check is what a linked PR/issue seed makes necessary here; mobile's blank-create
-      // path (use-new-workspace-create-submit.ts, `nameWasGenerated: !trimmedName`) has no other seed,
-      // so it can't share this expression. Same rule, two submit paths — change both together.
+      // Retire only Orca-generated names, not user-entered creature words; linked-item seeds require identity checks absent from mobile’s blank-name path. Keep both submit policies aligned.
       const nameWasGenerated = !name.trim() && workspaceName === fallbackCreatureName
 
       const smartSubmitBaseBranch =

@@ -5,11 +5,12 @@ import { startOrcadConvertHost } from './helpers/orcad-convert-host'
 import { reconnect, serverCall } from './helpers/orcad-convert-flow'
 import { runtimeAdvertisesBrowserClientHosting } from '../../src/shared/browser-client-hosting-eligibility'
 import { ORCAD_TEMPLATE, skipUnlessManagedDockerHost } from './helpers/orcad-managed-workspace'
+import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
 
 skipUnlessManagedDockerHost()
-test.use({ orcaAppExtraEnv: { ORCA_ORCAD_TEMPLATE_PATH: ORCAD_TEMPLATE } })
+test.use({ orcaAppExtraEnv: { ORCA_ORCAD_TEMPLATE_PATH: ORCAD_TEMPLATE ?? '' } })
 
-test('a backendless managed host does not promise client-hosted browser creation', async ({
+test('a backendless managed host offers desktop-hosted pages and refuses its own engine', async ({
   orcaPage: page
 }, testInfo) => {
   test.setTimeout(3 * 60_000)
@@ -24,7 +25,7 @@ test('a backendless managed host does not promise client-hosted browser creation
       return target.id
     }, target.input)
     const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-      (entry) => entry.orcadDeployment?.sshTargetId === targetId
+      (entry) => getOrcadSshDeployment(entry)?.sshTargetId === targetId
     )
     if (!environment) {
       throw new Error('Missing managed environment')
@@ -41,20 +42,29 @@ test('a backendless managed host does not promise client-hosted browser creation
       )
     const capabilities = (await status()).capabilities
     console.log('[managed-browser-capabilities]', JSON.stringify(capabilities))
-    expect(runtimeAdvertisesBrowserClientHosting(capabilities)).toBe(false)
-    expect(capabilities).not.toContain('browser.clientHost.v1')
-    expect(capabilities).not.toContain('browser.tab-create-known-id.v1')
+    // #30731: client pages need no engine on the host, so it can create them for a desktop.
+    expect(runtimeAdvertisesBrowserClientHosting(capabilities)).toBe(true)
+    expect(capabilities).toContain('browser.tab-create-known-id.v1')
     expect(capabilities).toContain('network.browserTunnel.v1')
-    const refused = await page.evaluate(
-      (selector) =>
-        window.api.runtimeEnvironments.call({ selector, method: 'browser.tabList', params: {} }),
-      environment.id
-    )
+    const call = (method: string, params: Record<string, unknown>) =>
+      page.evaluate((input) => window.api.runtimeEnvironments.call(input), {
+        selector: environment.id,
+        method,
+        params
+      })
+    const refused = await call('browser.tabList', {})
     console.log('[managed-browser-command]', JSON.stringify(refused))
     expect(refused).toMatchObject({ ok: false, error: { code: 'browser_unavailable' } })
+    // Managed SSH desktops do not host via paired open-url; the host CLI uses its browser bridge instead.
+    const openUrl = await call('browser.openUrl', {
+      url: 'https://example.org/',
+      worktree: 'active'
+    })
+    console.log('[managed-browser-open-url]', JSON.stringify(openUrl))
+    expect(openUrl).toMatchObject({ ok: false, error: { code: 'browser_host_unavailable' } })
     await serverCall(page, environment.id, 'repo.list')
     await reconnect(page, targetId)
-    expect(runtimeAdvertisesBrowserClientHosting((await status()).capabilities)).toBe(false)
+    expect(runtimeAdvertisesBrowserClientHosting((await status()).capabilities)).toBe(true)
   } finally {
     target.cleanup()
   }

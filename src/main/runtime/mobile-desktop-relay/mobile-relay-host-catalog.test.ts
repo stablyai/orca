@@ -8,8 +8,13 @@ import {
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { SshConnectionState } from '../../../shared/ssh-types'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { Tab } from '../../../shared/tab-types'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from './mobile-relay-host-catalog'
+import { PairedServerRowsProducer } from '../sidebar-inputs/paired-server-rows-producer'
 
 function answer(capable: boolean): RuntimeStatus {
   return {
@@ -54,8 +59,11 @@ function fakeHosts(
     id: string
     name: string
     snapshot: RuntimeHostStatusSnapshot
-    orcadDeployment?: { sshTargetId: string }
+    orcadDeployment?: { sshTargetId: string } | { kind: 'wsl' }
     runtimeId?: string | null
+    pairedDeviceId?: string
+    stoppedOnDesktop?: true
+    unavailableOnDesktop?: true
   }[]
 ) {
   const state = {
@@ -65,16 +73,30 @@ function fakeHosts(
     sshTargetLabels: new Map<string, string>(),
     sshConnectionStates: new Map<string, SshConnectionState>()
   }
+  // Simulate an older server answering only worktree.ps, leaving producer catalog reads pending.
   const call = vi.fn<MobileDesktopRelayHosts['call']>()
   const hosts: MobileDesktopRelayHosts = {
     list: () => ({
-      environments: state.environments.map(({ id, name, orcadDeployment, runtimeId }) => ({
-        id,
-        name,
-        orcadDeployment,
-        pairingRevision: state.pairingRevision,
-        runtimeId: runtimeId === undefined ? 'runtime-a' : runtimeId
-      })),
+      environments: state.environments.map(
+        ({
+          id,
+          name,
+          orcadDeployment,
+          runtimeId,
+          pairedDeviceId,
+          stoppedOnDesktop,
+          unavailableOnDesktop
+        }) => ({
+          id,
+          name,
+          orcadDeployment,
+          stoppedOnDesktop,
+          unavailableOnDesktop,
+          pairingRevision: state.pairingRevision,
+          runtimeId: runtimeId === undefined ? 'runtime-a' : runtimeId,
+          pairedDeviceId
+        })
+      ),
       sshTargetLabels: state.sshTargetLabels,
       sshConnectionStates: state.sshConnectionStates,
       statusByEnvironmentId: new Map(
@@ -89,17 +111,44 @@ function fakeHosts(
       fence: 'unused',
       pairing: { v: 2, endpoint: 'ws://server', deviceToken: 'desktop', publicKeyB64: 'k' }
     }),
-    call,
+    call: (host, method, params, options) =>
+      method === 'worktree.ps'
+        ? call(host, method, params, options)
+        : Promise.reject(new Error('method_not_found')),
+    hostsBrowserPage: () => false,
     onEnvironmentRetired: (listener) => {
       state.retire = listener
       return () => {}
-    }
+    },
+    onStatusChanged: () => () => {},
+    watchChanges: () => ({ close: () => {}, current: () => true })
   }
   return { hosts, call, state }
 }
 
-function catalog(hosts: MobileDesktopRelayHosts, labels = new Map()) {
-  return { catalog: new MobileRelayHostCatalog({ hosts, hostLabelOverrides: () => labels }) }
+function catalog(
+  hosts: MobileDesktopRelayHosts,
+  labels = new Map(),
+  desktop: {
+    sessions?: Record<string, Partial<WorkspaceSessionState>>
+  } = {}
+) {
+  const serverRows = new PairedServerRowsProducer({
+    hasDemand: () => false,
+    hostLabelOverrides: () => new Map()
+  })
+  serverRows.attach(hosts)
+  return {
+    catalog: new MobileRelayHostCatalog({
+      hosts,
+      serverRows,
+      hostLabelOverrides: () => labels,
+      getWorkspaceSession: (hostId) => {
+        const session = desktop.sessions?.[hostId]
+        return session ? { ...getDefaultWorkspaceSession(), ...session } : null
+      }
+    })
+  }
 }
 
 describe('mobile relay host catalog', () => {
@@ -118,11 +167,10 @@ describe('mobile relay host catalog', () => {
       { hostId: 'runtime:ready', label: 'Build box', health: 'available', relay: 'ready' },
       { hostId: 'runtime:old', label: 'ThinkPad', health: 'available', relay: 'update-needed' },
       { hostId: 'runtime:down', label: 'VM', health: 'connecting', relay: 'unavailable' },
-      // A build's capabilities outlive contact, so an old server stays update-needed offline.
+      // Build capabilities remain known while offline.
       { hostId: 'runtime:old-down', label: 'Pi', health: 'connecting', relay: 'update-needed' },
       { hostId: 'runtime:new', label: 'Fresh', health: 'connecting', relay: 'unavailable' }
     ])
-    // Listing reads what the desktop already knows; it never contacts a server.
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(call).not.toHaveBeenCalled()
   })
@@ -144,6 +192,30 @@ describe('mobile relay host catalog', () => {
     expect(renamed.list().hosts.map((host) => host.label)).toEqual(['Build box'])
   })
 
+  it('marks a WSL host stopped on the desktop only once the desktop confirmed the stop', () => {
+    const wsl = {
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu (WSL)',
+      snapshot: snapshot('wsl:ubuntu', 'unreachable'),
+      orcadDeployment: { kind: 'wsl' as const }
+    }
+    const unconfirmed = {
+      hostId: 'runtime:wsl%3Aubuntu',
+      label: 'Ubuntu (WSL)',
+      health: 'connecting',
+      relay: 'unavailable'
+    }
+    expect(catalog(fakeHosts([wsl]).hosts).catalog.list().hosts).toEqual([unconfirmed])
+    const stopped = fakeHosts([{ ...wsl, stoppedOnDesktop: true }]).hosts
+    expect(catalog(stopped).catalog.list().hosts).toEqual([
+      { ...unconfirmed, stoppedOnDesktop: true }
+    ])
+    const notConnected = fakeHosts([{ ...wsl, unavailableOnDesktop: true }]).hosts
+    expect(catalog(notConnected).catalog.list().hosts).toEqual([
+      { ...unconfirmed, unavailableOnDesktop: true }
+    ])
+  })
+
   it('does not list a managed server while its SSH host is reached over the SSH relay', () => {
     const { hosts, state } = fakeHosts([
       {
@@ -162,7 +234,7 @@ describe('mobile relay host catalog', () => {
       reconnectAttempt: 0,
       managedServer: { kind: 'relay', reason: 'relay_terminals_live' }
     })
-    // Its workspaces are the SSH host's, which the desktop already lists to the phone itself.
+    // The phone already lists these workspaces under the SSH host.
     expect(
       catalog(hosts)
         .catalog.list()
@@ -200,9 +272,9 @@ describe('mobile relay host catalog', () => {
     expect(call).toHaveBeenCalledWith(
       expect.objectContaining({ environmentId: 'env' }),
       'worktree.ps',
-      // The phone's full-catalog limit: the server's default page would silently truncate.
+      // Default server pagination would silently truncate the full catalog.
       { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true },
-      { timeoutMs: 5_000, expected: { pairingRevision: 1, runtimeId: 'runtime-a' } }
+      { expected: { pairingRevision: 1, runtimeId: 'runtime-a' } }
     )
   })
 
@@ -216,13 +288,11 @@ describe('mobile relay host catalog', () => {
 
     state.environments = [{ id: 'env', name: 'Box', snapshot: snapshot('env', 'unreachable') }]
     const offline = await hostCatalog.worktrees('runtime:env')
-    // Never re-fetched while the desktop itself cannot reach it, and never rewritten as idle.
     expect(call).toHaveBeenCalledTimes(1)
     expect(offline).toEqual({
       worktrees: [{ worktreeId: 'w', hostId: 'runtime:env', status: 'working' }]
     })
 
-    // A failed fetch on a server that looks reachable also serves the last rows.
     state.environments = [{ id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }]
     call.mockRejectedValueOnce(new Error('socket closed'))
     await expect(hostCatalog.worktrees('runtime:env')).resolves.toEqual(offline)
@@ -278,7 +348,7 @@ describe('mobile relay host catalog', () => {
     await expect(hostCatalog.worktrees('runtime:env')).resolves.toEqual({ worktrees: null })
   })
 
-  it('has no rows when re-paired mid-fetch, and the next poll fetches the new server afresh', async () => {
+  it('never serves rows from before a re-pair mid-fetch, and the next poll fetches the new server afresh', async () => {
     const { hosts, call, state } = fakeHosts([
       { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
     ])
@@ -289,16 +359,19 @@ describe('mobile relay host catalog', () => {
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(1))
     state.pairingRevision = 2
     call.mockResolvedValueOnce(psReply([{ worktreeId: 'new-server-row', hostId: 'local' }]))
-    // Never joins the old server's fetch, still pending here.
     const next = hostCatalog.worktrees('runtime:env')
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
     expect(call).toHaveBeenLastCalledWith(expect.anything(), 'worktree.ps', expect.anything(), {
-      timeoutMs: 5_000,
       expected: { pairingRevision: 2, runtimeId: 'runtime-a' }
     })
     await expect(next).resolves.toMatchObject({ worktrees: [{ worktreeId: 'new-server-row' }] })
     answerOldFetch(psReply([{ worktreeId: 'old-server-row', hostId: 'local' }]))
-    await expect(rows).resolves.toEqual({ worktrees: null })
+    await expect(rows).resolves.toEqual({
+      worktrees: [{ worktreeId: 'new-server-row', hostId: 'runtime:env' }]
+    })
+    await expect(hostCatalog.worktrees('runtime:env')).resolves.toMatchObject({
+      worktrees: [{ worktreeId: 'new-server-row' }]
+    })
   })
 
   it("forgets a removed server's rows, even ones its last fetch delivers after removal", async () => {
@@ -316,7 +389,6 @@ describe('mobile relay host catalog', () => {
     answerFetch(psReply([{ worktreeId: 'w', hostId: 'local' }]))
     await expect(rows).resolves.toEqual({ worktrees: null })
     expect(hostCatalog.list().hosts).toEqual([])
-    // Added back under the same id and identity: the late rows were pruned, not kept.
     state.environments = [{ ...removed[0]!, snapshot: snapshot('env', 'unreachable') }]
     await expect(hostCatalog.worktrees('runtime:env')).resolves.toEqual({ worktrees: null })
   })
@@ -328,7 +400,6 @@ describe('mobile relay host catalog', () => {
     call.mockResolvedValue(psReply([{ worktreeId: 'w', hostId: 'local' }]))
     const { catalog: hostCatalog } = catalog(hosts)
     await hostCatalog.worktrees('runtime:env')
-    // A manual disconnect retires the desktop's transport and its status owner.
     state.environments = [
       {
         id: 'env',
@@ -352,7 +423,6 @@ describe('mobile relay host catalog', () => {
       worktrees: [{ worktreeId: 'w' }]
     })
     expect(call).toHaveBeenCalledWith(expect.anything(), 'worktree.ps', expect.anything(), {
-      timeoutMs: 5_000,
       expected: { pairingRevision: 1, runtimeId: null }
     })
   })
@@ -394,5 +464,93 @@ describe('mobile relay host catalog', () => {
     const rows = { worktrees: [{ worktreeId: 'w', hostId: 'runtime:env' }] }
     await expect(Promise.all([first, second])).resolves.toEqual([rows, rows])
     expect(call).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("mobile relay host catalog: the desktop sidebar's own view of server rows", () => {
+  // Relayed phone creates record the relaying desktop as provenance.
+  const creators = [
+    { worktreeId: 'mine', creatorProvenance: { kind: 'paired-device', deviceId: 'desktop' } },
+    { worktreeId: 'other', creatorProvenance: { kind: 'paired-device', deviceId: 'laptop' } },
+    { worktreeId: 'server', creatorProvenance: { kind: 'host' } },
+    { worktreeId: 'unknown' }
+  ]
+
+  function serverRows(desktop: Parameters<typeof catalog>[2], pairedDeviceId = 'desktop') {
+    const { hosts, call } = fakeHosts([
+      { id: 'env', name: 'Box', snapshot: snapshot('env', 'live'), pairedDeviceId }
+    ])
+    call.mockResolvedValue(psReply(creators))
+    return catalog(hosts, new Map(), desktop).catalog.worktrees('runtime:env')
+  }
+
+  function marked(rows: Awaited<ReturnType<typeof serverRows>>, field: string): unknown[] {
+    return (rows.worktrees ?? []).filter((row) => row[field] === true).map((row) => row.worktreeId)
+  }
+
+  it('marks rows someone else created, whatever the desktop filter says', async () => {
+    const rows = await serverRows({})
+    expect(marked(rows, 'desktopOtherClient')).toEqual(['other', 'server'])
+    expect(rows.worktrees).toHaveLength(creators.length)
+  })
+
+  it('marks nothing on a server whose pairing the desktop cannot name', async () => {
+    const { hosts, call } = fakeHosts([
+      { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
+    ])
+    call.mockResolvedValue(psReply(creators))
+    const rows = await catalog(hosts, new Map()).catalog.worktrees('runtime:env')
+    expect(marked(rows, 'desktopOtherClient')).toEqual([])
+  })
+
+  function browserTab(worktreeId: string): BrowserWorkspace {
+    return {
+      id: `browser-${worktreeId}`,
+      worktreeId,
+      url: 'about:blank',
+      title: '',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: 0
+    }
+  }
+
+  function tab(
+    worktreeId: string,
+    contentType: Tab['contentType'],
+    agent?: Tab['agentSessionAgent']
+  ): Tab {
+    return {
+      id: `${contentType}-${worktreeId}`,
+      entityId: worktreeId,
+      groupId: 'group',
+      worktreeId,
+      contentType,
+      label: '',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0,
+      ...(agent ? { agentSessionAgent: agent } : {})
+    }
+  }
+
+  it("counts the desktop's saved browser or chat tabs as the row's sidebar activity", async () => {
+    const rows = await serverRows({
+      sessions: {
+        'runtime:env': {
+          browserTabsByWorktree: { mine: [browserTab('mine')], other: [] },
+          unifiedTabs: {
+            'worktree:server': [tab('server', 'agent-session', 'claude')],
+            unknown: [tab('unknown', 'terminal')]
+          }
+        },
+        local: { browserTabsByWorktree: { other: [browserTab('other')] } }
+      }
+    })
+    expect(marked(rows, 'hasHostSidebarActivity')).toEqual(['mine', 'server'])
   })
 })

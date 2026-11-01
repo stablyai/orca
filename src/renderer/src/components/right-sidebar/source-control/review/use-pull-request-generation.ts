@@ -1,10 +1,13 @@
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorkspaceJiraIssueKey } from '../../../../../../shared/jira/jira-review-title'
 import { useCallback } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import {
   cancelRuntimeGeneratePullRequestFields,
-  generateRuntimePullRequestFields,
-  type RuntimeGeneratePullRequestFieldsOverrides
-} from '@/runtime/runtime-git-client'
+  generateRuntimePullRequestFields
+} from '@/runtime/runtime-git-generation-client'
+import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/runtime-git-client-context'
 import type { PullRequestGenerationOutcome } from '../../create-pull-request-dialog-field-model'
 import { settlePullRequestGenerationRequest } from '../../pull-request-generation-request-outcome'
 import { useAppStore } from '@/store'
@@ -28,10 +31,7 @@ import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlStatusRefresh } from '../sync/use-status-refresh'
 
-/**
- * Runs AI generation of the PR details for the active branch through a store record, so a
- * run started before a tab switch is still resumable when the composer remounts.
- */
+/** Persist generation in a store record so the composer can resume after tab switches. */
 export function useSourceControlPullRequestGeneration({
   activeRepo,
   activeRepoTarget,
@@ -102,17 +102,28 @@ export function useSourceControlPullRequestGeneration({
         return undefined
       }
       const requestId = allocatePullRequestGenerationRequestId()
+      // Why one resolution: the result must land on this copy, not a same-path twin.
+      const copy = activeWorktreeId ? resolveWorktreeGitCopyNow(activeWorktreeId) : null
       const context: PullRequestGenerationContext = {
         worktreeId: activeWorktreeId,
         worktreePath,
-        connectionId: getConnectionId(activeWorktreeId) ?? undefined,
+        connectionId: copy ? copy.connectionId : (getConnectionId(activeWorktreeId) ?? undefined),
+        ownerHostId: copy?.hostId ?? null,
+        jiraIssueKey:
+          (hostedReviewCreateProvider === 'github' || hostedReviewCreateProvider === 'gitlab') &&
+          activeWorktreeId
+            ? getWorkspaceJiraIssueKey(
+                useAppStore
+                  .getState()
+                  .getKnownWorktreeById(activeWorktreeId, getRepoExecutionHostId(activeRepo))
+              )
+            : null,
         requestId,
         repoId: activeRepo.id,
         branch: branchName,
-        runtimeTarget: activeRepoTarget
+        runtimeTarget: copy?.transport ?? activeRepoTarget
       }
       const seed = { ...fields }
-      // Why: SourceControl can unmount on tab switches; the persisted record lets the PR composer resume on return.
       setPullRequestGenerationRecord(
         generationKey,
         createRunningPullRequestGenerationRecord(context, seed, fieldRevisions, options?.autoSubmit)
@@ -122,7 +133,7 @@ export function useSourceControlPullRequestGeneration({
         try {
           const result = await generateRuntimePullRequestFields(
             {
-              // Why: route generation by the repo OWNER host, not the focused runtime.
+              // Route generation to the repo owner, which may differ from the focused host.
               target: context.runtimeTarget,
               prefs: useAppStore.getState().settings,
               worktreeId: context.worktreeId,
@@ -213,7 +224,7 @@ export function useSourceControlPullRequestGeneration({
       return resolvePullRequestGenerationCancel(current)
     })
     void cancelRuntimeGeneratePullRequestFields({
-      // Why: the user can switch hosts while generation runs; cancel the original request owner, not the focused host.
+      // Cancel on the original request owner even after host navigation.
       target: record.context.runtimeTarget,
       worktreeId: record.context.worktreeId,
       worktreePath: record.context.worktreePath,

@@ -32,7 +32,7 @@ async function runJobs(): Promise<void> {
         }
         jobs.delete(job)
         if (!finished) {
-          // Why: to the back, so a long block cannot starve the others.
+          // Move unfinished work to the back so long blocks cannot starve siblings.
           jobs.add(job)
         }
       }

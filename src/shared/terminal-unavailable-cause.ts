@@ -1,22 +1,6 @@
-/**
- * The machine-readable half of "remote terminals are unavailable".
- *
- * Why this exists: the fault is proved on the relay, at spawn time, and the machinery
- * that can repair it (`repairInstalledNativeDeps`) lives on the client, at connect time.
- * Until now the only thing that crossed the wire was prose, so the client could not tell
- * a rebuildable ABI flip from a host whose glibc will never satisfy the binary — and the
- * message had to hedge across all of them.
- *
- * Wire compatibility (docs/reference/remote-wire-compatibility.md): this rides as the
- * optional `data` of an existing JSON-RPC error, so it is Rule 1 — additive. A client
- * that does not read it still renders `error.message`, which is exactly today's
- * behaviour, so no capability negotiation is needed.
- *
- * `repairable` is the field with teeth: it is true only for a fault that was PROVED and
- * that rebuilding node-pty on the host actually fixes. An `unverifiable` cause is never
- * repairable — a probe that did not answer must not trigger a destructive repair, which
- * is the #14830 lesson recorded in docs/reference/ssh-execution-boundary.md.
- */
+/** Carry relay-proven spawn faults to client-side repair: a rebuildable ABI mismatch differs from an unsupported host.
+ * Optional JSON-RPC error data is additive; older clients keep rendering error.message without negotiation.
+ * repairable requires proof that rebuilding node-pty fixes the fault. Unverifiable probes must never trigger repair (#14830). */
 import { z } from 'zod'
 import { TERMINAL_UNAVAILABLE_ERROR_CODE } from './runtime-capability-degradation'
 
@@ -39,11 +23,7 @@ export const TerminalUnavailableCauseSchema = z
   .object({
     /** `blocked` — proved. `unverifiable` — nothing answered; never act on it. */
     status: z.enum(['blocked', 'unverifiable']),
-    /**
-     * Open vocabulary, deliberately `string` rather than an enum: a newer relay may name a
-     * reason this client has never heard of, and a strict enum would drop the whole cause
-     * (including `repairable`) rather than the one field it cannot interpret.
-     */
+    /** Keep reason open so newer relay reasons do not discard the whole cause, including repairable. */
     reason: z.string().min(1).max(64),
     detail: z.string().max(400),
     /** Proved, and rebuilding node-pty on the host is the fix. */

@@ -1,5 +1,6 @@
-import type { AgentProviderSessionMetadata } from './agent-session-resume'
-import type { AgentType, NativeChatMessage } from './native-chat-types'
+import type { AgentProviderSessionMetadata } from './agent-session/lifecycle/agent-session-resume'
+import type { AgentType } from './agent-status-types'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 import type { OrchestrationFleetWorker } from './orchestration-fleet-projection'
 import type { RuntimeTerminalRead, RuntimeTerminalState } from './runtime-types'
 import type { PtyLivenessVerdict } from './pty-liveness-verdict'
@@ -53,7 +54,6 @@ export type OrchestrationWorkerReadTranscriptResult = {
   /** Fleet agent verdict for this Dispatch; absent from hosts that predate it. */
   projection?: OrchestrationFleetWorker | null
   fallbackReason: null
-  /** Additive provenance/coverage metadata. */
   sourceExact?: boolean
   contentComplete?: boolean
   clipping?: string[]
@@ -76,7 +76,6 @@ export type OrchestrationWorkerReadTerminalResult = {
   /** Fleet agent verdict for this Dispatch; absent from hosts that predate it. */
   projection?: OrchestrationFleetWorker | null
   fallbackReason: OrchestrationWorkerReadFallbackReason | null
-  /** Additive provenance/coverage metadata. */
   sourceExact?: boolean
   contentComplete?: boolean
   clipping?: string[]

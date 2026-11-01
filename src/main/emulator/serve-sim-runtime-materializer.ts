@@ -23,13 +23,7 @@ function defaultClearQuarantine(dir: string): void {
   if (process.platform !== 'darwin') {
     return
   }
-  // Why: a downloaded/updated .app carries com.apple.quarantine, and cpSync
-  // clones it onto the copy. serve-sim DYLD-injects libSimCameraInjector.dylib
-  // (an iOS-simulator binary Apple never Gatekeeper-tickets) into a simulator
-  // process; if that copy is quarantined, syspolicyd malware-rejects the load.
-  // Running from an unquarantined copy is what avoids the rejection (#6877).
-  // Remove only the quarantine attribute (not `-cr`, which strips every xattr);
-  // recursive `-d` exits 0 even for files that never had it.
+  // Clear only quarantine: copied simulator dylibs have no Gatekeeper ticket, but other xattrs must survive.
   execFileSync('/usr/bin/xattr', ['-rd', 'com.apple.quarantine', dir], { timeout: 30_000 })
 }
 
@@ -61,8 +55,7 @@ function readDependencyNames(packageDir: string): string[] {
   return dependencies && typeof dependencies === 'object' ? Object.keys(dependencies) : []
 }
 
-// Why: the copy has no node_modules of its own, so its bare imports (e.g. `ws`) must resolve
-// through links to the bundle's installed siblings; a dangling link (moved or translocated app) is stale.
+// Link bare imports to bundled dependencies; moved bundles make existing links stale.
 function bundledDependencyLinks(
   bundledPackageDir: string,
   runtimeNodeModulesDir: string
@@ -90,13 +83,7 @@ function isMaterializedRuntimeCurrent(bundledPackageDir: string, versionDir: str
   }
 }
 
-// Copies the bundled serve-sim package to a per-version directory outside the
-// signed app bundle and strips quarantine, so the camera dylib injected from
-// it is not subject to Gatekeeper assessment. The bundled dylib stays signed
-// and in place (it must, or the app fails notarization) — this only relocates
-// the copy that actually gets DYLD-injected. serve-sim resolves the dylib and
-// helper relative to its own entry, so the whole package moves together.
-// Layout: <version>/node_modules/serve-sim plus links to its bundled dependencies.
+// Relocate the whole package for relative helper/dylib paths while preserving the signed bundle.
 export function materializeServeSimRuntime(
   options: ServeSimRuntimeMaterializerOptions
 ): string | null {

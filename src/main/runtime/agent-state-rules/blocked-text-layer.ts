@@ -9,19 +9,12 @@ import {
   type BlockedTextSignal
 } from './agent-state-text-anchors'
 
-/**
- * The shared blocked layer, read before any agent's own rules. Why shared and positional: a tail
- * can show any agent's dialog whatever the pane runs, and an answered dialog stays in it, so the
- * blocker painted latest wins.
- */
+// Any pane can contain another agent's dialog; the latest live blocker wins.
 
 const BUILT_IN_SENTINEL_RE =
-  /update available|choose working directory to|codex just got an upgrade|available\s*·|esc\s*skip|enter\s*confirm\s*·|enter\/esc\s*(?:continue|confirm)|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always/
+  /update available|choose working directory to|codex just got an upgrade|available\s*\u00B7|esc\s*skip|enter\s*confirm\s*\u00B7|enter\/esc\s*(?:continue|confirm)|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always/
 
-/**
- * Matches any line that may carry a blocker; a cheap negative test before the full scan. The same
- * object until the active rules change, so a caller may key cached matches on it.
- */
+/** Cheap negative test; identity remains stable until rules change for caller caches. */
 export const terminalWaitBlockedSentinelRe = compiledFromActiveAgentStateRules(
   () =>
     new RegExp(
@@ -30,24 +23,27 @@ export const terminalWaitBlockedSentinelRe = compiledFromActiveAgentStateRules(
     )
 )
 
-// Why bounded: answered dialogs and quoted prompt wording (agents grep this file and its specs) stay in the
-// retained tail; only a dialog owning the screen bottom is live. Real Codex dialogs (trust, hooks review,
-// update, exec approval) are 4-8 lines; the slack covers a wrapped command or a longer hook list.
+// Restrict to the screen bottom: answered dialogs and quoted prompts remain in scrollback.
+// Twelve lines cover 4–8-line Codex dialogs plus wrapped commands/hooks.
 const LIVE_PROMPT_TAIL_LINES = 12
 
-export function findTerminalWaitBlockedSignal(fullTail: string): BlockedTextSignal | null {
-  const windowStart = startOfLastNonBlankLines(fullTail, LIVE_PROMPT_TAIL_LINES)
+/** `wholeText` scans every line: a grid holds only what is painted, and a tall dialog's keyword sits above the window. */
+export function findTerminalWaitBlockedSignal(
+  fullTail: string,
+  options: { wholeText?: boolean } = {}
+): BlockedTextSignal | null {
+  const windowStart = options.wholeText
+    ? 0
+    : startOfLastNonBlankLines(fullTail, LIVE_PROMPT_TAIL_LINES)
   const normalized = windowStart === 0 ? fullTail : fullTail.slice(windowStart)
-  // Why: one combined negative scan avoids a dozen searches when no prompt can match.
   if (!terminalWaitBlockedSentinelRe().test(normalized)) {
     return null
   }
   const signal = findBlockedSignalInLiveWindow(normalized)
-  // Why: callers compare this index against ready-header indexes found over the full tail.
+  // Convert the live-window index to full-tail coordinates for ready-header comparison.
   return signal === null ? null : { reason: signal.reason, index: signal.index + windowStart }
 }
 
-/** Whether a ready sign at `readyIndex` still owns the text: no blocker was painted after it. */
 export function isUnblockedAfter(normalized: string, readyIndex: number | null): boolean {
   if (readyIndex === null) {
     return false
@@ -56,7 +52,6 @@ export function isUnblockedAfter(normalized: string, readyIndex: number | null):
   return blockedSignal === null || blockedSignal.index <= readyIndex
 }
 
-/** Unblocked, and no hold anchor says the agent behind it is still starting: input would land. */
 export function isSettledAfter(normalized: string, readyIndex: number | null): boolean {
   return isUnblockedAfter(normalized, readyIndex) && !showsHoldAnchor(normalized)
 }
@@ -76,7 +71,7 @@ function findBlockedSignalInLiveWindow(normalized: string): BlockedTextSignal | 
       trustSegment.includes('directory') ||
       trustSegment.includes('repo'))
   ) {
-    // Why neutral: this matcher never inspects the agent -- every TUI agent ships a workspace-trust dialog.
+    // Workspace-trust wording identifies no particular agent.
     candidates.push({ reason: 'agent-trust-workspace', index: trustIndex })
   }
   const interactivePromptIndex = Math.max(
@@ -90,9 +85,7 @@ function findBlockedSignalInLiveWindow(normalized: string): BlockedTextSignal | 
     interactivePromptIndex === -1
       ? ''
       : normalized.slice(Math.max(0, interactivePromptIndex - 600), interactivePromptIndex + 200)
-  // Why 'codex' only widens detection and never names the reason: the sole Codex evidence here is
-  // that word somewhere in 600 chars of scrollback, which an agent narrating about Codex satisfies
-  // on any pane -- enough to suspect a dialog, not enough to label a non-Codex user's pane.
+  // Codex in scrollback widens dialog detection but cannot identify the pane's agent.
   const hasInteractiveDialogContext =
     interactivePromptContext.includes('codex') ||
     interactivePromptContext.includes('permission') ||
@@ -108,7 +101,6 @@ function findBlockedSignalInLiveWindow(normalized: string): BlockedTextSignal | 
       candidates.push({ reason: 'agent-interactive-prompt', index: interactivePromptIndex })
     }
   }
-  // Why after the generic prompt: it yields only to the startup and trust dialogs above.
   candidates.push(...findBlockedAnchorSignals(normalized))
   const permissionPromptIndex = Math.max(
     normalized.lastIndexOf('permission required'),
@@ -120,12 +112,8 @@ function findBlockedSignalInLiveWindow(normalized: string): BlockedTextSignal | 
       permissionSegment.includes(choice)
     ).length
     if (decisionCount >= 2) {
-      // Why neutral: an approval dialog with named choices identifies no agent; older hosts publish
-      // 'codex-interactive-prompt' here and clients alias the two. Rule 1 additive member --
-      // remote-wire-compatibility.md names RuntimeTerminalWaitBlockedReason as Rule 1 because no
-      // consumer switches exhaustively on it.
-      // Why alias rather than drop the old spelling: preserve the existing remote receipt value for
-      // mixed-version clients -- an older host still publishes codex-* on this path.
+      // Named choices identify no agent; retain the old codex-* alias for mixed-version receipts.
+      // Rule 1 additive member: RuntimeTerminalWaitBlockedReason has no exhaustive consumers (remote-wire-compatibility.md).
       candidates.push({ reason: 'agent-interactive-prompt', index: permissionPromptIndex })
     }
   }

@@ -9,16 +9,16 @@ export type ProviderProcessTree = {
   refresh?: () => Promise<void>
   reap(): Promise<DescendantTreeVerdict>
   readonly treeVerdict: DescendantTreeVerdict
-  /** A reap has reached the root while it lived: its exit since then is no longer its own. */
+  /** A live root targeted by a reap can no longer count as a voluntary exit. */
   readonly forcedReapAttempted?: boolean
+  readonly killDelivered?: boolean
 }
 
 export type ProviderProcessClosePolicy = {
   gracefulExitMs: number
   forcedExitMs: number
   signalSupervisorOnClose?: boolean
-  /** A root that leaves on its own after its stdin ends, with no forced reap ever on its tree, is
-   *  the close: no claim is made about its descendants, and no post-exit reap runs. */
+  /** Accept voluntary stdin-end exit without post-exit reaping, only if no forced reap was attempted. */
   selfExitIsClose?: boolean
 }
 
@@ -36,14 +36,14 @@ export type ProviderProcessCloseResult = {
   root: DescendantTreeVerdict
   /** Null when this close made no observation of the descendants. */
   tree: DescendantTreeVerdict | null
-  /** Set when `selfExitIsClose` decided the close. */
   selfExit?: true
+  killDelivered?: true
 }
 
 export const ROOT_ONLY_GRACEFUL_EXIT_MS = 1_500
 const ROOT_ONLY_FORCED_EXIT_MS = 1_000
 
-/** Default for providers without a descendant reaper: end stdin, wait, then the fallback teardown. */
+/** Providers without their own reaper must allow the supervisor its full stop before fallback. */
 export function rootOnlyProviderClosePolicy(supervised: boolean): ProviderProcessClosePolicy {
   return {
     gracefulExitMs: supervised ? PROVIDER_SUPERVISOR_MAX_STOP_MS : ROOT_ONLY_GRACEFUL_EXIT_MS,
@@ -51,9 +51,9 @@ export function rootOnlyProviderClosePolicy(supervised: boolean): ProviderProces
   }
 }
 
-/** A root-only close is done once the root is gone; an unproven tree is reported, not retried. */
-export function acceptProviderRootExit(result: ProviderProcessCloseResult): boolean {
-  return result.root === 'exited'
+/** Writer close is final after delivery; descendant observations remain independent. */
+export function acceptProviderWriterClose(result: ProviderProcessCloseResult): boolean {
+  return result.root === 'exited' || result.killDelivered === true
 }
 
 /** The supervisor owns the POSIX signal ladder; its wrapper must outlive that ladder. */
@@ -74,6 +74,7 @@ export async function closeProviderProcess(
   }
   let reaped = false
   let fallbackTree: DescendantTreeVerdict | null = null
+  let killDelivered = false
   if (input.rootVerdict() !== 'exited') {
     await waitForProcessExitUntil(input.exitPromise, policy.gracefulExitMs)
     if (input.rootVerdict() !== 'exited') {
@@ -82,7 +83,9 @@ export async function closeProviderProcess(
       if (tree) {
         await tree.reap()
       } else {
-        fallbackTree = await input.terminateTree()
+        const verdict = await input.terminateTree()
+        fallbackTree = typeof verdict === 'object' && verdict ? verdict.tree : verdict
+        killDelivered = typeof verdict === 'object' && verdict !== null
       }
       await waitForProcessExitUntil(input.exitPromise, policy.forcedExitMs)
     }
@@ -98,5 +101,9 @@ export async function closeProviderProcess(
   if (!reaped && input.rootVerdict() === 'exited' && tree && tree.treeVerdict !== 'exited') {
     await tree.reap()
   }
-  return { root: input.rootVerdict(), tree: tree ? tree.treeVerdict : fallbackTree }
+  return {
+    root: input.rootVerdict(),
+    tree: tree ? tree.treeVerdict : fallbackTree,
+    ...(tree?.killDelivered || killDelivered ? { killDelivered: true } : {})
+  }
 }

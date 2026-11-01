@@ -42,7 +42,14 @@ const mocks = vi.hoisted(() => ({ root: vi.fn(), status: vi.fn() }))
 vi.mock('../runtime-client', () => ({
   getDefaultUserDataPath: mocks.root,
   RuntimeClient: class {
-    getCliStatus = mocks.status
+    async getOfflineRuntimeAdmission() {
+      const status = await mocks.status()
+      return {
+        reachable: status.result.runtime.reachable,
+        legacyPidRunning: status.result.app.running,
+        pid: status.result.app.pid ?? null
+      }
+    }
   },
   RuntimeClientError: class extends Error {
     constructor(

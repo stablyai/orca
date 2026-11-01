@@ -1,7 +1,3 @@
-/**
- * Integration test for the mobile-fit override flow.
- * Tests the full lifecycle: mobile-fit → restore → verify PTY resized.
- */
 import { describe, expect, it, vi } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -103,12 +99,10 @@ describe('fit override integration', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
 
-    // Synced leaf = mounted desktop pane
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -131,12 +125,10 @@ describe('fit override integration', () => {
       ]
     })
 
-    // Mobile fit
     await runtime.resizeForClient('pty-1', 'mobile-fit', 'phone-a', 42, 18)
     expect(ptySize).toEqual({ cols: 42, rows: 18 })
 
-    // Restore — THIS is the critical assertion.
-    // Before the fix, mounted leaves skipped the PTY resize.
+    // Restore must resize even when the desktop leaf is mounted.
     await runtime.resizeForClient('pty-1', 'restore', 'phone-a')
     expect(ptySize).toEqual({ cols: 120, rows: 35 })
     expect(resizes).toEqual(['pty-1:42x18', 'pty-1:120x35'])

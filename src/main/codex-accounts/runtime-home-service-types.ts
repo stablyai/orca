@@ -51,7 +51,7 @@ export type CodexSelfContainedManagedHomeResolution =
   | { kind: 'untrusted' }
   | { kind: 'indeterminate' }
 
-/** Status used by the config-sync surface; `unavailable` is not a healthy null lane. */
+/** A ready null home means no mirror; unavailable means its state could not be read. */
 export type CodexMirroredHomeStatus =
   | { kind: 'ready'; homePath: string | null }
   | { kind: 'unavailable' }

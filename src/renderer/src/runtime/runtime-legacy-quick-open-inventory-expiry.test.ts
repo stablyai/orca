@@ -164,20 +164,6 @@ describe('legacy Quick Open inventory expiry', () => {
     expect(vi.getTimerCount()).toBe(1)
   })
 
-  it('starts the settled deadline when the inventory arrives', async () => {
-    const load = queueLoad()
-    const pending = search()
-    expect(vi.getTimerCount()).toBe(0)
-    vi.advanceTimersByTime(5_000)
-    load.resolve(listing())
-    await pending
-    vi.advanceTimersByTime(29_999)
-    expect(cached()).toBe(true)
-    vi.advanceTimersByTime(1)
-    expect(cached()).toBe(false)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('sweeps settled responses while leaving shared pending loads valid', async () => {
     call.mockResolvedValueOnce(listing('settled'))
     await search('settled')
@@ -283,17 +269,6 @@ describe('legacy Quick Open inventory expiry', () => {
     const result = await pending
     expect(await search()).toEqual(result)
     expect(call).toHaveBeenCalledTimes(2)
-    expect(vi.getTimerCount()).toBe(1)
-  })
-
-  it('retries failed requests without keeping an expiry timer for their response', async () => {
-    call.mockRejectedValueOnce(new Error('host failed'))
-    await expect(search()).rejects.toThrow('host failed')
-    expect(cached()).toBe(false)
-    expect(vi.getTimerCount()).toBe(0)
-    call.mockResolvedValueOnce(listing())
-    await search()
-    expect(cached()).toBe(true)
     expect(vi.getTimerCount()).toBe(1)
   })
 

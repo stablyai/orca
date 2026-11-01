@@ -5,7 +5,7 @@ import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { AgentStatusPayload } from '../../../../shared/agent-status-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
 // The composer is a marker that counts its mounts, so the test sees whether the view remounted it.
@@ -133,8 +133,7 @@ afterEach(() => {
   useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
 })
 
-// A terminal-backed send types into the PTY, so whatever card is up would take the message as its
-// answer. Every answerable card owns the input region, as structured chat's cards do.
+// Prompt cards own terminal input because composer sends would otherwise answer the agent’s active selector.
 describe('NativeChatResolvedView prompt cards own the input region', () => {
   it('shows the composer when no prompt is pending', () => {
     setStatus({ state: 'working' })

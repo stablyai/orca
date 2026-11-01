@@ -1,6 +1,5 @@
 import type { GpuFallbackRestartDecision } from './gpu-fallback-restart-prompt'
 
-/** The GPU-crash burst that tripped the software-rendering fallback. */
 export type GpuFallbackEngagement = {
   reason: string
   exitCode: number | null
@@ -23,17 +22,7 @@ export type GpuFallbackEngagementHandlers = {
   restartIntoSafeGraphics: (engagement: GpuFallbackEngagement) => void
 }
 
-/**
- * Drives the safe-graphics handover once a GPU crash burst trips the threshold.
- *
- * Why the marker is written before the prompt: measured on Windows 11 26200 /
- * Electron 43.1.0, Chromium's own GPU ladder aborts the whole browser process
- * (`FATAL gpu_data_manager_impl_private.cc: GPU process isn't usable. Goodbye.`)
- * on the 6th GPU crash — 1.285s after the 3rd, which is the crash that trips
- * this threshold. Persisting only after the user answers a modal means the app
- * dies first, no marker survives, and the next launch retries hardware
- * acceleration: the crash loop never ends. An explicit "Keep Running" undoes it.
- */
+/** Persist before prompting: Chromium may abort before the user answers. */
 export async function engageGpuFallbackAfterCrashBurst(
   engagement: GpuFallbackEngagement,
   handlers: GpuFallbackEngagementHandlers
@@ -44,7 +33,7 @@ export async function engageGpuFallbackAfterCrashBurst(
   try {
     decision = await handlers.promptForRestart()
   } catch (error) {
-    // Marker stays: the next launch is safe even though the user was never asked.
+    // Preserve the marker so a failed prompt cannot restart the hardware crash loop.
     handlers.onPromptFailed(error)
     return
   }

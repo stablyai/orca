@@ -129,25 +129,15 @@ function relativePathListsEqual(a: readonly string[], b: readonly string[]): boo
   return true
 }
 
-/**
- * Holds the array identity while its contents are unchanged.
- *
- * Why: a tree refresh commits dirCache once per read wave, and every commit
- * rebuilds this list. Each new identity would re-issue the uncancellable git
- * check-ignore over the whole visible tree — the remote round trips the wave cap
- * exists to bound.
- */
+/** Retain equal path-list identity across dirCache wave commits to avoid repeated uncancellable whole-tree ignore queries. */
 function useContentStableRelativePaths(relativePaths: string[], enabled: boolean): string[] {
   // Why: filters need fresh identities per keystroke and must not evict the tree signature.
   const prevRef = useRef<string[] | null>(null)
   const prev = prevRef.current
-  // Why publish `stable`, not `relativePaths`: the ref must hold what this hook actually
-  // returned. Publishing the input instead leaves the ref one commit behind, so a wave of
-  // content-equal arrays flips identity on every render — the churn this hook exists to stop.
+  // Publish the returned stable identity; publishing input leaves a one-commit lag that recreates wave churn.
   const stable =
     enabled && prev && relativePathListsEqual(prev, relativePaths) ? prev : relativePaths
-  // Why write-in-effect: render must stay pure (react-doctor); the first commit of a new
-  // list loses stability, never staleness.
+  // Publish after commit to keep render pure; new lists may lose stability, never freshness.
   useEffect(() => {
     prevRef.current = stable
   }, [stable])
@@ -199,8 +189,7 @@ export function useFileExplorerVisibleRowProjection(
       displayRootPath
     ]
   )
-  // Why: the name-filter list is debounced per keystroke, so it must keep a fresh
-  // identity; only the dirCache-derived list needs stability across wave commits.
+  // Keep filter-keystroke identities fresh; only tree wave commits need content stability.
   const relativePaths = useContentStableRelativePaths(rebuiltRelativePaths, !nameFilter)
   const canLoadIgnoredPaths =
     activeRepoSupportsGit &&

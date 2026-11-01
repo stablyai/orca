@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/terminal-surface-close-target'
-import { makeRepo } from '../../persistence-test-harness'
+import { makeRepo } from '../persistence-test-harness'
 import {
   closeMoveTestStores,
   MOVED,
@@ -38,7 +38,6 @@ afterEach(closeMoveTestStores)
 
 const request = { ...moveRequest, ptyId: 'pty-agent' }
 
-/** What `session:close-terminal-surface` commits for a close the renderer already performed. */
 async function rendererClose(
   store: ReturnType<typeof openStore>,
   target: TerminalSurfaceCloseTarget,
@@ -76,11 +75,10 @@ function restartedTabs(store: ReturnType<typeof openStore>, dataFile: string) {
   return { tabIds: (session.tabsByWorktree[WT] ?? []).map((tab) => tab.id), session }
 }
 
-// The renderer rolls a committed move forward: when the pane is gone it closes main's new tab.
+// The renderer completes a post-move close against main's new tab.
 describe('a close that lands while main commits the move', () => {
   it('leaves no dead pane after restart when the user closed the moved pane', async () => {
     const { dataFile, store } = await openMovedStore()
-    // The pane close reaches main after the move, so main no longer has SOURCE:leaf.
     await rendererClose(store, { kind: 'pane', tabId: SOURCE, leafId: MOVED }, 'user')
     expect(tabsHoldingLeaf(store.getWorkspaceSession(), MOVED)).toEqual([TARGET])
 
@@ -103,8 +101,7 @@ describe('a close that lands while main commits the move', () => {
   })
 })
 
-// Why the renderer refuses to drag a pane whose spawn is in flight: a move with no PTY id lets the
-// late spawn result bind SOURCE:leaf, and that bind grafts the leaf back into the source tab.
+// In-flight drags must refuse: a spawn without captured PTY identity can recreate SOURCE:leaf after move.
 it('grafts a late spawn result for the moved leaf back into its source tab', async () => {
   const store = openStore(newDataFile())
   await seedSplitSource(store)

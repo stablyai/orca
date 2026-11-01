@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import type { SshTarget } from '../../shared/ssh-types'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import {
   listOrcadMigrationSourceCutovers,
@@ -15,7 +15,9 @@ import {
   resolveOrcadMigrationFence
 } from './orcad-migration-source-fence'
 import type { OrcadMigrationTerminalVerdict } from './orcad-migration-terminal-gate'
-import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
+import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
+import { MAX_ORCAD_MIGRATION_MANIFEST_BYTES } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',
@@ -35,7 +37,7 @@ afterEach(async () => {
   }
 })
 
-function setup() {
+function setup(displayName = 'App') {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orcad-migration-fence-'))
   directories.push(userDataPath)
   const dataFile = join(userDataPath, 'orca-data.json')
@@ -44,7 +46,7 @@ function setup() {
   store.addRepo({
     id: 'repo-1',
     path: '/srv/app',
-    displayName: 'App',
+    displayName,
     badgeColor: '#737373',
     addedAt: 1,
     kind: 'git',
@@ -206,5 +208,22 @@ describe('migration source fence', () => {
     expect(harness.target().orcadFence).toBeUndefined()
     expect(listOrcadMigrationSourceCutovers(harness.userDataPath)).toEqual([])
     flush.mockRestore()
+  })
+
+  it('refuses, without a journal or fence, a manifest under the export cap that no request can carry', async () => {
+    const probe = setup()
+    const baseline = JSON.stringify(
+      createOrcadMigrationManifest(probe.store, probe.target())
+    ).length
+    // Under the export cap, over the sealed-frame request budget: stage, state and abort all refuse.
+    const harness = setup('x'.repeat(MAX_ORCAD_MIGRATION_MANIFEST_BYTES - 200 - baseline))
+    const manifestBytes = JSON.stringify(
+      createOrcadMigrationManifest(harness.store, harness.target())
+    ).length
+    expect(manifestBytes).toBeLessThanOrEqual(MAX_ORCAD_MIGRATION_MANIFEST_BYTES)
+
+    await expect(harness.fence()).rejects.toThrow(/\(orcad_migration_manifest_too_large\)$/)
+    expect(listOrcadMigrationSourceCutovers(harness.userDataPath)).toEqual([])
+    expect(harness.target().orcadFence).toBeUndefined()
   })
 })

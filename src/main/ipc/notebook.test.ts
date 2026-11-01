@@ -23,7 +23,7 @@ vi.mock('./local-file-access-resolution', () => ({
   resolveDesktopAuthorizedPath: resolveAuthorizedPathMock
 }))
 vi.mock('../notebook/notebook-kernel', () => ({ startNotebookKernel: startNotebookKernelMock }))
-// Why: the mocked resolver returns made-up `/real/...` paths, which stand for real files already.
+// Authorizer fixtures already represent canonical real files.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
   return {

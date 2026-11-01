@@ -47,8 +47,7 @@ export function resolveTerminalCloseTarget(
   return null
 }
 
-// Why: host-backed terminals may exist only in unified state, so sibling
-// selection must merge both representations into one terminal entity set.
+// Host-backed tabs may exist only in unified state; merge both representations before choosing siblings.
 export function getWorktreeTerminalTabIds(
   state: Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>,
   worktreeId: string

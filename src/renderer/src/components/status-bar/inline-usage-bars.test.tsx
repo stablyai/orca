@@ -65,7 +65,6 @@ describe('InlineUsageBars', () => {
       <InlineUsageBars limits={claudeLimits()} isFetching={false} />
     )
 
-    // Why: bars show % used with explicit "used" so compact labels are not ambiguous.
     expect(markup).toContain('32% used 5h')
     expect(markup).toContain('16% used wk')
     expect(markup).toContain('42% used Fable')
@@ -87,19 +86,95 @@ describe('InlineUsageBars', () => {
     expect(markup).toContain('Sign in to see usage')
   })
 
+  // Why: an idle account's access token lapses overnight while its login stays valid; Claude refreshes it on its next run.
+  it.each(['profile:idle', 'system', 'wsl:Ubuntu:system'])(
+    'does not ask a Claude account with an expired usage token (%s) to sign in',
+    async (authProvenance) => {
+      const { InlineUsageBars } = await import('./StatusBar')
+      const limits: ProviderRateLimits = {
+        provider: 'claude',
+        session: null,
+        weekly: null,
+        updatedAt: 0,
+        // An older host's wording; the row speaks from the failure kind.
+        error: 'Claude usage has expired. Start Claude in this account to refresh it.',
+        status: 'error',
+        usageMetadata: {
+          failureKind: 'stale-token',
+          attemptedSources: ['oauth'],
+          authProvenance
+        }
+      }
+
+      const markup = renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
+
+      expect(markup).not.toContain('Sign in to see usage')
+      expect(markup).toContain('Updates when Claude runs')
+    }
+  )
+
+  it.each([
+    { failureKind: 'missing-credentials' as const, label: 'Sign in to see usage' },
+    { failureKind: 'network' as const, label: 'Network issue' }
+  ])('labels a Claude row with no usage by its $failureKind failure', async (row) => {
+    const { InlineUsageBars } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: 0,
+      error: 'Claude usage is unavailable.',
+      status: 'error',
+      usageMetadata: { failureKind: row.failureKind }
+    }
+
+    const markup = renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
+
+    expect(markup).toContain(row.label)
+  })
+
+  it('renders the spend-cap monthly window for an inactive account without plan windows', async () => {
+    const { InlineUsageBars, isUnavailableInactiveUsage } = await import('./InlineProviderUsage')
+    const limits: ProviderRateLimits = {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      monthly: { usedPercent: 80, windowMinutes: 43_200, resetsAt: null, resetDescription: null },
+      updatedAt: 0,
+      error: null,
+      status: 'ok'
+    }
+
+    const markup = renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
+
+    expect(markup).toContain('80% used 30d')
+    expect(markup).not.toContain('Sign in to see usage')
+    expect(isUnavailableInactiveUsage({ ...limits, status: 'error' })).toBe(false)
+  })
+
+  it('keeps the monthly window out of rows that have plan windows', async () => {
+    const { InlineUsageBars } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      ...claudeLimits(),
+      monthly: { usedPercent: 80, windowMinutes: 43_200, resetsAt: null, resetDescription: null }
+    }
+
+    const markup = renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
+
+    expect(markup).not.toContain('80% used')
+  })
+
   it('derives the collapsed session label from resetsAt (#5399)', async () => {
     const { InlineUsageBars } = await import('./StatusBar')
 
     const limits = claudeLimits()
-    // ~1h 20m away; +5s buffer keeps the floor-based formatter at '1h 20m'
-    // across the few ms between snapshot and render.
+    // Buffer the floor-based countdown so snapshot-to-render delay cannot lose a minute.
     limits.session!.resetsAt = Date.now() + 80 * 60_000 + 5_000
 
     const markup = renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
 
     expect(markup).toContain('32% used 1h 20m')
     expect(markup).not.toContain('32% used 5h')
-    // Non-session bars keep their fixed labels.
     expect(markup).toContain('16% used wk')
     expect(markup).toContain('42% used Fable')
   })

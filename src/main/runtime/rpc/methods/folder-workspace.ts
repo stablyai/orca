@@ -13,7 +13,7 @@ export const FOLDER_WORKSPACE_METHODS = [
     permission: 'workspace',
     params: null,
     handler: (_params, { runtime }) => ({
-      folderWorkspaces: runtime.listFolderWorkspaces()
+      folderWorkspaces: runtime.listVisibleFolderWorkspaces()
     })
   }),
   defineMethod({

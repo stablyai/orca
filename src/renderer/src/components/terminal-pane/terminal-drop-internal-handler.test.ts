@@ -61,7 +61,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importExternalPathsToRuntime
 }))
 

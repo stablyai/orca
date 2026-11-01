@@ -47,7 +47,7 @@ describe('managed Orca server host merging', () => {
   it('keeps both ids resolvable and shows one row routed to the server', () => {
     const hosts = registry({ kind: 'managed', environmentId: 'omarchy-server' })
 
-    // Why both: setups, folders and filters are owned by one id or the other.
+    // Setups, folders and filters may belong to either id.
     expect(hosts.map((host) => host.id)).toEqual([
       'local',
       'runtime:omarchy-server',
@@ -97,6 +97,23 @@ describe('managed Orca server host merging', () => {
       'runtime:paired-server',
       'ssh:omarchy-target'
     ])
+  })
+
+  it('keeps a WSL-managed server as its own row, even beside an SSH host of the same name', () => {
+    const hosts = buildExecutionHostRegistry({
+      repos: [],
+      settings: null,
+      hostSource: 'configured-only',
+      sshTargetLabels: new Map([['Ubuntu', 'Ubuntu over SSH']]),
+      runtimeEnvironments: [{ id: 'wsl-server', name: 'Ubuntu', orcadDeployment: { kind: 'wsl' } }]
+    })
+
+    expect(pickerExecutionHosts(hosts).map((host) => [host.id, host.label])).toEqual([
+      ['local', expect.any(String)],
+      ['runtime:wsl-server', 'Ubuntu'],
+      ['ssh:Ubuntu', 'Ubuntu over SSH']
+    ])
+    expect(hosts.every((host) => !host.aliasHostIds && !host.mergedIntoHostId)).toBe(true)
   })
 
   it('keeps an orphaned managed server whose SSH host was removed', () => {

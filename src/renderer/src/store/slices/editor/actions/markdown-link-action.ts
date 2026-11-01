@@ -9,7 +9,7 @@ import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/loc
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
-import { statRuntimePath } from '@/runtime/runtime-file-client'
+import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
 import { getOpenedEditFileIdAfterOpen } from '../file-ids/editor-file-ids'
 import { scheduleEditorLineReveal } from '../focus/editor-focus-reveal'
 
@@ -86,7 +86,7 @@ export function createMarkdownLinkAction(
               getLinkSourceLocalOpenOwner(initialState, sourceOwner, ctx.worktreeId)
             )
           ) {
-            // Why: a file:// link outside the worktree is client-local; remote runtime/SSH editors must not treat server paths as client paths.
+            // Outside-worktree file:// is client-local; never interpret remote runtime/SSH paths as desktop files.
             showLocalPathOpenBlockedToast()
             return
           }
@@ -138,7 +138,6 @@ export function createMarkdownLinkAction(
         return
       }
 
-      // target.kind === 'markdown'
       const { absolutePath, relativePath, line, column } = target
       let stats: { isDirectory: boolean }
       try {

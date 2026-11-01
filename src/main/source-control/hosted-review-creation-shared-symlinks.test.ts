@@ -89,10 +89,7 @@ vi.mock('./hosted-review', () => ({
 
 import { createHostedReview } from './hosted-review-creation'
 
-// Why: a directory-only ignore rule (`node_modules/`) never matches the
-// worktree's symlink, so Git reports it untracked. Without the exclusion the
-// dirty preflight blocks Create PR and tells the user to commit an entry they
-// cannot commit — it is a symlink Orca created.
+// Directory-only ignores miss worktree symlinks; exclude Orca-owned links rather than demand an impossible commit.
 describe('createHostedReview with shared symlinks', () => {
   let worktree: string
   let statusOutput: string
@@ -109,7 +106,6 @@ describe('createHostedReview with shared symlinks', () => {
     worktree = mkdtempSync(join(tmpdir(), 'orca-hosted-shared-'))
     mkdirSync(join(worktree, 'primary-node-modules'))
     symlinkSync(join(worktree, 'primary-node-modules'), join(worktree, 'node_modules'), 'dir')
-    // Default: git reports only the shared symlink as untracked.
     statusOutput = '?? node_modules\0'
 
     for (const mock of [
@@ -186,7 +182,6 @@ describe('createHostedReview with shared symlinks', () => {
     expect(createGitHubPullRequestMock).toHaveBeenCalledOnce()
   })
 
-  // The control that matters: real work must never be waved through.
   it('still blocks when a genuine untracked file sits beside the shared symlink', async () => {
     statusOutput = '?? node_modules\0?? scratch.txt\0'
 
@@ -205,8 +200,7 @@ describe('createHostedReview with shared symlinks', () => {
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
 
-  // Why: only a real symlink is excluded. `notes` is declared shared but exists
-  // as a regular file here, so it is the user's work and must still block.
+  // A configured shared name holding a regular file remains user work.
   it('still blocks when a declared name exists as a regular file', async () => {
     writeFileSync(join(worktree, 'notes'), 'user work\n')
     statusOutput = '?? notes\0'
@@ -217,12 +211,8 @@ describe('createHostedReview with shared symlinks', () => {
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
 
-  // Why: only an *untracked* record can be Orca's artifact. A tracked change at a
-  // declared path is committable work, so waving it through would create a review
-  // off a branch missing it.
+  // Tracked changes remain committable user work even at declared shared paths.
   it('still blocks on a tracked change at the declared shared path', async () => {
-    // Both paths are declared shared and both are real symlinks, so only the
-    // untracked/tracked distinction can keep this from being waved through.
     symlinkSync(join(worktree, 'primary-node-modules'), join(worktree, 'tracked-link'), 'dir')
     statusOutput = '?? node_modules\0 M tracked-link\0'
 
@@ -233,8 +223,7 @@ describe('createHostedReview with shared symlinks', () => {
   })
 
   it('does not mistake a rename origin for an untracked shared path', async () => {
-    // `R  renamed.txt\0node_modules\0` — the origin field must be consumed, not
-    // read as its own `?? node_modules` record.
+    // Consume rename origin fields so they cannot masquerade as untracked shared links.
     statusOutput = 'R  renamed.txt\0node_modules\0'
 
     await expect(createPr(['node_modules'])).resolves.toEqual(

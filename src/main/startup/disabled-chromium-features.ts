@@ -1,8 +1,7 @@
-// Why: kept free of the electron import so real-Electron probes can launch a child with the exact shipped list.
+// Avoid Electron imports so real-runtime probes can reuse the shipped feature list.
 export const DISABLED_CHROMIUM_FEATURES = [
   'FedCm',
-  // Why: Electron ships no DirectSocketsDelegate, so the exposed constructors cannot egress but `new TCPSocket(...)`
-  // trips a mojo ReportBadMessage that kills the guest renderer — a page-triggerable kill that pollutes crash telemetry.
+  // Electron has no DirectSocketsDelegate; exposed constructors kill guest renderers via ReportBadMessage instead of connecting.
   'DirectSockets',
   'DirectSocketsInSharedWorkers',
   'DirectSocketsInServiceWorkers'

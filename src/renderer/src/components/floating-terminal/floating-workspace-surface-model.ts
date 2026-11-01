@@ -17,14 +17,7 @@ type FloatingWorkspaceSurfaceState = Pick<
   | 'openFiles'
 >
 
-/**
- * Decides emptiness and layout for the floating panel body atomically.
- *
- * An empty floating workspace has no layout at all: `layoutByWorktree` starts empty and
- * hydration skips workspaces without tabs — while the shared group tree requires a layout.
- * So the panel renders its empty state exactly until the first tab exists; tab creation and
- * hydration both write a layout with the tab, which flips this to a mountable workspace.
- */
+/** Resolve emptiness and layout together; empty workspaces lack the layout required to mount the shared group tree. */
 export function resolveFloatingWorkspaceSurfaceModel(
   state: FloatingWorkspaceSurfaceState
 ): FloatingWorkspaceSurfaceModel {

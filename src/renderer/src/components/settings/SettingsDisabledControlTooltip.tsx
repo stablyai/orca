@@ -1,7 +1,6 @@
 import type React from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
-/** Explains why a settings control is disabled; renders the control untouched without a reason. */
 export function SettingsDisabledControlTooltip({
   reason,
   children

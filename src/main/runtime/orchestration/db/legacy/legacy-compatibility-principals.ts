@@ -8,8 +8,6 @@ import { LEGACY_RUN_ID, LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 
-// ── Legacy adoption and compatibility principals ──
-
 export function getLegacyAdoption(this: OrchestrationDb): LegacyAdoptionRow | undefined {
   return this.db
     .prepare('SELECT * FROM legacy_adoptions WHERE source_run_id = ?')

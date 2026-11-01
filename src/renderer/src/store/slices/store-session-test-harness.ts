@@ -1,3 +1,4 @@
+import type { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
 import { vi, type Mock } from 'vitest'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -17,7 +18,7 @@ type UsageScannerMocks = {
 }
 
 export type StoreSessionMockApi = {
-  worktrees: { list: Mock; create: Mock; remove: Mock; updateMeta: Mock }
+  worktrees: { create: Mock; remove: Mock; updateMeta: Mock }
   repos: {
     list: Mock
     add: Mock
@@ -39,7 +40,6 @@ export type StoreSessionMockApi = {
 export function createStoreSessionMockApi(): StoreSessionMockApi {
   const mockApi: StoreSessionMockApi = {
     worktrees: {
-      list: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({}),
       remove: vi.fn().mockResolvedValue(undefined),
       updateMeta: vi.fn().mockResolvedValue({})
@@ -192,5 +192,16 @@ export function makeTabGroup(
     activeTabId: null,
     tabOrder: [],
     ...overrides
+  }
+}
+
+export function admissionFromBusy(busy: () => boolean): typeof admitStructuredAgentSession {
+  return (_workspace, _tab, _intent, effect) => {
+    effect(busy(), {
+      current: () => true,
+      busy,
+      signal: new AbortController().signal
+    })
+    return Promise.resolve()
   }
 }

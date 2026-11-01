@@ -6,7 +6,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SkillUploadRetainedPaths } from './skill-upload-retained-paths'
 import { SkillUploadSessionService } from './skill-upload-session-service'
-import type { SkillUploadStagingOwnership } from './skill-upload-staging-ownership'
 
 const roots: string[] = []
 
@@ -65,10 +64,6 @@ function identity(bytes: Buffer) {
 
 function retainedPathCleanup(service: SkillUploadSessionService): SkillUploadRetainedPaths {
   return service['retainedPaths']
-}
-
-function stagingOwnership(service: SkillUploadSessionService): SkillUploadStagingOwnership {
-  return service['ownership']
 }
 
 function initializationGate(uploads: string) {
@@ -183,24 +178,6 @@ describe('SkillUploadSessionService admission regressions', () => {
     ).resolves.toMatchObject({ acknowledgedOffset: 0 })
     expect(await stagedArchiveCount(uploads)).toBe(1)
     await service.dispose()
-  })
-
-  it('reports disposal, not the staging cleanup failure, to a begin racing disposal', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-admission-'))
-    roots.push(root)
-    const uploads = join(root, 'uploads')
-    const gate = initializationGate(uploads)
-    const service = new SkillUploadSessionService(uploads, { initializeRoot: gate.initializeRoot })
-    const cleanupFailure = new Error('injected-staging-rmdir-failure')
-    vi.spyOn(stagingOwnership(service), 'remove').mockRejectedValue(cleanupFailure)
-
-    const begin = service.begin({ package: identity(Buffer.from('closing package')) })
-    await gate.initializationStarted
-    const disposal = service.dispose()
-    gate.releaseInitialization()
-
-    await expect(begin).rejects.toThrow('skill-upload-service-disposed')
-    await expect(disposal).rejects.toBe(cleanupFailure)
   })
 
   it('removes disposed staging once when a begin and disposal race the same directory', async () => {

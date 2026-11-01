@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as pty from 'node-pty'
-import { createDaemonPtySubprocessHandle } from './pty-subprocess/subprocess-handle'
+import {
+  createDaemonPtySubprocessHandle,
+  MASTER_CLOSE_EXIT_GRACE_MS
+} from './pty-subprocess/subprocess-handle'
 import { mockPtyProcess } from './pty-subprocess-test-harness'
 import { TerminalHost } from './terminal-host'
 import { HeadlessEmulator } from './headless-emulator'
@@ -14,7 +17,7 @@ vi.mock('./pty-subprocess/foreground-process-tracker', () => ({
   })
 }))
 vi.mock('../pty/posix-pty-process-groups', () => ({
-  forceKillPosixPtyProcessGroups: (_pid: number, fallback: () => void) => fallback()
+  forceKillPosixPtyProcessGroups: async (_pid: number, fallback: () => void) => fallback()
 }))
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: async (_pid: number, killRoot: () => void) => killRoot()
@@ -142,6 +145,7 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
     it('keeps graceful and forced termination available until physical exit', () => {
       const fixture = createFixture()
       const originalKill = fixture.proc.kill
+      const terminateJob = vi.spyOn(ptyJob, 'terminatePtyJob').mockReturnValue('unavailable')
       const signal = vi.spyOn(process, 'kill').mockReturnValue(true)
       failIo(fixture, operation)
 
@@ -151,7 +155,14 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
       const forced = createFixture()
       failIo(forced, operation)
       forced.handle.forceKill()
-      expect(signal).toHaveBeenCalledWith(4242, 'SIGKILL')
+      if (platform === 'win32') {
+        // An unverified PID can be reused; the per-PTY job/native handle owns this process tree.
+        expect(signal).not.toHaveBeenCalled()
+        expect(terminateJob).toHaveBeenCalledExactlyOnceWith(forced.proc)
+        expect(forced.proc.kill).toHaveBeenCalledOnce()
+      } else {
+        expect(signal).toHaveBeenCalledWith(4242, 'SIGKILL')
+      }
 
       forced.proc._simulateExit(137)
       signal.mockClear()
@@ -165,6 +176,7 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
 
     it('reaps every session and native handle across 32 failed-I/O create/close cycles', async () => {
       const emulatorDispose = vi.spyOn(HeadlessEmulator.prototype, 'dispose')
+      const terminateJob = vi.spyOn(ptyJob, 'terminatePtyJob').mockReturnValue('unavailable')
       const signal = vi.spyOn(process, 'kill').mockReturnValue(true)
       let fixture = createFixture()
       const host = new TerminalHost({ spawnSubprocess: () => fixture.handle })
@@ -192,9 +204,18 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
             expect(host.listSessions()).toHaveLength(1)
             expect(fixture.proc.destroy).not.toHaveBeenCalled()
             expect(onExit).not.toHaveBeenCalled()
-            await vi.waitFor(() => expect(signal).toHaveBeenCalledWith(4242, 'SIGKILL'), {
-              interval: 1
-            })
+            if (platform === 'win32') {
+              await vi.waitFor(() => expect(fixture.proc.kill).toHaveBeenCalledOnce(), {
+                interval: 1
+              })
+              expect(terminateJob).toHaveBeenCalledWith(fixture.proc)
+              // An unverified PID can be reused; the per-PTY job/native handle owns this process tree.
+              expect(signal).not.toHaveBeenCalled()
+            } else {
+              await vi.waitFor(() => expect(signal).toHaveBeenCalledWith(4242, 'SIGKILL'), {
+                interval: 1
+              })
+            }
           } finally {
             fixture.proc._simulateExit(137)
             killFailure = await settled
@@ -202,7 +223,13 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
           expect(killFailure).toBeNull()
           expect(host.listSessions()).toHaveLength(0)
           expect(onExit).toHaveBeenCalledOnce()
-          expect(fixture.proc.destroy).toHaveBeenCalledOnce()
+          if (platform === 'win32') {
+            // An unverified PID can be reused; job/native close owns the tree and must not be repeated by destroy.
+            expect(fixture.proc.destroy).not.toHaveBeenCalled()
+            expect(fixture.proc.kill).toHaveBeenCalledOnce()
+          } else {
+            expect(fixture.proc.destroy).toHaveBeenCalledOnce()
+          }
           expect(emulatorDispose).toHaveBeenCalledTimes(index + 1)
         }
       } finally {
@@ -210,5 +237,47 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
         await host.dispose()
       }
     })
+  })
+
+  it("treats a master-retiring stream error as closed input when node-pty emits no 'close'", () => {
+    vi.useFakeTimers()
+    try {
+      const errorListeners: ((error: unknown) => void)[] = []
+      const proc = {
+        ...mockPtyProcess(4242),
+        destroy: vi.fn(),
+        _writable: true,
+        on: (event: string, listener: (error: unknown) => void) => {
+          if (event === 'error') {
+            errorListeners.push(listener)
+          }
+        }
+      }
+      const handle = createDaemonPtySubprocessHandle({
+        process: proc as unknown as pty.IPty,
+        shellPath: 'pwsh.exe',
+        spawnCwd: process.cwd(),
+        env: {},
+        startupCommandDeliveredInShellArgs: false,
+        reportsChildExitStatus: true,
+        sessionId: 'io-failure',
+        startupAgentRecognition: null
+      })
+      const onInputClosed = vi.fn()
+      handle.onInputClosed?.(onInputClosed)
+      errorListeners.forEach((listener) => listener(new Error('read EAGAIN')))
+      expect(handle.isInputClosed?.()).toBe(false)
+      // node-pty's own handler runs first and retires the master before ours.
+      proc._writable = false
+      errorListeners.forEach((listener) => listener(new Error('read ECONNRESET')))
+      expect(handle.isInputClosed?.()).toBe(true)
+      handle.write('dropped')
+      expect(proc.write).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(MASTER_CLOSE_EXIT_GRACE_MS)
+      expect(onInputClosed).toHaveBeenCalledWith('master_closed: read ECONNRESET')
+      handle.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

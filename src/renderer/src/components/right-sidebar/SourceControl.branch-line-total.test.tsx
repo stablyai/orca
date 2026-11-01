@@ -289,8 +289,6 @@ describe('SourceControl branch line total chip', () => {
   })
 
   it('drops a total whose fork point has since moved', () => {
-    // Why: status and branch compare refresh on different cadences, so a total
-    // can outlive the merge base it measured. Stale digits must not render.
     resetState({
       gitBranchLineTotalByWorktree: {
         [mocks.activeWorktree.id]: { added: 8259, removed: 670, mergeBase: 'stale-merge-base' }
@@ -317,9 +315,7 @@ describe('SourceControl branch line total chip', () => {
     expect(loadingChip()).toBeNull()
   })
 
-  // Why: a pending total and one this host will never send look identical from
-  // here, so a pulsing placeholder would keep pulsing forever on an old host,
-  // after a hard failure, or during the ranged-diff cooldown.
+  // Old hosts, hard failures, and cooldowns may never send a total; a pending placeholder could pulse forever.
   it('shows no placeholder while the total is still pending', () => {
     vi.useFakeTimers()
     try {

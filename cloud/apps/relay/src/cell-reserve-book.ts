@@ -4,8 +4,7 @@ import {
   type ReserveOutcome
 } from './cell-reserve-contract.js'
 
-// The cell's half of step 5: it alone says yes or no to each booking. One event loop makes
-// "check cap and budget, then count the booking" atomic with no lock.
+// Single event loop makes booking cap/budget admission and accounting atomic without locks.
 
 // A connection unit held for a booked host until its hello consumes it or the TTL ends.
 export type BookingUnit = { release(): void }
@@ -130,8 +129,7 @@ export class CellReserveBook {
     return booking !== undefined && booking.expiresAt > this.now()
   }
 
-  // The booked host's upgrade takes over its unit, so the host counts once until its hello.
-  // The upgrade carries no epoch; the hello's take() still requires the booked one.
+  // Upgrade takes the booking’s unit to count once; epoch-less upgrade still needs exact-epoch take at hello.
   handOff(userId: string, relayHostId: string): void {
     const booking = this.bookings.get(hostKey(userId, relayHostId))
     if (!booking || booking.handedOff || booking.expiresAt <= this.now()) return

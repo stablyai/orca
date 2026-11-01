@@ -15,18 +15,7 @@ import {
   type BrowserIdentityModeRecord
 } from './browser-identity-mode-record'
 
-/**
- * The single writer for the process-wide browser identity.
- *
- * Preflight reads the root record before `ready` and hands its mode to the engine. The ready
- * phase used to mirror the *active Orca profile's* setting back into that record, so switching
- * from a native profile to a clean one started the clean profile in native. That second authority
- * is gone: the root record is the only one, and this module is its only writer.
- *
- * `appliedMode` is what this launch is actually presenting and never changes while the process
- * lives; `configuredMode` is what the next launch will take. `restartRequired` is derived from the
- * two rather than stored, so it cannot drift from them.
- */
+// Single writer: appliedMode is fixed this launch; configuredMode takes effect after restart.
 
 type BrowserIdentityModeStore = {
   userDataPath: string
@@ -51,10 +40,7 @@ function writeRecord(userDataPath: string, record: BrowserIdentityModeRecord): v
   )
 }
 
-/**
- * Copies unhealthy bytes to a fresh path before anything overwrites them. Byte-for-byte, and
- * never onto a name that already exists, so an explicit reset cannot be what loses the data.
- */
+/** Back up unhealthy bytes before reset; refuse to reuse an existing backup path. */
 function backupUnhealthyRecord(userDataPath: string): string {
   const filePath = browserIdentityModeRecordPath(userDataPath)
   const bytes = readFileSync(filePath)
@@ -66,7 +52,6 @@ function backupUnhealthyRecord(userDataPath: string): string {
   return backupPath
 }
 
-/** Whether this host actually owns a browser identity, which is what the capability advertises. */
 export function isBrowserIdentityModeStoreInitialized(): boolean {
   return modeStore !== null
 }
@@ -117,13 +102,7 @@ function notifySnapshotListeners(snapshot: BrowserIdentityModeSnapshot): void {
   }
 }
 
-/**
- * Commits an explicit choice. The record lands durably before this resolves.
- *
- * No queue: writeRecord is synchronous end to end, so two calls cannot interleave and a
- * serialization layer here would be machinery no test could falsify. If durable writes ever
- * become async, reintroduce serialization with that change, where it is testable.
- */
+/** Writes are synchronous; serialize them if persistence becomes asynchronous. */
 export async function setBrowserIdentityMode(
   mode: BrowserUserAgentMode,
   options: { reset?: boolean } = {}
@@ -131,8 +110,7 @@ export async function setBrowserIdentityMode(
   const store = requireModeStore()
   const current = store.snapshot
   if (current.configuredMode === null) {
-    // Why never automatic: the data may belong to a newer Orca, and overwriting it silently
-    // would destroy the only copy. The caller has to ask, and the old bytes survive the ask.
+    // Unhealthy or newer data needs an explicit reset and a successful backup.
     if (!options.reset) {
       return {
         ok: false,
@@ -168,8 +146,7 @@ export async function setBrowserIdentityMode(
   try {
     writeRecord(store.userDataPath, record)
   } catch (error) {
-    // Why unchanged: a rejected write leaves disk on the old value, so reporting the new one
-    // would make the UI and the next launch disagree.
+    // Publish the new snapshot only after the write succeeds.
     return {
       ok: false,
       error: {
@@ -194,10 +171,7 @@ export async function setBrowserIdentityMode(
   return { ok: true, identity }
 }
 
-/**
- * Records that a launch found retired per-profile identity data. Best-effort by design: this is
- * bookkeeping, so a failure is reported and never allowed to gate session startup.
- */
+/** Notice persistence is best-effort and must not block session startup. */
 export async function markBrowserIdentityMigrationNoticePending(
   userDataPath: string,
   degraded: boolean
@@ -210,14 +184,11 @@ export async function markBrowserIdentityMigrationNoticePending(
     throw new Error('Browser identity mode store userData path changed')
   }
   const current = store.snapshot
-  // The retired per-profile bytes are retained on disk forever by design, so every launch
-  // rediscovers them. An explicit choice is what retires the notice — without this gate the
-  // notice re-arms on the launch after the user answers it, and on every launch after that.
+  // Retained per-profile records recur every launch; an explicit choice retires the notice.
   if (current.explicitSelection === true) {
     return false
   }
-  // Why the in-memory flag regardless: the user still needs the notice even when the record
-  // cannot be written, and unhealthy data has no mode to write it beside.
+  // Show the notice even if the record cannot be updated.
   launchMigrationNoticePending = true
   migrationNoticeDegraded ||= degraded
   if (current.configuredMode === null) {

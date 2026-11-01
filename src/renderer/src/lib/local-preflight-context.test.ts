@@ -3,6 +3,10 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shar
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
+import type { Project } from '../../../shared/project-types'
+import { createTestStore } from '../store/slices/store-test-helpers'
+import { makeDetectedResult } from '../store/slices/worktrees-detected-listing-fixtures'
+import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
 import {
   getLocalAgentPreflightContext,
   getLocalPreflightContext,
@@ -12,9 +16,26 @@ import {
   localPreflightContextKey
 } from './local-preflight-context'
 
+function legacySettings(): NonNullable<AppState['settings']> {
+  const settings = getDefaultSettings('/tmp')
+  Reflect.deleteProperty(settings, 'localWindowsRuntimeDefault')
+  return settings
+}
+
+function project(overrides: Pick<Project, 'id'> & Partial<Project>): Project {
+  return {
+    displayName: '',
+    badgeColor: '',
+    sourceRepoIds: [],
+    createdAt: 0,
+    updatedAt: 0,
+    ...overrides
+  }
+}
+
 function makeState(args: {
   repoPath?: string
-  worktreePath?: string | null
+  worktreePath?: string
   repo?: Partial<Repo>
   worktree?: Partial<Worktree>
 }): AppState {
@@ -34,6 +55,7 @@ function makeState(args: {
           }
         ]
   return {
+    ...createTestStore().getState(),
     activeRepoId: repoId,
     activeWorktreeId: args.worktreePath === undefined ? null : worktreeId,
     repos,
@@ -42,15 +64,15 @@ function makeState(args: {
         ? {}
         : {
             [repoId]: [
-              {
+              makeWorktree({
                 id: worktreeId,
                 repoId,
                 path: args.worktreePath,
                 ...args.worktree
-              }
+              })
             ]
           }
-  } as AppState
+  }
 }
 
 describe('local preflight context', () => {
@@ -72,6 +94,22 @@ describe('local preflight context', () => {
     expect(first).toBe(second)
     expect(first).toEqual({ wslDistro: 'Ubuntu' })
     expect(localPreflightContextKey(first)).toBe('wsl:Ubuntu')
+  })
+
+  it('retains duplicate-row refusal and refreshes the repo index when the slice changes', () => {
+    const state = makeState({
+      repoPath: '/repo',
+      worktreePath: String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`,
+      worktree: { hostId: 'local' }
+    })
+    const repo = state.repos[0]!
+    expect(getLocalPreflightContext(state, 'darwin')).toEqual({ wslDistro: 'Ubuntu' })
+    state.repos = [repo, { ...repo, path: '/other-copy' }]
+    expect(getLocalPreflightContext(state, 'darwin')).toBeUndefined()
+    state.repos = [repo, { ...repo, executionHostId: 'runtime:other' }]
+    expect(getLocalPreflightContext(state, 'darwin')).toEqual({ wslDistro: 'Ubuntu' })
+    state.repos = []
+    expect(getLocalPreflightContext(state, 'darwin')).toBeUndefined()
   })
 
   it('reuses the same WSL snapshot across equivalent active repo and worktree paths', () => {
@@ -110,14 +148,15 @@ describe('local preflight context', () => {
   })
 
   it('keys preflight by active runtime before local WSL or host context', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({
         repoPath: String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`
       }),
       settings: {
+        ...legacySettings(),
         activeRuntimeEnvironmentId: 'runtime-1'
       }
-    } as AppState
+    }
 
     const context = getLocalPreflightContext(state)
     expect(context?.runtimeContextKey).toMatch(/^runtime:runtime-1#\d+$/)
@@ -190,12 +229,13 @@ describe('local preflight context', () => {
   })
 
   it('returns repair context for Windows local preflight when the selected WSL distro is missing', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
       settings: {
+        ...legacySettings(),
         localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
       }
-    } as unknown as AppState
+    }
 
     const context = getLocalPreflightContext(state, 'win32', {
       wslAvailable: true,
@@ -218,13 +258,14 @@ describe('local preflight context', () => {
   })
 
   it('uses the migrated WSL runtime for local agent checks when WSL is the default shell', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
       settings: {
+        ...legacySettings(),
         terminalWindowsShell: 'wsl.exe',
         terminalWindowsWslDistro: 'Debian'
       }
-    } as AppState
+    }
 
     const context = getLocalAgentPreflightContext(state, 'win32')
 
@@ -246,14 +287,15 @@ describe('local preflight context', () => {
   })
 
   it('migrates explicit legacy agent location to the project runtime default', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
       settings: {
+        ...legacySettings(),
         terminalWindowsShell: 'wsl.exe',
         terminalWindowsWslDistro: 'Debian',
         localAgentRuntime: 'host'
       }
-    } as AppState
+    }
 
     const context = getLocalAgentPreflightContext(state, 'win32')
 
@@ -273,14 +315,15 @@ describe('local preflight context', () => {
   })
 
   it('lets explicit agent location choose a WSL distro independent of the terminal shell', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
       settings: {
+        ...legacySettings(),
         terminalWindowsShell: 'powershell.exe',
         localAgentRuntime: 'wsl',
         localAgentWslDistro: 'Ubuntu'
       }
-    } as AppState
+    }
 
     const context = getLocalAgentPreflightContext(state, 'win32')
 
@@ -302,37 +345,40 @@ describe('local preflight context', () => {
   })
 
   it('ignores stale terminal WSL settings when no Windows project runtime is available', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
       settings: {
+        ...legacySettings(),
         terminalWindowsShell: 'wsl.exe',
         terminalWindowsWslDistro: 'Debian'
       }
-    } as AppState
+    }
 
     expect(getLocalAgentPreflightContext(state, 'linux')).toBeUndefined()
   })
 
   it('ignores stale explicit agent runtime settings on non-Windows hosts', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
       settings: {
+        ...legacySettings(),
         localAgentRuntime: 'wsl',
         localAgentWslDistro: 'Ubuntu'
       }
-    } as AppState
+    }
 
     expect(getLocalAgentPreflightContext(state, 'darwin')).toBeUndefined()
   })
 
   it('returns repair context for explicit WSL agent location without a selected distro', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
       settings: {
+        ...legacySettings(),
         terminalWindowsShell: 'powershell.exe',
         localAgentRuntime: 'wsl'
       }
-    } as unknown as AppState
+    }
 
     const context = getLocalAgentPreflightContext(state, 'win32')
 
@@ -352,14 +398,15 @@ describe('local preflight context', () => {
   })
 
   it('uses the global WSL runtime for local agent checks without an active project', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: undefined }),
       activeRepoId: null,
       activeWorktreeId: null,
       settings: {
+        ...legacySettings(),
         localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
       }
-    } as unknown as AppState
+    }
 
     const context = getLocalAgentPreflightContext(state, 'win32')
 
@@ -381,15 +428,16 @@ describe('local preflight context', () => {
   })
 
   it('uses the global runtime default over stale legacy agent location without an active project', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: undefined }),
       activeRepoId: null,
       activeWorktreeId: null,
       settings: {
+        ...legacySettings(),
         localAgentRuntime: 'host',
         localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
       }
-    } as unknown as AppState
+    }
 
     const context = getLocalAgentPreflightContext(state, 'win32')
 
@@ -418,15 +466,16 @@ describe('local preflight context', () => {
   })
 
   it('uses the project override over legacy agent location for local agent checks', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
       settings: {
+        ...legacySettings(),
         localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
         localAgentRuntime: 'wsl',
         localAgentWslDistro: 'Ubuntu'
       },
-      projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'windows-host' } }]
-    } as unknown as AppState
+      projects: [project({ id: 'repo-1', localWindowsRuntimePreference: { kind: 'windows-host' } })]
+    }
 
     const context = getLocalAgentPreflightContext(state, 'win32')
 
@@ -445,36 +494,36 @@ describe('local preflight context', () => {
   })
 
   it('uses the target worktree runtime for local agent checks', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({
         repoPath: 'C:\\Users\\alice\\active',
         worktreePath: 'C:\\Users\\alice\\active'
       }),
       repos: [
-        { id: 'repo-1', path: 'C:\\Users\\alice\\active' },
-        { id: 'repo-2', path: 'C:\\Users\\alice\\target' }
+        { ...TEST_REPO, id: 'repo-1', path: 'C:\\Users\\alice\\active' },
+        { ...TEST_REPO, id: 'repo-2', path: 'C:\\Users\\alice\\target' }
       ],
       worktreesByRepo: {
         'repo-1': [
-          {
+          makeWorktree({
             id: 'repo-1::worktree-1',
             repoId: 'repo-1',
             path: 'C:\\Users\\alice\\active'
-          }
+          })
         ],
         'repo-2': [
-          {
+          makeWorktree({
             id: 'repo-2::worktree-1',
             repoId: 'repo-2',
             path: 'C:\\Users\\alice\\target'
-          }
+          })
         ]
       },
       projects: [
-        { id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } },
-        { id: 'repo-2', localWindowsRuntimePreference: { kind: 'windows-host' } }
+        project({ id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }),
+        project({ id: 'repo-2', localWindowsRuntimePreference: { kind: 'windows-host' } })
       ]
-    } as unknown as AppState
+    }
 
     const context = getLocalAgentPreflightContext(state, 'win32', {}, 'repo-2::worktree-1')
 
@@ -482,15 +531,16 @@ describe('local preflight context', () => {
   })
 
   it('resolves a project host override for a specific worktree over a WSL default', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo', worktreePath: 'C:\\Users\\alice\\repo' }),
       settings: {
+        ...legacySettings(),
         terminalWindowsShell: 'wsl.exe',
         terminalWindowsWslDistro: 'Debian',
         localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Debian' }
       },
-      projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'windows-host' } }]
-    } as unknown as AppState
+      projects: [project({ id: 'repo-1', localWindowsRuntimePreference: { kind: 'windows-host' } })]
+    }
 
     expect(getLocalProjectExecutionRuntimeContext(state, 'repo-1::worktree-1', 'win32')).toEqual({
       status: 'resolved',
@@ -505,10 +555,12 @@ describe('local preflight context', () => {
   })
 
   it('does not assign the active project runtime to the floating workspace', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo', worktreePath: 'C:\\Users\\alice\\repo' }),
-      projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }]
-    } as unknown as AppState
+      projects: [
+        project({ id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } })
+      ]
+    }
 
     expect(
       getLocalProjectExecutionRuntimeContext(state, FLOATING_TERMINAL_WORKTREE_ID, 'win32')
@@ -516,16 +568,17 @@ describe('local preflight context', () => {
   })
 
   it('keeps Floating on the host despite global and explicit WSL agent settings', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
       settings: {
+        ...legacySettings(),
         terminalWindowsShell: 'wsl.exe',
         terminalWindowsWslDistro: 'Debian',
         localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Debian' },
         localAgentRuntime: 'wsl',
         localAgentWslDistro: 'Ubuntu'
       }
-    } as AppState
+    }
 
     expect(
       getLocalAgentPreflightContext(state, 'win32', {}, FLOATING_TERMINAL_WORKTREE_ID)
@@ -533,18 +586,17 @@ describe('local preflight context', () => {
   })
 
   it('keeps the active project runtime fallback for a detected-only worktree', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
       detectedWorktreesByRepo: {
-        'repo-1': {
-          repoId: 'repo-1',
-          authoritative: true,
-          source: 'git',
-          worktrees: [{ id: 'repo-1::detected', repoId: 'repo-1', path: 'C:\\detected' }]
-        }
+        'repo-1': makeDetectedResult('repo-1', [
+          makeWorktree({ id: 'repo-1::detected', repoId: 'repo-1', path: 'C:\\detected' })
+        ])
       },
-      projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }]
-    } as unknown as AppState
+      projects: [
+        project({ id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } })
+      ]
+    }
 
     expect(
       getLocalProjectExecutionRuntimeContext(state, 'repo-1::detected', 'win32')
@@ -573,16 +625,16 @@ describe('local preflight context', () => {
   })
 
   it('resolves a local repo project WSL override before a worktree exists', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: String.raw`C:\Users\alice\repo` }),
       projects: [
-        {
+        project({
           id: 'project-1',
           sourceRepoIds: ['repo-1'],
           localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-        }
+        })
       ]
-    } as unknown as AppState
+    }
 
     expect(getLocalRepoProjectExecutionRuntimeContext(state, 'repo-1', 'win32')).toEqual({
       status: 'resolved',
@@ -627,18 +679,15 @@ describe('local preflight context', () => {
   })
 
   it('uses the requested worktree repo owner before resolving a local project runtime', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({
         repoPath: 'C:\\Users\\alice\\repo',
         worktreePath: 'C:\\Users\\alice\\repo'
       }),
       repos: [
+        { ...TEST_REPO, id: 'repo-1', path: 'C:\\Users\\alice\\repo', executionHostId: 'local' },
         {
-          id: 'repo-1',
-          path: 'C:\\Users\\alice\\repo',
-          executionHostId: 'local'
-        },
-        {
+          ...TEST_REPO,
           id: 'repo-ssh',
           path: '/remote/repo',
           connectionId: 'builder',
@@ -647,22 +696,22 @@ describe('local preflight context', () => {
       ],
       worktreesByRepo: {
         'repo-1': [
-          {
+          makeWorktree({
             id: 'repo-1::worktree-1',
             repoId: 'repo-1',
             path: 'C:\\Users\\alice\\repo'
-          }
+          })
         ],
         'repo-ssh': [
-          {
+          makeWorktree({
             id: 'repo-ssh::worktree-1',
             repoId: 'repo-ssh',
             path: '/remote/repo',
             hostId: 'ssh:builder'
-          }
+          })
         ]
       }
-    } as unknown as AppState
+    }
 
     expect(getLocalProjectExecutionRuntimeContext(state, 'repo-ssh::worktree-1', 'win32')).toBe(
       undefined
@@ -670,13 +719,16 @@ describe('local preflight context', () => {
   })
 
   it('returns repair when the resolved project WSL distro is unavailable', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo', worktreePath: 'C:\\Users\\alice\\repo' }),
       settings: {
+        ...legacySettings(),
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       },
-      projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }]
-    } as unknown as AppState
+      projects: [
+        project({ id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } })
+      ]
+    }
 
     expect(
       getLocalProjectExecutionRuntimeContext(state, 'repo-1::worktree-1', 'win32', {
@@ -696,12 +748,13 @@ describe('local preflight context', () => {
   })
 
   it('defers WSL repair while capability loading leaves distro availability unknown', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo', worktreePath: 'C:\\Users\\alice\\repo' }),
       settings: {
+        ...legacySettings(),
         localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
       }
-    } as unknown as AppState
+    }
 
     expect(
       getLocalProjectExecutionRuntimeContext(state, 'repo-1::worktree-1', 'win32', {
@@ -722,7 +775,7 @@ describe('local preflight context', () => {
   })
 
   it('resolves the requested worktree instead of the active worktree', () => {
-    const state = {
+    const state: AppState = {
       ...makeState({
         repoPath: 'C:\\Users\\alice\\repo',
         worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
@@ -730,22 +783,23 @@ describe('local preflight context', () => {
       activeWorktreeId: 'repo-1::worktree-1',
       worktreesByRepo: {
         'repo-1': [
-          {
+          makeWorktree({
             id: 'repo-1::worktree-1',
             repoId: 'repo-1',
             path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
-          },
-          {
+          }),
+          makeWorktree({
             id: 'repo-1::host-worktree',
             repoId: 'repo-1',
             path: 'C:\\Users\\alice\\repo'
-          }
+          })
         ]
       },
       settings: {
+        ...legacySettings(),
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       }
-    } as unknown as AppState
+    }
 
     expect(getLocalProjectExecutionRuntimeContext(state, 'repo-1::host-worktree', 'win32')).toEqual(
       {

@@ -1,9 +1,12 @@
-// Resolves a tab to its Agent Session History row, so the tab menu offers the same "Resume in New
-// Native Chat" / "Resume in New CLI" move the row menu does, under the row menu's gating.
+// Resolve tab conversations through Session History so both surfaces share switch eligibility.
 
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
-import { collectAiVaultTitleRequests } from '@/lib/ai-vault-tab-title-requests'
+import {
+  collectAgentPaneConversations,
+  resolvePaneAgentConversation,
+  resolvePaneLastAgentConversation
+} from '@/lib/ai-vault-tab-title-requests'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultListArgs,
@@ -16,10 +19,14 @@ import {
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
 import {
-  isAgentSessionHandleProvider,
-  type AgentSessionHandleProvider
-} from '../../../../shared/agent-session-provider-handle'
+  adoptsCliConversations,
+  CLI_CONVERSATION_ADOPTING_AGENTS,
+  cliConversationRowsShareAgent,
+  type CliConversationRowAgent
+} from '../../../../shared/structured-agent-cli-conversation-adoption'
+import { agentForksConversations } from '../../../../shared/agent-resume-argv'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { resolveAiVaultSessionSurfaceSwitchTargets } from '../right-sidebar/ai-vault-session-surface-switch'
 import { resolveAiVaultHistoryRowResume } from '../right-sidebar/ai-vault-session-resume-in-chat-workspace'
 import { resolveAiVaultTargetWorkspacePath } from '../right-sidebar/ai-vault-session-launch-target'
@@ -32,10 +39,16 @@ import {
   type AiVaultSessionListRequest
 } from '../right-sidebar/ai-vault-session-list-request'
 import { resolveAiVaultPanelSessionListRequest } from '../right-sidebar/ai-vault-panel-session-list-request'
+import { resolveAiVaultHostScopeDefaults } from '../right-sidebar/ai-vault-host-scope'
+import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
 import { claimAiVaultForcedRescan } from '../right-sidebar/ai-vault-session-refresh'
+import { structuredAgentSessionLaunchFeasible } from '@/lib/agent-session-launch-plan'
+import { resolveHostCapabilities } from '@/lib/agent-launch-route-input'
+import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 
-/** What a tab's history row is found by: a native chat tab by the chat it shows, a terminal tab by
- *  the provider conversation its agent reported. */
+/** Find native chats by Orca session ID and terminal tabs by their provider conversation. */
 export type TabSessionHistorySubject = {
   workspaceId: string
   /** The panel's own list request for this workspace, so both share one cached list. */
@@ -44,7 +57,7 @@ export type TabSessionHistorySubject = {
   | { kind: 'chat'; sessionId: string }
   | {
       kind: 'cli'
-      agent: AgentSessionHandleProvider
+      agent: CliConversationRowAgent
       providerSessionId: string
     }
 )
@@ -55,54 +68,147 @@ export type TabSessionSwitch = {
 }
 
 /** Skips lookups on hosts where the row's gate can never pass, so no remote scan runs for nothing. */
-function canHostOfferTabSessionMove(
-  kind: TabSessionHistorySubject['kind'],
-  hostScope: ExecutionHostScope
-): boolean {
+function canHostOfferTabSessionMove(hostScope: ExecutionHostScope): boolean {
   if (hostScope === LOCAL_EXECUTION_HOST_ID) {
     return true
   }
-  // Resume-in-chat refuses any row not recorded on this machine. A chat's row is owned only where an
-  // Orca host projects chat ownership: this machine or a runtime server, never an SSH relay.
-  return kind === 'chat' && parseExecutionHostId(hostScope)?.kind === 'runtime'
+  return parseExecutionHostId(hostScope)?.kind === 'runtime'
+}
+
+/** Null when the pane has nothing to move; `host-update-required` when its host predates chat resume. */
+export type PaneResumeInNewChatOffer = 'available' | 'host-update-required' | null
+
+/** The pane's known identity and launch route, without a History request. */
+export function resolvePaneResumeInNewChatOffer(
+  state: AppState,
+  pane: { worktreeId: string; paneKey: string }
+): PaneResumeInNewChatOffer {
+  const conversation = resolvePaneLastAgentConversation(state, pane, adoptsCliConversations)
+  if (!conversation) {
+    return null
+  }
+  const hostScope = resolveAiVaultHostScopeDefaults(
+    getAiVaultResumeWorkspaceExecutionHostId(state, conversation.worktreeId),
+    conversation.worktreeId
+  ).defaultExecutionHostScope
+  // The row gate's launch-route half, so a project the chat route refuses (WSL, repair) hides it.
+  if (
+    !canHostOfferTabSessionMove(hostScope) ||
+    !CLI_CONVERSATION_ADOPTING_AGENTS[conversation.agent].some((agent) =>
+      structuredAgentSessionLaunchFeasible(state, {
+        agent,
+        workspace: {
+          kind: workspaceKindForWorktreeId(conversation.worktreeId),
+          worktreeId: conversation.worktreeId
+        },
+        settings: state.settings
+      })
+    )
+  ) {
+    return null
+  }
+  if (conversation.executionHostId === LOCAL_EXECUTION_HOST_ID) {
+    return 'available'
+  }
+  // Older hosts' create schemas reject resumeFrom; unverified capabilities offer nothing yet.
+  const capabilities = resolveHostCapabilities(state, conversation.executionHostId)
+  if (!capabilities) {
+    return null
+  }
+  return capabilities.includes(STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY)
+    ? 'available'
+    : 'host-update-required'
+}
+
+export function canPaneOfferResumeInNewChat(
+  state: AppState,
+  pane: { worktreeId: string; paneKey: string }
+): boolean {
+  return resolvePaneResumeInNewChatOffer(state, pane) !== null
+}
+
+/** A native chat tab's session and the provider recorded when it was created. */
+export type NativeChatTabSession = {
+  sessionId: string
+  agent: AgentType | undefined
+}
+
+export type NativeChatCliForkIdentity = {
+  workspaceId: string
+  sessionId: string
+  executionHostScope: ExecutionHostScope
+}
+
+export function resolveNativeChatCliForkIdentity(
+  state: AppState,
+  args: { tab: Pick<TerminalTab, 'id' | 'worktreeId'>; nativeChat: NativeChatTabSession }
+): NativeChatCliForkIdentity | null {
+  const { nativeChat, tab } = args
+  if (
+    !nativeChat.agent ||
+    !agentForksConversations(nativeChat.agent) ||
+    !resolveAiVaultTargetWorkspacePath(state, tab.worktreeId)
+  ) {
+    return null
+  }
+  const executionHostScope = resolveAiVaultHostScopeDefaults(
+    getAiVaultResumeWorkspaceExecutionHostId(state, tab.worktreeId),
+    tab.worktreeId
+  ).defaultExecutionHostScope
+  return canHostOfferTabSessionMove(executionHostScope)
+    ? { workspaceId: tab.worktreeId, sessionId: nativeChat.sessionId, executionHostScope }
+    : null
 }
 
 export function resolveTabSessionHistorySubject(
   state: AppState,
   args: {
-    tab: Pick<TerminalTab, 'id' | 'worktreeId' | 'launchAgent'>
-    /** Set only for a native chat tab: the chat session it shows. */
-    structuredSessionId?: string
+    tab: Pick<TerminalTab, 'id' | 'worktreeId'>
+    /** Set only for a native chat tab. */
+    nativeChat?: NativeChatTabSession
+    /** Narrows a terminal tab to one pane's own conversation instead of the tab's best one. */
+    paneKey?: string
   }
 ): TabSessionHistorySubject | null {
-  const workspace = (workspaceId: string, kind: TabSessionHistorySubject['kind']) => {
+  const workspace = (workspaceId: string) => {
     if (!resolveAiVaultTargetWorkspacePath(state, workspaceId)) {
       return null
     }
     const request = resolveAiVaultPanelSessionListRequest(state, workspaceId)
-    return canHostOfferTabSessionMove(kind, request.executionHostScope)
-      ? { workspaceId, request }
+    return canHostOfferTabSessionMove(request.executionHostScope) ? { workspaceId, request } : null
+  }
+  if (args.nativeChat) {
+    // A chat tab's only move is opening a copy in its CLI.
+    const identity = resolveNativeChatCliForkIdentity(state, {
+      ...args,
+      nativeChat: args.nativeChat
+    })
+    return identity
+      ? {
+          kind: 'chat',
+          workspaceId: identity.workspaceId,
+          sessionId: identity.sessionId,
+          request: resolveAiVaultPanelSessionListRequest(state, identity.workspaceId)
+        }
       : null
   }
-  if (args.structuredSessionId !== undefined) {
-    // Only these providers have history rows either move can act on.
-    const target = isAgentSessionHandleProvider(args.tab.launchAgent)
-      ? workspace(args.tab.worktreeId, 'chat')
-      : null
-    return target ? { ...target, kind: 'chat', sessionId: args.structuredSessionId } : null
-  }
-  // The pane-to-conversation mapping tab titles use, limited to agents still running: once the agent
-  // exits, the tab title keeps its conversation but the move is no longer offered.
-  const titleRequest = collectAiVaultTitleRequests(state, { runningAgentsOnly: true }).find(
-    (candidate) => candidate.tabId === args.tab.id
-  )
-  const target = titleRequest ? workspace(titleRequest.worktreeId, 'cli') : null
-  return titleRequest && target
+  // Match the title’s pane-conversation identity, but require a running agent before offering a move.
+  const conversation = args.paneKey
+    ? resolvePaneAgentConversation(
+        state,
+        { worktreeId: args.tab.worktreeId, paneKey: args.paneKey },
+        adoptsCliConversations
+      )
+    : (collectAgentPaneConversations(state, adoptsCliConversations, {
+        runningAgentsOnly: true
+      }).find((candidate) => candidate.tabId === args.tab.id) ?? null)
+  const target = conversation ? workspace(conversation.worktreeId) : null
+  return conversation && target
     ? {
         ...target,
         kind: 'cli',
-        agent: titleRequest.agent,
-        providerSessionId: titleRequest.providerSession.id
+        agent: conversation.agent,
+        providerSessionId: conversation.providerSession.id
       }
     : null
 }
@@ -119,25 +225,25 @@ export function findTabSessionHistoryRow(
       if (subject.kind === 'chat') {
         return session.structuredSession?.sessionId === subject.sessionId
       }
+      // Match chat-owned rows so callers can reveal them; normalize OpenCode 1.x/2.x identity through the adoption rules.
       return (
-        !session.structuredSession &&
-        session.agent === subject.agent &&
+        adoptsCliConversations(session.agent) &&
+        cliConversationRowsShareAgent(session.agent, subject.agent) &&
         session.sessionId === subject.providerSessionId
       )
     }) ?? null
   )
 }
 
-/** The row's move under the Session History gate, with the tab's own workspace standing in for the
- *  active one. A chat tab only forks into a CLI; a CLI tab only resumes into a chat. */
+/** Apply the History move gate in this tab’s workspace: chat forks to CLI, while CLI resumes into chat. */
 export function resolveTabSessionSwitch(
   state: AppState,
   session: AiVaultSession,
   subject: TabSessionHistorySubject
 ): TabSessionSwitch | null {
   const worktrees = aiVaultSessionOwnerWorkspaces(
-    getIndexedAllWorktrees(state.worktreesByRepo),
-    state.folderWorkspaces
+    getIndexedAllWorktrees(selectWorktreesByRepo(state)),
+    selectFolderWorkspaces(state)
   )
   const { resumeState, resumeInChat } = resolveAiVaultHistoryRowResume({
     session,
@@ -170,14 +276,16 @@ export function resolveTabSessionSwitch(
     : null
 }
 
-/** Reads the row through the panel's own list request. It never uses the panel's renderer cache:
- *  cached rows miss chat ownership the host projects per reply, and a write here would let a
- *  later-opened panel paint this pre-launch list without asking the host.
- *  Resolves `undefined` when it got no answer (cancelled), as opposed to `null` for "no row". */
+/** Read fresh host-projected ownership without touching the panel cache; undefined means cancelled, null means no row. */
 export async function lookupTabSessionHistoryRow(
   subject: TabSessionHistorySubject,
   listSessions: (args: AiVaultListArgs) => Promise<AiVaultListResult>,
-  options: { requestToken: string; isCancelled: () => boolean }
+  options: {
+    requestToken: string
+    isCancelled: () => boolean
+    /** A click made for this lookup alone may force a scan the way the panel's Refresh does. */
+    userRequested?: boolean
+  }
 ): Promise<AiVaultSession | null | undefined> {
   const { request } = subject
   const { requestToken } = options
@@ -189,13 +297,11 @@ export async function lookupTabSessionHistoryRow(
   if (row && isAiVaultSessionResumableContent(row)) {
     return row
   }
-  // The host caches the list for a minute, so a conversation newer than that needs a fresh scan,
-  // taken from the panel's forced-rescan budget so right-clicks cannot amplify full scans. A closed
-  // menu checks first: its cancel may have landed before this scan was registered.
+  // Spend the panel’s forced-scan budget for newer conversations, checking cancellation before scanning.
   if (
     options.isCancelled() ||
     request.executionHostScope !== LOCAL_EXECUTION_HOST_ID ||
-    !claimAiVaultForcedRescan()
+    !claimAiVaultForcedRescan(options.userRequested === true)
   ) {
     return row
   }

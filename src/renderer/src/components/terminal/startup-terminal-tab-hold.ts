@@ -9,15 +9,7 @@ export type StartupTerminalTabHold = {
   heldTabIds: ReadonlySet<string>
 }
 
-/**
- * Ends the hold unless `nextHeldWorktreeId` is still the held worktree. Must run before the
- * activation plan, which would otherwise read the hold as a plan it had installed.
- *
- * Why an unwidened hold unmounts: nothing but the surface was mounted under it, so a worktree
- * switched away from — or left for no workspace — mid-startup returns to the unmounted world
- * where parked watchers cover it. A hold a targeted background mount widened keeps that mount's
- * tabs, like any targeted restriction.
- */
+/** Release before activation planning so it cannot mistake the hold for its own restriction. Unwidened holds unmount on departure; targeted background mounts retain their admitted tabs. */
 export function releaseStartupTerminalTabHold(
   hold: { current: StartupTerminalTabHold | null },
   restrictions: Map<string, ReadonlySet<string>>,
@@ -35,16 +27,7 @@ export function releaseStartupTerminalTabHold(
   }
 }
 
-/**
- * Keeps the worktree's terminal tabs unmounted while startup restoration is still publishing
- * PTY ownership, so the workspace surface can mount from the hydrated tab model without a pane
- * binding a PTY early. Runs after prune, so no prune pass can drop the hold before render.
- *
- * Why an empty admitted set and no deferral entry: reveal and idle admission act only on
- * worktrees with a deferral entry, so nothing admits a held tab until the startup gate opens
- * and the activation plan replaces the hold. A targeted background mount widens it to its
- * tabs, as it widens any restriction; a worktree already fully mounted is never narrowed.
- */
+/** After pruning, hold terminal panes until startup publishes PTY ownership; no deferral entry prevents reveal/idle admission. Targeted mounts may widen it, while fully mounted worktrees are never narrowed. */
 export function holdTerminalTabsForStartup(
   hold: { current: StartupTerminalTabHold | null },
   restrictions: Map<string, ReadonlySet<string>>,
@@ -56,7 +39,7 @@ export function holdTerminalTabsForStartup(
   mountedWorktreeIds.add(worktreeId)
   const heldTabIds = collectDeferredMountTabIds(restrictions.get(worktreeId) ?? null, tabIds)
   const previous = hold.current
-  // Why reuse: the set feeds a memoized surface prop, so an unchanged hold keeps its identity.
+  // Preserve unchanged set identity for the memoized surface prop.
   if (
     previous?.worktreeId === worktreeId &&
     previous.heldTabIds.size === heldTabIds.size &&
@@ -67,7 +50,6 @@ export function holdTerminalTabsForStartup(
   hold.current = { worktreeId, heldTabIds }
 }
 
-/** The watcher-coverage set for a mounted worktree: activation-deferred tabs, else held tabs. */
 export function selectParkedEquivalentMountTabIds(
   activationDeferredMountTabIds: ReadonlySet<string> | undefined,
   hold: StartupTerminalTabHold | null,

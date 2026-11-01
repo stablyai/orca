@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { importExternalPathsToRuntime } from './runtime-file-client'
+import { importExternalPathsToRuntime } from './runtime-file-import-client'
 import {
   clearRuntimeCompatibilityCacheForTests,
   markRuntimeEnvironmentCompatible

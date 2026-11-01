@@ -4,14 +4,8 @@ import {
   isPostgresPoolConnectFailure
 } from './postgres-pool-pressure.js'
 
-// A database fault reaching unhandledRejection must not kill the cell: on 09-28 one failover
-// crashed 18 cells and dropped ~16k hosts. A rejection is fenced only when both hold:
-//   path: the relay's database layer threw or rethrew it (marked below), and
-//   type: a pool acquire failure, pg's read timeout, a dropped connection, or a server error
-//         in class 08/40/53/55/57/58 (the database is unwell) or 23 (a constraint lost a race
-//         with a concurrent writer; the row it guards is intact, so the process is too).
-// Everything else stays fatal: schema errors (42), data errors (22), TypeErrors from pg's
-// parameter serialisation, and every bare socket errno from ws or fetch.
+// Fence only database-layer errors with recognized outage/race types; one failover otherwise killed 18 cells/~16k hosts.
+// Schema/data/programming errors and unmarked ws/fetch socket errors remain fatal.
 const databaseLayerErrors = new WeakSet<object>()
 
 // Set by pg's query_timeout timer (pg@8.22 client.js).
@@ -20,9 +14,7 @@ const CONNECTION_TERMINATED_PREFIX = 'Connection terminated'
 // pg@8.22 rejects the active query with the raw socket error when the connection drops.
 const DROPPED_SOCKET_ERRNOS = new Set(['ECONNRESET', 'EPIPE'])
 const FENCED_SQLSTATE_CLASSES = new Set(['08', '23', '40', '53', '55', '57', '58'])
-// Class 25 is otherwise a code error (a statement in the wrong transaction state). 25P03 is the
-// server ending a session left idle in a transaction past 5 s, which a whole-VM stall of 6-7 s
-// does to any backend caught idle mid-transaction at its onset.
+// 25P03 ends idle transactions after 5s, including during 6–7s VM stalls; other class-25 errors are code faults.
 const FENCED_SQLSTATES = new Set(['25P03'])
 
 export function isPostgresReadTimeout(error: unknown): error is Error {
@@ -65,9 +57,7 @@ function rejectionFields(reason: unknown): { code: string; message: string } {
   return { code, message: message.replace(/[^\x20-\x7e]/g, '').slice(0, 120) }
 }
 
-// Installed once by the process entry point. Fatal rejections are rethrown, which ends the
-// process exactly as Node's default would, after one line that names them.
-// `fenced` false is the per-cell switch turned off: every rejection is fatal, as before #26817.
+// Entry point installs once; rethrow unfenced failures for Node’s default fatal behavior. Switch off restores that behavior for all rejections.
 export function handleRelayUnhandledRejection(reason: unknown, fenced = true): void {
   if (fenced && isFencedRelayDatabaseRejection(reason)) {
     console.warn(

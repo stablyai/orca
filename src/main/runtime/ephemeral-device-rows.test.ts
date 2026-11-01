@@ -95,7 +95,7 @@ describe('ephemeral device rows', () => {
   })
 
   it('removes idle rows from the registry durably', () => {
-    const { registry } = registryWith([tokenRow()])
+    const { dir, registry } = registryWith([tokenRow()])
     const fork = registry.forkDeviceKey('legacy', KEY_A, 'Tab', { ephemeral: true })
     const removed = registry.pruneIdleEphemeralDevices(
       fork.lastSeenAt + EPHEMERAL_DEVICE_IDLE_MS + 1,
@@ -103,5 +103,7 @@ describe('ephemeral device rows', () => {
     )
     expect(removed).toEqual([fork.deviceId])
     expect(registry.lookupDeviceKey(fork.deviceId)).toEqual({ kind: 'unknown' })
+    const onDisk = JSON.parse(readFileSync(join(dir, DEVICE_REGISTRY_FILENAME), 'utf8'))
+    expect(onDisk.map((row: DeviceEntry) => row.deviceId)).toEqual(['legacy'])
   })
 })

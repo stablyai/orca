@@ -1,4 +1,4 @@
-import type { AgentSessionRecord } from '../../../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../../../shared/agent-session-conversation-view'
 import {
   formatOrcaSessionAddress,
   type OrcaSessionId
@@ -15,23 +15,20 @@ import { refuseUndeliverableSessionRecipient } from './messaging/session-recipie
 
 const NO_EFFECTS = 'No effects were applied.'
 
-/** A chat has no pane or process; its Dispatch names it by its Orca session ID alone. */
+/** A chat with no worker handle has no pane or process; its Dispatch names it by its Orca session ID alone. */
 export const CHAT_WORKER_AUTHORITY = { paneKey: null, processIncarnation: null } as const
 
-/** The chat a Dispatch assignee party names; null for a terminal or a structured worker. */
+/** The chat a party is, whichever name reached it: a structured worker's handle names its chat too. Null for a terminal. */
 export function chatAssigneeOf(party: OrchestrationParty): OrcaSessionId | null {
-  return party.terminalHandle === null ? party.orcaSessionId : null
+  return party.orcaSessionId
 }
 
-/**
- * Refuses a chat assignee before anything is created, by the same reach rules as mail to it: its
- * task and the coordinator's mail reach it the same way. Returns the session running it now.
- */
+/** Use the same reach rules as mail before creating anything; return the assignee's currently running session. */
 export async function admitChatAssignee(
   runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
   sessionId: OrcaSessionId,
   db: OrchestrationDb
-): Promise<AgentSessionRecord> {
+): Promise<AgentSessionConversationView> {
   // A failed install leaves no store, which the refusal below names.
   await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   const store = readAgentSessionRecordStore()

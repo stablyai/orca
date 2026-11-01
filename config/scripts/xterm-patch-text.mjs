@@ -1,16 +1,6 @@
-/**
- * How an xterm patch is formatted, split and compared.
- *
- * Split out of regenerate-xterm-patches.mjs, which orchestrates the clone and the
- * builds. Everything here is pure text: it needs no upstream checkout, so the unit
- * tests exercise it with no network and no build.
- */
+// Keep text-only xterm patch formatting independent of upstream cloning/builds so unit tests stay offline.
 
-/**
- * Flags pnpm@12 passes to `git diff` in its own `diff_folders()`. A patch built
- * with anything else is a patch pnpm may re-diff differently on the next
- * `pnpm patch-commit`, so the byte-comparison gate would never settle.
- */
+// Match pnpm12 diff_folders flags or pnpm patch-commit re-diffs bytes and comparison never stabilizes.
 export const PNPM_DIFF_FLAGS = [
   '-c',
   'core.safecrlf=false',
@@ -29,15 +19,9 @@ export const PNPM_DIFF_FLAGS = [
   '--'
 ]
 
-/**
- * The same formatting as PNPM_DIFF_FLAGS minus `--no-index`, so a diff taken
- * inside the upstream checkout is byte-comparable with the emitted patch.
- * `--relative` scopes paths to the package directory, which is what the published
- * tarball is rooted at; it is a no-op for a package whose packageDir is the repo root.
- */
+// Match emitted patch flags minus no-index; --relative scopes upstream-checkout paths to package tarball root.
 export const CHECKOUT_DIFF_FLAGS = PNPM_DIFF_FLAGS.filter((flag) => flag !== '--no-index').flatMap(
-  // Ahead of the `--` separator, or git reads it as a pathspec and silently keeps
-  // repo-root-relative paths.
+  // Place --relative before -- or Git treats it as pathspec and retains repo-root paths.
   (flag) => (flag === '--' ? ['--relative', '--'] : [flag])
 )
 
@@ -58,11 +42,7 @@ function trimSurroundingSlashes(value) {
   return value[0] === '/' || value.endsWith('/') ? value.replace(/^\/|\/$/g, '') : value
 }
 
-/**
- * Reproduces pnpm's post-processing of the raw `git diff` output: strip the two
- * scratch folder prefixes, drop a trailing no-newline marker, and remove
- * .DS_Store entries a macOS run would otherwise smuggle in.
- */
+// Match pnpm postprocessing: strip scratch prefixes/trailing no-newline marker and macOS .DS_Store entries.
 export function normalizePnpmDiff(stdout, folderA, folderB) {
   const a = folderA.replace(/\\/g, '/')
   const b = folderB.replace(/\\/g, '/')
@@ -103,11 +83,7 @@ export function sourceHunks(patchText) {
   return selectPatchEntries(patchText, (file) => file.startsWith('src/'))
 }
 
-/**
- * The source patch and the emitted patch are the same edits diffed two ways, so
- * they must produce the same bytes. A source hunk the emitted patch cannot carry
- * would be deleted by the next `--write`, so this fails instead of shipping one.
- */
+// Require source/emitted patches to apply identical bytes or next --write would delete source-only hunks.
 export function assertSourceDerivationsAgree(checkoutSource, patchText) {
   const checkout = sourceHunks(checkoutSource)
   const emitted = sourceHunks(patchText)

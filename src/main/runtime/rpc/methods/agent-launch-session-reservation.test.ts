@@ -1,10 +1,6 @@
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
-/**
- * The chat session a caller reserves for the structured launch `agent.launch` creates.
- *
- * The caller mints the conversation's id so it knows which session it started before the reply
- * arrives. The outcome's `sessionId` says which session really exists.
- */
+/** Caller-reserved chat ids identify the conversation before its reply; outcome.sessionId names the session actually created. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -215,6 +211,7 @@ describe('a taken session id under a named operation', () => {
 
   afterEach(async () => {
     setAgentLaunchRecordStore(null)
+    await closeTestJournalHostDatabases()
     await rm(directory, { recursive: true, force: true })
   })
 
@@ -271,8 +268,7 @@ describe('the chat tab a launch reserves', () => {
   const PANE_KEY = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d:3f2504e0-4f89-41d3-9a0c-0305e82c3301'
 
   it('hands the tab half of the reserved pane to the structured create', async () => {
-    // One reservation serves either route: the pane a terminal would have used names the chat's
-    // tab when the host settles the launch as a chat instead.
+    // When routing to chat, the reserved terminal pane still names the chat's tab.
     const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
 
     await launch({ ...EXISTING_LAUNCH, paneKey: PANE_KEY }, runtime)

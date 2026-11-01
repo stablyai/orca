@@ -1,6 +1,6 @@
 import { hostUnionArms } from '../../../src/shared/zod-salvage'
 
-/** Node's own platform domain, pinned to @types/node's union: an arm added or dropped there fails tsc here. */
+// Pin the platform set to Node’s union so additions/removals fail typechecking.
 export const NODE_PLATFORM_NAMES = hostUnionArms<NodeJS.Platform>({
   aix: true,
   android: true,

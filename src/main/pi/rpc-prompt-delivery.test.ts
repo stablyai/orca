@@ -105,7 +105,7 @@ describe('Pi pending prompt delivery bounds and ownership', () => {
     expect(h.accepted).toHaveBeenLastCalledWith('retrying', 1)
   })
 
-  it('settles a pending auth retry as unknown on process teardown', async () => {
+  it('settles a prompt waiting out a sign-in refusal as never reaching Pi on process teardown', async () => {
     vi.useFakeTimers()
     const h = rig()
     await h.delivery.submit('retrying', 1, { type: 'prompt', message: 'first' })
@@ -116,11 +116,33 @@ describe('Pi pending prompt delivery bounds and ownership', () => {
       error: 'No API key found for provider'
     })
     h.delivery.end()
-    expect(h.settled).toHaveBeenCalledWith(
+    expect(h.settled).toHaveBeenCalledExactlyOnceWith(
+      'retrying',
+      expect.objectContaining({
+        state: 'rejected',
+        rejection: expect.objectContaining({ kind: 'notSignedIn', neverReachedAgent: true })
+      })
+    )
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('settles a re-sent sign-in retry still awaiting its reply as unknown on process teardown', async () => {
+    vi.useFakeTimers()
+    const h = rig()
+    await h.delivery.submit('retrying', 1, { type: 'prompt', message: 'first' })
+    h.delivery.reply({
+      type: 'response',
+      command: 'prompt',
+      success: false,
+      error: 'No API key found for provider'
+    })
+    await vi.advanceTimersByTimeAsync(250)
+    expect(h.send).toHaveBeenCalledTimes(2)
+    h.delivery.end()
+    expect(h.settled).toHaveBeenCalledExactlyOnceWith(
       'retrying',
       expect.objectContaining({ state: 'unknown' })
     )
-    expect(vi.getTimerCount()).toBe(0)
   })
 })
 
@@ -143,7 +165,9 @@ it('retains Pi provider detail with sign-in guidance after bounded authenticatio
       state: 'rejected',
       rejection: {
         kind: 'notSignedIn',
-        detail: { text: 'No API key found for anthropic', audience: 'person' }
+        detail: { text: 'No API key found for anthropic', audience: 'person' },
+        // Pi checks sign-in before it records a prompt, so the agent never had this one.
+        neverReachedAgent: true
       }
     })
   )

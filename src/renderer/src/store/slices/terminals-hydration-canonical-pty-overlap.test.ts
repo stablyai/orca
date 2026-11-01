@@ -2,7 +2,7 @@
 import './terminal-hydration-store-test-bootstrap'
 import { describe, expect, it, vi } from 'vitest'
 import { getOrphanTerminalIds } from './terminal-orphan-helpers'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
@@ -14,7 +14,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/pty-transport', () => ({
+vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn(),
   ensurePtyDispatcher: vi.fn()
 }))
@@ -281,8 +281,7 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
     })
 
     const store = hydrate(session)
-    // Why: the row's own pane lives only in a leaf binding, which orphan detection ignores — without
-    // this anchor the sweep below hard-deletes the row and its session never reattaches.
+    // Anchor the retained leaf-only PTY or orphan sweep deletes the row before its pane can reattach.
     expect(store.getState().pendingReconnectPtyIdByTabId['split-tab']).toBe(soloPtyId)
     expect(getOrphanTerminalIds(store.getState(), WORKTREE_ID).has('split-tab')).toBe(false)
 

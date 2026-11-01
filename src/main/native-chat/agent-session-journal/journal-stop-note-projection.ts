@@ -1,5 +1,5 @@
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { isStructuredAgentSessionStopNote } from '../agent-session-wire/structured-agent-session-command-turn'
 import { STOP_NOTE_CANCELLATION_REQUESTED } from '../agent-session-wire/structured-agent-session-turn-stop-notes'
 
@@ -8,7 +8,7 @@ export function projectJournalStopNote(
   item: AgentJournalRenderItem,
   items: ReadonlyMap<string, AgentJournalRenderItem>
 ): AgentJournalRenderItem {
-  // Field checks before the key parse: this runs for every item of every snapshot.
+  // Avoid key parsing for unrelated snapshot items.
   if (
     item.body.kind === 'status' &&
     item.body.failure?.kind === 'cancelUnconfirmed' &&

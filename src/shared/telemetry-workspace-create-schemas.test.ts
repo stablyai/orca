@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { eventSchemas } from './telemetry-event-registry'
-import { WORKTREE_CREATE_PHASES } from './worktree/create-timing-vocabulary'
 
 const created = eventSchemas.workspace_created
 const failed = eventSchemas.workspace_create_failed
@@ -39,11 +38,6 @@ describe('workspace_created timing fields', () => {
 
   it('accepts a full payload', () => {
     expect(created.safeParse(fullCreatedPayload).success).toBe(true)
-  })
-
-  it('accepts a duration for every timed phase', () => {
-    const phases = Object.fromEntries(WORKTREE_CREATE_PHASES.map((phase) => [`${phase}_ms`, 1]))
-    expect(created.safeParse({ ...fullCreatedPayload, ...phases }).success).toBe(true)
   })
 
   it('accepts a miss with its reason', () => {

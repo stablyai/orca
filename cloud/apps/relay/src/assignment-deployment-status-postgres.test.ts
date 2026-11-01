@@ -84,4 +84,27 @@ describePostgres('PostgreSQL deployment status', () => {
       restartBlockingReservedRequests: -1
     })
   })
+
+  it('reads the same counts through the reserve-aware status, and none for a reserve-mode cell', async () => {
+    const store = new RelayAssignmentStore(database!, () => 100)
+    const reserveCell = { ...cell, id: `${cell.id}-reserve`, url: 'https://deployment-status-reserve.example.com' }
+    await store.reconcileCells([cell, reserveCell])
+    await store.assign({ userId: 'aware-user', relayHostId: 'd1e2f3a4b5c6' })
+    expect(await store.reserveAwareCellDeploymentStatus(cell.id)).toEqual({
+      admitMode: 'db',
+      status: await store.cellDeploymentStatus(cell.id)
+    })
+
+    await store.setCellAdmitMode(reserveCell.id, 'reserve')
+    await expect(store.cellDeploymentStatus(reserveCell.id)).rejects.toThrow('cell_in_reserve_mode')
+    const reserve = await store.reserveAwareCellDeploymentStatus(reserveCell.id)
+    expect(reserve).toMatchObject({
+      admitMode: 'reserve',
+      status: { cellId: reserveCell.id, cellUrl: reserveCell.url, enabled: true, capacityRequests: 20 }
+    })
+    for (const field of ['assignments', 'activityLeases', 'reservedRequests', 'restartBlockingReservedRequests']) {
+      expect(reserve.status).not.toHaveProperty(field)
+    }
+    await expect(store.reserveAwareCellDeploymentStatus('missing-cell')).rejects.toThrow('cell_not_found')
+  })
 })

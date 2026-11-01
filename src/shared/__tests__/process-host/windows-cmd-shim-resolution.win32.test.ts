@@ -7,13 +7,7 @@ import { runProcess } from '@orca/process-host'
 import { WINDOWS_ARGUMENT_CORPUS } from '../../../packages/process-host/src/__fixtures__/windows-argument-corpus'
 import { npmProgNodeShim } from '../../../packages/process-host/src/__fixtures__/windows-cmd-shim-bodies'
 
-/**
- * The resolved path has to deliver exactly what the cmd.exe path delivers, for
- * the same real shim on a real Windows box. Anything less and removing cmd.exe
- * has traded an EDR alert for a silent argument bug.
- *
- * Runs only on win32; skipped elsewhere.
- */
+/** Prove real Windows argv parity between resolved and cmd shim paths; avoiding cmd must preserve arguments. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
 describeOnWindows('resolved .cmd shim spawn', () => {
@@ -50,9 +44,7 @@ describeOnWindows('resolved .cmd shim spawn', () => {
   })
 
   it('delivers a multi-line agent prompt that cmd.exe could not carry at all', async () => {
-    // cmd ends the command at a raw CR/LF whatever the quote state, so the
-    // fallback path has to reject this input. Resolving the shim is what makes
-    // it expressible.
+    // cmd terminates on raw CR/LF even inside quotes; direct shim resolution is required to carry multiline prompts.
     const prompt = 'Fix "src/a b.ts"\n- run tests\r\n- report 100% & stop'
     const result = await runProcess({
       program: shim,

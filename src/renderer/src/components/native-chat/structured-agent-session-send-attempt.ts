@@ -1,40 +1,39 @@
-// One `agentSession.send` request and what its answer proves. Everything before the request is
-// local or read-only, so a send stopped there never went out.
+// Only agentSession.send mutates; stops during earlier local/read-only work prove the request never went out.
 
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryResult,
   AgentSessionMutationResult,
   AgentSessionSendResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
+  AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS,
   agentSessionWriteNoticeParts,
   agentSessionWriteNotDoneParts
-} from '../../../../shared/agent-session-refusal-notice'
-import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session-write-notice-copy'
-import { structuredAgentSessionMessageSendMutation } from '../../../../shared/structured-agent-session-send-mutation'
+} from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session/failures/agent-session-write-notice-copy'
+import { structuredAgentSessionMessageSendMutation } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { structuredAgentSessionBlocksTooLarge } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 import {
   structuredAgentSessionSendEvidence,
   type StructuredAgentSessionSendAnswer,
   type StructuredAgentSessionSendEvidence
-} from '../../../../shared/structured-agent-session-send-evidence'
-import {
-  ensureRuntimeEnvironmentCompatible,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-rpc-client'
+} from '../../../../shared/agent-session/requests/structured-agent-session-send-evidence'
+import { ensureRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import {
   agentSessionThrownFailure,
   readAgentSessionErrorRefusal,
   type AgentSessionWriteFailure
-} from '../../../../shared/agent-session-write-failure'
+} from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 const fences = new Map<string, number>()
 
-/** The fence the session's host serves, as its subscription or launch receipt last reported. */
 export function noteStructuredAgentSessionFence(sessionId: string, fence: number | null): void {
   if (fence !== null) {
     fences.set(sessionId, fence)
@@ -72,8 +71,8 @@ export type StructuredAgentSessionSendAttempt =
   | {
       kind: 'answered'
       evidence: StructuredAgentSessionSendEvidence
-      /** The host's row, when its answer carried one. */
       submission: AgentJournalSubmission | null
+      cursor: AgentJournalCursor | null
       /** The refusal a thrown answer carried: what the host said, though it proves nothing. */
       thrownRefusal: AgentSessionWriteFailure | null
     }
@@ -85,8 +84,7 @@ const NOT_SENT = agentSessionWriteNotDoneParts('composer-send')
 /** The code a remote call gets when its environment's pairing or identity changed under it. */
 const RUNTIME_ENVIRONMENT_CHANGED = 'runtime_environment_changed'
 
-/** What a failure before the request says: this client and the server can't talk, what the host
- *  refused, that Orca couldn't reach it, or only that nothing was sent. */
+/** Explain pre-request compatibility blocks, host refusals or lost contact as not sent. */
 function notSentParts(error: unknown): AgentSessionWriteNoticePart[] {
   if (isRuntimeCompatBlockError(error) && error instanceof Error) {
     return [{ text: error.message }, 'notDoneSend']
@@ -101,11 +99,15 @@ function notSentParts(error: unknown): AgentSessionWriteNoticePart[] {
 export async function attemptStructuredAgentSessionSend(args: {
   entry: StructuredAgentSessionPendingSend
   target: RuntimeClientTarget
-  /** Right before the request goes out. */
   beforeIssue: () => void
   abandoned: () => boolean
+  reconcile: (uncertain: boolean) => void
 }): Promise<StructuredAgentSessionSendAttempt | null> {
   const { entry, target } = args
+  // Measured as the host measures it, so a message it would refuse comes back saying why.
+  if (structuredAgentSessionBlocksTooLarge(entry.body.blocks)) {
+    return { kind: 'not-sent', parts: [...AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS] }
+  }
   let fence: number | null
   try {
     if (target.kind === 'environment') {
@@ -127,12 +129,16 @@ export async function attemptStructuredAgentSessionSend(args: {
     clientOperationId: entry.clientMessageId,
     expectedRuntimeFence: fence,
     body: entry.body,
-    ...(entry.delivery ? { delivery: entry.delivery } : {})
+    ...(entry.delivery ? { delivery: entry.delivery } : {}),
+    ...(entry.options ? { options: entry.options } : {}),
+    ...(entry.selection !== undefined ? { selection: entry.selection } : {}),
+    ...(entry.usageLimitContinuationOfTurnItemId
+      ? { usageLimitContinuationOfTurnItemId: entry.usageLimitContinuationOfTurnItemId }
+      : {})
   })
   type SendAnswer = AgentSessionMutationResult<AgentSessionSendResult>
   let answer: StructuredAgentSessionSendAnswer
   try {
-    // Checked above, so the request goes out now or not at all.
     const result =
       target.kind === 'environment'
         ? await callStructuredAgentSession<SendAnswer>(target, 'agentSession.send', params, {
@@ -141,9 +147,9 @@ export async function attemptStructuredAgentSessionSend(args: {
         : await callStructuredAgentSession<SendAnswer>(target, 'agentSession.send', params)
     answer = { kind: 'result', result }
   } catch (error) {
-    // This window answers it before forwarding anything (the server was re-paired, as a managed
-    // server's update does), so the request never went out.
+    // Re-pairing errors are raised before forwarding, proving the request never went out.
     if (error instanceof RuntimeRpcCallError && error.code === RUNTIME_ENVIRONMENT_CHANGED) {
+      args.reconcile(false)
       return args.abandoned() ? null : { kind: 'not-sent', parts: notSentParts(error) }
     }
     answer = {
@@ -152,6 +158,7 @@ export async function attemptStructuredAgentSessionSend(args: {
       rpcCode: error instanceof RuntimeRpcCallError ? error.code : undefined
     }
   }
+  args.reconcile(structuredAgentSessionSendEvidence(answer).kind === 'uncertain')
   if (args.abandoned()) {
     return null
   }
@@ -160,6 +167,7 @@ export async function attemptStructuredAgentSessionSend(args: {
     kind: 'answered',
     evidence: structuredAgentSessionSendEvidence(answer),
     submission: value && 'submission' in value ? value.submission : null,
+    cursor: answer.kind === 'result' && answer.result.ok ? answer.result.cursor : null,
     thrownRefusal:
       answer.kind === 'thrown' && readAgentSessionErrorRefusal(answer.error)
         ? agentSessionThrownFailure(answer.error, answer.rpcCode)

@@ -11,8 +11,13 @@ afterEach(cleanup)
 const NO_SLOTS: never[] = []
 const NO_ROWS = { messages: [], turnKeys: [] }
 
-/** The rail over the real hook, on a thread known only from the host's outline.
- *  The first two prompts have replies; past 20 the ticks are sampled. */
+function railScroller(): HTMLDivElement {
+  const element = document.createElement('div')
+  Object.defineProperty(element, 'clientWidth', { value: 800 })
+  return element
+}
+
+/** Use the real rail hook over a host outline; prompts beyond 20 get sampled ticks. */
 function Rail({
   count = 3,
   activeIndex,
@@ -23,7 +28,7 @@ function Rail({
   activeIndex?: number
   scroller?: HTMLDivElement
 }): React.JSX.Element {
-  const [scrollRef] = useState(() => ({ current: scroller ?? document.createElement('div') }))
+  const [scrollRef] = useState(() => ({ current: scroller ?? railScroller() }))
   const [outline] = useState(() =>
     Array.from({ length: count }, (_, index) => ({
       id: `prompt-${index}`,
@@ -119,12 +124,10 @@ describe('message rail interaction', () => {
     expect(screen.getByRole('toolbar').contains(document.activeElement)).toBe(false)
   })
 
-  // A long thread draws only some ticks; the keyboard still reaches every message,
-  // and the tick it lands on stays drawn while it holds focus.
+  // Keyboard navigation must reach unsampled messages and keep the focused tick drawn.
   it('walks every message with the arrow keys, sampled onto the rail or not', async () => {
     const user = userEvent.setup()
     render(<Rail count={60} />)
-    // Anti-vacuous: the second message has no tick until the keyboard reaches it.
     expect(screen.queryByRole('button', { name: 'Prompt 1' })).toBeNull()
     screen.getByRole('textbox').focus()
     await user.tab()
@@ -147,7 +150,7 @@ describe('message rail interaction', () => {
     [1, 112],
     [2, 2800]
   ])('forwards wheel delta mode %i', (deltaMode, expected) => {
-    const element = document.createElement('div')
+    const element = railScroller()
     Object.defineProperty(element, 'clientHeight', { value: 400 })
     render(<Rail scroller={element} />)
     fireEvent.wheel(screen.getByRole('toolbar', { name: 'Your messages' }), {

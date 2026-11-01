@@ -1,25 +1,24 @@
-/**
- * How the CLI starts an agent: through `agent.launch`, the host's one launch point that the desktop
- * and phone use too. The user's Chat UI setting picks a chat or a terminal, and the receipt says
- * which ran and why; the CLI never picks the surface itself.
- */
+// agent.launch shares desktop/mobile policy; absent --surface uses the host's Chat | CLI choice for the agent.
 
 import { randomUUID } from 'node:crypto'
 import type { AgentLaunchPrompt, AgentLaunchResult } from '../shared/agent-launch-intent'
+import { AGENT_LAUNCH_SURFACES, type AgentLaunchSurface } from '../shared/agent-launch-surface'
 import { checkAgentLaunchModelPreferences } from '../shared/agent-launch-model-preferences'
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
 } from '../shared/agent-launch-runtime-capability'
-import { createStructuredAgentSessionOperationId } from '../shared/structured-agent-session-mutation'
-import { parseAgentSessionOperationTimestamp } from '../shared/agent-session-host-authority'
+import { createStructuredAgentSessionOperationId } from '../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { parseAgentSessionOperationTimestamp } from '../shared/agent-session/agent-session-host-authority'
 import type { RuntimeStatus } from '../shared/runtime-types'
 import type { TuiAgent } from '../shared/tui-agent'
 import { isTuiAgent } from '../shared/tui-agent-config'
 import {
   getOptionalStringFlag,
+  getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty,
   rejectValuelessFlag
 } from './flags'
@@ -28,13 +27,29 @@ import { withCliAgentLaunchRecovery } from './agent-launch-recovery'
 
 type Flags = Map<string, string | boolean>
 
-export type CliAgentLaunchTarget = { kind: 'existing'; worktree: string }
+/** The host strips agent fields from the worktree.create payload. */
+export type CliAgentLaunchTarget =
+  | { kind: 'existing'; worktree: string }
+  | { kind: 'create-worktree'; create: Record<string, unknown> }
 
 export type CliAgentLaunch = {
   agent: TuiAgent
   prompt?: AgentLaunchPrompt
   sessionOptions?: Record<string, string>
   operationId?: string
+  surface?: AgentLaunchSurface
+}
+
+function readSurfaceFlag(flags: Flags): AgentLaunchSurface | undefined {
+  if (!flags.has('surface')) {
+    return undefined
+  }
+  const surface = getRequiredStringFlag(flags, 'surface')
+  const known = AGENT_LAUNCH_SURFACES.find((candidate) => candidate === surface)
+  if (!known) {
+    throw new RuntimeClientError('invalid_argument', '--surface must be one of: chat, terminal')
+  }
+  return known
 }
 
 export function parseCliAgent(value: string): TuiAgent {
@@ -44,13 +59,16 @@ export function parseCliAgent(value: string): TuiAgent {
   return value
 }
 
-/** The agent, prompt, model and effort a CLI start asks for; refuses a model or effort the launch
- *  could not apply, by the same rule as `orchestration worker-start`. */
-export function readCliAgentLaunch(flags: Flags, agent: TuiAgent): CliAgentLaunch {
+export function readCliAgentLaunch(
+  flags: Flags,
+  agent: TuiAgent,
+  target: { createsWorktree: boolean }
+): CliAgentLaunch {
   const checked = checkAgentLaunchModelPreferences({
     agent,
     model: getOptionalStringFlag(flags, 'model'),
     effort: getOptionalStringFlag(flags, 'effort'),
+    createsWorktree: target.createsWorktree,
     // The execution host verifies an OpenCode model itself before it starts one.
     openCodeModelLaunchSupported: true
   })
@@ -65,16 +83,25 @@ export function readCliAgentLaunch(flags: Flags, agent: TuiAgent): CliAgentLaunc
   if (operationId !== undefined && parseAgentSessionOperationTimestamp(operationId) === null) {
     throw new RuntimeClientError('invalid_argument', 'Malformed --retry-launch operation ID')
   }
+  const surface = readSurfaceFlag(flags)
   return {
     agent,
+    ...(surface ? { surface } : {}),
     ...(operationId ? { operationId } : {}),
-    // A blank prompt is no prompt: the agent starts with nothing sent.
     ...(typeof prompt === 'string' && prompt.trim()
       ? { prompt: { text: prompt, delivery: 'submit' as const } }
       : {}),
     ...(checked.preferences ? { sessionOptions: { ...checked.preferences } } : {})
   }
 }
+
+export function hasLaunchModelFlags(flags: Flags): boolean {
+  return flags.has('model') || flags.has('effort')
+}
+
+// An older host strips `surface` and follows its own setting, so an explicit pick never reaches it.
+export const SURFACE_UNSUPPORTED_MESSAGE =
+  'This Orca host cannot start an agent as a chat or a terminal on request. Update Orca on the execution host, or omit --surface.'
 
 export async function getAgentLaunchCapabilities(
   client: RuntimeClient
@@ -103,6 +130,9 @@ export async function callAgentLaunch(
       'incompatible_runtime',
       'This Orca host cannot safely carry launch prompts. Update Orca on the execution host.'
     )
+  }
+  if (launch.surface && !capabilities.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError('incompatible_runtime', SURFACE_UNSUPPORTED_MESSAGE)
   }
   if (!capabilities.includes(AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(

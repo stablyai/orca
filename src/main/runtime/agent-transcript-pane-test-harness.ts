@@ -1,8 +1,11 @@
-// One pane builder for every suite that replays a captured agent transcript through the runtime.
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { RuntimeStore } from './runtime-store-contract'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
 
 const TRANSCRIPT_PANE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const TRANSCRIPT_PANE_TAB_ID = 'tab-1'
@@ -13,34 +16,53 @@ export type TranscriptPaneOptions = {
   paneTitle: string
   foregroundProcess: string | null
   data: string
+  isReattach?: true
   launchAgent?: TuiAgent
-  /** Set for a pane whose PTY lives on an SSH host or WSL distro rather than locally. */
   connectionId?: string
-  /** The remote host of a `connectionId` pane is Windows. */
   remoteWindowsHost?: boolean
-  /** Simulates a PTY controller whose foreground probe never settles. */
   foregroundProbeHangs?: boolean
   onForegroundProbe?: () => void
-  /** PTY grid the controller reports; the runtime's emulator otherwise defaults to 80x24. */
+  /** Controller grid size; the runtime emulator defaults to 80x24. */
   size?: { cols: number; rows: number }
-  /** What a fresh foreground scan finds, where it differs from the cached foreground read. */
   confirmedForegroundProcess?: string | null
   onForegroundScan?: () => void
-  /** What the host's process inspection answers; absent for a host without one. */
   processInspection?: PtyProcessInspection
   onProcessInspection?: () => void
-  /** What the host's shell-foreground check answers: the spawned shell holds the foreground. */
   shellForegroundProven?: boolean
-  /** The pane's root process the provider reports; absent for a provider without an inventory. */
   paneRootPid?: number
   onShellForegroundProof?: () => void
+}
+
+function transcriptLayoutStore(): RuntimeStore {
+  return {
+    getRepos: () => [],
+    getRepo: () => undefined,
+    addRepo: vi.fn<RuntimeStore['addRepo']>(),
+    updateRepo: vi.fn<RuntimeStore['updateRepo']>(),
+    getAllWorktreeMeta: () => ({}),
+    getWorktreeMeta: () => undefined,
+    setWorktreeMeta: vi.fn<RuntimeStore['setWorktreeMeta']>(),
+    removeWorktreeMeta: vi.fn<RuntimeStore['removeWorktreeMeta']>(),
+    getGitHubCache: vi.fn<RuntimeStore['getGitHubCache']>(),
+    getSettings: () => ({
+      workspaceDir: '/workspaces',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      branchPrefix: 'none',
+      branchPrefixCustom: ''
+    })
+  }
 }
 
 export async function createTranscriptPane(
   options: TranscriptPaneOptions,
   runtimeDeps?: ConstructorParameters<typeof OrcaRuntimeService>[2]
-): Promise<{ runtime: OrcaRuntimeService; handle: string }> {
-  const runtime = new OrcaRuntimeService(null, undefined, runtimeDeps)
+): Promise<{ runtime: OrcaRuntimeService; handle: string; terminal: RuntimeTerminalCreate }> {
+  const runtime = new OrcaRuntimeService(
+    ORCA_LAYOUT_OWNER_IS_MAIN ? transcriptLayoutStore() : null,
+    undefined,
+    runtimeDeps
+  )
   // The runtime reads a remote pane's host OS from its worktree path.
   const worktreeId = options.remoteWindowsHost
     ? 'repo-1::C:\\repo\\app'
@@ -57,7 +79,14 @@ export async function createTranscriptPane(
   })
   const processInspection = options.processInspection
   runtime.setPtyController({
-    spawn: vi.fn().mockResolvedValue({ id: TRANSCRIPT_PANE_PTY_ID, incarnationId: 'inc-1' }),
+    spawn: committingSpawn(
+      runtime,
+      vi.fn(async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
+        id: TRANSCRIPT_PANE_PTY_ID,
+        incarnationId: 'inc-1',
+        ...(options.isReattach ? { isReattach: true as const } : {})
+      }))
+    ),
     write: () => true,
     kill: () => true,
     getSize: () => options.size ?? null,
@@ -110,46 +139,60 @@ export async function createTranscriptPane(
     title: 'Terminal'
   })
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
-    tabs: [
-      {
-        tabId: TRANSCRIPT_PANE_TAB_ID,
-        worktreeId,
-        title: 'Terminal',
-        activeLeafId: TRANSCRIPT_PANE_LEAF_ID,
-        layout: null
-      }
-    ],
-    leaves: [
-      {
-        tabId: TRANSCRIPT_PANE_TAB_ID,
-        worktreeId,
-        leafId: TRANSCRIPT_PANE_LEAF_ID,
-        paneRuntimeId: 1,
-        ptyId: TRANSCRIPT_PANE_PTY_ID,
-        paneTitle: options.paneTitle
-      }
-    ]
-  })
+  runtime.syncWindowGraph(
+    1,
+    ORCA_LAYOUT_OWNER_IS_MAIN
+      ? {
+          tabs: [],
+          leaves: [],
+          mountedLeaves: [
+            {
+              tabId: TRANSCRIPT_PANE_TAB_ID,
+              leafId: TRANSCRIPT_PANE_LEAF_ID,
+              paneRuntimeId: 1,
+              paneTitle: options.paneTitle
+            }
+          ]
+        }
+      : {
+          tabs: [
+            {
+              tabId: TRANSCRIPT_PANE_TAB_ID,
+              worktreeId,
+              title: 'Terminal',
+              activeLeafId: TRANSCRIPT_PANE_LEAF_ID,
+              layout: null
+            }
+          ],
+          leaves: [
+            {
+              tabId: TRANSCRIPT_PANE_TAB_ID,
+              worktreeId,
+              leafId: TRANSCRIPT_PANE_LEAF_ID,
+              paneRuntimeId: 1,
+              ptyId: TRANSCRIPT_PANE_PTY_ID,
+              paneTitle: options.paneTitle
+            }
+          ]
+        }
+  )
   if (options.launchAgent) {
-    runtime.registerPty(TRANSCRIPT_PANE_PTY_ID, worktreeId, options.connectionId ?? null, {
+    registerBoundPty(runtime, TRANSCRIPT_PANE_PTY_ID, worktreeId, options.connectionId ?? null, {
       tabId: TRANSCRIPT_PANE_TAB_ID,
       leafId: TRANSCRIPT_PANE_LEAF_ID,
       incarnationId: 'inc-1',
       agentLaunchAuthority: { launchToken: 'transcript-launch', launchAgent: options.launchAgent }
     })
   }
-  // Why the guard: a restore seed is only applied to a never-written record, so the restore
-  // cases must not write an empty chunk first.
+  // Restore seeds apply only to never-written records; do not write an empty chunk first.
   if (options.data.length > 0) {
     runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, options.data, Date.now())
   }
-  return { runtime, handle: terminal.handle }
+  return { runtime, handle: terminal.handle, terminal }
 }
 
-/** Advance readiness deadlines after real pane creation and emulator drains. */
 export async function waitForTranscriptIdle(
-  pane: Awaited<ReturnType<typeof createTranscriptPane>>,
+  pane: Pick<Awaited<ReturnType<typeof createTranscriptPane>>, 'runtime' | 'handle'>,
   timeoutMs: number
 ) {
   vi.useFakeTimers({

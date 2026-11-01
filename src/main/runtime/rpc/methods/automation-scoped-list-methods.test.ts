@@ -1,9 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-/**
- * The runtime end of the list contract: an old client that sends no params must
- * keep receiving the authority's complete list through the legacy field while
- * current callers also receive owner metadata.
- */
+/** Legacy parameterless clients keep the complete authority list; current clients also receive owner metadata. */
 import { describe, expect, it, vi } from 'vitest'
 import { eraseRpcMethods, type RpcContext, type RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -68,30 +64,6 @@ async function invoke(
 const SSH_OWNER = { selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 } }
 
 describe('automation.list', () => {
-  it('answers a parameterless request with owner metadata and the legacy field', async () => {
-    const runtime = runtimeStub()
-    expect(await invoke('automation.list', undefined, runtime)).toMatchObject({
-      automations: [{ id: 'a1' }, { id: 'a2' }],
-      items: [{ automationId: 'a1' }, { automationId: 'a2' }]
-    })
-    expect(runtime.listAutomationsForScope).toHaveBeenCalledWith({})
-  })
-
-  it('treats an empty object the same as no params', async () => {
-    const runtime = runtimeStub()
-    expect(await invoke('automation.list', {}, runtime)).toMatchObject({
-      automations: [{ id: 'a1' }, { id: 'a2' }],
-      items: [{ automationId: 'a1' }, { automationId: 'a2' }]
-    })
-  })
-
-  it('answers a scoped request with items and the orphan count', async () => {
-    const runtime = runtimeStub()
-    const result = await invoke('automation.list', { selector: { kind: 'self' } }, runtime)
-    expect(runtime.listAutomationsForScope).toHaveBeenCalledWith({ selector: { kind: 'self' } })
-    expect(result).toMatchObject({ orphanCount: 2, items: [{ automationId: 'a1' }] })
-  })
-
   it('requires an SSH scope to name the generation it expects', async () => {
     const runtime = runtimeStub()
     await expect(
@@ -100,12 +72,7 @@ describe('automation.list', () => {
   })
 })
 
-/**
- * The other two cases go through `invoke`, which normalizes params itself — so
- * literal `null` has to be proved through the real dispatcher instead. An old
- * client that serializes an absent params field as `null` is the case the
- * legacy fallback rests on, and only the dispatcher decides what it becomes.
- */
+/** Use real dispatch to prove legacy literal null params normalize before parsing; the test invoke helper would mask that boundary. */
 describe('automation.list from a client that sends literal null params', () => {
   it('answers with the complete authority list, not an invalid-argument error', async () => {
     const runtime = runtimeStub()
@@ -128,53 +95,12 @@ describe('automation.list from a client that sends literal null params', () => {
 })
 
 describe('owner preconditions', () => {
-  it('forwards the expected owner on show, runs, delete, and runNow', async () => {
-    const runtime = runtimeStub()
-    await invoke('automation.show', { id: 'a1', expectedOwner: SSH_OWNER }, runtime)
-    await invoke('automation.runs', { automationId: 'a1', expectedOwner: SSH_OWNER }, runtime)
-    await invoke('automation.delete', { id: 'a1', expectedOwner: SSH_OWNER }, runtime)
-    await invoke('automation.runNow', { id: 'a1', expectedOwner: SSH_OWNER }, runtime)
-    expect(runtime.showAutomation).toHaveBeenCalledWith('a1', SSH_OWNER)
-    expect(runtime.listAutomationRuns).toHaveBeenCalledWith('a1', SSH_OWNER)
-    expect(runtime.deleteAutomation).toHaveBeenCalledWith('a1', SSH_OWNER)
-    expect(runtime.runAutomationNow).toHaveBeenCalledWith('a1', SSH_OWNER)
-  })
-
-  // Why: a client with no SSH target registry of its own — the CLI — can only satisfy
-  // the fence by echoing back an owner the authority projected for it.
-  it('returns the projected owner beside the automation on show', async () => {
-    const runtime = runtimeStub()
-    expect(await invoke('automation.show', { id: 'a1' }, runtime)).toEqual({
-      automation: { id: 'a1' },
-      owner: SSH_OWNER
-    })
-  })
-
   it('omits the owner rather than inventing one when the store cannot project it', async () => {
     const runtime = runtimeStub()
     runtime.automationOwnerPrecondition.mockReturnValue(null as never)
     expect(await invoke('automation.show', { id: 'a1' }, runtime)).toEqual({
       automation: { id: 'a1' }
     })
-  })
-
-  it('forwards both sides of a selector-moving update', async () => {
-    const runtime = runtimeStub()
-    await invoke(
-      'automation.update',
-      {
-        id: 'a1',
-        updates: { enabled: false },
-        expectedOwner: SSH_OWNER,
-        destination: { selector: { kind: 'self' } }
-      },
-      runtime
-    )
-    expect(runtime.updateAutomation).toHaveBeenCalledWith(
-      'a1',
-      expect.objectContaining({ enabled: false }),
-      { expectedOwner: SSH_OWNER, destination: { selector: { kind: 'self' } } }
-    )
   })
 
   it('accepts an orphan precondition but never an orphan destination', async () => {

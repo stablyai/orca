@@ -11,6 +11,9 @@ export function createWebAppApi(): Partial<PreloadApi> {
       // Browser preferences do not use the desktop profile writer.
       isProfileStateSaveDelayed: () => Promise.resolve(false),
       onProfileStateSaveDelayChanged: () => () => undefined,
+      getWindowsAdministratorStatus: () => Promise.resolve(null),
+      restartAsAdministrator: () =>
+        Promise.reject(new Error('Administrator restart requires the Windows desktop app.')),
       getIdentity: () =>
         Promise.resolve({
           name: 'Orca',
@@ -22,6 +25,7 @@ export function createWebAppApi(): Partial<PreloadApi> {
           dockBadgeLabel: null
         }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
+      setWindowMaterialSuppressed: () => Promise.resolve(),
       relaunch: () => Promise.resolve(window.location.reload()),
       restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),

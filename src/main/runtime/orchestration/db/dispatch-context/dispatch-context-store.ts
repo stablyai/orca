@@ -10,16 +10,19 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
 import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
+import { assertTakesNewWork } from '../worker-terminal/worker-terminal-transfer'
 
 export function createDispatchContext(
   this: OrchestrationDb,
   params: {
     taskId: string
     assigneeHandle: string
-    // Why: pane key is the remint-stable identity behind the handle — lets worker_done ownership survive handle reissue.
+    // Pane identity survives handle reissue, preserving worker_done authority.
     assigneePaneKey?: string
     launchTokenHash?: string
     processIncarnation?: string
+    /** The assignee's serialized host scope, matching its worker-terminal custody row. */
+    hostScope?: string | null
     /** Who is dispatching, for nesting depth. Required so a new caller must decide. */
     creator: DispatchCreator
     maxDepth: number
@@ -39,16 +42,9 @@ export function createDispatchContext(
     )
   }
 
-  // Why: lock on pane identity too, so a reminted handle can't open a second concurrent dispatch on the same pane.
-  const existing = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
+  assertTakesNewWork(this, params, taskId)
 
-  if (existing) {
-    throw new Error(
-      `Terminal ${assigneeHandle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
-    )
-  }
-
-  // Carry forward failure_count so the circuit breaker accumulates across retries for the same task.
+  // Accumulate failure_count across task retries.
   const prior = this.db
     .prepare('SELECT MAX(failure_count) as max_failures FROM dispatch_contexts WHERE task_id = ?')
     .get(taskId) as { max_failures: number | null } | undefined
@@ -86,8 +82,7 @@ export function createDispatchContext(
           `Terminal ${assigneeHandle} already has an active dispatch (${occupied.id} for task ${occupied.task_id})`
         )
       }
-      // Why: the atomic claim lost to a concurrent status change; report it with the same
-      // typed receipt as the precheck so the loser can recover instead of reading runtime_error.
+      // Return the same typed rejection for a lost atomic claim as for a failed precheck.
       const message = `Task ${taskId} is ${current?.status ?? 'missing'}; only ready tasks can be dispatched`
       throw current
         ? taskNotStartableError(this, message, current)

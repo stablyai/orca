@@ -14,7 +14,7 @@ import {
   SESSION,
   TEARDOWN_CURRENT
 } from './structured-agent-session-restart-resume-test-harness'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const boundary = { operationId: 'clear', afterFence: 1, clearedAt: NOW }
 const clear: AgentJournalRenderItem = {
@@ -58,9 +58,10 @@ describe('restart offers after context clear', () => {
         sessionId: SESSION,
         session: {
           journal: journal([turnItem('old', 'running'), clear], [unknown]),
-          child: { fence: 2 }
+          child: { fence: 2, phase: 'ready' }
         },
         getRecord: value,
+        childWorkOpen: () => false,
         childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
@@ -78,8 +79,9 @@ describe('restart offers after context clear', () => {
     const turn = { ...turnItem('new-turn', 'running'), sequence: 6 }
     const offer = structuredAgentSessionWorkingAtStop({
       sessionId: SESSION,
-      session: { journal: journal([clear, turn]), child: { fence: 2 } },
+      session: { journal: journal([clear, turn]), child: { fence: 2, phase: 'ready' } },
       getRecord: () => currentRecord,
+      childWorkOpen: () => false,
       childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,

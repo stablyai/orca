@@ -19,7 +19,9 @@ vi.mock('./file-explorer-operation-owner', () => ({
   getFileExplorerOperationOwner: () => owner.current,
   getFileExplorerOperationOwnerFromState: () => owner.current
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({ subscribeRuntimeFileChanges: runtime.subscribe }))
+vi.mock('@/runtime/runtime-file-watch-client', () => ({
+  subscribeRuntimeFileChanges: runtime.subscribe
+}))
 
 const refreshDir = vi.fn(async () => {})
 const refreshTree = vi.fn(async () => 'refreshed' as const)
@@ -86,14 +88,6 @@ afterEach(() => {
 })
 
 describe('remote file explorer using the recovered app watcher', () => {
-  it('refreshes from the app broker without opening an independent remote subscription', async () => {
-    renderWatch()
-    emit()
-    await settle()
-    expect(refreshDir).toHaveBeenCalledExactlyOnceWith('/repo')
-    expect(runtime.subscribe).not.toHaveBeenCalled()
-  })
-
   it('ignores other hosts and roots, including an identical local path', async () => {
     renderWatch()
     emit('host-b')

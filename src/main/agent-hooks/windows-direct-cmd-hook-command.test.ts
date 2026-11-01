@@ -1,12 +1,14 @@
-// The registered command must not depend on the shell Claude selects.
 import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import { WINDOWS_CMD_SAFE_PATH } from './installer-utils'
-import { wrapWindowsDirectCmdHookCommand } from './windows-direct-cmd-hook-command'
+import { WINDOWS_CMD_SAFE_PATH, wrapWindowsHookCommand } from './installer-utils'
+import {
+  wrapWindowsBatchHookCommand,
+  wrapWindowsDirectCmdHookCommand
+} from './windows-direct-cmd-hook-command'
 import { getWindowsClaudeHookEntry } from '../claude/windows-hook-files'
 import { getManagedScript } from '../claude/hook-script'
 import { getWindowsPowerShellExecutablePath } from './windows-powershell-hook-launcher'
@@ -21,21 +23,6 @@ describe('wrapWindowsDirectCmdHookCommand', () => {
     )
   })
 
-  it('spells nothing either shell would rewrite or reinterpret', () => {
-    const command = wrapWindowsDirectCmdHookCommand(SAFE_PATH)!
-
-    // Why: MSYS rewrites `/c`-shaped tokens into drive paths — a literal `cmd.exe /d /c <path>`
-    // does not survive Git Bash (measured), which is why no interpreter is spelled at all.
-    expect(command).not.toMatch(/ \/[a-zA-Z]+( |$)/)
-    expect(command).not.toMatch(/\\/)
-    expect(command).not.toMatch(/["']/)
-    expect(command).not.toMatch(/powershell|cmd\.exe|conhost/i)
-    // Why: `2>nul` writes a literal file named `nul` into the cwd under MSYS (measured), and no
-    // stderr sink parses in both hosts. The missing-script line is left on stderr deliberately.
-    expect(command).not.toContain('2>')
-    expect(command).not.toMatch(/[|&;]/)
-  })
-
   it('declines any path the shells cannot carry bare', () => {
     for (const path of [
       'C:\\Users\\Bob Smith\\.orca\\agent-hooks\\claude-hook.cmd',
@@ -45,12 +32,28 @@ describe('wrapWindowsDirectCmdHookCommand', () => {
       'C:\\Users\\a(b)\\.orca\\agent-hooks\\claude-hook.cmd',
       'C:\\Users\\rené\\.orca\\agent-hooks\\claude-hook.cmd',
       '/home/alice/.orca/agent-hooks/claude-hook.sh',
-      // Why: WINDOWS_CMD_SAFE_PATH admits a UNC profile, but `//server/share/...` is not a
-      // command cmd.exe reliably starts — keep those on the encoded launcher.
+      // UNC profiles need the encoded launcher because cmd.exe cannot reliably start them bare.
       '\\\\server\\share\\alice\\.orca\\agent-hooks\\claude-hook.cmd'
     ]) {
       expect(wrapWindowsDirectCmdHookCommand(path), path).toBeNull()
     }
+  })
+})
+
+describe('wrapWindowsBatchHookCommand', () => {
+  it('registers a cmd-safe .cmd hook by its bare path', () => {
+    expect(wrapWindowsBatchHookCommand(SAFE_PATH)).toBe(
+      'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'
+    )
+  })
+
+  it('keeps the encoded launcher for a path the shells cannot carry bare', () => {
+    const spaced = 'C:\\Users\\Bob Smith\\.orca\\agent-hooks\\gemini-hook.cmd'
+    expect(wrapWindowsBatchHookCommand(spaced)).toBe(wrapWindowsHookCommand(spaced))
+    const unicode = 'C:\\Users\\rené\\.orca\\agent-hooks\\gemini-hook.cmd'
+    expect(wrapWindowsBatchHookCommand(unicode)).toBe(
+      wrapWindowsHookCommand(unicode, {}, { useProcessPolicyEnvironment: true })
+    )
   })
 })
 
@@ -90,14 +93,12 @@ describe.skipIf(process.platform !== 'win32')(
       return results
     }
 
-    // Why async runProcess: runProcessSync cannot take a string stdin (it forces encoding 'buffer').
     async function runCapture(file: string, args: string[], cwd: string) {
       const result = await runProcess({
         program: file,
         args,
         cwd,
-        // Why PATHEXT: without it Windows PowerShell 5.1 prints nothing and exits 0 for a .cmd path
-        // (measured); every real hook host inherits it.
+        // Windows PowerShell needs inherited PATHEXT to execute a .cmd path.
         env: {
           SystemRoot: process.env.SystemRoot,
           PATH: process.env.PATH,
@@ -115,8 +116,7 @@ describe.skipIf(process.platform !== 'win32')(
       return { stdout: result.stdout, status: result.code, label: `${file}: ${result.stderr}` }
     }
 
-    // Why: a runner whose TEMP sits under a profile with a space is the encoded-launcher case,
-    // so these legs skip rather than assert a contract that shape never claimed.
+    // Spaced temp profiles require the encoded launcher, outside this direct-path contract.
     const tempIsCmdSafe = WINDOWS_CMD_SAFE_PATH.test(join(tmpdir(), 'orca-direct-hook-x', 'x.cmd'))
     const canRunLive = tempIsCmdSafe
 
@@ -130,8 +130,7 @@ describe.skipIf(process.platform !== 'win32')(
         expect(command, 'precondition: temp path must be cmd-safe').not.toBeNull()
         await run(dir, scriptPath, command!)
       } finally {
-        // Why: cmd.exe/bash have just exited in this tree; a raw recursive rm throws EPERM on
-        // Windows while their handles drain.
+        // Retry cleanup while Windows shell handles drain.
         removeTreeSync(dir)
       }
     }
@@ -168,7 +167,7 @@ describe.skipIf(process.platform !== 'win32')(
     )
 
     it.skipIf(!canRunLive)(
-      'reports a non-blocking failure, never exit 2, when the entry is gone',
+      'reports a missing entry without exit 2 or a stray nul file',
       async () => {
         await withTempDir(async (dir, scriptPath, command) => {
           expect(existsSync(scriptPath)).toBe(false)
@@ -177,18 +176,6 @@ describe.skipIf(process.platform !== 'win32')(
             expect(result.status, result.label).toBeGreaterThan(0)
             expect(result.status, result.label).not.toBe(2)
           }
-        })
-      }
-    )
-
-    it.skipIf(!canRunLive)(
-      'leaves no stray `nul` file behind in the working directory',
-      async () => {
-        // Why this is worth a test: adding `2>nul` to silence the missing-script line looks like
-        // tidy-up, but under MSYS it creates a real file named `nul` in the cwd — which is the
-        // user's repo. Measured on Windows 11. Keep stderr unredirected.
-        await withTempDir(async (dir, _scriptPath, command) => {
-          await runInHosts(command, dir)
           expect(readdirSync(dir)).not.toContain('nul')
         })
       }

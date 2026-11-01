@@ -4,17 +4,37 @@ import '@testing-library/jest-dom/vitest'
 
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  }),
+  openSender: vi.fn(() => {
+    throw new Error('Unexpected sender navigation in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: unusedChatLeaves.openSender
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
+})
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../../shared/agent-session-journal-item-key'
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from '../../../../shared/agent-session-journal-types'
-import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
+import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import { NativeChatMessageList } from './NativeChatMessageList'
@@ -94,9 +114,7 @@ describe('which transcript rows offer Rewind to here', () => {
         <NativeChatRewindContext.Provider value={REWIND}>
           <NativeChatMessageList
             session={{
-              messages: projectStructuredAgentSessionMessages(items, [], submissions, {
-                rejectedInPlace: true
-              }),
+              messages: projectStructuredAgentSessionMessages(items, [], submissions),
               status: 'ready',
               sessionId: 'session-1',
               agent: 'codex',

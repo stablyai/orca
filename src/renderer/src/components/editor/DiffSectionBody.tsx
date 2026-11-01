@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { DiffTooLargeNotice } from './DiffTooLargeNotice'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { editor } from 'monaco-editor'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
@@ -18,6 +19,14 @@ import {
 } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
+import { installCombinedDiffCursorReveal } from './combined-diff-cursor-reveal'
+import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
+import {
+  PLUGIN_SYNTAX_EDITOR_OPTIONS,
+  applyModelLanguage
+} from '@/lib/monaco-languages/plugin-syntax-editor-options'
+import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { monacoTypographyOptions, type EditorTypography } from '@/lib/editor-typography'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -32,10 +41,9 @@ type DiffSectionBodyProps = {
   language: string
   modelPathBase: string
   isEditable: boolean
-  diffEditorFontSize: number
+  typography: EditorTypography
   diffWordWrap?: boolean
   diffShowWhitespace?: boolean
-  editorFontFamily?: string
   onRetrySection: (index: number) => void
   onLoadDeferredSection: (index: number) => void
   onSaveLimitedDiff: () => void
@@ -50,31 +58,63 @@ export function DiffSectionBody({
   isBranchMode,
   sideBySide,
   isDark,
-  language,
+  language: coreLanguage,
   modelPathBase,
   isEditable,
-  diffEditorFontSize,
+  typography,
   diffWordWrap,
   diffShowWhitespace,
-  editorFontFamily,
   onRetrySection,
   onLoadDeferredSection,
   onSaveLimitedDiff,
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
+  const language = usePluginSyntaxLanguage(section.path, coreLanguage)
+  const monacoTheme = useMonacoTheme(isDark)
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const wordWrapOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const wordWrapMountFrameRef = useRef(0)
   const diffWordWrapRef = useRef(diffWordWrap)
+  // Why: @monaco-editor/react calls updateOptions whenever this object's identity changes.
+  const editorOptions = useMemo<editor.IDiffEditorConstructionOptions>(
+    () => ({
+      dropIntoEditor: { enabled: false },
+      // Native EditContext focus scrolls its hidden input into the combined viewport.
+      editContext: false,
+      readOnly: !isEditable,
+      originalEditable: false,
+      renderSideBySide: sideBySide,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
+      ...monacoTypographyOptions(typography),
+      lineNumbers: 'on',
+      ...buildDiffEditorWordWrapOptions(diffWordWrap),
+      ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
+      automaticLayout: true,
+      renderOverviewRuler: false,
+      scrollbar: combinedDiffSectionScrollbarOptions,
+      hideUnchangedRegions: { enabled: true },
+      find: monacoFindOptions
+    }),
+    [isEditable, sideBySide, typography, diffWordWrap, diffShowWhitespace]
+  )
   useLayoutEffect(() => {
     diffWordWrapRef.current = diffWordWrap
   }, [diffWordWrap])
+  useEffect(() => {
+    const models = diffEditorRef.current?.getModel()
+    applyModelLanguage([models?.original, models?.modified], language)
+  }, [language])
   const handleEditorMount: DiffOnMount = (diffEditor, monaco) => {
     diffEditorRef.current = diffEditor
+    applyModelLanguage([diffEditor.getModel()?.original, diffEditor.getModel()?.modified], language)
     const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(diffEditor)
+    const cleanupCursorReveal = installCombinedDiffCursorReveal(diffEditor)
     diffEditor.getModifiedEditor().onDidDispose(() => {
       cleanupShiftWheelScroll()
+      cleanupCursorReveal()
       if (diffEditorRef.current !== diffEditor) {
         return
       }
@@ -83,7 +123,7 @@ export function DiffSectionBody({
       wordWrapOptionsSubRef.current = null
       diffEditorRef.current = null
     })
-    // Why: Monaco applies the inline-layout wrap override after mount, once width is known.
+    // Monaco applies its inline wrap override after mount when width is known.
     wordWrapMountFrameRef.current = requestAnimationFrame(() => {
       if (diffEditorRef.current !== diffEditor) {
         return
@@ -152,7 +192,9 @@ export function DiffSectionBody({
           </Button>
         </div>
       ) : section.diffResult?.kind === 'binary' ? (
-        section.diffResult.isImage ? (
+        section.diffResult.tooLarge ? (
+          <DiffTooLargeNotice />
+        ) : section.diffResult.isImage ? (
           <ImageDiffViewer
             originalContent={section.diffResult.originalContent}
             modifiedContent={section.diffResult.modifiedContent}
@@ -207,34 +249,14 @@ export function DiffSectionBody({
           language={language}
           original={section.originalContent}
           modified={section.modifiedContent}
-          theme={isDark ? 'vs-dark' : 'vs'}
+          theme={monacoTheme}
           onMount={handleEditorMount}
-          // Why: @monaco-editor/react can dispose models before widget teardown.
-          // Keep them through unmount and dispose unattached models next tick.
+          // The React wrapper may dispose models before widgets; retain them through teardown and dispose unattached models next tick.
           originalModelPath={`${modelPathBase}:original`}
           modifiedModelPath={`${modelPathBase}:modified`}
           keepCurrentOriginalModel
           keepCurrentModifiedModel
-          options={{
-            dropIntoEditor: { enabled: false },
-            // Native EditContext focus scrolls its hidden input into the combined viewport.
-            editContext: false,
-            readOnly: !isEditable,
-            originalEditable: false,
-            renderSideBySide: sideBySide,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            fontSize: diffEditorFontSize,
-            fontFamily: editorFontFamily || 'monospace',
-            lineNumbers: 'on',
-            ...buildDiffEditorWordWrapOptions(diffWordWrap),
-            ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
-            automaticLayout: true,
-            renderOverviewRuler: false,
-            scrollbar: combinedDiffSectionScrollbarOptions,
-            hideUnchangedRegions: { enabled: true },
-            find: monacoFindOptions
-          }}
+          options={editorOptions}
         />
       )}
     </div>

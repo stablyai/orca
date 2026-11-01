@@ -50,8 +50,7 @@ export function SessionActionMenuItems({
   showJumpToWorktree: boolean
   jumpWorkspaceId?: string | null
   onJumpToWorktree?: () => void
-  // Absent for zero-turn sessions: copying a resume command that lands in an
-  // empty conversation would contradict the "not saved" state.
+  // Hide resume-command copy for zero-turn sessions; it would reopen an empty conversation despite not-saved status.
   onCopyResume?: () => void
   onCopyId: () => void
   onCopyPath?: () => void
@@ -80,8 +79,7 @@ export function SessionActionMenuItems({
       variant="destructive"
       disabled={Boolean(deleteBlockedReason)}
       onSelect={deleteBlockedReason ? undefined : onDelete}
-      // Also on aria-label, so a screen-reader user hears why Delete is
-      // disabled rather than only that it is.
+      // Expose Delete’s blocked reason to screen readers as well as tooltip users.
       aria-label={deleteBlockedReason ? `${deleteLabel}. ${deleteBlockedReason}` : undefined}
     >
       <Trash2 className="size-3.5" />
@@ -121,6 +119,7 @@ export function SessionActionMenuItems({
         </Item>
       ) : null}
       <AiVaultSessionSurfaceSwitchMenuItems
+        action="resume"
         menuKind={menuKind}
         tooltipSide={menuKind === 'context' ? 'right' : 'left'}
         onResumeInNewChat={onResumeInNewChat}
@@ -194,8 +193,7 @@ export function SessionActionMenuItems({
           {deleteBlockedReason ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                {/* A disabled item is pointer-events:none, so the trigger needs this
-               wrapper to receive hover (as WorktreeContextMenu does). */}
+                {/* Disabled items ignore pointer events; wrap for tooltip hover as WorktreeContextMenu does. */}
                 <div>{deleteItem}</div>
               </TooltipTrigger>
               <TooltipContent

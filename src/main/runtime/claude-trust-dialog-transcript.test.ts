@@ -1,11 +1,4 @@
-/**
- * Claude Code's first-launch trust dialog, replayed byte for byte from captured transcripts
- * (`__fixtures__/claude-dialog-trust-workspace*.txt`).
- *
- * The dialog parks the cursor on its highlighted option with a cursor-up, and the host's line tail
- * drops every row below the cursor — "Yes, I trust this folder" and "Enter to confirm". The
- * tui-idle poll therefore reads the runtime's rendered screen, which still shows them.
- */
+/** Cursor-up leaves trust options below the folded tail; readiness must inspect the rendered screen. */
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -35,7 +28,7 @@ async function waitOnReplay(
   vi.useFakeTimers()
   const bytes = Buffer.from(data, 'utf8')
   const step = readSize ?? bytes.length
-  // Why a streaming decoder: a PTY read can end inside a multi-byte character, as a real one does.
+  // PTY chunks can split multibyte characters.
   const decoder = new TextDecoder()
   for (let offset = 0; offset < bytes.length; offset += step) {
     const read = decoder.decode(bytes.subarray(offset, offset + step), { stream: true })
@@ -68,8 +61,7 @@ describe("Claude's workspace trust dialog, from captured transcripts", () => {
   })
 
   it('still reports it when the dialog arrives in the 1024-byte reads a live Claude produced', async () => {
-    // Why: the tail's plain path blanks each `text\r\r\n` line of a read that carries no
-    // cursor-up, so the opening question never survives there; the screen is unaffected.
+    // Plain text\r\r\n chunks lose the opening question in folded text; the screen retains it.
     await expect(waitOnReplay('claude-dialog-trust-workspace', 1024)).resolves.toMatchObject({
       satisfied: false,
       blockedReason: 'agent-trust-workspace'
@@ -89,8 +81,7 @@ describe("Claude's workspace trust dialog, from captured transcripts", () => {
   })
 
   it('does not report a working Claude blocked for quoting the dialog in its own output', async () => {
-    // Synthetic turn painted over the answered capture: a working title, then a diff of this
-    // dialog's wording just above the status line, where the rendered screen shows it.
+    // Synthetic quoted dialog wording over the answered capture must not become a live blocker.
     const quotedDiff = [
       '⏺ Update(src/main/runtime/claude-trust-dialog-transcript.test.ts)',
       '  ⎿  Added 3 lines',
@@ -101,7 +92,6 @@ describe("Claude's workspace trust dialog, from captured transcripts", () => {
     ]
       .map((line, index) => `\x1b[${27 + index};1H\x1b[2K${line}`)
       .join('')
-    // Why a timeout proves it: three poll ticks pass, and a working agent has nothing else to settle on.
     await expect(
       waitOnReplay('claude-dialog-trust-workspace-answered', 1024, {
         after: `\x1b]0;⠂ Claude Code\x07${quotedDiff}`,
@@ -111,9 +101,7 @@ describe("Claude's workspace trust dialog, from captured transcripts", () => {
   })
 })
 
-// A shell auto-title names Claude before Claude paints anything: oh-my-zsh sends the command
-// line as OSC 2 and then `claude` as OSC 1; fish's default is `claude <cwd>`. That bare name is
-// not a rest signal, so it must never let a launch type into the dialog below it.
+// zsh/fish title the command before its TUI mounts; bare Claude names must not release startup prompts.
 const OH_MY_ZSH_TITLES = ['\x1b]2;claude --dangerously-skip-permissions\x07', '\x1b]1;claude\x07']
 const FISH_TITLE = '\x1b]0;claude ~/p/repo\x07'
 // eslint-disable-next-line no-control-regex -- OSC title sequences are control characters
@@ -135,17 +123,12 @@ describe("Claude's trust dialog under a shell auto-title", () => {
       size,
       data: ''
     })
-    // Why after creation: the pane's own set-up awaits real timers.
     vi.useFakeTimers()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both resolvers are protected methods on the runtime; the spies only count calls.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver is a protected method on the runtime; the spy only counts calls.
     const internals = pane.runtime as unknown as {
-      resolveTuiIdleWaiters: (...args: unknown[]) => void
       resolvePtyTuiIdleWaiters: (...args: unknown[]) => void
     }
-    const titleResolves = [
-      vi.spyOn(internals, 'resolveTuiIdleWaiters'),
-      vi.spyOn(internals, 'resolvePtyTuiIdleWaiters')
-    ]
+    const titleResolves = [vi.spyOn(internals, 'resolvePtyTuiIdleWaiters')]
     const write = (chunk: string) =>
       pane.runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, chunk, Date.now())
     const paint = (bytes = data) => {
@@ -183,18 +166,16 @@ describe("Claude's trust dialog under a shell auto-title", () => {
     })
   })
 
-  // Why the resolver differs: the command-line title reads as `permission`, and a
-  // permission-to-idle step is not offered to waiters, so oh-my-zsh reaches the poll instead.
   it.each([
-    ['oh-my-zsh', OH_MY_ZSH_TITLES, false],
-    ['fish', [FISH_TITLE], true]
+    ['oh-my-zsh', OH_MY_ZSH_TITLES],
+    ['fish', [FISH_TITLE]]
   ])(
     'does not settle ready when the %s title arrives before the dialog paints',
-    async (_, titles, offered) => {
+    async (_, titles) => {
       const pane = await createPane()
       const { promise, settled } = pane.wait()
       titles.forEach(pane.write)
-      expect(pane.titleResolveCount() > 0).toBe(offered)
+      expect(pane.titleResolveCount()).toBeGreaterThan(0)
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       expect(settled).not.toHaveBeenCalled()
 
@@ -212,8 +193,7 @@ describe("Claude's trust dialog under a shell auto-title", () => {
     const { promise, settled } = pane.wait()
     pane.write('\x1b]1;claude\x07')
     const resolvesBeforeRestore = pane.titleResolveCount()
-    // A neutral title reads as the agent exiting; the probe finds `claude` still in front and
-    // restores the idle status, offering it to the waiters again.
+    // A neutral shell title triggers a foreground probe; Claude presence then restores idle.
     pane.write('\x1b]0;~/p/repo\x07')
     await vi.advanceTimersByTimeAsync(0)
     expect(pane.titleResolveCount()).toBeGreaterThan(resolvesBeforeRestore)

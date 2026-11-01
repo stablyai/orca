@@ -1,9 +1,11 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
 import {
   buildClaudeAgentTeamsLaunchPlan,
   ensureClaudeAgentTeamsShimDir,
@@ -32,7 +34,6 @@ describe('claude agent teams shim env', () => {
   it('builds native shim env only for direct Claude commands', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))
     roots.push(root)
-    // Why: the plan writes its tmux shim under ~/.orca.
     vi.stubEnv('HOME', root)
     vi.stubEnv('USERPROFILE', root)
     const cliName = process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev'
@@ -96,6 +97,33 @@ describe('claude agent teams shim env', () => {
     expect(resolveClaudeAgentTeamsShimBin({ PATH: root })).toBe(cliPath)
   })
 
+  it.skipIf(process.platform === 'win32')(
+    "prefers a headless host's CLI launcher over a GUI binary earlier on PATH",
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))
+      roots.push(root)
+      // Why: an AppImage puts its Electron binary, named like the CLI, first on PATH.
+      const electron = join(root, getOrcaCliCommandNameForPlatform(process.platform))
+      const launcher = join(root, 'cli', 'bin', 'orca')
+      await mkdir(dirname(launcher), { recursive: true })
+      for (const path of [electron, launcher]) {
+        await writeFile(path, '#!/usr/bin/env sh\n', 'utf8')
+        await chmod(path, 0o755)
+      }
+      installFakeAppEnvironment({ getCliLauncherPath: () => launcher })
+
+      expect(resolveClaudeAgentTeamsShimBin({ PATH: root })).toBe(launcher)
+      // An older leader pane re-running `orca claude-teams` carries its stale team env.
+      expect(
+        resolveClaudeAgentTeamsShimBin({
+          PATH: root,
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-old',
+          ORCA_AGENT_TEAMS_SHIM_BIN: electron
+        })
+      ).toBe(launcher)
+    }
+  )
+
   it('refuses to resolve a CLI through relative PATH entries or a bare override', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))
     roots.push(root)
@@ -107,12 +135,13 @@ describe('claude agent teams shim env', () => {
       }
     }
 
+    const relativeRoot = relative(process.cwd(), root)
+    expect(resolveClaudeAgentTeamsShimBin({ PATH: relativeRoot })).toBeNull()
     expect(resolveClaudeAgentTeamsShimBin({ PATH: '.' })).toBeNull()
     expect(resolveClaudeAgentTeamsShimBin({ PATH: '' })).toBeNull()
     expect(
       resolveClaudeAgentTeamsShimBin({ PATH: '.', ORCA_AGENT_TEAMS_SHIM_BIN: 'orca' })
     ).toBeNull()
-    // Why: a bare override is still honored when it maps to a real absolute PATH entry.
     expect(resolveClaudeAgentTeamsShimBin({ PATH: root, ORCA_AGENT_TEAMS_SHIM_BIN: 'orca' })).toBe(
       join(root, 'orca')
     )
@@ -192,7 +221,7 @@ describe('claude agent teams shim env', () => {
 
     expect(script).not.toMatch(/^set "ORCA_AGENT_TEAMS_SHIM_BIN=orca/m)
     expect(script).toContain('if "%ORCA_SHIM_BIN:~1,1%"==":" goto :run')
-    // Why: `call` would re-expand `%2`-style tmux pane args as batch parameters.
+    // call would expand tmux %2 pane args as batch parameters.
     expect(script).toContain('\r\n"%ORCA_SHIM_BIN%" agent-teams-tmux %*\r\n')
     expect(script).toContain('exit /b 127')
   })

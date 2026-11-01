@@ -1,20 +1,12 @@
-// Clearing a macOS TCC row, plus the bundle id every row is keyed by. Shared because two remedies
-// must issue the identical `tccutil reset`: the computer-use helper's stale-grant reset and the
-// daemon folder-access fix (STA-7948), where clearing the row is what makes macOS ask again.
-
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
-/** Bounded so a wedged helper cannot hold a caller: neither binary prompts, so neither lingers. */
 const TCC_COMMAND_TIMEOUT_MS = 10_000
 
 export type MacosTccResetResult = { ok: true } | { ok: false; detail: string }
 
-/**
- * The bundle's `CFBundleIdentifier`, or null when it cannot be read — Info.plist is usually a
- * binary plist, so PlistBuddy is the only reader that works on both encodings.
- */
+/** PlistBuddy handles both binary and XML Info.plist encodings. */
 export async function readMacosBundleId(appBundlePath: string): Promise<string | null> {
   try {
     const result = await runProcess({
@@ -31,13 +23,7 @@ export async function readMacosBundleId(appBundlePath: string): Promise<string |
   }
 }
 
-/**
- * Clears the TCC row for one service and bundle id, so the next access re-prompts.
- *
- * Failure is data, not an exception: `tccutil` exits 64 and explains itself on stderr when
- * LaunchServices does not know the bundle id, which is the ordinary outcome for an app running
- * from an unregistered location.
- */
+/** Return tccutil failures as data; unregistered bundles commonly exit 64. */
 export async function resetMacosTccPermission(
   service: string,
   bundleId: string

@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+import { relayClockSkewMessage } from './relay-clock-skew-message'
 
 export function MobileRelayMintFailureNotice({
   failure,
@@ -88,10 +89,12 @@ export function MobileRelayMintFailureNotice({
                 'auto.components.mobile.MobileRelayMintFailureNotice.rateLimitedBody',
                 'Orca Relay is busy. Wait a minute and retry, or use LAN to pair over Tailscale or the same Wi‑Fi.'
               )
-            : translate(
-                'auto.components.mobile.MobileRelayMintFailureNotice.body',
-                'Retry, or use LAN to pair over Tailscale or the same Wi‑Fi.'
-              )
+            : failure.code === 'relay_clock_skew' && failure.clockOffsetMs !== undefined
+              ? relayClockSkewMessage(failure.clockOffsetMs)
+              : translate(
+                  'auto.components.mobile.MobileRelayMintFailureNotice.body',
+                  'Retry, or use LAN to pair over Tailscale or the same Wi‑Fi.'
+                )
 
   return (
     <div

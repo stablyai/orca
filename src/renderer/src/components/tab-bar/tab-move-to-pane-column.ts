@@ -1,13 +1,19 @@
 import { useAppStore } from '../../store'
 import type { TabSplitDirection } from '../../store/slices/tabs'
 import { mirrorWebRuntimeTabMove } from './web-runtime-tab-move-mirror'
+import {
+  isDesktopCreatedTabInFrameDrawnServerWorkspace,
+  serverTabCount
+} from '@/lib/frame-drawn-desktop-created-tabs'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { dropTabThroughLayoutOwner } from '../tab-group/tab-group-layout-owner-commands'
 
 type TabMovePaneColumnState = Pick<
   ReturnType<typeof useAppStore.getState>,
   'unifiedTabsByWorktree' | 'groupsByWorktree'
 >
 
-export function canMoveTabToNewPaneColumnFromState(
+function canMoveTabToNewPaneColumnFromState(
   state: TabMovePaneColumnState,
   unifiedTabId: string,
   groupId: string
@@ -23,9 +29,11 @@ export function canMoveTabToNewPaneColumnFromState(
     if (!group) {
       return false
     }
-    // Why: mirror dropUnifiedTab — splitting the only tab in a group onto an
-    // adjacent split pane is a layout no-op the store rejects.
-    return group.tabOrder.length > 1
+    // A group needs two server-owned tabs to split; desktop-only tabs cannot populate the server’s new group.
+    return (
+      !isDesktopCreatedTabInFrameDrawnServerWorkspace(worktreeId, unifiedTabId) &&
+      serverTabCount(worktreeId, group.tabOrder) > 1
+    )
   }
   return false
 }
@@ -47,6 +55,17 @@ export function moveTabToNewPaneColumn(args: {
   )?.[0]
   if (!worktreeId || !canMoveTabToNewPaneColumnFromState(state, args.unifiedTabId, args.groupId)) {
     return false
+  }
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    dropTabThroughLayoutOwner(worktreeId, {
+      kind: 'split',
+      tabId: args.unifiedTabId,
+      groupId: args.groupId,
+      direction: args.direction
+    })
+  ) {
+    return true
   }
   const moved = state.dropUnifiedTab(args.unifiedTabId, {
     groupId: args.groupId,

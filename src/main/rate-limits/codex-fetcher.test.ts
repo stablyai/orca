@@ -9,21 +9,29 @@ const {
   resolveCodexCommandMock,
   ptySpawnMock,
   isBackfillPendingMock,
-  startBackfillRecoveryMock
+  startBackfillRecoveryMock,
+  backfillGaveUpMock
 } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
   readFileMock: vi.fn(),
   resolveCodexCommandMock: vi.fn(),
   ptySpawnMock: vi.fn(),
   isBackfillPendingMock: vi.fn(() => false),
-  startBackfillRecoveryMock: vi.fn(() => Promise.resolve(null))
+  startBackfillRecoveryMock: vi.fn(() => Promise.resolve(null)),
+  backfillGaveUpMock: vi.fn(() => false)
 }))
 
+// Keep child-process assertions in this suite; worker transport is covered separately.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
 }))
 
-// The chokepoint is the seam: assertions see what the fetcher asked for, before shim resolution.
+// Observe spawn requests before npm-shim resolution.
 vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<typeof RunProcess>()),
   spawnProcess: (spec: { program: string; args?: readonly string[] }) =>
@@ -38,6 +46,9 @@ vi.mock('../codex-cli/command', () => ({
   resolveCodexCommand: resolveCodexCommandMock
 }))
 
+vi.mock('../wsl-interop-spawn-directory', () => ({
+  resolveWslInteropSpawnCwd: () => 'C:\\Windows'
+}))
 vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
@@ -47,11 +58,11 @@ vi.mock('../codex/codex-state-db', () => ({
 }))
 
 vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
-  startCodexStateDbBackfillRecoveryInBackground: startBackfillRecoveryMock
+  startCodexStateDbBackfillRecoveryInBackground: startBackfillRecoveryMock,
+  hasCodexStateDbBackfillRecoveryGivenUp: backfillGaveUpMock
 }))
 
-// Default to signed-in so the spawn paths under test still run; the auth gate
-// itself is covered by codex-auth-presence.test.ts and the no-auth case below.
+// Assume signed-in for spawn tests; codex-auth-presence.test.ts covers gating.
 vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(() => 'present')
 }))
@@ -70,8 +81,7 @@ function makeRpcChild() {
   }
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
-  // Why: like the real app-server, the fake dies on stdin EOF or a signal —
-  // the graceful shutdown path resolves only once the child reports exit.
+  // Graceful shutdown must wait for EOF/signal to produce exit, as real app-server does.
   const exitNow = (): void => {
     child.exitCode = 0
     child.emit('exit', 0, null)
@@ -115,7 +125,7 @@ function mockBackendUsage(): void {
   readFileMock.mockResolvedValue(
     JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
   )
-  // A Response body reads once; usage and reset credits each fetch.
+  // Response bodies are single-use; usage and credit reset need separate fixtures.
   vi.mocked(fetch).mockImplementation(
     async () =>
       new Response(
@@ -139,6 +149,7 @@ describe('fetchCodexRateLimits', () => {
     vi.mocked(probeCodexAuthPresence).mockResolvedValue('present')
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
     isBackfillPendingMock.mockReturnValue(false)
+    backfillGaveUpMock.mockReturnValue(false)
     vi.stubGlobal('fetch', vi.fn())
   })
 
@@ -171,6 +182,36 @@ describe('fetchCodexRateLimits', () => {
     expect(startBackfillRecoveryMock).toHaveBeenCalledWith('/managed-home')
     expect(childSpawnMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('reads HTTP usage while a state-DB backfill is pending', async () => {
+    isBackfillPendingMock.mockReturnValue(true)
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
+    )
+    vi.mocked(fetch).mockResolvedValue(
+      Response.json({
+        plan_type: 'plus',
+        rate_limit: { primary_window: { used_percent: 12, limit_window_seconds: 3_600 } }
+      })
+    )
+
+    await expect(fetchCodexRateLimits({ codexHomePath: '/managed-home' })).resolves.toMatchObject({
+      status: 'ok',
+      session: { usedPercent: 12 }
+    })
+    expect(startBackfillRecoveryMock).toHaveBeenCalledWith('/managed-home')
+    expect(childSpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('stops promising a refresh once backfill recovery has given up', async () => {
+    isBackfillPendingMock.mockReturnValue(true)
+    backfillGaveUpMock.mockReturnValue(true)
+
+    const result = await fetchCodexRateLimits({ codexHomePath: '/managed-home' })
+
+    expect(result.error).toContain('could not rebuild')
+    expect(result.error).toContain('CODEX_HOME')
   })
 
   it('preserves the aborted result when cancellation lands during the auth check', async () => {
@@ -320,7 +361,7 @@ describe('fetchCodexRateLimits', () => {
     childSpawnMock.mockReturnValue(rpcChild)
 
     const resultPromise = fetchCodexRateLimits()
-    // Why: without an initialize response only the 30s boot deadline fires.
+    // No initialize response means only the boot deadline can settle this request.
     await vi.advanceTimersByTimeAsync(30_000)
 
     await expect(resultPromise).resolves.toMatchObject({
@@ -672,7 +713,7 @@ describe('fetchCodexRateLimits', () => {
       expect(shellCommand).not.toContain('wsl-codex-path')
       expect(spawnOptions).toEqual(
         expect.objectContaining({
-          cwd: expect.stringContaining('rate-limit-pty-cwd'),
+          cwd: 'C:\\Windows',
           env: expect.not.objectContaining({ CODEX_HOME: expect.anything() })
         })
       )

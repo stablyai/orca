@@ -1,10 +1,9 @@
-// A Codex child that exits, or that Stop ends, while `/compact` runs, observed the way the shipping
-// adapter observes it: the app-server connection's own exit, not a hand-fed compaction result.
+// Exercise real adapter connection exits/Stop during compact; fake only the Codex child, never its compaction result.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../ipc/desktop-renderer-runtime-capabilities'
-import { structuredAgentSessionCommandTurn } from '../native-chat/agent-session-wire/structured-agent-session-command-turn'
+import { structuredAgentSessionCommandTurn } from '../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { ensureStructuredAgentSessionHost } from './structured-agent-session-runtime'
 import {
   openStructuredCodexRpcHarness,
@@ -146,8 +145,11 @@ it('ends a command Codex has not opened a turn for by stopping its child, and th
 
   expect(first.closed).toBe(true)
   expect(first.calls.some((entry) => entry.method === 'turn/interrupt')).toBe(false)
-  const turn = (await snapshot()).items.find((item) => item.itemId === itemId)
-  expect(readAgentJournalTurn(turn?.body)?.state).toBe('interrupted')
+  // The child's end, the Stop's second step, settles the command's turn.
+  await vi.waitFor(async () => {
+    const turn = (await snapshot()).items.find((item) => item.itemId === itemId)
+    expect(readAgentJournalTurn(turn?.body)?.state).toBe('interrupted')
+  })
   await send('after the stop')
   await vi.waitFor(() => expect(calls('turn/start')).toHaveLength(1))
   expect(calls('turn/start')[0]).not.toBe(first)

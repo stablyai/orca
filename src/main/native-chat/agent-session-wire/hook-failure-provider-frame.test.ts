@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { projectStructuredItemToNativeChat } from '../../../shared/structured-agent-session-projection'
+import { projectStructuredItemToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { unhandledProviderFrameJournalItem } from './unhandled-provider-frame'
 
 const CODEX_KIND = 'notification:hook/completed'
@@ -172,7 +172,7 @@ describe('failed hook provider frames', () => {
     ).toBeNull()
   })
 
-  it('bounds long hook error text and raw Details through the existing payload limits', () => {
+  it('keeps long hook error text whole and bounds only the raw Details', () => {
     const row = unhandledProviderFrameJournalItem(
       'codex',
       CODEX_KIND,
@@ -181,8 +181,7 @@ describe('failed hook provider frames', () => {
       },
       { inlineHeadBytes: 64 }
     )
-    expect(row?.body.text).toContain('Codex hook failed: ')
-    expect(row?.body.text).toContain('[Orca: output truncated')
+    expect(row?.body.text).toBe(`Codex hook failed: ${'x'.repeat(1000)}`)
     expect(row?.body.providerFrame?.payload).toMatchObject({ truncated: true })
     expect(
       Buffer.byteLength(row?.body.providerFrame?.payload.head ?? '', 'utf8')

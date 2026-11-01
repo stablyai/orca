@@ -13,23 +13,25 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-routing', () => ({
   getRuntimeFileReadScope: vi.fn(
     (
       settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined,
       connectionId?: string
     ) => connectionId ?? settings?.activeRuntimeEnvironmentId ?? null
-  ),
-  readRuntimeFileContent: mocks.readRuntimeFileContent,
-  subscribeRuntimeFileChanges: vi.fn()
+  )
 }))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFileContent: mocks.readRuntimeFileContent
+}))
+vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: vi.fn(),
   getRuntimeGitCommitDiff: vi.fn(),
-  getRuntimeGitDiff: vi.fn(),
-  getRuntimeGitScope: vi.fn(() => null)
+  getRuntimeGitDiff: vi.fn()
 }))
+vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(() => null),
@@ -43,7 +45,12 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
 }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
+}))
 
 vi.mock('./useEditorPanelExternalContentEvents', () => ({
   useEditorPanelExternalContentEvents: vi.fn(),
@@ -88,7 +95,7 @@ describe('restored client-local editor tabs', () => {
 
   beforeEach(() => {
     latestFileContents = {}
-    // Why an empty fs API: restoring must read with nothing re-granted or prepared first.
+    // Restored reads must work without re-granting or preparing file access.
     vi.stubGlobal('api', { fs: {} })
     mocks.readRuntimeFileContent.mockReset()
     mocks.readRuntimeFileContent.mockResolvedValue({ content: '# local', isBinary: false })

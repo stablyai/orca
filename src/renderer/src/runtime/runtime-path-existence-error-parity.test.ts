@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { runtimePathsExist } from './runtime-path-existence-batch'
-import { runtimePathExists } from './runtime-file-metadata-client'
+import { isMissingRuntimePathError, runtimePathExists } from './runtime-file-metadata-client'
 import {
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall,
@@ -77,3 +77,12 @@ for (const stage of ['status', 'operation'] as const) {
     }
   })
 }
+
+it('reads an older host ENOTDIR as missing, but not a file merely named after it', () => {
+  expect(
+    isMissingRuntimePathError(new Error("ENOTDIR: not a directory, stat '/r/a.txt/b.txt'"))
+  ).toBe(true)
+  expect(
+    isMissingRuntimePathError(new Error("EACCES: permission denied, stat '/r/enotdir-handling.ts'"))
+  ).toBe(false)
+})

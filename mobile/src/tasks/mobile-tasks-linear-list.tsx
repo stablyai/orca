@@ -1,17 +1,18 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   View,
-  ActivityIndicator,
   colors,
   Text,
   ScrollView,
   spacing,
   Pressable,
-  triggerMediumImpact,
   ChevronDown,
   FlatList,
-  TaskProviderLogo
+  TaskProviderLogo,
+  type MobileColorScheme
 } from './mobile-tasks-dependencies'
+import { renderMobileTasksListState } from './mobile-tasks-list-state'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
   createLinearTask,
@@ -19,36 +20,38 @@ import {
   linearIssueSecondaryParts,
   formatUpdatedAt
 } from './mobile-tasks-legacy-foundation'
+import { pressedStyle } from '../theme/mobile-theme'
 
-export function renderMobileTasksLinearList(model: ConnectionPresentationModel) {
+export function renderMobileTasksLinearList(
+  model: ConnectionPresentationModel,
+  colorScheme: MobileColorScheme,
+  bottomBarHeight: number
+) {
   const {
     effectiveLinearDisplayProperties,
-    emptyLabel,
     insets,
     linearBoardSections,
     linearIssuesForView,
     linearListEntries,
     linearViewMode,
-    loading,
     mutatingStatus,
     refreshTasks,
     refreshing,
     setActionItem,
     setLinearStatusPickerItem
   } = model
-  return loading ? (
-    <View style={styles.centered}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
-    </View>
-  ) : linearIssuesForView.length === 0 ? (
-    <View style={styles.centered}>
-      <Text style={styles.emptyText}>{emptyLabel}</Text>
-    </View>
-  ) : linearViewMode === 'board' ? (
+  const listState = renderMobileTasksListState(model, linearIssuesForView.length, bottomBarHeight)
+  if (listState) {
+    return listState
+  }
+  return linearViewMode === 'board' ? (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={[styles.boardContainer, { paddingBottom: spacing.lg + insets.bottom }]}
+      contentContainerStyle={[
+        styles.boardContainer,
+        { paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight) }
+      ]}
     >
       {linearBoardSections.map((section) => (
         <View key={section.key} style={styles.boardColumn}>
@@ -65,7 +68,6 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
                 key={issue.id}
                 style={({ pressed }) => [styles.boardCard, pressed && styles.taskRowPressed]}
                 onPress={() => {
-                  triggerMediumImpact()
                   setActionItem(
                     createLinearTask(issue) as Extract<TaskItem, { provider: 'linear' }>
                   )
@@ -79,13 +81,22 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
                 </Text>
                 {effectiveLinearDisplayProperties.has('state') ? (
                   <Pressable
-                    style={[styles.statusPillSelf, styles.linearStatePill]}
+                    style={({ pressed }) => [
+                      styles.statusPillSelf,
+                      styles.linearStatePill,
+                      pressed && pressedStyle
+                    ]}
                     disabled={mutatingStatus}
                     accessibilityRole="button"
-                    accessibilityLabel={`Change status from ${issue.state.name}`}
+                    accessibilityLabel={translate(
+                      'tasks.linearList.changeStatusFrom',
+                      'Change status from {{status}}',
+                      {
+                        status: issue.state.name
+                      }
+                    )}
                     onPress={(event) => {
                       event.stopPropagation()
-                      triggerMediumImpact()
                       setLinearStatusPickerItem(
                         createLinearTask(issue) as Extract<TaskItem, { provider: 'linear' }>
                       )
@@ -112,6 +123,7 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
   ) : (
     <FlatList
       data={linearListEntries}
+      extraData={colorScheme}
       keyExtractor={(entry) =>
         entry.type === 'section' ? `linear-section:${entry.section.key}` : entry.issue.id
       }
@@ -120,7 +132,10 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
           <View style={styles.separator} />
         )
       }
-      contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
+      contentContainerStyle={[
+        styles.list,
+        { paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight) }
+      ]}
       refreshing={refreshing}
       onRefresh={refreshTasks}
       renderItem={({ item: entry }) => {
@@ -141,7 +156,6 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
           <Pressable
             style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
             onPress={() => {
-              triggerMediumImpact()
               setActionItem(linearTask)
             }}
           >
@@ -167,13 +181,22 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
             <View style={styles.linearListTrailing}>
               {effectiveLinearDisplayProperties.has('state') ? (
                 <Pressable
-                  style={[styles.statusPill, styles.linearStatePill]}
+                  style={({ pressed }) => [
+                    styles.statusPill,
+                    styles.linearStatePill,
+                    pressed && pressedStyle
+                  ]}
                   disabled={mutatingStatus}
                   accessibilityRole="button"
-                  accessibilityLabel={`Change status from ${issue.state.name}`}
+                  accessibilityLabel={translate(
+                    'tasks.linearList.changeStatusFrom',
+                    'Change status from {{status}}',
+                    {
+                      status: issue.state.name
+                    }
+                  )}
                   onPress={(event) => {
                     event.stopPropagation()
-                    triggerMediumImpact()
                     setLinearStatusPickerItem(linearTask)
                   }}
                 >

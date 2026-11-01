@@ -3,6 +3,30 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { resolveWorktreeRowOpenInRuntimeOwner } from './worktree-row-open-in-owner'
 import { getExternalEditorOpenCapability } from './external-editor-open-capability'
 import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from './local-path-open-guard'
+import { OWNER_RESOLUTION_CASES } from './runtime-owner-alias-matrix.test-fixture'
+
+describe('an unhosted row resolves through the fold adapter', () => {
+  const caseState = (name: string) => OWNER_RESOLUTION_CASES.find((c) => c.name === name)!.state
+  const row = (id: string, repoId: string) => ({ id, repoId, hostId: undefined })
+
+  it('leaves a git twin unresolved instead of launching it as this desktop checkout', () => {
+    expect(
+      resolveWorktreeRowOpenInRuntimeOwner(
+        caseState('focused | projected-twin::wt'),
+        row('projected-twin::wt', 'projected-twin')
+      ).ownerUnresolved
+    ).toBe(true)
+  })
+
+  it('routes a row whose only repo row is a server proxying its target through that server', () => {
+    expect(
+      resolveWorktreeRowOpenInRuntimeOwner(
+        caseState('focused | stale-hub-repo::wt'),
+        row('stale-hub-repo::wt', 'stale-hub-repo')
+      )
+    ).toEqual({ runtimeEnvironmentId: 'hub-env', connectionId: null, ownerUnresolved: false })
+  })
+})
 
 const WORKTREE_ID = 'repo-1::/srv/worktree'
 

@@ -4,8 +4,7 @@ import { useAppStore } from '@/store'
 import { structuredChatTabBySessionId } from '@/lib/structured-chat-tab-index'
 import { useStructuredConversationName } from '@/runtime/structured-conversation-name'
 
-/** A native row reads the same name as the chat's tab; the host's row title is the fallback for a
- *  chat its host has not published this run, such as one closed before a restart. */
+/** Native rows use live saved names, falling back to authoritative host titles across closed tabs and restarts. */
 export function useAiVaultSessionDisplayTitle(session: AiVaultSession): string {
   const owner = session.structuredSession
   const customLabel = useAppStore((state) => {

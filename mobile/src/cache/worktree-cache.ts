@@ -1,12 +1,9 @@
-// Why: module-level cache lets the home screen pre-populate worktree data
-// so the host detail page can render instantly on navigation instead of
-// waiting for a fresh RPC connection + fetch cycle.
+// Home seeds module cache so host detail renders before reconnect/fetch.
 
 type CachedWorktrees = {
   worktrees: unknown[]
   at: number
-  // Whether the host itself listed these rows this session, as opposed to a cold-start seed
-  // rebuilt from a persisted snapshot. Only a proven list can prove a worktree *absent*.
+  // Only live host-listed rows can prove absence; persisted cold-start seeds cannot.
   proven: boolean
 }
 
@@ -20,17 +17,13 @@ export function setCachedWorktrees(
   worktrees: unknown[],
   options?: { proven?: boolean }
 ): void {
-  // Why: a cold-start snapshot seed landing after a live worktree.ps must not erase
-  // the proof — or truncate the host-listed rows — the resume check depends on.
+  // Late cold-start seed must neither erase proof nor truncate live host-listed rows used by Resume.
   if (options?.proven !== true && readFreshEntry(hostId)?.proven) {
     return
   }
-  // Why: Map.set on an existing key does not move it to the end of iteration
-  // order. Delete first so the re-inserted key becomes the newest entry,
-  // giving us true LRU eviction when the cap is hit.
+  // Delete before Map.set to move key to newest position for LRU eviction.
   cache.delete(hostId)
-  // Default false: a caller that has not said where the rows came from must never be taken
-  // as grounds for redirecting the user away from a workspace.
+  // Default unproven: unknown row origin cannot justify redirecting user from workspace.
   cache.set(hostId, { worktrees, at: Date.now(), proven: options?.proven === true })
   if (cache.size > MAX_ENTRIES) {
     const oldest = cache.keys().next().value
@@ -44,8 +37,7 @@ export function getCachedWorktrees(hostId: string): unknown[] | null {
   return readFreshEntry(hostId)?.worktrees ?? null
 }
 
-/** The rows only when the host listed them itself — null whenever absence cannot be trusted,
- *  which is every unproven or expired entry. */
+// Return live host-listed rows only; expired/unproven entries cannot establish absence.
 export function getProvenCachedWorktrees(hostId: string): unknown[] | null {
   const entry = readFreshEntry(hostId)
   return entry?.proven ? entry.worktrees : null

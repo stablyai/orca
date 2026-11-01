@@ -8,7 +8,12 @@ import {
   encodeTerminalStreamFrame
 } from '../../../../shared/terminal-stream-protocol'
 import { flushAsyncTicks, writeHeadlessTerminal } from './pty-connection-test-async'
-import { createMockTransport, createPane, createManager } from './pty-connection-test-pane-fixtures'
+import {
+  terminalWriteText,
+  createMockTransport,
+  createPane,
+  createManager
+} from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
 import type { PtyReplayDataMeta } from './pty-transport-types'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
@@ -18,12 +23,9 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
-// Why this suite: remote-snapshot-alt-screen-replay.test.ts hand-writes the replay meta, and
-// once fed a shape the host never sends. Here every input is produced by the real code:
-// the host runtime's headless model and shell-ownership proof, its ack-recovery publisher,
-// the wire codec, the client multiplexer, and the remote transport. Only the hand-off from
-// the transport's onReplayData into the pane's callback is wired by the test.
+// Drive host model/ownership, ACK recovery, codec, multiplexer and transport together; only the final pane callback is test-wired so impossible handcrafted metadata cannot pass.
 
 const { scheduleRuntimeGraphSync, shouldSeedCacheTimerOnInitialTitle, toastInfo } = vi.hoisted(
   () => ({
@@ -112,6 +114,8 @@ type HostStream = {
   ackPendingOutput: unknown[]
   ackPendingOutputBytes: number
   ackPendingOutputOverflowed: boolean
+  yieldedQueries: unknown[]
+  outputBatcher: { push: () => void; flush: () => void; dispose: () => void }
 }
 type HostConnection = {
   runtime: HostRuntime
@@ -159,24 +163,50 @@ async function render(events: PaneEvent[]): Promise<Terminal> {
   return term
 }
 
+type HostModules = {
+  OrcaRuntimeService: new (store: null) => HostRuntime
+  sendSnapshotFrames: (send: HostSendFrame, options: Record<string, unknown>) => unknown
+  serializeBudgetedRequestedSnapshot: (
+    runtime: HostRuntime,
+    ptyId: string,
+    scrollbackRows: number
+  ) => Promise<HostSnapshot | null>
+  installMultiplexFlowControl: (build: HostConnection) => void
+}
+
+async function loadHostModules(): Promise<HostModules> {
+  const [runtime, publication, flowControl] = await Promise.all([
+    vi.importActual<Pick<HostModules, 'OrcaRuntimeService'>>(
+      '../../../../main/runtime/orca-runtime'
+    ),
+    vi.importActual<Pick<HostModules, 'sendSnapshotFrames' | 'serializeBudgetedRequestedSnapshot'>>(
+      '../../../../main/runtime/rpc/methods/terminal/terminal-snapshot-publication'
+    ),
+    vi.importActual<Pick<HostModules, 'installMultiplexFlowControl'>>(
+      '../../../../main/runtime/rpc/methods/terminal/terminal-multiplex-flow-control'
+    )
+  ])
+  return {
+    OrcaRuntimeService: runtime.OrcaRuntimeService,
+    sendSnapshotFrames: publication.sendSnapshotFrames,
+    serializeBudgetedRequestedSnapshot: publication.serializeBudgetedRequestedSnapshot,
+    installMultiplexFlowControl: flowControl.installMultiplexFlowControl
+  }
+}
+
+// Why module scope: collection has no per-hook timer for the main graph's slow cold load.
+const hostModules = await loadHostModules()
+
 /** Real host + client chain: returns what the remote transport hands the pane for the push. */
 async function publishHostRecovery(
   missed: string
 ): Promise<{ data: string; meta: PtyReplayDataMeta; published: HostSnapshot }> {
-  const { OrcaRuntimeService } = await vi.importActual<{
-    OrcaRuntimeService: new (store: null) => HostRuntime
-  }>('../../../../main/runtime/orca-runtime')
-  const { sendSnapshotFrames, serializeBudgetedRequestedSnapshot } = await vi.importActual<{
-    sendSnapshotFrames: (send: HostSendFrame, options: Record<string, unknown>) => unknown
-    serializeBudgetedRequestedSnapshot: (
-      runtime: HostRuntime,
-      ptyId: string,
-      scrollbackRows: number
-    ) => Promise<HostSnapshot | null>
-  }>('../../../../main/runtime/rpc/methods/terminal/terminal-snapshot-publication')
-  const { installMultiplexFlowControl } = await vi.importActual<{
-    installMultiplexFlowControl: (build: HostConnection) => void
-  }>('../../../../main/runtime/rpc/methods/terminal/terminal-multiplex-flow-control')
+  const {
+    OrcaRuntimeService,
+    sendSnapshotFrames,
+    serializeBudgetedRequestedSnapshot,
+    installMultiplexFlowControl
+  } = hostModules
 
   const host = new OrcaRuntimeService(null)
   host.setPtyController({
@@ -279,7 +309,9 @@ async function publishHostRecovery(
     ackOutputSourceRanges: false,
     ackPendingOutput: [],
     ackPendingOutputBytes: 0,
-    ackPendingOutputOverflowed: false
+    ackPendingOutputOverflowed: false,
+    yieldedQueries: [],
+    outputBatcher: { push: vi.fn(), flush: vi.fn(), dispose: vi.fn() }
   }
   const connection: HostConnection = {
     runtime: host,
@@ -301,13 +333,12 @@ async function publishHostRecovery(
 }
 
 describe('host-published recovery snapshot onto a live alt screen', () => {
-  beforeEach(() => {
-    vi.resetModules()
+  beforeEach(async () => {
     vi.clearAllMocks()
     transportFactoryQueue = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -330,7 +361,8 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     const pane = createPane(1)
     const events: PaneEvent[] = []
     const parseCallbacks: (() => void)[] = []
-    pane.terminal.write.mockImplementation((chunk: string, callback?: () => void) => {
+    pane.terminal.write.mockImplementation((chunk: string | Uint8Array, callback?: () => void) => {
+      chunk = terminalWriteText(chunk)
       if (chunk.length > 0) {
         events.push(chunk)
       }
@@ -344,8 +376,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
       events.push({ cols, rows })
     })
     const deps = buildPaneConnectionDeps(() => mockStoreState)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-    const binding = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
     await flushAsyncTicks(8)
     pane.terminal.cols = COLS
     pane.terminal.rows = ROWS
@@ -363,8 +394,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     return [...events, { cols: COLS, rows: ROWS }]
   }
 
-  // Why: while the TUI lives, the host publishes no owner, so the alt flag never reaches
-  // the client; the pane must keep the setup history the TUI's alt screen covers.
+  // Live TUIs may lack host owner metadata; retain their pre-TUI setup history beneath alt-screen paint.
   it('keeps the covered history for a live TUI exactly as the host holds it', async () => {
     const { data, meta, published } = await publishHostRecovery(AGENT_FRAME)
     expect(published.alternateScreen).toBe(true)
@@ -382,8 +412,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     }
   })
 
-  // Why: once the host's TUI exits, its image no longer enters alt; the pane must leave
-  // alt and show the host's normal screen.
+  // Host TUI exit requires leaving alt and painting authoritative normal content.
   it('repaints from the normal buffer once the host TUI has exited', async () => {
     const { data, meta } = await publishHostRecovery(AGENT_EXIT)
     // The ACK-overflow recovery replaces the pane's history with the host's.
@@ -403,8 +432,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     }
   })
 
-  // Why: inside the gap the TUI exited, the shell printed past the pane's history and a
-  // second TUI started; both ends are on alt, but the pane's normal buffer is stale.
+  // A TUI may exit and another start inside the gap; matching alt endpoints do not prove the pane’s normal history is current.
   it('replaces the normal history that changed between two alt-screen sessions', async () => {
     const missed = `\x1b[?1049l\r\n${Array.from({ length: 300 }, (_, i) => `MISSED-${i}`).join('\r\n')}\r\n$ next-agent${COMMAND_START}\x1b[?1049h\x1b[2J\x1b[HNEW-AGENT-FRAME`
     const { data, meta } = await publishHostRecovery(missed)

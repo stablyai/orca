@@ -48,7 +48,7 @@ test('registration resolves nested and linked paths to one existing project', as
   await waitForSessionReady(orcaPage)
   const result = await orcaPage.evaluate(
     async ({ repoPath, nestedPath }) => {
-      const results = []
+      const results: Awaited<ReturnType<typeof window.api.repos.add>>[] = []
       for (const path of [repoPath, nestedPath]) {
         results.push(await window.api.repos.add({ path }))
       }
@@ -89,8 +89,9 @@ test('real WSL registration preserves literal paths and fences login output', as
 }, testInfo) => {
   const distro = process.env.ORCA_REAL_WSL_DISTRO
   test.skip(process.platform !== 'win32' || !distro, 'Requires a real Windows WSL distro')
-  const { buildWslExecArgs, buildWslCapturedLoginShellCommand, quotePosixShell } =
+  const { buildWslExecArgs, buildWslCapturedLoginShellCommand } =
     await import('../../src/shared/wsl-login-shell-command')
+  const { quotePosixShell } = await import('../../src/shared/shell-argument-quoting')
   const root = `/tmp/or60risk/run-${Date.now()}`
   const repoPath = `${root}/repo-$literal space`
   const uncPath = `\\\\wsl.localhost\\${distro}${repoPath.replaceAll('/', '\\')}`

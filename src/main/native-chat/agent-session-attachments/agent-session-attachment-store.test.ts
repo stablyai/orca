@@ -48,7 +48,6 @@ describe('AgentSessionAttachmentStore', () => {
     expect(stored.path.startsWith(store.rootDir)).toBe(true)
     expect(stored.path.endsWith('screen shot.png')).toBe(true)
     expect(await readFile(stored.path, 'utf8')).toBe('png-bytes')
-    // The part file is gone once the name holds the whole file.
     expect(await readdir(join(stored.path, '..'))).toEqual(['screen shot.png'])
   })
 
@@ -184,7 +183,6 @@ describe('AgentSessionAttachmentStore', () => {
       byteLength: 3
     })
     const uploadDir = join(store.rootDir, uploadId)
-    // Deeper than a stored file: nothing the store wrote lives there.
     await mkdir(join(uploadDir, 'nested'), { recursive: true })
     await writeFile(join(uploadDir, 'nested', 'x.png'), 'x')
     await expect(store.readPreview(join(uploadDir, 'nested', 'x.png'))).rejects.toThrow(
@@ -216,13 +214,11 @@ describe('AgentSessionAttachmentStore', () => {
       contentBase64: big.toString('base64')
     })
     const stored = await store.commitUpload({ callerKey: caller, uploadId })
-    // The budget a remote reply gets: what the server's outbound limit leaves after the envelope.
+    // Remote replies must fit the post-envelope content budget.
     await expect(store.readPreview(stored.path, REMOTE_RPC_MAX_CONTENT_BYTES)).rejects.toThrow(
       'file_too_large'
     )
-    // A local read keeps the larger preview limit.
     await expect(store.readPreview(stored.path)).resolves.toMatchObject({ mimeType: 'image/png' })
-    // An image that fits the budget also fits the server's outbound limit once enveloped.
     const fits = await upload('fits.png', Buffer.alloc(2.5 * 1024 * 1024, 1))
     const preview = await store.readPreview(fits.path, REMOTE_RPC_MAX_CONTENT_BYTES)
     const reply = JSON.stringify({ id: 'request-1', ok: true, result: preview })

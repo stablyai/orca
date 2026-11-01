@@ -50,8 +50,6 @@ describe('scanAiVaultSessions Claude subagent pruning', () => {
     const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
 
     expect(result.issues).toEqual([])
-    // Only the parent session surfaces; the subagent transcript is not a row,
-    // but it is still counted for the row's "N subagents" affordance.
     expect(result.sessions).toHaveLength(1)
     expect(result.sessions[0]).toMatchObject({
       sessionId: 'claude-session',

@@ -179,5 +179,4 @@ describe.skipIf(process.platform === 'win32')('git admission storm measurement',
       assertAdmissionLedger(enabled)
     }
   )
-  // Real-git output parity remains in git-admission-output-parity.test.ts, including Windows.
 })

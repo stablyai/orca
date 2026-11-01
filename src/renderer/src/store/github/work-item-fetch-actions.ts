@@ -6,7 +6,7 @@ import type { WorkItemsCacheError } from './cache-model'
 import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../../shared/work-items'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 import { isGitHubWorkItemsQueryTooLarge } from '../slices/github-work-items-query-bounds'
-import { reconcileCatalogRows } from '../slices/repo-identity-reconcile'
+import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
 import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import { workItemsCacheKey, workItemsInflightRequestKey } from './cache-identity'
 import { isFresh, withBoundedCacheEntry, WORK_ITEMS_CACHE_TTL } from './cache-policy'
@@ -21,6 +21,7 @@ import { findRepoForGitHubOwner } from './repository-routing'
 import {
   getGitHubWorkItemRequestContext,
   getGitHubWorkItemSourceCacheScope,
+  getGitHubWorkItemRowHostId,
   getGitHubWorkItemSourceHostId,
   getWorkItemsCacheKeyForOwner,
   listGitHubWorkItemsForRepo,
@@ -89,8 +90,8 @@ export const createWorkItemFetchActions = (
     }
     const requestState = get()
     const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
-    const ownerHostId = getGitHubWorkItemSourceHostId(requestState, repo, options?.sourceContext)
-    const cacheScope = getGitHubWorkItemSourceCacheScope(requestState, repo, options?.sourceContext)
+    const ownerHostId = getGitHubWorkItemSourceHostId(repo, options?.sourceContext)
+    const cacheScope = getGitHubWorkItemSourceCacheScope(repo, options?.sourceContext)
     const key = workItemsCacheKey(repoId, limit, query, cacheScope)
     const cached = get().workItemsCache[key]
     if (!options?.force && isFresh(cached, WORK_ITEMS_CACHE_TTL)) {
@@ -116,11 +117,12 @@ export const createWorkItemFetchActions = (
       const weakerThanRequested =
         (options?.force && !existing.force) ||
         (options?.noCache && !existing.noCache) ||
-        (options?.requireComplete && !existing.requireComplete)
+        (options?.requireComplete && !existing.requireComplete) ||
+        (options?.wakeWslDistro && !existing.wakeWslDistro)
       if (!weakerThanRequested) {
         return existing.promise
       }
-      // Why: wait out one weaker request so peers can share the upgrade, but never twice — a steady stream of weaker callers would otherwise starve this one forever.
+      // Wait once for weaker requests to coalesce upgrades without starvation.
       if (waitedForUpgrade) {
         break
       }
@@ -135,10 +137,21 @@ export const createWorkItemFetchActions = (
         const envelope = await listGitHubWorkItemsForRepo(requestContext, {
           limit,
           query: query || undefined,
-          ...(options?.noCache ? { noCache: true } : {})
+          ...(options?.noCache ? { noCache: true } : {}),
+          ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
         })
         // Why: stamp repoId at the fetch boundary so downstream consumers can rely on it — main doesn't know Orca's Repo.id.
-        const items: GitHubWorkItem[] = envelope.items.map((item) => ({ ...item, repoId }))
+        const repoHostId = getGitHubWorkItemRowHostId(
+          requestState,
+          repoId,
+          repoPath,
+          options?.sourceContext
+        )
+        const items: GitHubWorkItem[] = envelope.items.map((item) => ({
+          ...item,
+          repoId,
+          ...(repoHostId ? { repoHostId } : {})
+        }))
         if (options?.requireComplete && (envelope.errors?.issues || envelope.errors?.prs)) {
           throw new Error('GitHub work-item fetch returned a partial result.')
         }
@@ -156,11 +169,7 @@ export const createWorkItemFetchActions = (
             ? { ...issuesError, source: envelope.sources.issues }
             : undefined
         const currentRepo = findRepoForGitHubOwner(get(), repoId, repoPath)
-        const currentHostId = getGitHubWorkItemSourceHostId(
-          get(),
-          currentRepo,
-          options?.sourceContext
-        )
+        const currentHostId = getGitHubWorkItemSourceHostId(currentRepo, options?.sourceContext)
         // Why: repo ownership changed, so this response belongs to an older execution-host bucket (host focus changes alone are fine).
         if ((currentHostId ?? null) !== (ownerHostId ?? null)) {
           return items
@@ -169,16 +178,11 @@ export const createWorkItemFetchActions = (
         if (get().workItemsInvalidationNonce !== requestInvalidationNonce) {
           return items
         }
-        // Why: a stronger request may have replaced us on this key while we were awaiting (a
-        // force-only caller still lets gh's own cache answer), so writing here would bury its
-        // fresher rows under a new fetchedAt and keep isFresh serving them for the whole TTL.
+        // Only current key owner writes: force-only still permits gh cache, so late weaker results would bury fresher rows under new fetchedAt for a full TTL.
         if (!ownsInflightRequest(inflightWorkItemsRequests, inflightKey, requestId)) {
           return items
         }
-        // Why: TaskPage useShallow-selects cache entry refs. A new { ...entry, fetchedAt }
-        // still remaps every visible row. IPC structuredClone rebuilds nested records, so
-        // data === previous.data never holds — reconcile structurally, then either mutate
-        // fetchedAt in place or write one entry that keeps unchanged row/meta refs.
+        // TaskPage shallow-selects entries; fresh wrappers remap rows even on no-op. IPC clones nested records, so reconcile structurally and preserve unchanged refs, mutating only fetchedAt for equal data.
         set((s) => {
           const previousEntry = s.workItemsCache[key]
           const previousData = previousEntry?.data ?? []
@@ -205,8 +209,7 @@ export const createWorkItemFetchActions = (
           const previousError = previousEntry?.error
           return {
             workItemsCache: withBoundedCacheEntry(s.workItemsCache, key, {
-              // Why: `reconciled` already is `previousEntry.data` when nothing changed —
-              // reconcileCatalogRows returns the previous array on a structural match.
+              // reconcileCatalogRows returns previous array on structural match.
               data: reconciled,
               fetchedAt: Date.now(),
               sources:
@@ -244,7 +247,8 @@ export const createWorkItemFetchActions = (
       requestId,
       force: Boolean(options?.force),
       noCache: Boolean(options?.noCache),
-      requireComplete: Boolean(options?.requireComplete)
+      requireComplete: Boolean(options?.requireComplete),
+      wakeWslDistro: Boolean(options?.wakeWslDistro)
     })
     return request
   }

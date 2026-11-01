@@ -1,4 +1,11 @@
-// Why: shared error codes for emulator (mirrors BrowserErrorCode in shared/runtime-types; used by bridge, runtime, dispatcher, CLI handlers, skill examples). Keep codes stable for agents.
+import {
+  emulatorCodedMessage,
+  matchEmulatorErrorCopy,
+  type EmulatorCodedMessage,
+  type EmulatorFailureCode
+} from '../../shared/emulator-failure-copy'
+
+// Keep error codes stable: agents and CLI callers depend on them.
 export class EmulatorError extends Error {
   code: EmulatorErrorCode
   constructor(code: EmulatorErrorCode, message: string) {
@@ -17,3 +24,23 @@ export type EmulatorErrorCode =
   | 'emulator_disabled'
   | 'emulator_unsupported'
   | 'emulator_error'
+
+/** Coded availability text for a caught setup error; non-Errors use the fallback sentence. */
+export function emulatorErrorCodedMessage(
+  error: unknown,
+  fallback: EmulatorFailureCode
+): EmulatorCodedMessage {
+  if (!(error instanceof Error)) {
+    return emulatorCodedMessage(fallback)
+  }
+  const copy =
+    error instanceof EmulatorError ? matchEmulatorErrorCopy(error.code, error.message) : null
+  if (!copy) {
+    return { message: error.message }
+  }
+  return {
+    message: error.message,
+    messageCode: copy.code,
+    ...(Object.keys(copy.params).length > 0 ? { messageParams: copy.params } : {})
+  }
+}

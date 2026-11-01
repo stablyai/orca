@@ -3,11 +3,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
 import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
 
-/**
- * Why a reattach can be ineligible. `not_durable` alone means memory already matched but the
- * binding was still waiting in the debounced save — the bucket that says whether skipping the
- * flush on a durable match is enough, or the autosave itself has to move off the main thread.
- */
+/** not_durable alone means memory matches and only the debounced save remains. */
 export type PtyBindingFastLaneMiss =
   | 'split'
   | 'legacy_leaf'
@@ -19,13 +15,16 @@ export type PtyBindingFastLaneMiss =
   | 'incarnation'
   | 'tombstone'
   | 'inactive_worktree'
+  | 'defaults_not_applied'
   | 'not_durable'
+  | 'startup_cwd'
 
 export type PtyBindingFastLaneRequest = {
   tabId: string
   leafId: string
   ptyId: string
   incarnationId?: string
+  correctStartupCwd?: string
   expectedSourceBinding?: unknown
 }
 
@@ -34,11 +33,7 @@ export type PtyBindingFastLaneVerdict = {
   misses: PtyBindingFastLaneMiss[]
 }
 
-/**
- * True only when `persistPtyBinding` would change nothing: the requested binding is already the
- * in-memory session's binding and that session is already on disk. Every miss falls through to
- * the write path, so the predicate must be at least as strict as the mutations it stands in for.
- */
+/** Skip mutation only when both memory and disk match every effect of persistPtyBinding. */
 export function evaluatePtyBindingFastLane(
   args: PtyBindingFastLaneRequest,
   session: WorkspaceSessionState,
@@ -57,6 +52,9 @@ export function evaluatePtyBindingFastLane(
     (candidate) => candidate.id === args.tabId
   )
   const layout = session.terminalLayoutsByTabId?.[args.tabId]
+  if (args.correctStartupCwd !== undefined && tab?.startupCwd !== args.correctStartupCwd) {
+    misses.push('startup_cwd')
+  }
   if (!tab) {
     misses.push('tab_missing')
   } else if (
@@ -74,7 +72,6 @@ export function evaluatePtyBindingFastLane(
       misses.push('leaf_pty')
     }
   }
-  // Strict: undefined on both sides matches, undefined on one side does not.
   if (session.terminalPtyIncarnationsByPaneKey?.[paneKey] !== args.incarnationId) {
     misses.push('incarnation')
   }
@@ -86,6 +83,10 @@ export function evaluatePtyBindingFastLane(
     !session.activeWorktreeIdsOnShutdown.includes(bindingWorktreeId)
   ) {
     misses.push('inactive_worktree')
+  }
+  // Missing guards still need repair even when the binding matches.
+  if (session.defaultTerminalTabsAppliedByWorktreeId?.[bindingWorktreeId] !== true) {
+    misses.push('defaults_not_applied')
   }
   if (!durable) {
     misses.push('not_durable')

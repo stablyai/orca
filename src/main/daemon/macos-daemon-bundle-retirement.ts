@@ -8,7 +8,7 @@ const LSREGISTER =
   '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
 let collectionInFlight: Promise<void> | null = null
 
-/** Deletes a copy unless any process still has a file in it open, mapped or as its executable. */
+/** Delete only after a complete lsof scan reports no users. */
 export async function retireUnusedMacDaemonCopy(directory: string): Promise<void> {
   try {
     const result = await runProcess({
@@ -17,8 +17,7 @@ export async function retireUnusedMacDaemonCopy(directory: string): Promise<void
       timeoutMs: 5_000,
       maxOutputBytes: 8192
     })
-    // `lsof +D` exits 1 even when it lists users (any closed file in the tree does that), so only
-    // empty stdout proves the copy unused; the remaining checks reject an incomplete scan.
+    // lsof may exit 1 with live users; require empty output and a complete scan before deletion.
     const unused =
       result.stdout.trim() === '' &&
       result.stderr.trim() === '' &&
@@ -28,7 +27,7 @@ export async function retireUnusedMacDaemonCopy(directory: string): Promise<void
     if (!unused) {
       return
     }
-    // Something that ran the executable directly may have registered the copy with LaunchServices.
+    // Direct execution may register this copy with LaunchServices.
     await runProcess({
       program: LSREGISTER,
       args: ['-u', macDaemonCopyBundlePath(directory)],
@@ -37,7 +36,7 @@ export async function retireUnusedMacDaemonCopy(directory: string): Promise<void
     }).catch(() => {})
     await rm(directory, { recursive: true, force: true })
   } catch {
-    // Unverifiable use retains code.
+    // Retain code when its use cannot be verified.
   }
 }
 
@@ -45,14 +44,14 @@ async function collect(root: string, current: string): Promise<void> {
   const names = await readdir(root).catch(() => [])
   for (const name of names) {
     const directory = join(root, name)
-    // Only this process launches, and only from `current`; its own staging may still be copying.
+    // This process may still be copying its own staging directories.
     if (directory !== current && !name.includes(`.staging-${process.pid}-`)) {
       await retireUnusedMacDaemonCopy(directory)
     }
   }
 }
 
-/** One background collection at a time, never one scan per terminal. */
+/** Coalesce background collection across simultaneous terminal launches. */
 export function retireOtherMacDaemonCopies(root: string, current: string): Promise<void> {
   collectionInFlight ??= collect(root, current).finally(() => {
     collectionInFlight = null

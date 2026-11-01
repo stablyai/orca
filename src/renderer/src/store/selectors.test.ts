@@ -713,8 +713,7 @@ describe('selectFloatingWorkspaceHasUnread', () => {
   })
 
   it('does not light for a stale unread entry whose floating tab no longer exists', () => {
-    // Mirrors closing a floating tab: the tab is gone from tabsByWorktree, so even
-    // a lingering map entry (there should be none — closeTab purges) cannot show.
+    // Removed floating tabs must not show attention through lingering unread-map entries.
     const state = makeState({
       tabsByWorktree: { [FLOATING]: [floatingTab('ft-live')] },
       unreadTerminalTabs: { 'ft-closed': true },

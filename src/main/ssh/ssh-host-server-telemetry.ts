@@ -1,8 +1,4 @@
-/**
- * Connect-decision telemetry: which server each SSH connect chose and why, plus conversion and
- * deploy failures. Every raw code is narrowed onto a fixed enum here, so nothing a host or user
- * named can reach an event; unrecognised codes become `other`.
- */
+/** Narrow raw connect/setup codes to fixed enums; unknowns become other, never host/user strings. */
 import type { EventProps } from '../../shared/telemetry-events'
 import {
   SSH_HOST_SERVER_FAILURE_VALUES,
@@ -33,7 +29,7 @@ function durationBucket(durationMs: number): DurationBucket {
   return durationMs < 60_000 ? '15s_60s' : 'gte_60s'
 }
 
-function hostProps(facts: SshHostPlatformFacts | null): HostProps {
+export function hostProps(facts: SshHostPlatformFacts | null): HostProps {
   return facts
     ? { host_os: facts.os, host_arch: facts.arch, host_libc: facts.libc }
     : { host_os: 'unknown', host_arch: 'unknown', host_libc: 'unknown' }
@@ -51,7 +47,7 @@ export function hostServerFailure(code: string | null): FailureCode {
     : 'other'
 }
 
-export type SshHostServerMoveOutcome = EventProps<'ssh_host_server_move'>['outcome']
+type SshHostServerMoveOutcome = EventProps<'ssh_host_server_move'>['outcome']
 
 export function trackSshHostServerMove(
   outcome: SshHostServerMoveOutcome,

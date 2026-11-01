@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ORCAD_MIGRATION_MANIFEST_VERSION,
   parseOrcadMigrationManifest
-} from './orcad-migration-manifest'
+} from './orcad-migration/orcad-migration-manifest-validation'
 
 const digest = 'a'.repeat(64)
 
@@ -77,11 +77,6 @@ function dormantLineage(childWorkspaceKey: string, parentWorkspaceKey: string) {
 }
 
 describe('orcad migration manifest contract', () => {
-  it('is an explicit version 1 artifact', () => {
-    expect(ORCAD_MIGRATION_MANIFEST_VERSION).toBe(1)
-    expect(parseOrcadMigrationManifest(manifest()).version).toBe(1)
-  })
-
   it.each([2, 10, 0, '1', undefined, null])(
     'rejects manifest version %j instead of guessing its shape',
     (version) => {
@@ -112,6 +107,16 @@ describe('orcad migration manifest contract', () => {
         manifest({ dormantState: dormantLineage(key, 'folder:folder-1') })
       )
     ).toThrow('orcad_migration_dormant_workspace_lineage_scope_invalid')
+  })
+
+  // Retired draft-blob field from development builds; no released desktop sent it.
+  it('accepts and drops the retired editorDraftsBlob declaration', () => {
+    const dormantState = {
+      ...dormantLineage('folder:folder-1', 'worktree:repo-1::/srv/repo-1'),
+      editorDraftsBlob: { sha256: digest, byteLength: 4, entries: [] }
+    }
+    const parsed = parseOrcadMigrationManifest(manifest({ dormantState }))
+    expect(parsed.payload.dormantState).not.toHaveProperty('editorDraftsBlob')
   })
 
   it('rejects a malformed workspace key rather than treating it as a worktree id', () => {

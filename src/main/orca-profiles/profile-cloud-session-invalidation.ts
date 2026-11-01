@@ -2,11 +2,7 @@ type OrcaCloudSessionInvalidationListener = () => void
 
 const listeners = new Set<OrcaCloudSessionInvalidationListener>()
 
-/**
- * Fires when an auth failure (revoked or rotated-away refresh token) clears a
- * stored cloud session. Never fires for an explicit user sign-out, which already
- * hands the fresh auth status back to its caller.
- */
+/** Auth-failure invalidation only; explicit sign-out returns fresh status directly. */
 export function onOrcaCloudSessionInvalidated(
   listener: OrcaCloudSessionInvalidationListener
 ): () => void {

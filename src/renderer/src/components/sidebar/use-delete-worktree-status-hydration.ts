@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import { runtimeTargetForOwnerHostId } from '@/runtime/runtime-client-target'
-import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -62,7 +62,7 @@ export function useDeleteWorktreeStatusHydration({
         ? findRepoForHost(repos, target.repoId, { hostId: target.hostId })
         : undefined
       const ownerTarget = target.hostId
-        ? runtimeTargetForOwnerHostId(target.hostId)
+        ? ipcOrRuntimeTargetForHostId(target.hostId)
         : runtimeTargetForWorkspaceOwner(currentState, { workspaceId: target.id })
       if (!ownerTarget) {
         setStatusByIdentity((current) => new Map(current).set(identity, null))

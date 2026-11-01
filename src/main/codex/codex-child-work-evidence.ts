@@ -1,17 +1,4 @@
-// Codex child threads, and the commands they leave running, decoded into child-work evidence for
-// the host's records.
-//
-// The background-task tracker already follows which child exists, which turn it runs and how that
-// turn ended (the executions), and which command process is still running (the command tracker).
-// A command is a record from its process start until it stops, and then its record goes: the
-// tracker says when, and this module only mirrors it. This module keeps what only the records
-// read — the tool a child has open, what it said last, its usage, whether it waits on the user —
-// and after each frame re-derives the whole observation of the child that frame was about. Edges
-// are stamped with the host clock when drained, after the journal handled the frame, so the host
-// never holds a record ahead of the frame's own rows. A parent turn ending is never evidence here:
-// Codex children outlive the turn that spawned them, so only a child's own turn, or the session,
-// ends it.
-
+import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveObservation
@@ -34,9 +21,6 @@ import { codexThreadWaitsOnUser, readCodexTurnId } from './codex-structured-thre
 import { CODEX_TOKEN_USAGE_METHOD, readCodexThreadTokenTotal } from './codex-subagent-activity'
 import type { CodexExecutionChild, CodexSubagentExecutions } from './codex-subagent-executions'
 
-/** The executions' own child bound. */
-const MAX_CHILD_FACTS = 128
-const MAX_OPEN_CALLS_PER_CHILD = 16
 const CHILD_FRAME_METHODS: ReadonlySet<string> = new Set([
   'item/started',
   'item/completed',
@@ -44,8 +28,7 @@ const CHILD_FRAME_METHODS: ReadonlySet<string> = new Set([
   CODEX_TOKEN_USAGE_METHOD
 ])
 
-/** A tool call a child has started and not finished. `openedAt` is the host clock of the first
- *  drain that carried it, so a later edge keeps the time the call opened. */
+/** openedAt retains the host time of the first drain carrying this call. */
 type OpenCall = CodexChildToolCall & { turnId: string | null; openedAt?: number }
 
 type ChildFacts = {
@@ -59,7 +42,6 @@ type ChildFacts = {
 
 export type CodexPendingChildWork = (observedAt: number) => AgentChildWorkEvidence
 
-/** Evidence from a run only counts for that run: a fact recorded under another turn is stale. */
 function ofTurn<T extends { turnId: string | null }>(fact: T | undefined, turnId: string) {
   return fact?.turnId === turnId ? fact : undefined
 }
@@ -80,7 +62,6 @@ function commandLive(
       state: 'working',
       ...(task.description ? { description: task.description } : {}),
       ...(ownerId !== null ? { ownerId } : {}),
-      // As the strip offers it: a backgrounded process this app-server can terminate.
       stoppable: stopsTerminals && command.backgrounded && command.processId !== undefined
     }
   })
@@ -94,17 +75,14 @@ export class CodexChildWorkEvidence {
     private readonly primaryThreadId: string,
     private readonly executions: CodexSubagentExecutions,
     private readonly liveCommands: (threadId: string) => readonly CodexBackgroundCommandChange[],
-    /** Whether this app-server proved it can terminate a background command. */
     private readonly stopsTerminals: () => boolean = () => false
   ) {}
 
-  /** Restates these commands, as when whether they can be stopped changed. */
   restateCommands(commands: readonly CodexBackgroundCommandChange[]): void {
     this.queueCommands(commands)
   }
 
-  /** After the tracker applied the frame: which command processes it saw start or stop, and the
-   *  child the frame is about. */
+  /** Call after the tracker applies the frame; observations use its updated execution state. */
   observe(
     event: CodexBackgroundTaskEvent,
     frame: CodexBackgroundTaskFrame | null,
@@ -113,16 +91,30 @@ export class CodexChildWorkEvidence {
     this.queueCommands(commands)
     for (const threadId of this.childThreads(event, frame)) {
       const facts = this.factsFor(threadId)
-      if (facts && event.threadId === threadId) {
+      if (event.threadId === threadId) {
         this.record(facts, event)
       }
       this.queueChild(threadId)
     }
   }
 
-  /** The provider session is gone, with the commands it ended: no child it still ran can report
-   *  its own ending. */
-  clear(commands: readonly CodexBackgroundCommandChange[]): void {
+  clear(
+    commands: readonly CodexBackgroundCommandChange[],
+    processExit?: StructuredAgentSessionEndedEvent['processExit']
+  ): void {
+    if (processExit?.root === 'exited' && processExit.workload === 'exited') {
+      for (const child of this.executions.workingChildren()) {
+        const { agentThreadId, execution } = child
+        if (execution) {
+          this.pending.push((observedAt) => ({
+            type: 'ended',
+            observedAt,
+            handle: { idKind: 'thread_id', id: agentThreadId, runId: execution.turnId },
+            outcome: 'cancelled'
+          }))
+        }
+      }
+    }
     this.facts.clear()
     this.queueCommands(commands)
     this.pending.push((observedAt) => ({ type: 'session-ended', observedAt }))
@@ -147,8 +139,7 @@ export class CodexChildWorkEvidence {
     return threadIds.filter((threadId) => threadId !== this.primaryThreadId)
   }
 
-  /** A command belongs to the child thread that launched it; the session's own agent is no owner.
-   *  A stopped command leaves no record: it has nothing left to report. */
+  // Primary-thread commands have no child owner; ended commands leave no record.
   private queueCommands(commands: readonly CodexBackgroundCommandChange[]): void {
     for (const command of commands) {
       if (command.type === 'started') {
@@ -174,7 +165,6 @@ export class CodexChildWorkEvidence {
       facts.waiting = codexThreadWaitsOnUser(event.params)
       return
     }
-    // Every Codex agent shell is unified exec: it is the open call until its process exits.
     const item = readCodexThreadItem(readRecord(event.params).item)
     if (!item) {
       return
@@ -188,7 +178,7 @@ export class CodexChildWorkEvidence {
     if (text) {
       facts.lastMessage = { turnId, text }
     }
-    // An end closes the call by id alone: its closing frame need not restate what it ran.
+    // Closing frames need not restate the call's input.
     if (codexToolCallEnded(event.method, item)) {
       facts.openCalls.delete(item.id)
       return
@@ -196,14 +186,10 @@ export class CodexChildWorkEvidence {
     const call = codexChildToolCall(item)
     if (call && !facts.openCalls.has(item.id)) {
       facts.openCalls.set(item.id, { ...call, turnId })
-      for (const stale of [...facts.openCalls.keys()].slice(0, -MAX_OPEN_CALLS_PER_CHILD)) {
-        facts.openCalls.delete(stale)
-      }
     }
   }
 
-  /** Re-derive the child's observation and hand it on when it changed. A child the provider has
-   *  not announced, or that never ran a turn, is no record. */
+  // Only announced children with a turn can receive records.
   private queueChild(threadId: string): void {
     const child = this.executions.find(threadId)
     const facts = this.facts.get(threadId)
@@ -212,7 +198,6 @@ export class CodexChildWorkEvidence {
     }
     const { turnId, state } = child.execution
     if (state !== 'working') {
-      // The turn is over, and so is every call it had open.
       facts.openCalls.clear()
       facts.waiting = false
       const lastMessage = ofTurn(facts.lastMessage, turnId)?.text
@@ -269,7 +254,6 @@ export class CodexChildWorkEvidence {
       // A spawned child may outlive the turn that spawned it.
       residency: 'background',
       state: facts.waiting ? 'waiting' : 'working',
-      // The agent path's last segment is the child's only label; today's row shows it there.
       ...(child.label ? { description: child.label } : {}),
       ...(facts.totalTokens !== undefined ? { totalTokens: facts.totalTokens } : {}),
       ...(lastMessage ? { lastMessage } : {}),
@@ -286,8 +270,7 @@ export class CodexChildWorkEvidence {
     }
   }
 
-  /** Work a child launched before the host held its record was admitted with no owner; now that
-   *  the owner is recorded, say again whose it is. */
+  // Reassert ownership for work admitted before its owner's record existed.
   private requeueOwnedBy(threadId: string): void {
     this.queueCommands(this.liveCommands(threadId))
     for (const spawned of this.executions.workingChildren()) {
@@ -299,19 +282,10 @@ export class CodexChildWorkEvidence {
     }
   }
 
-  private factsFor(threadId: string): ChildFacts | undefined {
+  private factsFor(threadId: string): ChildFacts {
     const existing = this.facts.get(threadId)
     if (existing) {
       return existing
-    }
-    if (this.facts.size >= MAX_CHILD_FACTS) {
-      const idle = [...this.facts.keys()].find(
-        (id) => this.executions.find(id)?.execution?.state !== 'working'
-      )
-      if (idle === undefined) {
-        return undefined
-      }
-      this.facts.delete(idle)
     }
     const facts: ChildFacts = { openCalls: new Map(), waiting: false }
     this.facts.set(threadId, facts)

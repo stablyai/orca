@@ -28,7 +28,6 @@ export function emptyModel(): WorkspaceLayoutModel {
   }
 }
 
-/** Applies commands that must succeed and keep every structural rule. */
 export function build(context: LayoutContext, commands: LayoutCommand[], model = emptyModel()) {
   let next = model
   const results = commands.map((command) => {
@@ -56,7 +55,6 @@ export function terminalTab(model: WorkspaceLayoutModel, tabId: string): LayoutT
   return tab
 }
 
-/** A model with nothing beside it, as the Serializer and the rules check take it. */
 export function asLoaded(layout: WorkspaceLayoutModel) {
   return { ...emptyLayoutBeside(), layout }
 }

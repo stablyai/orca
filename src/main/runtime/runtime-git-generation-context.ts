@@ -3,6 +3,7 @@ import { gitExecFileAsync } from '../git/runner'
 import type { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
+  type SourceControlAiSettingsInput,
   type ResolvedSourceControlAiGenerationParams
 } from '../../shared/source-control-ai'
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
@@ -42,10 +43,10 @@ export type RuntimeCommitMessageSettingsOverride = Partial<
 }
 
 export function getRuntimeGitGenerationSettings(
-  settings: GlobalSettings,
+  settings: SourceControlAiSettingsInput,
   settingsOverride: RuntimeCommitMessageSettingsOverride | undefined,
   operation: SourceControlAiOperation
-): GlobalSettings {
+): SourceControlAiSettingsInput {
   const mergedSettings = { ...settings, ...settingsOverride }
   if (
     settingsOverride?.commitMessageAi !== undefined &&

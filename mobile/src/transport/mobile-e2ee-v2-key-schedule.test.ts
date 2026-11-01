@@ -32,7 +32,9 @@ describe('mobile E2EE v2 key schedule', () => {
 
   it('derives unique direction keys and session IDs across fresh client nonces', () => {
     const { hello, ready, sharedSecret } = createMobileE2EEV2Fixture()
-    const fingerprints = new Set<string>()
+    const mobileToDesktopKeys = new Set<string>()
+    const desktopToMobileKeys = new Set<string>()
+    const sessionIds = new Set<string>()
     for (let index = 0; index < 128; index++) {
       const nonce = new Uint8Array(32)
       new DataView(nonce.buffer).setUint32(28, index, false)
@@ -47,12 +49,12 @@ describe('mobile E2EE v2 key schedule', () => {
         clientNonce: handshake.clientNonce,
         desktopNonce: handshake.desktopNonce
       })
-      fingerprints.add(
-        [schedule.mobileToDesktopKey, schedule.desktopToMobileKey, schedule.sessionId]
-          .map(hex)
-          .join(':')
-      )
+      mobileToDesktopKeys.add(hex(schedule.mobileToDesktopKey))
+      desktopToMobileKeys.add(hex(schedule.desktopToMobileKey))
+      sessionIds.add(hex(schedule.sessionId))
     }
-    expect(fingerprints.size).toBe(128)
+    expect(mobileToDesktopKeys.size).toBe(128)
+    expect(desktopToMobileKeys.size).toBe(128)
+    expect(sessionIds.size).toBe(128)
   })
 })

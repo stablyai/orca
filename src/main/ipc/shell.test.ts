@@ -59,6 +59,13 @@ import { EXTERNAL_EDITOR_CLI_COMMAND, registerShellHandlers } from './shell'
 import { resolveExternalEditorLaunchSpec } from '../external-editor-launch'
 import type { SshTarget } from '../../shared/ssh-types'
 
+const HIDDEN_EDITOR_LAUNCH_OPTIONS = expect.objectContaining({
+  detached: true,
+  stdio: 'ignore',
+  windowsHide: true,
+  shell: false
+})
+
 function createSpawnedProcess(result: 'spawn' | 'error' = 'spawn'): {
   once: ReturnType<typeof vi.fn>
   off: ReturnType<typeof vi.fn>
@@ -325,18 +332,11 @@ describe('registerShellHandlers', () => {
       expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND, {
         platform: process.platform
       })
-      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
+      expect(spawnMock).toHaveBeenCalledWith(
         'editor-cli',
         [normalize(workspacePath)],
-        {
-          detachedGui: false
-        }
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
       )
-      expect(spawnMock).toHaveBeenCalledWith('editor-cli', [normalize(workspacePath)], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      })
       expect(child.off).toHaveBeenCalledWith('error', expect.any(Function))
       expect(child.off).toHaveBeenCalledWith('spawn', expect.any(Function))
       expect(openPathMock).not.toHaveBeenCalled()
@@ -354,18 +354,11 @@ describe('registerShellHandlers', () => {
       expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND, {
         platform: process.platform
       })
-      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
+      expect(spawnMock).toHaveBeenCalledWith(
         'editor-cli',
         [normalize(workspacePath)],
-        {
-          detachedGui: false
-        }
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
       )
-      expect(spawnMock).toHaveBeenCalledWith('editor-cli', [normalize(workspacePath)], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      })
       expect(child.off).toHaveBeenCalledWith('error', expect.any(Function))
       expect(child.off).toHaveBeenCalledWith('spawn', expect.any(Function))
       expect(openPathMock).not.toHaveBeenCalled()
@@ -384,12 +377,10 @@ describe('registerShellHandlers', () => {
       expect(resolveCliCommandMock).toHaveBeenCalledWith('custom-editor', {
         platform: process.platform
       })
-      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
+      expect(spawnMock).toHaveBeenCalledWith(
         'custom-editor',
         [normalize(workspacePath)],
-        {
-          detachedGui: false
-        }
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
       )
     })
 
@@ -406,12 +397,11 @@ describe('registerShellHandlers', () => {
         ).resolves.toEqual({
           ok: true
         })
-        expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
-          codeShim,
-          ['--remote', 'wsl+Ubuntu Preview', '/home/Ada Lovelace/project'],
-          {
-            detachedGui: false
-          }
+        expect(getSpawnArgsForWindowsMock).not.toHaveBeenCalled()
+        expect(spawnMock).toHaveBeenCalledWith(
+          expect.any(String),
+          [expect.stringContaining('"wsl+Ubuntu Preview" "/home/Ada Lovelace/project"')],
+          expect.objectContaining({ windowsHide: true, windowsVerbatimArguments: true })
         )
       }
     )
@@ -474,9 +464,13 @@ describe('registerShellHandlers', () => {
         ).resolves.toEqual({
           ok: true
         })
-        expect(getSpawnArgsForWindowsMock).toHaveBeenLastCalledWith(codeShim, [workspacePath], {
-          detachedGui: false
-        })
+        // Waiting batch launchers bypass start /B; process-host owns command-line encoding.
+        expect(getSpawnArgsForWindowsMock).toHaveBeenCalledTimes(1)
+        expect(spawnMock).toHaveBeenLastCalledWith(
+          expect.any(String),
+          [expect.stringContaining(`"${codeShim}" "${workspacePath}"`)],
+          expect.objectContaining({ windowsHide: true, windowsVerbatimArguments: true })
+        )
       } finally {
         if (platformDescriptor) {
           Object.defineProperty(process, 'platform', platformDescriptor)
@@ -494,12 +488,10 @@ describe('registerShellHandlers', () => {
       ).resolves.toEqual({
         ok: true
       })
-      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
+      expect(spawnMock).toHaveBeenCalledWith(
         '/usr/local/bin/cursor',
         ['--new-window', normalize(workspacePath)],
-        {
-          detachedGui: false
-        }
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
       )
       resolveCliCommandMock.mockReturnValueOnce('C:\\Cursor\\cursor.cmd')
       await expect(
@@ -507,12 +499,10 @@ describe('registerShellHandlers', () => {
       ).resolves.toEqual({
         ok: true
       })
-      expect(getSpawnArgsForWindowsMock).toHaveBeenLastCalledWith(
+      expect(spawnMock).toHaveBeenLastCalledWith(
         'C:\\Cursor\\cursor.cmd',
         ['--new-window', normalize(workspacePath)],
-        {
-          detachedGui: false
-        }
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
       )
     })
 
@@ -530,32 +520,19 @@ describe('registerShellHandlers', () => {
       })
     })
 
-    it('uses platform-safe launcher command arguments', async () => {
-      getSpawnArgsForWindowsMock.mockReturnValueOnce({
-        spawnCmd: 'platform-runner',
-        spawnArgs: ['platform-arg']
-      })
+    it('hands a hidden launcher to process-host without the batch wrapper', async () => {
       const workspacePath = resolve('workspace')
       const handler = getHandler('shell:openInExternalEditor')
 
       await expect(handler({}, { path: workspacePath, ownerHostId: 'local' })).resolves.toEqual({
         ok: true
       })
-      expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND, {
-        platform: process.platform
-      })
-      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
+      expect(getSpawnArgsForWindowsMock).not.toHaveBeenCalled()
+      expect(spawnMock).toHaveBeenCalledWith(
         'editor-cli',
         [normalize(workspacePath)],
-        {
-          detachedGui: false
-        }
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
       )
-      expect(spawnMock).toHaveBeenCalledWith('platform-runner', ['platform-arg'], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      })
       expect(openPathMock).not.toHaveBeenCalled()
     })
 
@@ -572,11 +549,11 @@ describe('registerShellHandlers', () => {
       expect(resolveCliCommandMock).not.toHaveBeenCalled()
       expect(getSpawnArgsForWindowsMock).not.toHaveBeenCalled()
       expect(launchSpec.kind).toBe('shell')
-      expect(spawnMock).toHaveBeenCalledWith(launchSpec.spawnCmd, launchSpec.spawnArgs, {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      })
+      expect(spawnMock).toHaveBeenCalledWith(
+        launchSpec.spawnCmd,
+        launchSpec.spawnArgs,
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
+      )
     })
 
     it('rejects missing and runtime-owned SSH targets', async () => {
@@ -620,12 +597,10 @@ describe('registerShellHandlers', () => {
         )
       ).resolves.toEqual({ ok: true })
       expect(statMock).not.toHaveBeenCalled()
-      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
+      expect(spawnMock).toHaveBeenCalledWith(
         '/usr/local/bin/code',
         ['--remote', 'ssh-remote+builder', remotePath],
-        {
-          detachedGui: false
-        }
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
       )
     })
 
@@ -650,12 +625,10 @@ describe('registerShellHandlers', () => {
         )
       ).resolves.toEqual({ ok: true })
       expect(statMock).not.toHaveBeenCalled()
-      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
+      expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Tools\\code.cmd',
         ['--remote', 'ssh-remote+Ada@win-builder.example.com', remotePath],
-        {
-          detachedGui: false
-        }
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
       )
     })
 
@@ -678,12 +651,10 @@ describe('registerShellHandlers', () => {
           { path: '/srv/project', command: 'code', connectionId: 'ssh-1', ownerHostId: 'ssh:ssh-1' }
         )
       ).resolves.toEqual({ ok: true })
-      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
+      expect(spawnMock).toHaveBeenCalledWith(
         '/usr/local/bin/code',
         ['--remote', 'ssh-remote+builder.example.com', '/srv/project'],
-        {
-          detachedGui: false
-        }
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
       )
     })
 
@@ -717,6 +688,7 @@ describe('registerShellHandlers', () => {
           port: 2222
         })
       )
+      resolveCliCommandMock.mockReturnValueOnce('/usr/local/bin/code')
       const handler = getHandler('shell:openInExternalEditor')
 
       await expect(
@@ -733,7 +705,33 @@ describe('registerShellHandlers', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
-    it.each(['cursor', 'zed', 'code --reuse-window'])(
+    it('opens a manual custom-port target in Zed without an SSH config alias', async () => {
+      sshTargets.set(
+        'ssh-1',
+        createSshTarget({
+          source: 'manual',
+          configHost: 'builder.example.com',
+          host: 'builder.example.com',
+          port: 2222
+        })
+      )
+      resolveCliCommandMock.mockReturnValueOnce('/usr/local/bin/zed')
+      const handler = getHandler('shell:openInExternalEditor')
+
+      await expect(
+        handler(
+          {},
+          { path: '/srv/project', command: 'zed', connectionId: 'ssh-1', ownerHostId: 'ssh:ssh-1' }
+        )
+      ).resolves.toEqual({ ok: true })
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/usr/local/bin/zed',
+        ['ssh://ada@builder.example.com:2222/srv/project'],
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
+      )
+    })
+
+    it.each(['subl', 'code --reuse-window'])(
       'rejects the unsupported SSH launcher %s',
       async (command) => {
         sshTargets.set('ssh-1', createSshTarget())
@@ -749,26 +747,37 @@ describe('registerShellHandlers', () => {
       }
     )
 
-    it('maps unsafe Windows batch arguments to a closed launch failure', async () => {
+    it('quotes cmd metacharacters in a Windows code.cmd launch so cmd never runs them', async () => {
+      const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       sshTargets.set('ssh-1', createSshTarget())
       resolveCliCommandMock.mockReturnValueOnce('C:\\Tools\\code.cmd')
-      getSpawnArgsForWindowsMock.mockImplementationOnce(() => {
-        throw new Error('unsafe batch arguments')
-      })
       const handler = getHandler('shell:openInExternalEditor')
 
-      await expect(
-        handler(
-          {},
-          {
-            path: '/srv/project&whoami',
-            command: 'code',
-            connectionId: 'ssh-1',
-            ownerHostId: 'ssh:ssh-1'
-          }
+      try {
+        await expect(
+          handler(
+            {},
+            {
+              path: '/srv/project&whoami',
+              command: 'code',
+              connectionId: 'ssh-1',
+              ownerHostId: 'ssh:ssh-1'
+            }
+          )
+        ).resolves.toEqual({ ok: true })
+        expect(spawnMock).toHaveBeenCalledWith(
+          expect.any(String),
+          [
+            '/d /v:off /s /c ""C:\\Tools\\code.cmd" "--remote" "ssh-remote+builder" "/srv/project&whoami""'
+          ],
+          expect.objectContaining({ windowsHide: true, windowsVerbatimArguments: true })
         )
-      ).resolves.toEqual({ ok: false, reason: 'launch-failed' })
-      expect(spawnMock).not.toHaveBeenCalled()
+      } finally {
+        if (platformDescriptor) {
+          Object.defineProperty(process, 'platform', platformDescriptor)
+        }
+      }
     })
   })
 

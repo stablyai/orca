@@ -17,8 +17,7 @@ export function AutomationListSortHeader({
 }): React.JSX.Element {
   const active = sort?.field === field
   const direction = active ? sort.direction : null
-  // Why: one interpolated key per direction — word order and punctuation around
-  // the column name differ per language.
+  // Translate whole direction labels because column placement/punctuation varies by language.
   const sortedLabel =
     direction === 'asc'
       ? translate(

@@ -15,8 +15,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TerminalSnapshot } from './types'
 
 const REATTACH_BUDGET_MS = 2_000
-// Why above DURABLE_HISTORY_OVERLAY_DEADLINE_MS: this asserts the reattach gives up on its own
-// stalled checkpoint, so the window must outlast the deadline it is proving.
+// Outlast the overlay deadline so this watchdog cannot cause the behavior under test.
 const DEADLINE_BUDGET_MS = 20_000
 const scheduleBudgetTimeout = setTimeout
 const clearBudgetTimeout = clearTimeout
@@ -46,7 +45,6 @@ function createMockSubprocess(): SubprocessHandle & { emitData: (data: string) =
   }
 }
 
-/** Resolves 'timed-out' instead of hanging, so a wedged reattach fails the test rather than the run. */
 async function withinBudget<T>(work: Promise<T>, budgetMs: number): Promise<T | 'timed-out'> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<'timed-out'>((resolve) => {
@@ -93,10 +91,7 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  /**
-   * Wedges one session's checkpoint at the history-write layer and reports how many times that
-   * stall was actually entered, so a swallowed TypeError cannot masquerade as a stall.
-   */
+  /** Confirm entry into the stalled write so a swallowed setup error cannot imitate a checkpoint stall. */
   async function stallCheckpointFor(stalledSessionId: string): Promise<{
     entered: () => number
     enteredPromise: Promise<void>
@@ -150,8 +145,7 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
     const healthyId = await spawnWithOutput('healthy-session', 'HEALTHY_OUTPUT\r\n')
     const stall = await stallCheckpointFor(stalledId)
 
-    // Why start the stalled reattach first: it is the one that parks a checkpoint, and before the
-    // per-session queue that parked checkpoint owned the process-wide tail every reattach joined.
+    // Park the stalled checkpoint first to exercise isolation from work that previously shared a global tail.
     const stalledReattach = adapter.spawn({ cols: 80, rows: 24, sessionId: stalledId, cwd: '/tmp' })
     void stalledReattach.catch(() => {})
     await vi.waitFor(() => expect(stall.entered()).toBeGreaterThan(0))
@@ -164,7 +158,6 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
     expect(healthyReattach).not.toBe('timed-out')
     expect(healthyReattach).toMatchObject({ isReattach: true })
     expect((healthyReattach as { snapshot: string }).snapshot).toContain('HEALTHY_OUTPUT')
-    // The stall must still be parked, or the healthy reattach proved nothing.
     expect(stall.entered()).toBe(1)
     stall.release()
     await stalledReattach
@@ -210,7 +203,7 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
       expect(stall.entered()).toBeGreaterThan(0)
       expect(reattach).not.toBe('timed-out')
       expect(reattach).toMatchObject({ isReattach: true })
-      // Degraded to the daemon's live window, not empty: the deadline costs restore depth, not history.
+      // Timeout reduces this replay's depth while leaving durable history intact.
       expect((reattach as { snapshot: string }).snapshot).toContain('DEADLINE_OUTPUT')
       expect(warn).toHaveBeenCalledWith(
         '[history] durable snapshot overlay deadline exceeded:',
@@ -312,8 +305,6 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
     expect(
       `${checkpointRead.checkpoint.scrollbackAnsi}${checkpointRead.checkpoint.snapshotAnsi}`
     ).toContain('RESUMED_OUTPUT')
-    // Why this is the whole point of not cancelling: the reattach degraded, and the durable write
-    // the deadline walked away from still lands on disk for the next restore.
     await vi.waitFor(async () => {
       const restore = await new HistoryReader(join(dir, 'history')).detectColdRestore(stalledId, {
         ignoreCleanEnd: true

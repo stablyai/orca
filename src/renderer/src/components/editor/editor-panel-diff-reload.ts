@@ -20,8 +20,7 @@ function hasReloadableStatusEntry(
     return true
   }
 
-  // Why: a diff tab snapshots one status area. If staging/commit moves that
-  // row elsewhere, auto-reloading replaces useful context with another diff.
+  // Diff tabs capture one status area; staging/commit moves must not silently replace their review context.
   if (file.diffSource === 'unstaged') {
     return gitStatusEntries.some(
       (entry) =>

@@ -2,7 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DraftStore from './native-chat-composer-draft-store'
 import type * as DraftCache from './native-chat-draft-cache'
-import { withNativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
+import {
+  placeNativeChatComposerDraftAddition,
+  withNativeChatComposerDraftAddition
+} from './native-chat-composer-draft-addition'
 import {
   createMemoryNativeChatComposerDraftStorage,
   type NativeChatComposerDraftStorage
@@ -69,10 +72,22 @@ describe('native-chat composer draft addition', () => {
 
   it('adds text only where the draft does not already end with it as its own paragraph', () => {
     const add = (text: string): string =>
-      withNativeChatComposerDraftAddition({ text, images: [] }, { text: 'go' }, { once: true }).text
+      withNativeChatComposerDraftAddition({ text, images: [] }, { text: 'go' }).text
     expect(add('please go')).toBe('please go\n\ngo')
     expect(add('please\n\ngo')).toBe('please\n\ngo')
     expect(add('go\n')).toBe('go\n')
+  })
+
+  it('fills an unavailable image once, however often the addition is made', () => {
+    const draft = { text: '', images: [{ id: 'p', path: '', unavailableName: 'a.png' }] }
+    const placed = placeNativeChatComposerDraftAddition(draft, {
+      images: [{ id: 'y', path: '/repo/a.png' }],
+      fromUser: true
+    })
+    const filled = { ...draft, ...withNativeChatComposerDraftAddition(draft, placed) }
+    expect(withNativeChatComposerDraftAddition(filled, placed).images).toEqual([
+      { id: 'p', path: '/repo/a.png' }
+    ])
   })
 
   it('gives "go" back onto "please go" after a crash before storage commits it', async () => {
@@ -84,6 +99,75 @@ describe('native-chat composer draft addition', () => {
 
     const next = await reload()
     expect(next.drafts.readNativeChatDraftCache(SCOPE)).toBe('please go\n\ngo')
+  })
+
+  it('keeps an image that finished while one attached before it was still on its way', async () => {
+    const drafts = (await reload()).drafts
+    const pending = await import('./native-chat-pending-attachment-cache')
+    pending.addNativeChatPendingAttachment(SCOPE, { id: 'first', path: '', pending: true })
+    pending.addNativeChatPendingAttachment(SCOPE, { id: 'second', path: '', pending: true })
+    pending.settleNativeChatPendingAttachment(SCOPE, 'second', '/repo/b.png')
+    expect(drafts.readNativeChatAttachmentCache(SCOPE)).toHaveLength(1)
+
+    const next = await reload()
+    expect(next.drafts.readNativeChatAttachmentCache(SCOPE)).toEqual([
+      { id: 'second', path: '/repo/b.png' }
+    ])
+  })
+
+  it('keeps an image in front of one attached after it when a crash replays it', async () => {
+    storage.drafts.set(SCOPE, { text: '', images: [{ id: 'b', path: '/repo/b.png' }], savedAt: 1 })
+    const crashing = { ...storage, write: () => new Promise<void>(() => {}) }
+    const crashed = await reload({ using: crashing })
+    crashed.store.appendToNativeChatComposerDraft(SCOPE, {
+      images: [{ id: 'a', path: '/repo/a.png' }],
+      fromUser: true,
+      before: 'b'
+    })
+    crashed.store.clearNativeChatComposerDraftsForTests()
+
+    const next = await reload()
+    expect(next.store.readNativeChatComposerDraft(SCOPE).images.map(({ id }) => id)).toEqual([
+      'a',
+      'b'
+    ])
+  })
+
+  it('keeps a second attachment of the same file when a crash replays it', async () => {
+    storage.drafts.set(SCOPE, { text: '', images: [{ id: 'x', path: '/repo/a.png' }], savedAt: 1 })
+    const crashing = { ...storage, write: () => new Promise<void>(() => {}) }
+    const crashed = await reload({ using: crashing })
+    crashed.store.appendToNativeChatComposerDraft(SCOPE, {
+      images: [{ id: 'y', path: '/repo/a.png' }],
+      fromUser: true
+    })
+    crashed.store.clearNativeChatComposerDraftsForTests()
+
+    const next = await reload()
+    expect(next.store.readNativeChatComposerDraft(SCOPE).images.map(({ id }) => id)).toEqual([
+      'x',
+      'y'
+    ])
+  })
+
+  it('fills an unavailable image once with the file attached again, when a crash replays it', async () => {
+    storage.drafts.set(SCOPE, {
+      text: '',
+      images: [{ id: 'p', path: '', unavailableName: 'a.png' }],
+      savedAt: 1
+    })
+    const crashing = { ...storage, write: () => new Promise<void>(() => {}) }
+    const crashed = await reload({ using: crashing })
+    crashed.store.appendToNativeChatComposerDraft(SCOPE, {
+      images: [{ id: 'y', path: '/repo/a.png' }],
+      fromUser: true
+    })
+    crashed.store.clearNativeChatComposerDraftsForTests()
+
+    const next = await reload()
+    expect(next.store.readNativeChatComposerDraft(SCOPE).images).toEqual([
+      { id: 'p', path: '/repo/a.png' }
+    ])
   })
 
   it('keeps a hand-back the draft already ends with when that draft was never saved', async () => {

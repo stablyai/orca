@@ -4,12 +4,15 @@ import { kimiSessionWirePaths } from './session-scanner-kimi-paths'
 import { parseJsonObject } from './session-scanner-values'
 
 // Versioned only for Kimi: old cached rows reparse without discarding any other agent's history.
-export async function kimiSessionContentFingerprint(path: string): Promise<string> {
-  const state = parseJsonObject(await wslGatedReadFile(path, 'utf-8', 'scan')) ?? {}
+export async function kimiSessionContentFingerprint(
+  path: string,
+  signal?: AbortSignal
+): Promise<string> {
+  const state = parseJsonObject(await wslGatedReadFile(path, 'utf-8', 'scan', signal)) ?? {}
   const identity: (string | number | null)[][] = []
   for (const wire of kimiSessionWirePaths(path, state)) {
     try {
-      const stat = await wslGatedStat(wire, 'scan')
+      const stat = await wslGatedStat(wire, 'scan', signal)
       identity.push([wire, stat.dev, stat.ino, stat.mtimeMs, stat.ctimeMs, stat.size])
     } catch (error) {
       if (

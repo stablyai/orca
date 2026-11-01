@@ -1,5 +1,5 @@
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { Cable, Loader2, Server, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -96,14 +96,13 @@ export default function WebConnect({
 
   // Why: a deep-linked offer that reaches this screen either has mobile scope
   // or unknown legacy scope; run the same connect path to reject/probe it.
+  const autoConnect = useEffectEvent(() => void connect())
   useEffect(() => {
     if (autoConnectAttempted.current || !initialPairingInput || !parsedOffer) {
       return
     }
     autoConnectAttempted.current = true
-    void connect()
-    // Why: run once for the deep-linked offer; connect() reads current refs/state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    autoConnect()
   }, [initialPairingInput, parsedOffer])
 
   const clear = (): void => {

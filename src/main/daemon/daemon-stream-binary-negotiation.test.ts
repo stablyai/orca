@@ -169,7 +169,7 @@ describe('daemon stream framing negotiation', () => {
     socket.destroy()
   })
 
-  // A pre-binary daemon (v39, v41, v44 today) ignores the request and answers a plain hello.
+  // Legacy daemons ignore binary negotiation and reply with an ordinary hello.
   function startFakeDaemon(
     protocolVersion: number,
     afterStreamHello: (hello: { streamFraming?: string }) => Buffer
@@ -193,7 +193,7 @@ describe('daemon stream framing negotiation', () => {
           encodeNdjson({ type: 'hello', ok: true, daemonIdentity: identity }),
           'utf8'
         )
-        // One write, so the client must pick the event out of the hello's own read.
+        // Coalesce hello and data so the client must preserve the handshake read's remainder.
         socket.write(
           hello.role === 'stream' ? Buffer.concat([reply, afterStreamHello(hello)]) : reply
         )

@@ -1,8 +1,7 @@
-/** The incumbent slot across a journaled activation or rollback: stop it, then put it back. */
-import type { OrcadActivationLockControl } from './orcad-activation-lock'
-import type { OrcadSnapshotVerdict } from './orcad-activation-transaction'
-import { orcadStopFreedTheHost } from './orcad-remote-process-control'
-import { withoutAbortSignal } from './orcad-remote-runtime-control'
+import type { OrcadActivationLockControl } from '../managed-server/activation/orcad-activation-lock'
+import type { OrcadSnapshotVerdict } from '../managed-server/activation/orcad-activation-transaction'
+import { orcadStopFreedTheHost } from '../managed-server/install/orcad-remote-process-control'
+import { withoutAbortSignal } from '../managed-server/install/orcad-remote-runtime-control'
 import {
   launchOrcadSlot,
   stopOrcadSlot,
@@ -13,24 +12,27 @@ import {
 import { recoverOrcadIncumbent } from './orcad-incumbent-recovery'
 import { errorMessage } from '../../shared/error-message'
 
-/** Null once the incumbent provably exited; otherwise why not, with the fence kept if it may still change. */
+/** Return null on proven exit; otherwise retain the fence when a delivered stop may still change the host. */
 export async function stopTransactionIncumbent(
   options: OrcadSlotOptions,
   incumbent: OrcadSlotIdentity,
   lock: OrcadActivationLockControl
-): Promise<string | null> {
+): Promise<{ reason: string; stopMayBeUnderway: boolean } | null> {
   const stopped = await stopOrcadSlot(options, incumbent.remoteDir, false)
   if (orcadStopFreedTheHost(stopped)) {
     return null
   }
   // Only a stop that may have been delivered can still change the host; otherwise nothing happened.
-  if (stopped === 'still-running' || stopped === 'unconfirmed') {
+  const stopMayBeUnderway = stopped === 'still-running' || stopped === 'unconfirmed'
+  if (stopMayBeUnderway) {
     lock.retain()
   }
-  return (
-    `Could not verify that orcad ${incumbent.version} exited within ` +
-    `${ORCAD_SLOT_STOP_WAIT_SECONDS}s (${stopped}).`
-  )
+  return {
+    reason:
+      `Could not verify that orcad ${incumbent.version} exited within ` +
+      `${ORCAD_SLOT_STOP_WAIT_SECONDS}s (${stopped}).`,
+    stopMayBeUnderway
+  }
 }
 
 export async function restartAfterSnapshotFailure(
@@ -48,10 +50,7 @@ export async function restartAfterSnapshotFailure(
   }
 }
 
-/**
- * Restores `restoreState` when it was replaced, then restarts the incumbent; both slots are
- * already proven exited. Null on success; otherwise why not, with the fence kept.
- */
+/** Restore changed state and incumbent only after both slots prove exit; refusal retains the fence. */
 export async function putTransactionIncumbentBack(
   options: OrcadSlotOptions,
   lock: OrcadActivationLockControl,
@@ -80,7 +79,7 @@ export async function putTransactionIncumbentBack(
   }
 }
 
-/** Stop the build this run launched, then put the incumbent back only on safe state. */
+/** Stop the rejected candidate before safely restoring incumbent state. */
 export async function restoreAfterRejectedCandidate(
   options: OrcadSlotOptions,
   lock: OrcadActivationLockControl,

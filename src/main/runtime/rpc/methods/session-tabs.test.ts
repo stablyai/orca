@@ -2,7 +2,7 @@ import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
@@ -16,18 +16,18 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 
 describe('session tab RPC methods', () => {
   it('routes mobile-only activation without notifying desktop clients', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      activateMobileSessionTab: vi.fn().mockResolvedValue({
-        worktree: 'wt-1',
-        publicationEpoch: 'epoch-1',
-        snapshotVersion: 1,
-        activeGroupId: null,
-        activeTabId: 'tab-1',
-        activeTabType: 'terminal',
-        tabs: []
-      })
-    } as unknown as OrcaRuntimeService
+    const runtime = new OrcaRuntimeService()
+    vi.spyOn(runtime, 'getRuntimeId').mockReturnValue('test-runtime')
+    vi.spyOn(runtime, 'listMobileSessionTabs').mockResolvedValue(visibleSnapshot())
+    vi.spyOn(runtime, 'activateMobileSessionTab').mockResolvedValue({
+      worktree: 'wt-1',
+      publicationEpoch: 'epoch-1',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: 'tab-1',
+      activeTabType: 'terminal',
+      tabs: []
+    })
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -74,11 +74,11 @@ describe('session tab RPC methods', () => {
     })
   })
 
-  // Why: only this field separates a reconnect probe from a user opening the tab,
-  // and the tab-open gesture is what wakes a deliberately slept pane (STA-3465).
+  // Only viewIntent distinguishes reconnect probes from tab opens that wake deliberately slept panes (STA-3465).
   it('forwards an automatic activation intent to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
+      listMobileSessionTabs: vi.fn().mockResolvedValue(visibleSnapshot()),
       activateMobileSessionTab: vi.fn().mockResolvedValue({ tabs: [] })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -101,11 +101,11 @@ describe('session tab RPC methods', () => {
     )
   })
 
-  // Why: the field is additive, so a client that predates it sends nothing and
-  // must keep the permissive default rather than losing its wake gesture.
+  // Older clients omit the additive field; preserve their permissive wake default.
   it('passes no intent for a client that omits the field', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
+      listMobileSessionTabs: vi.fn().mockResolvedValue(visibleSnapshot()),
       activateMobileSessionTab: vi.fn().mockResolvedValue({ tabs: [] })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })

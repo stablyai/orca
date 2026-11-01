@@ -1,4 +1,4 @@
-import { runtimeTargetForOwnerHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import type {
   DirectSshWorktreeFetchOptions,
   WorktreeFetchOptions,
@@ -25,6 +25,7 @@ import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { refreshRemoteWorktreeLineageBestEffort } from '../metadata/worktree-lineage-refresh'
+import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
 
 export function createFetchWorktrees(
   set: WorktreeSliceSet,
@@ -52,7 +53,7 @@ export function createFetchWorktrees(
       options && 'directSshAuthority' in options ? options.directSshAuthority : undefined
     try {
       const ownerState = get()
-      const requestStartedWorktrees = ownerState.worktreesByRepo[repoId]
+      const requestStartedWorktrees = selectWorktreesByRepo(ownerState)[repoId]
       const repoOwners = ownerState.repos.filter((repo) => repo.id === repoId)
       const ownerWasMissingAtStart = repoOwners.length === 0
       const hasLocalOwner = repoOwners.some(
@@ -76,8 +77,7 @@ export function createFetchWorktrees(
           ? (directCallerAuthority ?? getCurrentDirectSshAuthority(ownerState, hostId) ?? undefined)
           : undefined
       if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-        // Why: requireAuthoritative callers asked for authoritative-or-nothing, so writing non-authoritative
-        // rows as a side effect before returning false would silently weaken that contract.
+        // Authoritative-only callers must not receive non-authoritative store side effects before false returns.
         if (!options?.requireAuthoritative) {
           await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id)
         }
@@ -98,7 +98,7 @@ export function createFetchWorktrees(
       if (options?.requireAuthoritative && !refresh.result.authoritative) {
         return directCallerAuthority ? (refresh.providerResult ?? false) : false
       }
-      const outcome = mergeFetchedWorktrees(set, {
+      const outcome = mergeFetchedWorktrees(set, get, {
         repoId,
         hostId,
         ownerWasMissingAtStart,
@@ -114,10 +114,7 @@ export function createFetchWorktrees(
         case 'applied':
           break
         case 'superseded':
-          // Why current for direct callers: a newer catalog is already applied; 'stale' means a moved
-          // connection. Others relist once: a caller that joined a listing already in flight (a
-          // change event's refresh) may get only that older answer, and nothing else would follow
-          // it. One new listing scans at or past the applied version, so it is admitted.
+          // Direct callers retain current-catalog result; joined refreshes relist once after supersession or their only older answer leaves no follow-up.
           if (directCallerAuthority) {
             return refresh.providerResult ?? false
           }
@@ -130,7 +127,7 @@ export function createFetchWorktrees(
       // Direct SSH lineage requires its own qualified authority result.
       // Bulk runtime callers apply one final host-wide snapshot after all repo merges.
       if (!directSshAuthority && !options?.suppressRemoteLineageRefresh) {
-        await refreshRemoteWorktreeLineageBestEffort(runtimeTargetForOwnerHostId(hostId), set, get)
+        await refreshRemoteWorktreeLineageBestEffort(ipcOrRuntimeTargetForHostId(hostId), set, get)
       }
       return directCallerAuthority ? refresh.providerResult! : refresh.result.authoritative
     } catch (err) {

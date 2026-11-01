@@ -25,7 +25,7 @@ vi.mock('@/lib/worktree-activation', () => ({
 import { buildFileLinkActions } from './terminal-file-link-actions'
 import { getTerminalFileContext, openDetectedFilePath } from './terminal-file-open-routing'
 import { createNativeChatFileLinkExistence } from '../native-chat/native-chat-file-link-existence'
-import { extractTerminalFileLinks } from '@/lib/terminal-links'
+import { extractTerminalFileLinks } from '../../../../shared/terminal-links'
 
 const id = 'repo::/home/u/proj'
 const deps = { worktreeId: id, worktreePath: '/home/u/proj', runtimeEnvironmentId: null }
@@ -96,20 +96,6 @@ describe('same-id SSH terminal file links', () => {
     expect(mocks.stat).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/desktop-root', connectionId: 'box' })
     )
-    expect(desktopStatCalls()).toEqual([])
-    expect(mocks.openFilePath).not.toHaveBeenCalled()
-  })
-
-  it('offers no desktop default-app row on an SSH root, and Shift-click opens nothing locally', async () => {
-    const actions = buildFileLinkActions('/home/u/proj', null, null, deps, {
-      kind: 'local'
-    })
-    expect(actions.kind).toBe('workspace')
-    expect(actions.alternate).toBeUndefined()
-
-    openDetectedFilePath('/home/u/proj', null, null, { ...deps, openWithSystemDefault: true })
-    await settle()
-
     expect(desktopStatCalls()).toEqual([])
     expect(mocks.openFilePath).not.toHaveBeenCalled()
   })

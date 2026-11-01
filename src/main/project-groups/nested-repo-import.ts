@@ -91,8 +91,7 @@ function buildSparseFolderScopes(args: {
   parentPath: string
   repoPaths: readonly string[]
 }): FolderScope[] {
-  // Why: folder-backed workspaces should expose meaningful launch scopes
-  // without turning every one-child filesystem segment into sidebar structure.
+  // Expose meaningful folder launch scopes without making every single-child segment a sidebar group.
   const folderStats = new Map<string, { directRepoCount: number; totalRepoCount: number }>()
   const noteFolder = (relativePath: string, field: 'directRepoCount' | 'totalRepoCount'): void => {
     const normalized = normalizeRelativePath(relativePath)
@@ -150,8 +149,7 @@ export function createNestedProjectGroupResolver(args: {
   createGroup: (input: CreateGroupInput) => ProjectGroup
 }): NestedProjectGroupResolver {
   const createdGroups: ProjectGroup[] = []
-  // Every folder-scope read sits behind ensureRootGroup, so outside group mode the scopes are
-  // unreachable. One flag drives both so the skip can never drift from the guard that justifies it.
+  // Folder scopes are reachable only in group mode; use the same flag to skip their construction.
   const createsGroups = args.mode === 'group'
   const folderScopes = createsGroups
     ? buildSparseFolderScopes({ parentPath: args.parentPath, repoPaths: args.repoPaths ?? [] })
@@ -247,8 +245,7 @@ export function resolveNestedRepoSelection(args: {
     if (canonicalPath) {
       selectedPaths.push(canonicalPath)
     } else {
-      // Why: imports are derived from a bounded scan of this parent folder;
-      // callers must not smuggle unrelated paths into the group hierarchy.
+      // Scan-derived imports cannot admit paths outside their selected parent.
       rejectedPaths.push(repoPath)
     }
   }
@@ -284,8 +281,7 @@ export function resolveNestedRepoImportPaths(args: {
       normalizedPath === normalizedParentPath ||
       !isPathInsideOrEqual(canonicalParentPath, canonicalRepoPath)
     ) {
-      // Why: stopped scans import a caller-provided partial selection, so the
-      // parent boundary still blocks dot-segment escapes without rescanning.
+      // Partial selections after stopped scans still need parent-boundary validation without rescanning.
       rejectedPaths.push(repoPath)
       continue
     }

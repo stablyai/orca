@@ -16,6 +16,8 @@ import { issueCacheKey as getIssueCacheKey } from '../../store/github/cache-iden
 import { countWorkspaceSpaceActiveAgents } from './workspace-space-presentation'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 import { getWorkspaceSpaceBranchLabel } from './workspace-space-format'
+import { formatHostedReviewLabel } from './hosted-review-label'
+import { translate } from '@/i18n/i18n'
 
 export type WorkspaceDecisionDetails = {
   isActive: boolean
@@ -37,6 +39,7 @@ export type WorkspaceDecisionDetails = {
 export type WorkspaceDecisionInputs = {
   repoMap: ReadonlyMap<string, Repo>
   worktreeMap: ReadonlyMap<string, Worktree>
+  worktreeRecord?: Worktree
   repos?: readonly Repo[]
   tabsByWorktree: Record<string, readonly TerminalTab[]>
   ptyIdsByTabId: Record<string, string[]>
@@ -73,14 +76,6 @@ export type WorkspaceDecisionInputs = {
   now: number
 }
 
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : plural}`
-}
-
-function formatReviewState(state: string): string {
-  return state.charAt(0).toUpperCase() + state.slice(1)
-}
-
 function countLiveTerminals(
   tabs: readonly TerminalTab[],
   ptyIdsByTabId: Record<string, string[]>
@@ -95,23 +90,41 @@ function getBranchStatus(
     return null
   }
   if (status.ahead === 0 && status.behind === 0) {
-    return 'Synced with upstream'
+    return translate(
+      'auto.components.status.bar.workspaceSpaceDecision.syncedWithUpstream',
+      'Synced with upstream'
+    )
   }
-  const parts: string[] = []
-  if (status.ahead > 0) {
-    parts.push(`${status.ahead} ahead`)
+  if (status.ahead > 0 && status.behind > 0) {
+    return translate(
+      'auto.components.status.bar.workspaceSpaceDecision.aheadAndBehind',
+      '{{ahead}} ahead, {{behind}} behind',
+      {
+        ahead: status.ahead,
+        behind: status.behind
+      }
+    )
   }
-  if (status.behind > 0) {
-    parts.push(`${status.behind} behind`)
-  }
-  return parts.join(', ')
+  return status.ahead > 0
+    ? translate('auto.components.status.bar.workspaceSpaceDecision.ahead', '{{ahead}} ahead', {
+        ahead: status.ahead
+      })
+    : translate('auto.components.status.bar.workspaceSpaceDecision.behind', '{{behind}} behind', {
+        behind: status.behind
+      })
 }
 
 export function getWorkspaceDecisionDetails(
   worktree: WorkspaceSpaceWorktree,
   inputs: WorkspaceDecisionInputs
 ): WorkspaceDecisionDetails {
-  const workspaceRecord = inputs.worktreeMap.get(worktree.worktreeId)
+  const candidateWorkspaceRecord =
+    inputs.worktreeRecord ?? inputs.worktreeMap.get(worktree.worktreeId)
+  const workspaceRecord =
+    candidateWorkspaceRecord &&
+    (!worktree.executionHostId || candidateWorkspaceRecord.hostId === worktree.executionHostId)
+      ? candidateWorkspaceRecord
+      : undefined
   const tabs = inputs.tabsByWorktree[worktree.worktreeId] ?? []
   const openFiles = inputs.openFiles.filter((file) => file.worktreeId === worktree.worktreeId)
   const dirtyEditorBufferCount = openFiles.filter(
@@ -149,9 +162,7 @@ export function getWorkspaceDecisionDetails(
   const linkedPR = workspaceRecord?.linkedPR ?? null
   const reviewLabel =
     hostedReview !== undefined && hostedReview !== null
-      ? `PR #${hostedReview.number} ${formatReviewState(hostedReview.state)}${
-          hostedReview.status && hostedReview.status !== 'none' ? `, ${hostedReview.status}` : ''
-        }`
+      ? formatHostedReviewLabel(hostedReview)
       : linkedPR
         ? `PR #${linkedPR}`
         : null

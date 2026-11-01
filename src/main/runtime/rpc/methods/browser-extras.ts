@@ -20,7 +20,7 @@ import {
   StorageKey,
   StorageKeyValue,
   Viewport
-} from './browser-schemas'
+} from '../../../../shared/rpc-contract/browser-params'
 import { MouseClick } from '../../../../shared/rpc-contract/browser-extras-params'
 
 export const BROWSER_EXTRA_METHODS = [

@@ -30,8 +30,7 @@ export function logStartupDiagnostic(
   writeStartupDiagnosticLine(`[startup] ${event}${detailText ? ` ${detailText}` : ''}`, write)
 }
 
-// Why: startup benchmarking needs in-process timestamps — harness-side stderr
-// arrival times include pipe buffering jitter. `t` is ms since process start.
+// Use in-process elapsed milliseconds; stderr-arrival timestamps include pipe buffering jitter.
 export function logStartupMilestone(
   event: string,
   details: Record<string, unknown> | (() => Record<string, unknown>) = {}

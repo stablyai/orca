@@ -51,25 +51,20 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-/**
- * A worktree switch unmounts the pane subtree while main keeps the guest alive, so the pane
- * remounts over a guest that is still painting whatever it last loaded. These drive the real
- * store both ways, because the wipe being guarded against is the store's own coupling:
- * writing loadError:null also deletes the page's certificate record.
- */
+/** Worktree switches unmount chrome while retaining the guest; use the real store because clearing loadError also deletes its certificate record. */
 describe('ClientHostedBrowserPagePane failure records across a remount', () => {
   it('keeps the failure and the certificate record when the guest still sits on the failed page', () => {
     const view = render(<StoreDrivenPane />)
     failLoad()
     expect(storedPage().loadError?.validatedUrl).toBe(FAILED_URL)
-    expect(screen.getByRole('button', { name: 'Copy Address' })).not.toBeNull()
+    expect(screen.getByRole('heading', { name: "Connection isn't secure" })).not.toBeNull()
 
     act(() => view.unmount())
     render(<StoreDrivenPane />)
 
     expect(storedPage().loadError?.validatedUrl).toBe(FAILED_URL)
     expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeDefined()
-    expect(screen.getByRole('button', { name: 'Copy Address' })).not.toBeNull()
+    expect(screen.getByRole('heading', { name: "Connection isn't secure" })).not.toBeNull()
   })
 
   it('keeps both records when the guest is parked on the Chromium error page', () => {
@@ -77,14 +72,13 @@ describe('ClientHostedBrowserPagePane failure records across a remount', () => {
     failLoad()
 
     act(() => view.unmount())
-    // A guest that never left the failed navigation paints chrome-error://chromewebdata/ and
-    // reports that as its URL, so the remount meets a URL that matches nothing it recorded.
+    // Failed guests report chrome-error://chromewebdata/, which matches neither recorded URL.
     webview.getURL.mockReturnValue('chrome-error://chromewebdata/')
     render(<StoreDrivenPane />)
 
     expect(storedPage().loadError?.validatedUrl).toBe(FAILED_URL)
     expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeDefined()
-    expect(screen.getByRole('button', { name: 'Copy Address' })).not.toBeNull()
+    expect(screen.getByRole('heading', { name: "Connection isn't secure" })).not.toBeNull()
   })
 
   it('clears both records when the guest moved on while the pane was unmounted', () => {
@@ -92,14 +86,13 @@ describe('ClientHostedBrowserPagePane failure records across a remount', () => {
     failLoad()
 
     act(() => view.unmount())
-    // Nothing observes the guest while the pane is gone, so a navigation that lands in the gap
-    // is only ever noticed by the sync the remount runs.
+    // A navigation while unmounted is observable only through remount sync.
     webview.getURL.mockReturnValue('https://example.internal/recovered')
     render(<StoreDrivenPane />)
 
     expect(storedPage().loadError).toBeNull()
     expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeUndefined()
-    expect(screen.queryByRole('button', { name: 'Copy Address' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: "Connection isn't secure" })).toBeNull()
   })
 })
 

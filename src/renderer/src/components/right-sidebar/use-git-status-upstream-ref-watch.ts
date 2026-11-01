@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
-import { setRuntimeGitStatusUpstreamRefWatch } from '@/runtime/runtime-git-client'
+import { setRuntimeGitStatusUpstreamRefWatch } from '@/runtime/runtime-git-status-client'
 import type { GitStatusResult } from '../../../../shared/git-status-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { getWorktreeGitOwnerTarget } from './worktree-git-owner-target'
@@ -12,7 +12,7 @@ export function useGitStatusUpstreamRefWatch(args: {
   worktreePath: string | null
 }): (status: GitStatusResult) => void {
   const owner = getWorktreeGitOwnerTarget(args.worktreeId)
-  // Why a string: it keys the effect, and a fresh target object each render would re-arm it.
+  // Key by primitive identity so new target objects cannot rearm the effect.
   const runtimeEnvironmentId = owner?.kind === 'environment' ? owner.environmentId : null
   const connectionId = args.worktreeId ? (getConnectionId(args.worktreeId) ?? undefined) : undefined
   const scope =

@@ -12,7 +12,13 @@ import {
 import { BROWSER_CORE_METHODS } from './browser-core'
 import { BROWSER_EXTRA_METHODS } from './browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from './browser-screencast'
-import { ClipboardWrite, Fill, KeyboardInsert, ProfileCreate, Type } from './browser-schemas'
+import {
+  ClipboardWrite,
+  Fill,
+  KeyboardInsert,
+  Type
+} from '../../../../shared/rpc-contract/browser-params'
+import { ProfileCreate } from '../../../../shared/rpc-contract/browser-identity-params'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -75,8 +81,7 @@ describe('browser RPC methods', () => {
     ).toThrow('browser_profile_user_agent_mode_is_now_app_wide')
   })
 
-  // The schema check above proves the shape; this proves an older client actually gets the
-  // rejection over the wire instead of a success with the field quietly dropped.
+  // Prove retired fields are refused over the wire, not accepted after silent stripping.
   it('rejects the retired profile user-agent field through the dispatcher', async () => {
     const browserProfileCreate = vi.fn().mockResolvedValue({ id: 'profile-1' })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only getRuntimeId and the single browser method stubbed here.
@@ -94,8 +99,7 @@ describe('browser RPC methods', () => {
       })
     )
 
-    // Why a working runtime stub: if the field were accepted and stripped again the call would
-    // succeed, so every assertion below is load-bearing rather than passing on a missing method.
+    // A working runtime stub ensures refusal comes from validation, not a missing method.
     expect(response).toMatchObject({ ok: false })
     expect(JSON.stringify(response)).toContain('browser_profile_user_agent_mode_is_now_app_wide')
     expect(browserProfileCreate).not.toHaveBeenCalled()

@@ -31,7 +31,7 @@ describe('command token scanner', () => {
     )
   })
 
-  it('extracts path basenames without allocating path segment arrays', () => {
+  it('extracts basenames from Windows and POSIX paths', () => {
     expect(getCommandTokenPathBasename('C:\\Program Files\\Orca\\codex.cmd')).toBe('codex.cmd')
     expect(getCommandTokenPathBasename('/usr/local/bin/omp')).toBe('omp')
   })

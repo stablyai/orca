@@ -1,18 +1,19 @@
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
-import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal-osc-color-reply'
-import { colorQueryReplyColorsEqual } from '../../../shared/pty-owner-color-query-colors'
-import { callRuntimeRpc, RuntimeRpcCallError } from './runtime-rpc-client'
+import {
+  terminalViewAttributesEqual,
+  terminalViewColorQueryReplyColors,
+  type TerminalViewAttributes
+} from '../../../shared/terminal-view-attributes'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 
-type PushCall = (
-  environmentId: string,
-  colors: TerminalOscColorQueryReplyColors
-) => Promise<unknown>
+type PushCall = (environmentId: string, attributes: TerminalViewAttributes) => Promise<unknown>
 
 type ConnectedHost = { runtimeId: string; unsupported: boolean }
 
 export type RemoteRuntimeTerminalColorPush = {
   observeStatusSnapshot: (snapshot: RuntimeHostStatusSnapshot) => void
-  setColors: (colors: TerminalOscColorQueryReplyColors) => void
+  setAttributes: (attributes: TerminalViewAttributes) => void
   /** This window gained focus: a headless host with several clients answers with its theme again. */
   pushToAllHosts: () => void
 }
@@ -23,8 +24,7 @@ function connectedRuntimeId(snapshot: RuntimeHostStatusSnapshot): string | null 
   return live ? (snapshot.status?.runtimeId ?? null) : null
 }
 
-// Why: a host that predates the method, or a scope that refuses it, will not start accepting it
-// on this connection; stop asking until the host reconnects.
+// Unsupported/refused colour pushes cannot succeed on this connection; retry only after reconnect.
 function isPermanentRefusal(error: unknown): boolean {
   return (
     error instanceof RuntimeRpcCallError &&
@@ -33,23 +33,23 @@ function isPermanentRefusal(error: unknown): boolean {
 }
 
 /**
- * A headless paired host answers its panes' OSC 10/11 with the theme of the client that pushed
- * last, so this client pushes its colours to every connected host on connect, change and focus.
+ * A headless paired host answers its panes' queries with the theme of the client that pushed
+ * last, so this client pushes its appearance to every connected host on connect, change and focus.
  * A host with its own window keeps its own theme and ignores the push for its answers.
  */
 export function createRemoteRuntimeTerminalColorPush(
   call: PushCall
 ): RemoteRuntimeTerminalColorPush {
   const hosts = new Map<string, ConnectedHost>()
-  let colors: TerminalOscColorQueryReplyColors | null = null
+  let attributes: TerminalViewAttributes | null = null
 
   const push = (environmentId: string): void => {
     const host = hosts.get(environmentId)
-    if (!colors || !host || host.unsupported) {
+    if (!attributes || !host || host.unsupported) {
       return
     }
     // Best-effort: a failed push leaves the host answering with the colours it already had.
-    call(environmentId, colors).catch((error: unknown) => {
+    call(environmentId, attributes).catch((error: unknown) => {
       if (isPermanentRefusal(error) && hosts.get(environmentId) === host) {
         host.unsupported = true
       }
@@ -75,20 +75,23 @@ export function createRemoteRuntimeTerminalColorPush(
       hosts.set(snapshot.environmentId, { runtimeId, unsupported: false })
       push(snapshot.environmentId)
     },
-    setColors: (next) => {
-      if (colorQueryReplyColorsEqual(colors, next)) {
+    setAttributes: (next) => {
+      if (attributes && terminalViewAttributesEqual(attributes, next)) {
         return
       }
-      colors = next
+      attributes = next
       pushToAllHosts()
     },
     pushToAllHosts
   }
 }
 
-// Why one instance: status snapshots arrive through the app-lifetime IPC bridge, while the
-// colours and window focus come from the app shell.
+// One lifetime instance joins IPC status with shell-owned colours/focus events.
 export const remoteRuntimeTerminalColorPush = createRemoteRuntimeTerminalColorPush(
-  (environmentId, colors) =>
-    callRuntimeRpc({ kind: 'environment', environmentId }, 'terminal.setViewerColors', { colors })
+  (environmentId, attributes) =>
+    // Older hosts strip `attributes` and answer from `colors` alone.
+    callRuntimeRpc({ kind: 'environment', environmentId }, 'terminal.setViewerColors', {
+      colors: terminalViewColorQueryReplyColors(attributes),
+      attributes
+    })
 )

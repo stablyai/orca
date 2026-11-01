@@ -22,8 +22,7 @@ export function WorktreeCardHoverIdentityHeader({
   const branchIdentity = branchName ? (
     <div
       className={cn(
-        // Why: the hover panel is where users read full git identity; wrap instead
-        // of truncating so long branch names stay readable like issue titles below.
+        // The hover panel must reveal full branch names, so wrap instead of truncating.
         'break-words font-mono text-[11px] leading-snug text-muted-foreground',
         identityOrder === 'workspace-first' && 'mt-1'
       )}
@@ -67,8 +66,7 @@ export function WorktreeCardHoverIdentityHeader({
   }
 
   return (
-    // Why: detail sections keep the left rule; the hover title stays flush so
-    // it reads as the panel heading rather than another inset section.
+    // Keep hover titles flush so they read as headings rather than inset metadata sections.
     <div className="min-w-0" data-worktree-hover-identity-header="">
       {identityOrder === 'branch-first' ? branchIdentity : workspaceIdentity}
       {identityOrder === 'branch-first' ? workspaceIdentity : branchIdentity}

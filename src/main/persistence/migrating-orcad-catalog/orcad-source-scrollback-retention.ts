@@ -1,23 +1,21 @@
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import {
   readTerminalScrollbackStoredBytesSync,
   writeTerminalScrollbackSnapshotSync
 } from '../../terminal-scrollback-snapshots'
 import { deleteUnreferencedOrcadMigrationScrollback } from './orcad-source-scrollback-cleanup'
-import { findSnapshotBytes } from './orcad-source-scrollback-state'
+import {
+  findSnapshotBytes,
+  matchesOrcadMigrationSnapshotBytes
+} from './orcad-source-scrollback-state'
 
 type RetentionRuntime = Pick<
   StoreRuntimeState,
   'state' | 'terminalScrollbackSnapshotStorage' | 'retainedScrollbackRefsByMigrationId'
 >
 
-/**
- * Holds every snapshot an unfinished migration's manifest names, from the journaled export until
- * the destination commits or the migration is abandoned, so a tab closed meanwhile still sends
- * its bytes on any retry. An inline buffer has no file, so its bytes are written to its ref first.
- * Released refs no session names are deleted.
- */
+/** Persist signed snapshots until commit/abandonment so tab closes cannot break transfer retries. */
 export function syncOrcadMigrationScrollbackRetention(
   runtime: RetentionRuntime,
   pending: readonly OrcadMigrationManifest[]
@@ -51,7 +49,9 @@ function persistInlineSnapshot(
   >[number]
 ): void {
   const storage = runtime.terminalScrollbackSnapshotStorage
-  if (readTerminalScrollbackStoredBytesSync(descriptor.ref, storage)) {
+  // A newer inline copy (local-only park) can supersede a file under the same ref; keep what was signed.
+  const stored = readTerminalScrollbackStoredBytesSync(descriptor.ref, storage)
+  if (matchesOrcadMigrationSnapshotBytes(stored, descriptor)) {
     return
   }
   const bytes = findSnapshotBytes(runtime.state, descriptor, storage)

@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, createElement } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import { act } from 'react'
 import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 
 const mocks = vi.hoisted(() => ({
@@ -9,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   readClipboardText: vi.fn(),
   readClipboardImageThumbnail: vi.fn(),
   clipboardHasImage: vi.fn(),
-  readClipboardFilePaths: vi.fn()
+  readClipboardFilePaths: vi.fn(),
+  getPathForFile: vi.fn()
 }))
 
 vi.mock('@/i18n/i18n', () => ({
@@ -34,7 +34,8 @@ vi.stubGlobal('window', {
       readClipboardImageThumbnail: mocks.readClipboardImageThumbnail,
       clipboardHasImage: mocks.clipboardHasImage,
       readClipboardFilePaths: mocks.readClipboardFilePaths
-    }
+    },
+    fs: { getPathForFile: mocks.getPathForFile }
   }
 })
 vi.stubGlobal('URL', {
@@ -42,134 +43,11 @@ vi.stubGlobal('URL', {
   revokeObjectURL: () => {}
 })
 
-import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
-
-type HookApi = ReturnType<typeof useNativeChatComposerPaste>
-
-/** Mirrors the composer's attachment list so tests can assert what the user sees. */
-type FakeChip = { id: string; path: string; previewUrl?: string; pending: boolean }
-
-function createChipStore(): {
-  chips: FakeChip[]
-  begin: (previewUrl?: string) => string | null
-  resolve: (id: string, path: string, connectionId?: string | null) => void
-  reveal: (id: string, previewUrl?: string) => void
-  drop: (id: string) => void
-  connectionIds: (string | null | undefined)[]
-} {
-  const chips: FakeChip[] = []
-  const connectionIds: (string | null | undefined)[] = []
-  let counter = 0
-  return {
-    chips,
-    connectionIds,
-    reveal: (id, previewUrl) => {
-      const chip = chips.find((candidate) => candidate.id === id)
-      if (chip) {
-        chip.previewUrl = previewUrl
-      }
-    },
-    begin: (previewUrl) => {
-      counter += 1
-      const id = `chip-${counter}`
-      chips.push({ id, path: '', previewUrl, pending: true })
-      return id
-    },
-    resolve: (id, path, connectionId) => {
-      const chip = chips.find((candidate) => candidate.id === id)
-      if (chip) {
-        chip.path = path
-        chip.pending = false
-      }
-      connectionIds.push(connectionId)
-    },
-    drop: (id) => {
-      const index = chips.findIndex((candidate) => candidate.id === id)
-      if (index !== -1) {
-        chips.splice(index, 1)
-      }
-    }
-  }
-}
-
-type ProbeArgs = {
-  targetKey?: string
-  agent?: 'claude' | 'omp'
-  disabled: boolean
-  resolveAttachmentOwner: () => NativeChatAttachmentOwner
-  attachResolvedPaths: (paths: string[], connectionId?: string | null) => void
-  beginPendingImageAttachment: (previewUrl?: string) => string | null
-  resolvePendingImageAttachment: (id: string, path: string, connectionId?: string | null) => void
-  revealPendingImageAttachment: (id: string, previewUrl?: string) => void
-  dropPendingImageAttachment: (id: string) => void
-  insertTypedText: (text: string) => boolean
-  setNotice: (notice: string | null) => void
-  onReady: (api: HookApi) => void
-}
-
-function Probe({ onReady, ...args }: ProbeArgs): null {
-  onReady(useNativeChatComposerPaste({ agent: 'claude', caret: 0, setCaret: () => {}, ...args }))
-  return null
-}
-
-let root: Root | null = null
-
-async function renderProbe(args: {
-  agent?: 'claude' | 'omp'
-  disabled?: boolean
-  resolveAttachmentOwner: () => NativeChatAttachmentOwner
-  attachResolvedPaths?: (paths: string[], connectionId?: string | null) => void
-  store?: ReturnType<typeof createChipStore>
-  insertTypedText?: (text: string) => boolean
-  setNotice?: (notice: string | null) => void
-}): Promise<{
-  latest: () => HookApi
-  setDisabled: (disabled: boolean) => Promise<void>
-  setTarget: (key: string) => Promise<void>
-}> {
-  const container = document.createElement('div')
-  document.body.append(container)
-  const store = args.store ?? createChipStore()
-  let api: HookApi | null = null
-  root = createRoot(container)
-  let targetKey = 'session-1'
-  const render = async (disabled: boolean): Promise<void> => {
-    await act(async () => {
-      root?.render(
-        createElement(Probe, {
-          targetKey,
-          agent: args.agent ?? 'claude',
-          disabled,
-          resolveAttachmentOwner: args.resolveAttachmentOwner,
-          attachResolvedPaths: args.attachResolvedPaths ?? (() => {}),
-          beginPendingImageAttachment: args.agent === 'omp' ? () => null : store.begin,
-          resolvePendingImageAttachment: store.resolve,
-          revealPendingImageAttachment: store.reveal,
-          dropPendingImageAttachment: store.drop,
-          insertTypedText: args.insertTypedText ?? (() => true),
-          setNotice: args.setNotice ?? (() => {}),
-          onReady: (next) => {
-            api = next
-          }
-        })
-      )
-    })
-  }
-  await render(args.disabled ?? false)
-  return {
-    latest: () => {
-      if (!api) {
-        throw new Error('Probe did not render')
-      }
-      return api
-    },
-    setDisabled: render,
-    setTarget: async (key) => {
-      targetKey = key
-      await render(false)
-    }
-  }
-}
+import {
+  createChipStore,
+  renderProbe,
+  unmountPasteProbe
+} from './native-chat-composer-paste-test-fixtures'
 
 function imagePasteEvent(text = ''): ClipboardEvent {
   const data = new DataTransfer()
@@ -182,16 +60,18 @@ function imagePasteEvent(text = ''): ClipboardEvent {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (X11; Linux x86_64)')
   mocks.readClipboardText.mockResolvedValue('')
   mocks.readClipboardImageThumbnail.mockResolvedValue(null)
   mocks.clipboardHasImage.mockResolvedValue(true)
   mocks.readClipboardFilePaths.mockResolvedValue([])
+  mocks.getPathForFile.mockReturnValue('')
   mocks.saveClipboardImageAsTempFile.mockResolvedValue(null)
 })
 
 afterEach(() => {
-  root?.unmount()
-  root = null
+  unmountPasteProbe()
+  vi.restoreAllMocks()
   vi.clearAllMocks()
 })
 
@@ -216,6 +96,37 @@ describe('useNativeChatComposerPaste', () => {
     expect(store.chips).toHaveLength(0)
   })
 
+  it.each(['event', 'menu'] as const)(
+    'saves a clipboard image on the server whose host runs the agent via %s paste (#27997)',
+    async (source) => {
+      mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/remote.png')
+      const store = createChipStore()
+      const owner = { kind: 'remote', clipboardImageEnvironmentId: 'env-1' } as const
+      const probe = await renderProbe({ resolveAttachmentOwner: () => owner, store })
+      await act(async () =>
+        source === 'event'
+          ? probe.latest().handlePaste(imagePasteEvent())
+          : probe.latest().pasteFromClipboard()
+      )
+      expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+        runtimeEnvironmentId: 'env-1'
+      })
+      expect(store.chips).toEqual([expect.objectContaining({ path: '/tmp/remote.png' })])
+    }
+  )
+
+  it('rejects a remote image saved before the chat moved to another server', async () => {
+    let owner: NativeChatAttachmentOwner = { kind: 'remote', clipboardImageEnvironmentId: 'env-1' }
+    let resolveSave: (path: string) => void = () => {}
+    mocks.saveClipboardImageAsTempFile.mockReturnValue(new Promise((r) => (resolveSave = r)))
+    const store = createChipStore()
+    const probe = await renderProbe({ resolveAttachmentOwner: () => owner, store })
+    await act(async () => probe.latest().handlePaste(imagePasteEvent()))
+    owner = { kind: 'remote', clipboardImageEnvironmentId: 'env-2' }
+    await act(async () => resolveSave('/tmp/remote.png'))
+    expect(store.chips).toHaveLength(0)
+  })
+
   it('surfaces a failed image save through the composer notice', async () => {
     mocks.saveClipboardImageAsTempFile.mockRejectedValue(new Error('Disk full.'))
     const store = createChipStore()
@@ -229,7 +140,6 @@ describe('useNativeChatComposerPaste', () => {
       probe.latest().handlePaste(imagePasteEvent())
     })
     expect(setNotice).toHaveBeenCalledWith('Disk full.')
-    // The optimistic chip must not outlive a failed save.
     expect(store.chips).toHaveLength(0)
   })
 
@@ -270,6 +180,19 @@ describe('useNativeChatComposerPaste', () => {
       probe.latest().handlePaste(imagePasteEvent())
     })
     expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({ forNativeChatDraft: true })
+  })
+
+  it("keeps a local structured chat's paste where that chat's send claims it", async () => {
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => ({ kind: 'local', structuredSessionId: 'session-1' })
+    })
+    await act(async () => {
+      probe.latest().handlePaste(imagePasteEvent())
+    })
+    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+      forNativeChatDraft: true,
+      forStructuredChat: true
+    })
   })
 
   it('shows a pending chip before the save resolves', async () => {
@@ -534,11 +457,6 @@ describe('composer paste intake regressions', () => {
     async (change) => {
       let finishText = (_text: string): void => {}
       let finishImage = (_path: string): void => {}
-      mocks.readClipboardText.mockReturnValue(
-        new Promise<string>((resolve) => {
-          finishText = resolve
-        })
-      )
       mocks.saveClipboardImageAsTempFile.mockReturnValue(
         new Promise<string>((resolve) => {
           finishImage = resolve
@@ -556,12 +474,18 @@ describe('composer paste intake regressions', () => {
         insertTypedText,
         store
       })
+      // An image still saving, then a second paste whose text read is still in flight.
       await act(async () => probe.latest().pasteFromClipboard())
       expect(store.chips).toHaveLength(1)
+      mocks.readClipboardText.mockReturnValue(
+        new Promise<string>((resolve) => {
+          finishText = resolve
+        })
+      )
+      await act(async () => probe.latest().pasteFromClipboard())
       if (change === 'unmount') {
         await act(async () => {
-          root?.unmount()
-          root = null
+          unmountPasteProbe()
         })
       } else if (change === 'replace') {
         await probe.setTarget('session-2')
@@ -742,41 +666,113 @@ describe('file-manager copies', () => {
     expect(insertTypedText).not.toHaveBeenCalled()
   })
 
-  describe('from the app menu (macOS Cmd+V)', () => {
-    it.each([
-      ['a single file', 'shot.png', ['/Users/me/Desktop/shot.png']],
-      ['several files', 'a.png\rb.pdf', ['/Users/me/a.png', '/Users/me/b.pdf']]
-    ])('attaches %s without typing the Finder label', async (_label, text, paths) => {
-      mocks.readClipboardText.mockResolvedValue(text)
-      mocks.readClipboardFilePaths.mockResolvedValue(paths)
+  it('attaches pasted files that have local paths as a drop would, typing nothing', async () => {
+    mocks.getPathForFile.mockImplementation((file: File) => `/Users/me/${file.name}`)
+    const insertTypedText = vi.fn(() => true)
+    const attachCopiedFiles = vi.fn()
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => ({ kind: 'local' }),
+      insertTypedText,
+      attachCopiedFiles
+    })
+    const files = [png('shot.png'), new File(['pdf'], 'b.pdf', { type: 'application/pdf' })]
+    await act(async () => probe.latest().handlePaste(fileCopyEvent(files, 'shot.png\nb.pdf')))
+    expect(attachCopiedFiles).toHaveBeenCalledExactlyOnceWith(
+      ['/Users/me/shot.png', '/Users/me/b.pdf'],
+      { focus: false }
+    )
+    expect(insertTypedText).not.toHaveBeenCalled()
+    expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a screenshot picture beside its saved file', '', false],
+    ['a Finder copy, whose clipboard text names the file', 'Screenshot.png', true]
+  ])(
+    'on macOS, holds a chip at once for %s, then lets the clipboard decide',
+    async (_label, nativeText, attachesFiles) => {
+      vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (Macintosh)')
+      mocks.getPathForFile.mockImplementation((file: File) => `/Users/me/Desktop/${file.name}`)
+      let finishRead: (text: string) => void = () => {}
+      mocks.readClipboardText.mockReturnValue(
+        new Promise<string>((resolve) => {
+          finishRead = resolve
+        })
+      )
       mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/shot.png')
-      const insertTypedText = vi.fn(() => true)
-      const attachResolvedPaths = vi.fn()
+      const attachCopiedFiles = vi.fn()
+      const continueCopiedFiles = vi.fn(async () => {})
       const store = createChipStore()
       const probe = await renderProbe({
         resolveAttachmentOwner: () => ({ kind: 'local' }),
-        insertTypedText,
-        attachResolvedPaths,
+        attachCopiedFiles,
+        continueCopiedFiles,
         store
       })
-      await act(async () => probe.latest().pasteFromClipboard())
-      expect(insertTypedText).not.toHaveBeenCalled()
-      expect(store.chips[0]).toMatchObject({ path: '/tmp/shot.png', pending: false })
-      expect(attachResolvedPaths).not.toHaveBeenCalled()
-    })
+      await act(async () => probe.latest().handlePaste(fileCopyEvent([png('Screenshot.png')], '')))
+      expect(store.chips).toEqual([expect.objectContaining({ pending: true })])
+      await act(async () => finishRead(nativeText))
+      // Files continue the chip reserved at paste time; no new attach starts.
+      expect(attachCopiedFiles).not.toHaveBeenCalled()
+      expect(continueCopiedFiles.mock.calls).toEqual(
+        attachesFiles ? [[[{ path: '/Users/me/Desktop/Screenshot.png', chipId: 'chip-1' }]]] : []
+      )
+      expect(store.chips).toEqual([
+        attachesFiles
+          ? expect.objectContaining({ id: 'chip-1', pending: true })
+          : expect.objectContaining({ path: '/tmp/shot.png', pending: false })
+      ])
+      expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledTimes(attachesFiles ? 0 : 1)
+    }
+  )
 
-    it('types the label when no image came with the files', async () => {
-      mocks.clipboardHasImage.mockResolvedValue(false)
-      mocks.readClipboardText.mockResolvedValue('notes.txt')
-      mocks.readClipboardFilePaths.mockResolvedValue(['/Users/me/notes.txt'])
-      const insertTypedText = vi.fn(() => true)
-      const probe = await renderProbe({
-        resolveAttachmentOwner: () => ({ kind: 'local' }),
-        insertTypedText
-      })
-      await act(async () => probe.latest().pasteFromClipboard())
-      expect(insertTypedText).toHaveBeenCalledExactlyOnceWith('notes.txt')
-    })
+  describe('from the app menu (macOS Cmd+V)', () => {
+    it.each([
+      ['a single file', 'shot.png', ['/Users/me/Desktop/shot.png'], true],
+      ['several files', 'a.png\rb.pdf', ['/Users/me/a.png', '/Users/me/b.pdf'], true],
+      ['a file with no image rendition', 'notes.txt', ['/Users/me/notes.txt'], false]
+    ])(
+      'attaches %s as a drop would, without typing the Finder label',
+      async (_label, text, paths, hasImage) => {
+        mocks.readClipboardText.mockResolvedValue(text)
+        mocks.readClipboardFilePaths.mockResolvedValue(paths)
+        mocks.clipboardHasImage.mockResolvedValue(hasImage)
+        const insertTypedText = vi.fn(() => true)
+        const attachCopiedFiles = vi.fn()
+        const probe = await renderProbe({
+          resolveAttachmentOwner: () => ({ kind: 'local' }),
+          insertTypedText,
+          attachCopiedFiles
+        })
+        await act(async () => probe.latest().pasteFromClipboard())
+        expect(attachCopiedFiles).toHaveBeenCalledExactlyOnceWith(paths, { focus: false })
+        expect(insertTypedText).not.toHaveBeenCalled()
+        // The copied file itself is attached, never the bitmap rendition beside it.
+        expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+      }
+    )
+
+    it.each([
+      ['macOS', 'Macintosh', false],
+      ['other platforms', 'X11; Linux x86_64', true]
+    ])(
+      'on %s, treats a screenshot picture beside its saved file as files only off macOS',
+      async (_label, platform, attachesFiles) => {
+        // A screenshot tool's clipboard: the picture plus its saved file, which may be gone.
+        vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(`Mozilla/5.0 (${platform})`)
+        mocks.readClipboardText.mockResolvedValue('')
+        mocks.readClipboardFilePaths.mockResolvedValue(['/Users/me/Desktop/Screenshot.png'])
+        mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/shot.png')
+        const attachCopiedFiles = vi.fn()
+        const probe = await renderProbe({
+          resolveAttachmentOwner: () => ({ kind: 'local' }),
+          attachCopiedFiles
+        })
+        await act(async () => probe.latest().pasteFromClipboard())
+        expect(attachCopiedFiles).toHaveBeenCalledTimes(attachesFiles ? 1 : 0)
+        expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledTimes(attachesFiles ? 0 : 1)
+      }
+    )
 
     it('types unrelated text at once, and when the file list cannot be read', async () => {
       mocks.readClipboardText.mockResolvedValue('see attached')
@@ -795,27 +791,5 @@ describe('file-manager copies', () => {
       await act(async () => probe.latest().pasteFromClipboard())
       expect(insertTypedText).toHaveBeenLastCalledWith('shot.png')
     })
-
-    it.each([
-      [true, 0, 1],
-      [false, 1, 0]
-    ])(
-      'on a remote runtime, image presence %s decides between the refusal and the label',
-      async (hasImage, inserts, notices) => {
-        mocks.readClipboardText.mockResolvedValue('shot.png')
-        mocks.readClipboardFilePaths.mockResolvedValue(['/Users/me/shot.png'])
-        mocks.clipboardHasImage.mockResolvedValue(hasImage)
-        const insertTypedText = vi.fn(() => true)
-        const setNotice = vi.fn()
-        const probe = await renderProbe({
-          resolveAttachmentOwner: () => ({ kind: 'remote' }),
-          insertTypedText,
-          setNotice
-        })
-        await act(async () => probe.latest().pasteFromClipboard())
-        expect(insertTypedText).toHaveBeenCalledTimes(inserts)
-        expect(setNotice.mock.calls.filter(([notice]) => notice !== null)).toHaveLength(notices)
-      }
-    )
   })
 })

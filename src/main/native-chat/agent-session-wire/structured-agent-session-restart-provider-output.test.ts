@@ -1,14 +1,15 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { codexStreamingJournalItem } from '../../codex/codex-structured-item-translation'
 import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
-} from '../../../shared/structured-agent-session-turn-timing'
+} from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabases,
@@ -43,10 +44,9 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await rig.dispose()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
 })
 
-/** Drops the old host without an exit callback or graceful turn settlement. */
 async function restartAfterCrash(): Promise<void> {
   const old = rig.host
   old.stopDelivery()
@@ -55,7 +55,7 @@ async function restartAfterCrash(): Promise<void> {
   await runtimeState.stopLeaseRenewal()
   runtimeState.currentEventSink(SESSION)?.close()
   await sessions.get(SESSION)?.journal.close()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   rig.clock.now = RESTARTED_AT
   rig.store = await openTestAgentSessionRecordStore(rig.root)
   rig.host = new StructuredAgentSessionHost({
@@ -90,7 +90,7 @@ async function beginTurn() {
 
 async function expectInterruptedOutput(completedAt = LAST_CHUNK_AT): Promise<void> {
   await restartAfterCrash()
-  await rig.host.restoreReadableSessions()
+  await openTestChats(rig.host)
   const snapshot = await rig.host.journalSnapshot(SESSION)
   const turn = snapshot.items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
   expect(turn).toMatchObject({ state: 'interrupted', completedAt })
@@ -168,7 +168,7 @@ describe('provider output survives host restart', () => {
       rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.lastProviderActivityAt(1)
     ).toBe(LAST_CHUNK_AT)
     await restartAfterCrash()
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     const snapshot = await rig.host.journalSnapshot(SESSION)
     const turn = snapshot.items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
     expect(turn).toMatchObject({ state: 'interrupted', completedAt: LAST_CHUNK_AT })
@@ -193,7 +193,7 @@ describe('provider output survives host restart', () => {
     }
     expect(rig.store.getRecord(SESSION)?.lease.lastRenewedAt).toBe(HOST_TEST_NOW)
     await restartAfterCrash()
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     const snapshot = await rig.host.journalSnapshot(SESSION)
     const turn = snapshot.items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
     expect(turn).toMatchObject({ state: 'interrupted', completedAt: LAST_CHUNK_AT })
@@ -323,7 +323,7 @@ describe('provider output survives host restart', () => {
     )
     await rig.host.flushStreamedEvents(SESSION)
     await restartAfterCrash()
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     const snapshot = await rig.host.journalSnapshot(SESSION)
     const turn = snapshot.items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
     expect(turn).toMatchObject({ state: 'interrupted', completedAt: LAST_CHUNK_AT })

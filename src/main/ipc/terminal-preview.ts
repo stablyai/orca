@@ -6,6 +6,7 @@ import type {
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
 import { isTrustedUIRenderer } from './ui'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import {
   TERMINAL_PREVIEW_OUTPUT_BATCH_MAX_BYTES,
   TerminalPreviewOutputStream
@@ -17,9 +18,7 @@ function isValidPtyId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= PREVIEW_ID_MAX_LENGTH
 }
 
-// Why: the preview dialog has two hosts — the pop-out window and the main
-// renderer's in-window overlay. The trusted UI renderer already has full PTY
-// access through the regular terminal channels, so admitting it adds no reach.
+// Both popout and main-renderer overlay host previews; trusted UI already has ordinary PTY access.
 function isTerminalPreviewRenderer(sender: WebContents): boolean {
   return isDashboardPopoutRenderer(sender) || isTrustedUIRenderer(sender)
 }
@@ -32,11 +31,9 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
   ipcMain.removeHandler('terminalPreview:fit')
 
   const subscriptionsByContents = new Map<number, Map<string, TerminalPreviewOutputStream>>()
-  // Why: the preview dialog claims the PTY grid through the remote-desktop
-  // viewer registry so the main-window pane parks and later reclaims its own
-  // geometry. Claims are tracked per viewer webContents so an explicit
-  // unsubscribe or a destroyed window always releases the size floor.
+  // Unsubscribe or renderer document retirement releases the host pane's grid claim.
   const fitClaimsByContents = new Map<number, Map<string, symbol>>()
+  const rendererLifetimes = new Map<number, ReturnType<typeof abortWhenRendererGone>>()
 
   const previewViewerKey = (contentsId: number): string => `dashboard-popout:${contentsId}`
 
@@ -61,6 +58,9 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
   }
 
   const disposeContents = (contentsId: number): void => {
+    const lifetime = rendererLifetimes.get(contentsId)
+    rendererLifetimes.delete(contentsId)
+    lifetime?.dispose()
     const perPty = subscriptionsByContents.get(contentsId)
     if (perPty) {
       for (const subscription of perPty.values()) {
@@ -68,7 +68,6 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       }
       subscriptionsByContents.delete(contentsId)
     }
-    // Why: releasing one claim mutates this map while the remaining claims still need teardown.
     for (const ptyId of fitClaimsByContents.get(contentsId)?.keys() ?? []) {
       releaseFitClaim(contentsId, ptyId)
     }
@@ -79,7 +78,9 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     if (!perPty) {
       perPty = new Map()
       subscriptionsByContents.set(contents.id, perPty)
-      contents.once('destroyed', () => disposeContents(contents.id))
+      const lifetime = abortWhenRendererGone(contents)
+      rendererLifetimes.set(contents.id, lifetime)
+      lifetime.signal.addEventListener('abort', () => disposeContents(contents.id), { once: true })
     }
     return perPty
   }
@@ -107,9 +108,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
         subscription.append(data, meta)
       )
       let previewSize = runtime.getTerminalSize(ptyId)
-      // Why: any grid change (dialog fit landing, host reclaim, phone takeover)
-      // invalidates bytes parsed at the old width — push a resync so the
-      // renderer reconnects and repaints from a snapshot at the new grid.
+      // Grid changes invalidate parsing at the old width; reconnect from a new authoritative snapshot.
       const unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
         if (previewSize?.cols === event.cols && previewSize.rows === event.rows) {
           return
@@ -135,7 +134,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
         if (subscription.consumeInitialOverflow() && !subscription.disposed) {
           snapshot = await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows })
           if (subscription.consumeInitialOverflow()) {
-            // Why: never replay a tail with a silently missing middle; the renderer keeps its old frame while reconnecting.
+            // Never replay across an output gap; reconnect while retaining the previous frame.
             resyncRequired = true
           }
         }
@@ -147,7 +146,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
         return { snapshot: null, replay: [] }
       }
       if (!snapshot) {
-        // Why: a failed lookup has no future live boundary; release raw presence even if the renderer never invokes unsubscribe.
+        // Failed lookup has no future live boundary; release presence without waiting for unsubscribe.
         subscription.dispose()
         return { snapshot: null, replay: [] }
       }
@@ -155,7 +154,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
 
       const replay = subscription.completeSnapshot(snapshot.seq)
       if (resyncRequired) {
-        // Why: no live writes may outlive this stream and acknowledge bytes against its replacement.
+        // Retired streams must not acknowledge bytes belonging to their replacement.
         subscription.pauseForReconnect()
       }
       return { snapshot, replay, ...(resyncRequired ? { resyncRequired: true } : {}) }
@@ -193,10 +192,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     }
   )
 
-  // Why: the dialog asks for a grid matching its own box; the PTY resizes to
-  // it through the remote-desktop viewer registry (host pane parks, phone
-  // still wins). Returns the size actually in effect so the renderer can keep
-  // its scale-to-fit fallback when the claim did not land.
+  // Return effective viewer-claimed size so the renderer can scale when phone priority prevents fitting.
   ipcMain.handle(
     'terminalPreview:fit',
     async (
@@ -214,8 +210,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
         return null
       }
       const ptyId = args.ptyId
-      // Why: guarantees the destroyed hook exists even if this claim outlives
-      // the current output stream across a resync reconnect.
+      // Install destruction cleanup even if this claim outlives its current output stream.
       subscriptionsFor(event.sender)
       let claimed = fitClaimsByContents.get(event.sender.id)
       if (!claimed) {

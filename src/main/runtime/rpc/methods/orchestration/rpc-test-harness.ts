@@ -19,13 +19,19 @@ export function createOrchestrationRpcHarness() {
   let dbOpen = false
   let runtime: OrcaRuntimeService
   let activeRunId: string | undefined
+  let databasePath = ':memory:'
 
   const coordinatorPaneKey = COORDINATOR_PANE_KEY
 
-  function setup(withBoundRun = true): OrchestrationRpcState {
-    db = new OrchestrationDb(':memory:')
+  function setup(
+    withBoundRun = true,
+    store: ConstructorParameters<typeof OrcaRuntimeService>[0] = null,
+    path = ':memory:'
+  ): OrchestrationRpcState {
+    databasePath = path
+    db = new OrchestrationDb(path)
     dbOpen = true
-    runtime = new OrcaRuntimeService()
+    runtime = new OrcaRuntimeService(store)
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_coord' ? coordinatorPaneKey : null
@@ -42,7 +48,7 @@ export function createOrchestrationRpcHarness() {
         coordinatorHandle: 'term_coord',
         coordinatorPaneKey
       }).id
-      // Why: default direct fixtures to current-contract state; legacy behavior has dedicated tests.
+      // Default fixtures to the current contract; test legacy behavior explicitly.
       const createTask = db.createTask.bind(db)
       db.createTask = (task) => createTask({ ...task, runId: task.runId ?? activeRunId })
       const insertMessage = db.insertMessage.bind(db)
@@ -59,8 +65,7 @@ export function createOrchestrationRpcHarness() {
       return
     }
     const currentDb = db
-    // Why: parser-only tests do not call setup(), so cleanup must not reuse
-    // the previous test's already-closed in-memory DB.
+    // Parser-only tests skip setup; cleanup must not reuse the previous test's closed DB.
     dbOpen = false
     currentDb.close()
   }
@@ -73,7 +78,7 @@ export function createOrchestrationRpcHarness() {
     return method
   }
 
-  // Why: ctx is passed per call because individual tests rebind their own ctx before calling.
+  // Read ctx per call because tests rebind it.
   async function call(name: string, params: Record<string, unknown>, ctx: RpcContext) {
     const method = findMethod(name)
     const scopedParams = { ...params }
@@ -91,7 +96,7 @@ export function createOrchestrationRpcHarness() {
         name === 'orchestration.gateResolve' ||
         name === 'orchestration.gateList'
       ) {
-        // Why: gates resolve their Run from the sender's pane binding, so naming the run would skip that check.
+        // Omit explicit run to exercise gate lookup from the sender's binding.
         scopedParams.from ??= 'term_coord'
       }
     }
@@ -99,5 +104,12 @@ export function createOrchestrationRpcHarness() {
     return method.handler(parsed, ctx)
   }
 
-  return { coordinatorPaneKey, setup, cleanup, findMethod, call }
+  function reopenDatabase(): OrchestrationDb {
+    db.close()
+    db = new OrchestrationDb(databasePath)
+    runtime.setOrchestrationDb(db)
+    return db
+  }
+
+  return { coordinatorPaneKey, setup, cleanup, findMethod, call, reopenDatabase }
 }

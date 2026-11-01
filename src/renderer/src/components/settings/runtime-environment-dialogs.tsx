@@ -103,8 +103,8 @@ export function RuntimeEnvironmentRemoveDialog({
           <DialogDescription>
             {removingActiveServer
               ? translate(
-                  'auto.components.settings.RuntimeEnvironmentsPane.removeActiveServerDescription',
-                  'This server is the default host for new projects. Choose another one in Advanced before removing it. Existing host sessions are left alone.'
+                  'auto.components.settings.RuntimeEnvironmentsPane.removeDefaultServerDescription',
+                  'This server is the default host for new projects. Choose another one under New projects open on before removing it. Existing host sessions are left alone.'
                 )
               : translate(
                   'auto.components.settings.RuntimeEnvironmentsPane.ed3e3f069d',

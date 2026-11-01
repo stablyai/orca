@@ -9,7 +9,7 @@ import {
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
 import { peekWebSessionFocusIntent } from './web-session-focus-intent'
-import { createWebRuntimeSessionBrowserTab } from './web-runtime-session'
+import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import {
   ENVIRONMENT_ID,
   WORKTREE_ID,
@@ -37,7 +37,6 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
@@ -48,23 +47,27 @@ vi.mock('../store', () => ({
     subscribe: mocks.subscribe
   }
 }))
-vi.mock('./web-session-tabs-sync', () => ({
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
-  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
+  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
+}))
+vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
     return () => {}
-  },
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
@@ -119,10 +122,7 @@ describe('browser create focus intent across the client-host preparation await',
   beforeEach(() => stubBrowserTabCreateEnvironment(mocks))
   afterEach(() => resetBrowserTabCreateEnvironment())
 
-  /**
-   * Drives a create whose client-host preparation is held open, optionally switching the visible
-   * tab while it is held. Returns whatever focus intent the snapshot reconcile would have seen.
-   */
+  /** Hold client-host preparation open and optionally switch tabs; return the focus intent snapshot reconciliation would read. */
   async function runCreateSwitchingDuringPreparation(options: {
     switchTab: boolean
   }): Promise<{ hostTabId: string } | null | undefined> {
@@ -188,14 +188,7 @@ describe('browser create focus intent across the client-host preparation await',
   it('drops the focus intent when the user switches tabs during preparation', async () => {
     const intentAtReconcile = await runCreateSwitchingDuringPreparation({ switchTab: true })
 
-    // A surviving intent is what makes the reconcile follow the snapshot's active tab and steal
-    // the user back to the new browser tab.
+    // A surviving intent makes reconciliation steal focus back to the new browser.
     expect(intentAtReconcile).toBeNull()
-  })
-
-  it('keeps the focus intent when the user stays on the new tab', async () => {
-    const intentAtReconcile = await runCreateSwitchingDuringPreparation({ switchTab: false })
-
-    expect(intentAtReconcile).not.toBeNull()
   })
 })

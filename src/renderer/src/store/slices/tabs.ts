@@ -1,5 +1,6 @@
 export type {
   TabSplitDirection,
+  TabSplitTarget,
   TabsSlice,
   TabsSliceGet,
   TabsSliceSet

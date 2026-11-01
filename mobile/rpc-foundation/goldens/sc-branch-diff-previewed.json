@@ -4,13 +4,6 @@
   "family": "git.branch-diff-preview",
   "namedDeltas": [],
   "values": {
-    "009bc53fab97": {
-      "preview": {
-        "kind": "ready",
-        "lines": 3,
-        "truncated": false
-      }
-    },
     "7ef737811204": {
       "name": "git.branchDiff#1",
       "ordinal": 2,
@@ -19,6 +12,36 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "941cdc278f01": {
+      "preview": {
+        "kind": "ready",
+        "lines": [
+          {
+            "kind": "delete",
+            "newLineNumber": {
+              "$rpc": "undefined"
+            },
+            "oldLineNumber": 1,
+            "text": "const a = 1"
+          },
+          {
+            "kind": "add",
+            "newLineNumber": 1,
+            "oldLineNumber": {
+              "$rpc": "undefined"
+            },
+            "text": "const a = 2"
+          },
+          {
+            "kind": "context",
+            "newLineNumber": 2,
+            "oldLineNumber": 2,
+            "text": "export { a }"
+          }
+        ],
+        "truncated": false
+      }
     },
     "b699fd109439": {
       "name": "git.branchDiff#1",
@@ -135,7 +158,7 @@
             "mount": "eb79a9b3682a",
             "open": "eb79a9b3682a"
           },
-          "state": "009bc53fab97",
+          "state": "941cdc278f01",
           "effects": []
         }
       }

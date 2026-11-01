@@ -25,10 +25,7 @@ import { getConnectionExecutionHostId } from '../../shared/execution-host'
 
 export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }
 
-// Why: `gh` only ever manages github.com / GitHub Enterprise credentials, so a
-// host `gh auth status` reports as logged-in is definitively a GitHub host. This
-// mirrors the `glab auth status` signal GitLab self-hosted detection uses, so a
-// GHES remote is not left to fall through to Gitea (#8312).
+// Authenticated gh inventory identifies GitHub Enterprise hosts without claiming another forge's remote.
 const HOST_AUTH_TTL_MS = 15 * 60_000
 const HOST_AUTH_MISS_TTL_MS = 60_000
 const HOST_AUTH_CACHE_MAX_ENTRIES = 512
@@ -41,10 +38,7 @@ type HostAuthCacheEntry = {
 const hostAuthCache = new Map<string, HostAuthCacheEntry>()
 const hostAuthInFlight = new Map<string, Promise<string | null | undefined>>()
 
-// Why: gh intentionally executes on the native host even for connection-backed
-// repos, but the answer still describes that connection's runtime (it is probed
-// without the repository cwd). Keying it per connection stops a local repo and
-// an SSH-hosted repo at the same path from adopting each other's auth state.
+// Key connection-backed auth separately from same-path local repositories, even though gh runs locally.
 function runtimeCacheKey(
   repoPath: string,
   connectionId?: string | null,
@@ -78,10 +72,7 @@ function pruneHostAuthCache(now: number): void {
   }
 }
 
-// Only gh's own stdout/stderr — not the Error.message — counts as an
-// authoritative answer. A spawn failure (gh missing, ENOENT) carries just a
-// message and no command output, and must stay indeterminate rather than be
-// read as "host not authenticated".
+// Only command streams are authoritative; message-only spawn failures leave auth indeterminate.
 function ghCommandOutput(error: unknown): string {
   const execErr = error as { stdout?: unknown; stderr?: unknown }
   return [execErr?.stdout, execErr?.stderr]
@@ -104,7 +95,7 @@ function normalizeGitHubHost(host: string): NormalizedGitHubHost | null {
     return null
   }
   const hostname = match[1]
-  // Why: remote URL parsing already removes protocol-default ports; any port left here identifies the endpoint.
+  // URL parsing already stripped default ports; remaining ports identify the API endpoint.
   const port = match[2] ?? null
   return { hostname, port, authority: port ? `${hostname}:${port}` : hostname }
 }
@@ -126,13 +117,11 @@ function authenticatedHostFromInventory(host: string, output: string): string | 
   if (exact) {
     return exact.authority
   }
-  // Why: a non-default web port identifies the API endpoint; portless credentials target a different server.
   if (requested.port) {
     return null
   }
   const compatible = inventory.filter((candidate) => candidate.hostname === requested.hostname)
-  // Why: an SSH remote has no API port. Only a unique auth-inventory host can
-  // safely supply it; multiple ported endpoints on one hostname are ambiguous.
+  // SSH omits the API port; infer one only from an unambiguous authenticated endpoint.
   return compatible.length === 1 ? compatible[0].authority : null
 }
 
@@ -143,7 +132,8 @@ async function resolveAuthenticatedGitHubHost(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<string | null | undefined> {
   const normalizedHost = normalizeGitHubHost(host)?.authority ?? host.trim().toLowerCase()
-  const cacheKey = `${runtimeCacheKey(repoPath, connectionId, localGitOptions.wslDistro)}\0${normalizedHost}\0${githubReadExecutionScope({ ghAccount: localGitOptions.ghAccount })}`
+  const execOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const cacheKey = `${runtimeCacheKey(repoPath, connectionId, localGitOptions.wslDistro)}\0${normalizedHost}\0${githubReadExecutionScope(execOptions)}`
   const now = Date.now()
   pruneHostAuthCache(now)
   const cached = hostAuthCache.get(cacheKey)
@@ -154,12 +144,7 @@ async function resolveAuthenticatedGitHubHost(
   if (inFlight) {
     return inFlight
   }
-  // Why: provider detection and review loading can probe the same runtime at
-  // once; coalesce them so one host never spawns duplicate auth subprocesses.
   const probe = (async () => {
-    const execOptions = {
-      ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
-    }
     let authenticatedHost: string | null
     try {
       const { stdout, stderr } = await ghExecFileAsync(['auth', 'status'], execOptions)
@@ -167,12 +152,10 @@ async function resolveAuthenticatedGitHubHost(
     } catch (error) {
       const output = ghCommandOutput(error)
       if (!output) {
-        // Indeterminate (gh missing / spawn failure) — do not cache so a later
-        // probe (gh installed, tunnel ready, token added) can recover.
+        // Leave spawn failures uncached so installation or credential changes can recover.
         return undefined
       }
-      // gh exits non-zero when a host has a token problem but still prints the
-      // per-host status; trust only hosts that are actually listed.
+      // Nonzero auth status may still list hosts with token problems; inspect the inventory.
       authenticatedHost = authenticatedHostFromInventory(host, output)
     }
     hostAuthCache.set(cacheKey, {
@@ -192,14 +175,7 @@ async function resolveAuthenticatedGitHubHost(
   }
 }
 
-/**
- * Whether `gh` is authenticated to `host` from the repository's own runtime.
- *
- * The probe inventories gh's configured hosts and matches `host` locally. It
- * deliberately does not pass an untrusted remote host to gh because ambient
- * enterprise tokens could otherwise be sent to that host during validation.
- * Cached briefly per runtime+host so provider-detection polling stays cheap.
- */
+/** Match untrusted hosts against local auth inventory without passing them to gh or exposing ambient tokens. */
 export async function isGitHubHostAuthenticated(
   host: string,
   repoPath: string,
@@ -217,13 +193,7 @@ export function isGitHubHostAuthenticatedForGlobalCli(host: string): Promise<boo
   return isGitHubHostAuthenticated(host, '', 'project-host-validation')
 }
 
-/**
- * Resolve owner/repo for a GitHub Enterprise Server remote — a custom host the
- * user is gh-authenticated to. Returns null for github.com (already handled by
- * {@link getOwnerRepo}) and for hosts gh is not logged in to
- * (Gitea/Forgejo/self-hosted GitLab/etc.), so GHES routes to the GitHub provider
- * without a GitHub provider stealing another forge's remote.
- */
+/** Resolve authenticated custom GitHub hosts; github.com and unauthenticated other forges return null. */
 export async function getEnterpriseGitHubRepoSlugForRemote(
   repoPath: string,
   remoteName: string,
@@ -252,7 +222,6 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
   if (!identity) {
     return null
   }
-  // Why: GHES routing needs the effective host behind an SSH alias.
   let effectiveHost = identity.host
   const aliasHost = remoteUrl ? gitHubSshConfigHostAlias(remoteUrl) : null
   if (aliasHost) {

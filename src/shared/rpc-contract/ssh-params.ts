@@ -10,11 +10,15 @@ export const SshTarget = z.object({
   targetId: z.string().min(1)
 })
 
+// Why `automatic`: a client's background connect must not lift the host's cancelled sign-in.
+export const SshConnect = SshTarget.extend({
+  automatic: z.boolean().optional()
+})
+
 const boundedText = (max: number) => z.string().trim().min(1).max(max)
 
-// Why strict: an unknown key (a password, a passphrase, or a main-owned field such as a
-// generation or managed-server fence) is refused rather than silently dropped, so a client can
-// never believe the server kept a secret. Credentials are asked for when the server connects.
+// Reject unknown keys, including credentials and host-owned fences, so callers cannot believe secrets were saved.
+// Ask for credentials when connecting.
 export const SshEditableTargetInput = z
   .object({
     label: boundedText(200),
@@ -39,6 +43,7 @@ export const SshEditableTargetInput = z
       )
       .optional(),
     systemSshConnectionReuse: z.boolean().optional(),
+    systemSshProxyConnectionReuse: z.boolean().optional(),
     remoteRuntime: z.enum(SSH_REMOTE_RUNTIMES).optional(),
     allowRemoteCliControl: z.boolean().optional()
   })

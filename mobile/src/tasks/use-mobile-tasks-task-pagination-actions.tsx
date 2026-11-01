@@ -1,29 +1,56 @@
+import {
+  applyEmptyPageClamp,
+  applyWindowPageLimit,
+  deriveAdvertisedTotalPages,
+  resolveEmptyPageOutcome
+} from '../../../src/shared/work-item-empty-page'
+import { translate } from '../i18n/mobile-i18n'
 import type { TaskListLoadingModel } from './use-mobile-tasks-task-list-loading'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   PER_REPO_FETCH_LIMIT,
+  getTaskPagePerRepoLimit,
   useCallback,
-  useMemo
+  useMemo,
+  useState
 } from './mobile-tasks-dependencies'
 import { type TaskItem, buildPartialRepositoryNotice } from './mobile-tasks-legacy-foundation'
 import { linearAccountConnect } from './mobile-task-list-operations'
 
+function hasRepoWithFullPage(
+  page: readonly Extract<TaskItem, { provider: 'github' }>[],
+  perRepoLimit: number
+): boolean {
+  const rowsByRepo = new Map<string, number>()
+  for (const item of page) {
+    const rows = (rowsByRepo.get(item.source.repoId) ?? 0) + 1
+    if (rows >= perRepoLimit) {
+      return true
+    }
+    rowsByRepo.set(item.source.repoId, rows)
+  }
+  return false
+}
+
 export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel) {
   const {
     client,
+    clientRef,
     connState,
     fetchGitHubItemsPage,
     githubCurrentPage,
     githubPages,
     githubPaginationLoading,
-    githubTotalCount,
+    githubCountedTotalPages,
     linearApiKeyDraft,
     linearConnectState,
+    loadGenerationRef,
     loadLinearContext,
     loadTasks,
     selectedHostedRepos,
     setError,
     setGithubCurrentPage,
+    setGithubCountedTotalPages,
     setGithubLoadingTargetPage,
     setGithubPages,
     setGithubPaginationLoading,
@@ -78,8 +105,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
         return next
       })
       try {
-        // Why: desktop retries through the shared list refresh path so source
-        // errors, rows, counts, and pagination reset from one authoritative fetch.
+        // Use authoritative refresh so retries reset rows, errors, counts and pagination together.
         await loadTasks({ silent: true })
       } finally {
         setRetryingGithubSourceRepoPaths((current) => {
@@ -92,23 +118,25 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     [loadTasks]
   )
 
-  const githubTotalPages = useMemo(() => {
-    const selectedRepoCount = Math.max(1, selectedHostedRepos.length)
-    const pageCapacity = Math.max(
-      1,
-      Math.min(CROSS_REPO_DISPLAY_LIMIT, selectedRepoCount * PER_REPO_FETCH_LIMIT)
-    )
-    if (githubTotalCount !== null) {
-      return Math.max(githubPages.length, Math.ceil(githubTotalCount / pageCapacity))
-    }
-    return githubPages.length
-  }, [githubPages.length, githubTotalCount, selectedHostedRepos.length])
-  const githubPageCapacity = useMemo(() => {
-    const selectedRepoCount = Math.max(1, selectedHostedRepos.length)
-    return Math.max(1, Math.min(CROSS_REPO_DISPLAY_LIMIT, selectedRepoCount * PER_REPO_FETCH_LIMIT))
-  }, [selectedHostedRepos.length])
+  const [windowLimit, setWindowLimit] = useState<{ generation: number; pages: number } | null>(null)
+  const provenPageLimit =
+    windowLimit?.generation === loadGenerationRef.current ? windowLimit.pages : null
+  const githubTotalPages = deriveAdvertisedTotalPages({
+    loadedPages: githubPages.length,
+    countedTotalPages: githubCountedTotalPages,
+    fallbackTotalPages: githubPages.length,
+    provenPageLimit
+  })
+  const githubPerRepoLimit = getTaskPagePerRepoLimit(
+    selectedHostedRepos.length,
+    PER_REPO_FETCH_LIMIT,
+    CROSS_REPO_DISPLAY_LIMIT
+  )
+  // One full per-repo page may have more; all-repo mode skips counts and relies on this to reach page two.
   const githubCanLoadUncountedNextPage =
-    githubTotalCount === null && (githubPages.at(-1)?.length ?? 0) >= githubPageCapacity
+    !githubCountedTotalPages &&
+    (provenPageLimit === null || githubPages.length < provenPageLimit) &&
+    hasRepoWithFullPage(githubPages.at(-1) ?? [], githubPerRepoLimit)
   const githubCanShowPagination =
     githubTotalPages > 1 || (githubPages.length > 0 && githubCanLoadUncountedNextPage)
   const githubPagePickerPages = useMemo(() => {
@@ -149,40 +177,68 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
         setItems(githubPages[targetPage] ?? [])
         return
       }
-      const lastPage = githubPages[githubPages.length - 1]
-      const oldestItem = lastPage?.[lastPage.length - 1]
-      if (!oldestItem?.updatedAt) {
-        return
-      }
-
+      // Any list reload supersedes this page; its rows must not enter the new selection/query/provider.
+      const generation = loadGenerationRef.current
+      const isCurrent = () =>
+        loadGenerationRef.current === generation && clientRef.current === client
+      setError('')
       setGithubPaginationLoading(true)
       setGithubLoadingTargetPage(targetPage)
       try {
-        let cursor = oldestItem.updatedAt
-        let loadedPages = githubPages.length
-        const nextPages: Array<Extract<TaskItem, { provider: 'github' }>[]> = []
-        while (loadedPages <= targetPage) {
-          const page = await fetchGitHubItemsPage(client, selectedHostedRepos, cursor)
-          if (page.items.length === 0) {
-            break
-          }
-          if (page.failedCount > 0) {
-            setError(buildPartialRepositoryNotice(page.failedCount, selectedHostedRepos.length))
-          }
-          nextPages.push(page.items)
-          cursor = page.items[page.items.length - 1]!.updatedAt
-          loadedPages += 1
-        }
-        if (nextPages.length === 0) {
+        const page = await fetchGitHubItemsPage(client, selectedHostedRepos, targetPage, isCurrent)
+        if (!isCurrent()) {
           return
         }
-        const allPages = [...githubPages, ...nextPages]
-        const nextPage = targetPage < loadedPages ? targetPage : loadedPages - 1
-        setGithubPages(allPages)
-        setGithubCurrentPage(nextPage)
-        setItems(allPages[nextPage] ?? [])
+        if (page.items.length === 0) {
+          const emptyPage = {
+            target: targetPage,
+            failedCount: page.failedCount,
+            errorTypes: page.errorTypes
+          }
+          const { reason } = resolveEmptyPageOutcome({ ...emptyPage, countedTotalPages: null })
+          if (reason === 'window-unreachable') {
+            setError(
+              translate(
+                'tasks.pagination.pageUnreachable',
+                'Page {{page}} is beyond what GitHub search can return.',
+                { page: targetPage + 1 }
+              )
+            )
+            setWindowLimit((previous) => ({
+              generation,
+              pages: applyWindowPageLimit(
+                previous?.generation === generation ? previous.pages : null,
+                targetPage
+              )
+            }))
+          } else if (reason === 'load-failed') {
+            setError(
+              translate(
+                'tasks.pagination.loadPageFailed',
+                'Page {{page}} could not be loaded from GitHub.',
+                { page: targetPage + 1 }
+              )
+            )
+          } else {
+            setError(
+              translate('tasks.pagination.noMoreResults', 'No more results on page {{page}}.', {
+                page: targetPage + 1
+              })
+            )
+            setGithubCountedTotalPages((previous) => applyEmptyPageClamp(previous, emptyPage))
+          }
+          return
+        }
+        if (page.failedCount > 0) {
+          setError(buildPartialRepositoryNotice(page.failedCount, selectedHostedRepos.length))
+        }
+        setGithubPages([...githubPages, page.items])
+        setGithubCurrentPage(targetPage)
+        setItems(page.items)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load more GitHub tasks')
+        if (isCurrent()) {
+          setError(err instanceof Error ? err.message : 'Failed to load more GitHub tasks')
+        }
       } finally {
         setGithubPaginationLoading(false)
         setGithubLoadingTargetPage(null)
@@ -190,10 +246,13 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     },
     [
       client,
+      clientRef,
       fetchGitHubItemsPage,
       githubPages,
       githubPaginationLoading,
+      loadGenerationRef,
       selectedHostedRepos,
+      setGithubCountedTotalPages,
       tasksSupported
     ]
   )
@@ -201,7 +260,6 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     connectLinearAccount,
     retryGitHubIssueSourceFetch,
     githubTotalPages,
-    githubPageCapacity,
     githubCanLoadUncountedNextPage,
     githubCanShowPagination,
     githubPagePickerPages,

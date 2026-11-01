@@ -1,9 +1,8 @@
 import { Fragment, type ReactElement } from 'react'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 
 type MobileNativeChatListRow = { item: NativeChatMessage; index: number }
 
-/** The live turn's status, then the messages waiting behind that turn, drawn below it. */
 export function mobileNativeChatListFooter(
   liveStatus: ReactElement | null,
   waitingRows: readonly MobileNativeChatListRow[],

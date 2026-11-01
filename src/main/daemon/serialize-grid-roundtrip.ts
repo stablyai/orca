@@ -1,7 +1,4 @@
-// Round-trip oracle for serialize-grid.differential.fuzz.test.ts: drives one
-// source terminal through a fuzz case, serializes it with every supplied
-// SerializeAddon build at each checkpoint, replays each output into a fresh
-// terminal of the source's size and reports the first cell/cursor/mode diff.
+// Replay each serializer build’s snapshots at source dimensions and compare visible state.
 import { Terminal } from '@xterm/headless'
 import { createRequire } from 'node:module'
 import { SerializeAddon } from '@xterm/addon-serialize'
@@ -18,11 +15,10 @@ import {
   variantTrailingBackgroundRows
 } from './serialize-grid-variant-scope'
 import type { GridDiff } from './serialize-grid-cell-descriptors'
-import { cellDescriptor, CLIPPED, compareBufferRows } from './serialize-grid-cell-descriptors'
+import { compareBufferRows } from './serialize-grid-cell-descriptors'
 
 export type NamedSerializer = { name: string; create: () => SerializeAddon }
 
-/** Loads a patched build's lib/addon-serialize.js (see config/scripts/build-serialize-addon-at-ref.mjs). */
 function loadSerializerBuild(name: string, path: string): NamedSerializer {
   const loaded: { SerializeAddon: typeof SerializeAddon } = createRequire(import.meta.url)(path)
   return { name, create: () => new loaded.SerializeAddon() }
@@ -49,7 +45,7 @@ export type SerializeCheckResult = {
   outputs: Record<string, string[]>
   /** First I2 diff per serializer (cells, cursor, buffer, modes); null = faithful. */
   gridDiff: Record<string, GridDiff | null>
-  /** isWrapped diffs are reported apart: they never change what is painted. */
+  /** Track isWrapped metadata separately from the current painted grid. */
   wrapDiff: Record<string, GridDiff | null>
   clippedWideCells: number
 }
@@ -76,10 +72,9 @@ export function createFuzzTerminal(opts: {
   return terminal
 }
 
-/** Thrown when xterm itself crashes on a fuzz stream; unrelated to serialization. */
+/** Wrap synchronous xterm parser errors for separate reporting. */
 export class XtermWriteCrash extends Error {}
 
-/** The private xterm core members the oracle needs: sync writes and the active DECSTBM region. */
 type XtermCoreInternals = {
   writeSync: (data: string) => void
   region: { top: number; bottom: number }
@@ -110,9 +105,8 @@ function readXtermCore(terminal: Terminal): XtermCoreInternals {
   }
 }
 
-// Why sync: an xterm parser exception inside async write() never resolves its callback and hangs the sweep.
+// Synchronous writes surface parser errors; async writes can hang without invoking their callback.
 export function writeTerminal(terminal: Terminal, data: string): void {
-  // Headless Terminal's core exposes writeSync(data); the public API only has async write().
   const { writeSync } = readXtermCore(terminal)
   try {
     writeSync(data)
@@ -122,7 +116,6 @@ export function writeTerminal(terminal: Terminal, data: string): void {
 }
 
 function coreRegion(terminal: Terminal): { top: number; bottom: number } {
-  // xterm keeps DECSTBM on the private _core.buffer.
   return readXtermCore(terminal).region
 }
 
@@ -202,7 +195,12 @@ function countClippedWideCells(terminal: Terminal): number {
   const scratch = buffer.getNullCell()
   let count = 0
   for (let y = 0; y < buffer.length; y++) {
-    if (cellDescriptor(buffer.getLine(y), terminal.cols - 1, terminal.cols, scratch) === CLIPPED) {
+    const line = buffer.getLine(y)
+    if (
+      line &&
+      line.length > terminal.cols &&
+      (line.getCell(terminal.cols - 1, scratch)?.getWidth() ?? 0) > 1
+    ) {
       count++
     }
   }
@@ -229,7 +227,7 @@ function serializeVariants(
 
 export type SerializeCaseRun = {
   checks: SerializeCheckResult[]
-  /** xterm threw while the SOURCE parsed the stream; later checkpoints are skipped. */
+  /** Source write or resize failed; later checkpoints were skipped. */
   sourceCrash: string | null
 }
 
@@ -301,7 +299,7 @@ export async function runSerializeFuzzCase(
 
 export type Verdict = 'i1-bytes-differ' | 'regression' | 'fixed' | 'both-fail' | 'new-fail'
 
-/** I1 byte identity, then I2/I3 classification; single-serializer runs only report new-fail. */
+/** Byte identity applies outside intentional overlong-line and trailing-background changes. */
 export function i1Applies(check: SerializeCheckResult): boolean[] {
   return check.overlong.map((overlong, v) => !overlong && !check.trailingBackgroundRows[v])
 }

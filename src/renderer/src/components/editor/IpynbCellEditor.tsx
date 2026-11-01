@@ -2,8 +2,13 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Components } from 'react-markdown'
 import type { editor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
-import { computeEditorFontSize, resolveEditorFontStack } from '@/lib/editor-font-zoom'
-import { useAppStore } from '@/store'
+import {
+  EDITOR_TYPOGRAPHY_SURFACE_CLASS,
+  editorTypographyTextStyle,
+  monacoTypographyOptions
+} from '@/lib/editor-typography'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
+import { cn } from '@/lib/utils'
 import { installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { syncContentUpdate } from './monaco-content-sync'
 import {
@@ -14,13 +19,13 @@ import type { IpynbCell } from './ipynb-parse'
 import { MarkdownPreviewBody } from './MarkdownPreviewBody'
 import { useMonacoColorizedLines } from './MonacoCodeExcerpt'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 
 const NO_MARKDOWN_COMPONENTS: Components = {}
-// Box metrics the preview and the live editor share, so activating a cell never shifts it.
+// Share preview/editor box metrics to avoid shifts on activation.
 const CODE_LAYOUT = { lineHeight: 20, paddingY: 4, paddingX: 12 } as const
 // Fixed rows keep colorized blank lines one line tall; preflight gives <code> its own font.
 const CODE_ROW_STYLE = {
-  height: CODE_LAYOUT.lineHeight,
   paddingInline: CODE_LAYOUT.paddingX,
   fontFamily: 'inherit'
 } as const
@@ -37,6 +42,8 @@ export function IpynbMarkdownCell({ source }: { source: string }): React.JSX.Ele
 }
 
 type IpynbCellSourceProps = {
+  /** Null for cells without a stable id, whose position-based key can move to another cell. */
+  modelKey: string | null
   cell: IpynbCell
   source: string
   active: boolean
@@ -47,10 +54,8 @@ type IpynbCellSourceProps = {
 
 type ClientPoint = { x: number; y: number }
 
-/** Rendered cell source (markdown document or colorized code) that swaps to Monaco while active. */
 export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element {
   const { cell, source, active, onActivate } = props
-  // Where the activating press landed; Monaco opens its caret there, or at the start when null.
   const [pressedAt, setPressedAt] = useState<ClientPoint | null>(null)
   const activate = (point: ClientPoint | null): void => {
     setPressedAt(point)
@@ -78,7 +83,7 @@ export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element 
   }
 
   return (
-    <div className="ipynb-code-surface overflow-hidden rounded-md border border-border bg-muted/60 focus-within:border-ring">
+    <div className="ipynb-code-surface code-editor-colors overflow-hidden rounded-md border border-border bg-muted/60 focus-within:border-ring">
       {active ? (
         <IpynbSourceEditor {...props} pressedAt={pressedAt} />
       ) : (
@@ -86,7 +91,7 @@ export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element 
           role="button"
           tabIndex={0}
           className="cursor-text outline-none"
-          // Why: activating on press (not click) keeps the target stable while the previously active cell collapses.
+          // Activate on press before the previous cell collapses and moves the click target.
           onMouseDown={(event) => {
             if (event.button === 0) {
               event.preventDefault()
@@ -113,17 +118,16 @@ function IpynbCodePreview({
   source: string
   language: string
 }): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
-  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const typography = useEditorTypography()
+  const lineHeight = typography.lineHeight || CODE_LAYOUT.lineHeight
   const lines = useMemo(() => getIpynbCodeCellPreviewLines(source), [source])
   const htmlLines = useMonacoColorizedLines(lines, language)
   return (
     <div
-      className="overflow-x-auto text-foreground"
+      className={cn('overflow-x-auto text-foreground', EDITOR_TYPOGRAPHY_SURFACE_CLASS)}
       style={{
-        fontFamily: resolveEditorFontStack(settings),
-        fontSize: computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel),
-        lineHeight: `${CODE_LAYOUT.lineHeight}px`,
+        ...editorTypographyTextStyle(typography),
+        lineHeight: `${lineHeight}px`,
         paddingBlock: CODE_LAYOUT.paddingY,
         // Monaco renders code without the app's body tracking.
         letterSpacing: 0
@@ -133,8 +137,7 @@ function IpynbCodePreview({
         <code
           key={index}
           className="block whitespace-pre"
-          style={CODE_ROW_STYLE}
-          // Plain text shows until Monaco's async colorizer fills in token HTML.
+          style={{ ...CODE_ROW_STYLE, height: lineHeight }}
           dangerouslySetInnerHTML={{ __html: htmlLines[index] || escapeHtml(line) }}
         />
       ))}
@@ -143,49 +146,63 @@ function IpynbCodePreview({
 }
 
 function IpynbSourceEditor({
+  modelKey,
   cell,
   source,
   pressedAt,
   onDeactivate,
   onChange
 }: IpynbCellSourceProps & { pressedAt: ClientPoint | null }): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
-  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
-  const isDark = useDocumentDarkTheme()
-  const fontFamily = resolveEditorFontStack(settings)
-  const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
+  const monacoTheme = useMonacoTheme()
+  const typography = useEditorTypography()
+  // Monaco gets the CSS stack so cells match their DOM previews.
+  const typographyOptions = useMemo(
+    () => ({
+      ...monacoTypographyOptions(typography),
+      fontFamily: typography.cssFontFamily,
+      lineHeight: typography.lineHeight || CODE_LAYOUT.lineHeight
+    }),
+    [typography]
+  )
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const callbacksRef = useRef({ onChange, onDeactivate })
   const syncingSourceRef = useRef(false)
   const fitHeightRef = useRef<(() => void) | null>(null)
+  // The mount-once fit closure must cap height with the live line height, which typography can change.
+  const lineHeightRef = useRef(typographyOptions.lineHeight)
 
   useLayoutEffect(() => {
     callbacksRef.current = { onChange, onDeactivate }
   }, [onChange, onDeactivate])
 
   useLayoutEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-  }, [isDark])
+    monaco.editor.setTheme(monacoTheme)
+  }, [monacoTheme])
 
-  // Why: created synchronously before paint (not via @monaco-editor/react's async loader), so the
-  // swap from the preview never shows a placeholder, an unlaid-out editor or a guessed caret.
-  // Keep the model and undo history while external reloads update the cell below.
+  // Create before paint to avoid placeholders and guessed caret geometry; retain the model and undo history across external reloads.
   useLayoutEffect(() => {
     const container = containerRef.current
     if (!container) {
       return
     }
-    const { lineHeight, paddingX, paddingY } = CODE_LAYOUT
-    const model = monaco.editor.createModel(source, cell.language)
+    const { paddingX, paddingY } = CODE_LAYOUT
+    // Monaco restores undo for disposed models with this scheme; no other Monaco feature special-cases it.
+    const uri =
+      modelKey === null
+        ? null
+        : monaco.Uri.from({ scheme: 'vscode-userdata', path: `/${modelKey}` })
+    const model = monaco.editor.createModel(
+      source,
+      cell.language,
+      uri && !monaco.editor.getModel(uri) ? uri : undefined
+    )
     const editorInstance = monaco.editor.create(container, {
       dropIntoEditor: { enabled: false },
       model,
       automaticLayout: true,
-      fontFamily,
-      fontSize,
-      // Why: same box as the preview it replaces. No gutter, so the decorations lane is the inset.
-      lineHeight,
+      // Match preview geometry; the decorations lane supplies the inset without a gutter.
+      ...typographyOptions,
       padding: { top: paddingY, bottom: paddingY },
       lineNumbers: 'off',
       glyphMargin: false,
@@ -194,30 +211,26 @@ function IpynbSourceEditor({
       minimap: { enabled: false },
       overviewRulerLanes: 0,
       renderLineHighlight: 'none',
-      // The preview has no indent guides; matching it keeps the swap invisible.
       guides: { indentation: false },
-      // Clicking (word highlight) or double-clicking (selection highlight) a word should not light
-      // up its other occurrences like a search.
+      // Do not highlight other word occurrences when clicking or selecting cell text.
       occurrencesHighlight: 'off',
       selectionHighlight: false,
       scrollBeyondLastLine: false,
-      // Why: an auto-sized cell must let wheel events scroll the notebook, not trap them.
+      // Auto-sized cells must yield wheel scrolling to the notebook.
       scrollbar: { alwaysConsumeMouseWheel: false },
       wordWrap: cell.kind === 'code' ? 'off' : 'on'
     })
     editorRef.current = editorInstance
-    const maxHeight = IPYNB_CODE_CELL_PREVIEW_MAX_LINES * lineHeight
     const fitHeight = (): void => {
+      const maxHeight = IPYNB_CODE_CELL_PREVIEW_MAX_LINES * lineHeightRef.current
       container.style.height = `${Math.min(editorInstance.getContentHeight(), maxHeight)}px`
       editorInstance.layout()
     }
     fitHeightRef.current = fitHeight
     fitHeight()
     editorInstance.onDidContentSizeChange(fitHeight)
-    // Why: restoring a view state marks the visible lines stable, so Monaco tokenizes them now
-    // rather than 50ms later; without it the first frame paints uncoloured text.
+    // Restoring view state marks visible lines stable and forces tokenization before the first paint.
     editorInstance.restoreViewState(editorInstance.saveViewState())
-    // Monaco hit-tests the press against its own lines, so the caret lands where the user pressed.
     const target = pressedAt && editorInstance.getTargetAtClientPoint(pressedAt.x, pressedAt.y)
     if (target?.position) {
       editorInstance.setPosition(target.position)
@@ -255,9 +268,9 @@ function IpynbSourceEditor({
     if (model.getLanguageId() !== cell.language) {
       monaco.editor.setModelLanguage(model, cell.language)
     }
+    lineHeightRef.current = typographyOptions.lineHeight
     editorInstance.updateOptions({
-      fontFamily,
-      fontSize,
+      ...typographyOptions,
       wordWrap: cell.kind === 'code' ? 'off' : 'on'
     })
     syncingSourceRef.current = true
@@ -267,7 +280,7 @@ function IpynbSourceEditor({
       syncingSourceRef.current = false
     }
     fitHeightRef.current?.()
-  }, [source, cell.language, cell.kind, fontFamily, fontSize])
+  }, [source, cell.language, cell.kind, typographyOptions])
 
   return <div ref={containerRef} />
 }

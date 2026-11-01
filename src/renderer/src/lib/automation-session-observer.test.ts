@@ -36,9 +36,7 @@ vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: mockSubscribeToPtyData
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mockCallRuntimeRpc
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mockCallRuntimeRpc }))
 
 vi.mock('@/runtime/remote-runtime-terminal-multiplexer', () => ({
   getRemoteRuntimeTerminalMultiplexer: () => ({ subscribeTerminal: mockSubscribeTerminal })
@@ -66,8 +64,7 @@ describe('observeExistingAutomationSession', () => {
   })
 
   it('skips the duplicate OSC store write for local PTYs under main authority', async () => {
-    // Why: main already parses OSC 9999 for local/SSH PTYs and routes it to
-    // the store via agentStatus:set; writing here too would race that path.
+    // Main already routes local/SSH OSC 9999 through agentStatus:set; a renderer write would race it.
     const onAgentStatus = vi.fn()
     const { observeExistingAutomationSession } = await import('./automation-session-observer')
 
@@ -154,8 +151,7 @@ describe('observeExistingAutomationSession', () => {
   })
 
   it('reports a runtime wait that carried no status as unverified, not as a clean exit', async () => {
-    // `exitCode ?? 0` fabricated a clean finish out of an absent status, so a
-    // host that answered without one was read as a completed automation.
+    // Absent exit status must not become a fabricated clean automation finish via ?? 0.
     state.terminalLayoutsByTabId = {
       'tab-1': { ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-9' } }
     }
@@ -175,6 +171,28 @@ describe('observeExistingAutomationSession', () => {
 
     await vi.waitFor(() => expect(onExit).toHaveBeenCalledTimes(1))
     expect(onExit).toHaveBeenCalledWith(UNVERIFIED_PROCESS_EXIT_CODE)
+  })
+
+  it('aborts the remote exit wait and closes the stream on dispose', async () => {
+    const closeStream = vi.fn()
+    mockSubscribeTerminal.mockResolvedValue({ close: closeStream })
+    const { observeExistingAutomationSession } = await import('./automation-session-observer')
+
+    const dispose = await observeExistingAutomationSession({
+      ptyId: 'remote:env-1@@terminal-9',
+      paneKey: PANE_KEY,
+      runId: 'run-1',
+      onData: vi.fn(),
+      onAgentStatus: vi.fn(),
+      onExit: vi.fn()
+    })
+    const waitSignal: AbortSignal | undefined = mockCallRuntimeRpc.mock.calls[0]?.[3]?.signal
+    expect(waitSignal?.aborted).toBe(false)
+
+    dispose()
+
+    expect(waitSignal?.aborted).toBe(true)
+    expect(closeStream).toHaveBeenCalledOnce()
   })
 
   it('still forwards a status the runtime host did report', async () => {

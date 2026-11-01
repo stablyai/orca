@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import { UnsealedCredentialNotice } from './UnsealedCredentialNotice'
 import { useState } from 'react'
 import { AlertCircle, CheckCircle2, LoaderCircle, Unlink } from 'lucide-react'
@@ -48,8 +49,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
     }
   }
 
-  // Why: explicit user-triggered verification. This is the only settings path
-  // that decrypts a stored Linear key, avoiding surprise keychain prompts.
+  // Decrypt Linear keys only on explicit verification to avoid surprise keychain prompts.
   const handleTest = async (workspaceId: string): Promise<void> => {
     setTestingWorkspaceId(workspaceId)
     setTestResultByWorkspace((prev) => {
@@ -63,7 +63,9 @@ export function LinearIntegrationCard(): React.JSX.Element {
     }
     setTestResultByWorkspace((prev) => ({
       ...prev,
-      [workspaceId]: result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
+      [workspaceId]: result.ok
+        ? { state: 'ok' }
+        : { state: 'error', error: taskProviderErrorMessage(result) }
     }))
     setTestingWorkspaceId(null)
   }
@@ -76,9 +78,13 @@ export function LinearIntegrationCard(): React.JSX.Element {
       description={
         connected
           ? translate(
-              'auto.components.settings.task.tracker.integration.cards.e1f5e6424c',
-              '{{value0}} workspace{{value1}} connected',
-              { value0: workspaces.length, value1: workspaces.length === 1 ? '' : 's' }
+              workspaces.length === 1
+                ? 'auto.components.settings.task.tracker.integration.cards.connectedWorkspaceSingular'
+                : 'auto.components.settings.task.tracker.integration.cards.connectedWorkspacePlural',
+              workspaces.length === 1
+                ? '{{count}} workspace connected'
+                : '{{count}} workspaces connected',
+              { count: workspaces.length }
             )
           : checking
             ? translate(

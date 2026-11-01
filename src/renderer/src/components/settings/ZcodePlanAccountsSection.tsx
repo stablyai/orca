@@ -20,6 +20,14 @@ import { collectZcodeUsageWindows, ZcodeUsageWindowView } from './zcode-plan-usa
 import { useZcodePlanCredentials } from './use-zcode-plan-credentials'
 import { ZcodeCliSetupSection } from './ZcodeCliSetupSection'
 import { UnsealedCredentialNotice } from './UnsealedCredentialNotice'
+import {
+  usageCredentialAccessNotice,
+  usageCredentialSealedElsewhere,
+  usageCredentialUnreadableNotice,
+  zcodePlanKeyDescription,
+  type UsageCredentialHost
+} from './usage-credential-host'
+import type { UsageHostSettingsModel } from './use-usage-host-settings'
 
 const SEARCH_KEYWORDS = [
   'glm',
@@ -43,28 +51,42 @@ function siteLabel(site: ZcodePlanSite): string {
   return translate('auto.components.settings.ZcodePlanAccountsSection.site.zai', 'Z.AI (z.ai)')
 }
 
-export function ZcodePlanAccountsSection(): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
+export function ZcodePlanAccountsSection({
+  host,
+  usageSettings
+}: {
+  host: UsageCredentialHost
+  usageSettings: UsageHostSettingsModel
+}): React.JSX.Element {
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
-  const zcodeUsage = useAppStore((s) => s.rateLimits.zcode)
-  const { status, apiKeyDraft, setApiKeyDraft, credentialBusy, saveApiKey, clearApiKey } =
-    useZcodePlanCredentials(zcodeUsage?.updatedAt)
+  const storeZcodeUsage = useAppStore((s) => s.rateLimits.zcode)
+  const hostLabel = host.label
+  // This computer’s usage poll cannot describe another host’s plan.
+  const zcodeUsage = hostLabel === null ? storeZcodeUsage : null
+  const { status, access, apiKeyDraft, setApiKeyDraft, credentialBusy, saveApiKey, clearApiKey } =
+    useZcodePlanCredentials(zcodeUsage?.updatedAt, host.owner)
   const [refreshing, setRefreshing] = useState(false)
   const now = useNow(60_000)
 
-  const credentialEditable = !isWebClientLocation()
-  const site = settings?.zcodePlanSite ?? (credentialEditable ? 'zai' : undefined)
-  const detailsUnavailable = !credentialEditable || status?.detailsUnavailable === true
+  const webClient = isWebClientLocation()
+  const credentialEditable = !webClient && access === 'ready'
+  const accessNotice = usageCredentialAccessNotice(host, access)
+  const site =
+    usageSettings.settings?.zcodePlanSite ?? (!webClient && hostLabel === null ? 'zai' : undefined)
+  const siteEditable = credentialEditable && usageSettings.settings !== null
+  const unreadableNotice = usageCredentialUnreadableNotice(host, status?.apiKeyUnreadable)
+  const keyEditable =
+    credentialEditable && !usageCredentialSealedElsewhere(host, status?.apiKeyUnreadable)
+  const detailsUnavailable = webClient || status?.detailsUnavailable === true
   const consoleUrl = site ? ZCODE_PLAN_SITE_CONSOLE_URLS[site] : undefined
   const apiKeyConfigured = status?.apiKeyConfigured === true
 
   const handleSiteChange = (value: string): void => {
-    if (!credentialEditable || (value !== 'zai' && value !== 'bigmodel') || value === site) {
+    if (!siteEditable || (value !== 'zai' && value !== 'bigmodel') || value === site) {
       return
     }
-    // Why: main invalidates and refreshes on this settings change, so no local refresh is needed.
-    void updateSettings({ zcodePlanSite: value })
+    // The host refreshes after this setting changes; avoid a duplicate request.
+    void usageSettings.update({ zcodePlanSite: value })
   }
 
   const handleRefreshUsage = async (): Promise<void> => {
@@ -127,7 +149,9 @@ export function ZcodePlanAccountsSection(): React.JSX.Element {
           )}
         />
         <div className="min-w-0 flex-1 space-y-0.5">
-          {detailsUnavailable ? (
+          {accessNotice ? (
+            <p className="text-xs font-medium">{accessNotice}</p>
+          ) : detailsUnavailable ? (
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.ZcodePlanAccountsSection.detailsUnavailable',
@@ -144,10 +168,16 @@ export function ZcodePlanAccountsSection(): React.JSX.Element {
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.ZcodePlanAccountsSection.keyStoredHelp',
-                  'Stored locally and sent only to the selected site for usage refreshes. It takes priority over the ZCode CLI sign-in.'
-                )}
+                {hostLabel === null
+                  ? translate(
+                      'auto.components.settings.ZcodePlanAccountsSection.keyStoredHelp',
+                      'Stored locally and sent only to the selected site for usage refreshes. It takes priority over the ZCode CLI sign-in.'
+                    )
+                  : translate(
+                      'auto.components.settings.ZcodePlanAccountsSection.keyStoredOnHostHelp',
+                      'Stored on {{host}} and sent from there only to the selected site for usage refreshes. It takes priority over the ZCode CLI sign-in.',
+                      { host: hostLabel }
+                    )}
               </p>
             </>
           ) : status?.zcodeCliConfigured ? (
@@ -159,10 +189,16 @@ export function ZcodePlanAccountsSection(): React.JSX.Element {
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.ZcodePlanAccountsSection.usingCliHelp',
-                  'Orca reads the selected Coding Plan from the ZCode CLI credential store on this computer. Save an API key below to link the plan here instead.'
-                )}
+                {hostLabel === null
+                  ? translate(
+                      'auto.components.settings.ZcodePlanAccountsSection.usingCliHelp',
+                      'Orca reads the selected Coding Plan from the ZCode CLI credential store on this computer. Save an API key below to link the plan here instead.'
+                    )
+                  : translate(
+                      'auto.components.settings.ZcodePlanAccountsSection.usingCliOnHostHelp',
+                      'Orca reads the selected Coding Plan from the ZCode CLI credential store on {{host}}. Save an API key below to link the plan there instead.',
+                      { host: hostLabel }
+                    )}
               </p>
             </>
           ) : (
@@ -174,35 +210,43 @@ export function ZcodePlanAccountsSection(): React.JSX.Element {
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.ZcodePlanAccountsSection.notConfiguredHelp',
-                  'Save the plan API key below, or sign in with the ZCode CLI on this computer.'
-                )}
+                {hostLabel === null
+                  ? translate(
+                      'auto.components.settings.ZcodePlanAccountsSection.notConfiguredHelp',
+                      'Save the plan API key below, or sign in with the ZCode CLI on this computer.'
+                    )
+                  : translate(
+                      'auto.components.settings.ZcodePlanAccountsSection.notConfiguredOnHostHelp',
+                      'Save the plan API key below, or sign in with the ZCode CLI on {{host}}.',
+                      { host: hostLabel }
+                    )}
               </p>
             </>
           )}
           {staleUsageError ? <p className="text-xs text-destructive">{staleUsageError}</p> : null}
         </div>
-        <Button
-          variant="outline"
-          size="xs"
-          disabled={refreshing}
-          onClick={() => void handleRefreshUsage()}
-          className="shrink-0"
-        >
-          {refreshing ? (
-            <Loader2 className="size-3 animate-spin" />
-          ) : (
-            <RefreshCw className="size-3" />
-          )}
-          {translate(
-            'auto.components.settings.ZcodePlanAccountsSection.refreshUsage',
-            'Refresh usage'
-          )}
-        </Button>
+        {hostLabel === null ? (
+          <Button
+            variant="outline"
+            size="xs"
+            disabled={refreshing}
+            onClick={() => void handleRefreshUsage()}
+            className="shrink-0"
+          >
+            {refreshing ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <RefreshCw className="size-3" />
+            )}
+            {translate(
+              'auto.components.settings.ZcodePlanAccountsSection.refreshUsage',
+              'Refresh usage'
+            )}
+          </Button>
+        ) : null}
       </div>
 
-      {!credentialEditable ? (
+      {webClient ? (
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.settings.ZcodePlanAccountsSection.hostOnly',
@@ -229,7 +273,7 @@ export function ZcodePlanAccountsSection(): React.JSX.Element {
         <Select
           value={site ?? ''}
           onValueChange={handleSiteChange}
-          disabled={credentialBusy || !credentialEditable}
+          disabled={credentialBusy || !siteEditable}
         >
           <SelectTrigger id="zcode-plan-site" size="sm" className="w-full">
             <SelectValue
@@ -251,10 +295,7 @@ export function ZcodePlanAccountsSection(): React.JSX.Element {
 
       <SearchableSetting
         title={translate('auto.components.settings.ZcodePlanAccountsSection.keyTitle', 'API key')}
-        description={translate(
-          'auto.components.settings.ZcodePlanAccountsSection.keyDescription',
-          'Paste the API key from the selected console’s API Keys page. Stored locally, encrypted when the OS supports it, and sent only to that site for usage refreshes.'
-        )}
+        description={zcodePlanKeyDescription(host)}
         keywords={SEARCH_KEYWORDS}
         className="space-y-2"
       >
@@ -283,11 +324,14 @@ export function ZcodePlanAccountsSection(): React.JSX.Element {
             'GLM Coding Plan'
           )}
         />
+        {unreadableNotice ? (
+          <p className="text-xs text-muted-foreground">{unreadableNotice}</p>
+        ) : null}
         <div className="flex gap-2">
           <Input
             id="zcode-plan-api-key"
             type="password"
-            disabled={credentialBusy || !credentialEditable}
+            disabled={credentialBusy || !keyEditable}
             value={apiKeyDraft}
             onChange={(e) => setApiKeyDraft(e.target.value)}
             placeholder={translate(
@@ -300,7 +344,7 @@ export function ZcodePlanAccountsSection(): React.JSX.Element {
           <Button
             size="xs"
             onClick={() => void saveApiKey()}
-            disabled={credentialBusy || !credentialEditable || !apiKeyDraft.trim()}
+            disabled={credentialBusy || !keyEditable || !apiKeyDraft.trim()}
             className="shrink-0"
           >
             {credentialBusy ? <Loader2 className="size-3 animate-spin" /> : null}
@@ -331,7 +375,7 @@ export function ZcodePlanAccountsSection(): React.JSX.Element {
         </p>
       </SearchableSetting>
 
-      {credentialEditable ? <ZcodeCliSetupSection /> : null}
+      {!webClient && hostLabel === null ? <ZcodeCliSetupSection /> : null}
 
       {usageWindows.length > 0 ? (
         <SearchableSetting

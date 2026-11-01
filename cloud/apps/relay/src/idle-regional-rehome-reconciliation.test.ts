@@ -86,12 +86,45 @@ describe('idle cutover durable reconciliation', () => {
       )
     })
     await locked
+    const transaction = database.transaction.bind(database)
+    let reached!: () => void
+    const requested = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    let waiterPid: number | undefined
+    vi.spyOn(database, 'transaction').mockImplementation(async (operation, options) => {
+      reached()
+      return await transaction(async (tx) => {
+        if (database.dialect === 'postgres') {
+          waiterPid = Number((await tx.query('SELECT pg_backend_pid() AS pid'))[0]!.pid)
+        }
+        return await operation(tx)
+      }, options)
+    })
     let settled = false
     const reconciliation = store.reconcileIdleRegionalRehome(request).finally(() => {
       settled = true
     })
     try {
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await requested
+      if (database.dialect === 'postgres') {
+        await expect
+          .poll(
+            async () => {
+              if (waiterPid === undefined) {
+                return false
+              }
+              const rows = await database.query(
+                `SELECT 1 FROM pg_stat_activity
+            WHERE pid = ? AND wait_event_type = 'Lock' AND query LIKE '%relay_assignments%'`,
+                [waiterPid]
+              )
+              return rows.length === 1
+            },
+            { timeout: 900, interval: 10 }
+          )
+          .toBe(true)
+      }
       expect(settled).toBe(false)
     } finally {
       release()

@@ -5,34 +5,21 @@ import type {
   LinearSliceGet,
   LinearSliceSet
 } from './linear-slice-contract'
-import {
-  LINEAR_LIST_INVALIDATION_VERSION_CAP,
-  linearListInvalidationToken,
-  patchLinearIssueCollectionCache,
-  setLinearListInvalidationToken
-} from './linear-cache'
-import { inflightListRequests } from './linear-slice-request-state'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
-import { getLinearReadScope } from './linear-slice-scope'
+import { patchLinearIssueCollectionCache } from './linear-cache'
+import { publishLinearIssuePatch } from './linear-issue-publication'
+import { getLinearReadScope, canPublishLinearScopeCache } from './linear-slice-scope'
 
 export function createLinearInvalidationActions(
   set: LinearSliceSet,
   get: LinearSliceGet
 ): Pick<LinearSlice, 'invalidateLinearIssueLists' | 'patchLinearIssue'> {
   return {
-    invalidateLinearIssueLists: (options?: Pick<LinearFetchOptions, 'sourceContext'>) => {
-      const scope = getLinearReadScope(get().settings, options?.sourceContext)
-      const tokenScope = scope.cachePrefix ?? 'local'
-      const nextVersion =
-        linearListInvalidationToken.scope === tokenScope
-          ? (linearListInvalidationToken.version + 1) % LINEAR_LIST_INVALIDATION_VERSION_CAP || 1
-          : 1
-      const nextToken = { scope: tokenScope, version: nextVersion }
-      setLinearListInvalidationToken(nextToken)
-
-      // Why: drop only attribute-filtered plain list entries in this source scope
-      // so the next TaskPage read is forced current without wiping search/unrelated
-      // collections.
+    invalidateLinearIssueLists: (options?: Pick<LinearFetchOptions, 'sourceContext' | 'scope'>) => {
+      const scope = options?.scope ?? getLinearReadScope(get().settings, options?.sourceContext)
+      if (!canPublishLinearScopeCache(scope, get().settings)) {
+        return
+      }
+      // Invalidate only scoped attribute-filtered lists so TaskPage refetches without wiping searches/unrelated collections.
       set((s) => {
         const nextListCache = { ...s.linearListCache }
         let changed = false
@@ -52,26 +39,23 @@ export function createLinearInvalidationActions(
             continue
           }
           delete nextListCache[key]
-          inflightListRequests.delete(key)
+          // The active owned read coalesces its settlement replacement.
           changed = true
         }
         if (!changed) {
-          return { linearListInvalidationToken: nextToken }
+          return s
         }
         return {
-          linearListCache: nextListCache,
-          linearListInvalidationToken: nextToken
+          linearListCache: nextListCache
         }
       })
     },
 
     patchLinearIssue: (issueId: string, patch: Partial<LinearIssue>, options) => {
-      const sourceScope =
-        options?.sourceContext?.provider === 'linear'
-          ? getTaskSourceCacheScope(options.sourceContext)
-          : null
+      const scope = options?.scope ?? getLinearReadScope(get().settings, options?.sourceContext)
       const canPatchCacheKey = (key: string): boolean =>
-        sourceScope === null || key.startsWith(`${sourceScope}::`)
+        canPublishLinearScopeCache(scope, get().settings) &&
+        (scope.cachePrefix ? key.startsWith(`${scope.cachePrefix}::`) : !key.startsWith('linear:'))
       set((s) => {
         let changed = false
 
@@ -80,8 +64,7 @@ export function createLinearInvalidationActions(
           if (!canPatchCacheKey(key) || issueEntry?.data?.id !== issueId) {
             continue
           }
-          // Why: set fetchedAt to 0 so the next fetchLinearIssue call
-          // actually hits IPC instead of returning the stale optimistic data.
+          // Zero fetchedAt forces next issue read through IPC instead of stale optimistic cache.
           nextIssueCache[key] = {
             ...issueEntry,
             data: { ...issueEntry.data, ...patch },
@@ -96,12 +79,12 @@ export function createLinearInvalidationActions(
           if (!canPatchCacheKey(key) || !entry?.data) {
             continue
           }
-          const idx = entry.data.findIndex((item) => item.id === issueId)
-          if (idx === -1) {
+          if (!entry.data.some((item) => item.id === issueId)) {
             continue
           }
-          const updatedItems = [...entry.data]
-          updatedItems[idx] = { ...updatedItems[idx], ...patch }
+          const updatedItems = entry.data.map((item) =>
+            item.id === issueId ? { ...item, ...patch } : item
+          )
           nextSearchCache[key] = { ...entry, data: updatedItems }
           changed = true
         }
@@ -150,6 +133,7 @@ export function createLinearInvalidationActions(
             }
           : s
       })
+      publishLinearIssuePatch(scope, issueId, patch)
     }
   }
 }

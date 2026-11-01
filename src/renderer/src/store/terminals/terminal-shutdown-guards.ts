@@ -1,9 +1,9 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
-} from '@/components/terminal-pane/pty-transport'
+} from '@/components/terminal-pane/pty-dispatcher'
 import type { PtyDataHandlerShutdownSnapshot } from '@/components/terminal-pane/pty-shutdown-data-suspension'
 import { disposeParkedTerminalWatchersForPtyIds } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import {
@@ -34,7 +34,7 @@ export function createTerminalShutdownGuardController({
   get,
   keepIdentifiers,
   rendererShutdownPtyIds,
-  runtimeEnvironmentId,
+  runtimeOwnsRemotePtys,
   set,
   tabs
 }: {
@@ -42,7 +42,8 @@ export function createTerminalShutdownGuardController({
   get: TerminalStoreGet
   keepIdentifiers: boolean
   rendererShutdownPtyIds: readonly string[]
-  runtimeEnvironmentId: string | null
+  /** A runtime host stops the `remote:` PTYs, so the renderer counts them stopped. */
+  runtimeOwnsRemotePtys: boolean
   set: TerminalStoreSet
   tabs: readonly TerminalTab[]
 }): TerminalShutdownGuardController {
@@ -50,8 +51,7 @@ export function createTerminalShutdownGuardController({
   let partialRendererStopSettled = false
 
   const markShutdownPending = (): void => {
-    // Why the early return: tearing down a worktree whose panes already exited passes
-    // no guard ids, and the spreads below would still hand both maps a new identity.
+    // Already-exited workspaces have no guard IDs; skip spreads that would churn both map identities.
     if (exitGuardPtyIds.length === 0) {
       return
     }
@@ -140,7 +140,7 @@ export function createTerminalShutdownGuardController({
       localPtyIds.map((ptyId) => window.api.pty.kill(ptyId, { keepHistory: keepIdentifiers }))
     )
     const stoppedPtyIds = [
-      ...(runtimeEnvironmentId
+      ...(runtimeOwnsRemotePtys
         ? rendererShutdownPtyIds.filter((ptyId) => isRemoteRuntimePtyId(ptyId))
         : []),
       ...localPtyIds.filter((_, index) => results[index]?.status === 'fulfilled')

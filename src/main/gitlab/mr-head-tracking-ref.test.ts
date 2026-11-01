@@ -31,7 +31,6 @@ describe('fetchGitLabMergeRequestHeadRef', () => {
       42
     )
 
-    // The fetch is bounded so a stalled remote can't hang MR resolution.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'fetch',

@@ -1,12 +1,13 @@
 import { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
-import { isStageableStatusEntry } from '../commit/discard-all-sequence'
+import { isStageableStatusEntry } from '../../../../../../shared/source-control-discard-all-sequence'
 import { resolveDropdownItems } from '../../source-control-dropdown-items'
 import { resolveCommitAreaPrimaryAction } from '../../source-control-primary-action'
 import { resolveCreatePrHeaderAction } from './primary-create-pr-intent-action'
 import { resolveVisibleCreatePrHeaderAction } from './create-pr-intent-state'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
 
 type PrimaryInput = Parameters<typeof resolveCommitAreaPrimaryAction>[0]
 type HeaderInput = Parameters<typeof resolveCreatePrHeaderAction>[0]
@@ -65,6 +66,7 @@ export function useSourceControlActionModel({
   conflictOperation: DropdownInput['conflictOperation']
   effectiveBaseRef: string | null
 }) {
+  const languageRevision = useUiLanguageRevision()
   const createReviewEligibility = hasSuppressedGitHubPRState ? null : hostedReviewCreation
   const createReviewHeaderEligibility = hasSuppressedGitHubPRState
     ? null
@@ -171,6 +173,7 @@ export function useSourceControlActionModel({
       }
     }
     return action
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [
     branchName,
     branchSummary?.commitsAhead,
@@ -194,7 +197,8 @@ export function useSourceControlActionModel({
     isRemoteOperationActive,
     prGenerating,
     remoteStatus,
-    unresolvedConflictCount
+    unresolvedConflictCount,
+    languageRevision
   ])
   const directCreatePrAction =
     createPrHeaderAction?.kind === 'create_pr' &&

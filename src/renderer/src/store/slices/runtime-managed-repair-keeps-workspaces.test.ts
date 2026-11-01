@@ -79,12 +79,6 @@ const keptWorkspaces = (store: ReturnType<typeof userOnServer>) => ({
 afterEach(() => resetDeferredPeerChecksForTests())
 
 describe('an on-connect update re-pairs a managed server', () => {
-  it('keeps the workspaces and tabs when the host proves the same key', () => {
-    const store = userOnServer()
-    store.getState().setRuntimeEnvironments([server(2, 'key-a')])
-    expect(keptWorkspaces(store)).toEqual({ repos: 1, tabs: 1 })
-  })
-
   it('keeps them when the re-read runs before the key is known, and once it arrives', () => {
     const store = userOnServer()
     store.getState().setRuntimeEnvironments([server(2)])
@@ -99,10 +93,29 @@ describe('an on-connect update re-pairs a managed server', () => {
     store.getState().setRuntimeEnvironments([server(2, 'key-reinstalled')])
     expect(keptWorkspaces(store)).toEqual({ repos: 0, tabs: 0 })
   })
+})
 
-  it('retires them at once when the re-pair already proves a different host', () => {
+describe('Settings refreshes a hand-paired server with a new code for it', () => {
+  function handPaired(pairingRevision: number, hostKeyFingerprint: string) {
+    const { orcadDeployment: _managed, ...rest } = server(pairingRevision, hostKeyFingerprint)
+    return rest
+  }
+
+  function userOnHandPairedServer() {
     const store = userOnServer()
-    store.getState().setRuntimeEnvironments([server(2, 'key-reinstalled')])
+    store.getState().setRuntimeEnvironments([handPaired(1, 'key-a')])
+    return store
+  }
+
+  it('keeps the workspaces and tabs when the new pairing carries the same key', () => {
+    const store = userOnHandPairedServer()
+    store.getState().setRuntimeEnvironments([handPaired(2, 'key-a')])
+    expect(keptWorkspaces(store)).toEqual({ repos: 1, tabs: 1 })
+  })
+
+  it('retires them when the new pairing is for another machine', () => {
+    const store = userOnHandPairedServer()
+    store.getState().setRuntimeEnvironments([handPaired(2, 'key-other')])
     expect(keptWorkspaces(store)).toEqual({ repos: 0, tabs: 0 })
   })
 })

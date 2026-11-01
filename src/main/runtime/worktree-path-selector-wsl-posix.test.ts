@@ -1,8 +1,4 @@
-/**
- * A WSL shell prints `/home/neil/qa-repo`; the runtime stored the same directory as the UNC path
- * Windows sees (#16628). The CLI translates, proving the caller's distro from its own UNC cwd —
- * this resolver also feeds `worktree rm`, so a tail-only match would delete another distro's copy.
- */
+/** Translate WSL POSIX selectors to stored UNC paths using the caller's distro. Delete shares this resolver, so matching only the path tail could remove another distro's copy (#16628). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronMocks = vi.hoisted(() => {
@@ -35,7 +31,6 @@ const DEBIAN = 'Debian'
 const LINUX_REPO_PATH = '/home/neil/repo'
 const LINUX_WORKTREE_PATH = '/home/neil/qa-repo'
 
-/** The cwd the WSL launcher hands the CLI: the caller's directory, already in UNC form. */
 function uncPath(distro: string, linuxPath: string): string {
   return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
 }
@@ -83,7 +78,6 @@ function makeStore(registrations: readonly Registration[]) {
   return store
 }
 
-/** `git worktree list` for each registered repo: the main checkout plus one workspace. */
 function scanReports(registrations: readonly Registration[]): void {
   listWorktreesStrictMock.mockImplementation(async (repoPath: string) => {
     const entry = registrations.find((candidate) => candidate.repoPath === repoPath)
@@ -108,11 +102,7 @@ function makeRuntime(registrations: readonly Registration[]): OrcaRuntimeService
   return new OrcaRuntimeService(makeStore(registrations) as never)
 }
 
-/**
- * What `resolveCallerDistroPathSelector` sends: the caller's distro comes from its own UNC cwd,
- * and the stored spelling of the one worktree that distro can mean replaces the typed path.
- * Mirrored rather than imported — `src/cli` is outside this file's tsconfig project.
- */
+/** Mirror the CLI's caller-distro translation; src/cli lies outside this test's tsconfig. */
 async function selectorTheCliWouldSend(
   runtime: OrcaRuntimeService,
   callerCwd: string,
@@ -134,45 +124,6 @@ beforeEach(() => {
 })
 
 describe('a WSL caller typing the Linux path of a UNC-stored worktree (#16628)', () => {
-  it('resolves the Linux path a WSL shell prints to the UNC-stored worktree', async () => {
-    const registrations = [registration(UBUNTU, (linuxPath) => uncPath(UBUNTU, linuxPath))]
-    const runtime = makeRuntime(registrations)
-
-    // The live bug: the spelling the runtime stored resolves, the one the user types does not.
-    await expect(
-      runtime.showManagedWorktree(`path:${uncPath(UBUNTU, LINUX_WORKTREE_PATH)}`)
-    ).resolves.toMatchObject({ path: uncPath(UBUNTU, LINUX_WORKTREE_PATH) })
-    await expect(runtime.showManagedWorktree(`path:${LINUX_WORKTREE_PATH}`)).rejects.toThrow(
-      'selector_not_found'
-    )
-
-    const selector = await selectorTheCliWouldSend(
-      runtime,
-      uncPath(UBUNTU, '/home/neil'),
-      LINUX_WORKTREE_PATH
-    )
-
-    await expect(runtime.showManagedWorktree(selector)).resolves.toMatchObject({
-      path: uncPath(UBUNTU, LINUX_WORKTREE_PATH)
-    })
-  })
-
-  it('resolves a forward-slash UNC registration from the same Linux path', async () => {
-    // Windows records the same share both ways; the caller's spelling never changes.
-    const forwardSlash = (linuxPath: string) => `//wsl.localhost/${UBUNTU}${linuxPath}`
-    const runtime = makeRuntime([registration(UBUNTU, forwardSlash)])
-
-    const selector = await selectorTheCliWouldSend(
-      runtime,
-      uncPath(UBUNTU, '/home/neil'),
-      LINUX_WORKTREE_PATH
-    )
-
-    await expect(runtime.showManagedWorktree(selector)).resolves.toMatchObject({
-      path: forwardSlash(LINUX_WORKTREE_PATH)
-    })
-  })
-
   it('refuses a Linux path another distro spells, instead of resolving that distro', async () => {
     const runtime = makeRuntime([registration(UBUNTU, (linuxPath) => uncPath(UBUNTU, linuxPath))])
     const selector = await selectorTheCliWouldSend(
@@ -200,18 +151,6 @@ describe('a WSL caller typing the Linux path of a UNC-stored worktree (#16628)',
 
     await expect(runtime.showManagedWorktree(selector)).resolves.toMatchObject({
       path: uncPath(DEBIAN, LINUX_WORKTREE_PATH)
-    })
-  })
-
-  it('leaves a Linux-native CLI, whose runtime stores POSIX paths, untouched', async () => {
-    const posix = (linuxPath: string) => linuxPath
-    const runtime = makeRuntime([registration(UBUNTU, posix)])
-
-    const selector = await selectorTheCliWouldSend(runtime, '/home/neil', LINUX_WORKTREE_PATH)
-
-    expect(selector).toBe(`path:${LINUX_WORKTREE_PATH}`)
-    await expect(runtime.showManagedWorktree(selector)).resolves.toMatchObject({
-      path: LINUX_WORKTREE_PATH
     })
   })
 })

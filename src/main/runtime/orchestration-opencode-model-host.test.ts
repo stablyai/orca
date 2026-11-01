@@ -1,17 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import {
-  probeOpenCodeModelAvailability,
-  resolveOpenCodeDirectModelExecutable
-} from '../opencode/opencode-model-availability'
+import { resolveOpenCodeDirectModelExecutable } from '../opencode/opencode-model-executable'
 import { probeOpenCodeLaunchCapabilities } from '../opencode/opencode-launch-capabilities'
 import { resolveLocalProjectRuntimeForRepo } from '../project-runtime-git-options'
+import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../shared/agent-launch-model-preferences'
 
 vi.mock('../opencode/opencode-launch-capabilities', () => ({
   probeOpenCodeLaunchCapabilities: vi.fn()
 }))
-vi.mock('../opencode/opencode-model-availability', () => ({
-  probeOpenCodeModelAvailability: vi.fn(),
+vi.mock('../opencode/opencode-model-executable', () => ({
   resolveOpenCodeDirectModelExecutable: vi.fn()
 }))
 vi.mock('../managed-data-accounts/launch-environment', () => ({
@@ -49,7 +46,6 @@ function probe(
 describe('OpenCode worker model execution host', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(probeOpenCodeModelAvailability).mockResolvedValue(true)
     vi.mocked(resolveOpenCodeDirectModelExecutable).mockResolvedValue('/tmp/private-opencode')
     vi.mocked(resolveLocalProjectRuntimeForRepo).mockReturnValue(undefined)
     vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
@@ -58,28 +54,28 @@ describe('OpenCode worker model execution host', () => {
       promptMode: 'submit'
     })
   })
-  it('probes a local folder with its configured command and environment', async () => {
+  it('checks only the version route for a model in a local folder', async () => {
     expect(await probe(host())).toBe(true)
-    expect(probeOpenCodeLaunchCapabilities).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: '/tmp/private-opencode',
-        cwd: '/tmp/folder',
-        hostIdentity: 'host-1',
-        env: expect.objectContaining({ OPENCODE_CONFIG_DIR: '/tmp/private-config' })
-      })
-    )
+    expect(probeOpenCodeLaunchCapabilities).toHaveBeenCalledExactlyOnceWith({
+      command: '/tmp/private-opencode',
+      agent: 'opencode',
+      cwd: '/tmp/folder',
+      env: expect.objectContaining({ OPENCODE_CONFIG_DIR: '/tmp/private-config' }),
+      hostIdentity: 'host-1'
+    })
+    expect(resolveOpenCodeDirectModelExecutable).not.toHaveBeenCalled()
   })
-  it('rejects an unknown selector rather than claiming the fallback model', async () => {
-    vi.mocked(probeOpenCodeModelAvailability).mockResolvedValue(false)
-    expect(await probe(host())).toBe(false)
-  })
-  it.each(['v2', 'unknown'] as const)('refuses %s CLI model selection', async (pluginApi) => {
+  it('refuses an unsafe version before model discovery or worker creation', async () => {
     vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
-      version: null,
-      pluginApi,
+      version: '2.0.14',
+      pluginApi: 'v2',
       promptMode: 'unknown'
     })
-    expect(await probe(host())).toBe(false)
+    await expect(probe(host())).rejects.toMatchObject({
+      code: 'capability_unsupported',
+      message: OPENCODE_MODEL_VERSION_REFUSAL
+    })
+    expect(resolveOpenCodeDirectModelExecutable).not.toHaveBeenCalled()
   })
   it('never probes the client executable for an SSH workspace', async () => {
     expect(await probe(host({ path: '/remote/folder', connectionId: 'ssh-1' }))).toBe(false)

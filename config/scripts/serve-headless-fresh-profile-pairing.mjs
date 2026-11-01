@@ -44,14 +44,12 @@ let cleanedUp = false
 let child = null
 let sawPairingUrl = false
 let stopAttempts = 0
-// Why: temp dev worktrees do not have a root-owned chrome-sandbox; this script
-// is only for local headless testing, not packaged production.
+// Local headless worktrees lack root-owned chrome-sandbox; this exception is not packaged-production policy.
 const childEnv = { ...process.env }
 delete childEnv.CODEX_HOME
 delete childEnv.ORCA_CODEX_HOME
 Object.assign(childEnv, {
-  // Why: a fresh temporary Orca profile must not make the default Codex lane
-  // read or mutate the developer profile during a pairing smoke test.
+  // Prevent disposable pairing smoke from reading/mutating developer’s default Codex profile.
   ORCA_DEV_USER_DATA_PATH: profileDir,
   HOME: isolatedHome,
   USERPROFILE: isolatedHome,
@@ -99,9 +97,6 @@ child.once('exit', (code, signal) => {
 process.on('SIGINT', () => stopChild('SIGINT'))
 process.on('SIGTERM', () => stopChild('SIGTERM'))
 
-/**
- * Parses wrapper flags and forwards everything else to `orca serve`.
- */
 function parseArgs(args) {
   const serveArgs = []
   let keepProfile = false
@@ -120,9 +115,6 @@ function parseArgs(args) {
   return { help, keepProfile, serveArgs }
 }
 
-/**
- * Prints script usage without touching the dev profile or starting the server.
- */
 function printHelp() {
   console.log(`Usage: node config/scripts/serve-headless-fresh-profile-pairing.mjs [--keep] [orca serve flags]
 
@@ -143,9 +135,6 @@ Environment:
 `)
 }
 
-/**
- * Adds a reachable pairing address unless the caller provided one explicitly.
- */
 function withDefaultPairingAddress(args) {
   if (hasPairingAddress(args)) {
     return args
@@ -158,24 +147,16 @@ function withDefaultPairingAddress(args) {
   return [...args, '--pairing-address', address]
 }
 
-/**
- * Checks both supported CLI forms for an explicit pairing address.
- */
 function hasPairingAddress(args) {
   return hasForwardedServeFlag(args, 'pairing-address')
 }
 
-/**
- * Checks both exact and `--flag=value` forms for a forwarded serve flag.
- */
 function hasForwardedServeFlag(args, name) {
   const flag = `--${name}`
   return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`))
 }
 
-/**
- * Prefers an override, then Tailscale, then the OS hostname over loopback.
- */
+// Prefer override/Tailscale/hostname: loopback is unreachable from pairing phone.
 function resolveDefaultPairingAddress() {
   const configured = process.env.ORCA_HEADLESS_PAIRING_ADDRESS?.trim()
   if (configured) {
@@ -189,9 +170,6 @@ function resolveDefaultPairingAddress() {
   return host && host !== 'localhost' ? host : null
 }
 
-/**
- * Reads the first Tailscale IPv4 address when Tailscale is installed.
- */
 function readTailscaleAddress() {
   const result = spawnSync('tailscale', ['ip', '-4'], {
     encoding: 'utf8',
@@ -208,9 +186,6 @@ function readTailscaleAddress() {
   )
 }
 
-/**
- * Formats forwarded arguments for the startup log.
- */
 function formatForwardedArgs(args) {
   if (args.length === 0) {
     return ''
@@ -218,9 +193,7 @@ function formatForwardedArgs(args) {
   return ` ${args.map(formatShellArg).join(' ')}`
 }
 
-/**
- * Quotes a shell-ish argument for display only.
- */
+// Quote for log display only, not shell execution.
 function formatShellArg(value) {
   if (/^[\w./:=@+-]+$/.test(value)) {
     return value
@@ -228,9 +201,6 @@ function formatShellArg(value) {
   return JSON.stringify(value)
 }
 
-/**
- * Runs the same Electron runtime preflight used by dev/start package scripts.
- */
 function ensureElectronRuntime() {
   console.error('[headless-pairing] ensuring Electron runtime...')
   const result = spawnSync(process.execPath, [ensureNativeRuntimeScript, '--runtime=electron'], {
@@ -246,9 +216,6 @@ function ensureElectronRuntime() {
   }
 }
 
-/**
- * Rewrites the CLI JSON readiness line into the pairing URL testers need.
- */
 function printReadyLine(line) {
   let payload
   try {
@@ -276,9 +243,7 @@ function printReadyLine(line) {
   return true
 }
 
-/**
- * Stops the foreground server; repeated signals force its process tree down.
- */
+// Repeated shutdown signals force termination of server process tree.
 function stopChild(signal) {
   if (!child || child.killed) {
     return
@@ -286,8 +251,7 @@ function stopChild(signal) {
   stopAttempts += 1
   const targetSignal = stopAttempts > 1 ? 'SIGKILL' : signal
   if (process.platform === 'win32' && child.pid) {
-    // Why: child.kill() only targets orca-dev on Windows; taskkill walks the
-    // CLI/Electron descendants so the fresh profile is not left locked.
+    // Windows child.kill targets only orca-dev; taskkill reaches CLI/Electron descendants holding fresh profile open.
     const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
       stdio: 'ignore',
       windowsHide: true
@@ -296,8 +260,7 @@ function stopChild(signal) {
     return
   }
   if (process.platform !== 'win32' && child.pid) {
-    // Why: orca-dev synchronously owns the CLI child, which owns Electron; kill
-    // the spawned process group so programmatic shutdown does not orphan serve.
+    // Kill POSIX group spanning synchronous orca-dev/CLI/Electron ownership to avoid orphan serve.
     try {
       process.kill(-child.pid, targetSignal)
       return
@@ -308,9 +271,6 @@ function stopChild(signal) {
   child.kill(targetSignal)
 }
 
-/**
- * Removes only the ephemeral profile directory this script created.
- */
 function cleanupProfile() {
   if (cleanedUp) {
     return

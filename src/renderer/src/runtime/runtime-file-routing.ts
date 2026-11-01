@@ -3,9 +3,19 @@ import {
   relativePathInsideRoot
 } from '../../../shared/cross-platform-path'
 import { normalizeRelativePath } from '@/lib/path'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
+import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
+import type { LocalFileAccess } from '../../../shared/local-file-access'
+
+// Why local only: an SSH read is the remote host's to check, and its relay never sees this field.
+export function localAccess(
+  connectionId: string | undefined,
+  access: LocalFileAccess | undefined
+): { access?: LocalFileAccess } {
+  return access && !connectionId ? { access } : {}
+}
 
 export function assertExternalSshReadOwnership(
   target: RuntimeClientTarget,
@@ -79,14 +89,19 @@ export function getRemoteFileArgs(
     return null
   }
   const relativePath = getRelativePathInsideWorktree(context.worktreePath, absolutePath)
-  if (relativePath === null) {
+  // Outside every workspace, a chat's scratch file is addressed by its folder on the host.
+  const address =
+    relativePath === null
+      ? chatScratchFileAddress(absolutePath)
+      : { worktreeSelector: toRuntimeWorktreeSelector(context.worktreeId), relativePath }
+  if (!address) {
     return null
   }
   return {
     target,
     worktreeId: context.worktreeId,
-    worktreeSelector: toRuntimeWorktreeSelector(context.worktreeId),
-    relativePath
+    worktreeSelector: address.worktreeSelector,
+    relativePath: address.relativePath
   }
 }
 

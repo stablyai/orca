@@ -31,7 +31,7 @@ const resultSchema = z.discriminatedUnion('status', [
   })
 ])
 
-/** A worker reply arrives as a structured clone; null when it is not a profile read result. */
+// Validate structured-clone replies at the worker boundary.
 export function parseCursorProfileReadResult(
   value: unknown
 ): CursorDesktopProfileReadResult | null {

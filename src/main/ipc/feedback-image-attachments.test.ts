@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_IMAGE_COUNT,
-  MAX_FEEDBACK_IMAGE_TOTAL_BYTES,
+  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
+} from '../../shared/feedback-image-limits'
+import {
   appendFeedbackImagesToFormData,
   feedbackImageFilename,
   isSupportedFeedbackImageContentType,
@@ -22,8 +24,7 @@ describe('isSupportedFeedbackImageContentType', () => {
     expect(isSupportedFeedbackImageContentType(contentType)).toBe(false)
   })
 
-  // Why: the allow-list is an object literal, so a prototype member must not
-  // pass as a content type and get spliced into the upload filename.
+  // Prototype members must not become accepted MIME types and filename extensions.
   it.each(['constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty'])(
     'rejects the inherited member %s',
     (contentType) => {

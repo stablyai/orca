@@ -1,10 +1,7 @@
 import type { SparsePreset } from '../../shared/worktree/create-types'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 
-/**
- * The preset a sparse create is recorded under: only one of this repo's presets whose directories
- * are exactly the ones checked out, so an edited selection is never shown as the preset it began as.
- */
+/** Attribute a preset only when its directories still match; edited selections must not retain the old label. */
 export function attributedSparsePresetId(
   readPresets: () => readonly SparsePreset[],
   repoId: string,
@@ -19,7 +16,7 @@ export function attributedSparsePresetId(
     if (preset?.repoId !== repoId) {
       return undefined
     }
-    // Set-based so directory order doesn't matter, as the renderer's `sparseDirectoriesMatch` does.
+    // Ignore directory order, matching renderer sparseDirectoriesMatch.
     const presetSet = new Set(normalizeSparseDirectories(preset.directories))
     const checkedOutSet = new Set(sparseDirectories)
     const directoriesMatch =

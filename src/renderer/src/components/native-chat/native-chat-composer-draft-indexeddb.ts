@@ -1,5 +1,4 @@
-// Composer drafts in IndexedDB: one record per scope, keyed by the scope. Kept thin on purpose;
-// the draft store holds every rule, and unit tests drive it through the in-memory storage.
+// Keep persistence thin; the draft store owns merge and lifecycle policy.
 
 import type {
   NativeChatComposerDraftStorage,
@@ -40,8 +39,7 @@ export function createIndexedDbNativeChatComposerDraftStorage(
       }
       request.onsuccess = () => {
         const db = request.result
-        // Why: a newer Orca upgrading the database, or the browser closing it, must not leave
-        // every later write failing against a dead connection.
+        // Close replaced/upgraded connections so later writes reopen instead of reusing a dead database.
         db.onversionchange = () => db.close()
         db.onclose = () => {
           opened = null

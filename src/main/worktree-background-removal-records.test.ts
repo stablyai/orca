@@ -52,7 +52,6 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-/** A delete Git never finishes on its own, like one a quit or crash cuts short. */
 function interruptedJob(): {
   run: (stopSignal: AbortSignal) => Promise<never>
   publish: () => void
@@ -120,7 +119,6 @@ describe('durable worktree removal records', () => {
 
     expect(await readWorktreeRemovalRecords(directory)).toEqual([])
     expect(isPending()).toBe(false)
-    // Once on acceptance, once after the row left the table.
     expect(publish).toHaveBeenCalledTimes(2)
   })
 
@@ -175,7 +173,7 @@ describe('durable worktree removal records', () => {
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(await readWorktreeRemovalRecords(directory)).toHaveLength(1)
-    // Only the start was published: a stopped delete is neither removed nor failed.
+    // Quit publishes no completion; the interrupted record must remain resumable.
     expect(job.publish).toHaveBeenCalledTimes(1)
   })
 
@@ -186,7 +184,6 @@ describe('durable worktree removal records', () => {
     stopBackgroundWorktreeRemovals()
     await _settlePendingWorktreeRemovalsForTests()
 
-    // Restart: nothing in memory, only the file.
     _resetPendingWorktreeRemovalsForTests()
     expect(isPending()).toBe(false)
     await loadWorktreeRemovalRecords(directory)
@@ -221,7 +218,6 @@ describe('durable worktree removal records', () => {
     expect(resumed).toEqual(['/work/feature feature true'])
     expect(isPending()).toBe(false)
     expect(await readWorktreeRemovalRecords(directory)).toEqual([])
-    // A request that joined after the restart gets the resumed delete's result.
     await expect(joined).resolves.toEqual({})
     expect(publish).toHaveBeenCalledTimes(1)
   })
@@ -255,5 +251,30 @@ describe('durable worktree removal records', () => {
 
     await writeFile(worktreeRemovalRecordsFile(directory), '{not json')
     expect(await readWorktreeRemovalRecords(directory)).toEqual([])
+  })
+
+  it('reads a record that carries a field this version does not know, ignoring the field', async () => {
+    const record = {
+      worktreeId: 'repo-1::/work/a',
+      repoId: 'repo-1',
+      repoPath: '/work/repo',
+      worktreePath: '/work/a',
+      branch: 'feature',
+      head: 'abc',
+      deleteBranch: true,
+      force: false,
+      requestedAt: 5,
+      failure: { message: 'Operation not permitted', failedAt: 6 }
+    }
+    // Accept the older daily-build record format with checkout identity fields.
+    await writeFile(
+      worktreeRemovalRecordsFile(directory),
+      JSON.stringify({
+        version: 1,
+        removals: [{ ...record, checkoutIdentity: { dev: 1, ino: 2, birthtimeMs: 3 } }]
+      })
+    )
+
+    expect(await readWorktreeRemovalRecords(directory)).toEqual([record])
   })
 })

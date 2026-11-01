@@ -37,13 +37,13 @@ function desktopSsh(targetId: string, targetGeneration: number): AutomationOwner
 describe('resolveExternalAutomationScope', () => {
   it('resolves desktop + self to the local target', () => {
     const scope = resolveExternalAutomationScope(
-      { owner: desktopSelf, provider: 'hermes' },
+      { owner: desktopSelf, provider: 'openclaw' },
       registry([])
     )
 
     expect(scope.target).toEqual({ type: 'local' })
     expect(scope.sshTarget).toBeNull()
-    expect(scope.managerId).toBe('hermes:local')
+    expect(scope.managerId).toBe('openclaw:local')
   })
 
   it('resolves a desktop SSH host whose registration generation still matches', () => {
@@ -64,13 +64,13 @@ describe('resolveExternalAutomationScope', () => {
 
     expect(() =>
       resolveExternalAutomationScope(
-        { owner: desktopSsh('target-a', 3), provider: 'hermes' },
+        { owner: desktopSsh('target-a', 3), provider: 'openclaw' },
         registry([target])
       )
     ).toThrow(ExternalAutomationScopeError)
     try {
       resolveExternalAutomationScope(
-        { owner: desktopSsh('target-a', 3), provider: 'hermes' },
+        { owner: desktopSsh('target-a', 3), provider: 'openclaw' },
         registry([target])
       )
     } catch (error) {
@@ -88,7 +88,7 @@ describe('resolveExternalAutomationScope', () => {
 
     try {
       resolveExternalAutomationScope(
-        { owner: desktopSsh('target-a', 3), provider: 'hermes' },
+        { owner: desktopSsh('target-a', 3), provider: 'openclaw' },
         registry([target])
       )
       expect.unreachable('hidden target must not resolve')
@@ -102,7 +102,7 @@ describe('resolveExternalAutomationScope', () => {
   it('fails closed with the host-changed conflict on a stale generation', () => {
     try {
       resolveExternalAutomationScope(
-        { owner: desktopSsh('target-a', 2), provider: 'hermes' },
+        { owner: desktopSsh('target-a', 2), provider: 'openclaw' },
         registry([sshTarget({ generation: 3 })])
       )
       expect.unreachable('stale generation must not resolve')
@@ -115,7 +115,7 @@ describe('resolveExternalAutomationScope', () => {
   it('fails closed when the registration carries no usable generation', () => {
     try {
       resolveExternalAutomationScope(
-        { owner: desktopSsh('target-a', 1), provider: 'hermes' },
+        { owner: desktopSsh('target-a', 1), provider: 'openclaw' },
         registry([sshTarget({ generation: undefined })])
       )
       expect.unreachable('unstamped registration must not resolve')
@@ -127,7 +127,7 @@ describe('resolveExternalAutomationScope', () => {
   it('reports a removed SSH host as a target-removed conflict', () => {
     try {
       resolveExternalAutomationScope(
-        { owner: desktopSsh('gone', 1), provider: 'hermes' },
+        { owner: desktopSsh('gone', 1), provider: 'openclaw' },
         registry([sshTarget()])
       )
       expect.unreachable('missing target must not resolve')
@@ -143,7 +143,7 @@ describe('resolveExternalAutomationScope', () => {
     }
 
     try {
-      resolveExternalAutomationScope({ owner: runtimeOwner, provider: 'hermes' }, registry([]))
+      resolveExternalAutomationScope({ owner: runtimeOwner, provider: 'openclaw' }, registry([]))
       expect.unreachable('runtime authority must not resolve')
     } catch (error) {
       expect((error as ExternalAutomationScopeError).code).toBe(

@@ -1,27 +1,25 @@
-import { constants } from 'node:fs'
-import type { ReadStream } from 'node:fs'
-import { lstat, open, readdir, realpath } from 'node:fs/promises'
+import { lstat, readdir, realpath } from 'node:fs/promises'
 import { isAbsolute, join as pathJoin, relative, sep } from 'node:path'
-import { finished } from 'node:stream/promises'
 import { promisify } from 'node:util'
 import type { SFTPWrapper } from 'ssh2'
+import { createSshOperationAbortError } from './connection/ssh-exec-options'
+import { SFTP_UPLOAD_IN_FLIGHT_BYTES, uploadFileWithWindow } from './sftp-file-upload'
+import { latchLateSftpStreamErrors } from './sftp-stream-late-error'
 import {
-  latchLateSftpSessionErrors,
-  latchLateSftpStreamErrors,
-  type SftpStreamErrorLatch
-} from './sftp-stream-late-error'
+  createLinkedSshFileTransferSignal,
+  raceSftpFileTransferWithAbort
+} from './ssh-file-transfer-abort'
 
-export function mkdirSftp(
+export { SFTP_UPLOAD_IN_FLIGHT_BYTES, uploadFile } from './sftp-file-upload'
+
+function mkdirSftp(
   sftp: SFTPWrapper,
   path: string,
   options?: { allowExisting?: boolean }
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     sftp.mkdir(path, (err) => {
-      // Why: SFTP status code 4 (SSH_FX_FAILURE) is a generic code that
-      // OpenSSH returns for "already exists," but could also cover other
-      // failures (e.g. permission denied on parent). We accept this ambiguity
-      // because the next operation (write/recurse) will surface the real error.
+      // Status 4 can mean already-exists or another failure; allow it and let the next write/recurse expose the actual refusal.
       if (err && ((err as { code?: number }).code !== 4 || options?.allowExisting === false)) {
         reject(err)
       } else {
@@ -29,87 +27,6 @@ export function mkdirSftp(
       }
     })
   })
-}
-
-export async function uploadFile(
-  sftp: SFTPWrapper,
-  localPath: string,
-  remotePath: string,
-  options?: { exclusive?: boolean; signal?: AbortSignal }
-): Promise<void> {
-  const handle = await open(localPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
-  let handleClose: Promise<void> | undefined
-  let readStream: ReadStream | undefined
-  let writeStream: ReturnType<SFTPWrapper['createWriteStream']> | undefined
-  let writeStreamErrors: SftpStreamErrorLatch | undefined
-  const closeHandle = (): Promise<void> => {
-    handleClose ??= handle.close()
-    return handleClose
-  }
-  try {
-    options?.signal?.throwIfAborted()
-    const statResult = await lstat(localPath)
-    if (statResult.isSymbolicLink() || !statResult.isFile()) {
-      throw new Error(`Unsupported upload source: ${localPath}`)
-    }
-    const openedStat = await handle.stat()
-    if (
-      !openedStat.isFile() ||
-      openedStat.size !== statResult.size ||
-      (statResult.ino !== 0 && openedStat.ino !== 0 && openedStat.ino !== statResult.ino) ||
-      (statResult.dev !== 0 && openedStat.dev !== 0 && openedStat.dev !== statResult.dev)
-    ) {
-      throw new Error(`File changed during upload: ${localPath}`)
-    }
-    // Why: rejected local sources must not leave an empty remote file.
-    writeStream = sftp.createWriteStream(remotePath, {
-      flags: options?.exclusive ? 'wx' : 'w'
-    })
-    // Why: the OPEN reply can land after this transfer settles; without a listener that
-    // outlives it, ssh2 throws it synchronously into the socket handler (#15479).
-    writeStreamErrors = latchLateSftpStreamErrors(writeStream, remotePath)
-    readStream = handle.createReadStream({ autoClose: false })
-    // Why: `finished` drops its listeners once the read ends; an abort (a quit's disconnect) that
-    // destroys the ended stream with the signal's reason would then emit an unhandled 'error' that
-    // takes main down mid-shutdown. The transfer's outcome is read from `finished`, not from here.
-    readStream.on('error', () => {})
-    const abortTransfer = (): void => {
-      const reason =
-        options?.signal?.reason instanceof Error
-          ? options.signal.reason
-          : Object.assign(new Error('Upload aborted'), { name: 'AbortError' })
-      readStream?.destroy(reason)
-      writeStream?.destroy()
-      void closeHandle().catch(() => {})
-    }
-    options?.signal?.addEventListener('abort', abortTransfer, { once: true })
-    if (options?.signal?.aborted) {
-      abortTransfer()
-    }
-    try {
-      const readDone = finished(readStream, { cleanup: true }).catch((error: unknown) => {
-        writeStream?.destroy()
-        throw error
-      })
-      const writeDone = finished(writeStream, { cleanup: true }).catch((error: unknown) => {
-        readStream?.destroy(error instanceof Error ? error : undefined)
-        throw error
-      })
-      readStream.pipe(writeStream)
-      const results = await Promise.allSettled([readDone, writeDone])
-      const failure = results.find((result) => result.status === 'rejected')
-      if (failure?.status === 'rejected') {
-        throw failure.reason
-      }
-    } finally {
-      options?.signal?.removeEventListener('abort', abortTransfer)
-    }
-  } finally {
-    writeStreamErrors?.markTransferSettled()
-    readStream?.destroy()
-    writeStream?.destroy()
-    await closeHandle()
-  }
 }
 
 export function uploadBuffer(
@@ -179,7 +96,7 @@ export function writeStringViaSftp(
       cleanup()
       reject(err)
     }
-    // Why: prepend so a session error settles this write before a late-error swallower sees it.
+    // Settle this write before the session's late-error swallower sees the error.
     sftp.prependOnceListener('error', onError)
     ws.once('close', onClose)
     ws.once('error', onError)
@@ -187,40 +104,107 @@ export function writeStringViaSftp(
   })
 }
 
-/**
- * Write several files over one SFTP session, ending it when they are all done.
- *
- * Owns the session's late-error latch, which is why a caller must not hand-roll this
- * loop: `writeStringViaSftp` drops its own session listener at each settle, so between
- * files and after the last one the emitter would carry none, and a late STATUS reply
- * throws synchronously out of ssh2's parser into main (#15479).
- */
-export async function writeStringsViaSftp(
-  conn: { sftp(): Promise<SFTPWrapper> },
-  files: readonly { path: string; contents: string }[]
-): Promise<void> {
-  const sftp = await conn.sftp()
-  latchLateSftpSessionErrors(sftp)
-  try {
-    for (const file of files) {
-      await writeStringViaSftp(sftp, file.path, file.contents)
-    }
-  } finally {
-    sftp.end()
-  }
-}
-
 export async function uploadDirectory(
   sftp: SFTPWrapper,
   localDir: string,
   remoteDir: string,
   root = localDir,
-  options?: { exclusive?: boolean; signal?: AbortSignal }
+  options?: { exclusive?: boolean; signal?: AbortSignal; endSession?: () => void }
 ): Promise<void> {
   options?.signal?.throwIfAborted()
-  // Why resolve the root: entries are compared by realpath, so a root under a symlink, junction or
-  // Windows 8.3 short name (RUNNER~1 in TEMP) would otherwise reject every entry as escaped.
-  await uploadDirectoryWithinRoot(sftp, localDir, remoteDir, await realpath(root), options)
+  const failure = new AbortController()
+  const linked = createLinkedSshFileTransferSignal(
+    options?.signal ? [options.signal, failure.signal] : [failure.signal]
+  )
+  const active = new Set<Promise<void>>()
+  let reservedBytes = 0
+  let capacityWaiter: (() => void) | undefined
+  const wakeProducer = (): void => {
+    const waiter = capacityWaiter
+    capacityWaiter = undefined
+    waiter?.()
+  }
+  linked.signal.addEventListener('abort', wakeProducer, { once: true })
+  let firstError: Error | undefined
+  let sessionClosed = false
+  const onSessionClose = (): void => {
+    sessionClosed = true
+  }
+  sftp.prependOnceListener('close', onSessionClose)
+  const fail = (error: unknown): void => {
+    if (!linked.signal.aborted) {
+      firstError = error instanceof Error ? error : new Error(String(error))
+      failure.abort(firstError)
+    }
+  }
+  const upload = async (
+    localPath: string,
+    remotePath: string,
+    size: number,
+    rootRealPath: string
+  ): Promise<void> => {
+    const window = Math.min(SFTP_UPLOAD_IN_FLIGHT_BYTES, Math.max(64 * 1024, size))
+    while (active.size >= 4 || reservedBytes + window > SFTP_UPLOAD_IN_FLIGHT_BYTES) {
+      linked.signal.throwIfAborted()
+      await new Promise<void>((resolve) => {
+        capacityWaiter = resolve
+      })
+    }
+    await assertLocalUploadPathInsideRoot(rootRealPath, localPath)
+    linked.signal.throwIfAborted()
+    reservedBytes += window
+    const transfer = uploadFileWithWindow(sftp, localPath, remotePath, window, {
+      exclusive: options?.exclusive,
+      signal: linked.signal
+    })
+      .catch(fail)
+      .finally(() => {
+        reservedBytes -= window
+        active.delete(transfer)
+        wakeProducer()
+      })
+    active.add(transfer)
+  }
+  const run = (async (): Promise<void> => {
+    try {
+      // Canonicalize root like entries; symlinks, junctions and Windows 8.3 paths otherwise look escaped.
+      const rootRealPath = await realpath(root)
+      await uploadDirectoryWithinRoot(sftp, localDir, remoteDir, rootRealPath, {
+        ...options,
+        signal: linked.signal,
+        upload: (localPath, remotePath, size) => upload(localPath, remotePath, size, rootRealPath)
+      })
+    } catch (error) {
+      fail(error)
+    }
+    await Promise.all(active)
+    linked.signal.throwIfAborted()
+  })()
+  try {
+    await raceSftpFileTransferWithAbort(
+      run,
+      linked.signal,
+      (onClose) => {
+        if (sessionClosed) {
+          onClose()
+        } else {
+          sftp.once('close', onClose)
+        }
+        if (options?.endSession) {
+          options.endSession()
+        } else {
+          sftp.end()
+        }
+        return () => sftp.removeListener('close', onClose)
+      },
+      () => firstError ?? createSshOperationAbortError()
+    )
+  } finally {
+    sftp.removeListener('close', onSessionClose)
+    linked.signal.removeEventListener('abort', wakeProducer)
+    wakeProducer()
+    linked.dispose()
+  }
 }
 
 async function uploadDirectoryWithinRoot(
@@ -228,22 +212,24 @@ async function uploadDirectoryWithinRoot(
   localDir: string,
   remoteDir: string,
   rootRealPath: string,
-  options?: { exclusive?: boolean; signal?: AbortSignal }
+  options: {
+    exclusive?: boolean
+    signal: AbortSignal
+    upload: (localPath: string, remotePath: string, size: number) => Promise<void>
+  }
 ): Promise<void> {
-  options?.signal?.throwIfAborted()
+  options.signal.throwIfAborted()
   await assertLocalUploadPathInsideRoot(rootRealPath, localDir)
   const entries = await readdir(localDir, { withFileTypes: true })
   for (const entry of entries) {
-    options?.signal?.throwIfAborted()
+    options.signal.throwIfAborted()
     const localPath = pathJoin(localDir, entry.name)
     const remotePath = `${remoteDir}/${entry.name}`
     await assertLocalUploadPathInsideRoot(rootRealPath, localPath)
     const statResult = await lstat(localPath)
+    options.signal.throwIfAborted()
 
-    // Why: skip symlinks and special files (sockets, FIFOs, devices) to
-    // prevent following symlinks that could exfiltrate local files to the
-    // remote. The caller's pre-scan catches symlinks up-front, but this
-    // guard closes the TOCTOU gap if one is created between scan and upload.
+    // Reject symlinks/special files again after pre-scan to close replacement races that could upload unrelated local data.
     if (statResult.isSymbolicLink() || (!statResult.isFile() && !statResult.isDirectory())) {
       continue
     }
@@ -252,7 +238,7 @@ async function uploadDirectoryWithinRoot(
       await mkdirSftp(sftp, remotePath, { allowExisting: !options?.exclusive })
       await uploadDirectoryWithinRoot(sftp, localPath, remotePath, rootRealPath, options)
     } else {
-      await uploadFile(sftp, localPath, remotePath, options)
+      await options.upload(localPath, remotePath, statResult.size)
     }
   }
 }

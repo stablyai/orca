@@ -9,7 +9,7 @@ describe('mobileDiffImageDataUri', () => {
     expect(
       mobileDiffImageDataUri({
         kind: 'binary',
-        originalContent: PNG_BASE64,
+        originalContent: 'b2xk',
         modifiedContent: PNG_BASE64,
         isImage: true,
         mimeType: 'image/png'
@@ -44,10 +44,7 @@ describe('mobileDiffImageDataUri', () => {
     ).toBe(`data:image/png;base64,${PNG_BASE64}`)
   })
 
-  // The reviewer's read-failure case: a relay/SSH read returns an empty modified
-  // side with modifiedIsBinary false and no modifiedDeleted flag. Without a proven
-  // deletion, falling back to the original would show a stale pre-change image, so
-  // "unavailable" (null) is the honest result.
+  // Empty modified bytes can mean a relay/SSH read failure; without proven deletion, original bytes would show a stale image.
   it('returns null on a read failure (empty modified, no modifiedDeleted flag)', () => {
     expect(
       mobileDiffImageDataUri({
@@ -62,9 +59,7 @@ describe('mobileDiffImageDataUri', () => {
     ).toBeNull()
   })
 
-  // Guards the >size-cap case: the modified side IS a binary image but its bytes
-  // arrive empty. Falling back to the original would render the stale pre-change
-  // image; "unavailable" is the honest result.
+  // Size-capped modifications also have empty bytes; do not fall back to the stale original.
   it('returns null for a modify whose binary modified side is empty (no stale fallback)', () => {
     expect(
       mobileDiffImageDataUri({

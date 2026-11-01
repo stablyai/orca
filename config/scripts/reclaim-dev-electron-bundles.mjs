@@ -1,14 +1,6 @@
 #!/usr/bin/env node
 
-// Removes idle `out/electron-dev` bundles across every worktree of a repository.
-//
-// The dev runner already prunes these, but only within the worktree it is starting and only when
-// that worktree holds more than one bundle -- and a worktree almost always holds exactly one. So
-// nothing ever reclaims a bundle belonging to a worktree you are not currently running, and one
-// ~275MB copy per branch accumulates indefinitely.
-//
-// Bundles are pure build output: `pnpm dev` rebuilds one on demand, and since the Electron dist is
-// now shared, rebuilding is cheap.
+// Sweep idle ~275MB bundles across worktrees: dev runner prunes only its own tree when it has multiple bundles. pnpm dev rebuilds these outputs on demand.
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs'
@@ -108,8 +100,7 @@ function main() {
   const bundles = listWorktrees(repoRoot)
     .filter((worktree) => canonicalWorktreePath(worktree) !== excludeWorktree)
     .flatMap((worktree) => collectDevBundles(worktree))
-  // currentDir is null on purpose: unlike the dev runner, this sweep is not about to launch anything,
-  // so the only thing protecting a bundle is a live process or an in-flight build.
+  // No launch follows this sweep: currentDir is null so only live process/in-flight build protects a bundle.
   const stale = selectStaleDevBundleDirs({
     bundles,
     currentDir: null,

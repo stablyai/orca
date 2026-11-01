@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   SourceControlAiSettingsPatch,
@@ -19,7 +19,7 @@ import {
   type CommitMessageModelCapability
 } from '../../../../shared/commit-message-agent-spec'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
-import { getRuntimeGitScope } from '../../runtime/runtime-git-client'
+import { getRuntimeGitScope } from '../../runtime/runtime-git-client-context'
 import { useAppStore } from '../../store'
 import { CustomAgentCommandField } from './CustomAgentCommandField'
 import { Label } from '../ui/label'
@@ -127,19 +127,25 @@ export function CommitMessageAiPane({
   }
   const writeConfig = writeSourceControlAiSettings ?? localWriteConfig
 
+  const writeImmediateConfig = (patch: SourceControlAiSettingsPatch): void => {
+    void writeConfig(patch).catch((error: unknown) => {
+      console.error('Failed to update settings:', error)
+    })
+  }
+
   const onToggleEnabled = (): void => {
-    void writeConfig({ enabled: !config.enabled })
+    writeImmediateConfig({ enabled: !config.enabled })
   }
 
   const onCustomCommandChange = (value: string): void => {
-    void writeConfig({ customAgentCommand: value })
+    writeImmediateConfig({ customAgentCommand: value })
   }
 
   const onPrDefaultChange = (
     key: keyof NonNullable<SourceControlAiSettings['prCreationDefaults']>,
     value: boolean
   ): void => {
-    void writeConfig((current) => ({
+    writeImmediateConfig((current) => ({
       prCreationDefaults: {
         ...current.prCreationDefaults,
         [key]: value

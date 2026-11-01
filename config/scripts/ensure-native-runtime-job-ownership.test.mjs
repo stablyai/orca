@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url)
 const {
   CYGWIN_BREAKAWAY_MARKER,
   CYGWIN_BREAKAWAY_MARKER_TEXT,
+  NATIVE_HOST_JOB_MARKER,
   assertNodePtyJobOwnership,
   assertRebuiltConptyDeniesMsysBreakaway,
   nodePtyAddonPath
@@ -21,19 +22,21 @@ const NODE_PTY_PATCH = readFileSync(
 const JOB_EXPORTS = {
   listJobProcessIds: () => [],
   terminateJob: () => true,
-  assignCurrentProcessToJob: () => true
+  assignCurrentProcessToJob: () => true,
+  assignCurrentProcessToStrictJob: () => true
 }
 
 const fixtureDir = mkdtempSync(join(tmpdir(), 'node-pty-job-ownership-'))
 
 /** A stand-in addon; only the wide literal the gate reads has to be real. */
-function writeAddon(name, { cygwinBreakawayDenied }) {
+function writeAddon(name, { cygwinBreakawayDenied, nativeHostJobOwned = true }) {
   const path = join(fixtureDir, name)
   writeFileSync(
     path,
     Buffer.concat([
       Buffer.from('MZ fake addon '),
-      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0),
+      nativeHostJobOwned ? NATIVE_HOST_JOB_MARKER : Buffer.alloc(0)
     ])
   )
   return path
@@ -73,9 +76,7 @@ describe('assertNodePtyJobOwnership', () => {
     expect(NODE_PTY_PATCH).toContain("-          'target_name': 'pty'")
   })
 
-  // The gate's whole case rests on this literal, and nothing else ties the
-  // constant to the C++ that compiles it in. Drift either way has to fail HERE:
-  // otherwise it fails every correctly rebuilt addon, and no rebuild can fix it.
+  // Pin marker to compiled C++: drift would reject every correctly rebuilt addon, unfixable by another rebuild.
   it('sniffs for a literal the patch really adds to conpty.cc', () => {
     const conptyHunk = NODE_PTY_PATCH.split(/^diff --git /m).find((section) =>
       section.startsWith('a/src/win/conpty.cc ')
@@ -100,13 +101,17 @@ describe('assertNodePtyJobOwnership', () => {
 
   it('rejects the prebuild that shipped without the job exports', () => {
     expect(() => assertNodePtyJobOwnership(onWindows(PREBUILD, CURRENT_ADDON))).toThrow(
-      /listJobProcessIds, terminateJob, assignCurrentProcessToJob/
+      /listJobProcessIds, terminateJob, assignCurrentProcessToJob[\s\S]*prebuilds\/win32-x64/
     )
   })
 
-  it('names where the bad native came from, so the fix is obvious', () => {
-    expect(() => assertNodePtyJobOwnership(onWindows(PREBUILD, CURRENT_ADDON))).toThrow(
-      /prebuilds\/win32-x64/
+  it('rejects older job bindings without strict native-host ownership', () => {
+    const previous = {
+      ...PATCHED,
+      module: { ...JOB_EXPORTS, assignCurrentProcessToStrictJob: undefined }
+    }
+    expect(() => assertNodePtyJobOwnership(onWindows(previous, CURRENT_ADDON))).toThrow(
+      /missing assignCurrentProcessToStrictJob/
     )
   })
 
@@ -114,18 +119,10 @@ describe('assertNodePtyJobOwnership', () => {
     expect(() => assertNodePtyJobOwnership(onWindows(PATCHED, CURRENT_ADDON))).not.toThrow()
   })
 
-  // The reason this gate reads the binary at all: every export above predates
-  // the Cygwin/MSYS breakaway denial, so a build that leaks every Git Bash
-  // child out of its pane's job satisfies all of them.
+  // All exports predate MSYS breakaway denial; presence alone cannot prove Git Bash children stay in the pane job.
   it('rejects a source build that predates the Cygwin/MSYS breakaway denial', () => {
     expect(() => assertNodePtyJobOwnership(onWindows(PATCHED, PRE_MSYS_ADDON))).toThrow(
-      /predates the Cygwin\/MSYS job-breakaway denial/
-    )
-  })
-
-  it('tells that build apart by path, and says to rebuild', () => {
-    expect(() => assertNodePtyJobOwnership(onWindows(PATCHED, PRE_MSYS_ADDON))).toThrow(
-      /pre-msys\.node[\s\S]*Rebuild node-pty from source/
+      /pre-msys\.node[\s\S]*predates the Cygwin\/MSYS job-breakaway denial[\s\S]*Rebuild node-pty from source/
     )
   })
 
@@ -138,9 +135,7 @@ describe('assertNodePtyJobOwnership', () => {
     )
   })
 
-  // Passing the conpty name and no readable addon: on win32 every remaining
-  // branch throws, so only the platform gate can keep these quiet. The MSYS
-  // breakaway denial is a Windows concern and must cost other hosts nothing.
+  // Unreadable conpty would throw on every Windows branch; only platform gate can spare non-Windows hosts.
   it.each([
     ['non-Windows hosts', { platform: 'darwin', nativeName: 'conpty' }],
     ['non-Windows hosts building for one', { platform: 'linux', nativeName: 'conpty' }],
@@ -157,8 +152,7 @@ describe('assertNodePtyJobOwnership', () => {
 })
 
 describe('nodePtyAddonPath', () => {
-  // Built from segments rather than a POSIX string: on Windows `resolve` returns
-  // a drive letter and backslashes, so a literal only ever passed off Windows.
+  // Join segments so Windows drive/backslash paths exercise the real resolve result.
   it('resolves the addon against node-pty lib, which is the only base callers share', () => {
     expect(
       nodePtyAddonPath(
@@ -191,7 +185,8 @@ describe('assertRebuiltConptyDeniesMsysBreakaway', () => {
         addonPath,
         Buffer.concat([
           peImage({ arch }),
-          cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+          cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0),
+          NATIVE_HOST_JOB_MARKER
         ])
       )
     }
@@ -214,26 +209,17 @@ describe('assertRebuiltConptyDeniesMsysBreakaway', () => {
     ).toThrow(/predates the Cygwin\/MSYS job-breakaway denial/)
   })
 
-  // On the host that will run this install, no addon means loadNativeModule
-  // falls through to the published prebuild -- the binary that leaks every MSYS
-  // pane child. That is a broken build, not an absence to shrug at.
+  // Missing host addon falls through to published prebuild, which leaks MSYS children; fail the broken build.
   it('refuses a same-host rebuild that reported success and produced nothing', () => {
     const nodePtyDir = rebuiltInto({ 'package.json': {} })
     expect(() =>
-      assertRebuiltConptyDeniesMsysBreakaway({ nodePtyDir, rebuildArch: 'x64', crossHost: false })
-    ).toThrow(/the rebuild reported success/)
-  })
-
-  it('names both the addon it wanted and the prebuild that would load instead', () => {
-    const nodePtyDir = rebuiltInto({ 'package.json': {} })
-    expect(() =>
       assertRebuiltConptyDeniesMsysBreakaway({ nodePtyDir, rebuildArch: 'arm64', crossHost: false })
-    ).toThrow(/build[\\/]Release[\s\S]*prebuilds[\\/]win32-arm64/)
+    ).toThrow(
+      /the rebuild reported success[\s\S]*build[\\/]Release[\s\S]*prebuilds[\\/]win32-arm64/
+    )
   })
 
-  // A rebuild that ignored --arch leaves a binary the target cannot load, so
-  // node-pty falls back to the prebuild. Saying so here is two steps closer to
-  // the command that fixes it than saying so at packaging time.
+  // Wrong --arch binary cannot load and falls back to unpatched prebuild; fail close to rebuild command.
   it('rejects an addon of an architecture this rebuild did not target', () => {
     const nodePtyDir = rebuiltInto({ 'build/Release/conpty.node': { arch: 'x64' } })
     expect(() =>
@@ -241,25 +227,16 @@ describe('assertRebuiltConptyDeniesMsysBreakaway', () => {
     ).toThrow(/machine 0x8664, but this rebuild targets win32-arm64/)
   })
 
-  // "node-gyp ignored --arch" is a guess when the file is not a PE at all: that
-  // is a truncated or quarantined artifact, and saying otherwise sends the
-  // reader to the wrong command.
+  // Non-PE means truncation/quarantine, not proof node-gyp ignored --arch; avoid misleading repair advice.
   it('does not blame --arch for a file that is not a PE image', () => {
     const nodePtyDir = join(mkdtempSync(join(fixtureDir, 'rebuild-')), 'node-pty')
     mkdirSync(join(nodePtyDir, 'build', 'Release'), { recursive: true })
     writeFileSync(join(nodePtyDir, 'build', 'Release', 'conpty.node'), Buffer.alloc(0x200))
     expect(() =>
       assertRebuiltConptyDeniesMsysBreakaway({ nodePtyDir, rebuildArch: 'x64', crossHost: false })
-    ).toThrow(/is not a PE image[\s\S]*truncated or quarantined/)
-  })
-
-  it('still names the consequence for that file, which is the prebuild', () => {
-    const nodePtyDir = join(mkdtempSync(join(fixtureDir, 'rebuild-')), 'node-pty')
-    mkdirSync(join(nodePtyDir, 'build', 'Release'), { recursive: true })
-    writeFileSync(join(nodePtyDir, 'build', 'Release', 'conpty.node'), Buffer.alloc(0x200))
-    expect(() =>
-      assertRebuiltConptyDeniesMsysBreakaway({ nodePtyDir, rebuildArch: 'x64', crossHost: false })
-    ).toThrow(/fall back to the published prebuild/)
+    ).toThrow(
+      /is not a PE image[\s\S]*fall back to the published prebuild[\s\S]*truncated or quarantined/
+    )
   })
 
   it('accepts one a cross-arch rebuild really did emit for the target', () => {
@@ -269,8 +246,7 @@ describe('assertRebuiltConptyDeniesMsysBreakaway', () => {
     ).not.toThrow()
   })
 
-  // PE_MACHINE covers what Orca ships; an arch it does not know is not one this
-  // can judge, and guessing would fail a rebuild that was fine.
+  // Judge only shipped architectures in PE_MACHINE; guessing can reject valid unknown targets.
   it('does not judge an architecture it has no machine value for', () => {
     const nodePtyDir = rebuiltInto({ 'build/Release/conpty.node': { arch: 'x64' } })
     expect(() =>

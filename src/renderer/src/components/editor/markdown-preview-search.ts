@@ -28,9 +28,7 @@ export function isMarkdownPreviewReplaceShortcut(
   return keybindingMatchesAction('editor.replace', event, platform, keybindings)
 }
 
-// Why: react-markdown owns the preview DOM; matches are painted as CSS highlights
-// (see dom-text-search-highlights.ts). The static names below must match the
-// ::highlight() selectors in markdown-preview.css.
+// Paint CSS highlights without mutating React-owned DOM; names must match markdown-preview.css selectors.
 const previewHighlights = createDomTextSearchHighlights({
   match: 'markdown-preview-search-match',
   active: 'markdown-preview-search-active-match'
@@ -78,7 +76,6 @@ export function setActiveMarkdownPreviewSearchMatch(
   previewHighlights.setActive(instanceId, active)
 
   if (active && options.scrollIntoView !== false) {
-    // The Range's start container is a Text node; scroll its element into view.
     active.startContainer.parentElement?.scrollIntoView({ block: 'center', inline: 'nearest' })
   }
 }

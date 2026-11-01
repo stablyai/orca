@@ -1,14 +1,13 @@
 // @vitest-environment happy-dom
 
-// The sidebar row follows the host's Stopping both ways, even when nothing else on the summary
-// moved: a Stop that settles, then binds no turn, changes only that field.
+// A settled Stop can change only stopping; sidebar status must follow both edges.
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
@@ -35,8 +34,6 @@ vi.mock('@/store', async () => {
 })
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ?? null,
   getExecutionHostIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
     state.testRuntimeOwner ? `runtime:${state.testRuntimeOwner}` : 'local'
 }))

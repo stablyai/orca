@@ -4,15 +4,16 @@ import type {
 } from '../../../shared/managed-account-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { callRuntimeRpc, RuntimeRpcCallError, type RuntimeClientTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 // Mirrors OrcaRuntime.getAccountsSnapshot() / the accounts.subscribe payload.
 export type ProviderAccountsSnapshot = {
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
   rateLimits: RateLimitState | null
-  // Why: a partial local load substitutes an empty state for the failed
-  // provider; consumers must not treat that half as an authoritative roster.
+  // Partial local failures substitute empty state; that half is not an authoritative roster.
   failedProviders?: ('claude' | 'codex')[]
 }
 
@@ -28,15 +29,12 @@ type ProviderAccountsSubscriptionMessage = {
 }
 
 const REMOTE_ACCOUNTS_FIRST_SNAPSHOT_TIMEOUT_MS = 15_000
-// Why: the server applies a selection before it awaits provider usage
-// refreshes, and those refreshes can crawl behind broken auth. Give the call
-// room to finish instead of reporting failure for an applied switch.
+// Selection applies before slow usage refreshes; allow time so broken auth does not report an already-applied switch as failed.
 const REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS = 30_000
 const pendingProviderAccountsSnapshots = new Map<string, Promise<ProviderAccountsSnapshot>>()
 
 export function getProviderAccountsOwnerKey(target: RuntimeClientTarget): string {
-  // Why: environment ids are user-controlled strings; prefix the target kind
-  // so a remote id such as “local” cannot share the desktop's pending read.
+  // Prefix target kinds because user-chosen remote IDs such as local can collide with desktop pending reads.
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
@@ -57,18 +55,14 @@ function providerAccountsLoadError(provider: 'Claude' | 'Codex', cause: unknown)
   return new Error(`Could not load ${provider} accounts: ${message}`)
 }
 
-// Watches the provider-account snapshot for whichever runtime owns accounts.
-// Local: one-shot reads of the desktop services (they have no push channel
-// here; the pane refetches after each mutation). Remote: a live
-// accounts.subscribe stream — the ready message carries the current snapshot
-// synchronously and later broadcasts deliver refreshed usage. accounts.list is
-// deliberately avoided: it blocks behind provider usage refreshes on the
-// server and can hang for minutes behind broken auth.
+// Local services use one-shot reads/refetch after mutations. Remote accounts.subscribe supplies immediate snapshot and later usage; avoid accounts.list, which can block minutes behind broken-auth usage refresh.
 export function watchProviderAccounts(
   target: RuntimeClientTarget,
   handlers: {
     onSnapshot: (snapshot: ProviderAccountsSnapshot) => void
     onError: (error: unknown) => void
+    /** Remote only: the stream ended after its first snapshot, so later usage is unverifiable. */
+    onClosedAfterSnapshot?: () => void
   }
 ): ProviderAccountsWatcher {
   if (target.kind === 'local') {
@@ -109,8 +103,7 @@ export function watchProviderAccounts(
         rateLimits: null,
         ...(failedProviders.length > 0 ? { failedProviders } : {})
       })
-      // Why: publish the healthy provider first so one-shot consumers keep it,
-      // but re-check closed since an onSnapshot handler may close the watcher.
+      // Publish healthy provider before failure, then recheck closed because snapshot handlers may dispose watcher.
       for (const error of [claudeError, codexError]) {
         if (error && !closed) {
           handlers.onError(error)
@@ -127,8 +120,7 @@ export function watchProviderAccounts(
   let closed = false
   let unsubscribe: (() => void) | null = null
   let receivedSnapshot = false
-  // Why: a subscription that never produces a first snapshot looks identical
-  // to a loading state; surface it as an error so the pane can say so.
+  // Missing first snapshot otherwise looks perpetually loading; surface an error.
   const firstSnapshotTimer = window.setTimeout(() => {
     if (!closed && !receivedSnapshot) {
       handlers.onError(new Error('Timed out waiting for remote provider accounts.'))
@@ -164,8 +156,13 @@ export function watchProviderAccounts(
           }
         },
         onClose: () => {
-          if (!closed && !receivedSnapshot) {
+          if (closed) {
+            return
+          }
+          if (!receivedSnapshot) {
             handlers.onError(new Error('Remote provider account subscription closed.'))
+          } else {
+            handlers.onClosedAfterSnapshot?.()
           }
         }
       }
@@ -191,8 +188,7 @@ export function watchProviderAccounts(
   }
 }
 
-// One-shot convenience over watchProviderAccounts for surfaces that only need
-// the current snapshot (status-bar switcher menus).
+// One-shot account snapshot for status-bar switcher menus.
 export function fetchProviderAccountsSnapshot(
   target: RuntimeClientTarget
 ): Promise<ProviderAccountsSnapshot> {
@@ -220,8 +216,7 @@ export function fetchProviderAccountsSnapshot(
       pendingProviderAccountsSnapshots.delete(ownerKey)
     }
   }
-  // Why: both status-bar switchers mount together; share their in-flight read
-  // without caching the result past completion or across account owners.
+  // Share simultaneous switcher reads, never completed results or different owners’ requests.
   void request.then(clearPending, clearPending)
   return request
 }

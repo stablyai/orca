@@ -91,6 +91,21 @@ export function hostSessionTabIdsByLocalTabForWorktree(
   return entries
 }
 
+/** Which paired runtimes' last applied frames mirror this local tab in this workspace. */
+export function environmentIdsMirroringLocalTab(worktreeId: string, tabId: string): Set<string> {
+  const environmentIds = new Set<string>()
+  for (const [
+    environmentId,
+    mappingKeysByWorktree
+  ] of hostSessionTabMappingKeysByEnvironmentAndWorktree) {
+    const key = hostSessionTabMappingKey({ environmentId, worktreeId, tabId })
+    if (mappingKeysByWorktree.get(worktreeId)?.has(key)) {
+      environmentIds.add(environmentId)
+    }
+  }
+  return environmentIds
+}
+
 /** The local tab mirroring a host tab, or null when no mirrored tab claims it. */
 export function resolveLocalTabIdForHostSessionTab(args: {
   environmentId: string

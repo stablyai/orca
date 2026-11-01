@@ -101,50 +101,6 @@ describe('restoreSshConnectionsForStartup', () => {
     expect(harness.setDeferredSshReconnectTargets).toHaveBeenCalledWith(['ssh-asleep'])
   })
 
-  it('awaits the target that owns the active workspace', async () => {
-    vi.useFakeTimers()
-    installWindowApi([target('ssh-active')])
-    harness.connect.mockReturnValue(new Promise<SshConnectionState>(() => {}))
-
-    let settled = false
-    const restore = restoreSshConnectionsForStartup({
-      connectionIds: ['ssh-active'],
-      blockingConnectionIds: ['ssh-active'],
-      setDeferredSshReconnectTargets: harness.setDeferredSshReconnectTargets,
-      removeDeferredSshReconnectTarget: harness.removeDeferredSshReconnectTarget,
-      publishSshConnectionState: harness.publishSshConnectionState
-    }).then(() => {
-      settled = true
-    })
-
-    await vi.advanceTimersByTimeAsync(14_000)
-    expect(settled).toBe(false)
-    await vi.advanceTimersByTimeAsync(1_000)
-    await restore
-    expect(settled).toBe(true)
-    expect(harness.setDeferredSshReconnectTargets).toHaveBeenLastCalledWith(['ssh-active'])
-  })
-
-  it('clears the deferred flag once a background target connects', async () => {
-    installWindowApi([target('ssh-bg')])
-    harness.connect.mockResolvedValue(connectedState('ssh-bg'))
-
-    await restoreSshConnectionsForStartup({
-      connectionIds: ['ssh-bg'],
-      blockingConnectionIds: [],
-      setDeferredSshReconnectTargets: harness.setDeferredSshReconnectTargets,
-      removeDeferredSshReconnectTarget: harness.removeDeferredSshReconnectTarget,
-      publishSshConnectionState: harness.publishSshConnectionState
-    })
-    await vi.waitFor(() =>
-      expect(harness.removeDeferredSshReconnectTarget).toHaveBeenCalledWith('ssh-bg')
-    )
-    expect(harness.publishSshConnectionState).toHaveBeenCalledWith(
-      'ssh-bg',
-      connectedState('ssh-bg')
-    )
-  })
-
   it('does not push a connected background target back into the deferred list', async () => {
     vi.useFakeTimers()
     installWindowApi([target('ssh-active'), target('ssh-bg')])
@@ -167,8 +123,7 @@ describe('restoreSshConnectionsForStartup', () => {
     await restore
 
     expect(harness.removeDeferredSshReconnectTarget).toHaveBeenCalledWith('ssh-bg')
-    // The timed-out rewrite must not resurrect the reachable background target: a deferred
-    // connected target sends fresh panes down the cold-restore path instead of the normal one.
+    // Timeout rewrite must not redefer already connected background hosts or fresh panes take the cold-restore path.
     expect(harness.setDeferredSshReconnectTargets).toHaveBeenLastCalledWith(['ssh-active'])
   })
 

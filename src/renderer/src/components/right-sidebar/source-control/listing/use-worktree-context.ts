@@ -1,12 +1,11 @@
 import { useMemo } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { runtimeTargetForOwnerHostId } from '@/runtime/runtime-client-target'
-import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
+import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
-import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
@@ -17,11 +16,6 @@ import { selectReviewCacheData, selectReviewCacheEntry } from '../../review-cach
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
-/**
- * Resolves the active worktree/repo and every store-backed value the Source Control panel reads
- * about it: git status, branch compare, conflict + upstream state, hosted-review cache entries and
- * the repo-owner-routed settings that every git call must be pinned to.
- */
 export function useSourceControlWorktreeContext() {
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -49,6 +43,9 @@ export function useSourceControlWorktreeContext() {
   const repositoryHuge = useAppStore((s) =>
     activeWorktreeId ? s.gitStatusHugeByWorktree?.[activeWorktreeId] : undefined
   )
+  const statusReadError = useAppStore((s) =>
+    activeWorktreeId ? s.gitStatusReadErrorByWorktree?.[activeWorktreeId] : undefined
+  )
   const branchEntries = useAppStore((s) =>
     activeWorktreeId
       ? (s.gitBranchChangesByWorktree[activeWorktreeId] ?? EMPTY_BRANCH_CHANGE_ENTRIES)
@@ -60,8 +57,7 @@ export function useSourceControlWorktreeContext() {
   const publishedBranchLineTotal = useAppStore((s) =>
     activeWorktreeId ? (s.gitBranchLineTotalByWorktree?.[activeWorktreeId] ?? null) : null
   )
-  // Why: status and branch compare refresh on different cadences, so a total can
-  // outlive the fork point it measured. Drop it rather than render a stale number.
+  // Status and comparison refresh independently; drop totals measured against a stale fork point.
   const branchLineTotal =
     publishedBranchLineTotal && publishedBranchLineTotal.mergeBase === branchSummary?.mergeBase
       ? publishedBranchLineTotal
@@ -70,7 +66,7 @@ export function useSourceControlWorktreeContext() {
     activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
   )
   const conflictOperationsByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
-  // Why: leave undefined until fetchUpstreamStatus resolves; a synthetic "no upstream" flashes "Publish Branch" on worktree switch.
+  // Preserve unknown upstream while fetching so workspace switches cannot flash Publish Branch.
   const remoteStatus = useAppStore((s) =>
     activeWorktreeId ? s.remoteStatusesByWorktree[activeWorktreeId] : undefined
   )
@@ -101,17 +97,17 @@ export function useSourceControlWorktreeContext() {
           true
         )
       : null
-  // Why: background review refreshes replace both cache maps; this panel only needs its active repo/branch entries.
+  // Subscribe only to active repo/branch entries because background refresh replaces whole cache maps.
   const hostedReviewEntry = useAppStore((s) =>
     selectReviewCacheEntry(s.hostedReviewCache, hostedReviewCacheKey)
   )
   const hostedReviewEntryData = hostedReviewEntry?.data ?? null
   const activePrFromQueue = useAppStore((s) => selectReviewCacheData(s.prCache, activePrCacheKey))
-  // Why: git calls and repo metadata go to the repo's OWNER host; `null` (no repo row) runs nothing.
+  // Route Git and metadata to the repo owner; unresolved ownership must run nothing.
   const activeRepoTarget = useMemo(
     () =>
       activeRepoId
-        ? runtimeTargetForOwnerHostId(
+        ? ipcOrRuntimeTargetForHostId(
             getRepoExecutionHostId({
               connectionId: activeRepoConnectionId,
               executionHostId: activeRepoExecutionHostId
@@ -129,14 +125,12 @@ export function useSourceControlWorktreeContext() {
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)
     : null
-  const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
-    connectionId: activeConnectionId,
-    worktreePath,
-    projectRuntime: activeConnectionId
-      ? undefined
-      : getLocalProjectExecutionRuntimeContext(useAppStore.getState(), activeWorktreeId)
-  })
-  // Why: the sidebar stays mounted when closed, so gate polling on tab AND open or branchCompare/PR fetch would run with no visible consumer.
+  // Quote for the workspace owner's OS, where agents run (#27971).
+  const activeSourceControlLaunchPlatform =
+    activeWorktree && activeRepo
+      ? resolveRepoWorktreeLaunchPlatform(useAppStore.getState(), activeRepo, activeWorktree)
+      : undefined
+  // Mounted hidden sidebars need tab/open polling gates to avoid work without visible consumers.
   const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
   const hasUncommittedEntries = entries.length > 0
 
@@ -177,6 +171,7 @@ export function useSourceControlWorktreeContext() {
     repositoryHuge,
     rightSidebarTab,
     settings,
+    statusReadError,
     worktreeMap,
     worktreePath
   }

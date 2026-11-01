@@ -1,4 +1,8 @@
-import { defineMethod, defineStreamingMethod } from '../core'
+import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
+import type { OrcadFeature } from '../orcad-feature-readiness'
+import { rpcCallerOperationKey } from '../rpc-caller-identity'
+import { HostAccountSignInFlows } from '../../host-account-sign-in-flows'
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   AddDataAccountParams,
   SelectDataAccountParams,
@@ -12,17 +16,53 @@ import {
   ListAccountsParams,
   RemoveAccountParams,
   SelectAccountParams,
-  SelectCodexAccountForTargetParams
+  SelectClaudeAccountParams,
+  SelectCodexAccountForTargetParams,
+  HostAccountSignInStartParams,
+  HostAccountSignInWaitParams,
+  HostAccountSignInFlowParams,
+  HostAccountSignInCodeParams
 } from '../../../../shared/rpc-contract/accounts-params'
+import { HostAccountLaunchEnvParams } from '../../../../shared/host-account-launch-env'
 
-// Why: monotonically increasing per-process counter avoids the Date.now()
-// collision that fired when two near-simultaneous accounts.subscribe calls
-// collided on the same millisecond and one evicted the other through
-// registerSubscriptionCleanup's existing-key eviction path.
+// Use a per-process counter: same-millisecond subscriptions must not evict each other's cleanup.
 let accountsSubscriptionSeq = 0
 
-export const ACCOUNT_METHODS = [
-  // Why local only: sign-in runs `claude auth login` in a terminal on the execution host.
+const hostSignIns = new WeakMap<OrcaRuntimeService, HostAccountSignInFlows>()
+function hostSignInFlows(runtime: OrcaRuntimeService): HostAccountSignInFlows {
+  let flows = hostSignIns.get(runtime)
+  if (!flows) {
+    flows = new HostAccountSignInFlows((provider, channel) =>
+      runtime.runHostAccountSignIn(provider, channel)
+    )
+    hostSignIns.set(runtime, flows)
+  }
+  return flows
+}
+
+/** The caller a sign-in belongs to, as its transport proved it; one it can't name gets none. */
+function signInOwner({ caller }: Pick<RpcContext, 'caller'>): string {
+  if (!caller) {
+    throw new Error('This client cannot add accounts on this host.')
+  }
+  return rpcCallerOperationKey(caller)
+}
+
+const ACCOUNT_METHOD_DEFINITIONS = [
+  // Only the owning desktop pushes this host's account launch environment, including WSL.
+  defineMethod({
+    name: 'accounts.setHostLaunchEnv',
+    permission: 'accounts-admin',
+    params: HostAccountLaunchEnvParams,
+    handler: async (params, { runtime, clientKind }) => {
+      if (clientKind === 'mobile') {
+        throw new Error('Only the Orca desktop that owns this host can set its accounts.')
+      }
+      runtime.setHostAccountLaunchEnv(params)
+      return {}
+    }
+  }),
+  // Local only: sign-in opens claude auth login on the execution host.
   defineMethod({
     name: 'accounts.beginClaudeSignIn',
     permission: 'accounts-admin',
@@ -93,10 +133,7 @@ export const ACCOUNT_METHODS = [
     permission: 'workspace',
     params: ListAccountsParams,
     handler: async (params, { runtime }) => {
-      // Why: ensure the snapshot reflects the latest provider state before
-      // returning. Desktop polling pauses when the window is unfocused and
-      // inactive-account caches only fill on AccountsPane open, so without
-      // this the mobile UI would render stale nulls / zeroes.
+      // Refresh before replying: unfocused desktop polling and unopened account caches can leave mobile usage stale.
       if (params.refreshUsage) {
         await runtime.refreshAccountsForMobile()
       }
@@ -106,8 +143,11 @@ export const ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.selectClaude',
     permission: 'accounts-admin',
-    params: SelectAccountParams,
-    handler: async (params, { runtime }) => runtime.selectClaudeAccount(params.accountId)
+    params: SelectClaudeAccountParams,
+    handler: async (params, { runtime }) =>
+      runtime.selectClaudeAccount(params.accountId, {
+        movesRunningSessions: params.movesRunningSessions
+      })
   }),
   defineMethod({
     name: 'accounts.selectCodex',
@@ -116,8 +156,7 @@ export const ACCOUNT_METHODS = [
     handler: async (params, { runtime }) => runtime.selectCodexAccount(params.accountId)
   }),
   defineMethod({
-    // Why: old hosts silently strip unknown target fields from selectCodex.
-    // A distinct RPC makes version skew fail before it can clear the host slot.
+    // Use a distinct RPC: old hosts strip unknown target fields and could otherwise clear the host slot.
     name: 'accounts.selectCodexForTarget',
     permission: 'accounts-admin',
     params: SelectCodexAccountForTargetParams,
@@ -167,43 +206,77 @@ export const ACCOUNT_METHODS = [
       })
     }
   }),
-  // Why: streaming counterpart so mobile usage bars refresh in place when the
-  // desktop's 5-minute rate-limit poll completes or when the user switches
-  // accounts on either side. Mirrors the notifications.subscribe pattern.
+  // Credentials stay on this host; the caller opens the page and relays its code (#20009).
+  defineMethod({
+    name: 'accounts.hostSignInStart',
+    permission: 'accounts-admin',
+    params: HostAccountSignInStartParams,
+    handler: async ({ provider }, ctx) =>
+      hostSignInFlows(ctx.runtime).start(signInOwner(ctx), provider)
+  }),
+  defineMethod({
+    name: 'accounts.hostSignInWait',
+    permission: 'accounts-admin',
+    params: HostAccountSignInWaitParams,
+    handler: async ({ flowId, afterRevision }, ctx) =>
+      hostSignInFlows(ctx.runtime).wait(signInOwner(ctx), flowId, afterRevision, ctx.signal)
+  }),
+  defineMethod({
+    name: 'accounts.hostSignInSubmitCode',
+    permission: 'accounts-admin',
+    params: HostAccountSignInCodeParams,
+    handler: async ({ flowId, code }, ctx) =>
+      hostSignInFlows(ctx.runtime).submitCode(signInOwner(ctx), flowId, code)
+  }),
+  defineMethod({
+    name: 'accounts.hostSignInCancel',
+    permission: 'accounts-admin',
+    params: HostAccountSignInFlowParams,
+    handler: async ({ flowId }, ctx) =>
+      hostSignInFlows(ctx.runtime).cancel(signInOwner(ctx), flowId)
+  }),
+  // Stream rate-limit polls and account switches to mobile without reopening the screen.
   defineStreamingMethod({
     name: 'accounts.subscribe',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime, connectionId }, emit) => {
-      await new Promise<void>((resolve) => {
-        const unsubscribe = runtime.onAccountsChanged((snapshot) => {
-          emit({ type: 'snapshot', snapshot })
-        })
-
-        // Why: scope the id by connectionId so two sockets from the same
-        // device (host + accounts screen) cannot evict each other through
-        // registerSubscriptionCleanup's "existing key" branch, and append a
-        // per-process counter so two concurrent subscribes on the same
-        // socket also can't collide.
-        const seq = ++accountsSubscriptionSeq
-        const subscriptionId = `accounts-${connectionId ?? 'inproc'}-${seq}`
-        runtime.registerSubscriptionCleanup(
-          subscriptionId,
-          () => {
-            unsubscribe()
-            emit({ type: 'end' })
-            resolve()
-          },
-          connectionId
-        )
-
-        // Why: emit the current snapshot synchronously so the phone has
-        // something to render immediately, then refresh only stale data.
-        // Connection cutovers replay this subscription and must not turn the
-        // manual-force lane into an unbounded provider-fetch loop.
-        emit({ type: 'ready', subscriptionId, snapshot: runtime.getAccountsSnapshot() })
-        void runtime.refreshAccountsForMobileSubscriber()
+    handler: async (_params, { runtime, connectionId, signal }, emit) => {
+      if (signal?.aborted) {
+        return
+      }
+      const stopped = Promise.withResolvers<void>()
+      const unsubscribe = runtime.onAccountsChanged((snapshot) => {
+        emit({ type: 'snapshot', snapshot })
       })
+
+      // Key cleanup by socket plus sequence so sibling sockets and concurrent subscribes cannot evict each other.
+      const seq = ++accountsSubscriptionSeq
+      const subscriptionId = `accounts-${connectionId ?? 'inproc'}-${seq}`
+      const release = (): void => runtime.cleanupSubscription(subscriptionId)
+      runtime.registerSubscriptionCleanup(
+        subscriptionId,
+        () => {
+          signal?.removeEventListener('abort', release)
+          unsubscribe()
+          stopped.resolve()
+        },
+        connectionId
+      )
+
+      try {
+        if (signal?.aborted) {
+          release()
+        } else {
+          signal?.addEventListener('abort', release, { once: true })
+          // Publish a snapshot immediately, then refresh stale data; reconnect must not force repeated provider fetches.
+          emit({ type: 'ready', subscriptionId, snapshot: runtime.getAccountsStreamSnapshot() })
+          void runtime.refreshAccountsForMobileSubscriber()
+        }
+        await stopped.promise
+        emit({ type: 'end' })
+      } finally {
+        release()
+      }
     }
   }),
   defineMethod({
@@ -216,3 +289,15 @@ export const ACCOUNT_METHODS = [
     }
   })
 ]
+
+// The desktop's launch-env push and unsubscribes never touch the account services.
+const ACCOUNT_SERVICE_FREE_METHODS: ReadonlySet<string> = new Set([
+  'accounts.setHostLaunchEnv',
+  'accounts.unsubscribe'
+])
+
+export const ACCOUNT_METHODS = ACCOUNT_METHOD_DEFINITIONS.map((method) =>
+  ACCOUNT_SERVICE_FREE_METHODS.has(method.name)
+    ? method
+    : { ...method, requires: ['accounts'] satisfies OrcadFeature[] }
+)

@@ -80,9 +80,7 @@ export function attachBrowserClientRetainedPage(
   }
 }
 
-/** The retained host's click-through state is derived, never saved and restored: it is the
- *  only writer of the property, and a drag spanning a hide/show would otherwise put back a
- *  value captured under the opposite visibility. */
+/** Derive pointer-events from current visibility and drag state; restoring a captured value would fail across mid-drag hide/show. */
 function applyRetainedHostPointerEvents(
   host: HTMLDivElement,
   visible: boolean,
@@ -91,9 +89,7 @@ function applyRetainedHostPointerEvents(
   host.style.pointerEvents = visible && !dragPassthrough ? 'auto' : 'none'
 }
 
-/** Enrols a retained host in the shared guest passthrough set, so a drag reaches the document
- *  through this body-level overlay the way it already does through local pane guests. A host
- *  enrolled mid-drag needs no settling: it is created hidden, and its show derives the state. */
+/** Register the body-level host for drag passthrough; hidden creation and derived show state also cover enrollment mid-drag. */
 export function enrolRetainedHostDragPassthrough(page: RetainedPage): () => void {
   return registerWebviewDragPassthroughSurface((passthrough) => {
     applyRetainedHostPointerEvents(page.host, page.visibleAttachment !== null, passthrough)
@@ -123,9 +119,7 @@ function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => v
   observer?.observe(container)
   window.addEventListener('resize', syncViewport)
   window.addEventListener('scroll', syncViewport, true)
-  // Why: a pane can MOVE without resizing (tab dragged across an even split, sidebar toggles),
-  // which fires no resize/scroll event — the overlay would keep painting at the old pane's rect.
-  // The per-frame re-read is shared with every other shown host by the position driver.
+  // Pane moves can fire no resize/scroll event; the shared position loop remeasures each shown host.
   const releasePositionSync = registerBrowserClientPagePositionSync(syncViewport)
   syncViewport()
   // Idempotent: the registry releases a page it tears down, and the pane's own detach follows.

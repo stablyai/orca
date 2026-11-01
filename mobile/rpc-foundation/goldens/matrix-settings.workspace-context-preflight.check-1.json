@@ -112,18 +112,13 @@
       },
       "trust": {}
     },
-    "4083eac25622": {
+    "3d249e57942b": {
       "name": "ui.get#1",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
-    },
-    "41a2214deb19": {
-      "name": "settings.get#1",
-      "ordinal": 3,
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
-          "value": "settings.get"
+          "value": "ui.get"
         },
         {
           "name": "params",
@@ -143,15 +138,39 @@
         "startedAt": 0
       }
     },
-    "5ce265803a9c": {
-      "name": "settings.get#1",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
-    "6953830b50a0": {
-      "name": "linear.status#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    "65e027dec060": {
+      "name": "ui.get#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "ui": {}
+          }
+        }
+      }
     },
     "7c1703d13d10": {
       "name": "preflight.check#1",
@@ -188,13 +207,70 @@
         }
       }
     },
-    "843edb309e61": {
+    "7c5e5635081d": {
       "name": "settings.get#1",
-      "ordinal": 3,
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
           "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "82132b79b8f7": {
+      "name": "settings.get#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "83e12a6721ec": {
+      "name": "jira.status#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "jira.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8566e2463d90": {
+      "name": "jira.status#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "jira.status"
         },
         {
           "name": "params",
@@ -217,13 +293,7 @@
           "id": "frame-3",
           "ok": true,
           "result": {
-            "settings": {
-              "defaultTuiAgent": "codex",
-              "disabledTuiAgents": ["claude"],
-              "hostSettingOverrides": {},
-              "prBotAuthorOverrides": ["bot-user"],
-              "visibleTaskProviders": ["github", "linear"]
-            }
+            "connected": false
           }
         }
       }
@@ -368,6 +438,16 @@
         }
       }
     },
+    "a2fd5d449008": {
+      "name": "jira.status#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"jira.status\"}"
+    },
+    "ab92af857792": {
+      "name": "linear.status#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    },
     "ad7164511835": {
       "name": "preflight.check#1",
       "ordinal": 1,
@@ -461,6 +541,11 @@
         }
       }
     },
+    "cc61428a1b82": {
+      "name": "preflight.check#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+    },
     "d0d877eb4118": {
       "name": "preflight.check#1",
       "ordinal": 1,
@@ -489,6 +574,46 @@
         "value": {
           "id": "frame-1",
           "ok": true
+        }
+      }
+    },
+    "d13ca77439fc": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": ["claude"],
+              "hostSettingOverrides": {},
+              "prBotAuthorOverrides": ["bot-user"],
+              "visibleTaskProviders": ["github", "linear"]
+            }
+          }
         }
       }
     },
@@ -526,66 +651,6 @@
         }
       }
     },
-    "d57386932daa": {
-      "name": "ui.get#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "ui": {}
-          }
-        }
-      }
-    },
-    "e1a668fc41b0": {
-      "name": "ui.get#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -593,6 +658,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "edb8f0fe6906": {
+      "name": "ui.get#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
     },
     "f6a09f8c5b85": {
       "providers": [],
@@ -632,11 +702,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "ff2933c7056d": {
-      "name": "preflight.check#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
     }
   },
   "recording": {
@@ -645,8 +710,20 @@
       {
         "id": "settings-workspace-context-fulfilled.prelude:settings-pending",
         "observation": {
-          "sender": ["b69f454508d6", "1e7f9a45facb", "41a2214deb19", "e1a668fc41b0"],
-          "payloads": ["ff2933c7056d", "6953830b50a0", "5ce265803a9c", "4083eac25622"],
+          "sender": [
+            "b69f454508d6",
+            "1e7f9a45facb",
+            "83e12a6721ec",
+            "7c5e5635081d",
+            "3d249e57942b"
+          ],
+          "payloads": [
+            "cc61428a1b82",
+            "ab92af857792",
+            "a2fd5d449008",
+            "82132b79b8f7",
+            "edb8f0fe6906"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -657,8 +734,20 @@
       {
         "id": "settings-workspace-context-fulfilled.normal:settled",
         "observation": {
-          "sender": ["903ba5a79900", "9cf8484d8b20", "843edb309e61", "d57386932daa"],
-          "payloads": ["ff2933c7056d", "6953830b50a0", "5ce265803a9c", "4083eac25622"],
+          "sender": [
+            "903ba5a79900",
+            "9cf8484d8b20",
+            "8566e2463d90",
+            "d13ca77439fc",
+            "65e027dec060"
+          ],
+          "payloads": [
+            "cc61428a1b82",
+            "ab92af857792",
+            "a2fd5d449008",
+            "82132b79b8f7",
+            "edb8f0fe6906"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -669,8 +758,20 @@
       {
         "id": "settings-workspace-context-fulfilled.result-absent:settled",
         "observation": {
-          "sender": ["d0d877eb4118", "9cf8484d8b20", "843edb309e61", "d57386932daa"],
-          "payloads": ["ff2933c7056d", "6953830b50a0", "5ce265803a9c", "4083eac25622"],
+          "sender": [
+            "d0d877eb4118",
+            "9cf8484d8b20",
+            "8566e2463d90",
+            "d13ca77439fc",
+            "65e027dec060"
+          ],
+          "payloads": [
+            "cc61428a1b82",
+            "ab92af857792",
+            "a2fd5d449008",
+            "82132b79b8f7",
+            "edb8f0fe6906"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -681,8 +782,20 @@
       {
         "id": "settings-workspace-context-fulfilled.result-null:settled",
         "observation": {
-          "sender": ["d1af7ef29aa6", "9cf8484d8b20", "843edb309e61", "d57386932daa"],
-          "payloads": ["ff2933c7056d", "6953830b50a0", "5ce265803a9c", "4083eac25622"],
+          "sender": [
+            "d1af7ef29aa6",
+            "9cf8484d8b20",
+            "8566e2463d90",
+            "d13ca77439fc",
+            "65e027dec060"
+          ],
+          "payloads": [
+            "cc61428a1b82",
+            "ab92af857792",
+            "a2fd5d449008",
+            "82132b79b8f7",
+            "edb8f0fe6906"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -693,8 +806,20 @@
       {
         "id": "settings-workspace-context-fulfilled.inner-ok-missing:settled",
         "observation": {
-          "sender": ["19d55040ae04", "9cf8484d8b20", "843edb309e61", "d57386932daa"],
-          "payloads": ["ff2933c7056d", "6953830b50a0", "5ce265803a9c", "4083eac25622"],
+          "sender": [
+            "19d55040ae04",
+            "9cf8484d8b20",
+            "8566e2463d90",
+            "d13ca77439fc",
+            "65e027dec060"
+          ],
+          "payloads": [
+            "cc61428a1b82",
+            "ab92af857792",
+            "a2fd5d449008",
+            "82132b79b8f7",
+            "edb8f0fe6906"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -705,8 +830,20 @@
       {
         "id": "settings-workspace-context-fulfilled.inner-false-string-error:settled",
         "observation": {
-          "sender": ["7c1703d13d10", "9cf8484d8b20", "843edb309e61", "d57386932daa"],
-          "payloads": ["ff2933c7056d", "6953830b50a0", "5ce265803a9c", "4083eac25622"],
+          "sender": [
+            "7c1703d13d10",
+            "9cf8484d8b20",
+            "8566e2463d90",
+            "d13ca77439fc",
+            "65e027dec060"
+          ],
+          "payloads": [
+            "cc61428a1b82",
+            "ab92af857792",
+            "a2fd5d449008",
+            "82132b79b8f7",
+            "edb8f0fe6906"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -717,8 +854,20 @@
       {
         "id": "settings-workspace-context-fulfilled.inner-false-object-error:settled",
         "observation": {
-          "sender": ["0e109980fe2a", "9cf8484d8b20", "843edb309e61", "d57386932daa"],
-          "payloads": ["ff2933c7056d", "6953830b50a0", "5ce265803a9c", "4083eac25622"],
+          "sender": [
+            "0e109980fe2a",
+            "9cf8484d8b20",
+            "8566e2463d90",
+            "d13ca77439fc",
+            "65e027dec060"
+          ],
+          "payloads": [
+            "cc61428a1b82",
+            "ab92af857792",
+            "a2fd5d449008",
+            "82132b79b8f7",
+            "edb8f0fe6906"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -729,8 +878,20 @@
       {
         "id": "settings-workspace-context-fulfilled.outer-refused:settled",
         "observation": {
-          "sender": ["925a9a6755cc", "9cf8484d8b20", "843edb309e61", "d57386932daa"],
-          "payloads": ["ff2933c7056d", "6953830b50a0", "5ce265803a9c", "4083eac25622"],
+          "sender": [
+            "925a9a6755cc",
+            "9cf8484d8b20",
+            "8566e2463d90",
+            "d13ca77439fc",
+            "65e027dec060"
+          ],
+          "payloads": [
+            "cc61428a1b82",
+            "ab92af857792",
+            "a2fd5d449008",
+            "82132b79b8f7",
+            "edb8f0fe6906"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -741,8 +902,20 @@
       {
         "id": "settings-workspace-context-fulfilled.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["9b031957c39f", "9cf8484d8b20", "843edb309e61", "d57386932daa"],
-          "payloads": ["ff2933c7056d", "6953830b50a0", "5ce265803a9c", "4083eac25622"],
+          "sender": [
+            "9b031957c39f",
+            "9cf8484d8b20",
+            "8566e2463d90",
+            "d13ca77439fc",
+            "65e027dec060"
+          ],
+          "payloads": [
+            "cc61428a1b82",
+            "ab92af857792",
+            "a2fd5d449008",
+            "82132b79b8f7",
+            "edb8f0fe6906"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -753,8 +926,20 @@
       {
         "id": "settings-workspace-context-fulfilled.method-not-found:settled",
         "observation": {
-          "sender": ["c4022214e035", "9cf8484d8b20", "843edb309e61", "d57386932daa"],
-          "payloads": ["ff2933c7056d", "6953830b50a0", "5ce265803a9c", "4083eac25622"],
+          "sender": [
+            "c4022214e035",
+            "9cf8484d8b20",
+            "8566e2463d90",
+            "d13ca77439fc",
+            "65e027dec060"
+          ],
+          "payloads": [
+            "cc61428a1b82",
+            "ab92af857792",
+            "a2fd5d449008",
+            "82132b79b8f7",
+            "edb8f0fe6906"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -765,8 +950,20 @@
       {
         "id": "settings-workspace-context-fulfilled.transport-rejection:settled",
         "observation": {
-          "sender": ["f9b8f7e735b9", "9cf8484d8b20", "843edb309e61", "d57386932daa"],
-          "payloads": ["ff2933c7056d", "6953830b50a0", "5ce265803a9c", "4083eac25622"],
+          "sender": [
+            "f9b8f7e735b9",
+            "9cf8484d8b20",
+            "8566e2463d90",
+            "d13ca77439fc",
+            "65e027dec060"
+          ],
+          "payloads": [
+            "cc61428a1b82",
+            "ab92af857792",
+            "a2fd5d449008",
+            "82132b79b8f7",
+            "edb8f0fe6906"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -777,8 +974,20 @@
       {
         "id": "settings-workspace-context-fulfilled.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["ad7164511835", "9cf8484d8b20", "843edb309e61", "d57386932daa"],
-          "payloads": ["ff2933c7056d", "6953830b50a0", "5ce265803a9c", "4083eac25622"],
+          "sender": [
+            "ad7164511835",
+            "9cf8484d8b20",
+            "8566e2463d90",
+            "d13ca77439fc",
+            "65e027dec060"
+          ],
+          "payloads": [
+            "cc61428a1b82",
+            "ab92af857792",
+            "a2fd5d449008",
+            "82132b79b8f7",
+            "edb8f0fe6906"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

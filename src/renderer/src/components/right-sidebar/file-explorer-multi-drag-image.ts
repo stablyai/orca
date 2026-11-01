@@ -1,11 +1,10 @@
 import { basename } from '@/lib/path'
+import { translate } from '@/i18n/i18n'
 
-/** Detached DOM stack of the dragged rows, used as the multi-select drag image. */
 export function createMultiSelectDragGhost(paths: string[], rowW: number): HTMLDivElement {
   const MAX_SHOWN = 5
 
-  // Why: drag images are detached DOM nodes, so inline the same
-  // file glyph the real row renders.
+  // Detached drag images need the real row's glyph inlined.
   const FILE_ICON =
     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><polyline points="14 2 14 8 20 8"/></svg>'
 
@@ -35,7 +34,16 @@ export function createMultiSelectDragGhost(paths: string[], rowW: number): HTMLD
     ghost.appendChild(makeRow(basename(p)))
   }
   if (paths.length > MAX_SHOWN) {
-    ghost.appendChild(makeRow(`+${paths.length - MAX_SHOWN} more`, true))
+    ghost.appendChild(
+      makeRow(
+        translate(
+          'auto.components.right.sidebar.fileExplorerMultiDrag.moreItems',
+          '+{{count}} more',
+          { count: paths.length - MAX_SHOWN, defaultValue_one: '+{{count}} more' }
+        ),
+        true
+      )
+    )
   }
 
   return ghost

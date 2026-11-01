@@ -8,30 +8,6 @@ import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
-export {
-  ensurePtyDispatcher,
-  getEagerPtyBufferHandle,
-  registerEagerPtyBuffer,
-  restorePtyDataHandlersAfterFailedShutdown,
-  subscribeToPtyExit,
-  unregisterPtyDataHandlers
-} from './pty-dispatcher'
-export type { EagerPtyHandle } from './pty-dispatcher'
-export { extractLastOscTitle } from '../../../../shared/agent-detection'
-export { createPtyOutputProcessor } from './pty-output-processor'
-export {
-  MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY,
-  MAX_PENDING_PTY_SIDE_EFFECTS
-} from './pty-output-side-effect-queue'
-export type {
-  IpcPtyTransportOptions,
-  LocalPtySessionMetadata,
-  PtyBufferSnapshot,
-  PtyConnectResult,
-  PtyReplayDataMeta,
-  PtyTransport
-} from './pty-transport-types'
-
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
   const {
     connectionId,
@@ -77,9 +53,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
-    onAgentBecameIdle: (title) => {
+    onAgentBecameIdle: (title, meta) => {
       if (!suppressAttentionEvents) {
-        onAgentBecameIdle?.(title)
+        onAgentBecameIdle?.(title, meta)
       }
     },
     onAgentBecameWorking,
@@ -127,6 +103,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       } else {
         dropPreconnectInput('the terminal did not attach')
       }
+      return
+    }
+    if (opts.releasePreconnectInput && !opts.releasePreconnectInput()) {
+      dropPreconnectInput('startup work appeared before it attached')
       return
     }
     await preconnectInputBuffer.flush({
@@ -238,6 +218,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     sendInput(data, inputKind) {
+      if (!destroyed && inputKind === 'driving') {
+        opts.onDrivingInputAttempt?.(ptyId)
+      }
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
         return preconnectInputBuffer.enqueue(data, 'ordinary', inputKind, opts.onPreconnectInput)
       }
@@ -264,6 +247,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       ? {}
       : {
           async sendInputAccepted(data: string, inputKind: TerminalInputKind): Promise<boolean> {
+            if (!destroyed && inputKind === 'driving') {
+              opts.onDrivingInputAttempt?.(ptyId)
+            }
             if (!destroyed && preconnectInputBuffer?.isBuffering()) {
               return preconnectInputBuffer.enqueueAccepted(data, inputKind, opts.onPreconnectInput)
             }

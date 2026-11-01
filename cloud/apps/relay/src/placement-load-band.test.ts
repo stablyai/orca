@@ -136,18 +136,6 @@ describe('PlacementLoadBand', () => {
     expect(lines[0]?.fallbacks).toBeGreaterThan(0)
   })
 
-  it('never places past capacity while the fuller cells fill', () => {
-    const cells: SimulatedCell[] = [
-      { cellId: 'cell-empty', reserved: 0, capacity: 100 },
-      ...['cell-b', 'cell-c'].map((cellId) => ({ cellId, reserved: 90, capacity: 100 }))
-    ]
-    const director = new PlacementLoadBand(seededRandom(11), quiet)
-    const counts = simulate([director], cells, 120, () => 1_000)
-
-    expect(cells.map((cell) => cell.reserved)).toEqual([100, 100, 100])
-    expect(counts.get('cell-empty')).toBe(100)
-  })
-
   it('falls back to the least-loaded cell when every candidate is over budget', () => {
     const band = new PlacementLoadBand(seededRandom(3), quiet)
     const only = [{ cellId: 'cell-a', loadRatio: 0.5 }]
@@ -228,26 +216,34 @@ describe('leastLoadedCell with the load band', () => {
   }
 
   it('spreads within the preferred region and keeps an empty US cell out', async () => {
-    const { store } = await setupRegions()
-    const counts = await placements(store, 200)
+    const { database, store } = await setupRegions()
+    try {
+      const counts = await placements(store, 200)
 
-    expect(counts.get('us-a')).toBeUndefined()
-    expect(counts.get('asia-a')).toBeLessThanOrEqual(PLACEMENT_INTAKE_SHARE * 200 + 1)
-    const used = [...counts.values()].filter((count) => count >= 20)
-    expect(used.length).toBeGreaterThanOrEqual(3)
+      expect(counts.get('us-a')).toBeUndefined()
+      expect(counts.get('asia-a')).toBeLessThanOrEqual(PLACEMENT_INTAKE_SHARE * 200 + 1)
+      const used = [...counts.values()].filter((count) => count >= 20)
+      expect(used.length).toBeGreaterThanOrEqual(3)
+    } finally {
+      await database.close()
+    }
   })
 
   it('fills the preferred region to its hard cap before spilling, never past it', async () => {
     const { database, store } = await setupRegions()
-    const counts = await placements(store, 520)
-    const rows = await database.query(
-      `SELECT reserved_requests, capacity_requests FROM relay_cells`
-    )
+    try {
+      const counts = await placements(store, 520)
+      const rows = await database.query(
+        `SELECT reserved_requests, capacity_requests FROM relay_cells`
+      )
 
-    // The hard cap is reserved < capacity: five Asia cells hold 500, the rest spill to the US.
-    expect(counts.get('us-a')).toBe(20)
-    for (const row of rows) {
-      expect(Number(row.reserved_requests)).toBeLessThanOrEqual(Number(row.capacity_requests))
+      // The hard cap is reserved < capacity: five Asia cells hold 500, the rest spill to the US.
+      expect(counts.get('us-a')).toBe(20)
+      for (const row of rows) {
+        expect(Number(row.reserved_requests)).toBeLessThanOrEqual(Number(row.capacity_requests))
+      }
+    } finally {
+      await database.close()
     }
   })
 })

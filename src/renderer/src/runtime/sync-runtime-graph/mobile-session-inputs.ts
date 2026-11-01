@@ -1,3 +1,5 @@
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { hostSessionTabIdsByLocalTabForWorktree } from '../web-session-tabs-sync/tracking-mappings'
 import type { AppState } from '@/store/types'
 import { parsePaneKey, makePaneKey } from '../../../../shared/stable-pane-id'
 import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/native-chat-leaf-routing'
@@ -23,6 +25,7 @@ import {
   getRuntimeLeafIdsForTerminal,
   resolveMobileTabWideAgentHintLeafId
 } from './mobile-session-surfaces'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIndexes {
   if (graphState.cachedOpenFileIndexesSource === openFiles && graphState.cachedOpenFileIndexes) {
@@ -82,11 +85,9 @@ export function buildMobileSessionAgentStatusByWorktree(
   return byWorktreeId
 }
 
-// Why: a bare id can name one workspace per host (STA-4343); with two owners no
-// single identity is correct, so publish without one and let main fall back to
-// its generation fence rather than blank the mobile session.
+// Bare IDs collide across hosts (STA-4343); ambiguous ownership omits identity so main uses generation fences rather than blanks mobile.
 function resolveWorktreeInstanceId(state: AppState, worktreeId: string): string | undefined {
-  const rows = getIndexedWorktreesById(state.worktreesByRepo ?? {}, worktreeId)
+  const rows = getIndexedWorktreesById(selectWorktreesByRepo(state) ?? {}, worktreeId)
   return rows.length === 1 ? rows[0]?.instanceId : undefined
 }
 
@@ -96,11 +97,9 @@ export function buildMobileSessionWorktreeInputs(
   publication: MobileSessionPublicationInputs,
   ambiguousTerminalTabIds: ReadonlySet<string>
 ): MobileSessionWorktreeInputs {
-  // Legacy layout/title maps are keyed only by tab id. Omit ambiguous ids until
-  // hydration repairs ownership instead of publishing one worktree's metadata for another.
+  // Legacy tab-ID maps cannot distinguish twins; omit ambiguous entries until hydration repairs ownership.
   const sourceTerminalTabs = state.tabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_TERMINAL_TABS
-  // Preserve the source reference when there is nothing to filter; the mobile
-  // snapshot cache uses this identity to avoid rebuilding on title ticks.
+  // Keep unfiltered source identity so title ticks reuse mobile snapshot cache.
   const terminalTabs = sourceTerminalTabs.some((tab) => ambiguousTerminalTabIds.has(tab.id))
     ? sourceTerminalTabs.filter((tab) => !ambiguousTerminalTabIds.has(tab.id))
     : sourceTerminalTabs
@@ -130,8 +129,13 @@ export function buildMobileSessionWorktreeInputs(
   const activeEditorFileId =
     resolvedActiveFileId && openFilesById?.has(resolvedActiveFileId) ? resolvedActiveFileId : null
   const activeTabId = state.activeTabId
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
   return {
     worktreeId,
+    hostTabIds:
+      owner.kind === 'resolved'
+        ? hostSessionTabIdsByLocalTabForWorktree(owner.environmentId ?? 'local', worktreeId)
+        : EMPTY_NARROWED_BY_KEY,
     worktreeInstanceId: resolveWorktreeInstanceId(state, worktreeId),
     terminalTabs,
     browserWorkspaces,

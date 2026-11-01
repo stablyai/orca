@@ -1,6 +1,6 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import {
   agentMainAgentVerdict,
@@ -21,19 +21,20 @@ import type {
   ActivityLiveAgentState,
   AgentPaneThread
 } from './activity-thread-types'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 const ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH = 320
 
-const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
+const ABSOLUTE_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit'
-})
+}
 
 export function formatAbsoluteDate(timestamp: number): string {
-  return absoluteDateFormatter.format(new Date(timestamp))
+  return uiDateTimeFormat(ABSOLUTE_DATE_OPTIONS).format(new Date(timestamp))
 }
 
 export function formatRelativeTime(timestamp: number, now = Date.now()): string {
@@ -148,8 +149,7 @@ export function statusPreviewForEntry(
 
 export type ActivityThreadStatusId = AgentDotState
 
-/** Single classifier behind grouping, labels, and clear-completed; the only place the
- *  verdict predicate is spelled. */
+/** Keep grouping, labels and clear-completed on one verdict classifier. */
 export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
   // Why: a failed main agent outranks the subagent work still holding its row live.
   if (thread.currentAgentEntry && agentVerdictDisplayMark(thread.currentAgentEntry) === 'failed') {
@@ -187,8 +187,7 @@ function threadCurrentState(
 }
 
 export function threadAgentStateLabel(thread: AgentPaneThread): string {
-  // Literal keys with literal fallbacks: a dynamic key registers no catalog reference
-  // and forces every state string into the boot bundle.
+  // Literal translation keys/fallbacks register catalog references and avoid bundling every state string at boot.
   switch (activityThreadStatusId(thread)) {
     case 'working':
       return translate('auto.components.activity.ActivityPrototypePage.state.working', 'Working')

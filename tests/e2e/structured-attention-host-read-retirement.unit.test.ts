@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../src/shared/agent-session-journal-types'
-import { agentSessionPromptAttentionKey } from '../../src/shared/agent-session-attention'
-import { projectStructuredAgentSessionStatusState } from '../../src/shared/structured-agent-session-projection'
-import { AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionPromptAttentionKey } from '../../src/shared/agent-session/agent-session-attention'
+import { projectStructuredAgentSessionStatusState } from '../../src/shared/agent-session/view/structured-agent-session-projection'
+import { AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-attention-capabilities'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
@@ -53,9 +53,15 @@ function prompt(id: string, sequence: number): AgentJournalRenderItem {
     }
   }
 }
-function attentionPath(directory: string) {
+const controllers: RuntimeMobileNotificationController[] = []
+function storeController(directory: string): RuntimeMobileNotificationController {
   const controller = new RuntimeMobileNotificationController()
   controller.configureDismissalStore(directory)
+  controllers.push(controller)
+  return controller
+}
+function attentionPath(directory: string) {
+  const controller = storeController(directory)
   const events: MobileNotificationEvent[] = []
   controller.onDispatched((event) => events.push(event))
   let items: AgentJournalRenderItem[] = [
@@ -84,9 +90,12 @@ function attentionPath(directory: string) {
       customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 1,
-      mutedNotificationSourceIds: []
+      mutedNotificationSourceIds: [],
+      notifyHiddenWorkspaces: false
     }),
     readWorkspaceLabels: () => ({}),
+    isWorkspaceMuted: () => false,
+    readOrchestration: () => undefined,
     dispatch: (event) => controller.dispatch(event),
     reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
     now: () => 42
@@ -131,8 +140,9 @@ beforeEach(() => {
   installStructuredHostStub()
   vi.clearAllMocks()
 })
-afterEach(() => {
+afterEach(async () => {
   clearStructuredHostStub()
+  await Promise.all(controllers.splice(0).map((controller) => controller.closeDismissals()))
   rmSync(directory, { recursive: true, force: true })
 })
 
@@ -213,8 +223,8 @@ it('a restart sends the original delivery fence in the existing native gateway f
   if (!original) {
     throw new Error('prompt not delivered')
   }
-  const restarted = new RuntimeMobileNotificationController()
-  restarted.configureDismissalStore(directory)
+  await h.controller.closeDismissals()
+  const restarted = storeController(directory)
   const gateway = createHarness({
     devices: [{ deviceId: 'phone', pushRegistration: registration() }]
   })

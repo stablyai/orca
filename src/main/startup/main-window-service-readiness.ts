@@ -1,7 +1,4 @@
-/**
- * Keep startup diagnostics specific and ordered. These messages are useful
- * when a partial bootstrap opens a window and are part of the existing contract.
- */
+/** Keep ordered, specific diagnostics for partially initialized windows. */
 const MAIN_WINDOW_SERVICE_REQUIREMENTS = [
   ['store', 'Store must be initialized before opening the main window'],
   ['runtime', 'Runtime must be initialized before opening the main window'],

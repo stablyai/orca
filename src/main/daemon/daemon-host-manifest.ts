@@ -1,36 +1,23 @@
 import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, join, win32 as winPath } from 'node:path'
 
-// What the relocated host is made of: which files are mirrored, where each lands,
-// and which of a package's files are runtime rather than bulk. The lifecycle
-// around it -- when to materialize, what keeps a host valid, pruning -- is in
-// daemon-host-relocation.ts.
-
-/**
- * The host exe keeps the app exe's own file name, so the relocated image is a byte-for-byte,
- * name-included copy of a signed binary — nothing for EDR to read as a renamed image (MITRE T1036).
- * Survival comes from the path (see daemon-host-relocation.ts). The one name-sensitive updater path is the
- * no-PowerShell `taskkill /IM` fallback, where the daemon is killed and terminals cold-restore —
- * the documented pre-relocation outcome, not a failure.
- */
+/** Preserve signed bytes and basename; path-based NSIS sweeps spare the copy, but taskkill /IM can still kill it. */
 export const daemonHostExeName = (execPath: string): string => winPath.basename(execPath)
 
-// V8 snapshots + ICU data the Electron bootstrap reads even under ELECTRON_RUN_AS_NODE; siblings of Orca.exe.
+// Electron reads V8 snapshots and ICU data even in Node mode.
 const RUNTIME_DATA_FILES = ['icudtl.dat', 'snapshot_blob.bin', 'v8_context_snapshot.bin']
 
-/**
- * Everything `require('@vscode/windows-process-tree')` walks, package-relative.
- *
- * One list, read three times: the copy plan mirrors the package containing them,
- * materialization refuses to start without them, and a materialized host is only
- * valid while it still has them. Keeping those three in one place is what stops
- * "what we copy" and "what we accept" from drifting apart -- drift there means a
- * host that is copied, published, refused, and copied again on every launch.
- */
+/** Share required runtime files across copying and validation to avoid repeated unusable copies. */
 export const WINDOWS_PROCESS_TREE_REQUIRED = [
   'package.json',
   'lib/index.js',
   'build/Release/windows_process_tree.node'
+] as const
+
+export const WINDOWS_REGISTRY_REQUIRED = [
+  'package.json',
+  'index.js',
+  'build/Release/orca_windows_registry.node'
 ] as const
 
 export type CopyOp = {
@@ -38,9 +25,9 @@ export type CopyOp = {
   /** Destination path relative to the host root, posix-separated. */
   destRel: string
   kind: 'file' | 'dir'
-  /** When true, a missing source is skipped rather than failing the copy. */
+  /** Missing optional sources are skipped. */
   optional?: boolean
-  /** Per-source-path predicate for dir copies: return false to skip a path. */
+  /** Return false to exclude a directory-copy source path. */
   filter?: (sourcePath: string) => boolean
 }
 
@@ -58,6 +45,35 @@ export function daemonHostProcessPackageDir(sources: DaemonHostSources): string 
   return join(sources.resourcesPath, 'node_modules', '@orca', 'process-host')
 }
 
+export function daemonHostWindowsRegistryDir(sources: DaemonHostSources): string {
+  return join(sources.resourcesPath, 'node_modules', '@orca', 'windows-registry')
+}
+
+function daemonHostNodePtyDir(sources: DaemonHostSources): string {
+  return join(sources.resourcesPath, 'node_modules', 'node-pty')
+}
+
+/** Plain-path conpty.dll loading can fail past 250 characters even with Windows long paths enabled. */
+export const DAEMON_HOST_NATIVE_PATH_BUDGET = 250
+
+export function deepestDaemonHostNativePathLength(
+  sources: DaemonHostSources,
+  hostRoot: string
+): number {
+  const nodePtyRel = toPosixRelative(sources.appDir, daemonHostNodePtyDir(sources))
+  // OpenConsole.exe sits beside conpty.dll and is longer, so it bounds both.
+  return Math.max(
+    ...['build/Release', `prebuilds/win32-${process.arch}`].map(
+      (binDir) => destPath(hostRoot, `${nodePtyRel}/${binDir}/conpty/OpenConsole.exe`).length
+    )
+  )
+}
+
+// Fall back to the install runtime when a deeper copy would prevent terminal startup.
+export function daemonHostFitsPathBudget(sources: DaemonHostSources, hostRoot: string): boolean {
+  return deepestDaemonHostNativePathLength(sources, hostRoot) <= DAEMON_HOST_NATIVE_PATH_BUDGET
+}
+
 function isRuntimeProcessHostPath(packageRel: string): boolean {
   return (
     packageRel === '' ||
@@ -67,18 +83,24 @@ function isRuntimeProcessHostPath(packageRel: string): boolean {
   )
 }
 
-/** A required file, a directory on the way to one, or anything in lib/ (index.js requires its siblings). */
-function isRuntimeProcessTreePath(packageRel: string): boolean {
+function isRequiredRuntimePath(packageRel: string, requiredFiles: readonly string[]): boolean {
   return (
     packageRel === '' ||
-    packageRel.startsWith('lib/') ||
-    WINDOWS_PROCESS_TREE_REQUIRED.some(
+    requiredFiles.some(
       (required) => required === packageRel || required.startsWith(`${packageRel}/`)
     )
   )
 }
 
-// win32 path semantics so Windows paths decompose correctly off-win32 in cross-platform unit tests; production runs on win32 only.
+/** Keep lib siblings and paths leading to required files so the package loader can resolve the addon. */
+function isRuntimeProcessTreePath(packageRel: string): boolean {
+  return (
+    packageRel.startsWith('lib/') ||
+    isRequiredRuntimePath(packageRel, WINDOWS_PROCESS_TREE_REQUIRED)
+  )
+}
+
+// Use Windows semantics in both production and tests running on other platforms.
 export function toPosixRelative(fromDir: string, absPath: string): string {
   return winPath.relative(fromDir, absPath).split(winPath.sep).join('/')
 }
@@ -87,7 +109,6 @@ export function destPath(root: string, destRel: string): string {
   return join(root, ...destRel.split('/'))
 }
 
-// Drop node-pty's .pdb symbols and non-host-arch prebuilds (its bulk); keyed on host arch so a future win32-arm64 build keeps the prebuild it needs.
 const HOST_WIN_PREBUILD_DIR = `win32-${process.arch}`.toLowerCase()
 
 function isRuntimeNodePtyPath(sourcePath: string): boolean {
@@ -95,26 +116,22 @@ function isRuntimeNodePtyPath(sourcePath: string): boolean {
   if (p.endsWith('.pdb')) {
     return false
   }
-  // Keep only the host arch's win32 prebuild; drop any other win32-<arch> dir.
   const prebuild = p.match(/prebuilds[\\/](win32-[^\\/]+)/)
   return !prebuild || prebuild[1] === HOST_WIN_PREBUILD_DIR
 }
 
-/**
- * The ordered copy plan. Every destRel mirrors the source's win-unpacked relative path so require()
- * and node-pty's loader resolve the mirror identically to the packaged app. Pure so tests can assert layout.
- */
+/** Preserve the packaged relative layout so require() and native loaders resolve the mirror. */
 export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
   const { appDir, execPath, resourcesPath, entrySourcePath, entryRelPath } = sources
   const ops: CopyOp[] = []
 
-  // Host exe (verbatim name) + V8/ICU blobs at dest root. Top-level DLLs omitted: GPU/media libs a windowless run-as-node host never loads (~48MB saved).
+  // Windowless Node mode does not load the omitted top-level GPU/media DLLs.
   ops.push({ sourcePath: execPath, destRel: daemonHostExeName(execPath), kind: 'file' })
   for (const name of RUNTIME_DATA_FILES) {
     ops.push({ sourcePath: join(appDir, name), destRel: name, kind: 'file', optional: true })
   }
 
-  // Daemon bundle: entry + sibling chunks/ + out/package.json (CJS/ESM loader resolution), mirrored verbatim.
+  // Preserve sibling chunks and out/package.json for CJS/ESM resolution.
   ops.push({ sourcePath: entrySourcePath, destRel: entryRelPath, kind: 'file' })
   const chunksDir = join(winPath.dirname(entrySourcePath), 'chunks')
   ops.push({
@@ -140,8 +157,7 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
     filter: (sourcePath) => isRuntimeProcessHostPath(toPosixRelative(processHostDir, sourcePath))
   })
 
-  // @vscode/windows-process-tree, mirrored so the daemon's require() resolves it; without it every snapshot forks a powershell.exe (#16905).
-  // Filtered to the runtime files: the installed package is ~25MB of gyp intermediates (.obj/.pdb) around a ~150KB addon.
+  // Keep the native process table runtime to avoid a PowerShell scan per snapshot (#16905).
   const { windowsProcessTreeDir } = sources
   ops.push({
     sourcePath: windowsProcessTreeDir,
@@ -150,8 +166,15 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
     filter: (sourcePath) =>
       isRuntimeProcessTreePath(toPosixRelative(windowsProcessTreeDir, sourcePath))
   })
-  // node-pty tree, mirrored so require('node-pty') resolves it; filtered to drop unused .pdb/other-arch prebuilds.
-  const nodePtyDir = join(resourcesPath, 'node_modules', 'node-pty')
+  const registryDir = daemonHostWindowsRegistryDir(sources)
+  ops.push({
+    sourcePath: registryDir,
+    destRel: toPosixRelative(appDir, registryDir),
+    kind: 'dir',
+    filter: (sourcePath) =>
+      isRequiredRuntimePath(toPosixRelative(registryDir, sourcePath), WINDOWS_REGISTRY_REQUIRED)
+  })
+  const nodePtyDir = daemonHostNodePtyDir(sources)
   ops.push({
     sourcePath: nodePtyDir,
     destRel: toPosixRelative(appDir, nodePtyDir),
@@ -173,7 +196,7 @@ export function executeManifest(ops: CopyOp[], stagingRoot: string): void {
     const dest = destPath(stagingRoot, op.destRel)
     mkdirSync(dirname(dest), { recursive: true })
     const { filter } = op
-    // Dereference symlinks so the copy holds no link back into the install dir.
+    // Dereference links so the mirror survives removal of the install directory.
     cpSync(op.sourcePath, dest, {
       recursive: op.kind === 'dir',
       dereference: true,

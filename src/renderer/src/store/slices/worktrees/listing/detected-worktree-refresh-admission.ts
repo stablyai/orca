@@ -8,10 +8,7 @@ import { directSshAuthoritiesEqual, getCurrentDirectSshAuthority } from './direc
 import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import { repoHasExactlyOneExecutionHostOwner } from './worktree-host-ownership'
 
-/**
- * Why a listing was not applied. `not-current`: the connection or repo owner it was listed under
- * no longer holds. `superseded`: a newer catalog (a create or remove reply) is already applied.
- */
+/** not-current: connection/owner changed; superseded: newer create/remove catalog already applied. */
 export type WorktreeListingRefusal = 'not-current' | 'superseded'
 export type WorktreeListingMergeOutcome = 'applied' | WorktreeListingRefusal
 

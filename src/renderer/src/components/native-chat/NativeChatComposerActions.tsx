@@ -1,29 +1,36 @@
-import { ArrowUp, CircleAlert, Mic, Play, Plus, Square } from 'lucide-react'
+import { memo } from 'react'
+import { ArrowUp, CircleAlert, Mic, Plus, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat-follow-up-behavior'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
+import { NativeChatComposerPermissionPicker } from './NativeChatPermissionModePicker'
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
-import type { NativeChatComposerPrimaryAction } from './native-chat-composer-primary-action'
 
 export type NativeChatComposerActionsProps = {
+  editSession?: { cancel: () => void }
   attachDisabled: boolean
   dictationDisabled: boolean
   sendDisabled: boolean
-  /** What the primary button does (`nativeChatComposerPrimaryAction`). */
-  primaryAction: NativeChatComposerPrimaryAction
   /** Shown on the disabled send button: what the user can do to send. */
   sendBlockedReason?: string | null
   /** Storage refused this draft; it is held in memory only. */
   draftNotSaved?: boolean
   isWorking: boolean
+  /** The draft holds text or images: while the agent works, Send takes Stop's place. */
+  hasDraft?: boolean
+  /** While the agent works: what Cmd/Ctrl+Enter would do instead of a plain send, when it differs. */
+  alternateSend?: NativeChatFollowUpBehavior
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */
   isStopping?: boolean
   isDictating: boolean
@@ -34,8 +41,6 @@ export type NativeChatComposerActionsProps = {
   onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
-  /** Releases the held queue when the primary action is Resume. */
-  onResume?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
@@ -44,16 +49,21 @@ export type NativeChatComposerActionsProps = {
   onExitGoalMode?: () => void
   /** Absent until the session has reported or the transcript can estimate. */
   contextUsage?: NativeChatContextUsageSummary | null
+  /** The chat's agent, whose permission modes the picker describes. */
+  agent?: string
 }
 
-export function NativeChatComposerActions({
+// Memoized: typing re-renders the composer per keystroke, and these controls rarely change with it.
+export const NativeChatComposerActions = memo(function NativeChatComposerActions({
+  editSession,
   attachDisabled,
   dictationDisabled,
   sendDisabled,
-  primaryAction,
   sendBlockedReason,
   draftNotSaved,
   isWorking,
+  hasDraft = false,
+  alternateSend,
   isStopping = false,
   isDictating,
   isDictationHoldMode,
@@ -63,26 +73,24 @@ export function NativeChatComposerActions({
   onDictationHoldEnd,
   onSend,
   onStop,
-  onResume,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
   sessionOptionsPickerRequest,
   onExitGoalMode,
   contextUsage,
-  focusComposer
+  focusComposer,
+  agent
 }: NativeChatComposerActionsProps): React.JSX.Element {
-  const stops = primaryAction === 'stop'
-  const resumes = primaryAction === 'resume'
+  useUiLanguageRevision()
+  // Like Enter, a typed draft sends while the agent works; Esc still stops.
+  const stops = isWorking && !hasDraft
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
-    // A double-click commonly lands after the first send has started and the button has
-    // changed to Stop; ignore the second click instead of cancelling the new turn.
+    // Ignore a double-click’s second press after Send becomes Stop so it cannot cancel the newly started turn.
     if (event.detail > 1) {
       return
     }
     if (stops) {
       onStop?.()
-    } else if (resumes) {
-      onResume?.()
     } else {
       onSend()
     }
@@ -90,8 +98,29 @@ export function NativeChatComposerActions({
   const dictationLabel = isDictating
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
     : translate('components.native-chat.composer.startDictation', 'Start dictation')
-  const sendReason = stops || resumes ? null : (sendBlockedReason ?? null)
-  const sendButton = (
+  const sendReason = stops ? null : (sendBlockedReason ?? null)
+  const sendHint =
+    sendReason ??
+    (!stops && alternateSend
+      ? alternateSend === 'steer'
+        ? translate('components.native-chat.composer.alternateSteerHint', '{{shortcut}} to steer', {
+            shortcut: getScreenSubmitShortcutLabel()
+          })
+        : translate('components.native-chat.composer.alternateQueueHint', '{{shortcut}} to queue', {
+            shortcut: getScreenSubmitShortcutLabel()
+          })
+      : null)
+  const sendButton = editSession ? (
+    <Button
+      type="button"
+      size="sm"
+      disabled={sendDisabled}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={handleCriticalAction}
+    >
+      {translate('components.native-chat.queuedMessages.save', 'Save')}
+    </Button>
+  ) : (
     <Button
       type="button"
       data-native-chat-critical-action={stops ? 'stop' : undefined}
@@ -100,23 +129,17 @@ export function NativeChatComposerActions({
           ? isStopping
             ? translate('components.native-chat.status.stopping', 'Stopping…')
             : translate('components.native-chat.stop', 'Stop the agent')
-          : resumes
-            ? translate('components.native-chat.queuedMessages.resume', 'Resume')
-            : (sendReason ?? translate('components.native-chat.composer.send', 'Send'))
+          : (sendReason ?? translate('components.native-chat.composer.send', 'Send'))
       }
-      disabled={sendDisabled || (isWorking && isStopping)}
+      disabled={sendDisabled || (stops && isStopping)}
+      // A press keeps focus where it was; a focused button drops it to <body> when it disables.
+      onMouseDown={(event) => event.preventDefault()}
       onClick={handleCriticalAction}
       variant={stops ? 'secondary' : 'default'}
       size="icon"
       className="size-8 rounded-full pointer-coarse:size-10"
     >
-      {stops ? (
-        <Square className="size-3.5 fill-current" />
-      ) : resumes ? (
-        <Play className="size-3.5 fill-current" />
-      ) : (
-        <ArrowUp className="size-4" />
-      )}
+      {stops ? <Square className="size-3.5 fill-current" /> : <ArrowUp className="size-4" />}
     </Button>
   )
 
@@ -141,11 +164,15 @@ export function NativeChatComposerActions({
             {translate('components.native-chat.composer.attach', 'Attach file')}
           </TooltipContent>
         </Tooltip>
+        <NativeChatComposerPermissionPicker
+          surface={sessionOptionsSurface}
+          snapshot={sessionOptionsSnapshot}
+          {...(agent ? { agent } : {})}
+        />
         {onExitGoalMode ? <NativeChatComposerGoalChip onExit={onExitGoalMode} /> : null}
       </div>
       <div className="ml-auto flex items-center gap-1.5">
-        {/* Why: keep session controls beside the actions they affect; the
-        model trigger is ordered last so only the context ring separates it from dictation. */}
+        {/* Keep option pickers beside the session actions they affect. */}
         <NativeChatSessionOptionPickers
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
@@ -199,14 +226,19 @@ export function NativeChatComposerActions({
           </TooltipContent>
         </Tooltip>
         <DraftNotSavedIcon shown={draftNotSaved === true} />
-        {sendReason ? (
+        {editSession ? (
+          <Button type="button" variant="ghost" size="sm" onClick={editSession.cancel}>
+            {translate('common.cancel', 'Cancel')}
+          </Button>
+        ) : null}
+        {sendHint ? (
           <Tooltip>
             <TooltipTrigger asChild>
               {/* A disabled button gets no pointer events, so the wrapper carries the hover. */}
               <span className="inline-flex">{sendButton}</span>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {sendReason}
+              {sendHint}
             </TooltipContent>
           </Tooltip>
         ) : (
@@ -215,9 +247,8 @@ export function NativeChatComposerActions({
       </div>
     </div>
   )
-}
+})
 
-/** Shown only after storage refused the draft, so it never appears on a normal save. */
 function DraftNotSavedIcon({ shown }: { shown: boolean }): React.JSX.Element | null {
   if (!shown) {
     return null

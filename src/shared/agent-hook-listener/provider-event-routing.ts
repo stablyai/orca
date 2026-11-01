@@ -22,8 +22,7 @@ import { extractHermesToolFields } from './providers/hermes-tool-fields'
 import { extractJcodeToolFields } from './providers/jcode-tool-fields'
 import { extractKiroToolFields } from './providers/kiro-tool-fields'
 
-/** The per-provider answer to "is this event a user-initiated new turn?". Exported so the
- *  observation stamp reuses it instead of minting a second list of event-name literals. */
+/** Share provider boundaries with observation stamping; avoid a second event-name list. */
 export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of falling through to false.
   switch (source) {
@@ -31,8 +30,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'qwen-code':
     case 'qoder':
     case 'claude':
-      // Why: SessionStart lands an idle row (STA-3386) and must also drop stale
-      // tool/prompt caches left by the pane's previous session.
+      // SessionStart is idle but must clear previous-session tool/prompt caches (STA-3386).
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'codebuddy':
     case 'kimi':
@@ -42,12 +40,10 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       // Muse uses Claude-compatible lifecycle events.
       return eventName === 'UserPromptSubmit'
     case 'dsh':
-      // Why: DSH's Claude-Code hook bridge fires SessionStart once per session before the
-      // first turn, which is the point stale tool/prompt caches from a reused pane must go.
+      // DSH SessionStart clears reused-pane caches before its first turn.
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'zcode':
-      // Why: matches Codex/Claude — SessionStart lands an idle boundary row and drops stale
-      // tool/prompt caches, while UserPromptSubmit is the actual turn boundary.
+      // SessionStart clears idle-boundary caches; UserPromptSubmit opens the actual turn.
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
@@ -81,16 +77,66 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'hermes':
       return eventName === 'pre_llm_call' || eventName === 'on_session_start'
     case 'devin':
-      // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
+      // Devin handles SessionStart early; UserPromptSubmit is its turn boundary.
       return eventName === 'UserPromptSubmit'
     case 'jcode':
-      // Why: jcode has no UserPromptSubmit, but turn_start fires once per submitted
-      // prompt before the model generates — its real turn boundary. session_start
-      // returns early in normalizeJcodeEvent and clears the cache itself.
+      // jcode turn_start precedes generation; session_start clears caches on its separate early path.
       return eventName === 'turn_start'
     case 'kiro':
       // Why: agentSpawn opens a fresh session in the pane, so stale tool/prompt caches go too.
-      return eventName === 'agentSpawn' || eventName === 'userPromptSubmit'
+      return (
+        eventName === 'agentSpawn' ||
+        eventName === 'userPromptSubmit' ||
+        eventName === 'UserPromptSubmit'
+      )
+  }
+}
+
+/** Only main-agent turn-end events count; reminders/session events/enrichment merely restate them. */
+export function isTurnEndEvent(source: AgentHookSource, eventName: unknown): boolean {
+  // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of falling through to false.
+  switch (source) {
+    case 'claude':
+    case 'qoder':
+    case 'qoder-cn':
+    case 'qwen-code':
+    case 'codebuddy':
+    case 'kimi':
+    case 'muse':
+      return eventName === 'Stop' || eventName === 'StopFailure'
+    case 'dsh':
+    case 'zcode':
+    case 'codex':
+    case 'antigravity':
+    case 'droid':
+    case 'devin':
+      return eventName === 'Stop'
+    case 'gemini':
+      return eventName === 'AfterAgent'
+    case 'amp':
+      return eventName === 'agent.end'
+    case 'command-code':
+      // Why: its only done event; repeats within one prompt share the transcript key, so they restate.
+      return eventName === 'Stop'
+    case 'cursor':
+    case 'kiro':
+      return eventName === 'stop'
+    case 'grok':
+      return isGrokEvent(eventName, 'stop', 'stop_failure', 'stop_cancelled')
+    case 'copilot':
+      return normalizeCopilotEventName(eventName) === 'Stop'
+    case 'hermes':
+      return eventName === 'post_llm_call'
+    case 'jcode':
+      return eventName === 'turn_end'
+    case 'opencode':
+    case 'opencode2':
+    case 'mimo-code':
+    case 'pi':
+    case 'omp':
+    case 'prime-agent':
+      // Why: their done events are status snapshots or milestones that can repeat within one turn.
+      return false
   }
 }
 
@@ -107,7 +153,7 @@ export function hasExplicitUserPrompt(
     (extractedPrompt.source !== 'message' || hasTranscriptPromptEvidence) &&
     resolvedPromptText.trim().length > 0
   ) {
-    // Why: Command Code exposes the submitted prompt via its transcript, not direct hook fields; treat the transcript-backed prompt as explicit so telemetry covers real turns.
+    // Command Code transcript evidence makes prompt submissions explicit despite absent hook fields.
     return true
   }
   if (
@@ -126,7 +172,7 @@ export function hasExplicitUserPrompt(
     hasTranscriptPromptEvidence &&
     resolvedPromptText.trim().length > 0
   ) {
-    // Why: jcode hooks carry no prompt field; only the journal-backed prompt counts as explicit user text.
+    // jcode prompts are explicit only with journal evidence.
     return true
   }
   if (extractedPrompt.source === 'role_user_text') {
@@ -138,11 +184,11 @@ export function hasExplicitUserPrompt(
   if (extractedPrompt.text.length === 0) {
     return false
   }
-  // Why: harness-injected turns aren't a user submit (no prompt-sent telemetry or permission stickiness); match only KNOWN tags so a real `<my-element>` prompt still counts and survives interrupt recovery.
+  // Known harness tags confer no user-submit telemetry/stickiness; preserve real unknown-tag prompts.
   if (isKnownHarnessInjectedUserTurnText(extractedPrompt.text)) {
     return false
   }
-  // Why: bare `message` fields often carry permission/status copy — may update visible status prompts but aren't proof of a user submit.
+  // message may be status/permission text; it cannot prove submission.
   if (extractedPrompt.source === 'message') {
     return false
   }

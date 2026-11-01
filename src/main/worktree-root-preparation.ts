@@ -6,10 +6,9 @@ import { isFolderRepo } from '../shared/repo-kind'
 import { computeWorkspaceRootAsync, getWorktreePathSettings } from './ipc/worktree-logic'
 import { getWorktreeMirrorDistro } from './project-runtime-git-options'
 import type { ProjectRuntimeResolutionStore } from './local-project-runtime-resolution'
+import { blockedWslDistroForPath } from './wsl/wsl-unc-access-gate'
 
-// `localWindowsRuntimeDefault` is listed because the mirror distro is resolved
-// from it plus the project catalog: a store that omits it prepares a different
-// root than the create path uses.
+// Match create's mirror-distro resolution so root preparation cannot target a different directory.
 type WorktreeRootPreparationSettings = Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'> &
   Partial<Pick<GlobalSettings, 'localWindowsRuntimeDefault'>>
 type WorktreeRootPreparationStore = {
@@ -31,16 +30,23 @@ export async function prepareLocalWorktreeRootForRepo(
       repo.path,
       getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
     )
-    // Why: mkdir touches the current root to preflight macOS TCC, while
-    // access remains scoped by recomputed settings instead of a permanent grant.
+    // Touch the current root to preflight macOS TCC; recomputed settings still scope access.
     await mkdir(root, { recursive: true })
   } catch (error) {
     console.warn(`[worktree-root] failed to prepare worktree root for ${repo.path}:`, error)
   }
 }
 
+/** A settings edit is no act on every repo's WSL distro: stopped ones are skipped (E9). */
 export async function prepareLocalWorktreeRootsForRepos(
   store: WorktreeRootPreparationStore
 ): Promise<void> {
-  await Promise.all(store.getRepos().map((repo) => prepareLocalWorktreeRootForRepo(store, repo)))
+  await Promise.all(
+    store.getRepos().map(async (repo) => {
+      if (await blockedWslDistroForPath(repo.path, getWorktreeMirrorDistro(store, repo))) {
+        return
+      }
+      await prepareLocalWorktreeRootForRepo(store, repo)
+    })
+  )
 }

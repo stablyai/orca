@@ -1,9 +1,10 @@
+import type { WorkspaceAttachmentMetadata } from '../../../../shared/workspace-attachment-legacy'
 import type { AppState } from '@/store'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   RuntimeGeneratePullRequestFieldsOverrides,
   RuntimeGitContext
-} from '@/runtime/runtime-git-client'
+} from '@/runtime/runtime-git-client-context'
 import type { Repo } from '../../../../shared/repo-types'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control-ai-types'
@@ -28,6 +29,7 @@ export type UseCreatePullRequestDialogFieldsOptions = {
   worktreeId: string | null
   worktreePath: string
   branch: string
+  workspace?: WorkspaceAttachmentMetadata | null
   eligibility: HostedReviewCreationEligibility | null
   currentBaseRef?: string | null
   repo?: Pick<Repo, 'sourceControlAi'> | null
@@ -38,10 +40,7 @@ export type UseCreatePullRequestDialogFieldsOptions = {
   submitting: boolean
   prCreationDefaults?: SourceControlAiPrCreationDefaults
   sourceControlAiActionsVisible?: boolean
-  // When the composer is hidden by a temporary policy (a hard refresh error) for
-  // the same context rather than dismissed, retain the in-memory draft so
-  // recovery does not discard the user's title/body/base edits. Reopening a
-  // different context still reseeds (guarded by the eligibility key).
+  // Retain drafts across temporary same-context hiding; different eligibility contexts still reseed.
   retainDraftWhenClosed?: boolean
   onBranchChangedByGeneration?: () => Promise<void>
   generation?: {

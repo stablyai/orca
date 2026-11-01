@@ -114,13 +114,38 @@ describe('automation run open target', () => {
     ).toBeNull()
   })
 
-  it('rejects a run without an exact PTY identity', () => {
+  it('targets the pane a successful run slept in place, before and after it wakes', () => {
+    // Why: hibernation drops only the run's PTY id; the pane key still names the run's own pane.
+    const sleptRun = run({ terminalPtyId: null })
+    const asleepLayout = { ...runLeafLayout, ptyIdsByLeafId: { [leafId]: 'pty-run' } }
+    const asleep = resolveAutomationRunOpenTarget({
+      run: sleptRun,
+      terminalTabExists: true,
+      currentLayout: asleepLayout,
+      livePtyIds: []
+    })
+
+    expect(asleep).toEqual({ tabId: 'tab-1', paneKey, leafId, ptyId: null })
+    if (!asleep) {
+      throw new Error('Expected target.')
+    }
+    expect(
+      buildAutomationRunOpenLayout({ target: asleep, currentLayout: asleepLayout }).ptyIdsByLeafId
+    ).toBe(asleepLayout.ptyIdsByLeafId)
+    expect(
+      resolveAutomationRunOpenTarget({
+        run: sleptRun,
+        terminalTabExists: true,
+        currentLayout: { ...runLeafLayout, ptyIdsByLeafId: { [leafId]: 'pty-resumed' } },
+        livePtyIds: ['pty-resumed']
+      })
+    ).toEqual({ tabId: 'tab-1', paneKey, leafId, ptyId: 'pty-resumed' })
     expect(
       canOpen({
-        run: run({ terminalPtyId: null }),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds
+        run: sleptRun,
+        terminalTabExists: false,
+        currentLayout: asleepLayout,
+        livePtyIds: []
       })
     ).toBe(false)
   })

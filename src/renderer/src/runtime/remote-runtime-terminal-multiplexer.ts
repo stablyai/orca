@@ -10,23 +10,6 @@ import {
   onRuntimeEnvironmentsRetired
 } from './runtime-environment-revision'
 
-export {
-  REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS,
-  REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE
-} from './remote-runtime-terminal-snapshot-state'
-export { isHostAnsweredSnapshotRetryCause } from './remote-runtime-terminal-multiplexer-types'
-export type {
-  RemoteRuntimeMultiplexedTerminal,
-  RemoteRuntimeMultiplexedTerminalCallbacks,
-  RemoteRuntimeSnapshotAvailability,
-  RemoteRuntimeSnapshotHostRetryCause,
-  RemoteRuntimeSnapshotImage,
-  RemoteRuntimeSnapshotLocalRetryCause,
-  RemoteRuntimeSnapshotOutcome,
-  RemoteRuntimeSnapshotPermanentReason,
-  RemoteRuntimeSnapshotRetryCause
-} from './remote-runtime-terminal-multiplexer-types'
-
 const multiplexers = new Map<string, RemoteRuntimeTerminalMultiplexer>()
 
 // Why: a removed or replaced machine's streams end for good, before its new revision is published.
@@ -36,9 +19,7 @@ onRuntimeEnvironmentsRetired((environmentIds) => {
   }
 })
 
-// Why: a stream opened before main re-paired stays open but sendFrame refuses its stale revision,
-// so input would vanish silently; a recoverable close lets each pane rebind, and the pane itself
-// only follows the new pairing once it is proven to be the same machine.
+// Re-pair leaves old streams open but fences their sends. Recoverable close lets panes rebind only after same-machine proof, preventing silent input loss.
 onRuntimeEnvironmentRevisionsChanged((environmentIds) => {
   for (const environmentId of environmentIds) {
     const multiplexer = multiplexers.get(environmentId)

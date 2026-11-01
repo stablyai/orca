@@ -5,12 +5,7 @@ import {
 } from '../../shared/workspace-session-terminal-tab-close'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
-/**
- * Removes every terminal tab this partition's own live close records name, from whichever writer
- * sent it back (a late renderer save, a relay snapshot, a fast patch). Tab ids are uuids, so a
- * recorded id is never a new tab; scoped to the record's worktree, and records past the TTL stop
- * suppressing. Main's rollback path bypasses this: it restores rows a failed close never committed.
- */
+/** Suppress recorded closes across all writers until TTL expiry; failed-close rollback bypasses the fence. */
 export function dropClosedTerminalTabs(
   session: WorkspaceSessionState,
   now = Date.now()
@@ -19,7 +14,7 @@ export function dropClosedTerminalTabs(
   if (!records) {
     return session
   }
-  // Why: a host slice omits terminal maps when that host has no terminal rows.
+  // Empty host slices may omit terminal maps.
   const withMaps = {
     ...session,
     tabsByWorktree: session.tabsByWorktree ?? {},
@@ -34,6 +29,6 @@ export function dropClosedTerminalTabs(
       next = closeTerminalTabInWorkspaceSession(next, worktreeId, tabId, { force: true }).session
     }
   }
-  // Leaves a sparse slice as sent when nothing was dropped.
+  // Keep sparse slices sparse when no tabs were dropped.
   return next === withMaps ? session : next
 }

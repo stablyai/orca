@@ -32,12 +32,9 @@ export function parseGhosttyConfig(content: string): Record<string, string | str
     const key = line.slice(0, eqIndex).trim()
     let value = line.slice(eqIndex + 1).trim()
 
-    // Strip inline comments — Ghostty allows # after value unless it's inside quotes.
-    // A # is treated as a comment only when preceded by whitespace, so hex values
-    // like #1a1a1a at the start of the value are preserved.
+    // Require whitespace before inline # comments so leading hexadecimal colors remain intact.
     value = stripInlineComment(value)
 
-    // Ghostty allows quoted string values; strip surrounding quotes like Ghostty's own parser does.
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))

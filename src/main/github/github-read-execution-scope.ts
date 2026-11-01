@@ -12,7 +12,7 @@ export function githubReadExecutionScope(
       JSON.stringify([
         executionOptions,
         process.cwd(),
-        Object.entries(environment).sort(([a], [b]) => a.localeCompare(b))
+        Object.entries(environment).sort(([a], [b]) => a.localeCompare(b, 'en'))
       ])
     )
     .digest('hex')

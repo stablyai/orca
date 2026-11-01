@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab, TabContentType } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { buildPaletteTabDocument } from './palette-match/tab-document'
+import { buildPaletteTabDocument } from '../../../shared/palette-match/tab-document'
 import { searchWorkspaceTabs } from './workspace-tab-palette-results'
 import type { SearchableWorkspaceTab } from './workspace-tab-palette-search'
-import { createPaletteSearchContext } from './palette-match/palette-ranking'
+import { createPaletteSearchContext } from '../../../shared/palette-match/palette-ranking'
 
 const REPO_NAME = 'octo/rocket'
 const WORKTREE_NAME = 'Aurora Workspace'
@@ -141,6 +141,7 @@ describe('searchWorkspaceTabs lastActiveAt', () => {
   it('clamps to the tab creation time when the activity signal predates it', () => {
     const entry = makeEntry({
       createdAt: 4000,
+      agentLastActivityAt: 1000,
       worktree: makeWorktree({ lastActivityAt: 1000 })
     })
     const [result] = searchWorkspaceTabs([entry], '')

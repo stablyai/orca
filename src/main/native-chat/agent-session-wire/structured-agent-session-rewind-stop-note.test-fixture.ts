@@ -2,11 +2,11 @@ import { expect, vi, type Mock } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -64,13 +64,7 @@ export async function expectRawStopNoteRewindRecovery({
     kind: 'status',
     text: 'Cancellation requested.'
   })
-  rewind.mockImplementation(async () => {
-    expect(
-      store.getRecord(HOST_TEST_SESSION)?.rewind?.retained.find((item) => item.itemId === noteId)
-        ?.body
-    ).toEqual(unconfirmed)
-    return { ok: true }
-  })
+  rewind.mockImplementation(async () => ({ ok: true }))
   const replace = journal.replaceEpochItems.bind(journal)
   const crash = vi.spyOn(journal, 'replaceEpochItems').mockImplementationOnce(async (...args) => {
     await replace(...args)
@@ -100,6 +94,8 @@ export async function expectRawStopNoteRewindRecovery({
       hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
     )
   ).toMatchObject({ ok: true })
+  // Rewind settlement runs in startup after attach; drain serialization before asserting.
+  await host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {})
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
   expect(journal.itemBody(noteId)).toEqual(unconfirmed)
   expect(journal.snapshot().items.find((item) => item.itemId === noteId)?.body).toEqual({

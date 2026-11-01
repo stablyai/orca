@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { runProcess } from '@orca/process-host'
+import { dirname } from 'node:path'
+import { isShipItRunningForBundle, listProcessCommands } from '../../shared/shipit-process-listing'
 
 export type ServeInstallEvidence =
   | { kind: 'clear' }
@@ -22,44 +22,14 @@ export const SERVE_INSTALL_HOLD_REASON_TEXT: Record<
 
 type ListProcesses = () => Promise<string | null>
 
-/** `ps` is one short-lived fork with no interpreter; a failure is reported as unknown, not clear. */
-const listProcessCommands: ListProcesses = async () => {
-  try {
-    const result = await runProcess({
-      program: '/bin/ps',
-      args: ['-axww', '-o', 'command='],
-      timeoutMs: 5_000,
-      maxOutputBytes: 8 * 1024 * 1024,
-      killOnOutputLimit: true
-    })
-    return result.code === 0 && !result.timedOut && !result.outputTruncated ? result.stdout : null
-  } catch {
-    return null
-  }
-}
-
-/** ShipIt runs from inside the bundle it replaces, so its command line names that bundle. */
-export function isShipItRunningForBundle(listing: string, bundlePath: string): boolean {
-  const prefix = `${join(bundlePath, 'Contents', 'Frameworks', 'Squirrel.framework')}/`
-  return listing.split('\n').some((line) => {
-    const command = line.trimStart()
-    return (
-      command.startsWith(prefix) && command.slice(prefix.length).split(' ')[0].endsWith('/ShipIt')
-    )
-  })
-}
-
-/**
- * Whether a supervised serve may spawn from `executable` right now. Never spawn from a bundle an
- * installer is swapping: the child would run half-old, half-new code or be killed mid-start.
- */
+/** Installer swaps can expose mixed code or kill a child mid-start; hold spawns until they finish. */
 export async function readServeInstallEvidence(
   executable: string,
   options: { platform?: NodeJS.Platform; listProcesses?: ListProcesses } = {}
 ): Promise<ServeInstallEvidence> {
   const platform = options.platform ?? process.platform
   const bundlePath = platform === 'darwin' ? macBundlePathOf(executable) : null
-  // Why ShipIt first: mid-swap the executable is briefly missing, and that must not look like removal.
+  // ShipIt temporarily removes the executable during swaps; do not treat that as uninstall.
   if (bundlePath) {
     const listing = await (options.listProcesses ?? listProcessCommands)()
     if (listing === null) {
@@ -77,10 +47,7 @@ function macBundlePathOf(executable: string): string | null {
   return bundle.endsWith('.app') ? bundle : null
 }
 
-/**
- * Changes whenever the installed app does, so a new build starts with a clean restart count. The
- * app archive is included because Linux releases on one Electron version share the launcher binary.
- */
+/** Include the archive: Linux releases can share one Electron launcher binary. */
 export function serveBuildIdentity(executable: string, appRoot?: string): string {
   return [executable, ...(appRoot ? [appRoot] : [])]
     .map((path) => {

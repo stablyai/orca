@@ -12,7 +12,6 @@ import { applyWorkspaceTrustOnThisHost, launchedAgentHome } from './execution-ho
 import { getLocalCodexTrustConfigFiles } from './codex/codex-home-paths'
 import { getCachedWslHome } from './wsl-home-cache'
 
-/** What a trust writer needs to reach the file the launched agent will read. */
 export type AgentTrustLaunchContext = {
   /** The final spawn env, before the host's own process env. */
   env: Record<string, string | undefined> | undefined
@@ -21,9 +20,10 @@ export type AgentTrustLaunchContext = {
   wslDistro: string | null
   /** SSH connection that runs the agent; null means this machine. */
   connectionId: string | null
+  /** CODEX_HOME Orca injects after this step; the env does not carry it yet. */
+  codexHome?: string | null
 }
 
-/** Spawn fields the dispatcher asks the caller to forward to the process owner. */
 export type AgentTrustSpawnFields = {
   agentWorkspaceTrust?: AgentWorkspaceTrustSpawnRequest
 }
@@ -39,26 +39,23 @@ function isWslLaunch(workspacePath: string, context: AgentTrustLaunchContext): b
 /** Homes an agent on this machine may read trust under; SSH hosts check their own. */
 function localHomePaths(workspacePath: string, context: AgentTrustLaunchContext) {
   const wslWorkspace = parseWslUncPath(workspacePath)
-  // Why: a WSL guest agent reads trust under the guest's home; an uncached one means write nothing.
+  // WSL agents need the guest’s home; an uncached home means no trust write.
   return wslWorkspace
     ? [getCachedWslHome(wslWorkspace.distro)]
     : [homedir(), context.env?.HOME, context.env?.USERPROFILE]
 }
 
-/**
- * Pre-trusts `workspacePath` for the agent Orca is about to start, on the host that runs
- * it. Never throws and never waits past the preset's deadline: a miss means the agent asks.
- */
+/** Best-effort trust on the execution host; failure or timeout leaves the agent to ask. */
 export async function applyAgentWorkspaceTrust(
   preset: AgentTrustPreset,
   workspacePath: string,
   context: AgentTrustLaunchContext
 ): Promise<AgentTrustSpawnFields> {
   if (context.connectionId) {
-    // Why: the SSH host's relay writes on its own disk, under its own homes and the agent's final env.
+    // Forward to the SSH relay so trust is written on the agent’s host.
     return { agentWorkspaceTrust: { workspacePath } }
   }
-  // Why: the other writers target this host's home, which a WSL guest agent never reads.
+  // These writers target local homes, which WSL agents do not read.
   if (preset !== 'claude' && isWslLaunch(workspacePath, context)) {
     return {}
   }
@@ -74,8 +71,9 @@ export async function applyAgentWorkspaceTrust(
           claudeAuth: context.claudeAuth,
           wslDistro: context.wslDistro
         }),
-      codexConfigFiles: () => getLocalCodexTrustConfigFiles(agentHome),
-      // Why: Codex queues behind a config lane it shares with Orca's hook installs.
+      codexConfigFiles: () => getLocalCodexTrustConfigFiles(agentHome, context.codexHome),
+      kimiHome: context.env?.KIMI_CODE_HOME || process.env.KIMI_CODE_HOME,
+      // Codex shares its config lock queue with hook installs.
       deadlineMs:
         preset === 'codex' ? AGENT_TRUST_WRITE_DEADLINE_MS : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
     }

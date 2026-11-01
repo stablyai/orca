@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
-import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
+import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import type { RendererPublicationThrottleTarget } from '../window/renderer-publication-throttle'
 
@@ -35,7 +35,7 @@ export function createSinglePageBrowserCommandsHost(
   } as unknown as AgentBrowserBridge
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: page commands read only these host members.
   return {
-    resolveWorktreeSelector: async () => ({ id: 'wt-1' }),
+    resolveWorkspaceSelector: async () => ({ id: 'wt-1' }),
     getAgentBrowserBridge: () => bridge,
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAvailableAuthoritativeWindow: vi.fn(() => window),

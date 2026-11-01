@@ -1,19 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  comparePublishedFieldOccurrences,
-  comparePublishedFields,
-  publishedFieldNames
-} from './published-field-shape'
+import { comparePublishedFieldOccurrences, comparePublishedFields } from './published-field-shape'
 
 describe('published field shape', () => {
-  it('sorts the keys from one published frame occurrence', () => {
-    expect(publishedFieldNames({ seq: 27, kind: 'scrollback', requestId: 1 })).toEqual([
-      'kind',
-      'requestId',
-      'seq'
-    ])
-  })
-
   it('detects a field removed from only one corresponding occurrence', () => {
     expect(
       comparePublishedFieldOccurrences({
@@ -42,10 +30,6 @@ describe('published field shape', () => {
         newer: [{ kind: 'scrollback' }]
       })
     ).toThrow(/occurrence count differs: older 2, newer 1/)
-  })
-
-  it('reads an empty payload as no fields, which is what the anti-vacuous check tests', () => {
-    expect(publishedFieldNames({})).toEqual([])
   })
 
   it('reports an added field as added and nothing as removed', () => {

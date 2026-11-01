@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { rowLessSourceTarget, type RowLessSource } from '@/lib/default-creation-host'
 
 export type RuntimeJiraSettings = RowLessSource

@@ -244,7 +244,6 @@ describe('runtime:subscribe renderer lifecycle cleanup', () => {
       result: { seq: 1 }
     })
 
-    // Lifecycle listeners are registered once per sender, not once per subscription.
     expect(harness.listenerCount('did-navigate')).toBe(1)
     expect(harness.listenerCount('render-process-gone')).toBe(1)
   })

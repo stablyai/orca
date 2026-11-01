@@ -13,47 +13,46 @@ import {
   dropNativeChatPendingAttachmentsOwnedBy
 } from '@/components/native-chat/native-chat-pending-attachment-cache'
 
-/** Which unsent chat drafts a workspace owns: every draft that recorded it as its owner, open and
- *  closed chats alike, plus its open tabs' conversation keys and terminal tab ids (each tab's pane
- *  drafts) for drafts written before their owner could be named. */
+/** Include owner-tagged open/closed drafts plus tab conversation/pane keys written before owner attribution existed. */
 export type WorkspaceChatDraftKeys = {
   readonly owners: readonly NativeChatComposerDraftOwner[]
   readonly conversations: readonly string[]
   readonly terminalTabIds: readonly string[]
 }
 
-/**
- * Read before a user's delete goes to the host: the host announces the removal before it replies,
- * and the listing refresh that starts can drop the tab lists these keys are found through.
- */
+/** Capture before delete RPC; host announcements may purge tab lists before the reply. */
 export function captureWorkspaceChatDraftKeys(
   state: Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>,
   workspaces: readonly {
     readonly workspaceId: string
     readonly executionHostId: ExecutionHostId | null | undefined
+    /** Limits the tab-found keys to these tab/conversation ids, for an id another host also holds. */
+    readonly onlyEntityIds?: ReadonlySet<string>
   }[]
 ): WorkspaceChatDraftKeys {
   const owners: NativeChatComposerDraftOwner[] = []
   const conversations: string[] = []
   const terminalTabIds: string[] = []
-  for (const { workspaceId, executionHostId } of workspaces) {
+  for (const { workspaceId, executionHostId, onlyEntityIds } of workspaces) {
+    const included = (entityId: string): boolean => !onlyEntityIds || onlyEntityIds.has(entityId)
     if (executionHostId) {
       owners.push({ workspaceId, executionHostId })
     }
     for (const tab of state.unifiedTabsByWorktree[workspaceId] ?? []) {
-      if (tab.contentType === 'agent-session') {
+      if (tab.contentType === 'agent-session' && included(tab.entityId)) {
         conversations.push(structuredAgentSessionDraftScopeKey(tab.entityId))
       }
     }
     for (const tab of state.tabsByWorktree[workspaceId] ?? []) {
-      terminalTabIds.push(tab.id)
+      if (included(tab.id)) {
+        terminalTabIds.push(tab.id)
+      }
     }
   }
   return { owners, conversations, terminalTabIds }
 }
 
-/** Only after the delete succeeded: a refused or failed one keeps the drafts. Chips still on their
- *  way go too, or one settling later would write a draft back that nothing could delete. */
+/** Delete only after success, including in-flight upload chips or their later settlement can resurrect drafts. */
 export function deleteWorkspaceChatDrafts(keys: WorkspaceChatDraftKeys): void {
   for (const owner of keys.owners) {
     deleteNativeChatComposerDraftsOwnedBy(owner)

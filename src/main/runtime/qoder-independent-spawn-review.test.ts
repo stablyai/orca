@@ -17,6 +17,7 @@ const {
   makeFolderWorkspace,
   makeFolderProjectGroup
 } = await import('./orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('./bind-first-pane.test-fixture')
 const { detectAgentCommandsOnHost } = await import('../preflight/agent-detection')
 beforeEach(() =>
   vi
@@ -272,7 +273,8 @@ it('reconciles after the reply-cache expires and isolates deliberate forks and p
   const { TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
   vi.useFakeTimers()
   try {
-    const runtime = new OrcaRuntimeService(store)
+    // Copy the fixture store so main-owned bindings cannot leak into shared tests.
+    const runtime = new OrcaRuntimeService({ ...store })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     const live: {
       id: string
@@ -281,19 +283,26 @@ it('reconciles after the reply-cache expires and isolates deliberate forks and p
       worktreeId: string
       terminalHandle: string
     }[] = []
-    const spawn = vi.fn(async (args: { preAllocatedHandle?: string }) => {
-      const id = `qoder-${live.length + 1}`
-      live.push({
-        id,
-        cwd: TEST_WORKTREE_PATH,
-        title: 'Qoder',
-        worktreeId: TEST_WORKTREE_ID,
-        terminalHandle: args.preAllocatedHandle ?? ''
-      })
-      return { id }
-    })
+    const spawn = vi.fn(
+      async (args: {
+        preAllocatedHandle?: string
+        worktreeId?: string
+        tabId?: string
+        leafId?: string
+      }) => {
+        const id = `qoder-${live.length + 1}`
+        live.push({
+          id,
+          cwd: TEST_WORKTREE_PATH,
+          title: 'Qoder',
+          worktreeId: TEST_WORKTREE_ID,
+          terminalHandle: args.preAllocatedHandle ?? ''
+        })
+        return { id }
+      }
+    )
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       listProcesses: async () => live,
       kill: vi.fn(),
       write: () => true,

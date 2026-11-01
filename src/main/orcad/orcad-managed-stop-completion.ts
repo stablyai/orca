@@ -1,24 +1,19 @@
-/**
- * Asking one orcad instance to stop and proving that it did.
- *
- * Runs as a short-lived command on the execution host. It never signals: it writes the
- * instance-bound request the running orcad watches for, then observes until the instance is
- * gone. `exited` needs proof — no process with that PID, or a PID whose start time shows it now
- * belongs to another process. Anything the host cannot answer is `unverifiable`, never exit.
- */
+// Request shutdown without signaling; only kernel identity, owner change or PID absence proves exit.
 import { setTimeout as delay } from 'node:timers/promises'
 import { writeDurableSecureJsonFile } from '../../shared/secure-file'
 import {
   OrcadManagedStopRequestSchema,
+  orcadManagedStopRequestKey,
   type OrcadManagedStopInstance,
   type OrcadManagedStopRequest,
   type OrcadManagedStopVerdict
 } from '../../shared/orcad-stop-request'
 import {
-  START_TIME_TOLERANCE_MS,
-  startTimesWithinTolerance
-} from '../daemon/daemon-process-start-time'
-import { readOrcadProcessStartedAtMs } from './orcad-process-start-time'
+  compareOrcadProcessIdentity,
+  recordedOrcadProcessIncarnation,
+  type OrcadProcessIdentityReaders,
+  type OrcadRecordedIdentity
+} from './orcad-process-start-time'
 import { hasErrorCode, inspectProcessSignal } from '../daemon/daemon-process-inspection'
 import { persistOrcadCompletedStopReceipt } from './orcad-completed-stop-receipt'
 import { readOrcadManagedStopDecision } from './orcad-managed-stop-decision'
@@ -26,6 +21,7 @@ import { withdrawOrcadManagedStopRequest } from './orcad-managed-stop-cancellati
 import {
   orcadInstanceLockNames,
   orcadManagedStopRequestPath,
+  readOrcadInstanceLockNaming,
   readOrcadManagedStopRequest
 } from './orcad-managed-stop-request'
 import {
@@ -33,11 +29,10 @@ import {
   ORCAD_STOP_COMPLETION_POLL_MS
 } from './orcad-stop-deadlines'
 
-export type OrcadProcessProbe = (pid: number) => 'alive' | 'missing' | 'unverifiable'
+type OrcadProcessProbe = (pid: number) => 'alive' | 'missing' | 'unverifiable'
 
-export type OrcadManagedStopCompletionOptions = {
+export type OrcadManagedStopCompletionOptions = OrcadProcessIdentityReaders & {
   probeProcess?: OrcadProcessProbe
-  startedAtMs?: (pid: number) => number | null
   sleep?: () => Promise<void>
   attempts?: number
   now?: () => Date
@@ -51,26 +46,35 @@ function defaultProbe(pid: number): ReturnType<OrcadProcessProbe> {
 
 function observeInstance(
   instance: OrcadManagedStopInstance,
+  recorded: OrcadRecordedIdentity,
   options: OrcadManagedStopCompletionOptions
 ): OrcadManagedStopVerdict {
   const probe = (options.probeProcess ?? defaultProbe)(instance.pid)
   if (probe !== 'alive') {
     return probe === 'missing' ? 'exited' : 'unverifiable'
   }
-  const actual = (options.startedAtMs ?? readOrcadProcessStartedAtMs)(instance.pid)
-  // A reused PID is proof of exit only when both start times are known and disagree; on Windows
-  // without the addon both stay null, so a live PID is never read as exited.
-  if (
-    actual !== null &&
-    instance.startedAtMs !== null &&
-    !startTimesWithinTolerance(actual, instance.startedAtMs, START_TIME_TOLERANCE_MS)
-  ) {
-    return 'exited'
-  }
-  return 'live'
+  // Wall-clock drift alone cannot prove PID reuse.
+  const identity = compareOrcadProcessIdentity(instance.pid, recorded, options)
+  return identity === 'differs' ? 'exited' : identity === 'unproven' ? 'unverifiable' : 'live'
 }
 
-/** Writes the request only while the lock still names this instance, then waits for exit. */
+/** Recover incarnation data from the lock for older clients that omit it. */
+function recordedIdentity(instance: OrcadManagedStopInstance): OrcadRecordedIdentity {
+  if (recordedOrcadProcessIncarnation(instance)) {
+    return instance
+  }
+  let record: OrcadRecordedIdentity | null = null
+  try {
+    record = readOrcadInstanceLockNaming(instance)
+  } catch {
+    return instance
+  }
+  if (!record) {
+    return instance
+  }
+  return { ...instance, ...recordedOrcadProcessIncarnation(record), identity: record.identity }
+}
+
 export async function completeOrcadManagedStop(
   input: OrcadManagedStopRequest,
   options: OrcadManagedStopCompletionOptions = {}
@@ -84,16 +88,16 @@ export async function completeOrcadManagedStop(
     persistOrcadCompletedStopReceipt(request, (options.now ?? (() => new Date()))())
     return 'exited'
   }
-  let verdict = observeInstance(request.instance, options)
+  const recorded = recordedIdentity(request.instance)
+  let verdict = observeInstance(request.instance, recorded, options)
   if (verdict !== 'live') {
     return verdict === 'exited' ? completed() : verdict
   }
   if (!lockStillNamesInstance(request.instance)) {
-    // The process lives but no longer owns the lock it published: it is not ours to address.
+    // A live process that relinquished its lock is no longer ours to address.
     return 'unverifiable'
   }
   if (readOrcadManagedStopDecision(request) === 'canceled') {
-    // A cancelled transaction is never reissued; its orcad keeps running.
     return 'live'
   }
   const requestPath = orcadManagedStopRequestPath(request.instance)
@@ -103,14 +107,14 @@ export async function completeOrcadManagedStop(
   if (!writeDurableSecureJsonFile(requestPath, request)) {
     throw new Error('orcad_managed_stop_request_permissions_unconfirmed')
   }
-  // A cancel that won between the check above and this write found no file to remove.
+  // A cancel between the first check and write had no request file to remove.
   if (readOrcadManagedStopDecision(request) === 'canceled') {
     withdrawOrcadManagedStopRequest(request)
     return 'live'
   }
   for (let attempt = 0; attempt < attempts; attempt++) {
     await (options.sleep ?? (() => delay(ORCAD_STOP_COMPLETION_POLL_MS)))()
-    verdict = observeInstance(request.instance, options)
+    verdict = observeInstance(request.instance, recorded, options)
     if (verdict !== 'live') {
       return verdict === 'exited' ? completed() : verdict
     }
@@ -126,10 +130,12 @@ function lockStillNamesInstance(instance: OrcadManagedStopInstance): boolean {
   }
 }
 
-/** A request already present must be this one; another transaction's request is not ours. */
 function existingRequestMatches(path: string, request: OrcadManagedStopRequest): boolean {
   try {
-    return JSON.stringify(readOrcadManagedStopRequest(path)) === JSON.stringify(request)
+    return (
+      orcadManagedStopRequestKey(readOrcadManagedStopRequest(path)) ===
+      orcadManagedStopRequestKey(request)
+    )
   } catch (error) {
     return hasErrorCode(error, 'ENOENT')
   }

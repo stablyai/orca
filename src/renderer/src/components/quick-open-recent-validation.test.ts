@@ -7,7 +7,7 @@ vi.mock('@/runtime/runtime-file-request-debounce', () => ({
     request: () => Promise<unknown>
   ) => request()
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-search-client', () => ({
   listRuntimeFiles: mocks.list,
   cancelRuntimeFileList: mocks.cancel
 }))

@@ -2,13 +2,13 @@ import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 import { Store } from '../loading-store/store'
 import { collectLayoutLeafIdsInOrder } from '../restoring-sessions/terminal-layout-normalization'
 
-/** Shared by the move tests; each test file mocks `electron` before importing this. */
+// Import only after the test mocks electron.
 
 export const WT = 'repo-1::/tmp/move-worktree'
 export const SOURCE = 'tab-source'
@@ -52,7 +52,6 @@ export function sleeping(paneKey: string, tabId: string): SleepingAgentSessionRe
   }
 }
 
-/** A split source tab whose second leaf runs the agent that gets moved. */
 export async function seedSplitSource(store: Store, hostId?: string): Promise<void> {
   await store.persistPtyBinding(
     { worktreeId: WT, tabId: SOURCE, leafId: LEFT, ptyId: 'pty-left', incarnationId: 'inc-left' },

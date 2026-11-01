@@ -7,6 +7,8 @@ import { translate } from '@/i18n/i18n'
 import ProjectPicker from './ProjectPicker'
 import type { ProjectViewTableState } from './useProjectViewTable'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTableState }) {
   const {
@@ -103,7 +105,7 @@ export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTabl
               variant="outline"
               size="icon"
               className="h-7 w-7"
-              onClick={() => void window.api.shell.openUrl(selectedViewUrl)}
+              onClick={(event) => openAppHttpLink(selectedViewUrl, { event })}
               aria-label={translate(
                 'auto.components.github.project.ProjectViewWrapper.fd15491034',
                 'Open view in GitHub'
@@ -173,8 +175,8 @@ function ProjectSearchInput({
       input.focus()
       input.select()
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [])
 
   return (

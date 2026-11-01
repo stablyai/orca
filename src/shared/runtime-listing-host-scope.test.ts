@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { hostScopeCensusIsComplete } from './runtime-listing-host-scope'
 
-/**
- * The gate and the disclosure list answer different questions off the same field. These pin the
- * cases where they disagree — which is every case that mattered in #18595.
- */
+/** Disclosure and owed coverage differ; pin the disagreements behind #18595. */
 describe('hostScopeCensusIsComplete', () => {
   it('reads a peer runtime as disclosure, not as coverage this host owed', () => {
     expect(
@@ -33,10 +30,7 @@ describe('hostScopeCensusIsComplete', () => {
     )
   })
 
-  // Defence in depth: `listKnownExecutionHostIds` always seeds `local`, so a real scope that
-  // covered nothing also omits `local` and is refused by the runtime-only rule anyway. This
-  // branch is what stops a scope that answered for no host from ever reading complete if that
-  // ever stops holding.
+  // Even if local stops being seeded, a listing covering no host must never read complete.
   it('refuses a listing that covered no host at all', () => {
     expect(hostScopeCensusIsComplete({ hostIds: [], omittedHostIds: ['runtime:env-7'] })).toBe(
       false
@@ -44,15 +38,12 @@ describe('hostScopeCensusIsComplete', () => {
     expect(hostScopeCensusIsComplete({ hostIds: [], omittedHostIds: [] })).toBe(false)
   })
 
-  // Why: `hostScope` shipped in v1.4.187. An older host cannot say what it covered, and absence
-  // of the claim is never the claim — this must stay the first branch.
+  // Missing scope on pre-v1.4.187 hosts is never a completeness claim.
   it('refuses a host too old to publish a scope', () => {
     expect(hostScopeCensusIsComplete(undefined)).toBe(false)
   })
 
-  // Why: without this the runtime-only rule trusts a coverage claim it cannot read — the shape
-  // `{hostIds: ['runtime:'], omittedHostIds: ['runtime:env-7']}` was `unverifiable` before the
-  // gate changed and must not become `complete` on the strength of an unparseable id.
+  // An unreadable covered-host ID cannot establish completeness.
   it('refuses a coverage claim with no legible host in it', () => {
     expect(
       hostScopeCensusIsComplete({
@@ -62,8 +53,7 @@ describe('hostScopeCensusIsComplete', () => {
     ).toBe(false)
   })
 
-  // Why "at least one legible" and not "all legible": a host that later gains a kind this client
-  // cannot parse must not report an incomplete census forever — that is this bug in a new coat.
+  // One legible host suffices so future host kinds do not make census completeness permanently fail.
   it('accepts a coverage claim carrying one legible host beside an unreadable one', () => {
     expect(
       hostScopeCensusIsComplete({ hostIds: ['local', 'newkind:x' as never], omittedHostIds: [] })

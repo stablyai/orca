@@ -2,13 +2,15 @@ import { mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { createLocalFilesystemProvider } from './local-filesystem-provider'
 
 let root: string
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the provider reads only settings from the store; authorization is the injected stub.
-const store = { getSettings: () => ({ followSymlinkedDirectories: true }) } as unknown as Store
-const authorize = vi.fn(async (path: string, _store: Store, _options?: unknown) => path)
+const store = {
+  getSettings: () => ({ followSymlinkedDirectories: true })
+} as unknown as RuntimeStore
+const authorize = vi.fn(async (path: string, _store: RuntimeStore, _options?: unknown) => path)
 const provider = () =>
   createLocalFilesystemProvider({ requireStore: () => store, resolveAuthorizedPath: authorize })
 

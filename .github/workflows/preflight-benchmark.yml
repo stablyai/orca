@@ -1,6 +1,7 @@
 name: Preflight comparison
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - .github/workflows/preflight-benchmark.yml
       - config/scripts/benchmark-preflight-*.mjs
@@ -15,8 +16,11 @@ env:
   ORCA_BACKGROUND_LAUNCH: '1'
 jobs:
   compilers:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 25
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    # Native compiler peaks can exhaust the standard ARM runner before samples are saved.
+    runs-on: blacksmith-8vcpu-ubuntu-2404-arm
+    # The fifth typecheck project needs a 40-minute aggregate budget.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
         with:
@@ -27,7 +31,8 @@ jobs:
           node-version: '24'
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.3
+          bun-version-file: config/.bun-version
+          no-cache: true
       - name: Compare native and Bun typechecking
         run: node config/scripts/benchmark-preflight-compilers.mjs
       - uses: actions/upload-artifact@v7
@@ -37,6 +42,7 @@ jobs:
           path: .build/preflight-benchmark/
           retention-days: 30
   static-analysis:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 25
     steps:
@@ -49,7 +55,8 @@ jobs:
           node-version: '24'
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.3
+          bun-version-file: config/.bun-version
+          no-cache: true
       - name: Compare anti-slop patch and script runtimes
         run: node config/scripts/benchmark-preflight-static-analysis.mjs
       - uses: actions/upload-artifact@v7
@@ -59,6 +66,7 @@ jobs:
           path: .build/preflight-benchmark/
           retention-days: 30
   compatibility-imports:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
     steps:
@@ -72,7 +80,8 @@ jobs:
           node-version: '24'
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.3
+          bun-version-file: config/.bun-version
+          no-cache: true
       - name: Compare compatibility-import scan and runtimes
         run: node config/scripts/benchmark-preflight-compat-boundary.mjs
       - uses: actions/upload-artifact@v7
@@ -82,6 +91,7 @@ jobs:
           path: .build/preflight-benchmark/
           retention-days: 30
   localization-extraction:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 12
     steps:
@@ -94,7 +104,8 @@ jobs:
           node-version: '24'
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.3
+          bun-version-file: config/.bun-version
+          no-cache: true
       - name: Compare localization extraction runtimes and complete catalogs
         run: node config/scripts/benchmark-preflight-localization-extraction.mjs
       - uses: actions/upload-artifact@v7

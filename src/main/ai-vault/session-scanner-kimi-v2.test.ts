@@ -111,6 +111,112 @@ it('publishes v2 canonical turns and tool calls/results once, with record timest
   expect(messages.every((m) => m.timestamp === '2026-10-04T13:30:00.000Z')).toBe(true)
 })
 
+it('retains v2 user and assistant messages when only context stream events are present', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kimi-v2-stream-'))
+  roots.push(root)
+  const session = join(root, 'sessions', 'wd_fixture', 'session_v2-fixture')
+  await mkdir(join(session, 'agents', 'main'), { recursive: true })
+  const path = join(session, 'state.json')
+  await writeFile(path, JSON.stringify({ version: 2, agents: { main: { type: 'main' } } }))
+  const time = Date.parse('2026-10-04T13:30:00.000Z')
+  const records = [
+    {
+      type: 'context.append_message',
+      time,
+      message: {
+        role: 'user',
+        origin: { kind: 'user' },
+        content: 'stream-only question'
+      }
+    },
+    {
+      type: 'context.append_loop_event',
+      time,
+      event: {
+        type: 'content.part',
+        part: { type: 'text', text: 'stream-only answer' }
+      }
+    },
+    { type: 'context.append_loop_event', time, event: { type: 'step.end' } }
+  ]
+  await writeFile(
+    join(session, 'agents', 'main', 'wire.jsonl'),
+    records.map((record) => JSON.stringify(record)).join('\n')
+  )
+  const messages: TranscriptMessage[] = []
+  await parseKimiSessionFile(
+    { path, mtimeMs: 1, modifiedAt: '2026-10-04T14:00:00.000Z' },
+    'darwin',
+    { active: true, push: (message) => messages.push(message) }
+  )
+  expect(messages.map(({ role, text }) => ({ role, text }))).toEqual([
+    { role: 'user', text: 'stream-only question' },
+    { role: 'assistant', text: 'stream-only answer' }
+  ])
+})
+
+it('deduplicates mirrors with different timestamps without dropping repeated turns', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kimi-v2-mirrors-'))
+  roots.push(root)
+  const session = join(root, 'sessions', 'wd_fixture', 'session_v2-fixture')
+  await mkdir(join(session, 'agents', 'main'), { recursive: true })
+  const path = join(session, 'state.json')
+  await writeFile(path, JSON.stringify({ version: 2, agents: { main: { type: 'main' } } }))
+  const time = Date.parse('2026-10-04T13:30:00.000Z')
+  const turn = (at: number) => [
+    {
+      type: 'context.append_message',
+      time: at,
+      message: {
+        role: 'user',
+        origin: { kind: 'user' },
+        content: 'repeat'
+      }
+    },
+    {
+      type: 'agent.message.appended',
+      time: at + 1,
+      message: {
+        message: { role: 'user', content: 'repeat' },
+        meta: {}
+      }
+    },
+    {
+      type: 'context.append_loop_event',
+      time: at + 2,
+      event: {
+        type: 'content.part',
+        part: { type: 'text', text: 'answer' }
+      }
+    },
+    {
+      type: 'agent.message.appended',
+      time: at + 3,
+      message: {
+        message: { role: 'assistant', content: 'answer' },
+        meta: {}
+      }
+    },
+    { type: 'context.append_loop_event', time: at + 4, event: { type: 'step.end' } }
+  ]
+  await writeFile(
+    join(session, 'agents', 'main', 'wire.jsonl'),
+    [...turn(time), ...turn(time + 1000)].map((record) => JSON.stringify(record)).join('\n')
+  )
+  const messages: TranscriptMessage[] = []
+  await parseKimiSessionFile(
+    { path, mtimeMs: 1, modifiedAt: '2026-10-04T14:00:00.000Z' },
+    'darwin',
+    { active: true, push: (message) => messages.push(message) }
+  )
+  expect(messages.map(({ role, text }) => ({ role, text }))).toEqual([
+    { role: 'user', text: 'repeat' },
+    { role: 'assistant', text: 'answer' },
+    { role: 'user', text: 'repeat' },
+    { role: 'assistant', text: 'answer' }
+  ])
+})
+
 it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
   'rejects an unreadable v2 wire instead of committing a partial searchable session',
   async () => {

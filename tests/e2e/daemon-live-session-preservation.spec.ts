@@ -80,8 +80,7 @@ test('preserves a live daemon PTY when the daemon launch identity is stale', asy
     await session.close(firstApp)
     firstApp = null
 
-    // Why: this simulates the exact app-path mismatch that can happen after a
-    // dev-path change or app update while keeping the live daemon process intact.
+    // Change the launch identity while preserving the live daemon to model app updates or dev-path changes.
     spoofDaemonEntryPath(session.userDataDir)
 
     const secondLaunch = await session.launch()

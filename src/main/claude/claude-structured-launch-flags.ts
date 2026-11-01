@@ -1,62 +1,55 @@
-// The version-gated parts of a structured Claude launch: readable thinking, and the chat's visuals
-// folder with its skill plugin. Both ask one shared version probe of the launch's own CLI.
-
 import type {
   NativeChatVisualsLaunch,
   PrepareNativeChatVisuals
 } from '../native-chat/native-chat-visuals-delivery'
 import {
+  CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS,
   CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS,
   CLAUDE_PLUGIN_DIR_FLAG,
   CLAUDE_THINKING_DISPLAY_FLAG,
+  type ClaudeCliFlag,
+  type ClaudeCliFlagFact,
   type ClaudeCliFlagSupport,
   type ClaudeCliLaunch
 } from './claude-cli-flag-support'
 
 const THINKING_DISPLAY_ARGS: Readonly<Record<string, string>> = { 'thinking-display': 'summarized' }
 
-/** How long the thinking flag is asked again once the visuals check has waited for the version:
- *  enough to find the binary and read the now-known answer. */
-const THINKING_RECHECK_BUDGET_MS = 250
-
 export type ClaudeLaunchFlags = {
-  /** Readable thinking: the CLI otherwise streams thinking blocks with no text under Orca's
-   *  launch. Only the display is set, never `--thinking`, so a user who turned thinking off keeps
-   *  it off. */
+  /** Show thinking text without enabling thinking for users who disabled it. */
   thinkingDisplayArgs: Readonly<Record<string, string>>
   visuals: { visuals: NativeChatVisualsLaunch; pluginDir: string | null } | null
 }
 
 export async function resolveClaudeLaunchFlags(
   deps: {
-    cliFlags?: Pick<ClaudeCliFlagSupport, 'supports'>
+    cliFlags?: Pick<ClaudeCliFlagSupport, 'check'>
     prepareVisuals?: PrepareNativeChatVisuals
   },
   sessionId: string,
   launch: ClaudeCliLaunch
 ): Promise<ClaudeLaunchFlags> {
-  const thinking = (budgetMs?: number, startProbe?: boolean) =>
-    deps.cliFlags?.supports(CLAUDE_THINKING_DISPLAY_FLAG, launch, budgetMs, startProbe) ?? false
-  // Unlike the thinking display, a missed answer costs the chat its skill for its whole life, so
-  // the plugin check waits for the probe up to its own kill time: bounded, and instant once known.
+  const check = async (
+    flag: ClaudeCliFlag,
+    ...budget: [budgetMs?: number, startProbe?: boolean]
+  ): Promise<ClaudeCliFlagFact> =>
+    deps.cliFlags ? deps.cliFlags.check(flag, launch, ...budget) : 'unknown'
+  const thinking = async (...budget: [budgetMs?: number, startProbe?: boolean]) =>
+    (await check(CLAUDE_THINKING_DISPLAY_FLAG, ...budget)) === 'supported'
+  // A missed plugin probe disables the skill for the session, so allow the full probe timeout.
   const preparedVisuals = deps.prepareVisuals?.(sessionId) ?? Promise.resolve(null)
   const [thinksFirst, visuals, loadsPlugins] = await Promise.all([
     thinking(),
     preparedVisuals,
-    preparedVisuals.then((visuals) =>
+    preparedVisuals.then(async (visuals) =>
       visuals
-        ? (deps.cliFlags?.supports(
-            CLAUDE_PLUGIN_DIR_FLAG,
-            launch,
-            CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS
-          ) ?? false)
+        ? (await check(CLAUDE_PLUGIN_DIR_FLAG, CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS)) === 'supported'
         : false
     )
   ])
-  // The plugin check may have outwaited the thinking budget and learned the version meanwhile; a
-  // probe that gave none is not asked again here.
+  // Reuse any version learned by the plugin check without starting a new probe.
   const thinks =
-    thinksFirst || (visuals ? await thinking(THINKING_RECHECK_BUDGET_MS, false) : false)
+    thinksFirst || (visuals ? await thinking(CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS, false) : false)
   return {
     thinkingDisplayArgs: thinks ? THINKING_DISPLAY_ARGS : {},
     visuals: visuals ? { visuals, pluginDir: loadsPlugins ? visuals.skill.pluginDir : null } : null

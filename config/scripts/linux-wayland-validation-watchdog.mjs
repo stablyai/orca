@@ -10,8 +10,7 @@ function delay(ms) {
 export async function runWithTimeout(label, action, timeoutMs) {
   const actionPromise = Promise.resolve().then(action)
   actionPromise.catch(() => undefined)
-  // Why: Playwright protocol calls can remain pending when the Wayland GPU
-  // path wedges, so direct renderer actions need an independent deadline.
+  // Renderer protocol calls can wedge in Wayland GPU stalls; direct actions need independent deadlines.
   const result = await Promise.race([
     actionPromise.then((value) => ({ timedOut: false, value })),
     delay(timeoutMs).then(() => ({ timedOut: true, value: null }))

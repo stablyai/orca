@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
+import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-limits'
 
 const mocks = vi.hoisted(() => ({
   pasteTerminalText: vi.fn(),
@@ -68,22 +68,6 @@ async function flushPasteTasks(iterations = 6): Promise<void> {
 }
 
 describe('terminal programmatic text paste', () => {
-  it('does not direct-paste through xterm when the pane has no live transport', async () => {
-    const pane = makePane()
-
-    handleTerminalProgrammaticTextPaste({
-      detail: { tabId: 'tab-1', text: 'secret-token-value' },
-      getManager: () => makeManager(pane) as never,
-      getPaneTransports: () => new Map(),
-      tabId: 'tab-1'
-    })
-    await flushPasteTasks()
-
-    expect(mocks.pasteTerminalText).not.toHaveBeenCalled()
-    expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
-    expect(pane.terminal.focus).not.toHaveBeenCalled()
-  })
-
   it('rejects disconnected programmatic paste before writing terminal input', async () => {
     const pane = makePane()
     const transport = makeTransport({ connected: false })

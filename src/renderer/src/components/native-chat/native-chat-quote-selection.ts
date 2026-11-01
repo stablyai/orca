@@ -1,9 +1,25 @@
-/** Marks the prose of an agent reply; only a selection inside one of these can be quoted. */
+import { chatMathSelectionText } from '../sidebar/chat-markdown-math-selection'
+
+/** Only agent-reply prose marked with this attribute may be quoted. */
 export const NATIVE_CHAT_QUOTE_SOURCE_PROPS = { 'data-native-chat-quote-source': '' } as const
 
 const QUOTE_SOURCE_SELECTOR = '[data-native-chat-quote-source]'
+const TRANSCRIPT_SELECTOR = '[data-native-chat-scroll]'
 
-/** The selection when all of it sits inside one agent reply of this chat, else null. */
+export function readNativeChatTranscriptSelection(root: HTMLElement): string {
+  const selection = window.getSelection()
+  const transcript = root.querySelector(TRANSCRIPT_SELECTOR)
+  if (
+    !selection ||
+    selection.isCollapsed ||
+    !transcript?.contains(selection.anchorNode) ||
+    !transcript.contains(selection.focusNode)
+  ) {
+    return ''
+  }
+  return chatMathSelectionText(selection, transcript) ?? selection.toString()
+}
+
 export function readNativeChatQuotableSelection(
   root: HTMLElement
 ): { text: string; range: Range } | null {
@@ -17,15 +33,14 @@ export function readNativeChatQuotableSelection(
   }
   const edges = selectedTextEdges(range)
   const source = edges?.first.parentElement?.closest(QUOTE_SOURCE_SELECTOR)
-  const text = selection.toString().trim()
+  const text = (chatMathSelectionText(selection, root) ?? selection.toString()).trim()
   if (!edges || !source || !source.contains(edges.last) || text === '') {
     return null
   }
   return { text, range }
 }
 
-// Why: a triple-click ends its range at the start of the next block, often outside the reply, so
-// the reply is judged by the text actually selected and not by the range's endpoints.
+// Triple-click ranges can end outside the reply; check selected text edges instead of range endpoints.
 function selectedTextEdges(range: Range): { first: Text; last: Text } | null {
   const container = range.commonAncestorContainer
   if (container instanceof Text) {
@@ -53,7 +68,6 @@ function isSelectableText(node: Text): boolean {
   return node.parentElement !== null && getComputedStyle(node.parentElement).userSelect !== 'none'
 }
 
-/** The text as a markdown blockquote, then the blank line that ends it so a reply can follow. */
 export function formatNativeChatQuote(text: string): string {
   const lines = text.trim().split(/\r?\n/)
   return `${lines.map((line) => (line.trim() ? `> ${line}` : '>')).join('\n')}\n\n`

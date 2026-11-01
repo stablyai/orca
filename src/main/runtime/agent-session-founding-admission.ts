@@ -1,5 +1,9 @@
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
-import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
+import {
+  AgentSessionRefusalError,
+  agentSessionRefusalError,
+  isAgentSessionRefusalError
+} from '../../shared/agent-session/failures/agent-session-wire-refusals'
+import { agentSessionOperationKey } from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { foundAgentSessionRecord } from './agent-session-record-founding'
 import {
   assertAdoptedConversationUnowned,
@@ -9,14 +13,19 @@ import {
   validateAgentSessionReservationInput,
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
-} from './agent-session-reservation-admission'
-import type { AgentSessionStoreState } from './agent-session-store-state'
-import { setAgentSessionTabVisibility } from './agent-session-tab-table'
+} from './agent-session/ownership/agent-session-reservation-admission'
+import {
+  selectWritableAgentSessionRecord,
+  requireWritableAgentSessionRecord,
+  type AgentSessionStoreState
+} from './agent-session-store-state'
+import { setAgentSessionTabVisibility } from './agent-session/agent-session-tab-table'
 
-/** The same create admission as a reservation, with no obligation to acquire an owner. */
+/** Use create admission without requiring owner acquisition. */
 export function commitAgentSessionFounding(
   state: AgentSessionStoreState,
-  request: AgentSessionReserveRequest
+  request: AgentSessionReserveRequest,
+  legacyIds: readonly string[] = []
 ): AgentSessionReserveResult {
   const decision = evaluateAgentSessionReserveOperation(state, request)
   if (decision.decision === 'refused') {
@@ -35,14 +44,25 @@ export function commitAgentSessionFounding(
       reason: 'requestMalformed'
     })
   }
-  if (state.unreadableRecords.has(request.sessionId)) {
-    throw agentSessionRefusalError('execution_owner_reconciling', { reason: 'recordUnreadable' })
+  const selected = selectWritableAgentSessionRecord(state, request.sessionId)
+  if (selected.kind === 'unreadable') {
+    requireWritableAgentSessionRecord(state, request.sessionId)
   }
-  if (state.records.has(request.sessionId)) {
+  if (selected.kind === 'writable') {
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
-  assertAdoptedConversationUnowned(state, request)
-  assertReservedTabUnheld(state, request)
+  try {
+    assertAdoptedConversationUnowned(state, request)
+  } catch (error) {
+    if (isAgentSessionRefusalError(error)) {
+      throw new AgentSessionRefusalError({
+        ...error.refusal,
+        createAttemptRefusedBeforeCommit: true
+      })
+    }
+    throw error
+  }
+  assertReservedTabUnheld(state, request, legacyIds)
   const founded = foundAgentSessionRecord(request, request)
   const record = request.adoptedHandleLink
     ? { ...founded, providerHandleChain: [request.adoptedHandleLink] }
@@ -56,6 +76,6 @@ export function commitAgentSessionFounding(
     agentSessionOperationKey(operationRow.callerKey, operationRow.operationId),
     operationRow
   )
-  setAgentSessionTabVisibility(state, request.sessionId, true, request.surfaceTabId)
+  setAgentSessionTabVisibility(state, request.sessionId, true, request.surfaceTabId, legacyIds)
   return { record, disposition: 'created', operationRow }
 }

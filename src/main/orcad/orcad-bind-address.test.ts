@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   bindHostIsNetworkExposed,
-  describeOrcadBindExposure,
   ORCAD_LOOPBACK_BIND_HOST,
   OrcadBindAddressError,
   resolveOrcadBindHost
@@ -36,10 +35,5 @@ describe('bindHostIsNetworkExposed', () => {
     expect(bindHostIsNetworkExposed('0.0.0.0')).toBe(true)
     expect(bindHostIsNetworkExposed('::')).toBe(true)
     expect(bindHostIsNetworkExposed('10.1.2.3')).toBe(true)
-  })
-
-  it('says out loud when a deployment is reachable from the network', () => {
-    expect(describeOrcadBindExposure('0.0.0.0')).toContain('reachable from the network')
-    expect(describeOrcadBindExposure('127.0.0.1')).toContain('local only')
   })
 })

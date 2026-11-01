@@ -3,12 +3,12 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { buildRows } from './worktree-list/grouping/build-rows'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 import { worktree, repoMap } from './worktree-list-groups-test-fixtures'
 import {
   getCyclicProjectedWorktreeLineageIds,
   getSidebarLineageAncestors
-} from './worktree-lineage-projection'
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
 
 function pair(parentHost: ExecutionHostId | undefined, childHost: ExecutionHostId | undefined) {
   const parent: Worktree = { ...worktree, id: 'parent', instanceId: 'p', hostId: parentHost }
@@ -28,7 +28,6 @@ function pair(parentHost: ExecutionHostId | undefined, childHost: ExecutionHostI
 }
 
 describe('getSidebarLineageAncestors', () => {
-  // Why: only a parent on the child's own host nests it; a missing host id matches only another.
   it.each([
     ['both without a host id', undefined, undefined, true],
     ['both local', 'local', 'local', true],

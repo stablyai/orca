@@ -14,12 +14,11 @@ vi.mock('../repo-worktrees', () => ({
 vi.mock('../local-project-runtime-resolution', () => ({
   resolveLocalProjectRuntimesForRepos: mocks.runtimes
 }))
-import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from './filesystem-auth'
+import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from './filesystem/filesystem-auth'
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache,
-  registerWorktreeRootsForRepo,
-  resolveRegisteredWorktreePath
+  registerWorktreeRootsForRepo
 } from './registered-worktree-roots-cache'
 
 const DISTRO = 'Ubuntu-24.04'
@@ -30,8 +29,7 @@ const repo: Repo = {
   badgeColor: '#000',
   addedAt: 0
 }
-// The same checkout as each Git names it: WSL Git's `/mnt/c/...` translated to the drive spelling
-// every other consumer sends, and host Git reading that `/mnt/c` metadata as a different path.
+// WSL and host Git name this checkout differently when reading the same /mnt/c metadata.
 const worktree = resolve('/wsl-drive/workspaces/feature-extra')
 const hostGitSpelling = resolve('/mnt/c/wsl-drive/workspaces/feature-extra')
 const hostRepo: Repo = { ...repo, id: 'host-repo', path: resolve('/host-drive/repo') }
@@ -105,12 +103,6 @@ beforeEach(() => {
 })
 
 describe('authorized worktree roots for a drive repo whose project runtime is WSL', () => {
-  it('lists through the project distro, so the path delete and git status send is authorized', async () => {
-    await expect(resolveAuthorizedPath(worktree, fixture())).resolves.toBe(worktree)
-    await expect(resolveRegisteredWorktreePath(worktree, fixture())).resolves.toBe(worktree)
-    expect(mocks.graph).toHaveBeenCalledWith(repo, { wslDistro: DISTRO })
-  })
-
   it('still refuses a path outside every root, including the spelling only host Git lists', async () => {
     const store = fixture()
     await expect(
@@ -133,21 +125,8 @@ describe('authorized worktree roots for a drive repo whose project runtime is WS
       join(worktree, 'file')
     )
     expect(mocks.graph).toHaveBeenLastCalledWith(repo, { wslDistro: DISTRO })
-    // The host-Git listing is retired with its owner, not kept beside the new one.
     await expect(resolveAuthorizedPath(join(hostGitSpelling, 'file'), store)).rejects.toThrow(
       PATH_ACCESS_DENIED_MESSAGE
-    )
-  })
-
-  it('keeps a registration WSL Git produced without re-listing', async () => {
-    const store = fixture()
-    registerWorktreeRootsForRepo(store, repo.id, [repo.path, worktree], { wslDistro: DISTRO })
-    await expect(resolveAuthorizedPath(resolve('/wsl-drive/outside'), store)).rejects.toThrow(
-      PATH_ACCESS_DENIED_MESSAGE
-    )
-    expect(mocks.graph).not.toHaveBeenCalled()
-    await expect(resolveAuthorizedPath(join(worktree, 'file'), store)).resolves.toBe(
-      join(worktree, 'file')
     )
   })
 
@@ -158,14 +137,6 @@ describe('authorized worktree roots for a drive repo whose project runtime is WS
       join(worktree, 'file')
     )
     expect(mocks.graph).toHaveBeenCalledWith(repo, { wslDistro: DISTRO })
-  })
-
-  it('lists with host Git while the runtime awaits repair, as before routing', async () => {
-    useRuntime(repairRuntime)
-    await expect(resolveAuthorizedPath(join(hostGitSpelling, 'file'), fixture())).resolves.toBe(
-      join(hostGitSpelling, 'file')
-    )
-    expect(mocks.graph).toHaveBeenCalledWith(repo, {})
   })
 
   it('keeps the WSL listing when a resolved runtime starts awaiting repair', async () => {

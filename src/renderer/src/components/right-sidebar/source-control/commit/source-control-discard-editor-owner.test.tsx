@@ -1,9 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
-import {
-  runtimeTargetForOwnerEnvironment,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { EditorPathMutationTarget } from '@/components/editor/editor-autosave'
 
@@ -11,7 +9,7 @@ const mocks = vi.hoisted(() => {
   const focus: { value: string | null } = { value: null }
   return {
     focus,
-    quiesce: vi.fn<(target: EditorPathMutationTarget) => Promise<void>>(),
+    quiesce: vi.fn<(target: EditorPathMutationTarget) => Promise<() => void>>(),
     notify: vi.fn<(target: EditorPathMutationTarget) => void>(),
     discard: vi.fn(),
     bulkDiscard: vi.fn()
@@ -22,7 +20,7 @@ vi.mock('@/components/editor/editor-autosave', () => ({
   requestEditorSaveQuiesce: mocks.quiesce,
   notifyEditorExternalFileChange: mocks.notify
 }))
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-working-tree-client', () => ({
   discardRuntimeGitPath: mocks.discard,
   bulkDiscardRuntimeGitPaths: mocks.bulkDiscard,
   stageRuntimeGitPath: vi.fn(),
@@ -48,11 +46,12 @@ for (const bulk of [false, true]) {
     async ({ owner, focus }) => {
       mocks.focus.value = focus
       let release: () => void = () => {}
-      const pendingSave = new Promise<void>((resolve) => {
-        release = resolve
+      const releaseHold = (): void => {}
+      const pendingSave = new Promise<() => void>((resolve) => {
+        release = () => resolve(releaseHold)
       })
       mocks.quiesce.mockImplementation((target) =>
-        target.runtimeEnvironmentId === owner ? pendingSave : Promise.resolve()
+        target.runtimeEnvironmentId === owner ? pendingSave : Promise.resolve(releaseHold)
       )
       const activeRepoTarget: RuntimeClientTarget | null = runtimeTargetForOwnerEnvironment(owner)
       const { result } = renderHook(() =>

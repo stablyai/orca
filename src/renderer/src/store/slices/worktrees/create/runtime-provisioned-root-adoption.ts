@@ -1,5 +1,5 @@
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
-import type { RuntimeClientTarget } from '../../../../runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
 import {
   buildRuntimeWorktreeCreateParams,

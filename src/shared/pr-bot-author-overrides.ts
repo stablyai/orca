@@ -1,12 +1,9 @@
-// Helpers for the `prBotAuthorOverrides` setting — comment author logins the
-// user manually marked as bots. Shared so desktop renderer, main-process RPC,
-// and mobile classify comment authors identically.
+// Share manual bot-login overrides across renderer, runtime RPC and mobile classification.
 
 export const MAX_PR_BOT_AUTHOR_OVERRIDES = 500
 // GitLab permits longer usernames than GitHub; 255 keeps both providers covered.
 export const MAX_PR_COMMENT_AUTHOR_LOGIN_LENGTH = 255
 
-/** Normalized author login used to match manual bot overrides. */
 export function normalizePRCommentAuthorLogin(author: string): string {
   if (author.length > MAX_PR_COMMENT_AUTHOR_LOGIN_LENGTH) {
     return ''
@@ -14,7 +11,6 @@ export function normalizePRCommentAuthorLogin(author: string): string {
   return author.trim().toLowerCase()
 }
 
-/** Builds a lookup set from the persisted `prBotAuthorOverrides` setting. */
 export function createBotAuthorOverrideSet(
   logins: Iterable<unknown> | null | undefined
 ): ReadonlySet<string> {
@@ -40,7 +36,6 @@ export function createBotAuthorOverrideSet(
   return set
 }
 
-/** Sanitizes an untrusted settings update value into a sorted, deduped login list. */
 export function normalizePRBotAuthorOverrides(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []

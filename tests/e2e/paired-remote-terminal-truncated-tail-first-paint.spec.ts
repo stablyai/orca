@@ -11,7 +11,7 @@ import {
   launchPairedWebClient
 } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const RETENTION_PARK_DELAY_MS = 100
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-truncated-tail-'))

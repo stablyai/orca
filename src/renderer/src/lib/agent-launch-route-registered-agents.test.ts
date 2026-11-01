@@ -1,10 +1,11 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../../shared/protocol-version'
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -47,7 +48,7 @@ const LISTS_GROK = {
   ]
 }
 const SETTINGS = {
-  experimentalNativeChat: true
+  nativeChatProviders: EVERY_AGENT_CHAT
 }
 const LOCAL: ProspectiveWorkspace = { kind: 'git-worktree', repoId: 'repo-1' }
 const PAIRED: ProspectiveWorkspace = { kind: 'git-worktree', runtimeEnvironmentId: 'env-1' }
@@ -75,6 +76,7 @@ function store(
 ): AgentLaunchRouteStore {
   const state = {
     settings: { ...SETTINGS, ...overrides.settings },
+    localDetectedAgentIdsByContext: { host: [] },
     runtimeStatusByEnvironmentId: new Map([['env-1', pairedStatus(overrides.runtimeId ?? 'rt-1')]]),
     worktreesByRepo: {},
     folderWorkspaces: []
@@ -93,7 +95,7 @@ beforeEach(() => {
 })
 
 describe('structured launch of a host-registered agent', () => {
-  it('opens a chat for an agent the local host listed', async () => {
+  it('opens an unchosen chat with empty native installation inventory', async () => {
     await loadHostStructuredAgents('local', REGISTERED, null)
 
     expect(routeFor(store(), 'grok')).toBe('structured-native-chat')
@@ -104,7 +106,6 @@ describe('structured launch of a host-registered agent', () => {
     mocks.readLocalRuntimeCapabilitiesOrUnknown.mockReturnValue(STRUCTURED)
 
     expect(routeFor(store(), 'grok')).not.toBe('structured-native-chat')
-    // The agents every build ships stay offered there.
     expect(routeFor(store(), 'claude')).toBe('structured-native-chat')
   })
 
@@ -117,14 +118,6 @@ describe('structured launch of a host-registered agent', () => {
     await loadHostStructuredAgents('local', REGISTERED, null)
 
     expect(routeFor(store(), 'gemini')).not.toBe('structured-native-chat')
-  })
-
-  it('keeps the Chat UI switch authoritative', async () => {
-    await loadHostStructuredAgents('local', REGISTERED, null)
-
-    expect(routeFor(store({ settings: { experimentalNativeChat: false } }), 'grok')).not.toBe(
-      'structured-native-chat'
-    )
   })
 
   it("reads a paired host's list only from the runtime that gave it", async () => {
@@ -141,7 +134,6 @@ describe('OpenCode with its Command and environment set (live QA run 5)', () => 
   const LISTS_OPENCODE = {
     agents: [...LISTS_GROK.agents, { agent: 'opencode', capabilities: {} }]
   }
-  // The rig's settings: a private binary named twice, which must not decide the surface.
   const withOverrides = (): AgentLaunchRouteStore =>
     store({
       settings: {
@@ -157,35 +149,19 @@ describe('OpenCode with its Command and environment set (live QA run 5)', () => 
     warn.mockRestore()
   })
 
-  it('opens a chat once the local host listed OpenCode', async () => {
-    mocks.callRuntimeRpc.mockResolvedValue(LISTS_OPENCODE)
-    await loadHostStructuredAgents('local', REGISTERED, null)
-
-    expect(routeFor(withOverrides(), 'opencode')).toBe('structured-native-chat')
-  })
-
   it('says why it opened the terminal chat and asks the host again after a failed startup read', async () => {
     mocks.callRuntimeRpc.mockRejectedValueOnce(new Error('host not ready'))
     await loadHostStructuredAgents('local', REGISTERED, null)
     mocks.callRuntimeRpc.mockResolvedValue(LISTS_OPENCODE)
 
-    // What run 5 saw: the terminal-backed "OpenCode" chat, and no version check on the host.
     expect(routeFor(withOverrides(), 'opencode')).toBe('terminal-tui')
     expect(warn).toHaveBeenCalledWith(
       '[agent-launch-route] opencode opens terminal-tui: agent-without-structured-session ' +
         '(host local, host agents not learned, host capabilities known)'
     )
     await vi.waitFor(() => expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(2))
-    // The next launch reads the list the re-ask learned.
     await vi.waitFor(() =>
       expect(routeFor(withOverrides(), 'opencode')).toBe('structured-native-chat')
     )
-  })
-
-  it('keeps new agent tabs in terminals while Chat UI is off', () => {
-    expect(routeFor(store({ settings: { experimentalNativeChat: false } }), 'opencode')).toBe(
-      'terminal-tui'
-    )
-    expect(warn).not.toHaveBeenCalled()
   })
 })

@@ -1,7 +1,7 @@
 import { debounceRuntimeFileRequest } from '@/runtime/runtime-file-request-debounce'
 import { useEffect, useRef } from 'react'
 import { quickOpenRecentCandidateSet } from '../../../shared/quick-open-recent-candidates'
-import { cancelRuntimeFileList, listRuntimeFiles } from '@/runtime/runtime-file-client'
+import { cancelRuntimeFileList, listRuntimeFiles } from '@/runtime/runtime-file-search-client'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'

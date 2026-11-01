@@ -1,13 +1,14 @@
 import { toast } from 'sonner'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
+import { launchHostIsRemote } from '../../../shared/agent-launch-remote'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
+  refineLocalLaunchPlatform,
   resolveExecutionHostAgentStartupShell,
   resolveWorktreeExecutionHostPlatform
 } from '@/lib/execution-host-facts'
 import type { useAppStore } from '@/store'
 
-/** Where a new-tab agent launch runs, and the quoting rules that follow from it. */
 export type AgentLaunchExecutionContext = {
   /** `undefined` means rival host rows disagree, which is not evidence of a remote. */
   worktreeSshConnectionId: string | null | undefined
@@ -24,8 +25,6 @@ export function resolveAgentLaunchExecutionContext(
 ): AgentLaunchExecutionContext | null {
   // Why: `undefined` (rival host rows disagree) is not evidence of a remote; main rejects it anyway.
   const worktreeSshConnectionId = getConnectionIdFromState(store, args.worktreeId)
-  // Why: SSH remotes deploy the shim as plain `orca`, so skip the Linux-only `orca-ide` rename for remote launches.
-  const isRemote = Boolean(worktreeSshConnectionId)
   // Why getKnownWorktreeById: folder workspaces are not in allWorktrees, and their path marks WSL.
   const workspacePath = (
     store.getKnownWorktreeById?.(args.worktreeId) ??
@@ -37,15 +36,13 @@ export function resolveAgentLaunchExecutionContext(
     toast.error(fact.reason)
     return null
   }
-  // Why: a caller's platform only refines a local launch (e.g. WSL); a remote host's own OS wins.
-  const resolvedLaunchPlatform =
-    fact.hostKind === 'local' && args.launchPlatform ? args.launchPlatform : fact.platform
+  const launchHost = refineLocalLaunchPlatform(fact, args.launchPlatform)
   return {
     worktreeSshConnectionId,
-    resolvedLaunchPlatform,
-    isRemote,
+    resolvedLaunchPlatform: launchHost.platform,
+    isRemote: launchHostIsRemote(launchHost.hostKind, workspacePath),
     queuedShell: resolveExecutionHostAgentStartupShell(
-      { ...fact, platform: resolvedLaunchPlatform },
+      launchHost,
       store.settings?.terminalWindowsShell
     )
   }

@@ -1,18 +1,6 @@
 import type { PageClosurePins } from './page-closure'
 
-/**
- * The goldens the file preview adds to the C3 closure, and what each one did at the bridge.
- *
- * Five families, all recorded at `mobile-file-preview-request.ts` and its grant refresh: the two
- * text reads (`files.read` for a worktree file, `files.readTerminalArtifact` for an artifact), the
- * two image reads that answer base64 the screen composes into a `data:` URI, and the artifact save.
- * Every non-matrix golden here replays byte-identically, so the preview's own reads and its one
- * write are certified as bytes rather than as a named divergence.
- *
- * What these do not exercise: no golden replays a save twice, so `files.writeTerminalArtifact` is
- * not certified idempotent or retry-safe, and the grant refresh is driven only through
- * `files-preview-grant-refresh`'s single stale-grant path.
- */
+// Preview read/save recordings cover one round trip and one stale-grant path; they do not establish save retry safety.
 export const C3_PREVIEW_CLOSURE_FAMILIES: PageClosurePins = {
   'files.preview-artifact-image': {
     'files-preview-artifact-image-read': 'identical',

@@ -1,8 +1,5 @@
-// Today's graph mirror, captured from OrcaRuntimeService.syncWindowGraph: tab-1 splits a live
-// terminal (output and an OSC title) beside one that exited 1; tab-2 has one unbound pane. Step 2
-// restarts the exited pane on a new terminal. Step 3: pane 1's agent title is reset to neutral by
-// the window after its agent exits, pty-c's host is lost, and pane 3 names a PTY nobody registered.
-// runtime-graph-mirror-capture.test.ts replays this on the mirror and checks every record here.
+// Capture live/output/title, exited and unbound leaves from syncWindowGraph; then restart an exited PTY, reset an agent title, lose a host and bind an unknown PTY.
+// runtime-graph-mirror-capture.test.ts replays each stage and pins these records.
 
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 import type { RuntimeSyncedLeaf, RuntimeSyncedTab } from '../../shared/runtime-types'
@@ -135,7 +132,11 @@ export const PTY_FACTS: Record<'pty-a' | 'pty-b' | 'pty-c', RuntimeLeafPtyFacts>
 
 export const LIVENESS_VERDICTS: Record<string, PtyLivenessVerdict | null> = {
   'pty-a': null,
-  'pty-b': { status: 'exited' },
+  'pty-b': {
+    status: 'exited',
+    incarnationId: undefined,
+    cause: { kind: 'exited', exitCode: 1 }
+  },
   'pty-c': null
 }
 

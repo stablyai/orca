@@ -1,8 +1,4 @@
-/**
- * The contract between a Windows launch script (main) and the one-shot launcher mode that
- * `relay.js` and `orcad.js` both expose to start a detached process outside the SSH session's
- * job object. The flags are shared; each program names its own args separator and report marker.
- */
+/** Share flags between main launch scripts and Windows relay/orcad one-shot modes that escape the SSH job; separators/report markers remain program-specific. */
 
 export const WINDOWS_BREAKAWAY_LAUNCH_FLAG = '--windows-breakaway-launch'
 export const WINDOWS_BREAKAWAY_STDOUT_FLAG = '--stdout-file'
@@ -21,20 +17,12 @@ export type WindowsBreakawayLaunchContract = {
   reportMarker: string
 }
 
-export const RELAY_WINDOWS_BREAKAWAY_CONTRACT: WindowsBreakawayLaunchContract = {
-  argsFlag: '--relay-args',
-  reportMarker: 'ORCA_RELAY_LAUNCH'
-}
-
 export const ORCAD_WINDOWS_BREAKAWAY_CONTRACT: WindowsBreakawayLaunchContract = {
   argsFlag: '--orcad-args',
   reportMarker: 'ORCA_ORCAD_LAUNCH'
 }
 
-/**
- * `unavailable` means this host cannot use the launcher (no addon, an addon that predates it, or
- * a job that refuses breakaway); the relay's script then tries WMI, orcad's refuses.
- */
+/** Unavailable means missing/old addon or denied breakaway; legacy relay scripts may fall back to WMI, while orcad refuses. */
 export const WINDOWS_BREAKAWAY_EXIT_CODES = {
   launched: 0,
   failed: 1,

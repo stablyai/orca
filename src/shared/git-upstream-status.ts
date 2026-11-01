@@ -47,10 +47,7 @@ export function shouldForcePushWithLeaseForUpstream(
   )
 }
 
-// Why: behind-only is the only auto-prepare case Create PR can safely handle
-// with a pure fast-forward (no local unique commits to reconcile). Eligibility
-// and the intent remote-step resolver must share this predicate so the button
-// and the one-click flow never disagree on what "behind-only" means.
+// Create PR auto-prepare can fast-forward only behind-only branches with no local unique commits; share eligibility with intent resolution.
 export function isBehindOnlyUpstream(status: GitUpstreamStatus | undefined): boolean {
   return status?.hasUpstream === true && status.ahead === 0 && status.behind > 0
 }

@@ -1,4 +1,6 @@
 import type { BrowserGrabRect } from './browser-grab-types'
+import { COMPOSED_TREE_SCRIPT } from './browser-composed-tree-script'
+import { isValidBrowserGrabRect } from './browser-annotation-viewport-report'
 
 export type BrowserAnnotationViewportBridgeMarker = {
   id: string
@@ -13,6 +15,7 @@ export type BrowserSetAnnotationViewportBridgeArgs = {
   enabled: boolean
   emitViewport: boolean
   markers: BrowserAnnotationViewportBridgeMarker[]
+  selectionId?: string
   token: string
 }
 
@@ -20,33 +23,17 @@ export type BrowserAnnotationViewportBridgeOptions = {
   enabled: boolean
   emitViewport: boolean
   markers: BrowserAnnotationViewportBridgeMarker[]
+  selectionId?: string
   token: string
 }
 
 export const BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID = 1207
 export const BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX = '__orca_annotation_viewport__:'
+// Set by the grab overlay on the element it froze on, so the isolated bridge can measure it.
+export const BROWSER_GRAB_SELECTED_ATTRIBUTE = 'data-orca-grab-selected'
 
 export function isValidBrowserAnnotationViewportBridgeToken(value: unknown): value is string {
   return typeof value === 'string' && /^[a-zA-Z0-9_-]{16,80}$/.test(value)
-}
-
-function isValidBrowserGrabRect(value: unknown): value is BrowserGrabRect {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-  const rect = value as Record<string, unknown>
-  return (
-    typeof rect.x === 'number' &&
-    Number.isFinite(rect.x) &&
-    typeof rect.y === 'number' &&
-    Number.isFinite(rect.y) &&
-    typeof rect.width === 'number' &&
-    Number.isFinite(rect.width) &&
-    rect.width >= 0 &&
-    typeof rect.height === 'number' &&
-    Number.isFinite(rect.height) &&
-    rect.height >= 0
-  )
 }
 
 export function isValidBrowserAnnotationViewportBridgeMarkers(
@@ -81,6 +68,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
   emitViewport,
   enabled,
   markers,
+  selectionId,
   token
 }: BrowserAnnotationViewportBridgeOptions): string {
   return `(() => {
@@ -89,11 +77,14 @@ export function buildBrowserAnnotationViewportBridgeScript({
   const enabled = ${JSON.stringify(enabled)};
   const emitViewportMessages = ${JSON.stringify(emitViewport)};
   const markers = ${JSON.stringify(markers)};
+  const selectionId = ${JSON.stringify(selectionId ?? null)};
   const token = ${JSON.stringify(token)};
   const prefix = ${JSON.stringify(BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX)};
   const stateKey = '__orcaBrowserAnnotationViewportBridge';
   const hostAttribute = 'data-orca-browser-annotation-overlay';
+  const selectedAttribute = ${JSON.stringify(BROWSER_GRAB_SELECTED_ATTRIBUTE)};
   const markerSize = 24;
+${COMPOSED_TREE_SCRIPT}
 
   const removeOverlay = (state) => {
     if (state && state.host && state.host.parentNode) {
@@ -114,6 +105,10 @@ export function buildBrowserAnnotationViewportBridgeScript({
     if (state.onBeforeUnload) {
       window.removeEventListener('beforeunload', state.onBeforeUnload);
     }
+    if (state.targetObserver) {
+      state.targetObserver.disconnect();
+    }
+    state.targetShadowRoots.forEach((root) => root.removeEventListener('scroll', state.requestUpdate, true));
     removeOverlay(state);
   };
 
@@ -132,10 +127,67 @@ export function buildBrowserAnnotationViewportBridgeScript({
     scrollY: toNumber(window.scrollY, toNumber(window.pageYOffset, 0))
   });
 
-  const emitViewport = () => {
+  const findMarked = (root) =>
+    Array.from(root.querySelectorAll('[' + selectedAttribute + ']')).filter(
+      (candidate) => candidate.getAttribute(selectedAttribute) === selectionId
+    );
+
+  // Document queries stop at shadow roots, so open ones are walked when the light DOM has no match.
+  const findMarkedInShadowRoots = (root) =>
+    Array.from(root.querySelectorAll('*')).flatMap((element) =>
+      element.shadowRoot ? findMarked(element.shadowRoot).concat(findMarkedInShadowRoots(element.shadowRoot)) : []
+    );
+
+  // Why: the card must follow the element itself, not a click-time copy; the grab overlay
+  // marks it in the shared DOM because this world cannot see the page's objects.
+  const trackTarget = (state) => {
+    const current = state.target;
+    let next = null;
+    if (emitViewportMessages && selectionId) {
+      let found = findMarked(document);
+      if (found.length === 0) {
+        // The marker is set before the selection reaches this bridge, so one shadow walk per selection suffices.
+        const keep = current && current.isConnected && current.getAttribute(selectedAttribute) === selectionId;
+        if (keep) found = [current];
+        else if (state.searchedSelectionId !== selectionId) {
+          state.searchedSelectionId = selectionId;
+          found = findMarkedInShadowRoots(document);
+        }
+      }
+      next = found.length === 1 ? found[0] : null;
+    }
+    if (next !== current) {
+      state.target = next;
+      state.targetShadowRoots.forEach((root) => root.removeEventListener('scroll', state.requestUpdate, true));
+      state.targetShadowRoots = next ? shadowRootsAbove(next) : [];
+      state.targetShadowRoots.forEach((root) => root.addEventListener('scroll', state.requestUpdate, true));
+      if (state.targetObserver) {
+        state.targetObserver.disconnect();
+        if (next) {
+          state.targetObserver.observe(next, { box: 'border-box' });
+          if (next !== document.documentElement) {
+            state.targetObserver.observe(document.documentElement);
+          }
+        }
+      }
+    }
+    return next;
+  };
+
+  const readTarget = (target) => {
+    if (!target) return null;
+    const rect = target.getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  };
+
+  const emitViewport = (state) => {
+    const target = trackTarget(state);
     if (!emitViewportMessages) return;
     try {
-      console.debug(prefix + token + ':' + JSON.stringify(readViewport()));
+      const report = readViewport();
+      report.viewportWidth = toNumber(window.innerWidth, 0);
+      report.target = readTarget(target);
+      console.debug(prefix + token + ':' + JSON.stringify(report));
     } catch (e) {}
   };
 
@@ -238,7 +290,11 @@ export function buildBrowserAnnotationViewportBridgeScript({
     markers: [],
     shadowRoot: null,
     requestUpdate: null,
-    onBeforeUnload: null
+    onBeforeUnload: null,
+    target: null,
+    targetObserver: null,
+    targetShadowRoots: [],
+    searchedSelectionId: null
   };
 
   state.requestUpdate = () => {
@@ -246,9 +302,12 @@ export function buildBrowserAnnotationViewportBridgeScript({
     state.raf = requestAnimationFrame(() => {
       state.raf = 0;
       positionMarkers(state);
-      state.emitViewport();
+      state.emitViewport(state);
     });
   };
+  if (typeof ResizeObserver === 'function') {
+    state.targetObserver = new ResizeObserver(state.requestUpdate);
+  }
 
   // Navigation can hold IPC cleanup until the next document finishes loading.
   state.onBeforeUnload = () => {

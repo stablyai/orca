@@ -9,6 +9,11 @@ vi.mock('../../../skills/skill-discovery-target', () => ({
   resolveSkillDiscoveryTarget: vi.fn((target) => ({ kind: 'native-host', cwd: target?.cwd })),
   discoverSkillsOnTarget: vi.fn(async () => ({ skills: [], sources: [], scannedAt: 1 }))
 }))
+// Off Windows the real gate never sees a distro; stand in for its UNC parse.
+vi.mock('../../../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  wslDistroForPath: (path: string) => /^\\\\wsl\.localhost\\([^\\]+)/.exec(path)?.[1] ?? null
+}))
 import { SKILL_METHODS } from './skills'
 import {
   discoverSkillsOnTarget,
@@ -29,13 +34,16 @@ const WSL_RUNTIME = {
 
 function makeContext(overrides: {
   resolveProjectRuntimeForWorktree?: (worktreeId: string | null | undefined) => unknown
+  resolveRuntimeFileTarget?: (selector: string) => Promise<unknown>
 }): RpcContext {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: skills.discover reads only these runtime members.
   return {
     runtime: {
       listRepos: () => [],
       resolveSkillDiscoveryProviderRoots: async () => ({}),
       resolveProjectRuntimeForWorktree:
-        overrides.resolveProjectRuntimeForWorktree ?? (() => undefined)
+        overrides.resolveProjectRuntimeForWorktree ?? (() => undefined),
+      resolveRuntimeFileTarget: overrides.resolveRuntimeFileTarget
     }
   } as unknown as RpcContext
 }
@@ -73,8 +81,39 @@ describe('skills.discover RPC', () => {
     )
     expect(resolveProjectRuntimeForWorktree).toHaveBeenCalledWith('worktree-1')
     expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
-      expect.objectContaining({ projectRuntime: WSL_RUNTIME })
+      expect.objectContaining({ projectRuntime: WSL_RUNTIME }),
+      { refuseStoppedWslDistro: true }
     )
+  })
+
+  it('scans a workspace named only by id in its folder, and refuses SSH workspaces', async () => {
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { path: '/repo/feature' },
+      executionHostId: 'local'
+    }))
+    await discoverMethod().handler(
+      { worktreeId: 'repo::/repo/feature' },
+      makeContext({ resolveRuntimeFileTarget })
+    )
+    expect(resolveRuntimeFileTarget).toHaveBeenCalledWith('id:repo::/repo/feature')
+    expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cwd: '/repo/feature' }),
+      { refuseStoppedWslDistro: true }
+    )
+
+    const discoveries = vi.mocked(discoverSkillsOnTarget).mock.calls.length
+    await expect(
+      discoverMethod().handler(
+        { worktreeId: 'remote::/srv/app' },
+        makeContext({
+          resolveRuntimeFileTarget: async () => ({
+            worktree: { path: '/srv/app' },
+            executionHostId: 'ssh:box'
+          })
+        })
+      )
+    ).rejects.toThrow('unavailable for SSH hosts')
+    expect(vi.mocked(discoverSkillsOnTarget).mock.calls).toHaveLength(discoveries)
   })
 
   it('prefers a caller-supplied project runtime over store resolution', async () => {
@@ -85,7 +124,8 @@ describe('skills.discover RPC', () => {
     )
     expect(resolveProjectRuntimeForWorktree).not.toHaveBeenCalled()
     expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
-      expect.objectContaining({ projectRuntime: WSL_RUNTIME })
+      expect.objectContaining({ projectRuntime: WSL_RUNTIME }),
+      { refuseStoppedWslDistro: true }
     )
   })
 
@@ -114,7 +154,8 @@ describe('skills.discover RPC', () => {
     )
 
     expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
-      expect.objectContaining({ names: ['orchestration'], sourceKinds: ['home'] })
+      expect.objectContaining({ names: ['orchestration'], sourceKinds: ['home'] }),
+      { refuseStoppedWslDistro: true }
     )
   })
 
@@ -122,7 +163,8 @@ describe('skills.discover RPC', () => {
     await discoverMethod().handler({ names: [], sourceKinds: [] }, makeContext({}))
 
     expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
-      expect.objectContaining({ names: [], sourceKinds: [] })
+      expect.objectContaining({ names: [], sourceKinds: [] }),
+      { refuseStoppedWslDistro: true }
     )
   })
 })
@@ -259,7 +301,7 @@ describe('skills.share RPC', () => {
 
   beforeEach(() => {
     vi.mocked(discoverSkillsOnTarget).mockClear()
-    vi.mocked(resolveSkillDiscoveryTarget).mockImplementation((target) => ({
+    vi.mocked(resolveSkillDiscoveryTarget).mockImplementation(async (target) => ({
       kind: 'native-host',
       cwd: target?.cwd ?? undefined
     }))
@@ -303,11 +345,85 @@ describe('skills.share RPC', () => {
       [],
       { providerRootOverrides: {}, refresh: true }
     )
+    // Every selector was found without starting any stopped distro.
+    expect(discoverSkillsOnTarget).toHaveBeenCalledTimes(1)
     expect(publishDiscoveredSkillsFromAgent).toHaveBeenCalledWith(request, discoveredSkills, signal)
   })
 
+  it('reads only the unread distros when a selector is missing', async () => {
+    const unavailable = (path: string) => ({
+      id: path,
+      path,
+      sourceKind: 'repo',
+      skippedReason: 'unavailable'
+    })
+    vi.mocked(discoverSkillsOnTarget)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only skill ids and source skippedReason and path.
+      .mockResolvedValueOnce({
+        skills: [{ id: 'alpha' }],
+        sources: [
+          unavailable('\\\\wsl.localhost\\Ubuntu\\home\\me\\.claude\\skills'),
+          unavailable('\\\\wsl.localhost\\Ubuntu\\repo\\.claude\\skills'),
+          // A host folder that failed to read starts no distro.
+          unavailable('C:\\Users\\me\\.claude\\skills')
+        ],
+        scannedAt: 1
+      } as never)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only skill ids and source skippedReason.
+      .mockResolvedValueOnce({
+        skills: [{ id: 'alpha' }, { id: 'beta' }],
+        sources: [],
+        scannedAt: 2
+      } as never)
+    const publishDiscoveredSkillsFromAgent = vi.fn(async () => ({ status: 'ok' }))
+    const runtime = {
+      assertAgentSkillSharingAllowed: vi.fn(),
+      resolveProjectRuntimeForWorktree: vi.fn(),
+      resolveSkillDiscoveryProviderRoots: vi.fn(async () => ({})),
+      listRepos: vi.fn(() => []),
+      publishDiscoveredSkillsFromAgent
+    }
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: skills.share reads only these runtime members and the signal.
+    await method('skills.share').handler(request, { runtime } as unknown as RpcContext)
+
+    expect(vi.mocked(discoverSkillsOnTarget).mock.calls.map((call) => call[2])).toEqual([
+      { providerRootOverrides: {}, refresh: true },
+      { providerRootOverrides: {}, refresh: true, readStoppedWslRootsFor: { distros: ['Ubuntu'] } }
+    ])
+    expect(publishDiscoveredSkillsFromAgent).toHaveBeenCalledWith(
+      request,
+      [{ id: 'alpha' }, { id: 'beta' }],
+      undefined
+    )
+  })
+
+  it('starts no distro when the only unread folders are on the host', async () => {
+    vi.mocked(discoverSkillsOnTarget)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only skill ids and source skippedReason and path.
+      .mockResolvedValueOnce({
+        skills: [{ id: 'alpha' }],
+        sources: [
+          { id: 'host', path: 'C:\\skills', sourceKind: 'home', skippedReason: 'unavailable' }
+        ],
+        scannedAt: 1
+      } as never)
+    const runtime = {
+      assertAgentSkillSharingAllowed: vi.fn(),
+      resolveProjectRuntimeForWorktree: vi.fn(),
+      resolveSkillDiscoveryProviderRoots: vi.fn(async () => ({})),
+      listRepos: vi.fn(() => []),
+      publishDiscoveredSkillsFromAgent: vi.fn(async () => ({ status: 'ok' }))
+    }
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: skills.share reads only these runtime members and the signal.
+    await method('skills.share').handler(request, { runtime } as unknown as RpcContext)
+
+    expect(discoverSkillsOnTarget).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects WSL before attempting to read Linux paths with native fs', async () => {
-    vi.mocked(resolveSkillDiscoveryTarget).mockReturnValueOnce({
+    vi.mocked(resolveSkillDiscoveryTarget).mockResolvedValueOnce({
       kind: 'wsl',
       distro: 'Ubuntu',
       homeDir: '/home/alice',

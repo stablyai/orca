@@ -1,10 +1,4 @@
-/** Background tasks the MAIN agent launched in this session, keyed by the task id Claude reports at
- *  launch and repeats in the task's `<task-notification>`.
- *
- *  Why: Claude owes the main agent one notification for every background task that ends, and
- *  delivers it after the task stops running — up to a whole main-agent turn later, and after a Stop
- *  whose inventory is already empty. A pane with a notification still owed is not finished (#23942).
- *  Captures: __fixtures__/claude-task-notification-hooks.jsonl. */
+/** Main-agent background tasks keyed by launch/notification task ID. Notifications can arrive a turn after task end and an empty Stop; owed work keeps the pane active (#23942). Captures: __fixtures__/claude-task-notification-hooks.jsonl. */
 export type ClaudeLaunchedBackgroundTasks = Map<string, ClaudeLaunchedBackgroundTask>
 
 type ClaudeLaunchedBackgroundTask = {
@@ -19,15 +13,10 @@ type ClaudeLaunchedBackgroundTask = {
   notificationDelivered?: true
 }
 
-/** How long an idle main agent is still expected to be woken. Claude's Stop is never final and no
- *  hook says its queue is empty, so an owed notification is an expectation, not an obligation:
- *  captured deliveries land 40–130 ms after the main agent goes idle, and hooks are separate posts
- *  that can be lost or arrive out of order. Matches Claude's own idle threshold (its idle_prompt
- *  fired 60 s after the last Stop in every capture that idled that long). */
+/** An idle notification lease is expectation, not proof: Stop never promises an empty queue and posts can be lost/reordered. Captured deliveries took 40–130ms; Claude idle_prompt consistently fired after 60s. */
 export const CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS = 60_000
 
-/** A session can launch tasks without bound; past this, settled ones are forgotten first, and a
- *  launch that finds none is not tracked rather than displacing a task still being waited on. */
+/** Bound history by evicting settled tasks first; reject new tracking rather than displace pending debt when none are settled. */
 const CLAUDE_LAUNCHED_BACKGROUND_TASK_LIMIT = 256
 
 /** The task id a main-agent PostToolUse reports for work it left running in the background. */
@@ -135,8 +124,7 @@ export function oweClaudeAgentTaskNotification(
   }
 }
 
-/** A shell's end fires no hook: a main-agent inventory that stopped listing a launched
- *  shell is the only sign it ended. */
+/** Shells emit no end hook; omission from the main-agent inventory is their only completion evidence. */
 export function oweClaudeShellTaskNotifications(
   tasks: ClaudeLaunchedBackgroundTasks,
   runningShellIds: ReadonlySet<string>,
@@ -149,8 +137,7 @@ export function oweClaudeShellTaskNotifications(
   }
 }
 
-/** The notification arrived. A sub-agent can be resumed and notify again under the same id, so it
- *  stays known; a shell is over, and can be notified before any inventory showed it gone. */
+/** Retain resumable subagents for future notifications; shells end permanently and may notify before inventory omission. */
 export function settleClaudeTaskNotification(
   tasks: ClaudeLaunchedBackgroundTasks,
   taskId: string
@@ -161,6 +148,17 @@ export function settleClaudeTaskNotification(
     if (task.kind === 'agent') {
       task.notificationDelivered = true
     }
+  }
+}
+
+/** A provider kill ends notification debt without claiming delivery. */
+export function stopOwingClaudeAgentTaskNotification(
+  tasks: ClaudeLaunchedBackgroundTasks | undefined,
+  taskId: string
+): void {
+  const task = tasks?.get(taskId)
+  if (task?.kind === 'agent' && tasks) {
+    stopOwingClaudeTaskNotification(tasks, taskId, task)
   }
 }
 
@@ -177,8 +175,7 @@ function stopOwingClaudeTaskNotification(
   }
 }
 
-/** The lease runs only while the main agent is idle: a notification queued behind a running turn
- *  is delivered when that turn yields, however long it takes. */
+/** Count the lease only while the main agent is idle; queued notifications wait for an arbitrarily long running turn to yield. */
 function claudeOwedTaskNotificationExpiry(owedAt: number, mainAgentIdleSince: number): number {
   return Math.max(owedAt, mainAgentIdleSince) + CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS
 }
@@ -215,8 +212,7 @@ export function claudeOwedTaskNotificationDeadline(
   return deadline
 }
 
-/** The main agent stopped the task itself. Claude sends no notification for a shell it was told to
- *  stop; a stopped sub-agent still gets one (`killed`) and no turn end, so it never becomes owed. */
+/** Stopped shells receive no notification; killed subagents do, without a turn end, so their notification never becomes owed. */
 export function forgetStoppedClaudeShellTask(
   tasks: ClaudeLaunchedBackgroundTasks,
   taskId: string
@@ -239,8 +235,7 @@ function claudeOwedTaskNotificationKinds(tasks: ClaudeLaunchedBackgroundTasks | 
   return owed
 }
 
-/** What a pane is still owed, after giving up on what an idle main agent was owed for a whole
- *  lease. `mainAgentIdleSince` is undefined when the main agent is going idle on this very event. */
+/** Return owed kinds after expiring idle debt; undefined mainAgentIdleSince means this event is the idle boundary. */
 export function claudeLiveOwedTaskNotificationKinds(
   tasks: ClaudeLaunchedBackgroundTasks | undefined,
   mainAgentIdle: boolean,

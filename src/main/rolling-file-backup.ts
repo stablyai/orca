@@ -5,8 +5,7 @@ import { copyFileWithWindowsRetry, renameFileWithWindowsRetry } from './codex-ac
 export function writeRollingFileBackup(sourcePath: string, backupPath: string): void {
   try {
     if (lstatSync(backupPath).isSymbolicLink()) {
-      // Why: copyFile follows a destination symlink and can corrupt an
-      // unrelated dotfiles target before the primary atomic write begins.
+      // copyFile follows destination symlinks and could corrupt an unrelated file.
       throw new Error(`Refusing to overwrite symlinked backup: ${backupPath}`)
     }
   } catch (error) {
@@ -17,8 +16,7 @@ export function writeRollingFileBackup(sourcePath: string, backupPath: string): 
 
   const tempPath = `${backupPath}.${process.pid}.${randomUUID()}.tmp`
   try {
-    // Why: replacing the backup from a fresh inode cannot mutate another file
-    // through a hard link, and a failed rename leaves the prior backup intact.
+    // A fresh inode avoids hard-link mutation; rename preserves the old backup on failure.
     copyFileWithWindowsRetry(sourcePath, tempPath)
     renameFileWithWindowsRetry(tempPath, backupPath)
   } finally {

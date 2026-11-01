@@ -1,7 +1,6 @@
 import { expect, type Page } from '@stablyai/playwright-test'
 
-// Why scoped: the Landing screen renders its own "Add project" button whenever no
-// workspace is open, which is exactly the state these helpers run in.
+// Scope to the sidebar because Landing renders another Add project button when no workspace is open.
 function sidebarHeaderActions(page: Page) {
   return page.locator('[data-sidebar-header-actions]')
 }

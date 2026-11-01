@@ -12,6 +12,8 @@ describe('getHostOperationOwnership', () => {
   })
 
   it('reads subscriptions as streams and forge namespaces as credential-sourced', () => {
+    expect(getHostOperationOwnership('desktopBrowserBridge.attach')).toBe('stream')
+    expect(getHostOperationOwnership('desktopBrowserBridge.result')).toBe('host')
     expect(getHostOperationOwnership('terminal.subscribe')).toBe('stream')
     expect(getHostOperationOwnership('files.unwatch')).toBe('stream')
     expect(getHostOperationOwnership('session.tabs.subscribeAll')).toBe('stream')

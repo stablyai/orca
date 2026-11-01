@@ -12,10 +12,11 @@ import { validateGitPushTarget } from '../../../git/push-target-validation'
 import { resolveRegisteredWorktreePath } from '../../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
 import { validateGitForkSyncExpectedUpstream } from '../../../../shared/git-fork-sync'
-import { materializeWorktreePushTargetRemote } from '../../worktree-remote'
+import { ipcGitWorktreeTarget, materializeWorktreePushTargetRemote } from '../../worktree-remote'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { assertWslUncPathRunning } from '../../../wsl/wsl-unc-access-gate'
 
 export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -27,12 +28,15 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
       args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
     ): Promise<GitUpstreamStatus> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      // Background poll: its Git or UNC read would boot a stopped WSL distro (E9).
+      await assertWslUncPathRunning(args.worktreePath)
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+      await assertWslUncPathRunning(worktreePath, gitOptions.wslDistro)
       return getUpstreamStatus(worktreePath, args.pushTarget, gitOptions)
     }
   )
@@ -62,7 +66,7 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
             store,
             undefined,
             gitOptions,
-            args.worktreeId
+            ipcGitWorktreeTarget(args)
           )
         : undefined
       if (materializedPushTarget) {

@@ -1,14 +1,14 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem.test-fixture'
 import { isPlainObject } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { KiroHookService } from './hook-service'
 import { getKiroManagedCommandMatcher, KIRO_HOOK_EVENTS } from './hook-settings'
 
-// Why both names: os.homedir() reads $HOME on POSIX and %USERPROFILE% on Windows; setting
-// only one would let a run edit the developer's real ~/.kiro or ~/.orca.
+// Isolate HOME and USERPROFILE so tests cannot write real Kiro or Orca configs on any OS.
 let home: string
 let originalHome: string | undefined
 let originalUserProfile: string | undefined
@@ -65,9 +65,9 @@ function readAgent(name: string): Record<string, unknown> {
 const USER_STOP_HOOK = { command: 'say done' }
 
 describe('KiroHookService', () => {
-  it('reports the built-in default agent gap when no custom agents exist', () => {
+  it("reports the V2 default agent's gap as partial when no custom agents exist", () => {
     const result = new KiroHookService().install()
-    expect(result.state).toBe('not_installed')
+    expect(result.state).toBe('partial')
     expect(result.detail).toContain('kiro-cli agent create')
     expect(result.detail).toContain(agentsDir())
     // The launcher is still laid down so the refresher can keep it current.
@@ -80,7 +80,6 @@ describe('KiroHookService', () => {
 
     const service = new KiroHookService()
     expect(service.install().state).toBe('installed')
-    // Idempotent: a second install must not duplicate the managed entries.
     expect(service.install().state).toBe('installed')
 
     const caverna = readAgent('caverna')
@@ -142,7 +141,71 @@ describe('KiroHookService', () => {
     })
   })
 
-  it.each([{ hooks: [] }, { hooks: 'keep this' }, { hooks: { stop: { command: 'say done' } } }])(
+  // Shape `kiro-cli agent upgrade` (2.29+) writes; edits to `hooks` keep the file "universal".
+  it('converges list-form hooks in place and removes only its entries, locally and remotely', async () => {
+    const orcaHook = (trigger: string, command: string) => ({
+      name: `${trigger}-0`,
+      trigger,
+      ...(trigger === 'preToolUse' ? { matcher: '*' } : {}),
+      action: { type: 'command', command },
+      timeout: 10
+    })
+    const userHook = {
+      name: 'preToolUse-0',
+      trigger: 'preToolUse',
+      matcher: 'execute_bash',
+      action: { type: 'command', command: 'audit.sh' },
+      timeout: 10
+    }
+    const stale = `/bin/sh '${join(home, '.orca', 'agent-hooks', 'kiro-hook.sh')}'`
+    const extra = {
+      permissions: { rules: [{ capability: 'shell', effect: 'allow' }] },
+      kiroUpgrade: { notes: [] }
+    }
+    writeAgent('reviewer', {
+      name: 'reviewer',
+      hooks: [orcaHook('agentSpawn', stale), userHook, orcaHook('preToolUse', stale)],
+      ...extra
+    })
+    writeAgent('upgraded', { name: 'upgraded', permissions: extra.permissions })
+
+    const service = new KiroHookService()
+    expect(service.getStatus()).toMatchObject({ state: 'partial', managedHooksPresent: true })
+    expect(service.install().state).toBe('installed')
+    const installed = readAgent('reviewer')
+    const hooks = installed.hooks
+    if (!Array.isArray(hooks)) {
+      throw new Error('Expected hooks list')
+    }
+    expect(hooks.map((hook) => hook.trigger)).toEqual([
+      'agentSpawn',
+      'preToolUse',
+      'preToolUse',
+      'userPromptSubmit',
+      'postToolUse',
+      'stop'
+    ])
+    expect(hooks[1]).toEqual(userHook)
+    expect(hooks[2]).toMatchObject({ matcher: '*', timeout: 10, action: { type: 'command' } })
+    expect(hooks.filter((hook) => hook.action.command === stale)).toEqual([])
+    expect(installed).toMatchObject(extra)
+    expect(readAgent('upgraded').hooks).toHaveLength(KIRO_HOOK_EVENTS.length)
+
+    expect(service.remove().state).toBe('not_installed')
+    expect(readAgent('reviewer')).toEqual({ name: 'reviewer', hooks: [userHook], ...extra })
+    expect(readAgent('upgraded')).toEqual({ name: 'upgraded', permissions: extra.permissions })
+
+    expect(await service.installRemote(createManagedHookLocalFilesystem(), home)).toMatchObject({
+      state: 'installed'
+    })
+    expect(readAgent('reviewer').hooks).toHaveLength(KIRO_HOOK_EVENTS.length + 1)
+  })
+
+  it.each([
+    { hooks: ['say done'] },
+    { hooks: 'keep this' },
+    { hooks: { stop: { command: 'say done' } } }
+  ])(
     'preserves unsupported user hook structures and reports them locally and remotely: %j',
     async ({ hooks }) => {
       writeAgent('unsupported', { name: 'unsupported', hooks })
@@ -192,7 +255,6 @@ describe('KiroHookService', () => {
     expect(result.state).toBe('installed')
     const remote = JSON.parse(readFileSync(join(kiroHome, 'agents', 'remote.json'), 'utf-8'))
     expect(Object.keys(remote.hooks).sort()).toEqual([...KIRO_HOOK_EVENTS].sort())
-    // The inactive default home is left alone.
     expect(readAgent('stale').hooks).toBeUndefined()
   })
 
@@ -234,10 +296,29 @@ describe('KiroHookService', () => {
     expect(readAgent('kept').hooks).toBeDefined()
   })
 
+  // Check command shapes everywhere; windows-hook-payload-delivery.test.ts executes them under Kiro's shells.
+  it('registers the Windows batch hook command for every event', () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      writeAgent('mine', { name: 'mine' })
+      expect(new KiroHookService().install().state).toBe('installed')
+      const hooks = readAgent('mine').hooks
+      if (!isPlainObject(hooks)) {
+        throw new Error('Expected hooks object')
+      }
+      const command = wrapWindowsBatchHookCommand(scriptPath())
+      for (const event of KIRO_HOOK_EVENTS) {
+        expect(hooks[event]).toEqual([expect.objectContaining({ command })])
+      }
+    } finally {
+      platform.mockRestore()
+    }
+  })
+
   it('ignores non-JSON files such as the shipped example config', () => {
     mkdirSync(agentsDir(), { recursive: true })
     writeFileSync(join(agentsDir(), 'agent_config.json.example'), '{}')
-    expect(new KiroHookService().install().state).toBe('not_installed')
+    expect(new KiroHookService().install().state).toBe('partial')
     expect(readFileSync(join(agentsDir(), 'agent_config.json.example'), 'utf-8')).toBe('{}')
   })
 })

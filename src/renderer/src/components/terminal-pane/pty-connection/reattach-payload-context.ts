@@ -1,4 +1,4 @@
-import type { PtyBufferSnapshot, PtyConnectResult } from '../pty-transport'
+import type { PtyBufferSnapshot, PtyConnectResult } from '../pty-transport-types'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 // Per-call locals for applyReattachPayload so overlapping reattaches stay isolated.

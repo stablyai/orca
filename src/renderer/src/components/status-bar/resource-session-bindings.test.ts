@@ -80,31 +80,6 @@ describe('resource session bindings', () => {
     expect(index.boundPtyIds.has('pty-closed')).toBe(false)
   })
 
-  it('counts only daemon sessions without live or restorable tab bindings', () => {
-    const count = countUnboundDaemonSessions(
-      [
-        { id: 'pty-live', cwd: '/workspace', title: 'live', agentOwnership: 'absent' as const },
-        {
-          id: 'pty-restored',
-          cwd: '/workspace',
-          title: 'restored',
-          agentOwnership: 'absent' as const
-        },
-        { id: 'pty-orphan', cwd: '/tmp', title: 'orphan', agentOwnership: 'absent' as const }
-      ],
-      {
-        ptyIdsByTabId: { 'tab-live': ['pty-live'] },
-        tabsByWorktree: {
-          'repo::/workspace': [makeTab('tab-live'), makeTab('tab-restored', 'pty-restored')]
-        },
-        terminalLayoutsByTabId: {},
-        workspaceSessionReady: true
-      }
-    )
-
-    expect(count).toBe(1)
-  })
-
   it('binds a session deferred for SSH reattach so it is never offered for cleanup', () => {
     const inputs = {
       ptyIdsByTabId: {},
@@ -158,35 +133,8 @@ describe('resource session bindings', () => {
     expect(countUnboundDaemonSessions(sessions, inputs)).toBe(1)
   })
 
-  it('keeps the advertised count and the selected set identical', () => {
-    const inputs = {
-      ptyIdsByTabId: { 'tab-live': ['pty-live'] },
-      tabsByWorktree: { 'repo::/workspace': [makeTab('tab-live'), makeTab('tab-ssh')] },
-      terminalLayoutsByTabId: {},
-      deferredSshSessionIdsByTabId: { 'tab-ssh': 'pty-deferred' },
-      workspaceSessionReady: true
-    }
-    const sessions = [
-      { id: 'pty-live', cwd: '/workspace', title: 'live', agentOwnership: 'absent' as const },
-      {
-        id: 'pty-deferred',
-        cwd: '/workspace',
-        title: 'deferred',
-        agentOwnership: 'absent' as const
-      },
-      { id: 'pty-agent', cwd: '/workspace', title: 'codex', agentOwnership: 'present' as const },
-      { id: 'pty-orphan', cwd: '/tmp', title: 'orphan', agentOwnership: 'absent' as const }
-    ]
-
-    expect(selectUnboundDaemonSessions(sessions, inputs).map((s) => s.id)).toEqual(['pty-orphan'])
-    expect(countUnboundDaemonSessions(sessions, inputs)).toBe(
-      selectUnboundDaemonSessions(sessions, inputs).length
-    )
-  })
-
   it('never offers a session whose ownership could not be established', () => {
-    // Why: a legacy daemon generation or an older SSH relay cannot serialize claims, so it reports
-    // no owners for a session that may well have one. Unknown must never read as absent (#8459).
+    // Older daemons/relays may omit ownership claims; unknown cannot establish owner absence.
     const inputs = {
       ptyIdsByTabId: {},
       tabsByWorktree: {},

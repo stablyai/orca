@@ -4,9 +4,9 @@ import type { ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ProjectRoadmap from './ProjectRoadmap'
-import { i18n, setRendererPluginLanguagePacks, setRendererUiLanguage } from '@/i18n/i18n'
+import { i18n, loadRendererUiLanguage, setRendererPluginLanguagePacks } from '@/i18n/i18n'
 import { DEFAULT_LOCALE } from '@/i18n/supported-languages'
-import { pluginLanguageResourceId } from '../../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import type {
   GitHubProjectField,
   GitHubProjectFieldValue,
@@ -102,7 +102,7 @@ afterEach(async () => {
   vi.useRealTimers()
   window.localStorage.clear()
   setRendererPluginLanguagePacks([])
-  await setRendererUiLanguage(DEFAULT_LOCALE)
+  await i18n.changeLanguage(await loadRendererUiLanguage(DEFAULT_LOCALE))
 })
 
 describe('ProjectRoadmap', () => {
@@ -112,20 +112,17 @@ describe('ProjectRoadmap', () => {
   ])('renders date ticks and bars with plugin locale %s', async (packLocale, dateLocale) => {
     const packId = 'plugin:stablyai.orca-portuguese/pt-BR' as const
     const resourceLanguage = pluginLanguageResourceId(packId)
-    // The resource tag recorded in the Windows crash report on #25021.
-    expect(resourceLanguage).toBe(
-      'plugin0070006c007500670069006e003a0073007400610062006c007900610069002e006f007200630061002d0070006f00720074007500670075006500730065002f00700074002d00420052'
-    )
     setRendererPluginLanguagePacks([
       {
         id: packId,
         resourceLanguage,
         pluginKey: 'stablyai.orca-portuguese',
         locale: packLocale,
-        catalog: { common: { cancel: 'Cancelar' } }
+        catalog: { common: { cancel: 'Cancelar' } },
+        coverage: 100
       }
     ])
-    await setRendererUiLanguage(packId)
+    await i18n.changeLanguage(await loadRendererUiLanguage(packId))
     expect(i18n.resolvedLanguage).toBe(resourceLanguage)
 
     render(

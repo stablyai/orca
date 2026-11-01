@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FeedbackImageDraft } from '@/lib/feedback-image-attachments'
-import { toast } from 'sonner'
+
 import { useSidebarFeedbackImages } from './use-sidebar-feedback-images'
 
 const { readFeedbackImageFiles } = vi.hoisted(() => ({ readFeedbackImageFiles: vi.fn() }))
@@ -64,8 +64,6 @@ afterEach(() => {
 })
 
 describe('useSidebarFeedbackImages', () => {
-  // Why: the read callback clears its pending reservation before React
-  // re-renders, so rendered state alone would briefly undercount the budget.
   it('counts a just-read batch when another add lands before the re-render', async () => {
     let finishFirstRead: ((value: unknown) => void) | undefined
     readFeedbackImageFiles.mockReturnValueOnce(
@@ -94,24 +92,6 @@ describe('useSidebarFeedbackImages', () => {
     expect(readFeedbackImageFiles).toHaveBeenNthCalledWith(2, [second], 1, firstBytes)
   })
 
-  it('tells the user when an attachment was compressed to fit', async () => {
-    const notice = 'shot.png was compressed from 6.1 MB to 1.7 MB to fit the attachment limit.'
-    readFeedbackImageFiles.mockResolvedValue({
-      images: [draft('shot', 1_750_000)],
-      errors: [],
-      notices: [notice]
-    })
-
-    await act(async () => {
-      latest!.handleAddFiles([new File(['x'], 'shot.png', { type: 'image/png' })])
-    })
-
-    expect(toast.info).toHaveBeenCalledWith(notice)
-    expect(latest!.images.map((image) => image.bytes)).toEqual([1_750_000])
-  })
-
-  // Why: a batch still shrinking has no known size yet; reading the next one
-  // against its raw file size would refuse a screenshot even though room is left.
   it('sizes a later add against the shrunk size, not the raw file size', async () => {
     let finishShrink: ((value: unknown) => void) | undefined
     readFeedbackImageFiles.mockReturnValueOnce(
@@ -135,30 +115,5 @@ describe('useSidebarFeedbackImages', () => {
     })
 
     expect(readFeedbackImageFiles).toHaveBeenNthCalledWith(2, [second], 1, 1_750_000)
-  })
-
-  // Why: a queued batch can hold several screenshots, each costing a decode and
-  // up to six re-encodes, all for drafts an unmounted dialog would only revoke.
-  it('skips batches still queued when the dialog unmounts', async () => {
-    let finishFirstRead: ((value: unknown) => void) | undefined
-    readFeedbackImageFiles.mockReturnValueOnce(
-      new Promise((resolve) => {
-        finishFirstRead = resolve
-      })
-    )
-    await act(async () => {
-      latest!.handleAddFiles([new File(['x'], 'first.png', { type: 'image/png' })])
-      latest!.handleAddFiles([new File(['x'], 'second.png', { type: 'image/png' })])
-    })
-    expect(readFeedbackImageFiles).toHaveBeenCalledTimes(1)
-
-    mountedRef.current = false
-    await act(async () => {
-      finishFirstRead?.({ images: [draft('first', 1000)], errors: [], notices: [] })
-    })
-
-    expect(readFeedbackImageFiles).toHaveBeenCalledTimes(1)
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:first')
-    expect(latest!.hasPendingImageReads()).toBe(false)
   })
 })

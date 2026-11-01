@@ -45,7 +45,7 @@ describe('runInternalDevSetup', () => {
     expect(
       runInternalDevSetup({
         env: {
-          ORCA_INTERNAL_DEV_SETUP: '/tmp/setup',
+          ORCA_INTERNAL_DEV_SETUP: ' /tmp/setup ',
           ORCA_WORKTREE_PATH: '/tmp/worktree'
         },
         platform: 'linux',
@@ -59,14 +59,17 @@ describe('runInternalDevSetup', () => {
     })
   })
 
-  it('uses cmd.exe with explicit quoting so .cmd setup shims receive paths with spaces', () => {
+  it.each([
+    ['C:\\repo with spaces\\worktree', 'C:\\repo with spaces\\worktree'],
+    ['/c/repo with spaces/worktree', 'C:\\repo with spaces\\worktree']
+  ])('quotes Windows setup paths and converts MSYS worktree %s', (worktree, expected) => {
     const spawn = vi.fn(() => ({ status: 0 }))
 
     expect(
       runInternalDevSetup({
         env: {
-          ORCA_INTERNAL_DEV_SETUP: 'C:\\tools\\setup.cmd',
-          ORCA_WORKTREE_PATH: 'C:\\repo\\worktree'
+          ORCA_INTERNAL_DEV_SETUP: 'C:\\tool suite\\setup.cmd',
+          ORCA_WORKTREE_PATH: worktree
         },
         platform: 'win32',
         exists: () => true,
@@ -75,7 +78,7 @@ describe('runInternalDevSetup', () => {
     ).toBe(0)
     expect(spawn).toHaveBeenCalledWith(
       'cmd.exe',
-      ['/d', '/s', '/c', 'call "C:\\tools\\setup.cmd" "C:\\repo\\worktree"'],
+      ['/d', '/s', '/c', `call "C:\\tool suite\\setup.cmd" "${expected}"`],
       {
         stdio: 'inherit',
         windowsVerbatimArguments: true

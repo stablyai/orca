@@ -9,12 +9,7 @@ type LocalGitConfigPaths = {
   worktreeConfigPath: string
 }
 
-/**
- * Why: `stat` on a dead network mount is uninterruptible, and this read runs
- * *before* the bounded remote probe — unbounded, it reintroduces the hang that
- * probe timeout removes (P1-D). Abandoning the read only costs the shorter
- * negative-cache TTL that a missing signature already implies.
- */
+// A dead mount can stall stat before the bounded Git probe; missing signatures use shorter cache lifetimes.
 const CONFIG_SIGNATURE_DEADLINE_MS = 2_000
 
 const localGitConfigSignatureInFlight: CoalescedProbes<string | undefined> = new Map()
@@ -23,14 +18,10 @@ export async function readLocalGitConfigSignature(
   context: GitHubRepoContext
 ): Promise<string | undefined> {
   if (context.connectionId || context.wslDistro) {
-    // Why: this signature only covers host filesystem config files; remote
-    // runtimes are already separated by cache key and probed through git.
+    // Remote runtimes have separate cache keys; this signature covers host filesystem config only.
     return undefined
   }
-  // Why: the deadline is caller-facing only. Bounding the coalesced probe itself
-  // would drop its map entry after 2s while the read runs on, so every later
-  // call would start another unbounded read instead of joining the one already
-  // out — the coalescing that keeps a wedged mount to one read (P1-D).
+  // Deadline only the caller: keep the in-flight read shared so a hung mount cannot accumulate more reads.
   return withConfigSignatureDeadline(
     runCoalescedProbe(localGitConfigSignatureInFlight, context.repoPath, () =>
       readUncachedLocalGitConfigSignature(context.repoPath)
@@ -38,7 +29,6 @@ export async function readLocalGitConfigSignature(
   )
 }
 
-/** Resolves undefined rather than waiting on a read the filesystem may never finish. */
 function withConfigSignatureDeadline(
   read: Promise<string | undefined>
 ): Promise<string | undefined> {
@@ -252,7 +242,7 @@ async function resolveLocalGitConfigPaths(repoPath: string): Promise<LocalGitCon
         commonGitDir = resolve(gitDir, commonDir)
       }
     } catch {
-      // Fall back to the linked worktree gitdir below.
+      // Try the linked-worktree gitdir instead.
     }
     return {
       commonConfigPath: join(commonGitDir, 'config'),

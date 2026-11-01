@@ -1,17 +1,20 @@
 import { createWriteStream, rmSync } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
-import { net } from 'electron'
 import {
   DOWNLOAD_IDLE_TIMEOUT_MS,
   getHeaderValue,
   parseContentRange,
   parseRetryAfterMs,
   type DownloadIncomingMessage,
-  type DownloadTotals
+  type DownloadTotals,
+  type OpenSpeechDownloadRequest,
+  type SpeechDownloadRequest
 } from './speech-model-download-response'
 import type { HttpStatusError } from '../network/transient-download-error'
 
 export abstract class SpeechModelHttpDownload {
+  constructor(private readonly openRequest: OpenSpeechDownloadRequest) {}
+
   protected abstract reportDownloadProgress(modelId: string, progress: number): void
 
   protected downloadFile(
@@ -45,7 +48,8 @@ export abstract class SpeechModelHttpDownload {
       }
 
       let settled = false
-      let request: Electron.ClientRequest | null = null
+      let request: SpeechDownloadRequest | null = null
+      let detachRequest = (): void => {}
       let idleTimeout: ReturnType<typeof setTimeout> | null = null
       const onSignalAbort = (): void => {
         const activeRequest = request
@@ -64,9 +68,7 @@ export abstract class SpeechModelHttpDownload {
         if (!activeRequest) {
           return
         }
-        activeRequest.off('error', onRequestError)
-        activeRequest.off('response', onResponse)
-        activeRequest.off('redirect', onRedirect)
+        detachRequest()
         signal?.removeEventListener('abort', onSignalAbort)
         request = null
       }
@@ -142,8 +144,7 @@ export abstract class SpeechModelHttpDownload {
           .then(resolveOnce)
           .catch(rejectOnce)
       }
-      const onResponse = (incoming: Electron.IncomingMessage): void => {
-        const response = incoming as DownloadIncomingMessage
+      const onResponse = (response: DownloadIncomingMessage): void => {
         const contentLength = response.headers['content-length']
         const headerLength = Number.parseInt(getHeaderValue(contentLength) || '0', 10)
         const parsedLength =
@@ -156,7 +157,7 @@ export abstract class SpeechModelHttpDownload {
           (parsedLength <= 0 || parsedLength === contentRange.end - contentRange.start + 1)
 
         if (resumeOffset > 0 && response.statusCode === 206 && !resumed) {
-          // Why: appending an unverified range can silently corrupt the file; discard and retry from byte zero.
+          // Discard unverified ranges; appending them could silently corrupt the model.
           try {
             rmSync(dest)
           } catch {
@@ -174,7 +175,7 @@ export abstract class SpeechModelHttpDownload {
 
         if (response.statusCode !== 200 && !resumed) {
           if (response.statusCode === 416) {
-            // Why: 416 means the server rejected our resume offset; drop the partial to restart from scratch.
+            // 416 rejects the resume offset; discard the partial and restart.
             try {
               rmSync(dest)
             } catch {
@@ -186,14 +187,14 @@ export abstract class SpeechModelHttpDownload {
           statusError.httpStatusCode = response.statusCode
           statusError.retryAfterMs = parseRetryAfterMs(response.headers['retry-after'])
           rejectOnce(statusError)
-          // Why: abort so a retry doesn't leave the error-response body draining unowned.
+          // Abort the error body so retries do not leave unowned transfers.
           activeRequest?.abort()
           return
         }
 
-        // Why: a 200 to our Range request means the server restarted from byte zero, so overwrite the partial.
+        // 200 ignored Range and restarted at zero; overwrite the partial.
         const progressBase = resumed ? resumeOffset : 0
-        // Why: Content-Length on a 206 is only this segment; on Content-Range '*' keep the known full size.
+        // 206 Content-Length describes only this segment; retain known total for Content-Range *.
         const totalSize = resumed
           ? (contentRange?.totalBytes ?? totals?.totalBytes ?? expectedSize)
           : parsedLength > 0
@@ -237,21 +238,25 @@ export abstract class SpeechModelHttpDownload {
             }
           })
           .catch((error: Error) => {
+            const activeRequest = request
             cleanupResponseProgressListener()
             rejectOnce(error)
+            activeRequest?.abort()
           })
       }
 
-      request = net.request({ method: 'GET', url: parsedUrl.toString() })
+      request = this.openRequest(parsedUrl.toString())
       if (resumeOffset > 0) {
         request.setHeader('Range', `bytes=${resumeOffset}-`)
       }
 
-      // Why: Electron net honors app proxy settings (unlike Node https) but exposes no setTimeout, so time out manually.
+      // Neither request API exposes a body-wide idle timeout.
       resetIdleTimeout()
-      request.on('error', onRequestError)
-      request.on('response', onResponse)
-      request.on('redirect', onRedirect)
+      detachRequest = request.listen({
+        error: onRequestError,
+        response: onResponse,
+        redirect: onRedirect
+      })
       if (signal) {
         signal.addEventListener('abort', onSignalAbort, { once: true })
       }

@@ -8,7 +8,7 @@ export function CodexRestartStatusPrompt(): React.JSX.Element | null {
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
-  const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
+  const queuePaneAccountRestarts = useAppStore((s) => s.queuePaneAccountRestarts)
 
   const staleCodexStatus = useMemo(
     () =>
@@ -30,16 +30,14 @@ export function CodexRestartStatusPrompt(): React.JSX.Element | null {
       <div className="px-2 py-2">
         <div className="text-[11px] text-muted-foreground">
           {/* Why: notices are per-PTY-session but restart is per-pane; show both counts so split panes don't look wrong. */}
-          {staleCodexStatus.staleSessionCount === 1
-            ? translate(
-                'auto.components.status.bar.StatusBar.605901a495',
-                '1 Codex session is still on the old account'
-              )
-            : translate(
-                'auto.components.status.bar.StatusBar.1446d0d8a0',
-                '{{value0}} Codex sessions are still on the old account.',
-                { value0: staleCodexStatus.staleSessionCount }
-              )}
+          {translate(
+            'auto.components.status.bar.StatusBar.staleCodexSessions',
+            '{{count}} Codex sessions are still on the old account.',
+            {
+              count: staleCodexStatus.staleSessionCount,
+              defaultValue_one: '{{count}} Codex session is still on the old account.'
+            }
+          )}
           {staleCodexStatus.staleWorktreeCount > 1 ? (
             <span className="mt-0.5 block">
               {translate(
@@ -51,7 +49,7 @@ export function CodexRestartStatusPrompt(): React.JSX.Element | null {
         </div>
         <button
           type="button"
-          onClick={() => queueCodexPaneRestarts(staleCodexStatus.stalePtyIds)}
+          onClick={() => queuePaneAccountRestarts(staleCodexStatus.stalePtyIds, 'codex')}
           className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
         >
           {staleCodexStatus.staleSessionCount === 1
@@ -112,5 +110,3 @@ export function AccountRuntimeToggle<TGroup extends { key: string; label: string
     </div>
   )
 }
-
-// Exported so its account-switch/reset logic is preserved for row drill-in even

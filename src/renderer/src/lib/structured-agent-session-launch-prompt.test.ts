@@ -219,8 +219,7 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     expect(draft()).toBe('review this')
   })
 
-  // The launch prompt is the chat's first message: drawn as sending from the click, nothing typed
-  // while the chat starts goes out ahead of it, and it goes out once the chat exists.
+  // Reserve the first-message slot from click through creation; later typed text must never overtake launch input.
   it('holds the chat for its prompt from the click, then sends that prompt first, once', async () => {
     const stagedPrompt = stageStructuredLaunchPrompt(SESSION, 'review this')
     expect(pendingTexts()).toEqual(['review this:sending'])

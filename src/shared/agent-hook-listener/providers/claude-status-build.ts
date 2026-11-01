@@ -25,24 +25,21 @@ export function buildClaudeStatusPayload(
     claudeTaskWakeupPending?: ParsedAgentStatusPayload['claudeTaskWakeupPending']
   }
 ): ParsedAgentStatusPayload | null {
-  // Why: child-driven refreshes are roster bookkeeping, not lead tool activity; read the cached snapshot without merging so they can't clear a live AskUserQuestion card or clobber the tool preview.
+  // Roster refreshes read cached tool state without clearing live cards or previews.
   const snapshot = options.updateToolSnapshot
     ? resolveToolState(state, paneKey, extractToolFields('claude', eventName, hookPayload), {
         resetOnNewTurn: isNewTurnEvent('claude', eventName)
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
 
-  // Why: every path writes the main agent record before building, so the row's `mainAgent`, its
-  // `interrupted` flag and its turn stamp are all read off that one record rather than restated by
-  // each caller. The normalizer clamps `interrupted` to done payloads, so a row held open by child
-  // work drops it; the record keeps the verdict for the eventual done.
+  // Read mainAgent/verdict/turn stamp from one lead record; keep interruption there while child-held rows omit it.
   const mainAgentRecord = state.claudeLeadStateByPaneKey.get(paneKey)
-  // Why: validate directly — the JSON stringify/parse round trip other normalizers use is pure overhead on this hot per-hook path.
+  // Validate directly to avoid hot-path stringify/parse overhead.
   return normalizeAgentStatusPayload({
     state: options.stateName,
     workingMode: options.workingMode,
     claudeTaskWakeupPending: options.claudeTaskWakeupPending,
-    // Why: only lead-origin events may reset the prompt cache; a child-driven refresh must not blank the lead's prompt label.
+    // Only lead events reset prompt labels; child refreshes retain them.
     prompt: resolvePrompt(state, paneKey, promptText, {
       resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)
     }),

@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -132,6 +132,7 @@ export function useProjectViewTable(
       return
     }
     let cancelled = false
+    // No wake: this also runs on a restored page with no click, so a stopped distro stays stopped.
     void listProjectViewsForRuntime(sourceTarget, {
       owner: activeProject.owner,
       ownerType: activeProject.ownerType,

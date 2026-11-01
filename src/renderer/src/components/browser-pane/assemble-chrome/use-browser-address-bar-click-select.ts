@@ -1,9 +1,6 @@
 import { useCallback, useRef, type MouseEvent } from 'react'
 
-/**
- * Browser-style mouse selection for the address bar: the click that focuses it selects the whole
- * URL, a double-click selects a word, and a triple-click selects everything again.
- */
+/** Match browser mouse selection: focus click selects the URL, double-click a word, triple-click the URL again. */
 export function useBrowserAddressBarClickSelect(): {
   onMouseDown: (event: MouseEvent<HTMLInputElement>) => void
   onClick: (event: MouseEvent<HTMLInputElement>) => void
@@ -13,8 +10,7 @@ export function useBrowserAddressBarClickSelect(): {
   const onMouseDown = useCallback((event: MouseEvent<HTMLInputElement>) => {
     const input = event.currentTarget
     pressFocusedRef.current = event.button === 0 && document.activeElement !== input
-    // Why: Chromium treats a press inside a selection as a text drag, so it neither places a caret
-    // nor picks a double-click word; clear the old or click-made selection first.
+    // Clear old selections before native word/caret placement; Chromium otherwise treats the press as a text drag.
     if (pressFocusedRef.current) {
       // Focus first: a press that focuses the bar would restore the selection being cleared.
       input.focus()

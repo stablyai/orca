@@ -1,5 +1,5 @@
-import type { SshConnection } from './ssh-connection'
-import { createSshOperationAbortError } from './ssh-connection-utils'
+import type { SshConnection } from './connection/ssh-connection'
+import { createSshOperationAbortError } from './connection/ssh-exec-options'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, normalizeWindowsRemotePath } from './ssh-remote-platform'
 import { powerShellCommand } from './ssh-remote-powershell'
@@ -7,8 +7,7 @@ import {
   buildPosixNodeInstallGuidance,
   type RemoteNodeResolutionOptions
 } from './ssh-remote-node-install-guidance'
-import { execCommand } from './ssh-relay-deploy-helpers'
-import { isSshCommandExitError } from './ssh-relay-exec-command'
+import { execCommand, isSshCommandExitError } from './remote-exec/remote-exec-command'
 import {
   buildPosixNodeToolchainProbe,
   buildWindowsNodeToolchainProbe,
@@ -18,9 +17,7 @@ import { isSshSessionLimitError } from './ssh-session-limit-error'
 import { buildSshLoginShellCommand } from './ssh-login-shell-command'
 import { REMOTE_NODE_PATH_PROBE_SCRIPT } from './ssh-remote-node-probe-script'
 
-// Why: the login-shell fallback catches custom PATH setups in ~/.profile that
-// the path probes don't cover. Interactive configs (conda prompts, etc.) can
-// hang a login shell, so keep this short.
+// Login fallback covers custom profiles but can hang on interactive setup; keep its deadline short.
 const LOGIN_SHELL_PROBE_TIMEOUT_MS = 8_000
 
 /** The probes answered and no usable Node.js + npm exists; only `strict` resolution proves it. */
@@ -41,12 +38,7 @@ export async function resolveRemoteNodePath(
     return resolveRemoteWindowsNodePath(conn, options)
   }
 
-  // Strategy 1: probe well-known install directories for every common Node
-  // version manager (nvm, fnm, mise, asdf, volta, n) plus system locations.
-  // This doesn't depend on shell startup-file semantics — bash -lc skips
-  // .bashrc and zsh -lc skips .zshrc, but those are exactly the files where
-  // nvm/mise/asdf hooks live. Probing directories directly is deterministic.
-  // Why memoized: the login shell often names the Node the path probe already rejected.
+  // Probe manager/system directories independent of rc semantics; memoize across fallback because login shell often repeats rejected candidates.
   const npmCheck = memoizeCandidateCheck<true>(
     async (candidate) => (await nodeToolchainMeetsRequirements(conn, candidate, options)) || null
   )
@@ -55,8 +47,6 @@ export async function resolveRemoteNodePath(
     return probed.nodePath
   }
 
-  // Strategy 2 (fallback): ask the user's login shell. Catches custom PATH
-  // setups in ~/.profile / ~/.bash_profile that the probes don't cover.
   const loginShell = await tryResolveViaLoginShell(conn, npmCheck, options)
   if (loginShell) {
     return loginShell.nodePath
@@ -65,10 +55,9 @@ export async function resolveRemoteNodePath(
   return throwNodeNotFound(conn, options)
 }
 
-export type CandidateCheck<T> = (candidate: string) => Promise<T | null>
+type CandidateCheck<T> = (candidate: string) => Promise<T | null>
 
-/** Probes each candidate path once per resolution, however many strategies name it. */
-export function memoizeCandidateCheck<T>(check: CandidateCheck<T>): CandidateCheck<T> {
+function memoizeCandidateCheck<T>(check: CandidateCheck<T>): CandidateCheck<T> {
   const results = new Map<string, Promise<T | null>>()
   return (candidate) => {
     let result = results.get(candidate)
@@ -83,10 +72,7 @@ type ResolvedCandidate<T> = { nodePath: string; result: T }
 /** `strict` rethrows unanswered probes rather than reading them as "no Node here". */
 export type ProbeOptions = RemoteNodeResolutionOptions & { strict?: boolean }
 
-/**
- * Rethrows what is not a host-answered miss: an opted-in session limit, an abort, or (under
- * `strict`) an exec that never exited. Only a command that ran and exited answered.
- */
+/** Rethrow abort/session-limit as requested, and unanswered exec under strict mode; only completed host commands prove misses. */
 function rethrowUnlessAnsweredMiss(err: unknown, options?: ProbeOptions): void {
   if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
     throw err
@@ -97,11 +83,8 @@ function rethrowUnlessAnsweredMiss(err: unknown, options?: ProbeOptions): void {
   }
 }
 
-// Probe the on-disk install directories of every common Node version manager
-// plus system package-manager locations. Every probe runs unconditionally so
-// a missing directory prints nothing rather than short-circuiting later
-// probes. Returns the first candidate with a complete Node/npm toolchain.
-export async function tryResolveViaKnownPaths<T>(
+// Run all manager/system probes; select the first complete Node/npm toolchain without short-circuiting discovery.
+async function tryResolveViaKnownPaths<T>(
   conn: SshConnection,
   check: CandidateCheck<T>,
   options?: ProbeOptions
@@ -128,28 +111,22 @@ export async function tryResolveViaKnownPaths<T>(
       throw err
     }
     throwIfAborted(options)
-    // Why: the probe script always exits 0, so any failure here is an unanswered probe.
+    // This inventory script always exits 0, so a failed command is unanswered evidence.
     if (options?.strict) {
       throw err
     }
-    // Fall through to login shell.
   }
   return null
 }
 
-// Run `command -v node` under the user's login shell, then verify the result
-// meets the minimum version. Returns null on any failure (shell missing, no
-// node found, version too old, timeout) so callers fall through to the error.
+// Probe configured login shell then validate Node; permissive callers fall through on failures, strict callers retain unanswered evidence.
 export async function tryResolveViaLoginShell<T>(
   conn: SshConnection,
   check: CandidateCheck<T>,
   options?: ProbeOptions
 ): Promise<ResolvedCandidate<T> | null> {
   try {
-    // Why: $SHELL is the user's configured login shell (set by chsh / passwd).
-    // Using it — rather than hardcoding bash — means zsh/fish users whose
-    // custom PATH hooks live in profile files get coverage too. We fall back
-    // to sh if $SHELL is unset (rare, e.g. restricted accounts).
+    // Respect chsh/passwd SHELL for custom profiles; restricted accounts without it use sh.
     const shellResult = await execCommand(conn, 'echo "${SHELL:-/bin/sh}"', {
       timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS,
       signal: options?.signal
@@ -176,15 +153,13 @@ export async function tryResolveViaLoginShell<T>(
       return { nodePath: candidate, result }
     }
   } catch (err) {
-    // Why: `command -v node` exits non-zero when the shell answered "none".
+    // command -v can answer nonzero for missing Node; rethrow only unanswered failures.
     rethrowUnlessAnsweredMiss(err, options)
-    // Fall through.
   }
   return null
 }
 
-// Validates the same PATH-prepend + bare npm contract used during deployment.
-// This rejects missing npm (#8450) without requiring colocation (#9165).
+// Match deploy PATH-prepend plus bare npm: require npm without requiring colocation (#8450, #9165).
 async function nodeToolchainMeetsRequirements(
   conn: SshConnection,
   nodePath: string,
@@ -194,14 +169,12 @@ async function nodeToolchainMeetsRequirements(
     const versionOutput = await execCommand(
       conn,
       buildPosixNodeToolchainProbe(nodePath),
-      // Why: the paired probe uses POSIX PATH assignment syntax, which fish
-      // and csh cannot parse when sshd delegates directly to the login shell.
+      // Wrap POSIX PATH assignment before fish/csh login shells parse it.
       { wrapCommand: true, signal: options?.signal }
     )
     return nodeToolchainVersionsMeetRequirements(versionOutput)
   } catch (err) {
     rethrowUnlessAnsweredMiss(err, options)
-    // Binary missing or fails to run — not usable.
     return false
   }
 }
@@ -246,9 +219,8 @@ async function resolveRemoteWindowsNodePath(
       }
     }
   } catch (err) {
-    // Why: the script exits 1 when it finds nothing, so only an unanswered probe is unknown.
+    // The Windows probe exits 1 on an answered miss; only unanswered execution stays unknown.
     rethrowUnlessAnsweredMiss(err, options)
-    // Fall through to the shared error below.
   }
 
   throwWindowsNodeNotFound(options)
@@ -302,8 +274,7 @@ function throwWindowsNodeNotFound(options?: RemoteNodeResolutionOptions): never 
 }
 
 export function throwIfAborted(options?: RemoteNodeResolutionOptions): void {
-  // Why: strategy fallbacks intentionally swallow probe failures, but a shared
-  // bootstrap abort must stay an AbortError so callers can continue fallback.
+  // Restore shared AbortError after permissive strategy catches so bootstrap can safely fall back.
   if (options?.signal?.aborted) {
     throw createSshOperationAbortError()
   }

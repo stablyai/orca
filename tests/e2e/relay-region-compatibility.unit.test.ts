@@ -9,8 +9,8 @@ import {
 } from '../../cloud/apps/relay/src/test-fixtures/relay-contract-baseline/control-messages'
 import { AssignmentRequestSchema } from '../../cloud/packages/relay-contract/src/director-messages'
 import { HostHelloSchema } from '../../cloud/packages/relay-contract/src/control-messages'
-import { requestRelayAssignment } from '../../src/main/runtime/relay/relay-http-client'
-import { RelayAssignRateGate } from '../../src/main/runtime/relay/relay-assign-rate-gate'
+import { requestRelayAssignment } from '../../src/main/runtime/mobile-cloud-relay/relay-http-client'
+import { RelayAssignRateGate } from '../../src/main/runtime/mobile-cloud-relay/relay-assign-rate-gate'
 
 const assignment = {
   v: 1,
@@ -41,7 +41,7 @@ function request(fetch: typeof globalThis.fetch) {
 describe('relay correction mixed-version wire contracts', () => {
   it('new desktop falls back against the actual pinned old director parser', async () => {
     const bodies: unknown[] = []
-    const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body: unknown = JSON.parse(String(init?.body))
       bodies.push(body)
       return BaselineRequest.safeParse(body).success

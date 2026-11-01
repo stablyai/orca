@@ -34,7 +34,7 @@ import { useCallback } from 'react'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import { getLinkedWorkItemProvider } from '@/lib/new-workspace'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
-import { runtimeTargetForOwnerHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   getSmartGitHubSubmitResolution,
@@ -105,7 +105,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
             (await resolveGitHubPrStartPointForRepo({
               repoId: selectedRepo.id,
               prNumber: startPointIdentity.number,
-              target: runtimeTargetForOwnerHostId(getRepoExecutionHostId(selectedRepo)),
+              target: ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(selectedRepo)),
               ...(startPointSelection.item.branchName
                 ? { headRefName: startPointSelection.item.branchName }
                 : {}),
@@ -199,7 +199,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
           ? await resolveGitHubPrStartPointForRepo({
               repoId: selectedRepo.id,
               prNumber: itemIdentity.number,
-              target: runtimeTargetForOwnerHostId(getRepoExecutionHostId(selectedRepo)),
+              target: ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(selectedRepo)),
               ...(item.branchName ? { headRefName: item.branchName } : {}),
               ...(item.baseRefName ? { baseRefName: item.baseRefName } : {}),
               ...(item.isCrossRepository !== undefined
@@ -226,7 +226,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
       if (smartSourceSelectionRef.current !== submitSelection) {
         return resolution
       }
-      // Why: Create can fire before the debounced smart field commits; commit the resolved item here so the form shows the title, not the raw URL.
+      // Create can beat debounced field commit; apply the resolved item now so the form shows its title.
       setLinkedIssue(
         resolution.linkedIssueNumber !== null ? String(resolution.linkedIssueNumber) : ''
       )

@@ -15,8 +15,7 @@ function optionValue(tokens: readonly string[], index: number): string | null {
   return tokens[index + 1] ?? null
 }
 
-// Why: `--print`/`-p` prints one response and exits, and `--output-format json|stream-json`
-// is only meaningful there — either means a headless run, not the interactive TUI Orca hosts.
+// Print/output-format flags identify one-shot headless runs rather than the hosted TUI.
 export function isPrintModeHeadlessOneShotCommand(tokens: readonly string[]): boolean {
   for (let index = 1; index < tokens.length; index += 1) {
     // Why: `--` ends option parsing, so a prompt that reads like `--print` is still a prompt.

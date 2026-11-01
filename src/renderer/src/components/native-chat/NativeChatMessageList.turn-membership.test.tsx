@@ -2,25 +2,46 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { cleanup, screen, fireEvent } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  }),
+  openSender: vi.fn(() => {
+    throw new Error('Unexpected sender navigation in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: unusedChatLeaves.openSender
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
+})
 
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../../shared/agent-session-journal-item-key'
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from '../../../../shared/agent-session-journal-types'
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
 
-import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 
-import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
+import { selectStructuredAgentSettledTurns } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 
 import { NativeChatMessageList } from './NativeChatMessageList'
 
@@ -28,9 +49,9 @@ import { installNativeChatMessageListTestViewport } from './native-chat-message-
 
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
-import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
+import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 {
   const THREAD: AgentJournalTurnScope = { kind: 'thread' }
@@ -72,7 +93,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
       completedAt: start + seconds * 1000
     })
 
-  /** "List three fruits", answered and settled in 4s. */
   function fruitTurn(): AgentJournalRenderItem[] {
     return [
       say('u1', 'user', 'List three fruits'),
@@ -95,9 +115,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
     return (
       <NativeChatMessageList
         session={{
-          messages: projectStructuredAgentSessionMessages(items, [], submissions, {
-            rejectedInPlace: true
-          }),
+          messages: projectStructuredAgentSessionMessages(items, [], submissions),
           status: 'ready',
           sessionId: 'session-1',
           agent: 'codex',
@@ -306,7 +324,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
         item('t1', { kind: 'turn', turnId: 't1', state, userItemId: 'u1' }),
         say('t1-answer', 'assistant', 'Apple, banana, cherry.', inTurn('t1'))
       ]
-      // No host durations: this client's own clock is all the rows have.
       const local = { hostTiming: false }
       const { rerender } = render(
         journalList(answer('running'), [], {
@@ -382,8 +399,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
     it.each(['settled', 'running'] as const)(
       "a queued card Steered into a %s turn joins it, under the opener's bar, with no bar of its own",
       (phase) => {
-        // Steer hands the draft over under a fresh submission id, linked by `queuedMessageId`; the
-        // host scopes its row to the turn it joined.
+        // Steer gets a new submission id linked by queuedMessageId; its row belongs to the joined turn.
         const steer = agentJournalSubmissionKey('handed-off')
         const running = phase === 'running'
         const items = [
@@ -465,7 +481,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
         )
       )
 
-      // Handed over within moments, where it already is: it must not cross the activity line to wait.
       const activity = container.querySelector<HTMLElement>('[data-native-chat-turn-activity]')
       expect(activity).not.toBeNull()
       expect(follows(activity!, screen.getByText('Make it four'))).toBe(true)
@@ -612,7 +627,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
     const TURN_RECORD = 'turn-record-1'
     const IN_TURN: AgentJournalTurnScope = { kind: 'turn', turnItemId: TURN_RECORD }
 
-    /** The newest rows of the turn: everything from its 300th row on. */
     const loaded: AgentJournalRenderItem[] = [300, 301, 302].map((sequence) => ({
       itemId: `row-${sequence}`,
       revision: 0,
@@ -627,7 +641,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
     }))
 
     const patch = '@@ -1 +1 @@\n-before\n+after'
-    /** An edit among the loaded rows; the turn's earlier edits are above them. */
     const edit: AgentJournalRenderItem = {
       itemId: 'row-303',
       revision: 0,
@@ -654,9 +667,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
       return (
         <NativeChatMessageList
           session={{
-            messages: projectStructuredAgentSessionMessages(items, [], [], {
-              rejectedInPlace: true
-            }),
+            messages: projectStructuredAgentSessionMessages(items, [], []),
             status: 'ready',
             sessionId: 'session-1',
             agent: 'codex',
@@ -745,7 +756,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
       }
     }
 
-    /** The journal that says the turn runs and what its newest content is. */
     function journal(rows: readonly NativeChatMessage[]): AgentJournalRenderItem[] {
       return [
         {
@@ -812,7 +822,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
       expect(screen.queryByText('Weighing two approaches')).toBeNull()
     })
 
-    // The run never opens for a thought; the thought keeps its own open state inside it.
     it('keeps a thought the reader opened live open inside its collapsed run', () => {
       const { rerender } = render(list([command, reasoning('running')]))
       fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
@@ -830,8 +839,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
       expect(screen.getByText('Weighing two approaches')).toBeInTheDocument()
     })
 
-    // While the live line is not showing it (a Stop in flight, a prompt the reader owes), the open
-    // thought sits in the run rather than flashing as its own row until the turn ends.
+    // While Stop or a prompt replaces the live line, keep the open thought inside its run.
     it.each([
       ['a Stop is in flight', { stopping: true }],
       ['a prompt waits on the reader', { awaitingInput: 'unshown' as const }]

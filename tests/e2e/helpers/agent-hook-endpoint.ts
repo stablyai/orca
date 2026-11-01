@@ -124,3 +124,24 @@ export async function emitGrokHookPayload(
     throw new Error(`Grok hook POST returned ${response.status}`)
   }
 }
+
+/** One raw Claude hook event for a pane, as the agent's hook script posts it. */
+export async function postClaudeHook(
+  endpoint: AgentHookEndpoint,
+  pane: { paneKey: string; worktreeId: string },
+  payload: Record<string, unknown>
+): Promise<void> {
+  const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/claude`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': endpoint.token },
+    body: JSON.stringify({
+      paneKey: pane.paneKey,
+      tabId: pane.paneKey.split(':')[0],
+      worktreeId: pane.worktreeId,
+      env: endpoint.env,
+      version: endpoint.version,
+      payload: { session_id: 'e2e-claude-session', ...payload }
+    })
+  })
+  expect(response.status).toBe(204)
+}

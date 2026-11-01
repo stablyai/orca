@@ -3,10 +3,14 @@ import type { WebDeviceKeyRecord, WebDeviceKeyStore } from './web-device-key-sto
 
 /**
  * - persistent: a non-extractable Ed25519 key survives reloads.
- * - session-insecure-origin: plain http on another machine; nothing secret is persisted.
+ * - token-insecure-origin: plain http on another machine (no WebCrypto keys there); the pairing
+ *   code stays in local storage and signs in, so reloads, new tabs and bookmarks keep working.
  * - session-no-ed25519: a secure page whose browser cannot make Ed25519 keys.
  */
-export type WebDeviceKeySupport = 'persistent' | 'session-insecure-origin' | 'session-no-ed25519'
+export type WebDeviceKeySupport = 'persistent' | 'token-insecure-origin' | 'session-no-ed25519'
+
+/** Supports that sign in with a device key rather than the stored pairing code. */
+export type KeyedWebDeviceKeySupport = Exclude<WebDeviceKeySupport, 'token-insecure-origin'>
 
 export type WebDeviceSigningKey = {
   publicKeyB64: string
@@ -21,7 +25,7 @@ export async function detectWebDeviceKeySupport(scope: {
   indexedDB?: IDBFactory
 }): Promise<WebDeviceKeySupport> {
   if (!scope.isSecureContext) {
-    return 'session-insecure-origin'
+    return 'token-insecure-origin'
   }
   const subtle = scope.crypto?.subtle
   if (!subtle || !scope.indexedDB) {

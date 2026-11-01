@@ -2,14 +2,14 @@
 
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/structured-agent-session-start-failure-row-key'
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
@@ -78,7 +78,6 @@ afterEach(() => {
     })
   })
 
-  // The host's cancel names its turn, so with none running nothing is sent.
   it('sends nothing for the card when no turn is running', () => {
     mocks.promptItems = [NEWER_APPROVAL]
     render(
@@ -127,7 +126,6 @@ afterEach(() => {
     )
   }
 
-  // Nothing here answers it, so a send is the way on: it starts a turn, whose card cancel works.
   it('keeps the composer open and writable beside a card this build cannot answer', () => {
     mocks.promptItems = [NEWER_APPROVAL]
     renderSession()
@@ -197,7 +195,10 @@ afterEach(() => {
   }
 
   // The notices are the host's rows'; a copy an earlier session left in the outbox gives way to them.
-  function renderPane(messages: ReturnType<typeof rejected>[]): void {
+  function renderPane(
+    messages: ReturnType<typeof rejected>[],
+    agent: 'claude' | 'codex' = 'claude'
+  ): void {
     mocks.submissions = messages.map((message) => message.submission)
     localStorage.setItem(
       `orca:desktopStructuredAgentSessionOutbox:v1:${encodeURIComponent(SESSION_ID)}`,
@@ -210,7 +211,7 @@ afterEach(() => {
         tabId="start-failure-tab"
         sessionId={SESSION_ID}
         target={{ kind: 'local' }}
-        agent="claude"
+        agent={agent}
       />
     )
   }
@@ -227,8 +228,17 @@ afterEach(() => {
     })
   }
 
-  // The start's own row says why, so its rejected messages say only that they were not sent. Sending
-  // one again is a new message, so none offers a Retry.
+  it('renders the terminal refusal once beside the rejected message', async () => {
+    const fact: AgentSessionFailureFact = { kind: 'conversationOpenInTerminal' }
+    renderPane([rejected('terminal-held', 'Host fallback words.', fact)])
+    const row = await notice('terminal-held')
+    expect(row.textContent).toContain(
+      'Claude is already running this conversation in another terminal. Quit Claude there or close that terminal to continue here.'
+    )
+    expect(within(row).queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  // The start row owns the failure reason; resending a rejected message creates a new message.
   it("says only 'not sent', with no Retry, on each message the failed start's row explains", async () => {
     mocks.journalItems = [startFailureRow(START_FAILED)]
 
@@ -254,18 +264,12 @@ afterEach(() => {
 
     renderPane([
       rejected('stated', START_FAILED_REASON, START_FAILED),
-      rejected(
-        'other',
-        'The provider did not accept this message: Image type .bmp.',
-        providerRejected
-      )
+      rejected('other', "Claude didn't accept this message: Image type .bmp.", providerRejected)
     ])
 
     expect(within(await notice('stated')).getByText('Your message was not sent.')).toBeTruthy()
     expect(
-      within(await notice('other')).getByText(
-        'The provider did not accept this message: Image type .bmp.'
-      )
+      within(await notice('other')).getByText("Claude didn't accept this message: Image type .bmp.")
     ).toBeTruthy()
   })
 
@@ -274,4 +278,37 @@ afterEach(() => {
 
     expect(within(await notice('first')).getByText(START_FAILED_REASON)).toBeTruthy()
   })
+
+  it.each([null, '0.100.0', '0.135.0'])(
+    'states a missing or too-old Codex (installed version %s) in the existing failure notice',
+    async (installedVersion) => {
+      const failure: AgentSessionFailureFact = {
+        kind: installedVersion === null ? 'cliMissing' : 'startFailed',
+        ...(installedVersion === null
+          ? {}
+          : {
+              refusal: {
+                code: 'agent_session_operation_invalid',
+                details: {
+                  reason: 'attachFailed',
+                  codexInstallation: { installedVersion, minimumVersion: '0.136.0' }
+                }
+              }
+            })
+      }
+      const { text } = agentSessionFailureWords(failure, { agentName: 'Codex', surface: 'row' })
+      renderPane([rejected('codex-message', text, failure)], 'codex')
+      const row = await notice('codex-message')
+      expect(within(row).getByText(text)).toBeTruthy()
+      expect(text).toContain(
+        installedVersion === null
+          ? "Codex wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents."
+          : `Codex ${installedVersion} is too old for chats. Update to 0.136.0 or newer.`
+      )
+      if (installedVersion !== null) {
+        expect(text).not.toContain('Settings → Agents')
+      }
+      expect(text).not.toContain('codex update')
+    }
+  )
 }

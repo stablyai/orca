@@ -20,38 +20,44 @@ const sleepMocks = vi.hoisted(() => ({
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'comment']
 let settings: Partial<GlobalSettings> | null = null
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      browserTabsByWorktree: {},
-      createBrowserTab: vi.fn(),
-      deleteFolderWorkspace: vi.fn(),
-      deleteStateByWorktreeId: {},
-      fetchHostedReviewForBranch: vi.fn(),
-      fetchIssue: vi.fn(),
-      fetchLinearIssue: vi.fn(),
-      gitConflictOperationByWorktree: {},
-      hostedReviewCache: {},
-      issueCache: {},
-      linearIssueCache: {},
-      openModal,
-      openTaskPage: vi.fn(),
-      projectGroups: [],
-      ptyIdsByTabId: {},
-      remoteBranchConflictByWorktreeId: {},
-      renamingWorktreeId: null,
-      setActiveWorktree: vi.fn(),
-      setRemoteBrowserPageHandle: vi.fn(),
-      setRenamingWorktreeId,
-      settings,
-      sshConnectionStates: new Map(),
-      sshTargetLabels: new Map(),
-      tabsByWorktree: {},
-      updateWorktreeMeta,
-      workspacePortScan: null,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    browserTabsByWorktree: {},
+    createBrowserTab: vi.fn(),
+    deleteFolderWorkspace: vi.fn(),
+    deleteStateByWorktreeId: {},
+    fetchHostedReviewForBranch: vi.fn(),
+    fetchIssue: vi.fn(),
+    fetchLinearIssue: vi.fn(),
+    gitConflictOperationByWorktree: {},
+    hostedReviewCache: {},
+    issueCache: {},
+    linearIssueCache: {},
+    openModal,
+    openTaskPage: vi.fn(),
+    projectGroups: [],
+    ptyIdsByTabId: {},
+    remoteBranchConflictByWorktreeId: {},
+    renamingWorktreeId: null,
+    setActiveWorktree: vi.fn(),
+    setRemoteBrowserPageHandle: vi.fn(),
+    setRenamingWorktreeId,
+    settings,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
+    updateWorktreeMeta,
+    workspacePortScan: null,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState,
+      subscribe: () => () => {}
     })
-}))
+  }
+})
 
 vi.mock('@/components/ui/hover-card', () => ({
   HoverCard: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -68,8 +74,6 @@ vi.mock('@/components/ui/tooltip', () => ({
 vi.mock('@/lib/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: testDoubles.activateWorktreeFromSidebar
 }))
-
-vi.mock('@/runtime/runtime-rpc-client', () => ({}))
 
 vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'idle'
@@ -254,8 +258,7 @@ describe('WorktreeCard affiliate list mode', () => {
     expect(container.querySelector('[data-worktree-sleeping-dim=""]')).not.toBeNull()
     const dim = container.querySelector('[data-worktree-sleeping-dim=""]')
     expect(dim).not.toBeNull()
-    // Why pinned: the dim is a theme-token mix in main.css, not an opacity or filter
-    // over the painted backdrop — those faded out on lighter surfaces and custom tints.
+    // Theme-token mixing must keep sleeping dim visible on light surfaces/custom tints without fading the whole backdrop.
     expect(dim?.getAttribute('class') ?? '').not.toContain('opacity-')
     expect(dim?.getAttribute('class') ?? '').not.toContain('backdrop-')
   })
@@ -315,8 +318,6 @@ describe('WorktreeCard affiliate list mode', () => {
       )
     })
 
-    // Why both: the dim marks the row as sleeping while the unread badge still
-    // renders, so an unread sleeping row stays noticeable.
     expect(container.querySelector('[data-worktree-sleeping-dim=""]')).not.toBeNull()
     expect(container.querySelector('[data-worktree-unread-alert=""]')).not.toBeNull()
   })

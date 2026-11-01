@@ -8,9 +8,7 @@ import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace
 
 type RequiredKey<T> = { [K in keyof T]-?: undefined extends T[K] ? never : K }[keyof T]
 
-// Why: a present-but-undefined key in a spread ERASES the field. That is the
-// intended wire signal for clearing optional metadata, but this protects required
-// Worktree fields from disappearing in optimistic projections.
+// Spread keys with undefined intentionally erase optional metadata; protect required Worktree fields from optimistic erasure.
 const ERASURE_PROTECTED_KEYS: Record<Extract<RequiredKey<Worktree>, keyof WorktreeMeta>, true> = {
   displayName: true,
   comment: true,

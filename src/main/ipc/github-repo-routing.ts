@@ -15,6 +15,7 @@ import {
   getLocalProjectGhExecOptions,
   type LocalProjectGhExecOptions
 } from '../project-runtime-git-options'
+import { guardWslUncPathAccess, WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
 
 export type GitHubRepoScopedArgs = {
   repoPath: string
@@ -26,54 +27,111 @@ type RegisteredRepoValidationResult =
   | { kind: 'ok'; repo: Repo }
   | { kind: 'denied'; reason: PRRefreshValidationDenialReason; message: string }
 
+type RegisteredRepoQuery = {
+  repoPath: string
+  repoId?: string | null
+  /** Picks between twins (one id on two hosts); a lone row's own fields still win (they may be stale). */
+  hostHint?: Parameters<typeof getRepoExecutionHostId>[0] | null
+  sourceContext?: TaskSourceContext | null
+}
+
 function validateRegisteredRepo(
-  args: string | GitHubRepoScopedArgs,
-  store: Store,
-  repos = store.getRepos()
+  query: RegisteredRepoQuery,
+  repos: readonly Repo[]
 ): RegisteredRepoValidationResult {
-  const repoPath = typeof args === 'string' ? args : args.repoPath
-  const repoId = typeof args === 'string' ? undefined : args.repoId
-  const resolvedRepoPath = resolve(repoPath)
-  const repo = repos.find((candidate) =>
-    repoId ? candidate.id === repoId : resolve(candidate.path) === resolvedRepoPath
-  )
-  if (!repo) {
+  const { repoId, sourceContext } = query
+  const resolvedRepoPath = resolve(query.repoPath)
+  const idRows = repoId ? repos.filter((candidate) => candidate.id === repoId) : []
+  if (repoId && idRows.length === 0) {
     return {
       kind: 'denied',
       reason: 'unknown-repo',
       message: 'Access denied: unknown repository path'
     }
   }
-  if (repoId && resolve(repo.path) !== resolvedRepoPath) {
-    return {
-      kind: 'denied',
-      reason: 'repo-path-mismatch',
-      message: 'Access denied: repository path does not match repo id'
-    }
+  // Same-ID twins can live on different hosts; match path as well as ID.
+  const pathRows = (repoId ? idRows : repos).filter(
+    (candidate) => resolve(candidate.path) === resolvedRepoPath
+  )
+  if (pathRows.length === 0) {
+    return repoId
+      ? {
+          kind: 'denied',
+          reason: 'repo-path-mismatch',
+          message: 'Access denied: repository path does not match repo id'
+        }
+      : {
+          kind: 'denied',
+          reason: 'unknown-repo',
+          message: 'Access denied: unknown repository path'
+        }
   }
-  if (
-    typeof args !== 'string' &&
-    args.sourceContext?.provider === 'github' &&
-    args.sourceContext.hostId !== getRepoExecutionHostId(repo)
-  ) {
-    return {
-      kind: 'denied',
-      reason: 'host-mismatch',
-      message: 'Access denied: GitHub source host does not match repository host'
-    }
+  if (sourceContext?.provider === 'github') {
+    const repo = pathRows.find(
+      (candidate) => getRepoExecutionHostId(candidate) === sourceContext.hostId
+    )
+    return repo
+      ? { kind: 'ok', repo }
+      : {
+          kind: 'denied',
+          reason: 'host-mismatch',
+          message: 'Access denied: GitHub source host does not match repository host'
+        }
   }
+  const hintHostId = query.hostHint ? getRepoExecutionHostId(query.hostHint) : null
+  const repo =
+    (hintHostId
+      ? pathRows.find((candidate) => getRepoExecutionHostId(candidate) === hintHostId)
+      : undefined) ?? pathRows[0]
   return { kind: 'ok', repo }
+}
+
+function registeredRepoQuery(args: string | GitHubRepoScopedArgs): RegisteredRepoQuery {
+  return typeof args === 'string'
+    ? { repoPath: args }
+    : { repoPath: args.repoPath, repoId: args.repoId, sourceContext: args.sourceContext }
+}
+
+function prRefreshCandidateQuery(candidate: GitHubPRRefreshCandidate): RegisteredRepoQuery {
+  return {
+    repoPath: candidate.repoPath,
+    repoId: candidate.repoId,
+    hostHint: { connectionId: candidate.connectionId, executionHostId: candidate.executionHostId }
+  }
+}
+
+function assertRegisteredRepo(query: RegisteredRepoQuery, store: Store): Repo {
+  const result = validateRegisteredRepo(query, store.getRepos())
+  if (result.kind === 'denied') {
+    throw new Error(result.message)
+  }
+  return result.repo
 }
 
 export function assertRegisteredGitHubRepo(
   args: string | GitHubRepoScopedArgs,
   store: Store
 ): Repo {
-  const result = validateRegisteredRepo(args, store)
-  if (result.kind === 'denied') {
-    throw new Error(result.message)
-  }
-  return result.repo
+  return assertRegisteredRepo(registeredRepoQuery(args), store)
+}
+
+export function assertRegisteredPRRefreshCandidateRepo(
+  candidate: GitHubPRRefreshCandidate,
+  store: Store
+): Repo {
+  return assertRegisteredRepo(prRefreshCandidateQuery(candidate), store)
+}
+
+/** Match the queue identity: registered path plus execution host. */
+export function isPRRefreshCandidateRegistered(
+  candidate: GitHubPRRefreshCandidate,
+  repos: readonly Repo[]
+): boolean {
+  const repoPath = resolve(candidate.repoPath)
+  const hostId = getRepoExecutionHostId(candidate)
+  return repos.some(
+    (repo) => resolve(repo.path) === repoPath && getRepoExecutionHostId(repo) === hostId
+  )
 }
 
 export function getGitHubRepoConnectionId(repo: Repo): string | null {
@@ -86,6 +144,30 @@ export function getGitHubLocalGitOptionArgs(
 ): [] | [LocalProjectGhExecOptions] {
   const localGitOptions = getLocalProjectGhExecOptions(store, repo)
   return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
+}
+
+/**
+ * gh (and its git remote probe) for a WSL repo runs in that distro, which boots it when stopped.
+ * A poll refuses instead (E9); `wake` marks a user act, e.g. Refresh, that may start it.
+ * `retryStartsIt: false` words the refusal for surfaces whose Retry is itself a background read.
+ */
+export async function readGitHubRepoUnlessWslStopped<T>(
+  store: Store,
+  repo: Repo,
+  read: () => Promise<T>,
+  options: { wake?: boolean; retryStartsIt?: boolean } = {}
+): Promise<T> {
+  try {
+    return await guardWslUncPathAccess(repo.path, read, {
+      wake: options.wake,
+      wslDistro: getLocalProjectGhExecOptions(store, repo).wslDistro
+    })
+  } catch (error) {
+    if (options.retryStartsIt === false && error instanceof WslDistroStoppedError) {
+      throw new WslDistroStoppedError(error.distro, { retryStartsIt: false })
+    }
+    throw error
+  }
 }
 
 export function applyRegisteredRepoToPRRefreshCandidate(
@@ -117,7 +199,7 @@ export function validateAutomaticPRRefreshCandidate(
 ):
   | { kind: 'ok'; candidate: GitHubPRRefreshCandidate }
   | { kind: 'skipped'; result: Extract<GitHubPRRefreshEnqueueResult, { kind: 'skipped' }> } {
-  const result = validateRegisteredRepo(candidate, store, repos)
+  const result = validateRegisteredRepo(prRefreshCandidateQuery(candidate), repos)
   if (result.kind === 'denied') {
     const skippedReason = notePRRefreshValidationDenial({
       repoId: candidate.repoId,

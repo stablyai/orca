@@ -1,15 +1,25 @@
 import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
 import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-methods'
 
-// Why: a relaying Mac sends `execution-host` calls to the host named by the call's target (itself when
-// local) and keeps `paired-desktop` calls. A route is what allowlists a phone method.
+// Execution-host routes follow the configured target; paired-desktop routes stay with the relaying Mac. This table also defines mobile allowlisting.
 export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop'
 
 export const EXECUTION_HOST_METHODS = [
+  'ui.getJiraQuickFilters',
+  'ui.setJiraQuickFilters',
+  'ui.getJiraSavedFilters',
+  'ui.mutateJiraSavedFilters',
   'agent.launch',
   'agent.launchReplay',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
+  'automation.list',
+  'automation.show',
+  'automation.create',
+  'automation.update',
+  'automation.delete',
+  'automation.runNow',
+  'automation.runs',
   'browser.back',
   'browser.dialogAccept',
   'browser.dialogDismiss',
@@ -39,6 +49,7 @@ export const EXECUTION_HOST_METHODS = [
   'files.open',
   'files.openDiff',
   'files.read',
+  'files.readChatImage',
   'files.readChunk',
   'files.readDir',
   'files.readDocPreview',
@@ -62,6 +73,7 @@ export const EXECUTION_HOST_METHODS = [
   'git.commit',
   'git.commitCompare',
   'git.commitDiff',
+  'git.completeMerge',
   'git.diff',
   'git.discard',
   'git.discoverCommitMessageModels',
@@ -75,6 +87,8 @@ export const EXECUTION_HOST_METHODS = [
   'git.pull',
   'git.push',
   'git.rebaseFromBase',
+  'git.remoteCommitUrl',
+  'git.resolveConflict',
   'git.stage',
   'git.status',
   'git.unstage',
@@ -88,6 +102,7 @@ export const EXECUTION_HOST_METHODS = [
   'github.listAssignableUsers',
   'github.listLabels',
   'github.listWorkItems',
+  'github.markPRReadyForReview',
   'github.mergePR',
   'github.prCheckDetails',
   'github.prChecks',
@@ -130,6 +145,7 @@ export const EXECUTION_HOST_METHODS = [
   'preflight.check',
   'preflight.detectAgents',
   'preflight.detectRemoteAgents',
+  'preflight.refreshAgents',
   'hostedReview.create',
   'hostedReview.createStacked',
   'hostedReview.forBranch',
@@ -140,9 +156,16 @@ export const EXECUTION_HOST_METHODS = [
   'nativeChat.readSession',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',
-  // Why: the phone reports a takeover out of band, the same signal the desktop renderer sends.
+  // Sender cards resolve on the host that owns the orchestration records.
+  'orchestration.partyLocation',
+  // The worker's own host keeps it open and owns its countdown; older phones still report typing and viewing.
   'orchestration.workerTerminalUserInput',
+  'orchestration.workerChatTouch',
+  'orchestration.workerAutoClose',
+  'orchestration.workerKeepOpen',
   'projectGroup.list',
+  'project.list',
+  'projectHostSetup.list',
   'repo.baseRefDefault',
   'repo.gitAvailable',
   'repo.hooks',
@@ -151,6 +174,18 @@ export const EXECUTION_HOST_METHODS = [
   'repo.searchRefs',
   'repo.sparsePresets',
   'repo.update',
+  'settings.getAgentLaunch',
+  // The host that owns the workspace scans its skills.
+  'skills.discover',
+  // SSH targets belong to the host that holds them; untargeted calls stay the Mac's own, as on the desktop.
+  'ssh.connect',
+  'ssh.getState',
+  'ssh.listRemovedTargetLabels',
+  'ssh.listTargetSummaries',
+  'ssh.listTargets',
+  // A targeted status is the server's own, so a server workspace gates on what that server supports.
+  'status.get',
+  'session.readTerminalScrollback',
   'session.tabs.activate',
   'session.tabs.close',
   'session.tabs.closeLifecycle',
@@ -187,6 +222,7 @@ export const EXECUTION_HOST_METHODS = [
   'worktree.activate',
   'worktree.create',
   'worktree.forceDeleteBranch',
+  'worktree.list',
   'worktree.listRetiredNames',
   'worktree.prefetchCreateBase',
   'worktree.ps',

@@ -4,7 +4,7 @@ import { matchesSettingsSearch } from './settings-search'
 import { GitHubRateLimitPanel } from '../github/github-rate-limit-display'
 import { GitLabRateLimitPanel } from '../gitlab/gitlab-rate-limit-display'
 import { translate } from '@/i18n/i18n'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 type GitProviderApiBudgetPaneProps = {
   settingsSearchQuery?: string
@@ -79,7 +79,6 @@ export function GitProviderApiBudgetPane({
     return null
   }
 
-  // Why: provider budgets are diagnostic, so they render after core git and AI
-  // settings instead of competing with everyday branch and attribution controls.
+  // Put diagnostic budgets after everyday Git/AI controls.
   return <div className="space-y-4 border-t border-border/40 pt-4">{visibleSections}</div>
 }

@@ -12,7 +12,7 @@ import {
 } from './combined-diff-entries'
 import { getRetainedResolvedSnapshotEntries } from './combined-diff-git-status-signature'
 
-// Why: stable identities so the store selectors don't resubscribe on every empty read.
+// Stable empty arrays prevent selector invalidation on unchanged reads.
 export const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 export const EMPTY_GIT_BRANCH_ENTRIES: GitBranchChangeEntry[] = []
 
@@ -53,7 +53,7 @@ export function useCombinedDiffEntrySet({
       : null
   const commitCompare = file.commitCompare?.commitOid ? file.commitCompare : null
 
-  // Why: prefer the tab-open snapshot so a commit changing gitStatusByWorktree doesn't rebuild sections and lose loaded content.
+  // Tab-open snapshots prevent commits from rebuilding sections and discarding loaded content.
   const snapshotEntries = React.useMemo(
     () => file.uncommittedEntriesSnapshot?.filter((e) => e.conflictStatus !== 'unresolved'),
     [file.uncommittedEntriesSnapshot]
@@ -62,7 +62,7 @@ export function useCombinedDiffEntrySet({
     if (!snapshotEntries) {
       return getCombinedUncommittedEntries(gitStatusEntries, file.combinedAreaFilter)
     }
-    // Why: row load-state changes must not rebuild the snapshot list; the ref is consulted only when live Git status changes.
+    // Consult current load state only when Git status changes; row loads must not rebuild the snapshot list.
     return resolveCombinedUncommittedSnapshotEntries(
       snapshotEntries,
       gitStatusEntries,

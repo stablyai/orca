@@ -1,5 +1,4 @@
-// No transport import on purpose: the diagnostics analysis shares this mapping
-// and must keep resolving it without React Native.
+// Keep this mapping independent of React Native so diagnostics can import it.
 import { describe, expect, it } from 'vitest'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
 import {
@@ -8,7 +7,6 @@ import {
 } from './relay-host-reachability'
 
 describe('relayHostReachabilityForCloseCode', () => {
-  // The closed mapping: every code the cell can send, plus the transport close.
   it.each<[number, RelayHostReachabilityFromCloseCode]>([
     [MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE, 'host-offline'],
     [MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'credential-refused'],

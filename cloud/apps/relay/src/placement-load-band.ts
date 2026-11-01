@@ -1,7 +1,4 @@
-// Spreads placement over cells near the minimum load, so a freshly rolled
-// (empty) cell does not take a whole drain and serialize every follow-up on
-// its one relay_cells row. It only orders candidates: a candidate is never
-// refused, and the pool's least-loaded cell is the fallback.
+// Spread near-minimum placements so one empty rolled cell cannot serialize an entire drain’s follow-ups; reorder only, keeping least-loaded fallback and never refusing candidates.
 
 // Cells within this share of capacity of the least-loaded one are equals.
 export const PLACEMENT_LOAD_BAND = 0.05

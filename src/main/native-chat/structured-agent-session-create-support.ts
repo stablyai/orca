@@ -1,5 +1,5 @@
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 export type StructuredAgentSessionCreateSupport = {
@@ -7,7 +7,6 @@ export type StructuredAgentSessionCreateSupport = {
   reason?: 'agent' | 'remote' | 'wsl'
 }
 
-/** The create-support verdict: the adapter's location answer, with the reason a refusal names. */
 export function resolveStructuredAgentSessionCreateSupport(input: {
   location: AgentSessionExecutionLocation
   adapterSupportsCreate: boolean
@@ -26,12 +25,9 @@ export function resolveStructuredAgentSessionCreateSupport(input: {
   return { supported: true }
 }
 
-/** Which create-support check said no: where the chat would run, or the installed agent (its
- *  binary and version on this host). */
 export type StructuredAgentSessionCreateSupportCheck = 'location' | 'installed-agent'
 
-/** One main-log line per create-support verdict that sends a launch to the terminal; names the
- *  check and never a path or environment value. */
+/** Log the failing check once per terminal fallback; omit paths and environment values. */
 export function warnStructuredAgentSessionCreateUnsupported(
   agent: StructuredAgentId,
   support: StructuredAgentSessionCreateSupport,

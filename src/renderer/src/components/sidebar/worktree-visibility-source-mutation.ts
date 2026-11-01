@@ -17,7 +17,6 @@ export type WorktreeVisibilitySourceMutation = {
   isAccepted: (latestRepo: Repo) => boolean
 }
 
-/** Pins this project's own visibility for a source, overriding whatever Global Settings holds. */
 export function createWorktreeVisibilitySourceMutation(
   repo: Repo,
   source: WorktreeVisibilitySourceRow,

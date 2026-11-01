@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/constants'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
@@ -14,16 +13,12 @@ type ThresholdPromptInput = {
 
 export function ensureStarNagBaseline(store: Store, stats: StatsCollector): void {
   const ui = store.getUI()
-  const currentVersion = app.getVersion()
-  if (ui.starNagAppVersion === currentVersion && ui.starNagBaselineAgents != null) {
+  if (ui.starNagBaselineAgents != null) {
     return
   }
-  // Why: after an update, completed users stay suppressed but everyone else
-  // gets a fresh countdown from the current agent total.
   store.updateUI({
-    starNagAppVersion: currentVersion,
     starNagBaselineAgents: stats.getTotalAgentsSpawned(),
-    starNagNextThreshold: STAR_NAG_INITIAL_THRESHOLD
+    starNagNextThreshold: ui.starNagNextThreshold ?? STAR_NAG_INITIAL_THRESHOLD
   })
 }
 
@@ -35,7 +30,7 @@ export function shouldShowStarNagThresholdPrompt(input: ThresholdPromptInput): b
   if (ui.starNagCompleted || input.isCooldownActive(ui.starNagDeferredUntil)) {
     return false
   }
-  if (ui.starNagAppVersion !== app.getVersion()) {
+  if (ui.starNagBaselineAgents == null) {
     ensureStarNagBaseline(input.store, input.stats)
     return false
   }

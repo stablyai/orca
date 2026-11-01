@@ -50,14 +50,23 @@ function launchReply(promptOutcome: 'handed-to-terminal' | 'not-delivered'): Rpc
   }
 }
 
-/** Launch replies answered by hand; the notes reader never answers, so the seeded notes stand. */
+/** Launch replies answered by hand; the notes read answers with the seeded note. */
 function launchClient() {
   const replies: ((reply: RpcResponse) => void)[] = []
   const sendRequest = vi.fn(
-    (method: string) =>
+    (method: string, _params?: unknown) =>
       new Promise<RpcResponse>((resolve) => {
         if (method === 'agent.launchReplay') {
           replies.push(resolve)
+        } else if (method === 'worktree.show') {
+          resolve({
+            id: 'notes',
+            ok: true,
+            result: { worktree: { diffComments: [NOTE] } },
+            _meta: { runtimeId: 'r' }
+          })
+        } else if (method === 'worktree.set') {
+          resolve({ id: 'save', ok: true, result: {}, _meta: { runtimeId: 'r' } })
         }
       })
   )
@@ -74,7 +83,7 @@ function launchClient() {
   }
   const launches = () =>
     sendRequest.mock.calls.filter(([method]) => method === 'agent.launchReplay')
-  return { client, replies, launches }
+  return { client, replies, launches, sendRequest }
 }
 
 type Screen = {
@@ -176,13 +185,12 @@ async function mountSessionScreen(client: RpcClient): Promise<void> {
   })
 }
 
-/** "Send review notes to AI", then the sheet's first new agent session. */
 async function sendNotesToNewAgent(): Promise<void> {
   await act(async () => screen().send())
   await act(async () => screen().sendActions[0]?.onPress())
 }
 
-/** The launched tab landed, which frees the "+" lock long before a prompted reply. */
+// A listed tab releases the create lock before prompt delivery settles.
 function landLaunchedTab(): void {
   const { creatingTerminalRef } = screen()
   const lock = creatingTerminalRef.current
@@ -194,7 +202,7 @@ function landLaunchedTab(): void {
 
 describe('sending review notes to a new agent session', () => {
   it('starts one agent while the first send of the same notes is still waiting on its reply', async () => {
-    const { client, replies, launches } = launchClient()
+    const { client, replies, launches, sendRequest } = launchClient()
     await mountSessionScreen(client)
     await act(async () => screen().send())
     const [sheetAction] = screen().sendActions
@@ -202,7 +210,6 @@ describe('sending review notes to a new agent session', () => {
     expect(launches()).toHaveLength(1)
     landLaunchedTab()
 
-    // The notes are no longer offered, and a stale tap on the old sheet starts nothing.
     await act(async () => screen().send())
     expect(screen().pendingDelivery).toBeNull()
     await act(async () => sheetAction?.onPress())
@@ -210,9 +217,15 @@ describe('sending review notes to a new agent session', () => {
     expect(launches()).toHaveLength(1)
     expect(screen().sendingIds).toEqual(new Set([NOTE.id]))
 
-    // Delivered: the notes leave the list rather than becoming sendable again.
     await act(async () => replies[0]?.(launchReply('handed-to-terminal')))
     expect(screen().sendingIds.size).toBe(0)
+    expect(sendRequest.mock.calls.filter(([method]) => method === 'worktree.set')).toEqual([
+      [
+        'worktree.set',
+        { worktree: 'id:workspace-1', diffComments: [], diffCommentsBase: [NOTE] },
+        {}
+      ]
+    ])
     await act(async () => screen().send())
     expect(screen().pendingDelivery).toBeNull()
   })

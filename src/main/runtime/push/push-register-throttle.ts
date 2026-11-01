@@ -1,8 +1,4 @@
-// Why: notifications.registerPush costs a gateway write and a synchronous
-// registry write on the main thread, and a paired phone may call it as often
-// as it likes. A phone legitimately registers on switch-on, on each host
-// connect, and on a token change, so a small per-device bucket bounds a loop
-// without getting in the way of any of those.
+// A per-device bucket bounds gateway/registry writes while allowing normal connect, enable and token-change registrations.
 const DEFAULT_CAPACITY = 10
 const DEFAULT_WINDOW_MS = 60_000
 

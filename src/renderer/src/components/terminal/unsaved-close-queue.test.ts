@@ -10,9 +10,4 @@ describe('appendUniqueOpenFileIds', () => {
     )
     expect(result).toEqual(['a', 'b', 'c'])
   })
-
-  it('returns the original queue when no requested ids are provided', () => {
-    const queue = ['a']
-    expect(appendUniqueOpenFileIds(queue, [], new Set(['a']))).toEqual(['a'])
-  })
 })

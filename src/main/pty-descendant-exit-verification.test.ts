@@ -53,7 +53,6 @@ describe('descendant exit verification across partial process-table reads', () =
   })
 
   it('proves a target gone that only the snapshot saw, once two later reads miss it', async () => {
-    // A root that exits on its own takes a short-lived child with it before the first poll.
     const snapshot = collectDescendantRows(10, [row(10, 1), row(20)], CAPTURED_AT)
     const sendSignal = vi.fn()
     const pending = terminateDescendantSnapshotWithVerdict(snapshot, {
@@ -67,7 +66,6 @@ describe('descendant exit verification across partial process-table reads', () =
     void pending.then((value) => {
       verdict = value
     })
-    // Proven within a few polls, not by waiting out the verification window.
     await vi.advanceTimersByTimeAsync(200)
 
     expect(verdict).toBe('exited')
@@ -79,7 +77,7 @@ describe('descendant exit verification across partial process-table reads', () =
     const unseen = row(30)
     const snapshot = collectDescendantRows(10, [row(10, 1), unseen], CAPTURED_AT)
     const sendSignal = vi.fn()
-    // A shared read already in flight when the snapshot ran cannot list a descendant forked since.
+    // An older in-flight read cannot disprove a descendant observed by the later snapshot.
     const staleRead = { rows: [], capturedAtMs: CAPTURED_AT - 1 }
     const pending = terminateDescendantSnapshotWithVerdict(snapshot, {
       readTable: vi.fn().mockResolvedValue(staleRead),
@@ -101,7 +99,7 @@ describe('descendant exit verification across partial process-table reads', () =
       .fn()
       .mockResolvedValueOnce({ rows: [target], capturedAtMs: CAPTURED_AT + 300 })
       .mockResolvedValueOnce({ rows: [target], capturedAtMs: CAPTURED_AT + 100 })
-      // Began between the two sightings, so it cannot prove the later one gone.
+      // This read predates the latest sighting and cannot prove absence.
       .mockResolvedValue({ rows: [], capturedAtMs: CAPTURED_AT + 200 })
     const pending = terminateDescendantSnapshotWithVerdict(snapshot, {
       readTable,
@@ -118,7 +116,6 @@ describe('descendant exit verification across partial process-table reads', () =
   it('counts the read after the deadline as an absence', async () => {
     const snapshot = collectDescendantRows(10, [row(10, 1), row(20)], CAPTURED_AT)
     const readTable = vi.fn().mockImplementation(async () => capture([]))
-    // One poll fits in the window; the final read supplies the second absence.
     const pending = terminateDescendantSnapshotWithVerdict(snapshot, {
       readTable,
       sendSignal: vi.fn(),

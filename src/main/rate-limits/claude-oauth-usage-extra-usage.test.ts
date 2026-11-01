@@ -1,19 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setMainHttpClient } from '../network/http-client'
 import { fetchClaudeOAuthUsage } from './claude-oauth-usage-request'
+import { classifyClaudeOAuthUsageError } from './claude-usage-error-classification'
 
-const { netFetchMock } = vi.hoisted(() => ({ netFetchMock: vi.fn() }))
-
-vi.mock('electron', () => ({
-  net: { fetch: netFetchMock },
-  session: { defaultSession: {} }
-}))
+const fetchMock = vi.fn()
 
 vi.mock('../network/proxy-settings', () => ({
   ensureElectronProxyFromEnvironment: vi.fn(async () => {})
 }))
 
+setMainHttpClient({ fetch: fetchMock, proxySession: () => null })
+
 async function fetchUsageResponse(body: string) {
-  netFetchMock.mockResolvedValueOnce(new Response(body, { status: 200 }))
+  fetchMock.mockResolvedValueOnce(new Response(body, { status: 200 }))
   return fetchClaudeOAuthUsage('oauth-token')
 }
 
@@ -23,7 +22,7 @@ describe('Claude OAuth usage extra usage', () => {
   })
 
   it('maps the usage-credits spend object into a capped balance in major units', async () => {
-    netFetchMock.mockResolvedValueOnce(
+    fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           five_hour: { utilization: 10 },
@@ -56,7 +55,7 @@ describe('Claude OAuth usage extra usage', () => {
   })
 
   it('keeps the usage-credits cap visible without inventing an out-of-credits balance', async () => {
-    netFetchMock.mockResolvedValueOnce(
+    fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           five_hour: { utilization: 10 },
@@ -89,7 +88,7 @@ describe('Claude OAuth usage extra usage', () => {
   })
 
   it('keeps legacy extra_usage spend data without inventing a missing balance', async () => {
-    netFetchMock.mockResolvedValueOnce(
+    fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           five_hour: { utilization: 10 },
@@ -217,4 +216,87 @@ describe('Claude OAuth usage extra usage', () => {
       expect(result.extraUsage ?? null).toBeNull()
     }
   )
+
+  it('shows the spend cap as the monthly window when the plan has no 5h or 7d window', async () => {
+    const result = await fetchUsageResponse(
+      JSON.stringify({
+        five_hour: null,
+        seven_day: null,
+        limits: [],
+        spend: {
+          used: { amount_minor: 40000, currency: 'USD', exponent: 2 },
+          limit: { amount_minor: 50000, currency: 'USD', exponent: 2 },
+          percent: 80,
+          enabled: true
+        }
+      })
+    )
+    expect(result.session).toBeNull()
+    expect(result.weekly).toBeNull()
+    expect(result.monthly).toEqual({
+      usedPercent: 80,
+      windowMinutes: 43_200,
+      resetsAt: null,
+      resetDescription: null
+    })
+  })
+
+  it('derives the monthly window from legacy extra_usage when spend is absent', async () => {
+    const result = await fetchUsageResponse(
+      '{"five_hour":null,"seven_day":null,"extra_usage":{"monthly_limit":50000,"used_credits":40000,"utilization":80,"currency":"USD","is_enabled":true}}'
+    )
+    expect(result.monthly).toMatchObject({ usedPercent: 80, windowMinutes: 43_200 })
+  })
+
+  it('falls back to the legacy cap when spend carries only a balance', async () => {
+    const result = await fetchUsageResponse(
+      JSON.stringify({
+        five_hour: null,
+        seven_day: null,
+        spend: { balance: { amount_minor: 1000, currency: 'USD' }, enabled: true },
+        extra_usage: {
+          monthly_limit: 50000,
+          used_credits: 40000,
+          utilization: 80,
+          currency: 'USD',
+          is_enabled: true
+        }
+      })
+    )
+    expect(result.extraUsage).toMatchObject({ balance: 10, spendLimit: null })
+    expect(result.monthly).toMatchObject({ usedPercent: 80, windowMinutes: 43_200 })
+  })
+
+  it('derives legacy percentage from the amounts when utilization is a fraction', async () => {
+    const result = await fetchUsageResponse(
+      '{"five_hour":null,"seven_day":null,"extra_usage":{"monthly_limit":5000,"used_credits":479,"utilization":0.0958,"currency":"USD","is_enabled":true}}'
+    )
+    expect(result.extraUsage).toMatchObject({ spentPercent: expect.closeTo(9.58) })
+    expect(result.monthly?.usedPercent).toBeCloseTo(9.58)
+  })
+
+  it('keeps spend out of the monthly window when a plan window exists', async () => {
+    const result = await fetchUsageResponse(
+      '{"five_hour":{"utilization":10},"seven_day":null,"spend":{"used":{"amount_minor":5000},"limit":{"amount_minor":200000},"percent":2.5,"enabled":true}}'
+    )
+    expect(result.extraUsage).toMatchObject({ spentPercent: 2.5 })
+    expect(result.monthly).toBeNull()
+  })
+
+  it('does not invent a monthly window from a balance without a cap', async () => {
+    const result = await fetchUsageResponse(
+      '{"five_hour":null,"seven_day":null,"spend":{"balance":{"amount_minor":1000,"currency":"EUR"},"enabled":true}}'
+    )
+    expect(result.extraUsage).toMatchObject({ balance: 10, spendLimit: null })
+    expect(result.monthly).toBeNull()
+  })
+
+  it('classifies only the request: a dead proxy is network, a null 200 body stays unknown', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('net::ERR_PROXY_CONNECTION_FAILED'))
+    const transport = await fetchClaudeOAuthUsage('oauth-token').catch((error: unknown) => error)
+    expect(classifyClaudeOAuthUsageError(transport).failureKind).toBe('network')
+
+    const nullBody = await fetchUsageResponse('null').catch((error: unknown) => error)
+    expect(classifyClaudeOAuthUsageError(nullBody).failureKind).toBe('unknown')
+  })
 })

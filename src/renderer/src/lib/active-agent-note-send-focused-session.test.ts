@@ -33,8 +33,8 @@ vi.mock('@/store', () => ({
   )
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: testState.callRuntimeRpc,
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: testState.callRuntimeRpc }))
+vi.mock('@/runtime/runtime-rpc-result', () => ({
   RuntimeRpcCallError: testState.RuntimeRpcCallError
 }))
 
@@ -190,6 +190,17 @@ describe('active agent note send', () => {
       'terminal.isRunningAgent',
       'terminal.send'
     ])
+    expect(testState.callRuntimeRpc).toHaveBeenLastCalledWith(
+      { kind: 'local' },
+      'terminal.send',
+      {
+        terminal: 'term-1',
+        text: 'File: src/app.ts',
+        enter: true,
+        client: { id: 'orca-desktop', type: 'desktop' }
+      },
+      { timeoutMs: 15000 }
+    )
   })
 
   it('does not write notes when the active terminal is not an agent', async () => {

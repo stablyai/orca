@@ -1,33 +1,39 @@
+import { AiVaultPrepareSessionResumeParams } from '../../shared/rpc-contract/ai-vault-params'
+import { prepareStructuredChatCliFork } from '../ai-vault/structured-chat-cli-fork'
 import { ipcMain } from 'electron'
 import type {
-  AiVaultPrepareSessionResumeArgs,
+  AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult,
   AiVaultSessionResumePreparation
 } from '../../shared/ai-vault-resume-preparation'
 import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../../shared/execution-host'
+import { isWslUncPath } from '../../shared/wsl-paths'
 import { assertLegacyAiVaultResumeAllowed } from '../ai-vault/structured-session-ownership'
+import { tryEnsureStructuredAgentSessionHostForResume } from '../runtime/structured-agent-session-host-refusal'
+import { copyStructuredChatConversation } from '../ai-vault/structured-chat-conversation-copy'
+import { wakeNativeChatTranscriptDistro } from '../native-chat/native-chat-open-wake'
+import { wslDistroForPath } from '../wsl/wsl-unc-access-gate'
 
 export type AiVaultResumeHandlerOptions = {
   ensureStructuredSessionOwnership?: () => Promise<void>
   prepareSessionResume?: AiVaultSessionResumePreparation
   prepareRuntimeSessionResume?: (
     environmentId: string,
-    args: AiVaultPrepareSessionResumeArgs
+    args: AiVaultPrepareSessionResumeRequest
   ) => Promise<AiVaultPrepareSessionResumeResult>
 }
 
 export function registerAiVaultResumeHandler(options: AiVaultResumeHandlerOptions): void {
-  ipcMain.handle('aiVault:prepareSessionResume', (_event, args: AiVaultPrepareSessionResumeArgs) =>
-    prepareAiVaultSessionResume(args, options)
+  ipcMain.handle(
+    'aiVault:prepareSessionResume',
+    (_event, args: AiVaultPrepareSessionResumeRequest) => prepareAiVaultSessionResume(args, options)
   )
 }
 
 export async function prepareAiVaultSessionResume(
-  args: AiVaultPrepareSessionResumeArgs,
+  args: AiVaultPrepareSessionResumeRequest,
   options: AiVaultResumeHandlerOptions
 ): Promise<AiVaultPrepareSessionResumeResult> {
-  await options.ensureStructuredSessionOwnership?.()
-  assertLegacyAiVaultResumeAllowed(args)
   const executionHost = parseExecutionHostId(args.executionHostId)
   if (executionHost?.kind === 'runtime') {
     if (!options.prepareRuntimeSessionResume || isUnresolvedOwnerHostId(executionHost.id)) {
@@ -35,9 +41,36 @@ export async function prepareAiVaultSessionResume(
     }
     return options.prepareRuntimeSessionResume(executionHost.environmentId, args)
   }
+  if ('sourceChat' in args) {
+    const parsed = AiVaultPrepareSessionResumeParams.parse(args)
+    if (!('sourceChat' in parsed)) {
+      throw new Error('Invalid chat source.')
+    }
+    if (executionHost?.kind === 'ssh') {
+      throw new Error('This chat cannot be copied on this host.')
+    }
+    await options.ensureStructuredSessionOwnership?.()
+    return prepareStructuredChatCliFork(
+      parsed,
+      options.prepareSessionResume ?? (async () => ({ useRealCodexHome: false }))
+    )
+  }
   // Why: the desktop process must never materialize transcript paths owned by an SSH host.
   if (executionHost?.kind === 'ssh') {
     return { useRealCodexHome: false }
   }
-  return options.prepareSessionResume?.(args) ?? { useRealCodexHome: false }
+  // Resuming a session is a user act: start its stopped distro before the gated transcript reads.
+  await wakeNativeChatTranscriptDistro(wslDistroForPath(args.filePath))
+  if (!isWslUncPath(args.filePath)) {
+    if (options.ensureStructuredSessionOwnership) {
+      await (args.codexHome === null && !args.fork
+        ? tryEnsureStructuredAgentSessionHostForResume(options.ensureStructuredSessionOwnership)
+        : options.ensureStructuredSessionOwnership())
+    }
+    assertLegacyAiVaultResumeAllowed(args)
+  }
+  return (
+    (await copyStructuredChatConversation(args)) ??
+    options.prepareSessionResume?.(args) ?? { useRealCodexHome: false }
+  )
 }

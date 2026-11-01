@@ -1,4 +1,5 @@
 import { type ReactNode, View, Text } from './mobile-tasks-dependencies'
+import { translate } from '../i18n/mobile-i18n'
 import { gitLabTodoTargetLabel } from './mobile-tasks-item-mapping'
 import { COMMENT_REACTION_EMOJI } from './mobile-tasks-options'
 import type { DetailCommentGroup } from './mobile-tasks-view-state-types'
@@ -16,6 +17,9 @@ export function taskKindLabel(item: TaskItem): string {
   if (item.provider === 'gitlabTodo') {
     return `${gitLabTodoTargetLabel(item.source)} todo`
   }
+  if (item.provider === 'jira') {
+    return 'Jira issue'
+  }
   return 'Linear ticket'
 }
 
@@ -25,6 +29,9 @@ export function taskExternalOpenLabel(item: TaskItem): string {
   }
   if (item.provider === 'gitlab' || item.provider === 'gitlabTodo') {
     return 'Open in GitLab'
+  }
+  if (item.provider === 'jira') {
+    return 'Open in Jira'
   }
   return 'Open in Linear'
 }
@@ -136,9 +143,13 @@ export function isResolvedDetailCommentGroup(group: DetailCommentGroup): boolean
 
 export function discussionSummary(count: number): string {
   if (count === 0) {
-    return 'No comments yet'
+    return translate('tasks.itemComments.noComments', 'No comments yet')
   }
-  return `${count} ${count === 1 ? 'comment' : 'comments'}`
+  return count === 1
+    ? translate('tasks.itemComments.oneComment', '1 comment')
+    : translate('tasks.itemComments.commentCount', '{{commentCount}} comments', {
+        commentCount: count
+      })
 }
 
 export function renderCommentReactions(comment: DetailComment): ReactNode {

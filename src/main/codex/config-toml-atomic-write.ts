@@ -17,10 +17,12 @@ export function writeTomlConfigAtomically(configPath: string, contents: string):
   const directory = dirname(writePath)
   mkdirSync(directory, { recursive: true })
   const temporaryPath = join(directory, `.${Date.now()}-${randomUUID()}.tmp`)
-  const existingMode = existsSync(writePath) ? statSync(writePath).mode : undefined
   let renamed = false
   try {
-    writeFileSync(temporaryPath, contents, { encoding: 'utf-8', mode: existingMode })
+    writeFileSync(temporaryPath, contents, {
+      encoding: 'utf-8',
+      mode: resolveCodexConfigTomlFileMode(writePath)
+    })
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
@@ -31,9 +33,18 @@ export function writeTomlConfigAtomically(configPath: string, contents: string):
       try {
         unlinkSync(temporaryPath)
       } catch {
-        // Why: cleanup failure must not mask the write failure.
+        // Cleanup failure must not mask the write failure.
       }
     }
+  }
+}
+
+/** Preserve existing permissions; new configs are owner-only because MCP entries may hold tokens. */
+export function resolveCodexConfigTomlFileMode(configPath: string): number {
+  try {
+    return statSync(configPath).mode & 0o777
+  } catch {
+    return 0o600
   }
 }
 
@@ -46,6 +57,6 @@ function resolveTomlWritePath(configPath: string): string {
       throw error
     }
   }
-  // Why: replacing the lexical path would destroy a dotfiles symlink; dangling links fail closed.
+  // Preserve dotfile symlinks; refuse writes through unresolved dangling links.
   return isSymlink ? realpathSync.native(configPath) : configPath
 }

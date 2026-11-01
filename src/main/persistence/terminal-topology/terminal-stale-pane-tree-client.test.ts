@@ -5,8 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
-import { OrcaRuntimeWithPersistHeadlessSessionTabProps } from '../../runtime/orca-runtime-persist-headless-session-tab-props'
+import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
+import type { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from '../../runtime/session-tabs/headless-terminal-tab-close'
+import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../loading-store/store'
 import { closeLeafOrTab } from './terminal-topology-commit'
 import {
@@ -18,35 +19,47 @@ import { leafIds, WindowSession } from './terminal-topology-window-session-fixtu
 import { checkWorkspaceLayoutRules } from '../../../shared/workspace-layout/workspace-layout-rules'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
 
-// An older phone build sends a whole pane tree (`session.tabs.updatePaneLayout`) built before a
-// split or close it has not seen yet. Main persists it only on a headless host (no window), so
-// these run main's handler with no window against the real Store.
+// Older mobile clients send stale whole trees; exercise the headless handler against real persistence.
 
 const WT = FIXTURE_GIT_WORKTREE_ID
 const NEW_LEAF = '55555555-5555-4555-8555-555555555555'
 const directories: string[] = []
 
 type PaneLayoutHandler = Pick<
-  OrcaRuntimeWithPersistHeadlessSessionTabProps,
+  OrcaRuntimeWithCloseHeadlessMobileTerminalTab,
   'updateMobileSessionPaneLayout'
 >
 
-/** Main's real `updateMobileSessionPaneLayout`, on a headless host whose session is `store`'s. */
+class PaneLayoutRuntime extends OrcaRuntimeService {
+  protected override getValidatedExplicitWorktreeIdSelector(): string {
+    return WT
+  }
+
+  protected override getAvailableAuthoritativeWindow(): null {
+    return null
+  }
+
+  public override getWorkspaceSessionForWorktree(): WorkspaceSessionState {
+    // SAFETY: paneLayoutHandler receives the real Store opened by this fixture.
+    return this.requireStore().getWorkspaceSession!()
+  }
+
+  public override setWorkspaceSessionForWorktree(
+    _worktreeId: string,
+    session: WorkspaceSessionState
+  ): void {
+    // SAFETY: paneLayoutHandler receives the real Store opened by this fixture.
+    this.requireStore().setWorkspaceSession!(session)
+  }
+}
+
 function paneLayoutHandler(store: Store): PaneLayoutHandler {
-  return Object.assign(Object.create(OrcaRuntimeWithPersistHeadlessSessionTabProps.prototype), {
-    store,
-    mobileSessionTabsByWorktree: new Map(),
-    getValidatedExplicitWorktreeIdSelector: () => WT,
-    getAvailableAuthoritativeWindow: () => null,
-    getWorkspaceSessionForWorktree: () => store.getWorkspaceSession(),
-    setWorkspaceSessionForWorktree: (_worktreeId: string, session: WorkspaceSessionState) =>
-      store.setWorkspaceSession(session)
-  })
+  return new PaneLayoutRuntime(store)
 }
 
 function split(first: string, second: string): TerminalPaneLayoutNode {
@@ -59,7 +72,6 @@ function split(first: string, second: string): TerminalPaneLayoutNode {
   }
 }
 
-/** A tab whose panes the desktop window made and the renderer's spawns bound. */
 async function openWithPanes(panes: readonly string[]): Promise<Store> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-stale-pane-tree-'))
   directories.push(directory)
@@ -100,7 +112,7 @@ describe('an old client pane tree that predates a split or close', () => {
 
   it('keeps a pane another client split since the tree was built', async () => {
     const store = await openWithPanes([TEST_LEAF_1])
-    // `terminal.split` from the CLI: the runtime writes the pane, then binds it against its source.
+    // CLI splits commit membership before binding the new pane.
     await expect(
       store.admitTerminalPane({
         type: 'splitPane',
@@ -140,7 +152,6 @@ describe('an old client pane tree that predates a split or close', () => {
 
   it('does not bring back a pane another client closed', async () => {
     const store = await openWithPanes([TEST_LEAF_1, TEST_LEAF_2])
-    // A phone's pane close (`closeTerminalPane`): main commits it, not the layout owner.
     await expect(
       store.runDurableMutation(
         closeLeafOrTab({
@@ -199,9 +210,7 @@ describe('an old client pane tree that predates a split or close', () => {
     }
   })
 
-  // Known on main: with no topology revision for the repo, the membership rebase is skipped and
-  // `persistHeadlessTerminalPaneLayout` takes the tree whole, dropping a live pane and its binding
-  // (the tab row still names its PTY). Drop `fails` once fixed.
+  // Known gap: without a repo topology revision, whole-tree persistence can drop a live pane/binding.
   it.fails('keeps a pane the tree omits when the repo never had a host topology change', async () => {
     const store = await openWithPanes([TEST_LEAF_1, TEST_LEAF_2])
     await paneLayoutHandler(store).updateMobileSessionPaneLayout(`id:${WT}`, {

@@ -12,6 +12,7 @@ const frameSchema = z.object({
     .optional()
 })
 export type FakeFrame = z.infer<typeof frameSchema>
+const setConfigOptionSchema = z.object({ configId: z.string(), value: z.string() })
 type Handler = (frame: FakeFrame) => void
 
 export class AcpScriptedAgent {
@@ -42,6 +43,13 @@ export class AcpScriptedAgent {
 
   on(method: string, handler: Handler): void {
     this.methods.set(method, handler)
+  }
+  confirmConfigOptions(base: readonly unknown[]): void {
+    this.on('session/set_config_option', (frame) => {
+      const { configId: id, value } = setConfigOptionSchema.parse(frame.params)
+      const set = { id, name: id, type: 'select', currentValue: value, options: [] }
+      this.reply(frame, { configOptions: [...base, set] })
+    })
   }
   reply(frame: FakeFrame, result: unknown): void {
     this.send({ jsonrpc: '2.0', id: frame.id, result })

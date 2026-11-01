@@ -30,7 +30,10 @@ import { clearSessionSearchInService } from '../ai-vault/session-scanner-service
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
 import { getActiveRuntimeAiVaultHostInfosResult } from './ai-vault'
 import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
-import { searchWithStructuredOwners } from '../ai-vault/structured-session-ownership'
+import {
+  OPENS_EVERY_STRUCTURED_CHAT,
+  searchWithStructuredOwners
+} from '../ai-vault/structured-session-ownership'
 
 export type RuntimeSessionSearchCall = (
   environmentId: string,
@@ -43,7 +46,6 @@ export type AiVaultSearchHandlerOptions = {
   ensureStructuredSessionOwnership?: () => Promise<void>
 }
 
-// One wording with the session list, which refuses the same unroutable scope.
 const UNROUTABLE_HOST_MESSAGE = 'Agent Session History is not available for this execution host.'
 // Consent is written where the index lives: locally through settings, never here.
 const LOCAL_ENABLE_MESSAGE =
@@ -80,10 +82,7 @@ export function registerAiVaultSearchHandlers(options: AiVaultSearchHandlerOptio
   ipcMain.handle('aiVault:clearSearchIndex', () => clearSessionSearchInService())
 }
 
-/**
- * Only a paired runtime host can be toggled from here. The local index answers to this
- * desktop's own settings write, and an SSH host has no method to carry the change.
- */
+/** Only paired runtimes support toggling here; local consent belongs to Settings and SSH has no setter. */
 async function setSearchEnabledByExecutionHost(
   scope: ParsedExecutionHost,
   enabled: boolean
@@ -112,11 +111,7 @@ async function setSearchEnabledByExecutionHost(
   }
 }
 
-/**
- * Why not the list's `requestedExecutionHostScope`: it normalizes an unparseable
- * id to `all`, which would answer an unroutable request by searching every host.
- * Same parser, same omitted-means-this-host rule, but garbage is refused.
- */
+/** Reject malformed host IDs; list-scope normalization to all would search unintended hosts. */
 function requestedSearchScope(raw: unknown): ParsedExecutionHost {
   const value = scopeSchema.parse(raw)
   if (value === undefined) {
@@ -148,17 +143,13 @@ async function searchByExecutionHostScope(
 }
 
 async function searchLocalSessions(request: AiVaultSearchRequest): Promise<AiVaultSearchResponse> {
-  return searchWithStructuredOwners(
-    searchSessionService(request, 'ipc'),
-    handlerOptions.ensureStructuredSessionOwnership
-  )
+  return searchWithStructuredOwners(searchSessionService(request, 'ipc'), {
+    ensureHost: handlerOptions.ensureStructuredSessionOwnership,
+    opensChat: OPENS_EVERY_STRUCTURED_CHAT
+  })
 }
 
-/**
- * Every host the session list's `all` scope would enumerate, in one leg each.
- * A broken enumerator already degrades to an empty list rather than throwing,
- * so one unusable host class costs its own rows and not the merge.
- */
+/** One leg per list-visible host; broken enumeration loses only its own host class. */
 function allExecutionHostLegs(): SessionSearchHostLeg[] {
   const localLeg: SessionSearchHostLeg = {
     executionHostId: LOCAL_EXECUTION_HOST_ID,
@@ -197,10 +188,7 @@ async function statusByExecutionHost(scope: ParsedExecutionHost): Promise<AiVaul
   return client ? client.searchStatus() : unavailableSessionSearchStatus()
 }
 
-/**
- * Not through the shared client: it answers an unknown method with `unavailable`, which
- * the settings pane cannot tell from a current server that is switched off.
- */
+/** Bypass the shared client: distinguish unsupported methods from a current host with indexing disabled. */
 async function runtimeHostStatus(environmentId: string): Promise<AiVaultSearchStatus> {
   const call = handlerOptions.callRuntimeSearch
   if (!call) {
@@ -219,7 +207,7 @@ async function runtimeHostStatus(environmentId: string): Promise<AiVaultSearchSt
   }
 }
 
-// Null for the local host and for a runtime environment with no injected transport.
+/** Null for local scope or runtimes without injected transport. */
 function remoteSearchClient(
   host: ParsedExecutionHost,
   call: RuntimeSessionSearchCall | undefined

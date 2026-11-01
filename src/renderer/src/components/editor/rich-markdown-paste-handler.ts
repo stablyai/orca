@@ -2,6 +2,7 @@ import type { Editor } from '@tiptap/react'
 import type { Slice } from '@tiptap/pm/model'
 import type { EditorView } from '@tiptap/pm/view'
 import { handleRichMarkdownImagePaste } from './rich-markdown-paste-image'
+import { scheduleRichMarkdownBlobImageImport } from './rich-markdown-blob-image-paste'
 import { handleRichMarkdownLargeTextPaste } from './rich-markdown-large-text-paste'
 import { handleRichMarkdownTerminalPathPaste } from './rich-markdown-terminal-path-paste'
 import { inspectRichMarkdownSourceOwningSlice } from './rich-markdown-source-owning-slice'
@@ -37,12 +38,18 @@ export function handleRichMarkdownPaste({
   ) {
     return true
   }
+  scheduleRichMarkdownBlobImageImport({
+    editor,
+    slice,
+    filePath,
+    worktreeId,
+    runtimeEnvironmentId
+  })
 
   const sourceOwningStatus = slice ? inspectRichMarkdownSourceOwningSlice(slice) : null
   if (sourceOwningStatus?.containsSourceOwningNode && slice && view) {
     if (sourceOwningStatus.canPreserve) {
-      // Why: dispatch directly so the transaction can carry paste/uiEvent
-      // metadata that editor.commands.insertContent would omit.
+      // Dispatch directly to retain paste/uiEvent metadata that insertContent omits.
       view.dispatch(
         view.state.tr
           .replaceSelection(slice)
@@ -63,7 +70,13 @@ export function handleRichMarkdownPaste({
     }
     if (visibleText && editor) {
       event.preventDefault()
-      editor.commands.insertContent(visibleText)
+      view.dispatch(
+        view.state.tr
+          .insertText(visibleText)
+          .setMeta('paste', true)
+          .setMeta('uiEvent', 'paste')
+          .scrollIntoView()
+      )
     }
     return true
   }

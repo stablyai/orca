@@ -18,7 +18,7 @@ import {
 } from './helpers/browser-split-guest-probes'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
 import { getWorktreeHostIdentity } from '../../src/shared/worktree/host-qualified-identity'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 skipUnlessManagedDockerHost()
 test.skip(process.platform === 'win32', 'Owned POSIX host collision fixture')

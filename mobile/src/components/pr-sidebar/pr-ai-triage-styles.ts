@@ -1,21 +1,18 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
-// Styles for the "Fix checks with AI" / "Resolve conflicts with AI" triage
-// affordances. Kept in their own focused file (rather than growing the shared
-// sidebar/conflict style sheets) and muted/monochrome to match the sidebar.
-export const prAiTriageStyles = StyleSheet.create({
+export const prAiTriageStyles = themedStyleSheet(() => ({
   triageArea: {
     gap: spacing.xs
   },
-  // Top-of-section triage strip (desktop PRTriageStrip): failing-count summary +
-  // a Fix action on the right, tinted by the failure status color.
+  // Match desktop failure-tinted triage strip: count summary and Fix action.
   triageStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusRed,
     backgroundColor: colors.diffDeletedBg
@@ -33,14 +30,13 @@ export const prAiTriageStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
-  // Compact Fix button sitting inside the strip (vs. the full-width footer button).
   triageStripButton: {
     minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
@@ -57,7 +53,7 @@ export const prAiTriageStyles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
@@ -74,4 +70,4 @@ export const prAiTriageStyles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: typography.metaSize
   }
-})
+}))

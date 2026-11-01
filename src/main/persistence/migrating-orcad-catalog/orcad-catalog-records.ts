@@ -3,10 +3,11 @@ import {
   serializeOrcadMigrationValue,
   type OrcadMigrationImportReceipt,
   type OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { isRepoOnCatalogHost } from '../../../shared/execution-host'
 import { assertOrcadMigrationStagedCatalogClaims } from './orcad-staged-catalog-claims'
 import {
   toOrcadDestinationFolderWorkspace,
@@ -44,7 +45,7 @@ export function assertSameOrcadMigrationManifest(
   }
 }
 
-// Dormant only: no live PTY reaches the destination, so the incoming session is compared as is.
+// No live PTY migrates, so compare the incoming dormant session as is.
 export function prepareOrcadMigrationCatalog(
   manifest: OrcadMigrationManifest,
   state: StoreRuntimeState['state']
@@ -138,7 +139,8 @@ function assertNoRepositoryPathConflicts(incoming: Repo[], existing: Repo[]): vo
     }
     incomingByPath.set(key, repo.id)
   }
-  for (const repo of existing) {
+  // Same-path rows on other hosts represent different checkouts.
+  for (const repo of existing.filter(isRepoOnCatalogHost)) {
     if (
       !incomingIdSet.has(repo.id) &&
       incomingByPath.has(normalizeRuntimePathForComparison(repo.path))

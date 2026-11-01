@@ -9,6 +9,12 @@ const { childSpawnMock, readFileMock, ptySpawnMock } = vi.hoisted(() => ({
   ptySpawnMock: vi.fn()
 }))
 
+// Keep child-process assertions in this suite; worker transport is covered separately.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
@@ -16,7 +22,7 @@ vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')
 }))
 
-// The recovery's supervised stop imports the process-table reader, which needs the real execFile.
+// Mock recovery so its process-table import does not require real execFile.
 vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: vi.fn()
 }))
@@ -279,7 +285,7 @@ describe('Codex backend rate-limit requests', () => {
       idempotencyKey: 'redeem-timeout'
     })
     await vi.advanceTimersByTimeAsync(0)
-    // Why: redeem is user-triggered, so it gets the longer redeem deadline.
+    // User-triggered redemption has the longer deadline.
     expect(timeout).toHaveBeenCalledWith(30_000)
     expect(readFileMock).toHaveBeenCalledWith(join('/managed/deadline-home', 'auth.json'), 'utf8')
 

@@ -1,9 +1,4 @@
-/**
- * Tracks the one window in a pack that actually excludes anybody: the
- * `packed-refs` rewrite. Callers about to touch refs wait this out rather than
- * killing the child, because a signal delivered into the prune phase strands a
- * `refs/**\/*.lock` roughly one time in five and Git never clears those.
- */
+/** Wait only for packed-refs rewriting. Killing Git during prune can strand ref lock files that Git never clears. */
 export class PackedRefsLockGate {
   private held = false
   private waiters: (() => void)[] = []

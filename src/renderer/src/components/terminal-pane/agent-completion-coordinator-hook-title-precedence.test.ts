@@ -98,11 +98,13 @@ describe('agent completion coordinator', () => {
   it('suppresses late process-exit backstop after process inspection follows hook completion', async () => {
     let foregroundProcess: string | null = 'codex'
     const dispatchCompletion = vi.fn()
+    const onForegroundAgentExited = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
       dispatchCompletion,
+      onForegroundAgentExited,
       isLive: () => true
     })
 
@@ -115,9 +117,13 @@ describe('agent completion coordinator', () => {
     vi.advanceTimersByTime(2_000)
     await flushAsyncTicks()
     foregroundProcess = null
-    vi.advanceTimersByTime(750)
+    await vi.advanceTimersByTimeAsync(3_000)
     await flushAsyncTicks()
 
+    expect(onForegroundAgentExited).toHaveBeenCalledExactlyOnceWith({
+      agent: 'codex',
+      processName: 'codex'
+    })
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
     expect(dispatchCompletion).toHaveBeenCalledWith('codex')
   })

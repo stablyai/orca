@@ -28,6 +28,7 @@ import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { getGitRepoRoot } from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { createRepoHandlerHarness, resetLocalRepoMocks } from './repos-remote-test-harness'
+import { repoTarget } from '../persistence/repo-host-target-matcher.test-fixture'
 
 const {
   handleMock,
@@ -262,7 +263,7 @@ describe('repos:add + repos:clone', () => {
       setupMethod: 'imported-existing-folder'
     })
 
-    expect(mockStore.updateRepo).toHaveBeenNthCalledWith(1, existing.id, {
+    expect(mockStore.updateRepo).toHaveBeenNthCalledWith(1, repoTarget(existing.id), {
       upstream: {
         owner: 'acme',
         repo: 'orca',
@@ -275,7 +276,7 @@ describe('repos:add + repos:clone', () => {
     const added: Record<string, unknown>[] = []
     mockStore.getRepos.mockImplementation(() => added)
     mockStore.addRepo.mockImplementation((repo: Record<string, unknown>) => added.push(repo))
-    mockStore.updateRepo.mockImplementation((id, updates) => {
+    mockStore.updateRepo.mockImplementation(({ id }: { id: string }, updates) => {
       const repo = added.find((entry) => entry.id === id)
       if (!repo) {
         return null
@@ -337,8 +338,78 @@ describe('repos:add + repos:clone', () => {
       })
     ).rejects.toThrow('Imported folder does not match the selected project identity.')
 
-    expect(mockStore.removeProjectForHost).toHaveBeenCalledWith(added[0]?.id, 'local')
+    expect(mockStore.removeProjectForHost).toHaveBeenCalledWith(
+      expect.objectContaining({ id: added[0]?.id })
+    )
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+  })
+
+  it('refuses to relabel a folder whose own GitHub remote names another repository (#30663)', async () => {
+    const added: Record<string, unknown>[] = []
+    mockStore.getRepos.mockImplementation(() => added)
+    mockStore.addRepo.mockImplementation((repo: Record<string, unknown>) => added.push(repo))
+    reposMocks.gitExecFileAsyncMock.mockImplementation(async (argv: string[]) =>
+      argv[0] === 'remote' && argv[1] === '-v'
+        ? {
+            stdout:
+              'origin\thttps://github.com/acme/repo-b.git (fetch)\norigin\thttps://github.com/acme/repo-b.git (push)\n'
+          }
+        : { stdout: '' }
+    )
+
+    try {
+      await expect(
+        handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+          projectId: 'github:acme/repo-a',
+          projectProviderIdentity: { provider: 'github', owner: 'acme', repo: 'repo-a' },
+          hostId: 'local',
+          path: '/tmp/repo-b',
+          kind: 'git'
+        })
+      ).rejects.toThrow(/points at acme\/repo-b, not acme\/repo-a/)
+    } finally {
+      reposMocks.gitExecFileAsyncMock.mockReset()
+    }
+
+    expect(mockStore.updateRepo).not.toHaveBeenCalled()
+    expect(mockStore.removeProjectForHost).toHaveBeenCalledWith(
+      expect.objectContaining({ id: added[0]?.id })
+    )
+  })
+
+  it('re-reads an already-registered folder whose stored remote is still pending (#30663)', async () => {
+    const registered = {
+      id: 'repo-b',
+      path: '/tmp/repo-b',
+      displayName: 'repo-b',
+      badgeColor: DEFAULT_REPO_BADGE_COLOR,
+      addedAt: 1,
+      kind: 'git'
+    }
+    mockStore.getRepos.mockReturnValue([registered])
+    mockStore.removeProjectForHost.mockClear()
+    reposMocks.gitExecFileAsyncMock.mockImplementation(async (argv: string[]) =>
+      argv[0] === 'remote' && argv[1] === '-v'
+        ? { stdout: 'origin\tgit@github.com:acme/repo-b.git (fetch)\n' }
+        : { stdout: '' }
+    )
+
+    try {
+      await expect(
+        handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+          projectId: 'github:acme/repo-a',
+          projectProviderIdentity: { provider: 'github', owner: 'acme', repo: 'repo-a' },
+          hostId: 'local',
+          path: '/tmp/repo-b',
+          kind: 'git'
+        })
+      ).rejects.toThrow(/points at acme\/repo-b, not acme\/repo-a/)
+    } finally {
+      reposMocks.gitExecFileAsyncMock.mockReset()
+    }
+
+    expect(mockStore.updateRepo).not.toHaveBeenCalled()
+    expect(mockStore.removeProjectForHost).not.toHaveBeenCalled()
   })
 
   it('refuses project setup on an SSH target with the not-connected text and adds no repo', async () => {
@@ -354,7 +425,7 @@ describe('repos:add + repos:clone', () => {
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
-  it('prepares and invalidates roots when repos:update changes worktree base path', () => {
+  it('prepares and invalidates roots when repos:update changes worktree base path', async () => {
     const updated = {
       id: 'repo-update-root',
       path: '/tmp/repo-update-root',
@@ -363,22 +434,24 @@ describe('repos:add + repos:clone', () => {
       badgeColor: '#22c55e',
       worktreeBasePath: '../worktrees'
     }
+    mockStore.getRepo.mockReturnValue(updated)
     mockStore.updateRepo.mockReturnValue(updated)
 
-    const result = handlers.get('repos:update')!(null, {
+    const result = await handlers.get('repos:update')!(null, {
       repoId: updated.id,
       updates: { worktreeBasePath: ' ../worktrees ' }
     })
 
     expect(result).toBe(updated)
-    expect(mockStore.updateRepo).toHaveBeenCalledWith(updated.id, {
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(repoTarget(updated.id), {
       worktreeBasePath: '../worktrees'
     })
+    expect(mockStore.getRepos).not.toHaveBeenCalled()
     expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, updated)
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
   })
 
-  it('persists agent worktree visibility through local repos:update', () => {
+  it('persists agent worktree visibility through local repos:update', async () => {
     const updated = {
       id: 'repo-agent-visibility',
       path: '/tmp/repo-agent-visibility',
@@ -387,20 +460,21 @@ describe('repos:add + repos:clone', () => {
       badgeColor: '#22c55e',
       agentWorktreeVisibility: 'show'
     }
+    mockStore.getRepo.mockReturnValue(updated)
     mockStore.updateRepo.mockReturnValue(updated)
 
-    const result = handlers.get('repos:update')!(null, {
+    const result = await handlers.get('repos:update')!(null, {
       repoId: updated.id,
       updates: { agentWorktreeVisibility: 'show' }
     })
 
     expect(result).toBe(updated)
-    expect(mockStore.updateRepo).toHaveBeenCalledWith(updated.id, {
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(repoTarget(updated.id), {
       agentWorktreeVisibility: 'show'
     })
   })
 
-  it('validates source definitions and preferences through local repos:update', () => {
+  it('validates source definitions and preferences through local repos:update', async () => {
     const updated = {
       id: 'repo-source-visibility',
       path: '/tmp/repo-source-visibility',
@@ -408,9 +482,10 @@ describe('repos:add + repos:clone', () => {
       kind: 'git',
       badgeColor: '#22c55e'
     }
+    mockStore.getRepo.mockReturnValue(updated)
     mockStore.updateRepo.mockReturnValue(updated)
 
-    handlers.get('repos:update')!(null, {
+    await handlers.get('repos:update')!(null, {
       repoId: updated.id,
       updates: {
         customWorktreeVisibilitySources: [
@@ -424,7 +499,7 @@ describe('repos:add + repos:clone', () => {
       }
     })
 
-    expect(mockStore.updateRepo).toHaveBeenCalledWith(updated.id, {
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(repoTarget(updated.id), {
       customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team' }],
       worktreeVisibilitySourcePreferences: {
         builtIn: { claude: 'show' },
@@ -433,7 +508,7 @@ describe('repos:add + repos:clone', () => {
     })
   })
 
-  it('prepares and invalidates roots when project host setup update changes worktree base path', () => {
+  it('prepares and invalidates roots when project host setup update changes worktree base path', async () => {
     const repo = {
       id: 'repo-setup-update-root',
       path: '/tmp/repo-setup-update-root',
@@ -449,12 +524,12 @@ describe('repos:add + repos:clone', () => {
     }
     mockStore.updateProjectHostSetup.mockReturnValue(result)
 
-    expect(
+    await expect(
       handlers.get('projectHostSetups:update')!(null, {
         setupId: 'setup-1',
         updates: { worktreeBasePath: '../worktrees' }
       })
-    ).toBe(result)
+    ).resolves.toBe(result)
 
     expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, repo)
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()

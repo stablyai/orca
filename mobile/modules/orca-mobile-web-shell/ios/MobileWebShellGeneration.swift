@@ -9,13 +9,7 @@ enum MobileWebShellGenerationError: Error {
   case unreadable
 }
 
-/// The served surface of one activated generation: a request path to file map, built once from the
-/// manifest before anything loads. Serving is a lookup in this map and never a path join at request
-/// time, so "not in the manifest" is a refusal by construction rather than by sanitiser.
-///
-/// Asset bytes are not re-hashed here. The TypeScript store verified every byte against the
-/// manifest before the activating rename, and the directory path is one the app owns and the page
-/// can never influence. Framework-free so `swiftc` can check it.
+/// Serve only a prebuilt manifest path map, never request-time path joins. TypeScript verifies bytes before activation; native uses an app-owned directory.
 struct MobileWebShellGeneration {
   static let manifestName = "manifest.json"
   static let manifestContentType = "application/json"
@@ -61,14 +55,12 @@ struct MobileWebShellGeneration {
         contentType: contentType
       )
     }
-    // Removed, not copied: the document answers at "/" and nowhere else, so the one response that
-    // carries the policy header is the only way to reach those bytes.
+    // Remove the entrypoint alias: only / may serve document bytes with the CSP header.
     guard let document = entries.removeValue(forKey: "/\(entrypoint)") else {
       throw MobileWebShellGenerationError.unreadable
     }
     entries["/"] = document
-    // The manifest is written last and is not part of the content hash, so it is not in `assets`;
-    // the bootstrap page still reads it from its own origin.
+    // Bootstrap reads the last-written manifest, which is excluded from the content hash/assets.
     entries["/\(manifestName)"] = MobileWebShellAsset(
       file: directory.appendingPathComponent(manifestName, isDirectory: false),
       contentType: manifestContentType
@@ -76,8 +68,7 @@ struct MobileWebShellGeneration {
     return MobileWebShellGeneration(entries: entries)
   }
 
-  /// `as? Int` is not this check: NSNumber bridges `true` and `1.0` to 1, and the contract pins the
-  /// integer 1. JSONSerialization keeps the written form, so the number's own type answers it.
+  /// NSNumber bridges true and 1.0 to Int; check JSON’s written number type to require integer 1.
   static func isPinnedSchemaVersion(_ value: Any?) -> Bool {
     guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else {
       return false
@@ -87,8 +78,7 @@ struct MobileWebShellGeneration {
     return number.intValue == schemaVersion
   }
 
-  /// Re-checked here rather than trusted: the schema that pins this shape is on the other side of
-  /// a file the native layer cannot see change.
+  /// Revalidate the schema across the TypeScript/native file boundary.
   static func isServableAssetPath(_ path: String) -> Bool {
     guard !path.isEmpty, path.utf8.count <= maxAssetPathLength else { return false }
     for segment in path.split(separator: "/", omittingEmptySubsequences: false) {
@@ -103,9 +93,7 @@ struct MobileWebShellGeneration {
     return true
   }
 
-  /// This value becomes a response header, so it must not be able to carry a second header or a
-  /// parameter we did not intend. One lowercase type, one optional charset: the manifest
-  /// contract's only accepted spelling.
+  /// Accept one lowercase MIME type and optional charset to prevent header/parameter injection.
   static func isServableContentType(_ contentType: String) -> Bool {
     guard !contentType.isEmpty, contentType.utf8.count <= maxContentTypeLength else { return false }
     var type = Substring(contentType)

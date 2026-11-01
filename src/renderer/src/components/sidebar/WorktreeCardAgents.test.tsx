@@ -66,6 +66,8 @@ function mockAgent({
 }
 
 let mockAgents: unknown[] = [mockAgent()]
+// The hook records behind mockAgents; the unread (bold) rule reads them.
+let mockAgentStatusByPaneKey: Record<string, { stateStartedAt: number }> = {}
 let mockFocusedAgentPaneKey: string | null = null
 let mockAgentActivityDisplayMode: 'compact' | 'full' | undefined
 let mockPromptCacheTimerEnabled = true
@@ -86,12 +88,13 @@ vi.mock('@/store', () => ({
     selector({
       agentActivityDisplayMode: mockAgentActivityDisplayMode,
       acknowledgedAgentsByPaneKey: {},
+      retainedAgentsByPaneKey: {},
       cacheTimerByKey: mockCacheTimerByKey,
       dropAgentStatus: vi.fn(),
       dismissRetainedAgent: vi.fn(),
       acknowledgeAgents: vi.fn(),
       agentSendPopoverTargetMode: null,
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: mockAgentStatusByPaneKey,
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
       sendPromptToSidebarAgentTarget: vi.fn(),
@@ -186,6 +189,7 @@ describe('WorktreeCardAgents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAgents = [mockAgent()]
+    mockAgentStatusByPaneKey = {}
     mockFocusedAgentPaneKey = null
     mockAgentActivityDisplayMode = undefined
     mockPromptCacheTimerEnabled = true
@@ -221,6 +225,7 @@ describe('WorktreeCardAgents', () => {
 
   it('emphasizes unvisited non-focused compact agent row text', async () => {
     mockAgentActivityDisplayMode = 'compact'
+    mockAgentStatusByPaneKey = { 'tab-1:1': { stateStartedAt: 1000 } }
     mockAgents = [
       mockAgent({
         agentType: 'codex',
@@ -241,6 +246,7 @@ describe('WorktreeCardAgents', () => {
 
   it('keeps focused compact agent row text legible', async () => {
     mockAgentActivityDisplayMode = 'compact'
+    mockAgentStatusByPaneKey = { 'tab-1:1': { stateStartedAt: 1000 } }
     mockFocusedAgentPaneKey = 'tab-1:1'
     mockAgents = [
       mockAgent({
@@ -390,20 +396,7 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('data-pane-key="tab-1:2"')
   })
 
-  it('keeps retained completion rows passive when activated', async () => {
-    mockAgentActivityDisplayMode = 'full'
-    mockAgents = [mockAgent({ rowSource: 'retained', state: 'done' })]
-    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
-
-    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
-    expect(capturedRowActivations).toHaveLength(1)
-    capturedRowActivations[0].onActivate('tab-1', 'tab-1:1')
-
-    expect(activationMocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
-  })
-
-  it('shows orchestration child agent rows under their parent by default', async () => {
+  it('keeps orchestration child agent rows collapsed under their parent by default', async () => {
     mockAgentActivityDisplayMode = 'full'
     mockAgents = [
       mockAgent({
@@ -434,9 +427,9 @@ describe('WorktreeCardAgents', () => {
 
     expect(markup).toContain('role="tree"')
     expect(markup).toContain('data-pane-key="tab-parent:1"')
-    expect(markup).toContain('data-pane-key="tab-child:1"')
-    expect(markup).toContain('aria-label="Hide 1 child agent"')
-    expect(markup).toContain('aria-expanded="true"')
+    expect(markup).not.toContain('data-pane-key="tab-child:1"')
+    expect(markup).toContain('aria-label="Show 1 child agent"')
+    expect(markup).toContain('aria-expanded="false"')
   })
 
   it('shows orchestration children under a retained parent matched by terminal handle', async () => {
@@ -459,8 +452,7 @@ describe('WorktreeCardAgents', () => {
 
     expect(markup).toContain('role="tree"')
     expect(markup).toContain('data-pane-key="tab-parent:1"')
-    expect(markup).toContain('data-pane-key="tab-child:1"')
-    expect(markup).toContain('aria-label="Hide 1 child agent"')
+    expect(markup).toContain('aria-label="Show 1 child agent"')
   })
 
   it('shows orchestration children under a visible coordinator when parent handle is absent', async () => {
@@ -483,8 +475,7 @@ describe('WorktreeCardAgents', () => {
 
     expect(markup).toContain('role="tree"')
     expect(markup).toContain('data-pane-key="tab-parent:1"')
-    expect(markup).toContain('data-pane-key="tab-child:1"')
-    expect(markup).toContain('aria-label="Hide 1 child agent"')
+    expect(markup).toContain('aria-label="Show 1 child agent"')
   })
 
   it('keeps partially cyclic orchestration rows visible as flat roots', async () => {
@@ -767,7 +758,6 @@ describe('WorktreeCardAgents', () => {
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
     const iconTitles = [...markup.matchAll(/title="([^"]+)"/g)].map((match) => match[1])
 
-    // Variety icons stay identity-free; the state label belongs to the shared tooltip.
     expect(iconTitles).toEqual([])
     expect(markup).toContain('>Working<')
     expect(markup).not.toContain('>5 working<')

@@ -7,7 +7,7 @@ import SyncDatabase from '../sqlite/sync-database'
 import { SessionSearchIndexer } from './session-search-indexer'
 import { SessionSearchEngine } from './session-search-engine'
 import { addSyntheticSession } from './session-search-engine-test-fixture'
-import { openSessionSearchDatabase } from './session-search-schema'
+import { openSessionSearchDatabase, SESSION_SEARCH_SCHEMA_VERSION } from './session-search-schema'
 import { SessionSearchStore } from './session-search-store'
 import {
   FakeSessionSearchClock,
@@ -153,7 +153,9 @@ it('adds the fingerprint column to an old index without losing cached Claude row
   expect(db.prepare("SELECT value FROM meta WHERE key = 'index_incarnation'").get()?.value).toBe(
     incarnation
   )
-  expect(db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get()?.value).toBe('6')
+  expect(db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get()?.value).toBe(
+    String(SESSION_SEARCH_SCHEMA_VERSION)
+  )
   expect(engine.search({ query: 'mainresultfixture' }).hits.map((h) => h.sessionId)).toEqual([ID])
 })
 

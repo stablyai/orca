@@ -11,7 +11,10 @@ import type {
 } from '../../../../../../shared/hosted-review'
 import type { PrimaryAction, PrimaryActionInputs } from '../../source-control-primary-action-types'
 import { resolveCreatePrIntentEligibility } from './create-pr-intent-state'
-import { canClickBlockedCreateReviewReason } from '../../source-control-create-review-blocked-action'
+import {
+  canClickBlockedCreateReviewReason,
+  resolveBlockedCreateReviewNoticeMessage
+} from '../../source-control-create-review-blocked-action'
 
 export function resolveProvisionalHostedReviewProvider(input: {
   hostedReview?: Pick<HostedReviewInfo, 'provider'> | null
@@ -26,9 +29,7 @@ export function resolveProvisionalHostedReviewProvider(input: {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
-  // Provider inferred from the repo's remote URL host; used before the GitHub
-  // default so a GitLab (etc.) repo with no linked review still gets its own
-  // review copy while a probe is loading or after it fails.
+  // Infer the remote provider before defaulting to GitHub so loading/failed probes retain provider-specific copy.
   remoteInferredProvider?: HostedReviewProvider | null
 }): HostedReviewProvider {
   if (input.hostedReview?.provider && supportsHostedReviewCreation(input.hostedReview.provider)) {
@@ -177,11 +178,14 @@ export function resolveDisabledCreatePrHeaderAction(
       case 'unsupported_provider':
       case 'base_not_on_remote':
       case null:
-        title = translate(
-          'auto.components.right.sidebar.source.control.primary.action.f0c6e2a581',
-          'This branch is not ready for a {{value0}} yet.',
-          { value0: copy.reviewLabel }
-        )
+        // A failed review lookup is not a branch problem, so name it instead.
+        title =
+          resolveBlockedCreateReviewNoticeMessage(hostedReviewCreation) ??
+          translate(
+            'auto.components.right.sidebar.source.control.primary.action.f0c6e2a581',
+            'This branch is not ready for a {{value0}} yet.',
+            { value0: copy.reviewLabel }
+          )
     }
   }
 
@@ -307,7 +311,5 @@ export function resolveCreatePrHeaderAction(inputs: PrimaryActionInputs): Primar
     return createPrIntent
   }
 
-  // Why: any remaining blocked state (including create-time-only base_not_on_remote)
-  // falls back to the disabled header action with its explanatory title.
   return resolveDisabledCreatePrHeaderAction(inputs)
 }

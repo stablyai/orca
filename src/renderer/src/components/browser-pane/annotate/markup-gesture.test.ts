@@ -148,8 +148,7 @@ describe('erase gesture', () => {
   })
 
   it('does not erase a mark the pointer curved around between events', () => {
-    // Down left of the stroke, around its end, to its far side: the chord from the
-    // first to the last point crosses it, but no swept segment does.
+    // The endpoint chord crosses the stroke, but the actual curved sweep goes around it.
     const after = endGesture(
       erase(editorWith(line('a', 0)), [
         { x: 50, y: -40 },

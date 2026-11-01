@@ -30,8 +30,7 @@ export async function installRendererTitleLog(page: Page): Promise<void> {
       }
     }
 
-    // Why: shell prompts can immediately overwrite OSC titles. Logging every
-    // renderer title state lets tests assert transient title frames landed.
+    // Record transient OSC titles before shell prompts overwrite them.
     recordTitles()
     w.__orcaE2eTitleUnsubscribe = store.subscribe(recordTitles)
   })

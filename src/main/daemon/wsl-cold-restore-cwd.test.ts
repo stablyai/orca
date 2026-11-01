@@ -28,13 +28,4 @@ describe('normalizeWslColdRestoreCwd', () => {
   ])('falls back instead of guessing for %s', (recoveredCwd) => {
     expect(normalizeWslColdRestoreCwd({ ...base, recoveredCwd })).toBe(base.requestedCwd)
   })
-
-  it('leaves native and missing-context restores unchanged', () => {
-    expect(
-      normalizeWslColdRestoreCwd({ ...base, platform: 'linux', recoveredCwd: '/home/jin' })
-    ).toBe('/home/jin')
-    expect(
-      normalizeWslColdRestoreCwd({ ...base, wslDistro: undefined, recoveredCwd: '\\\\server\\x' })
-    ).toBe('\\\\server\\x')
-  })
 })

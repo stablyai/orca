@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import { getHostedReviewCacheKey } from '../slices/hosted-review-cache-identity'
 import type { GitHubPRFallbackSource } from './cache-model'
@@ -16,7 +17,7 @@ type GitHubPRResultCacheArgs = {
   prCacheKey: string
   repoPath: string
   branch: string
-  settings: AppState['settings']
+  settings: RuntimeFocusSettings
   repoId?: string
   connectionId?: string | null
   executionHostId?: string | null
@@ -117,8 +118,31 @@ export function applyGitHubPRResultToCaches(
   prCache: AppState['prCache']
   hostedReviewCache: AppState['hostedReviewCache']
 } {
+  const hostedReviewCacheKey = getHostedReviewCacheKey(
+    args.repoPath,
+    args.branch,
+    args.settings,
+    args.repoId,
+    args.connectionId,
+    args.executionHostId,
+    args.hasRepoOwner === true
+  )
+  const hostedReviewEntry = args.hostedReviewCache[hostedReviewCacheKey]
+  const current = args.prCache[args.prCacheKey]
+  const prNumber = args.pr?.number ?? null
+  // The coordinator delivers each outcome twice; skip duplicates only while both caches name the same PR.
+  if (
+    current?.fetchedAt === args.fetchedAt &&
+    (current.data?.number ?? null) === prNumber &&
+    current.data?.url === args.pr?.url &&
+    hostedReviewEntry?.data?.url === args.pr?.url &&
+    (hostedReviewEntry?.data?.provider === 'github' ? hostedReviewEntry.data.number : null) ===
+      prNumber
+  ) {
+    return { prCache: args.prCache, hostedReviewCache: args.hostedReviewCache }
+  }
   const preserveExistingPRForFallbackMiss = shouldPreserveExistingPRForFallbackMiss({
-    currentPR: args.prCache[args.prCacheKey]?.data,
+    currentPR: current?.data,
     nextPR: args.pr,
     state: args.state,
     worktreeId: args.worktreeId,
@@ -143,15 +167,6 @@ export function applyGitHubPRResultToCaches(
     requestStartedAt: args.requestStartedAt,
     requestStartedEntry: args.requestStartedEntry
   })
-  const hostedReviewCacheKey = getHostedReviewCacheKey(
-    args.repoPath,
-    args.branch,
-    args.settings,
-    args.repoId,
-    args.connectionId,
-    args.executionHostId,
-    args.hasRepoOwner === true
-  )
   return {
     prCache: applyPRCacheResult(
       args.prCache,
@@ -160,7 +175,7 @@ export function applyGitHubPRResultToCaches(
       args.fetchedAt,
       shouldWritePRCacheForHostedReviewSync({
         hostedReviewSyncAccepted: hostedReviewSync.accepted,
-        hostedReviewEntry: args.hostedReviewCache[hostedReviewCacheKey],
+        hostedReviewEntry,
         pr: args.pr,
         linkedPRNumber: args.linkedPRNumber,
         fallbackPRNumber: args.fallbackPRNumber

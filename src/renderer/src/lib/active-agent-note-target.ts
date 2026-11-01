@@ -1,8 +1,6 @@
 import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
-import {
-  runtimeTargetForOwnerEnvironment,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -10,10 +8,8 @@ import {
 } from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import {
-  getRuntimeEnvironmentIdForWorktree,
-  type WorktreeRuntimeOwnerState
-} from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
@@ -22,7 +18,7 @@ import {
   isExplicitAgentStatusFresh,
   resolveTitleActivityLabel
 } from '@/lib/pane-agent-evidence'
-import { resolveRuntimePaneTitleForLeaf } from './runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleForLeaf } from '../../../shared/runtime-pane-title-leaf-id'
 
 const ACTIVE_AGENT_PROBE_RPC_TIMEOUT_MS = 3000
 const ACTIVE_AGENT_TERMINAL_LIST_LIMIT = 200
@@ -101,9 +97,7 @@ export function getActiveAgentNoteTarget(
   if (entry && isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
     return noteTarget
   }
-  // Why: freshly opened agents can be idle before their first hook event. Use
-  // renderer title/launch hints only to show the option; runtime still verifies
-  // the focused terminal is an idle agent before sending Enter.
+  // Idle-before-first-hook hints only expose the option; runtime still verifies the focused agent is idle before Enter.
   if (!hasFocusedPaneAgentHint(state, worktreeId, noteTarget)) {
     return null
   }
@@ -123,10 +117,9 @@ export function getActiveAgentRuntimeProbeDescriptor(
   if (!activePtyId) {
     return null
   }
-  // Route by the worktree's owner host so the probe targets the host that runs
-  // this worktree's agent terminal, not the focused runtime.
+  // Probe the worktree’s owner host rather than the focused runtime.
   const runtimeTarget = runtimeTargetForOwnerEnvironment(
-    getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
   const runtimeKey =
     runtimeTarget.kind === 'environment' ? `env:${runtimeTarget.environmentId}` : 'local'
@@ -165,7 +158,12 @@ export async function findActiveRuntimeTerminal(
   runtimeTarget: RuntimeClientTarget,
   worktreeId: string,
   noteTarget: ActiveTerminalNoteTarget,
-  timeoutMs: number
+  timeoutMs: number,
+  options: {
+    signal?: AbortSignal
+    expectedEnvironmentPairingRevision?: number
+    beforeSend?: () => void
+  } = {}
 ): Promise<RuntimeTerminalListResult['terminals'][number] | null> {
   const { terminals } = await callRuntimeRpc<RuntimeTerminalListResult>(
     runtimeTarget,
@@ -176,7 +174,7 @@ export async function findActiveRuntimeTerminal(
       limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT,
       includeVisualLayouts: false
     },
-    { timeoutMs }
+    { timeoutMs, ...options }
   )
   // Why: paired renderer tabs wrap the host id with `web-terminal-*`.
   const runtimeTabId = toHostSessionTabId(noteTarget.tabId)
@@ -199,8 +197,7 @@ function getActivePanePtyId(
   const ptyIdsByLeafId = state.terminalLayoutsByTabId[noteTarget.tabId]?.ptyIdsByLeafId
   if (ptyIdsByLeafId && Object.keys(ptyIdsByLeafId).length > 0) {
     const activeLeafPtyId = ptyIdsByLeafId[noteTarget.leafId]
-    // Why: layout maps can survive sleep/reconnect; ptyIdsByTabId is the live
-    // PTY source of truth for whether submitting with Enter is currently safe.
+    // Layout maps can survive reconnect; only live ptyIdsByTabId bindings make Enter safe.
     return activeLeafPtyId && livePtyIds.includes(activeLeafPtyId) ? activeLeafPtyId : null
   }
   return livePtyIds[0] ?? null

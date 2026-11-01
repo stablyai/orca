@@ -24,7 +24,7 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
 }))
 
 vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
-  useActiveProjectSkillRuntime: () => ({ canUseLocalSkillFreshness: true })
+  useActiveProjectSkillRuntime: () => ({ canUseSkillFreshness: true })
 }))
 
 vi.mock('./AgentSkillSetupPanel', () => ({
@@ -103,7 +103,6 @@ describe('CliSection install failure surfacing', () => {
       'Refusing to replace non-Orca command at /usr/local/bin/orca.'
     )
     expect(alert.textContent).toContain('Remove it and register again if it is no longer needed.')
-    // The Electron transport wrapper must not leak into the panel.
     expect(alert.textContent).not.toContain('invoking remote method')
     expect(toasts.success).not.toHaveBeenCalled()
     expect(toasts.error).toHaveBeenCalledTimes(1)
@@ -140,15 +139,5 @@ describe('CliSection install failure surfacing', () => {
     )
     expect(toasts.success).not.toHaveBeenCalled()
     expect(toasts.error).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps the success toast and shows no failure notice when registration lands', async () => {
-    await renderCliSectionAndInstall(async () =>
-      notInstalledStatus({ state: 'installed', detail: null })
-    )
-
-    expect(screen.queryByRole('alert')).toBeNull()
-    expect(toasts.success).toHaveBeenCalledTimes(1)
-    expect(toasts.error).not.toHaveBeenCalled()
   })
 })

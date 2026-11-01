@@ -2,7 +2,10 @@ import type { RuntimeDeviceGrant } from '../rpc/rpc-caller-scope'
 import type { DeviceRegistry, DeviceScope, TokenDeviceEntry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
-import type { RelayDeviceBinding, RelayRevokeOutbox } from '../relay/relay-revoke-outbox'
+import type {
+  RelayDeviceBinding,
+  RelayRevokeOutbox
+} from '../mobile-cloud-relay/relay-revoke-outbox'
 import type { PushUnregisterOutbox } from '../push/push-unregister-outbox'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
 import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
@@ -11,9 +14,11 @@ import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
 import { MobileDesktopRelay } from '../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileDesktopRelayHosts } from '../mobile-desktop-relay/mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from '../mobile-desktop-relay/mobile-relay-host-catalog'
+import { OnDemandServerWorktreeRows } from '../mobile-desktop-relay/on-demand-server-worktree-rows'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../shared/delegated-mobile-device-contract'
 import { allocateTerminalSubscriptionStreamId } from '../rpc/methods/terminal/terminal-subscription-stream-id'
+import { isStructuredNativeChatDefaultFor } from '../rpc/methods/structured-agent-session-policy'
 import {
   createWebClientUrl,
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
@@ -26,10 +31,6 @@ import {
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
   getDeviceRegistry(): DeviceRegistry | null {
     return this.deviceRegistry
-  }
-
-  getTlsFingerprint(): string | null {
-    return this.tlsFingerprint
   }
 
   getE2EEPublicKey(): string | null {
@@ -65,7 +66,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       (current.relayBinding.relayHostId !== binding.relayHostId ||
         current.relayBinding.ownerIdentityKey !== binding.ownerIdentityKey)
     ) {
-      // Why: switching the owning account/host must not strand the old cloud credential family, even if that account is offline.
+      // Switching account/host must durably revoke the old cloud credential family even while that account is offline.
       if (!this.queueRelayDeviceRevoke(current.relayBinding)) {
         return false
       }
@@ -96,14 +97,21 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       ? new MobileDesktopRelay({
           hosts,
           listPhones: () => this.listRelayedPhones(),
-          // Why: one allocator with local streams, so relayed ids never collide on the phone's socket.
-          allocateStreamId: allocateTerminalSubscriptionStreamId
+          // Share local stream allocator so relayed ids cannot collide on phone sockets.
+          allocateStreamId: allocateTerminalSubscriptionStreamId,
+          nativeChatDefault: (agent) => isStructuredNativeChatDefaultFor(this.runtime, agent)
         })
       : null
+    const { pairedServerRows } = this.runtime
+    this.detachPairedServerRows?.()
+    this.detachPairedServerRows = hosts && pairedServerRows ? pairedServerRows.attach(hosts) : null
     this.mobileRelayHostCatalog = hosts
       ? new MobileRelayHostCatalog({
           hosts,
-          hostLabelOverrides: () => getHostDisplayLabelOverrides(this.runtime.getClientSettings())
+          serverRows: pairedServerRows ?? new OnDemandServerWorktreeRows(hosts),
+          hostLabelOverrides: () =>
+            getHostDisplayLabelOverrides(this.runtime.requireStore().getSettings()),
+          getWorkspaceSession: (hostId) => this.runtime.getWorkspaceSessionForHost(hostId)
         })
       : null
   }
@@ -112,7 +120,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     const computerName = this.runtime.readMachineName()
     return (this.deviceRegistry?.listDevices() ?? [])
       .filter(
-        // Why: phones another desktop relays here are that desktop's to relay, not ours.
+        // Phones delegated by another desktop remain that desktop's relay responsibility.
         (device) =>
           device.scope === 'mobile' && device.lastSeenAt > 0 && device.parentDeviceId === undefined
       )
@@ -132,10 +140,9 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     name?: string
     rotate?: boolean
     scope?: DeviceScope
-    // Why: STA-2370 — recorded on the grant so a "This computer only" client reconnecting cannot make the
-    // next launch bind every interface. Defaults to network reach, which is what every other caller means.
+    // Persist local-only policy on grants so reconnect cannot expose every interface; other callers default to network reach (STA-2370).
     reach?: RuntimePairingReach
-    // Why: administrative permissions exist only when granted here, never added to a paired device later.
+    // Grant administrative permissions only at pairing, never as later device upgrades.
     grants?: readonly RuntimeDeviceGrant[]
   }):
     | PairingOfferUnavailable
@@ -190,7 +197,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       publicKeyB64,
       pairedDeviceId: device.deviceId,
       scope,
-      // Why runtime scope only: mobile never pins it, and every byte densifies the phone's QR.
+      // Runtime clients pin host identity; mobile does not need these extra QR bytes.
       ...(hostDescriptor && scope === 'runtime' ? { hostDescriptor } : {})
     })
     return {

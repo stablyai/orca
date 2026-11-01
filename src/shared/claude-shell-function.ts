@@ -1,12 +1,4 @@
-/**
- * `claude` re-reads the which-account file on every launch, so a switch reaches open terminals
- * (superset's wrapper rule). Defined only in a pane Orca routed (pointer env set) where `claude` is
- * a real executable. A missing or empty file is System default, which restores the user's own value
- * Orca's replaced; a CLAUDE_CONFIG_DIR the user set, as opposed to Orca's twin-marked value, wins.
- * Prints nothing: an account folder with no login is created, and Claude's own first run signs in
- * there. The shell's Anthropic auth passes through untouched, as on System default. A pointer that names no absolute folder (never written by Orca) runs nothing, since any
- * fallback would be another account.
- */
+/** Re-read account selection on every launch in Orca-routed panes with a real claude binary. Missing/empty pointer restores the user’s config; another pane override wins. Create account homes without a login silently and preserve Anthropic auth. Refuse nonabsolute pointers rather than run under the wrong account. */
 export function getPosixClaudeShellFunction(): string {
   return `__orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
 if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" && -x "\${__orca_claude_binary}" ]]; then
@@ -15,7 +7,8 @@ if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" 
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
     case "$__orca_claude_pointer" in '~/'*) __orca_claude_pointer="\${HOME:-}/\${__orca_claude_pointer#??}" ;; esac
     __orca_claude_home="$(cat "$__orca_claude_pointer" 2>/dev/null || :)"
-    if [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "\${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
+    if [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "\${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ] &&
+      { [ -z "\${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ] || [ "\${CLAUDE_CONFIG_DIR%/}" != "\${ORCA_CLAUDE_USER_CONFIG_DIR%/}" ]; }; then
       command claude "$@"; return
     fi
     # Why: Orca's value replaced the user's own at spawn, so System default restores theirs.
@@ -35,7 +28,7 @@ unset __orca_claude_binary
 `
 }
 
-/** Leading newline: the codex fragment it follows ends without one. */
+/** Leading newline separates the preceding codex fragment, which has no trailing newline. */
 export function getFishClaudeShellFunction(): string {
   return `
 set -l __orca_claude_type (type -t claude 2>/dev/null)
@@ -44,7 +37,9 @@ if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
     set -l pointer (string replace -r '^~/' "$HOME/" -- "$ORCA_CLAUDE_PROFILE_POINTER")
     set -l profile (cat "$pointer" 2>/dev/null)
-    if test -n "$CLAUDE_CONFIG_DIR"; and test "$CLAUDE_CONFIG_DIR" != "$ORCA_CLAUDE_INJECTED_CONFIG_DIR"
+    set -l own (string trim -r -c / -- "$ORCA_CLAUDE_USER_CONFIG_DIR")
+    set -l current (string trim -r -c / -- "$CLAUDE_CONFIG_DIR")
+    if test -n "$CLAUDE_CONFIG_DIR"; and test "$CLAUDE_CONFIG_DIR" != "$ORCA_CLAUDE_INJECTED_CONFIG_DIR"; and begin; test -z "$own"; or test "$current" != "$own"; end
       command claude $argv
       return $status
     end
@@ -67,10 +62,8 @@ set -e __orca_claude_type
 `
 }
 
-/** Leading newline: the codex fragment it follows ends without one. */
 export function getPowerShellClaudeShellFunction(): string {
-  return `
-$orcaClaudeCommand = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
+  return `$orcaClaudeCommand = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($env:ORCA_CLAUDE_PROFILE_POINTER -and $orcaClaudeCommand -and
     $orcaClaudeCommand.CommandType -in @("Application", "ExternalScript")) {
 function Global:claude {
@@ -82,8 +75,11 @@ function Global:claude {
         if ($env:ORCA_CLAUDE_PROFILE_POINTER -and (Test-Path -LiteralPath $env:ORCA_CLAUDE_PROFILE_POINTER -PathType Leaf)) {
             $orcaClaudeHome = [IO.File]::ReadAllText($env:ORCA_CLAUDE_PROFILE_POINTER).TrimEnd()
         }
-        if ($env:CLAUDE_CONFIG_DIR -and $env:CLAUDE_CONFIG_DIR -ne $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR) {
-            # The user's own value wins.
+        # Why the separator swap: Windows names one folder with either separator.
+        $own = ("$env:ORCA_CLAUDE_USER_CONFIG_DIR" -replace '/', '\\').TrimEnd('\\')
+        if ($env:CLAUDE_CONFIG_DIR -and $env:CLAUDE_CONFIG_DIR -ne $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR -and
+            (-not $own -or ("$env:CLAUDE_CONFIG_DIR" -replace '/', '\\').TrimEnd('\\') -ne $own)) {
+            # A value set in this pane, other than the user's own, wins.
         } elseif (-not $orcaClaudeHome) {
             Remove-Item Env:ORCA_CLAUDE_INJECTED_CONFIG_DIR -ErrorAction SilentlyContinue
             if ($env:CLAUDE_CONFIG_DIR -and $env:ORCA_CLAUDE_USER_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR = $env:ORCA_CLAUDE_USER_CONFIG_DIR }
@@ -97,7 +93,8 @@ function Global:claude {
             $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR = $orcaClaudeHome
         }
         $binary = Get-Command claude -CommandType Application,ExternalScript -ErrorAction Stop | Select-Object -First 1
-        if ($MyInvocation.ExpectingInput) { $input | & $binary.Source @args } else { & $binary.Source @args }
+        $claudeArgs = @(__OrcaEscapeNativeArgs $binary.Source $args)
+        if ($MyInvocation.ExpectingInput) { $input | & $binary.Source @claudeArgs } else { & $binary.Source @claudeArgs }
         $global:LASTEXITCODE = $LASTEXITCODE
     } catch { $global:LASTEXITCODE = 1; Write-Error $_ -ErrorAction Continue }
     finally {

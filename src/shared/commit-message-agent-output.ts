@@ -5,17 +5,12 @@ function isJcodeJsonResult(value: unknown): value is JcodeJsonResult {
   return typeof value === 'object' && value !== null && 'text' in value
 }
 
-/** Strips noise around the agent's output: surrounding whitespace, a single
- *  enclosing fenced code block, lone "Generating…" preamble lines some CLIs
- *  print before the real answer, and a reasoning block the output opens with. */
+/** Remove surrounding whitespace, one enclosing fence, CLI progress preambles and leading reasoning from generated answers. */
 export function cleanGeneratedCommitMessage(raw: string): string {
-  // Why: agent output can include very large generated bodies; normalize and
-  // unwrap by scanning boundaries instead of building newline-sized arrays.
+  // Scan boundaries instead of allocating newline arrays for large generated bodies.
   let text = normalizeGeneratedCommitMessageLineFeeds(raw).trim()
 
-  // Why: jcode --json emits a `{"text": …}` envelope (its plain-text mode
-  // mixes thinking and a "[Tokens]…" usage line into stdout); extract the
-  // answer field when the output is such an envelope.
+  // Extract jcode --json text; plain mode mixes thinking and token-usage lines into stdout.
   if (text.startsWith('{')) {
     try {
       const parsed: unknown = JSON.parse(text)
@@ -27,20 +22,17 @@ export function cleanGeneratedCommitMessage(raw: string): string {
     }
   }
 
-  // Why: jcode prints a trailing "[Tokens] upload: …" usage line after the
-  // answer; strip it so the result stays clean for branch/commit naming.
+  // Strip jcode’s trailing [Tokens] usage line before using the answer as a branch/commit name.
   const tokensUsageIndex = text.search(/\n\[Tokens\]\s/)
   if (tokensUsageIndex !== -1) {
     text = text.slice(0, tokensUsageIndex).trimEnd()
   }
 
-  // Why: real commit messages never start with an ellipsis or the word
-  // "Generating"/"Thinking" — those leak from CLIs that print a status line
-  // before the actual response.
+  // Discard CLI progress preambles before the actual answer.
   const firstNewline = text.indexOf('\n')
   if (firstNewline !== -1) {
     const firstLine = text.slice(0, firstNewline)
-    if (/^(generating|thinking)\b/i.test(firstLine) || /^[.…]+$/.test(firstLine.trim())) {
+    if (/^(generating|thinking)\b/i.test(firstLine) || /^[.\u2026]+$/.test(firstLine.trim())) {
       text = text.slice(firstNewline + 1).trim()
     }
   }
@@ -52,15 +44,13 @@ export function cleanGeneratedCommitMessage(raw: string): string {
     text = fenced.trim()
   }
 
-  // Why: some CLIs format a one-shot answer as a list item even when the
-  // prompt asks for raw text; a Git subject should not carry that marker.
-  text = text.replace(/^(\s*)(?:[-*•●]\s+|\d+[.)]\s+)/, '$1').trim()
+  // Some CLIs ignore raw-text instructions and emit list markers; keep those out of Git subjects.
+  text = text.replace(/^(\s*)(?:[-*\u2022\u25CF]\s+|\d+[.)]\s+)/, '$1').trim()
 
   return text
 }
 
-// Why: reasoning models print their chain of thought before the answer.
-// DeepSeek-R1, Qwen3 and Kimi K2 use <think>; Kimi-VL-Thinking uses ◁think▷.
+// DeepSeek-R1/Qwen3/Kimi K2 reasoning uses <think>; Kimi-VL-Thinking uses ◁think▷.
 const REASONING_TAGS = [
   { open: '<think>', close: '</think>' },
   { open: '◁think▷', close: '◁/think▷' }
@@ -77,10 +67,7 @@ function stripLeadingReasoningBlock(text: string): string {
   return text
 }
 
-/** Drops reasoning that ends in a closing tag with no opening tag before it.
- *  Chat templates that prefill the opening tag in the prompt (Qwen3-Thinking,
- *  DeepSeek-R1-0528, Kimi K2.5) keep it out of stdout. Only custom commands
- *  should use this: any other message may legitimately mention the closing tag. */
+/** Custom commands only: Qwen3-Thinking/DeepSeek-R1-0528/Kimi K2.5 may prefill the opening reasoning tag, emitting only its close. Other messages can legitimately mention closing tags. */
 export function stripPrefilledReasoningPreamble(text: string): string {
   for (const { open, close } of REASONING_TAGS) {
     const closeIndex = text.indexOf(close)
@@ -153,8 +140,7 @@ function isCommitFenceInfoCharacter(code: number): boolean {
 export function stripAnsiControlSequences(value: string): string {
   const esc = String.fromCharCode(27)
   const bel = String.fromCharCode(7)
-  // CSI (colors/cursor) and OSC (titles/hyperlinks) both appear in raw CLI
-  // failure output once it is shown verbatim instead of parsed.
+  // Raw CLI failures can contain both CSI colors/cursor and OSC titles/hyperlinks.
   return value.replace(
     new RegExp(
       `${esc}(?:\\[[0-?]*[ -/]*[@-~]|\\][^${bel}${esc}\\r\\n]*(?:${bel}|${esc}\\\\))`,
@@ -168,26 +154,17 @@ function stripAnsiIfPresent(value: string): string {
   return value.includes(String.fromCharCode(27)) ? stripAnsiControlSequences(value) : value
 }
 
-// Only the two ends of the output are read, like glancing at the first and
-// last lines of a long log.
+// Bound scans to the output’s ends.
 const FAILURE_EXCERPT_SCAN_WINDOW = 8192
 const FAILURE_EXCERPT_HEAD_LINE_COUNT = 2
-// Why: when both ends are shown, the tail gets the larger budget because most
-// CLIs print the operative error last; the head budget covers CLIs that
-// front-load it. A lone excerpt keeps the whole toast/persistence budget.
+// Give the tail more space for typical final diagnostics; preserve head space for CLIs that front-load errors. Single excerpts use the full budget.
 const FAILURE_EXCERPT_HEAD_BUDGET = 100
 const FAILURE_EXCERPT_TAIL_BUDGET = 130
 const FAILURE_EXCERPT_SINGLE_BUDGET = 240
 
-// Why: agent CLIs share no error format, and per-CLI parsing rots every time a
-// vendor rewords a message. Orca deliberately does NOT interpret failure
-// output — it excerpts it positionally (first lines plus last line) so every
-// CLI's real failure text reaches the user. Callers must still sanitize the
-// excerpt before display or persistence.
+// CLI error formats drift; excerpt first/last lines without interpreting vendor wording. Callers must sanitize before display/persistence.
 export function excerptAgentFailureOutput(stdout: string, stderr: string): string | null {
-  // stderr is where CLIs put diagnostics; stdout is the fallback for the ones
-  // that report failures inline (and often echoes the prompt, so it never
-  // overrides a non-blank stderr).
+  // Prefer stderr diagnostics; stdout is fallback and may echo the prompt.
   const source = /\S/.test(stderr) ? stderr : stdout
   if (!/\S/.test(source)) {
     return null

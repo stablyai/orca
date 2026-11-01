@@ -117,7 +117,7 @@ describe('writeStartupCommandWhenShellReady', () => {
     expect(proc._writes).toEqual(['codex\r'])
   })
 
-  // Why: multiline startup commands must be bracketed-paste wrapped (ESC[200~ … ESC[201~) so shells insert them literally instead of treating each LF as Enter.
+  // Bracketed paste inserts multiline prompts literally instead of submitting each LF.
   it('wraps a multiline startup command in bracketed paste when the shell supports it', async () => {
     const proc = createMockProc()
     const ready = Promise.resolve()
@@ -153,8 +153,7 @@ describe('writeStartupCommandWhenShellReady', () => {
     const proc = createMockProc()
     const ready = Promise.resolve()
     const command = 'echo one\necho two'
-    // Why CR between the lines: without bracketed paste each break submits its own line.
-    // Why: bracketedPasteSafe defaults false, so keep the raw path to avoid echoing ESC[200~ on shells without bracketed paste.
+    // Unsupported shells need raw CR submissions; bracketed-paste escapes would be echoed literally.
     writeStartupCommandWhenShellReady(ready, proc, command, () => {})
 
     await ready

@@ -3,6 +3,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
 import {
   buildTaskSourceContextFromRepo,
+  haveConflictingTaskSourceAccounts,
   normalizeTaskSourceContext,
   type TaskSourceContext,
   type TaskProvider
@@ -91,9 +92,7 @@ export function isWorkspaceAttachmentLinked(
       !newContext ||
       (oldContext.hostId === newContext.hostId &&
         oldContext.projectId === newContext.projectId &&
-        (!oldContext.accountLabel ||
-          !newContext.accountLabel ||
-          oldContext.accountLabel === newContext.accountLabel))
+        !haveConflictingTaskSourceAccounts(oldContext, newContext))
     )
   })
 }

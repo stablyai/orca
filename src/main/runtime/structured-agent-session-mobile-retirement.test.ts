@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import { agentSessionPromptAttentionKey } from '../../shared/agent-session-attention'
-import type { AgentSessionTurnCompletionEvent } from '../../shared/agent-session-wire'
-import { projectStructuredAgentSessionStatusState } from '../../shared/structured-agent-session-projection'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionPromptAttentionKey } from '../../shared/agent-session/agent-session-attention'
+import type { AgentSessionTurnCompletionEvent } from '../../shared/agent-session/view/agent-session-turn-completion-wire'
+import { projectStructuredAgentSessionStatusState } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { StructuredAgentSessionTurnCompletionFeed } from '../native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
@@ -73,14 +73,14 @@ describe('host prompt delivery and retirement', () => {
     ['failure', true]
   ] as const)(
     'withdraws the prompt beside %s (announced earlier: %s)',
-    (outcome, announcedEarlier) => {
+    async (outcome, announcedEarlier) => {
       const directory = mkdtempSync(join(tmpdir(), 'orca-prompt-retirement-'))
+      const controller = new RuntimeMobileNotificationController()
       try {
         let items = [USER, turn()]
         let sequence = 1
         const events: MobileNotificationEvent[] = []
         const legacy: AgentSessionTurnCompletionEvent[] = []
-        const controller = new RuntimeMobileNotificationController()
         controller.configureDismissalStore(directory)
         controller.onDispatched((event) => events.push(event))
         const delivery = createStructuredAttentionMobileDelivery({
@@ -92,9 +92,12 @@ describe('host prompt delivery and retirement', () => {
             customSoundId: 'system',
             customSoundPath: null,
             customSoundVolume: 1,
-            mutedNotificationSourceIds: []
+            mutedNotificationSourceIds: [],
+            notifyHiddenWorkspaces: true
           }),
           readWorkspaceLabels: () => ({}),
+          isWorkspaceMuted: () => false,
+          readOrchestration: () => undefined,
           dispatch: (event) => controller.dispatch(event),
           reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
           now: () => 42
@@ -164,6 +167,7 @@ describe('host prompt delivery and retirement', () => {
           Number(promptAnnounced) + (outcome === 'failure' ? 1 : 0)
         )
       } finally {
+        await controller.closeDismissals()
         rmSync(directory, { recursive: true, force: true })
       }
     }

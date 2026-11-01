@@ -27,8 +27,7 @@ type Props = {
     fieldId: string,
     value: GitHubProjectFieldMutationValue | null
   ) => void
-  /** Rendered instead of the board when no column field is resolvable — the
-   *  caller supplies the table list so the items stay usable. */
+  /** Show the caller’s table fallback when the view has no resolvable column field. */
   fallback: React.ReactNode
 }
 

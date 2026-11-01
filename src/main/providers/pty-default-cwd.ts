@@ -19,11 +19,9 @@ export function resolveSafePtyDefaultCwd(env: NodeJS.ProcessEnv = process.env): 
       ? [env.USERPROFILE, homeDrivePath(env), homedir()]
       : [env.HOME, homedir()]
   const selected = candidates.find(isSafeImplicitPtyCwd)
-  // Why: silently falling back to "/" or a drive root is the exact runaway-CPU
-  // bug this module prevents (see runaway-cpu-hidden-usage-pty-design.md) — fail loud.
+  // Root fallback can trigger runaway discovery; refuse when no safe home exists.
   if (!selected) {
-    // Log the rejected candidates so the rare "no safe home at all" environment
-    // (e.g. HOME=/ or unset in a minimal container) is diagnosable, not opaque.
+    // Record candidate values so malformed home environments remain diagnosable.
     console.error(
       '[pty-default-cwd] No safe default working directory for terminal launch; every home candidate resolved to a root-like path.',
       { platform: process.platform, candidates }

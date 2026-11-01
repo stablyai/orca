@@ -1,24 +1,13 @@
-// Mixed-version coverage for the structured attention stream, with real frames on it.
-//
-// `agentSession.subscribeTurnCompletions` now also carries a `prompt` arm, sent only to a subscriber
-// that opted in with `includePrompts`, and a new `agentSession.acknowledgeAttention` method retires
-// what a host pushed its phones. Each pairing below runs one build's real RPC method over that same
-// build's real attention feed, and drives a turn that asks for approval mid-turn and then settles:
-//
-// - current client, current host: the prompt arrives as its own frame, once;
-// - older client (no opt-in), current host: only frames an older reader knows ever arrive;
-// - current client, baseline host: the opt-in is ignored rather than refused, completions still come,
-//   and the acknowledgement method is absent exactly when its capability is.
+// Pair real attention feeds and RPC dispatchers across versions: send prompt frames only to opted-in clients.
+// Older hosts must ignore includePrompts, still deliver completion, and expose acknowledgement only with its capability.
 
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
-import { projectStructuredAgentSessionStatusState } from '../../../src/shared/structured-agent-session-projection'
-import {
-  AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { projectStructuredAgentSessionStatusState } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
+import { AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-attention-capabilities'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

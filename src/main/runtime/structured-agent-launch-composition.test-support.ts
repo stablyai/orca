@@ -1,7 +1,10 @@
-// Each agent's composed launch resolver over test doubles, built the way its registration builds
-// it, so resolver tests exercise the shared launch path rather than a copy of it.
+import type { ClaudeAccountRecipe } from '../../shared/agent-session-acquired-account'
+// Build agent launch resolvers with production composition over test doubles so tests exercise the shared path.
 
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import {
@@ -33,13 +36,16 @@ import {
 
 export const TEST_SPAWN_TOKEN = 'test-spawn-token'
 
-export type LaunchTestSources = Pick<StructuredAgentLaunchSources, 'store'> & {
+export type LaunchTestSources = {
+  store: Pick<AgentSessionRecordStore, 'getRecord' | 'pinLaunchDirectory'> &
+    Partial<Pick<AgentSessionRecordStore, 'selectWritableRecord' | 'requireWritableRecord'>>
   resolveWorkspacePath?: (workspaceId: string) => Promise<string>
   /** The base env; none is an empty one. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveLaunchEnv?: (agent: string) => Record<string, string>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   prepareVisuals?: PrepareNativeChatVisuals
+  refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
 }
 
 function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
@@ -52,7 +58,28 @@ function launchSources(deps: LaunchTestSources): StructuredAgentLaunchSources {
   const resolveEnvironment = deps.resolveEnvironment
   const resolveBaseEnvironment = async () => definedEnv((await resolveEnvironment?.()) ?? {})
   return {
-    store: deps.store,
+    store: {
+      pinLaunchDirectory: (id, directory) => deps.store.pinLaunchDirectory(id, directory),
+      selectWritableRecord: (id) => {
+        if (deps.store.selectWritableRecord) {
+          return deps.store.selectWritableRecord(id)
+        }
+        const record = deps.store.getRecord(id)
+        return record ? { kind: 'writable', record } : { kind: 'missing' }
+      },
+      requireWritableRecord: (id) => {
+        if (deps.store.requireWritableRecord) {
+          return deps.store.requireWritableRecord(id)
+        }
+        const record = deps.store.getRecord(id)
+        if (!record) {
+          throw agentSessionRefusalError('agent_session_identity_required', {
+            reason: 'recordMissing'
+          })
+        }
+        return record
+      }
+    },
     resolveWorkspacePath: deps.resolveWorkspacePath ?? (async (id) => `/repos/${id}`),
     resolveBaseEnvironment,
     resolveAgentEnvironment: async (agent) => ({
@@ -61,7 +88,10 @@ function launchSources(deps: LaunchTestSources): StructuredAgentLaunchSources {
     }),
     ...(deps.resolveLaunchEnv ? { resolveAgentLaunchEnv: deps.resolveLaunchEnv } : {}),
     ...(deps.resolveCommandSettings ? { resolveCommandSettings: deps.resolveCommandSettings } : {}),
-    ...(deps.prepareVisuals ? { prepareVisuals: deps.prepareVisuals } : {})
+    ...(deps.prepareVisuals ? { prepareVisuals: deps.prepareVisuals } : {}),
+    ...(deps.refreshAfterMissingProgram
+      ? { refreshAfterMissingProgram: deps.refreshAfterMissingProgram }
+      : {})
   }
 }
 
@@ -74,11 +104,21 @@ function withTestSpawnToken<L>(
 ) {
   const resolve = composeStructuredLaunch(definition, sources, part)
   const read = composeStructuredLaunchRead(definition, sources, part)
-  return (input: { identity: AgentSessionJournalIdentity; spawnToken?: string | null }) => {
+  return (input: {
+    identity: AgentSessionJournalIdentity
+    spawnToken?: string | null
+    permissionMode?: AgentChatPermissionChoice
+    accountRecipe?: ClaudeAccountRecipe
+  }) => {
     const spawnToken = input.spawnToken === undefined ? defaultToken : input.spawnToken
     return spawnToken === null
       ? read(input.identity)
-      : resolve({ identity: input.identity, spawnToken })
+      : resolve({
+          identity: input.identity,
+          spawnToken,
+          ...(input.accountRecipe ? { accountRecipe: input.accountRecipe } : {}),
+          ...(input.permissionMode ? { permissionMode: input.permissionMode } : {})
+        })
   }
 }
 
@@ -97,12 +137,14 @@ export function createCodexStructuredLaunchResolver(
 /** Unsealed unless a token is passed: the env an agent part produced, before the seal. */
 export function createAcpStructuredLaunchResolver(
   spec: AcpLaunchSpec,
-  deps: LaunchTestSources & AcpStructuredLaunchPartDeps
+  deps: LaunchTestSources &
+    Omit<AcpStructuredLaunchPartDeps, 'dataDirectory'> &
+    Partial<Pick<AcpStructuredLaunchPartDeps, 'dataDirectory'>>
 ) {
   return withTestSpawnToken(
     acpStructuredAgentDefinition(spec),
     launchSources(deps),
-    acpStructuredLaunchPart(spec, deps),
+    acpStructuredLaunchPart(spec, { dataDirectory: '/orca-data', ...deps }),
     null
   )
 }
@@ -114,9 +156,7 @@ export function createPiRpcLaunchResolver(deps: LaunchTestSources & PiRpcLaunchP
     resolve({ identity, spawnToken })
 }
 
-/** Sealed with `TEST_SPAWN_TOKEN` unless the test passes another: Claude's launch env has always
- *  carried the session's identity. `resolveEnv` is Claude's overlay; `resolveInheritedEnv`, its
- *  base, defaults to this process's env as a launch without one inherits it. */
+/** Seal Claude with TEST_SPAWN_TOKEN unless overridden; resolveEnv overlays resolveInheritedEnv, which defaults to process.env. */
 export function createClaudeStructuredLaunchResolver(
   deps: Omit<LaunchTestSources, 'resolveEnvironment' | 'resolveLaunchEnv'> &
     Pick<ClaudeEnvDeps, 'resolveInheritedEnv'> & {

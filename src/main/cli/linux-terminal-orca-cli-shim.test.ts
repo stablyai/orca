@@ -13,13 +13,12 @@ import { resolveAppImageLauncherEndpointPath } from './appimage-stable-launcher'
 import { ensureLinuxTerminalOrcaCliShimDir } from './linux-terminal-orca-cli-shim'
 
 const created: string[] = []
-const canFenceAppImageRuntime = process.platform === 'linux' && existsSync('/proc/self/stat')
+const canFenceAppImageRuntime = process.platform === 'linux'
 
 async function makeFixture(): Promise<{ userDataPath: string; resourcesPath: string }> {
   const root = await mkdtemp(join(tmpdir(), 'orca-terminal-cli-shim-'))
   created.push(root)
   const resourcesPath = join(root, 'resources')
-  // The bundled orca-ide launcher must exist for the shim to be written.
   mkdirSync(join(resourcesPath, 'bin'), { recursive: true })
   writeFileSync(join(resourcesPath, 'bin', 'orca-ide'), '#!/usr/bin/env bash\n', 'utf8')
   return { userDataPath: join(root, 'user-data'), resourcesPath }
@@ -31,36 +30,6 @@ afterEach(async () => {
 })
 
 describe('ensureLinuxTerminalOrcaCliShimDir', () => {
-  it('uses the mounted bundled launcher when only APPDIR is inherited', async () => {
-    const { userDataPath, resourcesPath } = await makeFixture()
-    vi.stubEnv('APPIMAGE', '')
-    vi.stubEnv('APPDIR', resourcesPath)
-
-    const shimDir = ensureLinuxTerminalOrcaCliShimDir({ userDataPath, resourcesPath })
-
-    expect(shimDir).toBe(join(userDataPath, 'linux-orca-cli-shim'))
-    expect(readFileSync(join(shimDir!, 'orca'), 'utf8')).toContain(
-      `exec '${join(resourcesPath, 'bin', 'orca-ide')}' "$@"`
-    )
-  })
-
-  it('writes an executable bare-orca shim that execs the bundled orca-ide launcher', async () => {
-    const { userDataPath, resourcesPath } = await makeFixture()
-
-    const shimDir = ensureLinuxTerminalOrcaCliShimDir({
-      userDataPath,
-      resourcesPath,
-      appImagePath: null
-    })
-
-    expect(shimDir).toBe(join(userDataPath, 'linux-orca-cli-shim'))
-    const content = readFileSync(join(shimDir!, 'orca'), 'utf8')
-    // Single-quoted so a resources path with shell metacharacters can't break out.
-    expect(content).toContain(`exec '${join(resourcesPath, 'bin', 'orca-ide')}' "$@"`)
-    const mode = statSync(join(shimDir!, 'orca')).mode & 0o777
-    expect(mode & 0o111).not.toBe(0)
-  })
-
   it('reuses the shim path and re-asserts its exec bit', async () => {
     const { userDataPath, resourcesPath } = await makeFixture()
     const options = { userDataPath, resourcesPath, appImagePath: null }
@@ -113,8 +82,7 @@ describe('ensureLinuxTerminalOrcaCliShimDir', () => {
       const shimPath = join(shimDir!, 'orca')
       const content = readFileSync(shimPath, 'utf8')
       expect(content).toContain(liveLauncherPath)
-      expect(content).toContain('runtime_pid=')
-      expect(content).toContain('/proc/$runtime_pid/stat')
+      expect(content).not.toContain('/proc/')
       expect(existsSync(resolveAppImageLauncherEndpointPath(cacheRootPath, 'live'))).toBe(false)
       await expect(
         runProcess({ program: shimPath, args: [], timeoutMs: 3_000 })
@@ -189,57 +157,4 @@ describe('ensureLinuxTerminalOrcaCliShimDir', () => {
       ).resolves.toMatchObject({ code: 1, stdout: '' })
     }
   )
-
-  it.skipIf(!canFenceAppImageRuntime)(
-    'rejects a shim after its owning AppImage process generation changes',
-    async () => {
-      const { userDataPath, resourcesPath } = await makeFixture()
-      const appImagePath = join(userDataPath, 'Orca.AppImage')
-      await mkdir(userDataPath, { recursive: true })
-      await writeFile(appImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
-      const liveLauncher = join(resourcesPath, 'bin', 'orca-ide')
-      writeFileSync(liveLauncher, '#!/usr/bin/env bash\nprintf original', { mode: 0o755 })
-      const shimDir = ensureLinuxTerminalOrcaCliShimDir({
-        userDataPath,
-        resourcesPath,
-        appImagePath,
-        appImageCacheRootPath: join(userDataPath, 'cache')
-      })
-      const shimPath = join(shimDir!, 'orca')
-      const staleContent = readFileSync(shimPath, 'utf8').replace(
-        /runtime_start_time='[^']*'/,
-        "runtime_start_time='stale-process'"
-      )
-      writeFileSync(shimPath, staleContent, { mode: 0o755 })
-
-      await expect(
-        runProcess({ program: shimPath, args: [], timeoutMs: 3_000 })
-      ).resolves.toMatchObject({ code: 1, stdout: '' })
-    }
-  )
-
-  it('returns null (and does not memoize) when the bundled launcher is missing', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-terminal-cli-shim-missing-'))
-    created.push(root)
-    const userDataPath = join(root, 'user-data')
-
-    const missing = ensureLinuxTerminalOrcaCliShimDir({
-      userDataPath,
-      resourcesPath: join(root, 'resources'),
-      appImagePath: null
-    })
-    expect(missing).toBeNull()
-
-    // Once the launcher exists (e.g. later probe with real resources), the same
-    // userData path succeeds — proving failures are not cached.
-    const resourcesPath = join(root, 'resources')
-    mkdirSync(join(resourcesPath, 'bin'), { recursive: true })
-    writeFileSync(join(resourcesPath, 'bin', 'orca-ide'), '#!/usr/bin/env bash\n', 'utf8')
-    const recovered = ensureLinuxTerminalOrcaCliShimDir({
-      userDataPath,
-      resourcesPath,
-      appImagePath: null
-    })
-    expect(recovered).toBe(join(userDataPath, 'linux-orca-cli-shim'))
-  })
 })

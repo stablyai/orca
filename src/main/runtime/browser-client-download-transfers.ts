@@ -9,8 +9,7 @@ import {
   normalizeBrowserDownloadFilename
 } from '../../shared/browser-download-filename'
 
-// Why: client-hosted downloads land in the remote workspace, not the desktop, so they need a
-// stable in-workspace home that the containment-checked file transfer path can reach.
+// Remote downloads need an in-workspace home reachable through containment-checked transfers.
 export const BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY = '.orca/browser-downloads'
 
 export type BrowserClientDownloadTransferDependencies = {
@@ -37,11 +36,10 @@ type TransferSession = {
   workspaceId: string
   tempRelativePath: string
   bytesWritten: number
-  /** Set the moment an abort or page release is requested, before its cleanup is queued. */
+  /** Set synchronously before queued cleanup. */
   canceled: boolean
-  /** Serializes this transfer's writes, commits, and cleanup against each other. */
   operations: Promise<void>
-  /** Armed only while the transfer is idle, so a slow chunk is never mistaken for a stranded one. */
+  /** Armed only while idle so slow chunks never look stranded. */
   idleTimer: ReturnType<typeof setTimeout> | null
 }
 
@@ -61,12 +59,10 @@ export type BrowserClientDownloadChunk = {
   platform: NodeJS.Platform
 }
 
-// Why: transfer ids are per-download UUIDs, so a settled id is never legitimately reused; keeping a
-// bounded trail of them stops a late chunk from resurrecting a transfer the runtime already cleaned.
+// UUIDs are never reused; retain a bounded settled trail to reject late resurrection.
 const MIN_SETTLED_TRANSFER_TRAIL = 64
 
-// Why: the client's abort is lost exactly when it matters -- a transport blip rejects it silently --
-// so a transfer nobody is feeding has to retire itself or stranded ones exhaust the shared slots.
+// Lost aborts must not strand transfers and exhaust shared slots.
 export const BROWSER_CLIENT_DOWNLOAD_TRANSFER_IDLE_TIMEOUT_MS = 3 * 60_000
 
 export class BrowserClientDownloadTransferStore {
@@ -102,10 +98,13 @@ export class BrowserClientDownloadTransferStore {
     return this.serialize(session, () => this.release(session)).then(() => true)
   }
 
-  // Why: page close and lease fencing must not leave half-written files in the remote workspace.
-  async releasePage(browserPageId: string): Promise<void> {
+  // Page close/fencing must remove partial remote files.
+  /** Omitting the generation releases every generation of the page. */
+  async releasePage(browserPageId: string, pageHostGeneration?: number): Promise<void> {
     const owned = [...this.sessions.values()].filter(
-      (session) => session.browserPageId === browserPageId
+      (session) =>
+        session.browserPageId === browserPageId &&
+        (pageHostGeneration === undefined || session.pageHostGeneration === pageHostGeneration)
     )
     for (const session of owned) {
       session.canceled = true
@@ -144,7 +143,6 @@ export class BrowserClientDownloadTransferStore {
     await this.serialize(session, () => this.release(session)).catch(() => undefined)
   }
 
-  /** Runs `operation` after every earlier operation on the same transfer has settled. */
   private serialize<T>(session: TransferSession, operation: () => Promise<T>): Promise<T> {
     const running = session.operations.then(operation, operation)
     session.operations = running.then(
@@ -186,8 +184,7 @@ export class BrowserClientDownloadTransferStore {
       await this.release(session)
       throw error
     }
-    // Why: cancellation during the write leaves the temp file for the queued release to remove; the
-    // transfer must not keep accounting bytes or continue to a commit after that.
+    // Cancellation during write leaves cleanup queued; stop accounting/commit now.
     this.assertLive(session)
     session.bytesWritten += byteLength
     if (!input.final) {
@@ -272,8 +269,7 @@ export class BrowserClientDownloadTransferStore {
           finalRelativePath
         })
       } catch (error) {
-        // Why: both commit backends are exclusive, so a transfer that lost the name race between
-        // `exists` and here must take the next candidate instead of losing its transferred bytes.
+        // Both backends commit exclusively; retry name races without losing transferred bytes.
         if (!isDestinationExistsError(error)) {
           throw error
         }
@@ -297,7 +293,7 @@ export class BrowserClientDownloadTransferStore {
         relativePath: session.tempRelativePath
       })
     } catch {
-      // Why: a partial file that cannot be removed must not turn cleanup into a failed command.
+      // Failed partial-file removal must not fail the cleanup command.
     }
   }
 
@@ -317,8 +313,7 @@ export class BrowserClientDownloadTransferStore {
   }
 }
 
-// Why: the local backend rejects with an errno EEXIST, the SSH backend with the relay's re-thrown
-// message, which crosses the RPC boundary as text only.
+// Local EEXIST becomes message-only text across the SSH RPC boundary.
 function isDestinationExistsError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false

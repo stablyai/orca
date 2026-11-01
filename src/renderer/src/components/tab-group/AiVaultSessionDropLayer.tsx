@@ -1,8 +1,8 @@
 import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
+import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault-resume-target'
 import {
-  canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
@@ -18,12 +18,12 @@ import {
   getAiVaultAgentProviderSession
 } from '@/lib/ai-vault-resume-command'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
-import { aiVaultSessionNeedsResumePreparation } from '@/lib/ai-vault-session-resume-preparation'
+import { prepareAiVaultTerminalResumeRequest } from '@/lib/ai-vault-session-resume-preparation'
+import { describeAiVaultResumeFailure } from '@/lib/ai-vault-resume-refusal'
 import { useAppStore } from '@/store'
 import { resolveDropZone } from './tab-drop-zone'
 import type { TabDropZone } from './useTabDragSplit'
 import { translate } from '@/i18n/i18n'
-import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 
 type PaneDropTarget = {
@@ -178,8 +178,7 @@ export default function AiVaultSessionDropLayer({
         return true
       }
       if (payload.structuredSession) {
-        // Same row, same reveal as clicking Resume. Activating by id alone cannot reach a chat
-        // whose tab is closed, which is the case this drop is most often used for.
+        // Use Resume’s reveal path because activating a chat by ID alone cannot reopen its closed tab.
         void activateAiVaultStructuredSession(payload)
         return true
       }
@@ -222,23 +221,22 @@ export default function AiVaultSessionDropLayer({
           )
         )
       }
-      const preparation =
-        payload.sessionFilePath &&
-        payload.sessionExecutionHostId &&
-        payload.codexHome !== undefined &&
-        aiVaultSessionNeedsResumePreparation({
-          agent: payload.agent,
-          codexHome: payload.codexHome,
-          executionHostId: payload.sessionExecutionHostId
-        })
-          ? window.api.aiVault.prepareSessionResume({
-              agent: payload.agent,
-              sessionId: payload.sessionId,
-              filePath: payload.sessionFilePath,
-              executionHostId: payload.sessionExecutionHostId,
-              codexHome: payload.codexHome
-            })
-          : Promise.resolve<AiVaultPrepareSessionResumeResult>({ useRealCodexHome: false })
+      if (!payload.sessionFilePath || !payload.sessionExecutionHostId) {
+        toast.error(
+          translate(
+            'auto.components.tab.group.AiVaultSessionDropLayer.oldPayload',
+            'This session was dragged from an older Orca window. Resume it from Session History instead.'
+          )
+        )
+        return true
+      }
+      const preparation = prepareAiVaultTerminalResumeRequest({
+        agent: payload.agent,
+        sessionId: payload.sessionId,
+        filePath: payload.sessionFilePath,
+        executionHostId: payload.sessionExecutionHostId,
+        codexHome: payload.codexHome ?? null
+      })
       void preparation
         .then((result) => {
           const startup = result.useRealCodexHome
@@ -252,13 +250,17 @@ export default function AiVaultSessionDropLayer({
                 })
               : payload
           if (!startup) {
-            // Why: the host just proved the prebuilt command pins another
-            // account's home, so an unrepinnable payload (older serializer)
-            // must fail loudly rather than silently resume under it.
+            // Refuse old payloads that cannot repin the startup command; silently using another account’s home is unsafe.
             throw new Error(
               result.substituteCodexHome
-                ? 'This session was dragged from an older Orca window, so Orca cannot retarget it to the selected Codex account. Resume it from the Session History panel instead.'
-                : 'Orca could not prepare this legacy Codex session. Retry resume.'
+                ? translate(
+                    'auto.components.tab.group.AiVaultSessionDropLayer.legacyDragCannotRetarget',
+                    'This session was dragged from an older Orca window, so Orca cannot retarget it to the selected Codex account. Resume it from the Session History panel instead.'
+                  )
+                : translate(
+                    'auto.components.tab.group.AiVaultSessionDropLayer.legacyDragPrepareFailed',
+                    'Orca could not prepare this legacy Codex session. Retry resume.'
+                  )
             )
           }
           const providerSession = getAiVaultAgentProviderSession({
@@ -282,7 +284,9 @@ export default function AiVaultSessionDropLayer({
             void launchResult.runtimeLaunch.then((outcome) => {
               if (outcome.status === 'failed') {
                 toast.error(
-                  outcome.message ||
+                  (outcome.message
+                    ? describeAiVaultResumeFailure(new Error(outcome.message), payload.agent)
+                    : null) ||
                     translate(
                       'auto.lib.launch.agent.in.new.tab.11cce5cc77',
                       'Could not launch {{value0}} in a new terminal.',
@@ -298,14 +302,7 @@ export default function AiVaultSessionDropLayer({
           showQueuedToast()
         })
         .catch((error: unknown) => {
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : translate(
-                  'auto.components.right.sidebar.AiVaultPanel.prepareSessionResumeFailed',
-                  'Could not prepare this session for resume.'
-                )
-          )
+          toast.error(describeAiVaultResumeFailure(error, payload.agent))
         })
       return true
     },

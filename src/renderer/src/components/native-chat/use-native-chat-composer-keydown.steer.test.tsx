@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
 
-// Cmd/Ctrl+Enter in an empty composer: steer the newest queued draft when one
-// exists; with nothing queued, or with text or images in the composer, the
-// chord stays what it always was — a send.
-// The primary modifier follows the platform (⌘ on Mac, Ctrl elsewhere).
+// Cmd/Ctrl+Enter sends the draft the other way; Cmd/Ctrl+Shift+Enter steers the head card.
 
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
@@ -16,7 +13,7 @@ vi.mock('./native-chat-shortcut', () => ({
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 
 function setup(
-  steerQueued?: () => boolean,
+  steerHead?: () => boolean,
   composer: { draft?: string; hasAttachments?: boolean } = {}
 ) {
   const callbacks = {
@@ -38,19 +35,27 @@ function setup(
       draft: composer.draft ?? '',
       hasAttachments: composer.hasAttachments ?? false,
       isComposing: () => false,
-      ...(steerQueued ? { steerQueued } : {}),
+      ...(steerHead ? { steerHead } : {}),
       ...callbacks
     })
   )
   return { handler: hook.result.current, callbacks }
 }
 
-function enter(modifiers: Partial<{ metaKey: boolean; ctrlKey: boolean }> = {}) {
+function enter(
+  modifiers: Partial<{
+    metaKey: boolean
+    ctrlKey: boolean
+    shiftKey: boolean
+    repeat: boolean
+  }> = {}
+) {
   return {
     key: 'Enter',
     shiftKey: false,
     metaKey: false,
     ctrlKey: false,
+    repeat: false,
     keyCode: 0,
     nativeEvent: { isComposing: false },
     preventDefault: vi.fn(),
@@ -61,60 +66,71 @@ function enter(modifiers: Partial<{ metaKey: boolean; ctrlKey: boolean }> = {}) 
 type Handler = ReturnType<typeof useNativeChatComposerKeyDown>
 
 function press(handler: Handler, event: ReturnType<typeof enter>): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only key, modifiers, keyCode, nativeEvent and preventDefault, all present on this stub.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only key, modifiers, repeat, keyCode, nativeEvent and preventDefault, all present on this stub.
   handler(event as unknown as Parameters<Handler>[0])
 }
 
-describe('composer steer chord', () => {
-  it('⌘+Enter on Mac steers the newest queued draft instead of sending', () => {
+describe('composer send and steer chords', () => {
+  it('⌘+Enter with text or an image sends it the other way', () => {
     platform.isMac = true
-    const steerQueued = vi.fn(() => true)
-    const { handler, callbacks } = setup(steerQueued)
+    const typed = setup(undefined, { draft: 'typed text' })
+    press(typed.handler, enter({ metaKey: true }))
+    expect(typed.callbacks.send).toHaveBeenCalledExactlyOnceWith({ alternate: true })
+    const image = setup(undefined, { hasAttachments: true })
+    press(image.handler, enter({ metaKey: true }))
+    expect(image.callbacks.send).toHaveBeenCalledExactlyOnceWith({ alternate: true })
+  })
+
+  it('⌘+Enter on an empty composer does nothing', () => {
+    platform.isMac = true
+    const steerHead = vi.fn(() => true)
+    const { handler, callbacks } = setup(steerHead)
     const event = enter({ metaKey: true })
     press(handler, event)
-    expect(steerQueued).toHaveBeenCalledTimes(1)
     expect(callbacks.send).not.toHaveBeenCalled()
+    expect(steerHead).not.toHaveBeenCalled()
     expect(event.preventDefault).toHaveBeenCalled()
   })
 
-  it('Ctrl — not ⌘ — is the chord off Mac', () => {
+  it('⌘+Shift+Enter steers the head card and leaves the draft', () => {
+    platform.isMac = true
+    const steerHead = vi.fn(() => true)
+    const { handler, callbacks } = setup(steerHead, { draft: 'still typing' })
+    const event = enter({ metaKey: true, shiftKey: true })
+    press(handler, event)
+    expect(steerHead).toHaveBeenCalledTimes(1)
+    expect(callbacks.send).not.toHaveBeenCalled()
+    expect(callbacks.setDraft).not.toHaveBeenCalled()
+    expect(event.preventDefault).toHaveBeenCalled()
+    // Holding the chord steers once, not each card that becomes the head.
+    const held = enter({ metaKey: true, shiftKey: true, repeat: true })
+    press(handler, held)
+    expect(steerHead).toHaveBeenCalledTimes(1)
+    expect(held.preventDefault).toHaveBeenCalled()
+  })
+
+  it('Ctrl — not ⌘ — is the modifier off Mac', () => {
     platform.isMac = false
-    const steerQueued = vi.fn(() => true)
-    const { handler, callbacks } = setup(steerQueued)
+    const steerHead = vi.fn(() => true)
+    const { handler, callbacks } = setup(steerHead, { draft: 'typed text' })
     press(handler, enter({ metaKey: true }))
-    expect(steerQueued).not.toHaveBeenCalled()
-    expect(callbacks.send).toHaveBeenCalledTimes(1)
+    expect(callbacks.send).toHaveBeenLastCalledWith()
     press(handler, enter({ ctrlKey: true }))
-    expect(steerQueued).toHaveBeenCalledTimes(1)
-    expect(callbacks.send).toHaveBeenCalledTimes(1)
+    expect(callbacks.send).toHaveBeenLastCalledWith({ alternate: true })
+    press(handler, enter({ ctrlKey: true, shiftKey: true }))
+    expect(steerHead).toHaveBeenCalledTimes(1)
   })
 
-  it('with nothing queued the chord falls through to a plain send', () => {
+  it('plain Enter sends per the setting, and Shift+Enter still adds a newline', () => {
     platform.isMac = true
-    const { handler, callbacks } = setup(vi.fn(() => false))
-    press(handler, enter({ metaKey: true }))
-    expect(callbacks.send).toHaveBeenCalledTimes(1)
-  })
-
-  it('with text or an image in the composer the chord sends it, never a card past it', () => {
-    platform.isMac = true
-    const steerQueued = vi.fn(() => true)
-    const typed = setup(steerQueued, { draft: 'typed text' })
-    press(typed.handler, enter({ metaKey: true }))
-    expect(steerQueued).not.toHaveBeenCalled()
-    expect(typed.callbacks.send).toHaveBeenCalledTimes(1)
-    const image = setup(steerQueued, { hasAttachments: true })
-    press(image.handler, enter({ metaKey: true }))
-    expect(steerQueued).not.toHaveBeenCalled()
-    expect(image.callbacks.send).toHaveBeenCalledTimes(1)
-  })
-
-  it('plain Enter never steers', () => {
-    platform.isMac = true
-    const steerQueued = vi.fn(() => true)
-    const { handler, callbacks } = setup(steerQueued)
+    const steerHead = vi.fn(() => true)
+    const { handler, callbacks } = setup(steerHead, { draft: 'typed text' })
     press(handler, enter())
-    expect(steerQueued).not.toHaveBeenCalled()
+    expect(callbacks.send).toHaveBeenCalledExactlyOnceWith()
+    const newline = enter({ shiftKey: true })
+    press(handler, newline)
+    expect(newline.preventDefault).not.toHaveBeenCalled()
+    expect(steerHead).not.toHaveBeenCalled()
     expect(callbacks.send).toHaveBeenCalledTimes(1)
   })
 })

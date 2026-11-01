@@ -75,9 +75,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
 const STATE_NAME = 0
 const STATE_PARENT_PATH = 1

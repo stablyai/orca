@@ -1,29 +1,10 @@
-/**
- * Repairing a session-tabs snapshot the retired-epoch fence rejected.
- *
- * The fence is right to reject a subscription frame carrying a retired epoch — it cannot tell that
- * frame apart from a delayed one queued by a dead publisher generation, whose version can be
- * higher than the live cursor. What it cannot do is notice when the epoch's publisher is actually
- * still alive and has simply returned after another publisher briefly owned the worktree.
- *
- * So the drop is not treated as final: it schedules one authoritative census, whose answer settles
- * which epoch is current. If the epoch really is dead the census changes nothing; if it is live,
- * the census carries it and the tab lands. The fence itself is never relaxed for subscription
- * frames.
- *
- * Each mirror (local structured sessions, each paired environment) owns one lane. The census and
- * the generation fence are injected so this module depends on nothing that depends on the apply.
- */
+/** Keep retired subscription frames fenced: delayed dead publishers may carry higher versions. A bounded authoritative census can prove a publisher returned after temporary handover and revive it; dead epochs remain rejected. Inject census/generation fencing per mirror lane to avoid apply dependencies. */
 
 /** Bounded so a publisher that keeps re-sending a retired epoch cannot drive an endless refetch. */
 const MAX_REPAIR_ATTEMPTS = 3
 const BASE_REPAIR_DELAY_MS = 250
 const MAX_REPAIR_DELAY_MS = 5000
-/**
- * The cap decays rather than latching. A run of transient RPC failures must not hide a tab for the
- * renderer's lifetime; once a worktree has been quiet this long, a fresh drop is a fresh problem
- * and gets its full budget back.
- */
+// Decay retry caps after quiet periods so transient RPC failures cannot hide tabs for the renderer’s lifetime.
 const REPAIR_ATTEMPT_DECAY_MS = 60_000
 
 type RepairState = {

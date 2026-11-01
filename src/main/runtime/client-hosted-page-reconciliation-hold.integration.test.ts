@@ -1,8 +1,4 @@
-/**
- * Drives the real publication seam: a real OrcaRuntimeService answering the same session-tabs call
- * the client subscribes through. The window's own unit tests can only prove it answers correctly
- * once asked -- they cannot prove the runtime asks it, or asks it per client.
- */
+/** Exercise runtime publication per client; window-unit coverage alone cannot prove callers apply the hold. */
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -74,8 +70,7 @@ describe('client-hosted reconciliation hold on published session tabs', () => {
     expect(answer.clientHostedPagesUnreconciled).toBeUndefined()
   })
 
-  // The two-client bug: one desktop attaching used to close the window for everyone, so the second
-  // desktop's next snapshot looked authoritative and it culled rows for guests it was still running.
+  // One client's attach cannot authorize another to cull its still-live browser rows.
   it('keeps warning the client whose host has not attached', async () => {
     const runtime = createRuntime()
 

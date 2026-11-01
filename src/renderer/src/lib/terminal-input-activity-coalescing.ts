@@ -1,8 +1,4 @@
-// Why: xterm reports every keystroke, and one store write per key wakes every zustand
-// subscriber in the app. Hibernation — the only real consumer — is a >=60s idle timeout,
-// so the leading edge of a typing burst writes immediately (keeping subscriber-visible
-// behavior identical for the first key) and the rest collapse into one trailing flush.
-// Imperative readers merge the pending value, so they never observe a stale stamp.
+// Per-key Zustand writes wake every subscriber, but hibernation uses >=60s idle windows. Write the burst’s first key immediately, coalesce the rest into trailing flush, and merge pending stamps for fresh imperative reads.
 
 export const TERMINAL_INPUT_ACTIVITY_WRITE_INTERVAL_MS = 500
 
@@ -65,7 +61,7 @@ export function recordTerminalInputActivity(args: {
       flushTimer = null
       flushTerminalInputActivity()
     }, TERMINAL_INPUT_ACTIVITY_WRITE_INTERVAL_MS)
-    // Why: renderer-only timer; never hold the Node event loop open under test runners.
+    // Unref renderer-only timers so test Node processes can exit.
     ;(flushTimer as unknown as { unref?: () => void }).unref?.()
   }
 }

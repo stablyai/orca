@@ -5,10 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type { Store } from '../persistence'
 import type * as RepoWorktrees from '../repo-worktrees'
-import { resolveAuthorizedPath } from './filesystem-auth'
+import { resolveAuthorizedPath } from './filesystem/filesystem-auth'
 import {
   resolveDesktopAuthorizedPath,
   resolveLocalFileRequestPath,
+  resolveLocalListRequestPath,
   resolveLocalRenamePaths,
   resolveLocalRequestPath,
   resolveLocalWriteRequestPath,
@@ -51,6 +52,7 @@ function makeStore({ repoPaths = [], folderPath }: Registration): Store {
 }
 
 const USER_FILE = { kind: 'user-file' } as const
+const PROJECT_FOLDER_LINK = { kind: 'project-folder-link' } as const
 const documentResource = (documentPath: string) =>
   ({ kind: 'document-resource', documentPath }) as const
 const documentFolder = (documentPath: string) =>
@@ -68,7 +70,7 @@ let project: string
 let outside: string
 
 beforeEach(async () => {
-  // The floating folder resolves through the app environment, as the headless runtime does too.
+  // Floating paths use AppEnvironment in desktop and headless runtimes.
   installFakeAppEnvironment({ getPath: () => userData.path })
   invalidateAuthorizedRootsCache()
   base = await mkdtemp(join(await realpath(tmpdir()), 'orca-file-access-'))
@@ -234,7 +236,7 @@ describe('requests with no declared access (roots only)', () => {
   })
 })
 
-// Why: creating a symlink on Windows needs elevation or Developer Mode.
+// Windows symlinks require elevation or Developer Mode.
 describe.skipIf(process.platform === 'win32')('project symlinks under every spelling', () => {
   let real: string
   let alias: string
@@ -469,4 +471,64 @@ describe('chat-image requests', () => {
       ).toBe('denied')
     }
   )
+})
+
+describe('project-folder-link listings', () => {
+  beforeEach(async () => {
+    await mkdir(join(outside, 'guides'))
+    await symlink(outside, join(project, 'linked'), 'dir')
+  })
+
+  it('list a project folder link that leads out, and folders under it', async () => {
+    const store = makeStore({ repoPaths: [project] })
+    const linked = join(project, 'linked')
+
+    await expect(resolveLocalListRequestPath(linked, undefined, store)).rejects.toThrow(
+      'outside allowed directories'
+    )
+    await expect(resolveLocalListRequestPath(linked, PROJECT_FOLDER_LINK, store)).resolves.toBe(
+      outside
+    )
+    await expect(
+      resolveLocalListRequestPath(join(linked, 'guides'), PROJECT_FOLDER_LINK, store)
+    ).resolves.toBe(join(outside, 'guides'))
+  })
+
+  it('refuse folders not reached through a project link', async () => {
+    const store = makeStore({ repoPaths: [project] })
+    await mkdir(join(base, 'unregistered', 'src'), { recursive: true })
+
+    for (const dirPath of [outside, join(base, 'unregistered', 'src')]) {
+      expect(await settles(resolveLocalListRequestPath(dirPath, PROJECT_FOLDER_LINK, store))).toBe(
+        'denied'
+      )
+    }
+    // Other access kinds never list outside folders.
+    expect(
+      await settles(resolveLocalListRequestPath(join(project, 'linked'), USER_FILE, store))
+    ).toBe('denied')
+  })
+
+  it('refuse links in Orca floating folder, which is not a project', async () => {
+    const floatingLink = join(userData.path, 'floating-workspace', 'linked')
+    await symlink(outside, floatingLink, 'dir')
+
+    expect(
+      await settles(resolveLocalListRequestPath(floatingLink, PROJECT_FOLDER_LINK, makeStore({})))
+    ).toBe('denied')
+  })
+
+  it('grant listing only, never file reads', async () => {
+    const store = makeStore({ repoPaths: [project] })
+
+    expect(
+      await settles(
+        resolveLocalFileRequestPath(
+          join(project, 'linked', 'notes.txt'),
+          PROJECT_FOLDER_LINK,
+          store
+        )
+      )
+    ).toBe('denied')
+  })
 })

@@ -12,7 +12,7 @@ vi.mock('./worktree-git-owner-target', () => ({
   getWorktreeGitOwnerTarget: () => ({ kind: 'local' })
 }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-status-client', () => ({
   getRuntimeGitIgnoredPaths: getRuntimeGitIgnoredPathsMock
 }))
 
@@ -105,9 +105,7 @@ describe('file explorer ignored-path query debounce', () => {
   })
 
   it('does not re-issue the ignored check for a dirCache commit that changes no path', () => {
-    // A wave-batched tree refresh commits a fresh dirCache object per wave. The
-    // ignored query is an uncancellable remote git check-ignore over the whole
-    // visible tree, so identical contents must not re-issue it.
+    // Wave commits replace dirCache identity; unchanged paths must not repeat uncancellable whole-tree ignore queries.
     const hook = renderHook(({ dirCache }) => useTreeProjection(dirCache), {
       initialProps: { dirCache: treeDirCache() }
     })

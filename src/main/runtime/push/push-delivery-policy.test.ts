@@ -51,7 +51,6 @@ it('never lets the workspace window swallow distinct keyed news, but still colla
   const { dispatcher, sends } = createHarness({
     devices: [{ deviceId: 'phone', pushRegistration: registration() }]
   })
-  // Unkeyed news (a terminal agent) keeps the per-workspace window.
   dispatcher.enqueue(notification({ emittedAt: 10_000 }))
   dispatcher.enqueue(notification({ emittedAt: 10_001, agentState: 'blocked', attentionKey: 'p1' }))
   dispatcher.enqueue(notification({ emittedAt: 10_002, agentState: 'blocked', attentionKey: 'p2' }))

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
 import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitSubmoduleStatus } from '@/runtime/runtime-git-client'
+import { getRuntimeGitSubmoduleStatus } from '@/runtime/runtime-git-status-client'
 import {
   getSubmoduleExpansionKey,
   isExpandableSubmoduleEntry,
@@ -15,8 +16,7 @@ export type UseSourceControlSubmoduleStatusInput = {
   activeWorktreeId: string | null | undefined
   worktreePath: string | null
   activeRepoTarget: RuntimeClientTarget | null
-  // Why: re-fetch expanded children whenever the parent status poll refreshes
-  // its entries, so an expanded submodule's inner changes stay fresh.
+  // Parent status refreshes invalidate expanded children so inner changes stay current.
   entries: readonly GitStatusEntry[]
 }
 
@@ -26,13 +26,7 @@ export type UseSourceControlSubmoduleStatusResult = {
   toggleSubmodule: (entry: Pick<GitStatusEntry, 'area' | 'path'>) => void
 }
 
-/**
- * Owns the lazy submodule-expansion state for Source Control: which dirty
- * submodules are expanded and the on-demand inner status for each. Dirty
- * submodules start collapsed and only query their inner `git status` when
- * expanded, so the parent status poll never recurses into (possibly nested)
- * submodules.
- */
+/** Load inner status only for expanded submodules so parent polling never recurses. */
 export function useSourceControlSubmoduleStatus(
   input: UseSourceControlSubmoduleStatusInput
 ): UseSourceControlSubmoduleStatusResult {
@@ -42,13 +36,12 @@ export function useSourceControlSubmoduleStatus(
     activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : ''
   const activeConnectionRouteKey = getConnectionId(activeWorktreeId ?? null) ?? ''
   const submoduleStatusScopeKey = `${activeConnectionRouteKey}\0${activeRuntimeRouteKey}\0${activeWorktreeId ?? ''}\0${worktreePath ?? ''}`
-  // Why: scope lives in the status store so a late response from a previous
-  // worktree/host can no-op in the updater instead of mutating a render-time ref.
+  // Store scope with results so late previous-host/worktree updates can no-op without render-time refs.
   const [submoduleStatusStore, setSubmoduleStatusStore] = useState<{
     scope: string
     byKey: Record<string, SubmoduleStatusState>
   }>(() => ({ scope: submoduleStatusScopeKey, byKey: {} }))
-  // Why: reset during render so a worktree/host switch never paints the previous expansion.
+  // Reset during render so host/worktree switches cannot paint the prior expansion.
   if (submoduleStatusStore.scope !== submoduleStatusScopeKey) {
     setSubmoduleStatusStore({ scope: submoduleStatusScopeKey, byKey: {} })
     setExpandedSubmoduleKeys(new Set())
@@ -66,8 +59,7 @@ export function useSourceControlSubmoduleStatus(
       }
       const { area, path: submodulePath } = parsed
       const scopeAtStart = submoduleStatusScopeKey
-      // Why: keep any already-loaded children visible during a poll-driven
-      // refetch so expanding then refreshing doesn't flash a loading row.
+      // Retain loaded children during poll refreshes to avoid flashing a loading placeholder.
       setSubmoduleStatusStore((prev) =>
         prev.scope !== scopeAtStart || prev.byKey[expansionKey]
           ? prev
@@ -80,7 +72,7 @@ export function useSourceControlSubmoduleStatus(
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         const result = await getRuntimeGitSubmoduleStatus(
           {
-            // Why: route by the repo OWNER host, matching the rest of this panel.
+            // Use the repo owner like the rest of the panel.
             target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
@@ -106,7 +98,9 @@ export function useSourceControlSubmoduleStatus(
         )
       } catch (error) {
         setSubmoduleStatusStore((prev) =>
-          prev.scope !== scopeAtStart
+          prev.scope !== scopeAtStart ||
+          // A poll refused for a stopped WSL distro keeps the children already shown.
+          (prev.byKey[expansionKey]?.status === 'loaded' && isWslDistroNotRunningRefusal(error))
             ? prev
             : {
                 ...prev,
@@ -137,9 +131,7 @@ export function useSourceControlSubmoduleStatus(
     })
   }, [])
 
-  // Why: (re)load inner status only for currently-expanded submodules. Re-runs
-  // when the parent status poll refreshes `entries` so expanded children stay
-  // fresh, while collapsed submodules never trigger any extra git work.
+  // Refresh expanded children when parent entries change; collapsed submodules incur no Git work.
   useEffect(() => {
     const visibleExpandableKeys = new Set(
       entries.filter(isExpandableSubmoduleEntry).map(getSubmoduleExpansionKey)

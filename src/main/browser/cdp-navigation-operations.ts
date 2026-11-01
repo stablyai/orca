@@ -24,12 +24,11 @@ export class CdpNavigationOperations {
   }
 
   async waitForLoad(sender: CdpCommandSender, guest: WebContents): Promise<void> {
-    // Why: SPAs fire 'load' before async content renders, so also wait for 500ms of network idle.
+    // SPAs can render asynchronously after load; also wait for network idle.
     const TIMEOUT_MS = 25_000
     const IDLE_MS = 500
     const startedAt = Date.now()
 
-    // Phase 1: wait for readyState=complete
     await new Promise<void>((resolve, reject) => {
       let settled = false
       let pollTimer: ReturnType<typeof setTimeout> | null = null
@@ -78,7 +77,6 @@ export class CdpNavigationOperations {
       void check()
     })
 
-    // Phase 2: wait for network idle
     const remaining = TIMEOUT_MS - (Date.now() - startedAt)
     if (remaining <= 0) {
       return

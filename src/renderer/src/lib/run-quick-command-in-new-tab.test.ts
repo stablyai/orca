@@ -3,7 +3,6 @@ import { runQuickCommandInNewTab } from './run-quick-command-in-new-tab'
 
 type MockStoreState = {
   createTab: ReturnType<typeof vi.fn>
-  queueTabStartupCommand: ReturnType<typeof vi.fn>
   setActiveTabType: ReturnType<typeof vi.fn>
   setTabBarOrder: ReturnType<typeof vi.fn>
   setRecentQuickCommandForGroup: ReturnType<typeof vi.fn>
@@ -37,7 +36,6 @@ vi.mock('@/lib/launch-agent-in-new-tab', () => ({
 function createStoreState(): MockStoreState {
   return {
     createTab: vi.fn(() => ({ id: 'tab-new' })),
-    queueTabStartupCommand: vi.fn(),
     setActiveTabType: vi.fn(),
     setTabBarOrder: vi.fn(),
     setRecentQuickCommandForGroup: vi.fn(),
@@ -73,10 +71,8 @@ describe('runQuickCommandInNewTab', () => {
 
     expect(result).toEqual({ tabId: 'tab-new' })
     expect(mockState.createTab).toHaveBeenCalledWith('wt-1', 'group-1', undefined, {
-      quickCommandLabel: 'Build'
-    })
-    expect(mockState.queueTabStartupCommand).toHaveBeenCalledWith('tab-new', {
-      command: 'cd packages; bun run build; cd ..'
+      quickCommandLabel: 'Build',
+      pendingStartup: { command: 'cd packages; bun run build; cd ..' }
     })
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith('group-1', 'build')
   })
@@ -139,8 +135,9 @@ describe('runQuickCommandInNewTab', () => {
       groupId: 'group-1'
     })
 
-    expect(mockState.queueTabStartupCommand).toHaveBeenCalledWith('tab-new', {
-      command: 'git status'
+    expect(mockState.createTab).toHaveBeenCalledWith('wt-1', 'group-1', undefined, {
+      quickCommandLabel: 'Status',
+      pendingStartup: { command: 'git status' }
     })
   })
 
@@ -174,7 +171,7 @@ describe('runQuickCommandInNewTab', () => {
       launchSource: 'quick_command',
       quickCommandLabel: 'Review'
     })
-    expect(mockState.queueTabStartupCommand).not.toHaveBeenCalled()
+    expect(mockState.createTab).not.toHaveBeenCalled()
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith('group-1', 'agent-review')
   })
 
@@ -330,6 +327,6 @@ describe('runQuickCommandInNewTab', () => {
 
     expect(result).toBeNull()
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-    expect(mockState.queueTabStartupCommand).not.toHaveBeenCalled()
+    expect(mockState.createTab).not.toHaveBeenCalled()
   })
 })

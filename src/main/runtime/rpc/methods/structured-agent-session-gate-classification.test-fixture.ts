@@ -7,7 +7,7 @@ import {
   sendParams,
   SESSION
 } from './structured-agent-session-rpc.test-fixture'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 
 /** Stops or retires work the caller already owns; none of these builds a host. */
 export const CLEANUP_METHODS = [
@@ -15,6 +15,11 @@ export const CLEANUP_METHODS = [
     method: 'agentSession.close',
     params: { sessionId: SESSION },
     hostCall: 'close'
+  },
+  {
+    method: 'agentSession.sleepWorkspace',
+    params: { workspaceId: 'workspace-1' },
+    hostCall: 'sleepWorkspace'
   },
   {
     method: 'agentSession.cancel',
@@ -64,6 +69,10 @@ export const WORK_METHODS = [
     method: 'agentSession.queuedMessageDelete',
     params: { envelope: envelope(), messageId: 'queued-1' }
   },
+  {
+    method: 'agentSession.queuedMessageMove',
+    params: { envelope: envelope(), messageId: 'queued-1', beforeMessageId: null }
+  },
   { method: 'agentSession.queuedMessagesResume', params: { envelope: envelope() } },
   {
     method: 'agentSession.rewind',
@@ -90,8 +99,11 @@ export const WORK_METHODS = [
   { method: 'agentSession.modelCatalog', params: { agent: 'codex', sessionId: SESSION } },
   { method: 'agentSession.history', params: { sessionId: SESSION, direction: 'tail' } },
   { method: 'agentSession.conversationOutline', params: { sessionId: SESSION } },
+  { method: 'agentSession.item', params: { sessionId: SESSION, itemId: 'item-1' } },
   { method: 'agentSession.subscribe', params: { sessionId: SESSION } },
   { method: 'agentSession.hold', params: { sessionId: SESSION, holderId: 'surface-1' } },
   { method: 'agentSession.reveal', params: { sessionId: SESSION } },
+  { method: 'agentSession.regenerateName', params: { sessionId: SESSION } },
+  { method: 'agentSession.rename', params: { sessionId: SESSION, name: 'Release notes' } },
   { method: 'agentSession.subscribeStatus', params: null }
 ] as const

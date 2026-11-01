@@ -6,22 +6,32 @@ vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { printResult } from '../format'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
+import { orchestrationTestContext } from './orchestration-handler-test-context'
 
 async function formatSend(result: unknown): Promise<string> {
   callMock.mockReset().mockResolvedValueOnce({ result })
-  await ORCHESTRATION_HANDLERS['orchestration send']({
-    flags: new Map([
-      ['from', 'term_sender'],
-      ['to', 'term_recipient'],
-      ['subject', 'ping']
-    ]),
-    client: { call: callMock },
-    cwd: '/workspace',
-    json: false
-  } as never)
-  const printCall = vi.mocked(printResult).mock.calls.at(-1)
-  const formatter = printCall?.[2] as (value: unknown) => string
-  return formatter(result)
+  vi.mocked(printResult).mockClear()
+  await ORCHESTRATION_HANDLERS['orchestration send'](
+    orchestrationTestContext(
+      callMock,
+      new Map<string, string | boolean>([
+        ['full', true],
+        ['from', 'term_sender'],
+        ['to', 'term_recipient'],
+        ['subject', 'ping']
+      ]),
+      false,
+      '/workspace'
+    )
+  )
+  expect(printResult).toHaveBeenCalledOnce()
+  const printCall = vi.mocked(printResult).mock.calls[0]
+  if (!printCall) {
+    throw new Error('send did not print its receipt')
+  }
+  expect(printCall[0]).toEqual({ result })
+  expect(printCall[1]).toBe(false)
+  return printCall[2](printCall[0].result)
 }
 
 it('prints a live terminal-only delivery limitation', async () => {

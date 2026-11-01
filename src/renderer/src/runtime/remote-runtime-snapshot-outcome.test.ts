@@ -9,15 +9,13 @@ import {
 } from '../../../shared/terminal-stream-protocol'
 import {
   getRemoteRuntimeTerminalMultiplexer,
-  resetRemoteRuntimeTerminalMultiplexersForTests,
-  type RemoteRuntimeMultiplexedTerminal
+  resetRemoteRuntimeTerminalMultiplexersForTests
 } from './remote-runtime-terminal-multiplexer'
+import type { RemoteRuntimeMultiplexedTerminal } from './remote-runtime-terminal-multiplexer-types'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
-// Why: the client used to collapse every unusable snapshot reply to `null`, so a slow
-// host and a genuinely empty pane were indistinguishable. These tests pin the reason
-// each reply now carries, and pin that the legacy `serializeBuffer` result is unchanged.
+// Unusable snapshots once collapsed to null, hiding slow-host versus empty-pane differences. Pin reasons and unchanged legacy serializeBuffer output.
 
 type SubscribeCallbacks = {
   onResponse: (response: unknown) => void

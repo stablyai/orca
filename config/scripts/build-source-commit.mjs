@@ -1,9 +1,6 @@
 import { execFileSync } from 'node:child_process'
 
-/**
- * The full commit this build is made from. Official skill installs pin to it, so the
- * skills an Orca build installs are the ones it bundles on every release channel.
- */
+// Pin official skill installs to the full build commit so installed and bundled skills agree on every channel.
 export function resolveBuildSourceCommit() {
   let commit = ''
   try {

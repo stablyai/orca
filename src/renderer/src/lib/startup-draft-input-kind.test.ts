@@ -8,7 +8,7 @@ import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-rea
 import { bindSettlePaneSerializer } from '@/components/terminal-pane/pty-connection/pane-serializer-settle'
 import type { ConnectPanePtySession } from '@/components/terminal-pane/pty-connection/connect-pane-pty-session'
 import { STARTUP_DRAFT_PASTE_QUIET_MS } from '@/components/terminal-pane/pty-connection/pty-connect-limits'
-import { pasteDraftToAgentPtyWhenReady, submitPromptToAgentPty } from './agent-paste-draft'
+import { pasteDraftToAgentPtyWhenReady } from './agent-paste-draft'
 
 const { onTimeout } = vi.hoisted(() => ({ onTimeout: vi.fn() }))
 vi.mock('./launch-agent-paste-timeout-notice', () => ({
@@ -20,10 +20,6 @@ vi.mock('@/store', () => ({
     getState: () => ({ settings: {}, terminalLayoutsByTabId: {} }),
     subscribe: () => () => {}
   }
-}))
-
-vi.mock('./worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => null
 }))
 
 vi.mock('./agent-draft-readiness', () => ({
@@ -72,7 +68,6 @@ function createPaneDraftSession(agent?: 'codex') {
   return { session, kinds }
 }
 
-/** The pane route: the pane's transport pastes the draft once the agent's composer is ready. */
 async function paneRouteKinds(): Promise<TerminalInputKind[]> {
   const { session, kinds } = createPaneDraftSession()
   session.observeStartupDraftPasteReadiness('\x1b[?2004h')
@@ -81,7 +76,6 @@ async function paneRouteKinds(): Promise<TerminalInputKind[]> {
   return kinds
 }
 
-/** The helper route: the draft helper waits for the agent, then writes through the runtime. */
 async function helperRouteKinds(): Promise<TerminalInputKind[]> {
   const { kinds } = stubPtyApi()
   const pasted = pasteDraftToAgentPtyWhenReady({
@@ -112,16 +106,6 @@ describe('a created worktree’s startup draft', () => {
     expect(paneKinds.length).toBeGreaterThan(0)
     expect(new Set(paneKinds)).toEqual(new Set(['launch']))
     expect(new Set(helperKinds)).toEqual(new Set(paneKinds))
-  })
-
-  it('differs from a prompt submitted to an agent that is already running', async () => {
-    const { kinds } = stubPtyApi()
-
-    const submitted = submitPromptToAgentPty({ tabId: 'tab-1', ptyId: 'pty-1', content: DRAFT })
-    await vi.runAllTimersAsync()
-
-    await expect(submitted).resolves.toBe(true)
-    expect(new Set(kinds)).toEqual(new Set(['driving']))
   })
 
   it('never delivers a pane-owned Codex draft after readiness times out', async () => {

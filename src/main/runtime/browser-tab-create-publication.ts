@@ -5,8 +5,6 @@ import {
   type RuntimeNavigationTarget
 } from '../../shared/runtime-navigation'
 
-// The surfaces that can back a newly created browser page. Every one of them
-// publishes the created tab through publishCreatedBrowserSessionTab.
 export type BrowserTabCreatePlacementKind = 'client' | 'offscreen' | 'renderer'
 
 export const BROWSER_TAB_CREATE_PLACEMENT_KINDS = [
@@ -32,17 +30,9 @@ export type BrowserTabCreatePublicationHost = {
 
 export type BrowserSessionTabSelectionOptions = {
   targetGroupId?: string
-  /**
-   * false leaves the shared snapshot's active tab alone; only the caller's own selection moves.
-   * Required, not defaulted: a default here is a branch no caller exercises, and getting it wrong
-   * silently decides whose screen moves.
-   */
+  /** Required to force each caller to decide whether shared host selection moves. */
   focusesHost: boolean
-  /**
-   * The paired device that asked for the tab, and how far its selection reaches. Absent for a
-   * local create. The two travel together because neither means anything alone — separately, the
-   * runtime had to default a navigation target that could never actually be missing.
-   */
+  /** Paired origin and navigation audience travel together; absent for local creates. */
   caller?: { clientNavigationId: string; navigation: RuntimeNavigationTarget }
 }
 
@@ -55,15 +45,8 @@ export type BrowserTabCreatePublication = {
   targetGroupId?: string
 }
 
-/**
- * Where the HOST desktop's own tab row for a placement comes from. The host renderer owns its tab
- * model, so a placement whose page never reaches that renderer has to name another source or it is
- * invisible on the host — which is exactly what `client` was before it declared `session-notify`.
- *
- * `create-ipc`: the create round-trips through the renderer, which mints the row itself.
- * `session-notify`: main pushes a derived, ephemeral row off the session-tabs announcement.
- * `none`: no host renderer exists for this placement to appear in.
- */
+/** Host rows come from renderer create IPC or a derived session notification.
+ * none applies only without a host renderer; client placements need session-notify to appear. */
 export type BrowserTabCreateHostRowSource = 'create-ipc' | 'session-notify' | 'none'
 
 type BrowserTabCreatePublicationRules = {
@@ -73,15 +56,13 @@ type BrowserTabCreatePublicationRules = {
   hostRowSource: BrowserTabCreateHostRowSource
 }
 
-// Why: this table is the only place a placement may differ in post-create bookkeeping. A new
-// surface that forgets a step has to say so here instead of silently omitting it in its branch
-// — which is how a client-placed page once lost its targetGroupId and landed in the wrong group.
+// Centralize placement differences so branches cannot silently omit publication/group placement.
 export const BROWSER_TAB_CREATE_PUBLICATION_RULES: Record<
   BrowserTabCreatePlacementKind,
   BrowserTabCreatePublicationRules
 > = {
   client: {
-    // Why: client pages are driven over the host lease, so no bridge-registered WebContents exists.
+    // Lease-hosted pages have no bridge WebContents.
     activatesBridgeTab: false,
     marksSessionTabFocus: true,
     notifiesSessionTabsChanged: true,
@@ -90,47 +71,32 @@ export const BROWSER_TAB_CREATE_PUBLICATION_RULES: Record<
   offscreen: {
     activatesBridgeTab: true,
     marksSessionTabFocus: true,
-    // Why: the offscreen snapshot is republished by hydration and by navigation; a bare create
-    // has nothing new to announce until one of those runs.
+    // Hydration/navigation publish the offscreen snapshot; bare creation has nothing to announce.
     notifiesSessionTabsChanged: false,
-    // Why: the offscreen backend only exists when there is no host renderer to show a row in.
     hostRowSource: 'none'
   },
   renderer: {
     activatesBridgeTab: true,
-    // Why: the renderer owns its own tab model — `activate` rides the create IPC and the renderer
-    // publishes the resulting session snapshot itself.
+    // The renderer receives activate in create IPC and publishes its own snapshot.
     marksSessionTabFocus: false,
     notifiesSessionTabsChanged: false,
     hostRowSource: 'create-ipc'
   }
 }
 
-// Why: only user-initiated creates take focus; agent and CLI creates must not yank a connected
-// client onto the new tab. The marker is also what moves the tab into the clicked split group.
+// Agent/CLI creates must not steal focus; this marker also applies the requested split group.
 export function browserTabCreateTakesFocus(activate: boolean | undefined): boolean {
   return activate === true
 }
 
-/** How far a create's selection reaches: the caller's own screen, the host's, or every device. */
 export type BrowserTabCreateFocusResolution = {
   navigation: RuntimeNavigationTarget
-  /** The caller wants the new tab selected somewhere — the precondition for every step below. */
   selects: boolean
-  /** The host desktop's own tab row follows the create. */
   focusesHost: boolean
-  /** A client-placed page becomes its workspace's current page in the runtime page registry. */
   startsActive: boolean
 }
 
-/**
- * Split `activate` — historically "select this tab, everywhere" — into who selects and who follows.
- *
- * Why: `browser.tabCreate` carried no origin, so a create from one paired device moved the tab the
- * host desktop and every other client were looking at. `navigation` names the audience; an absent
- * value from a paired caller means 'caller', matching session.tabs.createTerminal. A local create
- * (no paired caller, no navigation) still resolves to 'all', so the host keeps focusing its own.
- */
+/** Paired creates default to caller-only navigation; local creates retain the all-screen default. */
 export function resolveBrowserTabCreateFocus(request: {
   activate?: boolean
   navigation?: RuntimeNavigationTarget
@@ -149,17 +115,13 @@ export function resolveBrowserTabCreateFocus(request: {
   }
 }
 
-// Why: a client page becomes its workspace's active registry page unless the caller opts out.
-// That default differs from browserTabCreateTakesFocus only when `activate` is omitted, which no
-// shipped caller does — web-runtime-session is the sole sender of client placement and always
-// sends an explicit boolean. Kept as a separate named resolution rather than collapsed, because
-// collapsing would quietly change the omitted-activate case for a hand-written RPC.
+// Omitted activate still selects the client registry page, unlike opt-in UI focus.
+// Preserve that hand-written RPC behavior even though shipped callers send an explicit boolean.
 export function browserTabCreateClientPageStartsActive(activate: boolean | undefined): boolean {
   return activate !== false
 }
 
-// The surfaces browserTabSwitch can land on. `bridge` covers renderer and offscreen alike: both
-// are switched by AgentBrowserBridge.tabSwitch, which already moves bridge-side active state.
+/** bridge covers renderer/offscreen, whose bridge already updates its own active state. */
 export type BrowserTabSwitchPlacementKind = 'client' | 'bridge'
 
 export const BROWSER_TAB_SWITCH_PLACEMENT_KINDS = [
@@ -180,26 +142,21 @@ export const BROWSER_TAB_SWITCH_PUBLICATION_RULES: Record<
 > = {
   client: {
     marksSessionTabFocus: true,
-    // Why: the page registry's active flag moved, and that flag is only visible to clients
-    // through a republished snapshot — announce it whether or not the switch took focus.
+    // Registry selection reaches clients only through republished snapshots, even without focus.
     notifiesSessionTabsChanged: true
   },
   bridge: {
     marksSessionTabFocus: true,
-    // Why: nothing in the snapshot changes for an unfocused bridge switch, and the focused case
-    // republishes through the focus marker itself.
+    // Unfocused bridge switches change no snapshot; focused ones publish through the focus marker.
     notifiesSessionTabsChanged: false
   }
 }
 
-// Why: `focus` is the switch's opt-in user intent, the exact analogue of create's `activate` —
-// an agent or CLI switch without it must not yank a connected client onto the tab.
+// Agent/CLI switches must opt in before moving a client's view.
 export function browserTabSwitchTakesFocus(focus: boolean | undefined): boolean {
   return focus === true
 }
 
-// Why: an explicit switch moved the session's active tab just as an activating create does, so
-// both converge here rather than letting only create reach the session-tab snapshot.
 export function publishSwitchedBrowserSessionTab(
   host: BrowserTabCreatePublicationHost,
   publication: BrowserTabSwitchPublication
@@ -209,8 +166,7 @@ export function publishSwitchedBrowserSessionTab(
     host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
   }
   if (rules.marksSessionTabFocus && browserTabSwitchTakesFocus(publication.focus)) {
-    // Why unconditionally host-facing: an explicit switch carries no navigation target yet, so it
-    // keeps steering every screen exactly as it did before create learned to stay local.
+    // Switch has no navigation audience yet; preserve its existing host-facing semantics.
     host.markHeadlessBrowserSessionTabActive?.(publication.worktreeId, publication.browserPageId, {
       focusesHost: true
     })
@@ -234,8 +190,7 @@ export function publishCreatedBrowserSessionTab(
       bridge.setActiveTab(webContentsId, publication.worktreeId)
     }
   }
-  // Why `selects` and not `focusesHost`: a caller-local create still has to land the tab in the
-  // group whose "+" was clicked, and this is the only call that moves it there.
+  // Caller-only creates still need this call to place the tab in the requested group.
   if (rules.marksSessionTabFocus && publication.focus.selects) {
     host.markHeadlessBrowserSessionTabActive?.(publication.worktreeId, publication.browserPageId, {
       ...(publication.targetGroupId !== undefined

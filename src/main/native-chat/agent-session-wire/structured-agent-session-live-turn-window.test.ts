@@ -1,28 +1,27 @@
-// A long turn's record keeps the place it opened at when revised, so a bounded page leaves it out.
-// Whether a turn runs comes from the host's whole-journal record, never the loaded rows.
+// Revised long-turn rows retain their old position; whole-journal state must outlive bounded pages.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemIdentity,
-  AgentJournalTurnLifecycle,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnLifecycle } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import {
   activeStructuredAgentSessionTurnId,
   runningStructuredAgentSessionTurnId
-} from '../../../shared/structured-agent-session-live-turn'
+} from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../../shared/structured-agent-session-reducer'
-import { selectStructuredAgentTurnBars } from '../../../shared/structured-agent-session-turn-timing'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
+import { selectStructuredAgentTurnBars } from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -65,7 +64,6 @@ async function writeTurn(turnId: string, turn: Omit<AgentJournalTurnLifecycle, '
   )
 }
 
-/** A running turn whose record sits `rows` rows above the journal head. */
 async function runLongTurn(turnId: string, rows: number): Promise<void> {
   await writeTurn(turnId, { state: 'running', startedAt: 1_000, requestedAt: 900 })
   const turnScope = { kind: 'turn' as const, turnItemId: agentJournalItemKey(turnRecord(turnId)) }
@@ -86,7 +84,6 @@ function hydrate(): StructuredAgentSessionState {
   })
 }
 
-/** A live subscriber attached at `state`'s cursor; returns a pump that applies what it was sent. */
 function subscribeFrom(state: StructuredAgentSessionState) {
   const events: AgentSessionSubscribeEvent[] = []
   const subscribers = new AgentSessionSubscribers()
@@ -116,9 +113,9 @@ describe('a running turn whose record is older than the loaded page', () => {
     await runLongTurn('turn-1', 250)
     const state = hydrate()
 
-    expect(journal.activeTurnId()).toBe('turn-1')
+    expect(journal.runningTurn()?.turnId ?? null).toBe('turn-1')
     expect(state.hasOlder).toBe(true)
-    // What every client read before: the record is off the page, so the loaded rows said idle.
+    // Page-only inference previously reported idle when the running turn was off-page.
     expect(activeStructuredAgentSessionTurnId(state.items)).toBeNull()
     expect(runningStructuredAgentSessionTurnId(state)).toBe('turn-1')
   })
@@ -145,7 +142,7 @@ describe('a running turn whose record is older than the loaded page', () => {
     live.subscribers.publish('session-1', journal)
     const state = live.apply()
 
-    // The completing revision keeps its old position, so the window never admits it.
+    // Completion revises the old position, outside this window.
     expect(
       state.items.some((item) => item.itemId === agentJournalItemKey(turnRecord('turn-1')))
     ).toBe(false)
@@ -181,7 +178,6 @@ describe('a running turn whose record is older than the loaded page', () => {
     if (!older.ok) {
       throw new Error(`expected an older page, got reset ${older.reset}`)
     }
-    // The older page was read while the turn still ran.
     expect(older.page.latestTurn?.turn.state).toBe('running')
     const after = reduceStructuredAgentSession(ended, {
       type: 'older-page',

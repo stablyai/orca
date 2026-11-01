@@ -1,8 +1,4 @@
-/**
- * The two headless `orca serve` hosts the layout oracle drives with no window: orcad (plain Node)
- * and Electron serve. Both keep their pairing port across restarts so paired clients and the
- * oracle's layout stream reconnect.
- */
+// Keep profile and pairing port stable across Node-orcad/Electron-serve restarts so existing client streams reconnect.
 
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
@@ -18,6 +14,8 @@ import { cliServeProfile, spawnUntilReady, type ReadyProcess } from './orca-serv
 
 export type HeadlessHostKind = 'orcad' | 'electron'
 
+type RestartOptions = { cold?: boolean; whileStopped?: () => void | Promise<void> }
+
 export type HeadlessOracleHost = {
   kind: HeadlessHostKind
   userDataDir: string
@@ -26,8 +24,11 @@ export type HeadlessOracleHost = {
   pairingUrl: string
   /** Run by `dispose`, after the host stops. */
   cleanups: (() => void)[]
-  /** Stops serve and starts it again on the same profile and port; `cold` also kills the PTY daemon. */
-  restart: (options?: { cold?: boolean }) => Promise<void>
+  /**
+   * Stops serve and starts it again on the same profile and port; `cold` also kills the PTY daemon.
+   * `whileStopped` runs with no serve process alive, the only safe time to edit the profile.
+   */
+  restart: (options?: RestartOptions) => Promise<void>
   dispose: () => Promise<void>
 }
 
@@ -112,13 +113,14 @@ async function startOrcadHost(scratch: string, node: string): Promise<StartedHos
     userDataDir: profile.userDataDir,
     scratch,
     pairingUrl: serve.ready.pairingUrl,
-    restart: async ({ cold } = {}) => {
+    restart: async ({ cold, whileStopped } = {}) => {
       // SIGTERM is orcad's graceful stop and leaves the PTY daemon running.
       await serve?.stop()
       serve = null
       if (cold) {
         await cleanupE2EDaemons(profile.userDataDir)
       }
+      await whileStopped?.()
       serve = await launch()
     },
     dispose: async () => {
@@ -140,10 +142,15 @@ async function startElectronHost(scratch: string): Promise<StartedHost> {
     userDataDir: host.userDataDir,
     scratch,
     pairingUrl: host.offer.pairingUrl,
-    restart: ({ cold } = {}) =>
-      host.restartServeProcess(
-        cold ? { betweenProcesses: () => cleanupE2EDaemons(host.userDataDir) } : {}
-      ),
+    restart: ({ cold, whileStopped } = {}) =>
+      host.restartServeProcess({
+        betweenProcesses: async () => {
+          if (cold) {
+            await cleanupE2EDaemons(host.userDataDir)
+          }
+          await whileStopped?.()
+        }
+      }),
     dispose: async () => {
       await host.dispose()
       rmSync(scratch, PROFILE_REMOVAL)

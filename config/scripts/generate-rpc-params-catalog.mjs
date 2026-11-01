@@ -1,6 +1,4 @@
-// Why: the host registry is the only place that binds a method name to its params
-// schema. Reading it back — instead of hand-listing 600 methods — is what keeps the
-// shared catalog and the dispatcher from drifting apart.
+// Derive method/schema bindings from host registry; a hand-maintained catalog of 600 methods would drift from dispatcher.
 import { execFileSync } from 'node:child_process'
 import {
   existsSync,
@@ -24,10 +22,7 @@ const RPC_DIR = path.join(REPO_ROOT, 'src', 'main', 'runtime', 'rpc')
 const REGISTRY_ENTRY = path.join(RPC_DIR, 'methods', 'index.ts')
 const OUTPUT_PATH = path.join(CONTRACT_DIR, 'rpc-params-catalog.generated.ts')
 
-// Why mkdirSync first: out/ is gitignored and absent on a fresh checkout, so
-// mkdtempSync threw ENOENT and took `pnpm lint` down with it. Why not os.tmpdir():
-// the bundle keeps its node_modules deps external and oxfmt reads .oxfmtrc.json by
-// walking up, so both scratch files have to sit under the repo to resolve at all.
+// Create ignored out/ before mkdtemp; keep scratch under repo for external node_modules resolution and formatter config discovery.
 function scratchDir(prefix) {
   const root = path.join(REPO_ROOT, 'out')
   mkdirSync(root, { recursive: true })
@@ -37,11 +32,8 @@ function scratchDir(prefix) {
 const posix = (value) => value.split(path.sep).join('/')
 const repoPath = (absolute) => posix(path.relative(REPO_ROOT, absolute))
 
-// Every module the catalog may import from: the extracted params modules plus the
-// pre-existing src/shared schemas the RPC methods already bind directly.
 function indexableModules() {
-  // Tests are excluded here for the same reason as the RPC_DIR walk below: bundling one pulls
-  // vitest into the CJS catalog build, which throws on require().
+  // Exclude tests or catalog’s CJS bundle requires Vitest and throws.
   const modules = new Set(
     globSync('*.ts', { cwd: CONTRACT_DIR })
       .filter((name) => !name.endsWith('.test.ts'))
@@ -55,9 +47,7 @@ function indexableModules() {
     const source = readFileSync(path.join(RPC_DIR, file), 'utf8')
     for (const [, specifier] of source.matchAll(/from\s+'(\.[^']+)'/g)) {
       const resolved = `${path.resolve(path.dirname(path.join(RPC_DIR, file)), specifier)}.ts`
-      // Never re-add the generator's own output: a module under RPC_DIR may import the
-      // catalog for a type-only contract, and bundling a stale catalog makes regeneration
-      // crash in exactly the state that requires regenerating.
+      // Exclude generator output even when params import its types; stale catalog bundling would break regeneration precisely when needed.
       if (
         resolved !== OUTPUT_PATH &&
         resolved.startsWith(`${SHARED_DIR}${path.sep}`) &&
@@ -70,8 +60,7 @@ function indexableModules() {
   return [...modules].sort()
 }
 
-// Why: one bundle keeps the registry and the shared modules on the same module
-// instances, so schema object identity is what maps a method to its export.
+// Bundle once so registry and schema exports share object identities.
 function loadRegistryAndSchemas(modules) {
   const buildDir = scratchDir('rpc-params-catalog-')
   try {
@@ -96,7 +85,9 @@ function loadRegistryAndSchemas(modules) {
       format: 'cjs',
       outfile,
       logLevel: 'error',
-      packages: 'external'
+      packages: 'external',
+      // Why: the catalog types every method a build can register, every dark switch's included.
+      define: { ORCA_LAYOUT_OWNER: '"main"', ORCA_SIDEBAR_INPUTS: '"main"' }
     })
     const loaded = createRequire(import.meta.url)(outfile)
     return { methods: loaded.ALL_RPC_METHODS, schemaModules: loaded.SCHEMA_MODULES }
@@ -105,8 +96,7 @@ function loadRegistryAndSchemas(modules) {
   }
 }
 
-// Why: schema objects are compared by identity, not by shape — two structurally
-// identical schemas are still two different wire contracts.
+// Schema identity defines wire contracts; structurally equal objects remain distinct.
 function buildSchemaIndex(schemaModules) {
   const index = new Map()
   for (const [modulePath, moduleExports] of Object.entries(schemaModules)) {
@@ -219,8 +209,7 @@ export type RpcParams<Method extends RpcMethodName> =
 `
 }
 
-// Why: the drift gate compares bytes, so the generator must emit exactly what the
-// formatter would produce or every run would look like drift.
+// Emit formatter-exact bytes or drift check fails every run.
 function formatted(source) {
   const buildDir = scratchDir('rpc-params-catalog-fmt-')
   try {

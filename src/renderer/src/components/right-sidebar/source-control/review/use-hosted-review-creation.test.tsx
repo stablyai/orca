@@ -3,7 +3,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeGitClient from '@/runtime/runtime-git-client'
+import type * as RuntimeGitGenerationClient from '@/runtime/runtime-git-generation-client'
 import type { RuntimeGeneratePullRequestFieldsResult } from '@/runtime/runtime-git-client-context'
 import { useAppStore } from '@/store'
 import {
@@ -31,8 +31,8 @@ import { useSourceControlPullRequestGeneration } from './use-pull-request-genera
 
 const runtime = vi.hoisted(() => ({ cancel: vi.fn(), generate: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', async (importOriginal) => {
-  const original = await importOriginal<typeof RuntimeGitClient>()
+vi.mock('@/runtime/runtime-git-generation-client', async (importOriginal) => {
+  const original = await importOriginal<typeof RuntimeGitGenerationClient>()
   return {
     ...original,
     cancelRuntimeGeneratePullRequestFields: runtime.cancel,
@@ -112,6 +112,8 @@ function makeInput(overrides: Partial<Input> = {}): Input {
     prBase: 'main',
     prBody: '',
     prDraft: false,
+    prFieldRevisions: { base: 0, title: 0, body: 0, draft: 0 },
+    pullRequestFieldsInitialized: true,
     prFieldsAreSeedPlaceholders: true,
     prGenerating: false,
     prTitle: 'Fix readme typo',
@@ -127,7 +129,7 @@ function makeInput(overrides: Partial<Input> = {}): Input {
   }
 }
 
-// Like the store-routed generation: the record runs before the first await and settles to the outcome.
+// Match store generation’s synchronous record publication before its first await.
 function startGeneration(options?: PullRequestGenerationOptions): void {
   useAppStore.getState().setPullRequestGenerationRecord(GENERATION_KEY, runningRecordFor(options))
 }
@@ -180,6 +182,119 @@ describe('useSourceControlHostedReviewCreation', () => {
         draft: true
       })
     )
+  })
+
+  it.each(['github', 'gitlab'] as const)(
+    'preserves edits made during delayed %s auto-submit generation',
+    async (provider) => {
+      const { generate, finish } = deferredGeneration()
+      const input = makeInput({
+        handleGeneratePullRequestFields: generate,
+        hostedReviewCreateProvider: provider,
+        hostedReviewCreation: { ...readyEligibility, provider }
+      })
+      const { result, rerender } = renderHook(
+        (props: Input) => useSourceControlHostedReviewCreation(props),
+        { initialProps: input }
+      )
+      let click: Promise<void> = Promise.resolve()
+      act(() => {
+        click = result.current.handleCreatePullRequest()
+      })
+      rerender({
+        ...input,
+        prBase: 'release',
+        prTitle: 'My manual review title',
+        prBody: 'My review details',
+        prDraft: false,
+        prFieldRevisions: { base: 1, title: 1, body: 1, draft: 1 }
+      })
+      await act(async () => {
+        finish({ ...generatedFields, title: '[ORCA-7] Generated title' })
+        await click
+      })
+      expect(input.createHostedReview).toHaveBeenCalledWith(
+        '/repo',
+        expect.objectContaining({
+          base: 'release',
+          title: 'My manual review title',
+          body: 'My review details',
+          draft: false,
+          provider
+        })
+      )
+    }
+  )
+
+  it('keeps edits after returning to the generating branch without using another branch draft', async () => {
+    const { generate, finish } = deferredGeneration()
+    const input = makeInput({ handleGeneratePullRequestFields: generate })
+    const { result, rerender } = renderHook(
+      (props: Input) => useSourceControlHostedReviewCreation(props),
+      { initialProps: input }
+    )
+    let click: Promise<void> = Promise.resolve()
+    act(() => {
+      click = result.current.handleCreatePullRequest()
+    })
+    rerender({
+      ...input,
+      activePullRequestGenerationKey: 'wt-2::repo-1::other-branch',
+      activeWorktreeId: 'wt-2',
+      branchName: 'other-branch',
+      prTitle: 'Other branch manual title',
+      prFieldRevisions: { base: 0, title: 1, body: 0, draft: 0 }
+    })
+    rerender({
+      ...input,
+      prTitle: 'My title after returning',
+      prFieldRevisions: { base: 0, title: 1, body: 0, draft: 0 }
+    })
+    await act(async () => {
+      finish({ ...generatedFields, title: '[ORCA-7] Generated title' })
+      await click
+    })
+    expect(input.createHostedReview).toHaveBeenCalledWith(
+      '/repo',
+      expect.objectContaining({ head: 'fix-readme-typo', title: 'My title after returning' })
+    )
+  })
+
+  it('preserves edits in a remounted composer while the clicked run finishes', async () => {
+    const { generate, finish } = deferredGeneration()
+    const input = makeInput({ handleGeneratePullRequestFields: generate })
+    const first = renderHook((props: Input) => useSourceControlHostedReviewCreation(props), {
+      initialProps: input
+    })
+    let click: Promise<void> = Promise.resolve()
+    act(() => {
+      click = first.result.current.handleCreatePullRequest()
+    })
+    first.rerender({
+      ...input,
+      prTitle: 'My title before closing',
+      prFieldRevisions: { base: 0, title: 1, body: 0, draft: 0 }
+    })
+    first.unmount()
+    const retained =
+      useAppStore.getState().pullRequestGenerationRecords[GENERATION_KEY]?.editedFields
+    expect(retained?.fields.title).toBe('My title before closing')
+    const reopened = renderHook(() =>
+      useSourceControlHostedReviewCreation({
+        ...input,
+        prTitle: 'My title after reopening',
+        prFieldRevisions: { base: 0, title: 2, body: 0, draft: 0 }
+      })
+    )
+    await act(async () => {
+      finish({ ...generatedFields, title: '[ORCA-7] Generated title' })
+      await click
+    })
+    expect(input.createHostedReview).toHaveBeenCalledWith(
+      '/repo',
+      expect.objectContaining({ head: 'fix-readme-typo', title: 'My title after reopening' })
+    )
+    reopened.unmount()
   })
 
   it('does not create when generation fails, and the next click submits as shown, even after the panel reopens', async () => {
@@ -345,12 +460,11 @@ describe('useSourceControlHostedReviewCreation', () => {
   it('creates after generation even though generation ending refreshes eligibility', async () => {
     const { generate, finish } = deferredGeneration()
     const base = makeInput({ handleGeneratePullRequestFields: generate })
-    // Why: the first probe confirms the branch; any refetch stays pending, as a real one does for a while.
+    // Let the first probe resolve and later refetches hang to model delayed refreshes.
     const getEligibility = vi
       .fn<() => Promise<HostedReviewCreationEligibility>>()
       .mockResolvedValueOnce(readyEligibility)
       .mockReturnValue(new Promise(() => {}))
-    // Wires the real eligibility probe to the real create, as the Source Control panel does.
     const { result } = renderHook(() => {
       const [inFlight, setCreatePrInFlightByWorktree] = useState<Record<string, boolean>>({})
       const createPrInFlightRef = useRef<Record<string, boolean>>({})
@@ -409,9 +523,8 @@ describe('useSourceControlHostedReviewCreation', () => {
     act(() => {
       click = result.current.handleCreatePullRequest()
     })
-    // A repeated click is refused while the first one is in flight.
     await act(async () => result.current.handleCreatePullRequest())
-    // The run's record settles and the panel re-renders before the click's continuation resumes.
+    // Settle and rerender before the original click’s continuation resumes.
     await act(async () => {
       useAppStore
         .getState()
@@ -466,10 +579,9 @@ describe('useSourceControlHostedReviewCreation', () => {
           answer = resolve
         })
     )
-    // The cancel never reaches the host, so the stopped request stays pending.
+    // Model cancellation never reaching the host so the stopped request remains pending.
     runtime.cancel.mockReturnValue(new Promise(() => {}))
     const base = makeInput()
-    // Wires the real store-routed generation and Stop to the real create and its hold, as the Source Control panel does.
     const { result } = renderHook(() => {
       const [inFlight, setCreatePrInFlightByWorktree] = useState<Record<string, boolean>>({})
       const createPrInFlightRef = useRef<Record<string, boolean>>({})
@@ -525,7 +637,6 @@ describe('useSourceControlHostedReviewCreation', () => {
       '/repo',
       expect.objectContaining({ title: 'Fix readme typo', body: '' })
     )
-    // The stopped request's late result creates nothing.
     await act(async () => {
       answer({ success: true, fields: generatedFields })
       await firstClick

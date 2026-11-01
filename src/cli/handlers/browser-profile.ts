@@ -41,9 +41,7 @@ export const BROWSER_PROFILE_HANDLERS: Record<string, CommandHandler> = {
       scope
     })
     if (result.result.profile === null) {
-      // Why: registry refuses non-isolated/imported scopes; we already validated
-      // the scope client-side, so a null here means a server-side rejection we
-      // shouldn't silently report as success.
+      // Client validation cannot guarantee the server accepted creation; null must not read as success.
       throw new RuntimeClientError(
         'runtime_error',
         `Failed to create browser profile (label=${label}, scope=${scope})`

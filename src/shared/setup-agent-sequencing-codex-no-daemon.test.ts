@@ -5,8 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createSequencedSetupAgentCommands } from './setup-agent-sequencing'
 
-// Why: the POSIX gate evals the agent in a fresh `bash -lc`, which never reads
-// Orca's shell wrapper, so it must carry the codex --no-daemon rule itself.
+// Fresh bash -lc does not read Orca’s wrapper; the gate must enforce codex --no-daemon itself.
 const roots: string[] = []
 const gates: ChildProcess[] = []
 
@@ -24,8 +23,7 @@ function prepareGate(startupCommand: string) {
   roots.push(root)
   const bin = join(root, 'bin')
   mkdirSync(bin)
-  // Why: `bash -l` reads /etc/profile, whose macOS path_helper moves the fixture bin
-  // behind /usr/local/bin and /opt/homebrew/bin; re-prepend it so a real codex never runs.
+  // macOS login path_helper may demote the fixture bin; prepend again so real codex never runs.
   writeFileSync(join(root, '.bash_profile'), `export PATH=${JSON.stringify(bin)}:"$PATH"\n`)
   const runner = join(root, 'setup-runner.sh')
   const sequenced = createSequencedSetupAgentCommands({

@@ -2,14 +2,11 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { basename, dirname, joinPath } from '@/lib/path'
 import type { TreeNode } from './file-explorer-types'
-import { copyRuntimePath, runtimePathExists } from '@/runtime/runtime-file-client'
+import { copyRuntimePath } from '@/runtime/runtime-file-mutation-client'
+import { runtimePathExists } from '@/runtime/runtime-file-metadata-client'
 import { captureFileExplorerOperationGuard } from './file-explorer-operation-owner'
 
-/**
- * Electron's ipcRenderer.invoke wraps errors as:
- *   "Error invoking remote method 'channel': Error: actual message"
- * Strip the wrapper so users see only the meaningful part.
- */
+/** Strip Electron invoke error wrappers before showing the underlying message. */
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
     return fallback
@@ -57,9 +54,7 @@ export function useFileDuplicate({
           expectedSshTargetId: operationGuard.route.expectedSshTargetId,
           expectedSshConnectionGeneration: operationGuard.route.expectedSshConnectionGeneration
         }
-        // Why: generate a unique "stem copy.ext", "stem copy 2.ext", … name
-        // so we never collide with an existing file. pathExists checks are
-        // sequential to avoid TOCTOU races with COPYFILE_EXCL on the backend.
+        // Find an available copy name; the exclusive copy below handles concurrent creation races.
         let candidate = joinPath(dir, `${stem} copy${ext}`)
         let n = 2
         while (await runtimePathExists(context, candidate)) {
@@ -67,15 +62,9 @@ export function useFileDuplicate({
           n += 1
         }
 
-        // Why: Between the final pathExists returning false and the copyFile
-        // call, another process could create a file at that path (TOCTOU race).
-        // The backend uses COPYFILE_EXCL which will fail with EEXIST in that
-        // case. Instead of surfacing a generic error toast, we retry with the
-        // next candidate name. A max-retry limit of 10 prevents infinite loops
-        // in degenerate scenarios.
+        // Another process can claim the name after pathExists; retry exclusive-copy EEXIST failures with a bounded new-name search.
         const MAX_RETRIES = 10
         let retries = 0
-        // eslint-disable-next-line no-constant-condition
         while (true) {
           try {
             operationGuard.assertCurrent()
@@ -86,8 +75,6 @@ export function useFileDuplicate({
               err instanceof Error &&
               (err.message.includes('EEXIST') || err.message.includes('already exists'))
             if (isEexist && retries < MAX_RETRIES) {
-              // The candidate was taken between our check and the copy attempt;
-              // advance to the next name and retry.
               candidate = joinPath(dir, `${stem} copy ${n}${ext}`)
               n += 1
               retries += 1
@@ -98,13 +85,10 @@ export function useFileDuplicate({
           }
         }
 
-        // Best-effort refresh; the file was already copied successfully,
-        // so a refresh failure should not surface an error to the user.
+        // Refresh failures must not report an already-successful copy as failed.
         try {
           await refreshDir(dir)
-        } catch {
-          // noop – the copy succeeded; stale tree is a minor inconvenience.
-        }
+        } catch {}
       }
       void run()
     },

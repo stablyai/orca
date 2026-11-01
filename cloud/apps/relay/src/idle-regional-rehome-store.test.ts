@@ -217,9 +217,48 @@ describe('constrained idle regional assignment transaction', () => {
     expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
   })
 
-  it('leaves the candidate page offset untouched across a closed dispatch budget', async () => {
+  // sourceRequestUnits reads a reserve cell's missing phone leases as zero units; selection must drop it.
+  it.each(['source', 'target'])('drops every candidate while the %s cell is recorded as reserve', async (cellId) => {
+    const { store, safety } = await setup()
+    await store.setCellAdmitMode(cellId, 'reserve')
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
+    await store.setCellAdmitMode(cellId, 'db')
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
+  })
+
+  it('leaves the candidate page cursor untouched across a closed dispatch budget', async () => {
     const { store, database, safety } = await setup()
+    for (const table of [
+      'relay_assignments',
+      'relay_assignment_activity_leases',
+      'relay_control_capabilities',
+      'relay_region_decisions'
+    ]) {
+      const template = (
+        await database.query(`SELECT * FROM ${table} WHERE user_id = ? AND relay_host_id = ?`, [
+          identity.userId,
+          identity.relayHostId
+        ])
+      )[0]!
+      const columns = Object.keys(template)
+      for (let index = 0; index < 100; index++) {
+        const values = columns.map((column) =>
+          column === 'user_id' || column === 'relay_host_id' ? '?' : column
+        )
+        await database.query(
+          `INSERT INTO ${table} (${columns.join(', ')}) SELECT ${values.join(', ')} FROM ${table}
+           WHERE user_id = ? AND relay_host_id = ?`,
+          [
+            `idle-store-test-${String(index).padStart(3, '0')}`,
+            `pagehost${String(index).padStart(8, '0')}`,
+            identity.userId,
+            identity.relayHostId
+          ]
+        )
+      }
+    }
     const first = await store.selectIdleRegionalRehomeCandidates(safety)
+    expect(first).toHaveLength(100)
     await database.query(
       `UPDATE relay_region_rehome_worker_state SET next_dispatch_at = ? WHERE worker_id = 'global'`,
       [safety.observedAt + 1]
@@ -228,7 +267,10 @@ describe('constrained idle regional assignment transaction', () => {
     await database.query(
       `UPDATE relay_region_rehome_worker_state SET next_dispatch_at = 0 WHERE worker_id = 'global'`
     )
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual(first)
+    const next = await store.selectIdleRegionalRehomeCandidates(safety)
+    expect(next).toHaveLength(1)
+    expect(next[0]!.relayHostId).toBe('pagehost00000099')
+    expect(first.some((c) => c.relayHostId === next[0]!.relayHostId)).toBe(false)
   })
 
   it('progresses past a full page of busy candidates without writing eligibility state', async () => {
@@ -282,8 +324,8 @@ describe('constrained idle regional assignment transaction', () => {
       const { store, safety, request, database } = await setup()
       const held = holdStatement(database, 'SELECT * FROM relay_region_rehome_control')
       const commit = store.commitIdleRegionalRehome(request, safety)
-      await held.entered
       try {
+        await held.entered
         await store.activateControl(identity, {
           cellId: 'source',
           assignmentEpoch: 1,
@@ -293,6 +335,7 @@ describe('constrained idle regional assignment transaction', () => {
         })
       } finally {
         held.release()
+        await commit
       }
       expect(await commit).toEqual({ outcome: 'deferred', reason: 'candidate-ineligible' })
       expect(await store.reconcileIdleRegionalRehome(request)).toBe('stale')
@@ -313,10 +356,19 @@ describe('constrained idle regional assignment transaction', () => {
       idleRegionalRehome: true
     })
     const rejected = expect(replacement).rejects.toThrow('wrong_assignment')
-    held.release()
-    expect(await commit).toEqual({ outcome: 'committed' })
-    await rejected
-    expect(await store.resolve(identity)).toMatchObject({ cellId: 'target', assignmentEpoch: 2 })
+    try {
+      held.release()
+      expect(await commit).toEqual({ outcome: 'committed' })
+      await rejected
+      expect(await store.resolve(identity)).toMatchObject({ cellId: 'target', assignmentEpoch: 2 })
+    } finally {
+      held.release()
+      try {
+        await commit
+      } finally {
+        await rejected
+      }
+    }
   })
 
   it('finds the committed attempt after its database reply is lost', async () => {

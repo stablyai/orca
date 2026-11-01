@@ -44,8 +44,6 @@ const { INITIAL_MODE_2031_REPLY_SCAN_STATE, mode2031SequenceFor, scanMode2031Rep
     pathToFileURL(path.join(REPO_ROOT, 'src/shared/terminal-color-scheme-protocol.ts')).href
   )
 
-// ---------------------------------------------------------------- args
-
 const argv = process.argv.slice(2)
 const flag = (name) => argv.includes(`--${name}`)
 const opt = (name, fallback) => {
@@ -68,8 +66,6 @@ const SETTLE_MS = Number(opt('settle', '400'))
 
 const PROMPT_MARK = 'HARNESS> '
 const CHILD_CMD = `python3 -c 'import sys; d=sys.stdin.readline(); print("GOT:", repr(d))'`
-
-// ---------------------------------------------------------------- tracing
 
 const t0 = process.hrtime.bigint()
 const ms = () => Number(process.hrtime.bigint() - t0) / 1e6
@@ -113,16 +109,13 @@ function escCapped(s) {
     : e
 }
 
-// ---------------------------------------------------------------- fish config
-
 let configHome = null
 const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', LANG: 'en_US.UTF-8' }
 delete env.FISH_HISTORY
 if (!USE_USER_CONFIG) {
   configHome = mkdtempSync(path.join(tmpdir(), 'fish-2031-'))
   mkdirSync(path.join(configHome, 'fish'), { recursive: true })
-  // Plain prompt: no Tide, no async prompt machinery. fish core still toggles
-  // DEC 2031 in tty_handoff.rs regardless of the prompt.
+  // Minimal prompt omits Tide/async work; fish tty_handoff.rs still toggles DEC 2031.
   const promptBody = PROMPT_CMD
     ? `set -l __x (/bin/echo -n ok); printf '${PROMPT_MARK}'`
     : `printf '${PROMPT_MARK}'`
@@ -138,8 +131,6 @@ if (!USE_USER_CONFIG) {
   env.XDG_CONFIG_HOME = configHome
   env.XDG_DATA_HOME = path.join(configHome, 'data')
 }
-
-// ---------------------------------------------------------------- pty
 
 log(
   'HARNESS',
@@ -182,8 +173,7 @@ function ptyWrite(bytes, label) {
 
 function sendMode2031Reply(reason) {
   replyCount += 1
-  // Stale = the scanner has already seen fish's `CSI ?2031l` (tty handed to a child)
-  // by the time this reply actually reaches the PTY. That reply lands in the child's stdin.
+  // A reply is stale if the scanner saw ?2031l (child handoff) before PTY write, sending the reply into child stdin.
   const stale = lastDecision === 'unsubscribed'
   if (stale) {
     staleReplyCount += 1
@@ -267,8 +257,6 @@ term.onExit((e) => {
   log('PTY', 'exit', JSON.stringify(e))
 })
 
-// ---------------------------------------------------------------- driving
-
 const sleep = (n) => new Promise((r) => setTimeout(r, n))
 async function waitFor(pred, timeoutMs, what) {
   const deadline = Date.now() + timeoutMs
@@ -295,10 +283,7 @@ try {
   let outLenBeforeAccept
 
   if (TYPEAHEAD) {
-    // Most realistic leak window: queue the command while an external command
-    // still owns the tty. fish redraws the prompt (`CSI ?2031h`) and consumes the
-    // buffered line in the same breath, so the handoff to the child happens
-    // sub-millisecond after the subscribe.
+    // Queue input while a child owns the TTY: fish can subscribe at prompt redraw then hand off buffered input sub-millisecond later.
     phase = 'pre-command'
     log('HARNESS', 'MARK', '--- running `sleep 0.4` so the next line is typed ahead ---')
     ptyWrite('sleep 0.4\r', 'pre-command')

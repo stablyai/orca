@@ -17,27 +17,19 @@ function getProjectWslRuntimeDistro(
 ): string | null {
   const project = projects.find((candidate) => candidate.sourceRepoIds.includes(repo.id))
   const resolution = resolveProjectExecutionRuntime({
-    // Why win32 unconditionally: a non-Windows host cannot produce a drive or WSL UNC repo path, so
-    // the boundary check below rejects it regardless of what platform we claim here.
+    // Non-Windows hosts cannot produce drive/WSL UNC repo paths; boundary detection rejects them even with win32 here.
     appPlatform: 'win32',
     projectId: project?.id ?? repo.id,
     projectRuntimePreference: project?.localWindowsRuntimePreference,
     globalWindowsRuntimeDefault: settings.localWindowsRuntimeDefault
   })
-  // Why not warn on repair-required: the runtime is unusable, and a perf advisory on top of the
-  // repair prompt is noise.
+  // Unusable runtimes already need repair; avoid stacking a performance advisory on that prompt.
   return resolution.status === 'resolved' && resolution.runtime.kind === 'wsl'
     ? resolution.runtime.distro
     : null
 }
 
-/**
- * Advises that a just-added project's working tree sits on the Windows drive while its git runs in
- * WSL, so every command pays the 9p/drvfs crossing.
- *
- * Worktree placement already moves NEW workspaces inside the distro, but the project's own tree
- * stays where the user put it and that cost is otherwise invisible — the project simply feels slow.
- */
+/** Warn when project tree stays on Windows drive while git runs in WSL, paying 9p/drvfs per command. Worktree placement fixes new workspaces, not the original tree. */
 export function warnIfProjectCrossesWslFilesystemBoundary(
   repo: Repo,
   projects: readonly Project[],

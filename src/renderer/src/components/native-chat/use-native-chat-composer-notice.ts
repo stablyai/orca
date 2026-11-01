@@ -12,8 +12,11 @@ import type { StructuredConversationCommandCauses } from './structured-conversat
 type ComposerErrorLine = NativeChatComposerNoticeContent &
   Pick<NativeChatComposerErrorDetail, 'refusedWhile'>
 
-/** The composer's own paste and attachment notice, after the chat's notices. */
-export function useNativeChatComposerNotice(chatNotices?: readonly NativeChatComposerNotice[]): {
+/** The composer's own paste and attachment notice, after the chat's notices and the input hold. */
+export function useNativeChatComposerNotice(
+  chatNotices?: readonly NativeChatComposerNotice[],
+  holdNotice?: NativeChatComposerNotice | null
+): {
   notices: readonly NativeChatComposerNotice[]
   setNotice: (text: string | null, errorText?: string) => void
 } {
@@ -26,6 +29,7 @@ export function useNativeChatComposerNotice(chatNotices?: readonly NativeChatCom
   const notices = useMemo(
     () => [
       ...(chatNotices ?? []),
+      ...(holdNotice ? [holdNotice] : []),
       ...(notice
         ? [
             {
@@ -37,13 +41,12 @@ export function useNativeChatComposerNotice(chatNotices?: readonly NativeChatCom
           ]
         : [])
     ],
-    [chatNotices, notice, setNotice]
+    [chatNotices, holdNotice, notice, setNotice]
   )
   return { notices, setNotice }
 }
 
-/** A chat's last send or command error: shown in the card until dismissed or the next send clears
- *  it. A command's refusal names what the chat shows it waiting on, so it goes once that is gone. */
+/** Retain send/command errors until dismissed or replaced; drop refusals when their visible blocking cause ends. */
 export function useNativeChatComposerError(causes: StructuredConversationCommandCauses): {
   composerError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
   reportComposerError: NativeChatStructuredComposerTransport['onError']

@@ -11,8 +11,7 @@ function forcePendingReaps(): void {
   }
 }
 
-// Why: signal the child handle, not a raw pid. Node no-ops once the child has
-// exited, so a recycled pid can never be signalled.
+// Use the child handle so exited children are not signaled through a reusable raw PID.
 export function reapMacOSProviderProcess(provider: ChildProcess): void {
   if (reaped.has(provider) || hasProviderExited(provider)) {
     return
@@ -49,8 +48,7 @@ export function reapMacOSProviderProcess(provider: ChildProcess): void {
 export class MacOSProviderProcessOwner {
   private provider: ChildProcess | null = null
 
-  // Why: adopting a new generation must never strand the previous one, whatever
-  // teardown did or did not run first.
+  // Reap the previous generation even if its teardown never ran.
   adopt(provider: ChildProcess): void {
     this.reap()
     this.provider = provider
@@ -65,8 +63,7 @@ export class MacOSProviderProcessOwner {
   }
 }
 
-// Why: typeof, not `!== null` — test doubles leave these undefined, which
-// `!== null` would read as "already exited" and silently skip the reap.
+// Test doubles may omit exit fields; undefined does not mean the child has exited.
 function hasProviderExited(provider: ChildProcess): boolean {
   return typeof provider.exitCode === 'number' || typeof provider.signalCode === 'string'
 }

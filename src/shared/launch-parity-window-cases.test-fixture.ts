@@ -1,6 +1,4 @@
-// Test-only (never imported by production code): the window-lane launch parity table for rows 2
-// (typed prompt into a new tab) and 6 (continue from transcript). Renderer suites assert a real
-// producer + pane sends `request`; main suites feed it to pty:spawn and assert `provider`.
+// Window launch parity: typed prompts (row 2) and transcript continuation (row 6). Renderer asserts requests; main asserts pty:spawn provider facts.
 import type {
   LaunchClient,
   LaunchWorkspace,
@@ -112,7 +110,7 @@ export const WINDOW_LAUNCH_CASES: WindowLaunchCase[] = [
     'darwin',
     repo(POSIX_PATH),
     {
-      command: `codex '--dangerously-bypass-approvals-and-sandbox' 'fix Bob'"'"'s bug'`,
+      command: `codex '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox' 'fix Bob'"'"'s bug'`,
       agentCommand: `codex '--dangerously-bypass-approvals-and-sandbox'`
     },
     ZSH

@@ -5,6 +5,7 @@ import type { PreloadApi } from '../api-types'
 export const workspacePortsApi = {
   scan: (args) => ipcRenderer.invoke('workspacePorts:scan', args),
   kill: (args) => ipcRenderer.invoke('workspacePorts:kill', args),
+  probePage: (args) => ipcRenderer.invoke('workspacePorts:probePage', args),
   onAdvertisedUrlChanged: (callback) => {
     const listener = (
       _event: Electron.IpcRendererEvent,

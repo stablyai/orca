@@ -23,8 +23,7 @@ export function runtimeSupportsSshTargetManagement(environmentId: string): Promi
   )
 }
 
-// Why every call checks: an old server would answer method_not_found at best; there is never a
-// local fallback, because this client's own SSH hosts are a different machine's.
+// Check every call; old-server refusal never permits local fallback because client SSH hosts are another machine’s.
 async function callSshTargetManagement<T>(
   environmentId: string,
   method: string,

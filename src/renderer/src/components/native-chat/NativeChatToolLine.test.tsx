@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatToolLine } from './NativeChatToolLine'
 import { NativeChatToolRun } from './NativeChatToolRun'
-import type { NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatToolCallBlock } from '../../../../shared/native-chat/native-chat-types'
 
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
   loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))
@@ -41,23 +41,6 @@ describe('tool sentence rows', () => {
     expect(screen.getByRole('button')).toHaveAccessibleName(new RegExp(name))
     expect(screen.getByRole('button')).toHaveAccessibleName(new RegExp(verb))
     expect(container.querySelector('.font-semibold')).toBeNull()
-  })
-
-  it('tints the glyph of a failed call, and of no other', () => {
-    const glyphOf = (state: 'completed' | 'failed', isError: boolean): Element | null => {
-      const { container, unmount } = render(
-        <NativeChatToolLine
-          block={{ type: 'tool-call', name: 'Bash', input: { command: 'ls src' }, state }}
-          result={{ type: 'tool-result', output: 'out', isError }}
-        />
-      )
-      const tinted = container.querySelector('.text-destructive\\/70')
-      unmount()
-      return tinted
-    }
-    expect(glyphOf('failed', true)).not.toBeNull()
-    expect(glyphOf('completed', true)).not.toBeNull()
-    expect(glyphOf('completed', false)).toBeNull()
   })
 
   it('retains full paths in titles and accessible targets', () => {

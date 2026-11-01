@@ -444,10 +444,7 @@ describe('WorkspacePortScanner', () => {
     expect(useAppStore.getState().workspacePortScansByKey['environment:env-3:all']).toBeUndefined()
   })
 
-  // Why: a manual publish (the ports popover) can resolve after the host-set
-  // change already pruned its key, re-adding it. Per-key writes never delete, so
-  // that removed host would otherwise hold its ports and a permanent
-  // unavailable notice until the next host-set change.
+  // Late manual publishes can re-add pruned hosts; the next poll must remove their ports/unavailable notices again.
   it('drops a stale host re-added after pruning on the next poll', async () => {
     await act(async () => {
       root?.render(<WorkspacePortScanner />)
@@ -600,7 +597,6 @@ describe('advertised URL refresh bursts', () => {
   })
 
   it('rescans this computer on a local URL change while a server is the default host', async () => {
-    // Why: the event comes from this app's processes; the default host setting used to mute it.
     seedRemoteWorkspace('env-1')
     await act(async () => {
       root?.render(<WorkspacePortScanner />)

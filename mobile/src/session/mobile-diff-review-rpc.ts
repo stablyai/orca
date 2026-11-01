@@ -6,9 +6,7 @@ import type {
   MobileGitUpstreamStatus
 } from '../source-control/mobile-git-status'
 
-// The one projection left here after the review readers became schemas: the open-PR prefill still
-// re-normalizes a fresh `git.status` payload it already holds, which is a value in hand rather
-// than a reply at a reader boundary.
+// Normalize the status value already in hand for PR prefill; reply boundaries use schema readers.
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null

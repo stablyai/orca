@@ -1,12 +1,15 @@
-import { Info } from 'lucide-react'
+import {
+  getClaudeSubagentNavigationTitle,
+  getClaudeSubagentNavigationDescription
+} from './claude-subagent-navigation-copy'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentCacheTimerSection } from './AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import { CodexTerminalServerIsolationSetting } from './CodexTerminalServerIsolationSetting'
+import { CodexHistorySharingSetting } from './CodexHistorySharingSetting'
 import {
   getAgentGeneratedTabTitlesDescription,
   getAgentGeneratedTabTitlesTitle
@@ -16,13 +19,7 @@ import {
   getAgentWorkspaceTrustDescription,
   getAgentWorkspaceTrustTitle
 } from './agent-workspace-trust-copy'
-import {
-  SettingsSegmentedControl,
-  SettingsSubsectionHeader,
-  SettingsSwitchRow
-} from './SettingsFormControls'
-import { translate } from '@/i18n/i18n'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { getAgentsPaneSearchEntries } from './agents-search'
 import {
@@ -31,13 +28,18 @@ import {
 } from './agent-availability-settings'
 import { AgentAvailabilityControl } from './AgentCatalogRow'
 import { AgentLaunchSettingsSection } from './AgentLaunchSettingsSection'
+import {
+  AgentPermissionsSetting,
+  type AgentPermissionsSettingProps
+} from './AgentPermissionsSetting'
 import type { SettingsHostScope } from './settings-host-scope'
 
 export {
   buildAgentAvailabilitySettingsUpdate,
   createAgentAvailabilityUpdateQueue,
   getAgentsPaneSearchEntries,
-  AgentAvailabilityControl
+  AgentAvailabilityControl,
+  AgentPermissionsSetting
 }
 
 type AgentSettingProps = {
@@ -52,79 +54,6 @@ type AgentsPaneProps = AgentSettingProps & {
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
-}
-
-export function AgentPermissionsSetting({
-  mode,
-  onChange
-}: {
-  mode: AgentPermissionMode
-  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
-}): React.JSX.Element {
-  const visibleMode: Exclude<AgentPermissionMode, 'mixed'> = mode === 'manual' ? 'manual' : 'yolo'
-  return (
-    <section className="space-y-3">
-      <SettingsSubsectionHeader
-        title={
-          <span className="flex items-center gap-2">
-            {translate('auto.components.settings.AgentsPane.agentPermissions', 'Agent Permissions')}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={translate(
-                    'auto.components.settings.AgentsPane.agentPermissionsInfo',
-                    'Agent permissions info'
-                  )}
-                  className="grid size-5 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                  <Info className="size-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                {translate(
-                  'auto.components.settings.AgentsPane.agentPermissionsTooltip',
-                  "Doesn't apply to agents where you've overridden launch arguments."
-                )}
-              </TooltipContent>
-            </Tooltip>
-          </span>
-        }
-        description={translate(
-          'auto.components.settings.AgentsPane.agentPermissionsDescription',
-          'Choose whether Orca launches agents with fewer permission prompts or with manual checks.'
-        )}
-        action={
-          <SettingsSegmentedControl<AgentPermissionMode>
-            value={visibleMode}
-            onChange={(nextMode) => {
-              if (nextMode !== 'mixed') {
-                onChange(nextMode)
-              }
-            }}
-            ariaLabel={translate(
-              'auto.components.settings.AgentsPane.agentPermissions',
-              'Agent Permissions'
-            )}
-            size="sm"
-            options={[
-              {
-                value: 'yolo',
-                label: translate('auto.components.settings.AgentsPane.agentPermissionsYolo', 'Yolo')
-              },
-              {
-                value: 'manual',
-                label: translate(
-                  'auto.components.settings.AgentsPane.agentPermissionsManual',
-                  'Manual'
-                )
-              }
-            ]}
-          />
-        }
-      />
-    </section>
-  )
 }
 
 export function AgentsPane({
@@ -145,18 +74,36 @@ export function AgentsPane({
         hostScope={hostScope}
         renderPermissions={renderAgentPermissions}
       />
+      <section className="space-y-3">
+        <CodexHistorySharingSetting
+          settings={settings}
+          updateSettings={updateSettings}
+          hostScope={hostScope}
+        />
+      </section>
       <section className="space-y-8">
         <SettingsSubsectionHeader title={getLocalExecutionHostLabel()} />
         <AgentRuntimeSetting
           settings={settings}
           updateSettings={updateSettings}
-          refresh={refreshLocalAgents}
+          refresh={() => refreshLocalAgents(undefined, { wakeWslDistro: true })}
           wslSupportedPlatform={wslSupportedPlatform}
           wslAvailable={wslAvailable}
           wslDistros={wslDistros}
           wslCapabilitiesLoading={wslCapabilitiesLoading}
         />
         <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
+        <SettingsSwitchRow
+          label={getClaudeSubagentNavigationTitle()}
+          description={getClaudeSubagentNavigationDescription()}
+          checked={settings.claudeSubagentNavigationEnabled !== false}
+          onChange={() =>
+            updateSettings({
+              claudeSubagentNavigationEnabled: settings.claudeSubagentNavigationEnabled === false
+            })
+          }
+          ariaLabel={getClaudeSubagentNavigationTitle()}
+        />
         {!isPairedWebClientWindow() ? (
           <>
             <AgentWorkspaceTrustSetting settings={settings} updateSettings={updateSettings} />
@@ -176,11 +123,8 @@ export function AgentsPane({
   )
 }
 
-function renderAgentPermissions(
-  mode: AgentPermissionMode,
-  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
-): React.ReactNode {
-  return <AgentPermissionsSetting mode={mode} onChange={onChange} />
+function renderAgentPermissions(props: AgentPermissionsSettingProps): React.ReactNode {
+  return <AgentPermissionsSetting {...props} />
 }
 
 export function AgentStatusHooksSetting({ settings, updateSettings }: AgentSettingProps) {

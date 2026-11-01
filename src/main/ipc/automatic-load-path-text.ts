@@ -1,19 +1,15 @@
 import { basename, sep } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
-// Why the path flavour, not the OS: these are Windows path rules, and tests exercise them with
-// path.win32 on any host.
+// Follow the injected path flavor so Windows rules are testable on every host.
 function usesWindowsPaths(): boolean {
   return sep === '\\'
 }
 
 const WINDOWS_RESERVED_DEVICE_STEM =
-  /^(?:con|prn|aux|nul|conin\$|conout\$|clock\$|com[0-9¹²³]|lpt[0-9¹²³])$/i
+  /^(?:con|prn|aux|nul|conin\$|conout\$|clock\$|com[0-9\u00B9\u00B2\u00B3]|lpt[0-9\u00B9\u00B2\u00B3])$/i
 
-/**
- * `NUL.png`, `com1 .jpg`, `Aux.`, `NUL:stream.png` name a Windows device, not a file, whatever the
- * extension or alternate data stream (`:`).
- */
+/** Windows device names remain devices through extensions, trailing spaces/dots and alternate streams. */
 export function isWindowsReservedDeviceName(filePath: string): boolean {
   if (!usesWindowsPaths()) {
     return false
@@ -34,10 +30,7 @@ export function isDeviceNamespacePath(filePath: string): boolean {
   return usesWindowsPaths() && /^\\\\[?.]\\/.test(toBackslashes(filePath))
 }
 
-/**
- * A network share (`\\host\share`). WSL paths are UNC in form but stay on this machine, so they
- * are not network paths.
- */
+/** WSL UNC paths stay on this machine and are excluded from network shares. */
 export function isNetworkSharePath(filePath: string): boolean {
   if (!usesWindowsPaths() || isDeviceNamespacePath(filePath)) {
     return false

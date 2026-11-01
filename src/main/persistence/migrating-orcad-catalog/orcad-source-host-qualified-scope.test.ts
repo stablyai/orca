@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { Tab } from '../../../shared/tab-types'
@@ -73,7 +71,6 @@ function twoHostState(): PersistedState {
     'ssh:host-a': { ...state.workspaceSession, unifiedTabs: { [WORKTREE]: [tab('a')] } },
     [HOST_B]: { ...state.workspaceSession, unifiedTabs: { [WORKTREE]: [tab('b')] } }
   }
-  // Host B's row, qualified, in the local partition.
   state.workspaceSession.unifiedTabs = { [`${HOST_B}|${WORKTREE}`]: [tab('b-local')] }
   state.worktreeMeta[`${HOST_B}|${WORKTREE}`] = {
     displayName: 'B worktree',

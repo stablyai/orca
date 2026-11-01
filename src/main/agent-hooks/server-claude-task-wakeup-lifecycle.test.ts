@@ -171,7 +171,6 @@ describe.each([false, true])('Claude wake-up production ingress remote=%s', (rem
           prematureCompletion.push(index)
         }
       }
-      // Every status subscriber must avoid a false whole-pane completion.
       expect(prematureCompletion).toEqual([])
       expect(server.row()).toMatchObject({
         state: 'done',

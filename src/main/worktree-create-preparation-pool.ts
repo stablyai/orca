@@ -13,6 +13,7 @@ import { WorktreePreparationLockOwnershipError } from './git/worktree-preparatio
 import { queuePreparedWorktreeTipRefresh } from './worktree-preparation-refresh-queue'
 import { toHostFilesystemPath } from './host-tree-removal'
 import { createPreparationActivity } from './worktree-create-preparation-activity'
+import { profileStateAccessMachineIdentity } from './persistence/profile-state/profile-state-access-identity'
 import type { PreparationActivity } from './worktree-create-preparation-activity'
 import {
   deferPreparationForClaim,
@@ -62,7 +63,6 @@ export type PreparationEntry = {
   expiration: NodeJS.Timeout
   controller: AbortController
   checkoutStarted: boolean
-  /** Origin, disk work and timing reported by the create that uses it. */
   activity: PreparationActivity
 }
 
@@ -77,13 +77,12 @@ export type StartPreparationArgs = {
 
 const preparations = new Map<string, PreparationEntry>()
 
-/** A prepared checkout is a create that is either in flight or imminent. */
 export function hasPendingPreparations(): boolean {
   return preparations.size > 0 || hasClaims() || hasPendingStalePreparationCleanup()
 }
 
 function discardEntryInBackground(entry: PreparationEntry): void {
-  // Tracked, not bare `void`: the test reset must be able to settle it before dropping the registry.
+  // Let test reset await background discards before clearing the registry.
   trackPreparationDiscard(worktreePreparationGit.run(() => discardPreparationEntry(entry)))
 }
 
@@ -136,8 +135,7 @@ export function findPreparation(
   )
 }
 
-/** Removes an entry from the pool so no other create can claim it. Callers must run this in the
- *  same synchronous turn as the selection that produced `entry`. */
+/** Take synchronously after selection so concurrent creates cannot claim the same entry. */
 export function takePreparation(
   entry: PreparationEntry,
   requestedCanonicalBase = entry.canonicalBase
@@ -215,7 +213,10 @@ function startBackgroundPreparation({
   const key = preparationEntryKey(repoPathKey, workspaceRootKey, canonicalBase, wslDistro)
   enforcePreparationLimit(repoPathKey, workspaceRootKey, wslDistro)
   const preparationId = `${process.pid}-${randomUUID()}`
-  const lockReason = createWorktreePreparationLockReason(preparationId)
+  const lockReason = createWorktreePreparationLockReason(
+    preparationId,
+    profileStateAccessMachineIdentity()
+  )
   const paths = isWindowsAbsolutePathLike(workspaceRoot) ? win32 : posix
   const preparationRoot = paths.join(workspaceRoot, WORKTREE_CREATE_PREPARATION_DIRECTORY)
   const preparedPath = paths.join(preparationRoot, preparationId)
@@ -253,7 +254,6 @@ function startBackgroundPreparation({
     signal.throwIfAborted()
     await mkdir(toHostFilesystemPath(preparationRoot), { recursive: true })
     signal.throwIfAborted()
-    // Already canonical, so the add re-resolves nothing.
     entry.checkoutStarted = true
     try {
       await prepareWorktreeCreateCheckout(

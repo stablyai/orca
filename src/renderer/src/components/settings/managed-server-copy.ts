@@ -1,10 +1,10 @@
-/** User-facing words for managed-server states; every string goes through the catalog. */
 import type {
   OrcadManagedPendingMigrationRow,
   OrcadManagedRuntimeStatus
 } from '../../../../shared/orcad-managed-runtime'
-import type { OrcadMigrationBlocker } from '../../../../shared/orcad-migration-preflight'
+import type { OrcadMigrationBlocker } from '../../../../shared/orcad-migration/orcad-migration-preflight'
 import { translate } from '@/i18n/i18n'
+import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../../shared/wsl-host-types'
 import { dependencyKindLabel } from './managed-server-dependency-kinds'
 
 export function migrationPhaseLabel(phase: OrcadManagedPendingMigrationRow['phase']): string {
@@ -57,6 +57,14 @@ export function terminalCensusLabel(terminals: OrcadManagedRuntimeStatus['termin
   )
 }
 
+/** Copy for Update anyway; it states only what the forced update was verified to keep. */
+export function forceUpdateMessage(): string {
+  return translate(
+    'auto.components.settings.managedServers.row.forceUpdate',
+    'Terminals are running on this host. They keep running through the update, and their panes reconnect when Orca’s server restarts.'
+  )
+}
+
 export function conversionBlockerLabel(blocker: OrcadMigrationBlocker): string {
   switch (blocker.code) {
     case 'orcad_migration_target_not_found':
@@ -68,7 +76,7 @@ export function conversionBlockerLabel(blocker: OrcadMigrationBlocker): string {
     case 'orcad_migration_owner_unrecorded':
       return translate(
         'auto.components.settings.managedServers.blocker.owned',
-        'This SSH host already belongs to a managed server.'
+        'Orca already runs on this SSH host.'
       )
     case 'orcad_migration_direct_ssh_repositories':
     case 'orcad_migration_direct_ssh_folder_workspaces':
@@ -134,7 +142,6 @@ const MIGRATION_CODES = new Set([
   'orcad_rollback_crosses_migration'
 ])
 
-/** The one localized line for a managed-server action that did not go through. */
 export function managedServerOutcomeLabel(result: {
   outcome: string
   code?: string
@@ -143,8 +150,8 @@ export function managedServerOutcomeLabel(result: {
   const code = result.code ?? ''
   if (code === 'orcad_stop_active_environment') {
     return translate(
-      'auto.components.settings.managedServers.outcome.activeServer',
-      'Not done: this server is the default host for new projects. Choose another one in Advanced before stopping it.'
+      'auto.components.settings.managedServers.outcome.defaultServer',
+      'Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.'
     )
   }
   if (result.verdict === 'live' || LIVE_TERMINAL_CODES.has(code)) {
@@ -157,6 +164,12 @@ export function managedServerOutcomeLabel(result: {
     return translate(
       'auto.components.settings.managedServers.outcome.unverifiable',
       'Not done: Orca couldn’t confirm what is running on this server. Try again when the host is reachable.'
+    )
+  }
+  if (code === ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE) {
+    return translate(
+      'auto.components.settings.managedServers.outcome.wslMoveRunning',
+      'Not done: a project is moving onto this server. Orca updates it once the move finishes.'
     )
   }
   if (MIGRATION_CODES.has(code)) {

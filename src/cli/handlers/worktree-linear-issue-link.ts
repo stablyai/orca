@@ -23,10 +23,7 @@ export function getOptionalLinearIssueLinkFlag(
     return { ...LINEAR_ISSUE_LINK_CLEARED }
   }
 
-  // Why: the shared builder treats empty input as "clear", which is right for a
-  // text field the user can blank but wrong for a flag — `--linear-issue "  "`
-  // is a mistyped argument, not a request to unlink. Only the literal `null`
-  // clears, and that is handled above.
+  // Only literal null unlinks; blank flag values must not inherit the text-field builder's clear behavior.
   const updates = value.trim() === '' ? null : buildLinearIssueLinkUpdates(value)
   if (!updates) {
     throw new RuntimeClientError(

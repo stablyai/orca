@@ -14,8 +14,7 @@ import { useGitStatusPolling } from './useGitStatusPolling'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-// Mock the refresh boundary so we count invocations precisely without
-// triggering real IPC cascades (upstream probes, store mutations, etc.).
+// Mock refresh to count scheduler invocations without IPC cascades.
 const refreshMock = vi.hoisted(() => vi.fn())
 vi.mock('./git-status-refresh', () => ({
   refreshGitStatusForWorktree: refreshMock
@@ -94,8 +93,7 @@ describe('useGitStatusPolling rerender stability', () => {
   })
 
   afterEach(() => {
-    // Unmount roots WHILE fake timers are still active so effect cleanups
-    // call the faked clearInterval/clearTimeout on matching fake handles.
+    // Unmount before restoring real timers so cleanup clears matching fake handles.
     roots.splice(0).forEach((root) => {
       act(() => root.unmount())
     })
@@ -105,19 +103,14 @@ describe('useGitStatusPolling rerender stability', () => {
   })
 
   it('keeps the refresh scheduler stable when openFiles changes mid-signal debounce', async () => {
-    // Spy on addEventListener so we can guard that the file-watch listener
-    // registered before emitting — otherwise the test would prove nothing.
     const addSpy = vi.spyOn(window, 'addEventListener')
 
     await renderHook()
     await flushMicrotasks()
 
-    // First poll fires immediately (installWindowVisibilityInterval calls
-    // run() once at install time).
     expect(refreshMock).toHaveBeenCalledTimes(1)
 
-    // Rerender: change openFiles in the store while the file-watch/scheduler
-    // debounce is pending. The active-worktree scheduler must survive it.
+    // Change openFiles while scheduler debounce is pending; the scheduler must survive.
     await act(async () => {
       useAppStore.setState({
         openFiles: [makeOpenFile({ id: `${WORKTREE_PATH}/a.ts`, worktreeId: WORKTREE_ID })]
@@ -125,11 +118,9 @@ describe('useGitStatusPolling rerender stability', () => {
     })
     await flushMicrotasks()
 
-    // Guard: the file-watch listener must be registered, or the event below
-    // is a no-op and the test cannot distinguish fix from bug.
+    // Assert subscription first so an unhandled event cannot make this test vacuous.
     expect(addSpy).toHaveBeenCalledWith(ORCA_WORKTREE_FILE_CHANGE_EVENT, expect.any(Function))
 
-    // Fire a file-watch event to drive fetchStatus during the cooldown.
     window.dispatchEvent(
       new CustomEvent(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
         detail: {
@@ -142,8 +133,7 @@ describe('useGitStatusPolling rerender stability', () => {
       })
     )
 
-    // Advance past the 125 ms file-watch debounce. The scheduler coalesces the
-    // signal and paces it behind the 3 s anti-churn floor from the mount run.
+    // The 125ms signal debounce remains paced behind the mount run’s 3s floor.
     await vi.advanceTimersByTimeAsync(200)
     expect(refreshMock).toHaveBeenCalledTimes(1)
 
@@ -156,14 +146,36 @@ describe('useGitStatusPolling rerender stability', () => {
 
     addSpy.mockRestore()
   })
+  it('still refreshes while file-watch events never stop', async () => {
+    await renderHook()
+    await flushMicrotasks()
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+
+    // Why: a nudge pushed back on every event would never fire under continuous agent writes.
+    for (let elapsed = 0; elapsed < 4_000; elapsed += 50) {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
+          detail: {
+            payload: {
+              worktreePath: WORKTREE_PATH,
+              events: [{ kind: 'update', absolutePath: `${WORKTREE_PATH}/a.ts` }]
+            },
+            runtimeEnvironmentId: null
+          }
+        })
+      )
+      await vi.advanceTimersByTimeAsync(50)
+    }
+    await flushMicrotasks()
+    expect(refreshMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
   it('triggers an immediate poll when the active worktree changes (no delay)', async () => {
     await renderHook()
     await flushMicrotasks()
 
-    // First poll on mount (worktree 1)
     expect(refreshMock).toHaveBeenCalledTimes(1)
 
-    // Switch active worktree to worktree 2
     await act(async () => {
       useAppStore.setState({
         activeWorktreeId: WORKTREE_ID2
@@ -171,8 +183,6 @@ describe('useGitStatusPolling rerender stability', () => {
     })
     await flushMicrotasks()
 
-    // Should trigger an immediate poll on the new worktree (total 2 calls)
-    // without having to wait for the 3000ms timer.
     expect(refreshMock).toHaveBeenCalledTimes(2)
 
     await act(async () => {
@@ -253,12 +263,9 @@ describe('useGitStatusPolling rerender stability', () => {
   it('keeps the activity floor when the execution host flaps for the same worktree', async () => {
     await renderHook()
     await flushMicrotasks()
-    // Mount refresh settles and stamps pacing for this worktree.
     expect(refreshMock).toHaveBeenCalledTimes(1)
 
-    // Flap the resolved execution host back and forth. Each flip rebuilds the
-    // scheduler; pacing must survive or every flip grants an immediate run
-    // (the rc.3 storm: sustained git at the debounce floor).
+    // Host flapping rebuilds the scheduler; retain pacing or sustained signals can run Git at the bare debounce floor.
     await act(async () => {
       useAppStore.setState({
         worktreesByRepo: {

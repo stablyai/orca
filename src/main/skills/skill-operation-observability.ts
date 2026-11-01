@@ -15,8 +15,6 @@ import { skillInstallFailureFromError } from './skill-install-operation-error'
 
 const SAFE_LABEL = /^[a-z0-9][a-z0-9._-]{0,63}$/i
 const MAX_OBSERVED_COUNT = 1_000_000
-// Roots grow with the repo count, so an uncapped id list makes one log line
-// grow with the install.
 const MAX_LOGGED_DELETE_ROOT_IDS = 12
 const MAX_OBSERVED_BYTES = 64 * 1024 * 1024
 
@@ -283,11 +281,7 @@ export function startSkillBundleInstallOperation(
   }
 }
 
-/**
- * One summary line per delete batch. Root *ids* are safe to log where labels
- * and paths are not — a repo or plugin id is already a hash — matching
- * discovery's own logging rule.
- */
+/** Log one delete summary using hashed root ids, never private labels/paths, matching discovery. */
 export function recordSkillDeleteOperation(input: {
   operationId: string
   hostKind: 'native-host' | 'wsl'

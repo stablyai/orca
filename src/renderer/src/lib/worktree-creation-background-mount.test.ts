@@ -3,7 +3,10 @@ import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type * as BackgroundMountModule from '@/components/terminal/background-terminal-worktree-mount'
 
-const { requestMount } = vi.hoisted(() => ({ requestMount: vi.fn() }))
+const { requestMount, mainStarts } = vi.hoisted(() => {
+  const started: unknown[] = []
+  return { requestMount: vi.fn(), mainStarts: started }
+})
 
 vi.mock('@/components/terminal/background-terminal-worktree-mount', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundMountModule>()),
@@ -19,11 +22,56 @@ vi.mock('sonner', () => ({
 }))
 
 import { useAppStore } from '@/store'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { runBackgroundWorktreeCreation } from './worktree-creation-flow'
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
-} from './worktree-activation-created-agent-test-state'
+} from './worktree-activation-created-agent.test-fixture'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them, and the first
+// terminals it starts for the window's new tabs.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const client = (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+  return {
+    ...client,
+    callRuntimeRpc: (...args: Parameters<typeof client.callRuntimeRpc>) => {
+      if (args[1] !== 'terminal.create') {
+        return client.callRuntimeRpc(...args)
+      }
+      mainStarts.push(args[2])
+      return new Promise(() => undefined)
+    }
+  }
+})
+
+/** Whether the tab's startup runs: main runs it in a layout-owner build, else the window's mount. */
+function startupRuns(tabId: string): boolean {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return useAppStore.getState().pendingStartupByTabId[tabId] !== undefined
+  }
+  return mainStarts.some(
+    (params) =>
+      typeof params === 'object' && params !== null && 'tabId' in params && params.tabId === tabId
+  )
+}
+
+/** Whether the user sees the terminal titled Setup: a layout-owner build sends the title to main,
+ *  whose frame (not modelled here) draws it; otherwise the window titles the row itself. */
+function titledSetup(terminal: { id: string; customTitle?: string | null }): boolean {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return terminal.customTitle === 'Setup'
+  }
+  const tabBarId = useAppStore
+    .getState()
+    .unifiedTabsByWorktree[worktree.id]?.find((tab) => tab.entityId === terminal.id)?.id
+  return layoutApplyTestTransport
+    .sentOfType('renameTab')
+    .some((rename) => rename.tabId === tabBarId && rename.title === 'Setup')
+}
 
 const initialAppStoreState = useAppStore.getState()
 const worktree = makeCreatedAgentWorktree()
@@ -70,6 +118,7 @@ async function createAfterUserSwitchedAway(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mainStarts.length = 0
   seedEmptyActivatableWorktree(worktree)
 })
 
@@ -88,7 +137,7 @@ describe('a create finishing after the user switched away', () => {
     const state = useAppStore.getState()
     const tabs = state.tabsByWorktree[worktree.id] ?? []
     expect(new Set(tabs.map((tab) => tab.id)).size).toBe(2)
-    expect(tabs.every((tab) => state.pendingStartupByTabId[tab.id] !== undefined)).toBe(true)
+    expect(tabs.every((tab) => startupRuns(tab.id))).toBe(true)
     expect(state.activeWorktreeId).toBeNull()
     expect(requestMount).toHaveBeenCalledWith({
       worktreeId: worktree.id,
@@ -117,11 +166,7 @@ describe('a create finishing after the user switched away', () => {
     expect(requestMount).toHaveBeenCalledWith({ worktreeId: worktree.id, tabIds: [setupTab?.id] })
   })
 
-  it('mounts a plain terminal whose only work is a queued setup split', async () => {
-    useAppStore.setState((current) => ({
-      settings: current.settings && { ...current.settings, setupScriptLaunchMode: 'split-vertical' }
-    }))
-
+  it('mounts the dedicated Setup tab beside an idle primary terminal', async () => {
     await createAfterUserSwitchedAway(
       {
         worktree,
@@ -129,15 +174,41 @@ describe('a create finishing after the user switched away', () => {
       },
       makeBlankTerminalRequest()
     )
-
     const next = useAppStore.getState()
     const tabs = next.tabsByWorktree[worktree.id] ?? []
-    expect(tabs).toHaveLength(1)
-    const tabId = tabs[0]?.id ?? ''
-    expect(next.pendingStartupByTabId[tabId]).toBeUndefined()
-    expect(next.pendingSetupSplitByTabId[tabId]).toBeDefined()
-    expect(requestMount).toHaveBeenCalledWith({ worktreeId: worktree.id, tabIds: [tabId] })
+    expect(tabs).toHaveLength(2)
+    const setupTab = tabs.find(titledSetup)
+    expect(setupTab).toBeDefined()
+    expect(requestMount).toHaveBeenCalledExactlyOnceWith({
+      worktreeId: worktree.id,
+      tabIds: [setupTab?.id]
+    })
+    expect(next.activeWorktreeId).toBeNull()
   })
+
+  it.each(['split-vertical', 'split-horizontal', 'new-tab'] as const)(
+    'keeps setup-only creation to one tab with retired location %s',
+    async (setupScriptLaunchMode) => {
+      const currentSettings = useAppStore.getState().settings
+      if (!currentSettings) {
+        throw new Error('missing creation settings')
+      }
+      const settings = { ...currentSettings, setupScriptLaunchMode }
+      useAppStore.setState({ settings })
+      await createAfterUserSwitchedAway(
+        {
+          worktree,
+          setup: { runnerScriptPath: '/workspace/setup.sh', envVars: {} },
+          defaultTabs: { tabs: [{ title: 'Dev', command: 'pnpm dev' }], runCommands: true }
+        },
+        makeBlankTerminalRequest({ setupOnly: true })
+      )
+      const next = useAppStore.getState()
+      expect(next.tabsByWorktree[worktree.id]).toHaveLength(1)
+      expect(titledSetup(next.tabsByWorktree[worktree.id]![0]!)).toBe(true)
+      expect(next.activeWorktreeId).toBeNull()
+    }
+  )
 
   it('mounts a plain terminal whose only work is a queued issue-command split', async () => {
     await createAfterUserSwitchedAway(

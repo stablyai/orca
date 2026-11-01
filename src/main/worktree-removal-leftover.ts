@@ -1,20 +1,22 @@
+import { unregisteredFolderRefusal } from '../shared/worktree/removal'
+import { usesNativeWindowsRemoval } from './git/windows-worktree-removal'
+import type { LocalProjectWorktreeGitOptions } from './project-runtime-git-options'
 import { lstat } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
+import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { listWorktreesStrict } from './git/worktree'
-import { getErrorCode } from './git/worktree-operation-options'
+import { getErrorCode, normalizeLocalBranchRef } from './git/worktree-operation-options'
+import type { WorktreeRemovalRecord } from './worktree-removal-records'
 import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
+import { failedWorktreeRemovals, worktreeCheckoutExists } from './worktree-removal-table'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canSafelyRemoveOrphanedWorktreeDirectory
 } from './worktree-removal-safety'
-import type { GitWorktreeExecOptions } from './git/worktree-operation-options'
 
-/**
- * Whether a checkout path Git no longer registers still holds the removed checkout's own leftover:
- * no `.git` (Git deleted it first), or a `.git` file naming the admin entry Git removed. Any other
- * `.git` is a different checkout created at the path since.
- */
+/** Absent .git or a proven orphan marker can identify a leftover; live or foreign registrations cannot. */
 export async function isUnregisteredRemovalLeftover(
   repoPath: string,
   worktreePath: string
@@ -27,38 +29,65 @@ export async function isUnregisteredRemovalLeftover(
   return canSafelyRemoveOrphanedWorktreeDirectory(worktreePath, repoPath, CLIENT_REMOVAL_HOME)
 }
 
-/** The refusal when the path no longer holds the removed checkout's own leftover. */
 export function differentCheckoutAtPathError(worktreePath: string): Error {
   return new Error(
     `A different checkout is now at ${worktreePath}; Orca left it in place. Delete it again to remove it.`
   )
 }
 
-/** Whether Git registers a checkout at the recorded path now. */
-export async function isCheckoutRegistered(record: {
+export async function registeredRemovalCheckout(record: {
   repoPath: string
   worktreePath: string
-}): Promise<boolean> {
-  return (await listWorktreesStrict(record.repoPath)).some((worktree) =>
+}): Promise<GitWorktreeInfo | undefined> {
+  return (await listWorktreesStrict(record.repoPath)).find((worktree) =>
     areWorktreePathsEqual(worktree.path, record.worktreePath)
   )
 }
 
-/**
- * Refuses unless the path still holds the removed checkout's own leftover, with no worktree Git
- * registers at or inside it. Run right before the delete: the path can change while it waits.
- */
-export async function assertUnregisteredRemovalLeftover(
-  repoPath: string,
+export async function isCheckoutRegistered(record: {
+  repoPath: string
+  worktreePath: string
+}): Promise<boolean> {
+  return !!(await registeredRemovalCheckout(record))
+}
+
+export function isRecordedCheckout(
+  worktree: GitWorktreeInfo,
+  record: WorktreeRemovalRecord
+): boolean {
+  return (
+    normalizeLocalBranchRef(worktree.branch) === record.branch &&
+    (!record.head || worktree.head === record.head)
+  )
+}
+
+export { unregisteredFolderRefusal } from '../shared/worktree/removal'
+
+/** Name nested worktrees before asking the user to remove an unregistered folder. */
+export async function assertUnregisteredCheckoutGone(
   worktreePath: string,
-  options: GitWorktreeExecOptions = {}
+  registeredWorktrees: readonly Pick<GitWorktreeInfo, 'path'>[] = []
 ): Promise<void> {
-  const worktrees = await listWorktreesStrict(repoPath, options)
-  if (worktrees.some((worktree) => areWorktreePathsEqual(worktree.path, worktreePath))) {
-    throw differentCheckoutAtPathError(worktreePath)
+  if (await worktreeCheckoutExists(worktreePath)) {
+    assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
+    throw unregisteredFolderRefusal(worktreePath)
   }
-  assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, worktrees)
-  if (!(await isUnregisteredRemovalLeftover(repoPath, worktreePath))) {
-    throw differentCheckoutAtPathError(worktreePath)
+}
+
+/** Registered paths use normal deletion; otherwise require the folder gone before retrying recorded cleanup. */
+export async function retryFailedRemovalUnlessRegistered(
+  worktreeId: string,
+  worktreePath: string,
+  registeredWorktrees: readonly Pick<GitWorktreeInfo, 'path'>[],
+  localOptions: LocalProjectWorktreeGitOptions,
+  retry: () => Promise<RemoveWorktreeResult> | undefined
+): Promise<boolean> {
+  if (registeredWorktrees.some((worktree) => areWorktreePathsEqual(worktree.path, worktreePath))) {
+    return false
   }
+  const failed = failedWorktreeRemovals.get(worktreeId)
+  if (failed && !usesNativeWindowsRemoval(worktreePath, localOptions)) {
+    await assertUnregisteredCheckoutGone(failed.worktreePath, registeredWorktrees)
+  }
+  return retry() !== undefined
 }

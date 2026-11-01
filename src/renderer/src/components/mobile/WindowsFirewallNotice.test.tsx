@@ -94,7 +94,9 @@ describe('WindowsFirewallNotice', () => {
     const user = userEvent.setup()
     render(<WindowsFirewallNotice pairingReady address="192.168.0.108" />)
 
-    await user.click(await screen.findByRole('button', { name: /allow phone connections/i }))
+    const repairButton = await screen.findByRole('button', { name: /allow phone connections/i })
+    expect(repairWindowsFirewall).not.toHaveBeenCalled()
+    await user.click(repairButton)
     expect(repairWindowsFirewall).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(getWindowsFirewallStatus).toHaveBeenCalledTimes(2))
     await waitFor(() =>
@@ -152,8 +154,7 @@ describe('WindowsFirewallNotice', () => {
     render(<WindowsFirewallNotice pairingReady address="192.168.0.108" />)
     expect(await screen.findByText(/Windows may be blocking Orca Mobile/i)).toBeInTheDocument()
 
-    // Why: UAC elevation bounces window focus, so an older in-flight
-    // inspection can resolve after a newer one and must not win.
+    // Overlap focus-triggered UAC inspections so only the newest answer may win.
     window.dispatchEvent(new Event('focus'))
     window.dispatchEvent(new Event('focus'))
     await waitFor(() => expect(getWindowsFirewallStatus).toHaveBeenCalledTimes(3))
@@ -206,9 +207,11 @@ describe('WindowsFirewallNotice', () => {
       getWindowsFirewallStatus
     })
 
-    render(<WindowsFirewallNotice pairingReady address="10.0.0.4" />)
+    await act(async () => {
+      render(<WindowsFirewallNotice pairingReady address="10.0.0.4" />)
+    })
 
-    await waitFor(() => expect(getWindowsFirewallStatus).toHaveBeenCalledTimes(1))
+    expect(getWindowsFirewallStatus).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('button', { name: /allow phone connections/i })).toBeNull()
   })
 })

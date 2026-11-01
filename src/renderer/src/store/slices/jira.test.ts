@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { JiraConnectionStatus, JiraIssue, JiraViewer } from '../../../../shared/jira-types'
+import type {
+  JiraConnectionStatus,
+  JiraIssue,
+  JiraViewer
+} from '../../../../shared/jira/jira-types'
 import {
   getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,
@@ -34,6 +38,7 @@ vi.mock('@/runtime/runtime-jira-client', () => ({
   jiraListCreateFields: vi.fn(),
   jiraListIssueTypes: vi.fn(),
   jiraListIssues: (...args: unknown[]) => jiraListIssues(...args),
+  jiraListIssuesForTarget: (...args: unknown[]) => jiraListIssues(...args),
   jiraReadStatus: (...args: unknown[]) => jiraReadStatus(...args),
   jiraListPriorities: vi.fn(),
   jiraListProjects: vi.fn(),
@@ -208,7 +213,13 @@ describe('createJiraSlice runtime context', () => {
 
     sourceResult.resolve([{ ...issue('ALP-1'), title: 'Source issue' }])
     await expect(request).resolves.toMatchObject([{ key: 'ALP-1', title: 'Source issue' }])
-    expect(jiraListIssues).toHaveBeenCalledWith(sourceContext, 'assigned', 30, 'site-1')
+    expect(jiraListIssues).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'source-runtime' },
+      'assigned',
+      30,
+      'site-1',
+      undefined
+    )
     expect(Object.values(store.getState().jiraSearchCache)).toHaveLength(1)
     expect(store.getState().jiraSearchCache['site-1::list::assigned::30']).toBeUndefined()
   })
@@ -530,6 +541,10 @@ describe('createJiraSlice runtime context', () => {
         [`${remoteScope}::site-1::ALP-1`]: {
           data: { ...issue('ALP-1'), title: 'Remote title' },
           fetchedAt: Date.now()
+        },
+        [`${localScope}::site-2::ALP-1`]: {
+          data: { ...issue('ALP-1'), siteId: 'site-2', title: 'Other site title' },
+          fetchedAt: Date.now()
         }
       },
       jiraSearchCache: {
@@ -540,6 +555,13 @@ describe('createJiraSlice runtime context', () => {
         [`${remoteScope}::site-1::list::assigned::30`]: {
           data: [{ ...issue('ALP-1'), title: 'Remote title' }],
           fetchedAt: Date.now()
+        },
+        [`${localScope}::all::list::assigned::30`]: {
+          data: [
+            { ...issue('ALP-1'), siteId: 'site-2', title: 'Other site title' },
+            { ...issue('ALP-1'), title: 'Local title' }
+          ],
+          fetchedAt: Date.now()
         }
       }
     })
@@ -548,7 +570,8 @@ describe('createJiraSlice runtime context', () => {
       'ALP-1',
       { title: 'Patched local title' },
       {
-        sourceContext: localSource
+        sourceContext: localSource,
+        siteId: 'site-1'
       }
     )
 
@@ -566,6 +589,14 @@ describe('createJiraSlice runtime context', () => {
       store.getState().jiraSearchCache[`${remoteScope}::site-1::list::assigned::30`]?.data?.[0]
         ?.title
     ).toBe('Remote title')
+    expect(store.getState().jiraIssueCache[`${localScope}::site-2::ALP-1`]?.data?.title).toBe(
+      'Other site title'
+    )
+    expect(
+      store
+        .getState()
+        .jiraSearchCache[`${localScope}::all::list::assigned::30`]?.data?.map((item) => item.title)
+    ).toEqual(['Other site title', 'Patched local title'])
   })
 
   it('returns a failed Jira connect result when the active runtime changes before completion', async () => {
@@ -836,8 +867,7 @@ describe('createJiraSlice credential errors', () => {
     })
     jiraListIssues.mockRejectedValueOnce(new Error('Forbidden'))
 
-    // A non-auth failure must reject so the Tasks panel can show a real error
-    // instead of a misleading empty list, while keeping the session connected.
+    // Non-auth failures reject to show real Tasks errors without disconnecting the session or pretending empty results.
     await expect(store.getState().listJiraIssues('assigned', 30)).rejects.toThrow('Forbidden')
 
     expect(store.getState().jiraStatus.connected).toBe(true)

@@ -1,4 +1,4 @@
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
@@ -19,13 +19,18 @@ export type WorkspaceTerminalRowPlan = {
 
 export function buildWorkspaceTerminalRowPlan(
   session: WorkspaceSessionState,
-  validWorktreeIds: ReadonlySet<string>
+  validWorktreeIds: ReadonlySet<string>,
+  /** Rows whose saved title is live, so restore's agent-title reset skips them. */
+  liveTitleTabIds?: Pick<ReadonlySet<string>, 'has'>
 ): WorkspaceTerminalRowPlan {
   const rowHydrationByWorktree = Object.entries(session.tabsByWorktree)
     .filter(([worktreeId]) => validWorktreeIds.has(worktreeId))
     .map(
       ([worktreeId, tabs]) =>
-        [worktreeId, hydrateWorkspaceTerminalRows(session, worktreeId, tabs)] as const
+        [
+          worktreeId,
+          hydrateWorkspaceTerminalRows(session, worktreeId, tabs, liveTitleTabIds)
+        ] as const
     )
   const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
     rowHydrationByWorktree

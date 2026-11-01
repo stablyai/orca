@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamFrame
@@ -7,6 +7,18 @@ import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -64,7 +76,9 @@ describe('createRemoteRuntimePtyTransport', () => {
         ackOutputSourceRanges: 1,
         desktopViewportClaims: 1,
         outputPause: 1,
+        outputPauseDropNotice: 1,
         writeUnavailable: 1,
+        endpointLossNotice: 1,
         inputAck: 1
       })
     )

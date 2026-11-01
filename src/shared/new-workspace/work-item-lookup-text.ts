@@ -1,6 +1,6 @@
 import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from './github-links'
 import { parseGitLabIssueOrMRLink } from './gitlab-links'
-import { parseJiraIssueUrl } from '../jira-issue-url'
+import { parseJiraIssueUrl } from '../jira/jira-issue-url'
 
 const LINEAR_ISSUE_URL_RE = /^https?:\/\/(?:www\.)?linear\.app\/[^/\s]+\/issue\/[^/\s]+(?:\/\S*)?$/i
 const GITHUB_ITEM_URL_IN_TEXT_RE =

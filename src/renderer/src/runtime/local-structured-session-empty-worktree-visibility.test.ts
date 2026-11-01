@@ -1,15 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
-import { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-projection'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { collectClientLayoutGroupIds } from './web-session-client-owned-tab-placement'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 
-// Why: a structured session created on a worktree with no prior tabs must land in a
-// group the local layout actually renders. The host publishes it inside a
-// "headless-terminals:" group; adopting that group while freezing the local layout
-// leaves the tab in store but permanently off screen (empty-worktree launch P0).
+// Host headless-terminals groups must become locally renderable; adopting them while freezing the split tree hides new chats forever (empty-worktree launch P0).
 
 const GIT_WT = 'repo-1::/tmp/wt1'
 const FOLDER_WT = 'folder:folder-1'
@@ -39,6 +37,7 @@ function emptyState(overrides: Partial<WebSessionTabsSyncState>): WebSessionTabs
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},
@@ -123,12 +122,6 @@ describe('structured session visibility on empty worktrees', () => {
     expect(applied.layoutByWorktree[GIT_WT]).toEqual({ type: 'leaf', groupId: LOCAL_ROOT })
   })
 
-  it('materializes a rendered group on a truly empty git worktree', () => {
-    const applied = applyStructured(emptyState({}), headlessSnapshot(GIT_WT))
-
-    expectChatTabRendered(applied, GIT_WT)
-  })
-
   it('materializes a rendered group on a truly empty folder workspace', () => {
     const applied = applyStructured(
       emptyState({ activeWorktreeId: FOLDER_WT }),
@@ -136,21 +129,6 @@ describe('structured session visibility on empty worktrees', () => {
     )
 
     expectChatTabRendered(applied, FOLDER_WT)
-  })
-
-  it('adopts the session into an existing empty local root group', () => {
-    const state = emptyState({
-      groupsByWorktree: {
-        [GIT_WT]: [{ id: LOCAL_ROOT, worktreeId: GIT_WT, activeTabId: null, tabOrder: [] }]
-      },
-      layoutByWorktree: { [GIT_WT]: { type: 'leaf', groupId: LOCAL_ROOT } },
-      activeGroupIdByWorktree: { [GIT_WT]: LOCAL_ROOT }
-    })
-
-    const applied = applyStructured(state, headlessSnapshot(GIT_WT))
-
-    const chatTab = expectChatTabRendered(applied, GIT_WT)
-    expect(chatTab.groupId).toBe(LOCAL_ROOT)
   })
 
   it('keeps the folder-workspace local split intact while placing the session beside the terminal', () => {

@@ -1,22 +1,6 @@
 #!/usr/bin/env node
-// Benchmark: cost of resolving a Command Code turn prompt from the transcript,
-// paid on EVERY command-code hook event (PreToolUse/PostToolUse fire once per
-// tool call, so many per second during an active agent turn).
-//
-// Before the fix, readLastCommandCodeUserPromptEntryFromTranscript() read up to
-// TRANSCRIPT_MAX_SCAN_BYTES (4 MB) synchronously, decoded it all to a JS string,
-// and JSON-parsed EVERY line to the end of the buffer to find the LAST user
-// entry — so cost grew with the transcript, which only grows as a session runs.
-//
-// The fix scans backward from EOF in TRANSCRIPT_CHUNK_BYTES blocks and returns
-// on the first user line, the shape the sibling readLastTextFromTranscriptOnce
-// already used. The answer sits near EOF in a real session (the current turn's
-// prompt precedes only this turn's output), so the scan reads one or two blocks
-// instead of the whole file.
-//
-// Both implementations are mirrored here: node cannot import the .ts source,
-// matching the other benchmarks in this directory. Constants are re-read from
-// the real module so a drifted cap fails loudly instead of measuring dead code.
+// Compare mirrored Command Code prompt readers on the per-tool-hook path: capped 4MB full parse versus backward chunks returning at the latest user line.
+// Typical prompts are near EOF; read constants from production so cap drift fails instead of measuring stale code.
 import {
   closeSync,
   mkdtempSync,
@@ -64,9 +48,7 @@ for (const [name, value] of [
   }
 }
 
-// Mirror of parseAgentHookJson: the real reader scans a line's structure before
-// parsing it, on BOTH sides of this comparison. Omitting it made the pre-fix
-// column ~9x too fast and invented a regression that does not exist.
+// Mirror parseAgentHookJson’s structural scan in BOTH arms; omitting it made baseline ~9x too fast and invented a regression.
 const HOOK_STRUCTURAL_TOKENS = 128 * 1024
 const HOOK_NESTING_DEPTH = 64
 
@@ -144,7 +126,6 @@ function extractUserPrompt(line) {
   return undefined
 }
 
-// Pre-fix: read the capped window, then parse every line to the end.
 function readForward(path) {
   const size = statSync(path).size
   if (size <= 0) {
@@ -199,8 +180,7 @@ function findLastPromptInRegion(region) {
   return undefined
 }
 
-// Post-fix: walk backward from EOF, return on the first user line. The carry is
-// a chunk list, not a re-joined buffer, so one oversized line stays linear.
+// Backward scan carries chunk lists; repeatedly joining an oversized line would become quadratic.
 function readBackward(path) {
   const size = statSync(path).size
   if (size <= 0) {
@@ -260,8 +240,7 @@ function readBackward(path) {
   }
 }
 
-// A real session: many completed turns, then THIS turn's prompt, then the tool
-// output produced since. The prompt therefore sits near EOF.
+// Model completed turns followed by current prompt/output so the answer sits near EOF.
 function writeTranscript(path, priorTurns) {
   const lines = []
   for (let index = 0; index < priorTurns; index += 1) {
@@ -289,8 +268,7 @@ function writeTranscript(path, priorTurns) {
   writeFileSync(path, `${lines.join('\n')}\n`)
 }
 
-// A turn already in progress: `trailingBytes` of tool output sits between the
-// prompt and EOF, which is what the backward scan has to read past.
+// Trailing tool output determines how far backward the current turn’s scan must walk.
 function writeTranscriptWithTrailing(path, priorTurns, trailingBytes) {
   const lines = []
   for (let index = 0; index < priorTurns; index += 1) {
@@ -321,8 +299,7 @@ function writeTranscriptWithTrailing(path, priorTurns, trailingBytes) {
   writeFileSync(path, `${lines.join('\n')}\n`)
 }
 
-// One tool result larger than many read blocks — the shape with no newline for
-// the backward scan to stop on.
+// Oversized tool result removes newline stops across many read blocks.
 function writeTranscriptWithHugeLine(path, lineBytes) {
   const lines = [
     JSON.stringify({ role: 'user', content: [{ type: 'text', text: 'the current prompt' }] }),
@@ -383,9 +360,7 @@ try {
     '\nThe old cost grows with the transcript; the new cost is flat because the\ncurrent turn’s prompt sits near EOF and the scan stops at the first hit.'
   )
 
-  // Worst cases, reported even where the ratio is below 1x. The new cost scales
-  // with bytes-AFTER the prompt, so a long turn (many tool calls since the ask)
-  // and a single oversized tool result are where the win decays or inverts.
+  // Report worst cases too: cost follows bytes after prompt, so long turns/oversized results can erase or invert the win.
   const worst = []
   for (const trailingKb of [32, 256, 1024, 3072]) {
     const path = join(dir, `trailing-${trailingKb}.jsonl`)

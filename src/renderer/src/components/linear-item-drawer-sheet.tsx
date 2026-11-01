@@ -30,6 +30,7 @@ import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-ty
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { LinearEditState, LinearLocalComment } from '@/components/linear-item-drawer-types'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -47,14 +48,8 @@ type LinearItemDrawerSheetProps = {
   issue: LinearIssue | null
   onClose: () => void
   displayed: LinearIssue | null
-  handleIssueTextChange: Parameters<typeof LinearIssueTextEditor>[0] extends {
-    onIssueChange: infer Handler
-  }
-    ? Handler
-    : never
   sourceContext: TaskSourceContext | null | undefined
   editState: LinearEditState | null
-  handleEditStateChange: (patch: Partial<LinearEditState>) => void
   commentsLoading: boolean
   comments: LinearComment[]
   handleCommentAdded: (comment: LinearLocalComment) => void
@@ -68,10 +63,8 @@ export function renderLinearItemDrawerSheet({
   issue,
   onClose,
   displayed,
-  handleIssueTextChange,
   sourceContext,
   editState,
-  handleEditStateChange,
   commentsLoading,
   comments,
   handleCommentAdded,
@@ -107,7 +100,6 @@ export function renderLinearItemDrawerSheet({
 
         {displayed && (
           <div className="flex h-full min-h-0 flex-col">
-            {/* Header */}
             <div className="flex-none border-b border-border/60 px-4 py-3">
               <div className="flex items-start gap-2">
                 <LinearIcon className="mt-1 size-4 shrink-0 text-muted-foreground" />
@@ -118,7 +110,6 @@ export function renderLinearItemDrawerSheet({
                   <div className="mt-1">
                     <LinearIssueTextEditor
                       issue={displayed}
-                      onIssueChange={handleIssueTextChange}
                       density="drawer"
                       fields="title"
                       sourceContext={sourceContext}
@@ -137,7 +128,7 @@ export function renderLinearItemDrawerSheet({
                         variant="ghost"
                         size="icon"
                         className="size-7"
-                        onClick={() => window.api.shell.openUrl(displayed.url)}
+                        onClick={(event) => openAppHttpLink(displayed.url, { event })}
                         aria-label={translate(
                           'auto.components.LinearItemDrawer.0190b760c1',
                           'Open on Linear'
@@ -173,22 +164,18 @@ export function renderLinearItemDrawerSheet({
               </div>
             </div>
 
-            {/* Edit section */}
             {editState && (
               <LinearIssueEditSection
                 issue={displayed}
                 editState={editState}
-                onEditStateChange={handleEditStateChange}
                 sourceContext={sourceContext}
               />
             )}
 
-            {/* Body + comments */}
             <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
               <div className="px-4 py-4">
                 <LinearIssueTextEditor
                   issue={displayed}
-                  onIssueChange={handleIssueTextChange}
                   density="drawer"
                   fields="description"
                   sourceContext={sourceContext}
@@ -248,7 +235,6 @@ export function renderLinearItemDrawerSheet({
               </div>
             </div>
 
-            {/* Comment footer + Start/Open workspace */}
             <LinearIssueCommentFooter
               issueId={displayed.id}
               workspaceId={displayed.workspaceId}

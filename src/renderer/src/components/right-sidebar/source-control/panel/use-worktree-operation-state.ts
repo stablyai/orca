@@ -13,11 +13,7 @@ import type { CreatePrIntentNotice } from '../commit/commit-area-types'
 import { readCommitDraftForWorktree, type CommitDraftsByWorktree } from '../commit/commit-drafts'
 import { clearRemoteActionErrorsForCompletedConflictOperations } from '../sync/remote-refresh'
 
-/**
- * Owns every per-worktree record the panel keeps outside the store — commit drafts and errors,
- * remote-action errors, and the in-flight flags for commit, abort, generation and Create PR —
- * together with the pruning that drops records for worktrees that no longer exist.
- */
+/** Prune per-worktree drafts/errors/in-flight records when worktrees disappear so reused IDs inherit no stale state. */
 export function useSourceControlWorktreeOperationState({
   activeWorktreeId,
   conflictOperationsByWorktree,
@@ -27,9 +23,9 @@ export function useSourceControlWorktreeOperationState({
   conflictOperationsByWorktree: Record<string, GitConflictOperation>
   worktreeMap: ReadonlyMap<string, unknown>
 }) {
-  // Why: setState is async, so a double-click can pass the isCommitting guard before re-render; a synchronously-flipped ref gives a true single-flight lock.
+  // Latch synchronously because async state cannot block double-clicks before rerender.
   const commitInFlightRef = useRef<Record<string, boolean>>({})
-  // Why: Source Control unmounts on tab switch; keep commit drafts in a module-scoped session cache and restore on remount.
+  // Persist drafts in the renderer session cache across Source Control tab unmounts.
   const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>(() =>
     loadSessionCommitDrafts()
   )
@@ -41,7 +37,7 @@ export function useSourceControlWorktreeOperationState({
   >({})
   const remoteActionErrorSequenceByWorktreeRef = useRef<Record<string, number>>({})
   const previousConflictOperationsRef = useRef<Record<string, GitConflictOperation>>({})
-  // Why: keep commit-in-flight per-worktree; a single boolean would clear on worktree switch, allowing a double-commit on the original.
+  // Track commits per worktree so navigation cannot allow a duplicate in-flight commit.
   const [commitInFlightByWorktree, setCommitInFlightByWorktree] = useState<Record<string, boolean>>(
     {}
   )
@@ -50,7 +46,7 @@ export function useSourceControlWorktreeOperationState({
   >({})
   const isAbortingOperation = abortOperationInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const isCommitting = commitInFlightByWorktree[activeWorktreeId ?? ''] ?? false
-  // Why: per-worktree shape (like commit) so navigating worktrees mid-generation never cancels the in-flight request.
+  // Track generation per worktree so navigation cannot cancel its running request.
   const generateInFlightRef = useRef<Record<string, boolean>>({})
   const [generateInFlightByWorktree, setGenerateInFlightByWorktree] = useState<
     Record<string, boolean>
@@ -109,7 +105,7 @@ export function useSourceControlWorktreeOperationState({
   const updateCommitDrafts = useCallback(
     (updater: (drafts: CommitDraftsByWorktree) => CommitDraftsByWorktree): void => {
       const next = updater(commitDraftsRef.current)
-      // Why: Create PR intent reads this ref after awaits so it doesn't overwrite user edits made before React's passive state sync runs.
+      // Sync the draft ref before passive effects so awaited Create PR flows see current user edits.
       commitDraftsRef.current = next
       setCommitDrafts(next)
     },
@@ -123,7 +119,7 @@ export function useSourceControlWorktreeOperationState({
     []
   )
 
-  // Why: prune per-worktree state for removed worktrees so a reused ID doesn't inherit stale state (e.g. a stuck commitInFlightRef disabling Commit).
+  // Prune removed worktrees before reused IDs can inherit stuck in-flight state.
   useEffect(() => {
     const pruneRecord = <T>(prev: Record<string, T>): Record<string, T> => {
       let changed = false
@@ -147,7 +143,6 @@ export function useSourceControlWorktreeOperationState({
     setGenerateErrors((prev) => pruneRecord(prev))
     setCreatePrIntentInFlightByWorktree((prev) => pruneRecord(prev))
     setCreatePrIntentNotices((prev) => pruneRecord(prev))
-    // Refs don't need setState — mutate in place to drop stale keys.
     for (const key of Object.keys(commitInFlightRef.current)) {
       if (!worktreeMap.has(key)) {
         delete commitInFlightRef.current[key]
@@ -176,7 +171,7 @@ export function useSourceControlWorktreeOperationState({
   }, [commitDrafts])
 
   useEffect(() => {
-    // Why: conflicts are often resolved in a terminal; clear the stale failure banner once git status sees the operation end.
+    // Terminal conflict resolution must clear stale failure banners once status observes the operation ending.
     const previousConflictOperations = previousConflictOperationsRef.current
     setRemoteActionErrors((prev) =>
       clearRemoteActionErrorsForCompletedConflictOperations({

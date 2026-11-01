@@ -1,5 +1,9 @@
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it } from 'vitest'
+import {
+  spawnWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { makePaneKey } from '../../shared/stable-pane-id'
@@ -7,8 +11,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import { OrcaRuntimeService } from './orca-runtime'
 
-// Folder projects back several workspaces with ONE directory; only the
-// `::workspace:<uuid>` suffix separates them, so runtime PTY identity must keep it.
+// Folder workspaces share a directory; retain ::workspace:<uuid> to distinguish their PTYs.
 const REPO_ID = 'repo-1'
 const FOLDER_PATH = '/tmp/folder-project'
 const ROOT_ID = `${REPO_ID}::${FOLDER_PATH}`
@@ -46,7 +49,7 @@ type RuntimeInternals = {
   onClientEvent: (listener: (event: RuntimeClientEvent) => void) => () => void
   onPtyExit: (ptyId: string, exitCode: number) => void
   sleepTerminalsForWorktree: (worktreeSelector: string) => Promise<unknown>
-  acquireWorktreeTerminalSpawn: (worktreeId?: string) => Promise<() => void>
+  acquireWorktreeTerminalSpawn: (target: HostWorktreeTarget | undefined) => Promise<() => void>
   getTerminalSleepClientEventSnapshot: () => RuntimeClientEvent[]
 }
 
@@ -59,7 +62,6 @@ function createRuntimeInternals(
   options: {
     session?: WorkspaceSessionState
     sessions?: unknown[]
-    // Consecutive controller inventories, so a sleep sees its PTY then sees it gone.
     processLists?: unknown[][]
   } = {}
 ): RuntimeInternals {
@@ -73,7 +75,7 @@ function createRuntimeInternals(
     getRepo: (id: string) => (id === REPO_ID ? REPO : undefined),
     getAllWorktreeMeta: () => meta,
     getWorktreeMeta: (worktreeId: string) => meta[worktreeId],
-    setWorktreeMeta: (worktreeId: string, patch: Record<string, unknown>) => {
+    setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, patch: Record<string, unknown>) => {
       meta[worktreeId] = { ...meta[worktreeId], ...patch }
       return meta[worktreeId]
     },
@@ -98,10 +100,7 @@ function createRuntimeInternals(
   return runtime as unknown as RuntimeInternals
 }
 
-/**
- * Resolves to 'blocked' only if `pending` has not settled once the microtask queue drains —
- * an uncontended mutation lease is pure-promise, so this never waits on wall-clock time.
- */
+/** Drain microtasks to test promise-only lease contention without wall-clock delays. */
 async function raceAgainstMicrotaskDrain(pending: Promise<unknown>): Promise<string> {
   return await Promise.race([
     pending.then(() => 'acquired'),
@@ -318,10 +317,11 @@ describe('folder workspaces sharing one directory', () => {
     internals.onClientEvent((event) => events.push(event))
 
     await internals.sleepTerminalsForWorktree(`id:${WORKSPACE_A}`)
-    const release = await internals.acquireWorktreeTerminalSpawn(WORKSPACE_B)
+    const release = await internals.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(WORKSPACE_B, null)
+    )
     release()
 
-    // A shared identity key would wake A's stopped terminals on B's spawn and tell clients so.
     expect(
       events.filter(
         (event) => event.type === 'worktreeTerminalSleepState' && event.phase === 'woken'
@@ -334,15 +334,14 @@ describe('folder workspaces sharing one directory', () => {
 
   it('does not serialize a sibling instance behind this instance held terminal mutation', async () => {
     const internals = createRuntimeInternals({ processLists: [[], []] })
-    const releaseA = await internals.acquireWorktreeTerminalSpawn(WORKSPACE_A)
+    const releaseA = await internals.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(WORKSPACE_A, null)
+    )
 
-    const spawnB = internals.acquireWorktreeTerminalSpawn(WORKSPACE_B)
+    const spawnB = internals.acquireWorktreeTerminalSpawn(spawnWorktreeTarget(WORKSPACE_B, null))
     expect(await raceAgainstMicrotaskDrain(spawnB)).toBe('acquired')
 
-    // Control: spawns intentionally share the per-worktree lock (only sleep
-    // excludes), so a second A spawn can no longer prove the lock blocks.
-    // A's own sleep still must, which keeps 'acquired' above from being a
-    // free pass on a lock that never blocks anything.
+    // Spawns intentionally share the lock; use sleep as the exclusive positive control.
     const sleepA = internals.sleepTerminalsForWorktree(`id:${WORKSPACE_A}`)
     expect(await raceAgainstMicrotaskDrain(sleepA)).toBe('blocked')
 
@@ -353,10 +352,11 @@ describe('folder workspaces sharing one directory', () => {
 
   it('grants concurrent spawns for one instance while still excluding its sleep', async () => {
     const internals = createRuntimeInternals({ processLists: [[], []] })
-    const releaseFirst = await internals.acquireWorktreeTerminalSpawn(WORKSPACE_A)
-    // Why: a multi-tab worktree activates every tab at once; queueing them
-    // behind each other was the activation latency staircase.
-    const second = internals.acquireWorktreeTerminalSpawn(WORKSPACE_A)
+    const releaseFirst = await internals.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(WORKSPACE_A, null)
+    )
+    // Share concurrent tab spawns to avoid an activation latency staircase.
+    const second = internals.acquireWorktreeTerminalSpawn(spawnWorktreeTarget(WORKSPACE_A, null))
     expect(await raceAgainstMicrotaskDrain(second)).toBe('acquired')
 
     const sleepA = internals.sleepTerminalsForWorktree(`id:${WORKSPACE_A}`)

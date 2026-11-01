@@ -9,6 +9,7 @@ import {
   type WebGitLabRuntimeMethod
 } from '@/web/preload-api/web-gitlab-routes'
 import { mapRepoPathArg } from './runtime-repo-selector-params'
+import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 
 export type GitLabApi = NonNullable<PreloadApi['gl']>
 
@@ -46,10 +47,21 @@ export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLa
       route<GitLabApiResult<'addIssueComment'>>(GITLAB_WEB_RPC_METHODS.addIssueComment, args),
     listLabels: (args) =>
       route<GitLabApiResult<'listLabels'>>(GITLAB_WEB_RPC_METHODS.listLabels, args),
-    listAssignableUsers: () => Promise.resolve([]),
+    // Why empty on method_not_found: a host older than this RPC simply offers no reviewers.
+    listAssignableUsers: (args) =>
+      route<GitLabApiResult<'listAssignableUsers'>>(
+        GITLAB_WEB_RPC_METHODS.listAssignableUsers,
+        args
+      ).catch((error: unknown) => {
+        if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
+          return []
+        }
+        throw error
+      }),
     todos: (args) => route<GitLabApiResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
     // Why: the owner guard names a host as this client sees it; the server resolves the repo itself.
-    workItemDetails: ({ repoOwnerExecutionHostId: _owner, ...args }) =>
+    // A remote host gates its own polls; `background` is a local IPC hint only.
+    workItemDetails: ({ repoOwnerExecutionHostId: _owner, background: _background, ...args }) =>
       route<GitLabApiResult<'workItemDetails'>>(GITLAB_WEB_RPC_METHODS.workItemDetails, args),
     closeMR: (args) =>
       route<GitLabApiResult<'closeMR'>>(GITLAB_WEB_RPC_METHODS.closeMR, {

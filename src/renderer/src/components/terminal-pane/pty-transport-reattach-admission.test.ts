@@ -108,13 +108,12 @@ describe('createIpcPtyTransport', () => {
     const discardedId = 'removed-worktree@@discarded-session'
     discardPreHandlerPtyState(discardedId)
 
-    await createIpcPtyTransport({ cwdFallback: 'worktree' }).connect({
+    await createIpcPtyTransport({}).connect({
       url: '',
       sessionId: discardedId,
       callbacks: {}
     })
 
-    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ cwdFallback: 'worktree' }))
     expect(spawn).toHaveBeenCalledWith(expect.not.objectContaining({ sessionId: discardedId }))
     clearPreHandlerPtyState(discardedId)
   })
@@ -156,10 +155,7 @@ describe('createIpcPtyTransport', () => {
     spawn.mockResolvedValueOnce({ id: 'reveal-pty' })
     const onExitCallback = vi.fn()
     const sessionId = 'sole-newborn-dead-session'
-    // The parked sidecar's sole-newborn guard consumed the buffered exit
-    // (pre-fix primary parity), so reveal must take the readmission/spawn path.
-    // exitedBeforeAttach here would drain the exit into the reattached session
-    // — where spawnedFreshPtyId is null — and close the kept tab on reveal.
+    // Consumed newborn-diagnostic exits need readmission; replaying one into reattach would close the preserved tab because it is no longer fresh-spawned.
     bufferPreHandlerPtyExit(sessionId, 1)
     consumePreHandlerPtyState(sessionId)
 

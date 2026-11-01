@@ -1,11 +1,6 @@
 const WRAPPER_SEPARATOR = ' | '
 
-/**
- * A wrapped terminal title split into the texts an identity check should consider, whole
- * title first and innermost pane title last. Multiplexers and session wrappers prefix the
- * pane's own dynamic title (`zsh | ⠋ Claude Code`), so a check anchored to the start of the
- * string would miss the agent that actually owns the pane.
- */
+/** Check whole-to-innermost titles so wrapper prefixes such as zsh | do not hide an anchored pane identity. */
 export function getWrapperTitleSegments(title: string): string[] {
   const segments = [title]
   let separatorIndex = title.indexOf(WRAPPER_SEPARATOR)

@@ -68,6 +68,31 @@ describe('AutomaticWorkRunMarker', () => {
     expect(open(30).mode).toEqual({ kind: 'normal' })
   })
 
+  it('never reads an outside stop as a crash, even when the exit is then cut short', () => {
+    const stopped = open()
+    stopped.arm()
+    stopped.recordStopRequested()
+    // Omit markCleanExit to simulate teardown dying before completion.
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ state: 'clean-exit' })
+    expect(open(20).mode).toEqual({ kind: 'normal' })
+  })
+
+  it('keeps the stop on record when automatic work is armed or resumed after it', () => {
+    const marker = open()
+    marker.recordStopRequested()
+    marker.arm()
+    marker.resume()
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ state: 'clean-exit' })
+    expect(open(20).mode).toEqual({ kind: 'normal' })
+  })
+
+  it('keeps a recorded pause across a stop until an explicit resume', () => {
+    open().arm()
+    const paused = open(20)
+    paused.recordStopRequested()
+    expect(open(30).mode).toMatchObject({ kind: 'paused', reason: 'unclean_host_death' })
+  })
+
   it('does not pause on a new boot', () => {
     open().arm()
     expect(open(20, { bootTimeMs: BOOT.bootTimeMs + 3_600_000, bootId: null }).mode).toEqual({

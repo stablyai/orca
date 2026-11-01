@@ -1,7 +1,4 @@
-/**
- * Folds attributed usage events into per-session and per-day rollups. Shared by every
- * event-based usage provider so a token-accounting fix lands in all of them at once.
- */
+/** Share event rollups across providers so token-accounting fixes apply consistently. */
 import {
   indexUsageSessionBreakdowns,
   usageLocationModelKey,

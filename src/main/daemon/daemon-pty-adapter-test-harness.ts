@@ -1,13 +1,14 @@
-/* Shared daemon server + adapter fixtures for the DaemonPtyAdapter test files. */
 import { vi } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { DaemonFileLog } from './daemon-file-log'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export type SpawnSubprocess = ConstructorParameters<typeof DaemonServer>[0]['spawnSubprocess']
 
@@ -31,12 +32,12 @@ export function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle
   resume: ReturnType<typeof vi.fn<() => void>>
   confirmShellForeground: ReturnType<typeof vi.fn<() => Promise<boolean>>>
   _simulateData: (data: string) => void
-  _simulateExit: (code: number) => void
+  _simulateExit: (code: number, cause?: TerminalExitCause) => void
 } {
   let onDataCb: ((data: string) => void) | null = null
-  let onExitCb: ((code: number) => void) | null = null
+  let onExitCb: ((code: number, cause?: TerminalExitCause) => void) | null = null
   return {
-    // Why: getCwd falls back to OS pid lookup; an implausibly-high fake pid can't collide with a real process' cwd.
+    // getCwd falls back to OS lookup; keep the fake PID outside the real process range.
     pid: 999_999_999,
     getForegroundProcess: vi.fn(() => null),
     confirmShellForeground: vi.fn(async () => false),
@@ -46,7 +47,9 @@ export function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle
     resume: vi.fn<() => void>(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
     terminateOwnedTree: () => 'unavailable' as const,
-    forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
+    forceKill: vi.fn(() => {
+      setTimeout(() => onExitCb?.(137), 5)
+    }),
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb
@@ -61,8 +64,8 @@ export function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle
     _simulateData(data: string) {
       onDataCb?.(data)
     },
-    _simulateExit(code: number) {
-      onExitCb?.(code)
+    _simulateExit(code: number, cause?: TerminalExitCause) {
+      onExitCb?.(code, cause)
     }
   }
 }
@@ -79,7 +82,12 @@ export async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promi
 
 /** Boots a real daemon server over a temp socket plus a lazily-connecting adapter. */
 export async function startDaemonAdapterHarness(
-  spawnSubprocess: SpawnSubprocess
+  spawnSubprocess: SpawnSubprocess,
+  adapterOptions: Pick<
+    DaemonPtyAdapterOptions,
+    'readRunningWslDistros' | 'historyPath' | 'wslBridgeBootIdentity'
+  > = {},
+  serverOptions: { onPtySessionExit?: (sessionId: string) => void } = {}
 ): Promise<DaemonAdapterHarness> {
   const dir = createTestDir()
   const socketPath = getDaemonSocketPath(dir)
@@ -89,8 +97,14 @@ export async function startDaemonAdapterHarness(
     log: (event) => daemonLogEvents.push(event),
     close() {}
   }
-  const server = new DaemonServer({ socketPath, tokenPath, log: daemonLog, spawnSubprocess })
+  const server = new DaemonServer({
+    socketPath,
+    tokenPath,
+    log: daemonLog,
+    spawnSubprocess,
+    ...serverOptions
+  })
   await server.start()
-  const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+  const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, ...adapterOptions })
   return { dir, socketPath, tokenPath, server, adapter, daemonLog, daemonLogEvents }
 }

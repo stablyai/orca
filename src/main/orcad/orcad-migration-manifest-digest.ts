@@ -3,7 +3,7 @@ import {
   orcadMigrationManifestHashInput,
   serializeOrcadMigrationValue,
   type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 
 export function computeOrcadMigrationManifestSha256(
   manifest: Omit<OrcadMigrationManifest, 'manifestSha256'>
@@ -11,7 +11,7 @@ export function computeOrcadMigrationManifestSha256(
   return createHash('sha256').update(orcadMigrationManifestHashInput(manifest)).digest('hex')
 }
 
-/** Pass the manifest as received: a newer peer's unknown fields are part of what it signed. */
+/** Hash the received manifest: unknown fields from newer peers are part of its signature. */
 export function assertOrcadMigrationManifestDigest(manifest: unknown): void {
   if (typeof manifest !== 'object' || manifest === null || Array.isArray(manifest)) {
     throw new Error('orcad_migration_manifest_invalid')

@@ -232,7 +232,10 @@ describe('exact orchestration worker output', () => {
       source: 'terminal',
       fallbackReason: 'provider_unsupported',
       terminal: { tail: ['opencode --dispatch-capability [dispatch capability redacted]'] },
-      warnings: ['Dispatch capability tokens were redacted from terminal output.']
+      warnings: [
+        'Dispatch capability tokens were redacted from terminal output.',
+        'Terminal wrap information was unavailable; capability masking used complete lines.'
+      ]
     })
     expect(JSON.stringify(result)).not.toContain(capability)
   })
@@ -257,7 +260,10 @@ describe('exact orchestration worker output', () => {
         tail: ['safe output'],
         draft: 'send --dispatch-capability [dispatch capability redacted]'
       },
-      warnings: ['Dispatch capability tokens were redacted from terminal output.']
+      warnings: [
+        'Dispatch capability tokens were redacted from terminal output.',
+        'Terminal wrap information was unavailable; capability masking used complete lines.'
+      ]
     })
     expect(JSON.stringify(result)).not.toContain(capability)
   })

@@ -2,7 +2,7 @@ import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
 import { useAppStore } from '../../store'
-import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
+import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import {
   recordReceivedWebSessionTabsSnapshot,
   sessionTabsFreshnessKey,
@@ -16,7 +16,7 @@ import {
   isRetiredSessionTabsPublicationEpoch
 } from './publisher-identity-fences'
 import { scheduleRetiredEpochCensus } from './retired-epoch-census'
-import { applyWebSessionTabsSnapshot } from './snapshot-api'
+import { createWebSessionTabsSnapshotPatch } from './snapshot-api'
 import { applyWebSessionTabsStorePatch } from './store-patch'
 import {
   hostSessionMirrorSettleForPatchlessFrame,
@@ -38,7 +38,6 @@ export type GlobalSessionEventArgs = {
   coordinator: VisibilityResumeCoordinator
 }
 
-/** Apply one event from the all-worktrees stream, including visibility inventory fencing. */
 export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
   const {
     environmentId,
@@ -117,7 +116,7 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
     )
   }
   let settleHydration: HostSessionMirrorSettle | null = null
-  void recoverWebSessionTerminalOrphansBeforeApply(useAppStore.getState(), event, environmentId, {
+  void recoverMirroredTerminalOrphansBeforeApply(useAppStore.getState(), event, environmentId, {
     expectedEnvironmentPairingRevision,
     expectedRuntimeId: runtimeId,
     getCurrentState: () => useAppStore.getState()
@@ -142,12 +141,13 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
       const decision = decideWebSessionTabsSnapshot(recovered, environmentId, runtimeId)
       if (decision.apply) {
         settleHydration = applyWebSessionTabsStorePatch(
-          (state) => applyWebSessionTabsSnapshot(state, recovered, environmentId),
+          createWebSessionTabsSnapshotPatch(recovered, environmentId),
           {
             frames: [
               {
                 environmentId,
                 worktreeId: recovered.worktree,
+                source: recovered,
                 decision,
                 expectedEnvironmentConnectionGeneration,
                 expectedEnvironmentPairingRevision,

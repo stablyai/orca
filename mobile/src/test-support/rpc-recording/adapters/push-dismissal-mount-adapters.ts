@@ -3,11 +3,7 @@ import type { MountAdapter } from '../recording-scenario'
 
 const HOST = 'host-1'
 
-/**
- * Reconciling the OS notification tray with the host. Everything this reads off the device is
- * declared by the scenario — the presented notifications, and the stored host list the push
- * fingerprint is resolved against — so the identities it puts on the wire are scenario bytes.
- */
+// Declare device tray/host catalog in the scenario so reconciliation emits identities from test inputs, not adapter guesses.
 export function pushDismissalMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

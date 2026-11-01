@@ -1,7 +1,10 @@
+import type { AiVaultProjectionDependency } from './ai-vault-projection-dependency'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
+import { aiVaultSessionListCacheGeneration } from '../ai-vault/cached-session-list'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import {
-  aiVaultSessionDepthCovers,
+  aiVaultCachedDepthServes,
   truncateAiVaultListResult,
   type AiVaultSessionDepth
 } from '../../shared/ai-vault-session-depth'
@@ -9,27 +12,26 @@ import {
 export const AI_VAULT_CACHE_TTL_MS = 15_000
 
 type CachedHostLeg = {
+  dependency?: AiVaultProjectionDependency
+  release?: () => void
   depth: AiVaultSessionDepth
   result: AiVaultListResult
   expiresAt: number
 }
 
-// Why: the merged result is only cacheable when every host answered, so one
-// flaky host used to force a full rescan of every healthy host on each panel
-// open. Legs are cached individually and the failing host is the only one
-// rescanned.
+// Cache healthy legs independently so one failing host cannot force every host to rescan.
 const cachedHostLegs = new Map<string, CachedHostLeg>()
-// Bumped on every invalidation. A leg scan that started before an invalidation
-// carries the old generation and must not write its (now stale) result back —
-// otherwise a delete's invalidation is silently undone by a scan that resolves
-// just after it.
+// Fence scans begun before invalidation so late results cannot resurrect deleted sessions.
 let cacheGeneration = 0
-// Why: an `unchanged` reply carries no rows, so without the last full list the
-// TTL cache could only hold the empty marker and fingerprint-less readers (tab
-// session lookup, other windows) would pay a full remote scan.
+// Retain rows behind unchanged replies for readers without fingerprints.
 const lastFullHostLegs = new Map<
   string,
-  { depth: AiVaultSessionDepth; result: AiVaultListResult }
+  {
+    depth: AiVaultSessionDepth
+    result: AiVaultListResult
+    dependency?: AiVaultProjectionDependency
+    release?: () => void
+  }
 >()
 const LAST_FULL_HOST_LEGS_MAX = 8
 let expiryTimer: ReturnType<typeof setTimeout> | null = null
@@ -58,6 +60,7 @@ function scheduleHostLegExpiry(): void {
  * next open while its healthy neighbours stay cached. */
 export async function scanHostLegWithCache(args: {
   cacheKey: string
+  dependency?: AiVaultProjectionDependency
   depth: AiVaultSessionDepth
   scopePaths?: readonly string[]
   force: boolean
@@ -70,8 +73,10 @@ export async function scanHostLegWithCache(args: {
   if (
     !args.force &&
     cached &&
+    cached.dependency?.key === args.dependency?.key &&
+    (cached.dependency?.isCurrent() ?? true) &&
     cached.expiresAt > now &&
-    aiVaultSessionDepthCovers(cached.depth, args.depth) &&
+    aiVaultCachedDepthServes(cached.depth, args.depth, args.scopePaths) &&
     (!cached.result.unchanged ||
       (cached.depth === args.depth && cached.result.fingerprint === args.afterFingerprint))
   ) {
@@ -80,13 +85,13 @@ export async function scanHostLegWithCache(args: {
   const result = await args.scan()
   // A delete's invalidation landed while this leg was scanning; caching a
   // pre-delete result would resurrect the deleted session for the TTL.
-  if (startGeneration !== cacheGeneration) {
+  if (startGeneration !== cacheGeneration || args.dependency?.isCurrent() === false) {
     return result
   }
   if (result.issues.some((issue) => issue.kind === 'host')) {
     const current = cachedHostLegs.get(args.cacheKey)
     if (!current || current.expiresAt <= Date.now()) {
-      cachedHostLegs.delete(args.cacheKey)
+      dropEntry(cachedHostLegs, args.cacheKey)
     }
     return result
   }
@@ -95,16 +100,21 @@ export async function scanHostLegWithCache(args: {
   if (
     !args.force &&
     current &&
+    current.dependency?.key === args.dependency?.key &&
+    (current.dependency?.isCurrent() ?? true) &&
     current.expiresAt > Date.now() &&
-    aiVaultSessionDepthCovers(current.depth, args.depth) &&
+    aiVaultCachedDepthServes(current.depth, args.depth, args.scopePaths) &&
     (!current.result.unchanged ||
       (current.depth === args.depth && current.result.fingerprint === args.afterFingerprint))
   ) {
     return result
   }
+  dropEntry(cachedHostLegs, args.cacheKey)
   cachedHostLegs.set(args.cacheKey, {
+    dependency: args.dependency,
+    release: args.dependency?.retain(),
     depth: args.depth,
-    result: rememberFullHostLeg(args.cacheKey, args.depth, result),
+    result: rememberFullHostLeg(args.cacheKey, args.depth, result, args.dependency),
     expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
   })
   scheduleHostLegExpiry()
@@ -115,24 +125,28 @@ export async function scanHostLegWithCache(args: {
 function rememberFullHostLeg(
   cacheKey: string,
   depth: AiVaultSessionDepth,
-  result: AiVaultListResult
+  result: AiVaultListResult,
+  dependency?: AiVaultProjectionDependency
 ): AiVaultListResult {
   if (!result.fingerprint) {
     return result
   }
   const previous = lastFullHostLegs.get(cacheKey)
   if (result.unchanged) {
-    return previous?.depth === depth && previous.result.fingerprint === result.fingerprint
+    return previous?.depth === depth &&
+      previous.dependency?.key === dependency?.key &&
+      (previous.dependency?.isCurrent() ?? true) &&
+      previous.result.fingerprint === result.fingerprint
       ? { ...previous.result, scannedAt: result.scannedAt }
       : result
   }
-  lastFullHostLegs.delete(cacheKey)
-  lastFullHostLegs.set(cacheKey, { depth, result })
+  dropEntry(lastFullHostLegs, cacheKey)
+  lastFullHostLegs.set(cacheKey, { depth, result, dependency, release: dependency?.retain() })
   for (const oldest of lastFullHostLegs.keys()) {
     if (lastFullHostLegs.size <= LAST_FULL_HOST_LEGS_MAX) {
       break
     }
-    lastFullHostLegs.delete(oldest)
+    dropEntry(lastFullHostLegs, oldest)
   }
   return result
 }
@@ -140,7 +154,7 @@ function rememberFullHostLeg(
 function pruneExpiredHostLegs(now: number): void {
   for (const [cacheKey, entry] of cachedHostLegs) {
     if (entry.expiresAt <= now) {
-      cachedHostLegs.delete(cacheKey)
+      dropEntry(cachedHostLegs, cacheKey)
     }
   }
 }
@@ -149,14 +163,43 @@ function pruneExpiredHostLegs(now: number): void {
 // call within the TTL can't still serve the trashed session. Scan discovery
 // walks disk first, so a deleted file is never rediscovered — this only guards
 // the cached RESULT.
-export function invalidateAiVaultHostLegCache(): void {
-  cacheGeneration++
-  cachedHostLegs.clear()
-  lastFullHostLegs.clear()
+function dropEntry<T extends { release?: () => void }>(entries: Map<string, T>, key: string): void {
+  entries.get(key)?.release?.()
+  entries.delete(key)
+}
+
+/** Keeps reads after a delete out of scans that began before it. Remote-client
+ * deletes bump only the shared session-list generation, so fence on both. */
+export function createAiVaultListScanCoordinator(): Pick<AiVaultScanCoordinator, 'run'> {
+  const coordinator = new AiVaultScanCoordinator()
+  return {
+    run: (args) =>
+      coordinator.run({
+        ...args,
+        key: JSON.stringify({
+          key: args.key,
+          generation: [cacheGeneration, aiVaultSessionListCacheGeneration()]
+        })
+      })
+  }
+}
+
+export function invalidateAiVaultHostLegCache(environmentId?: string): void {
+  if (environmentId === undefined) {
+    cacheGeneration++
+  }
+  for (const entries of [cachedHostLegs, lastFullHostLegs]) {
+    for (const [key, entry] of entries) {
+      if (environmentId === undefined || entry.dependency?.hosts.includes(environmentId)) {
+        dropEntry(entries, key)
+      }
+    }
+  }
   if (expiryTimer !== null) {
     clearTimeout(expiryTimer)
   }
   expiryTimer = null
+  scheduleHostLegExpiry()
 }
 
 export function resetAiVaultHostLegCacheForTests(): void {

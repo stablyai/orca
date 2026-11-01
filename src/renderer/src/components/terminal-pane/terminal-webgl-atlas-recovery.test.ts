@@ -48,8 +48,7 @@ describe('terminal WebGL atlas recovery', () => {
         return rafCallbacks.length
       })
     )
-    // Why: resets go through the live-manager registry so every terminal
-    // sharing the glyph atlas rebuilds and repaints, not just the paste target.
+    // Repaint every manager sharing the reset atlas, not just the paste target.
     const manager = registerManager()
     const otherManager = registerManager()
 

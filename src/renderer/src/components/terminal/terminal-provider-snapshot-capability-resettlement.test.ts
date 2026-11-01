@@ -1,11 +1,4 @@
-/**
- * Gate for the capability re-settlement fix.
- *
- * A daemon that cannot answer within the retry budget must not convert its
- * ptys into permanently eviction-exempt tabs: once a healthy resolver exists,
- * capability synchronization must consult it again and the exemption must
- * clear. During the outage, unknown must stay exempt (pane stays mounted).
- */
+/** Unknown capabilities retain panes during outages but must be re-asked after recovery to release eviction exemptions. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
 import {
@@ -23,7 +16,6 @@ import {
 const WORKTREE_ID = 'wt-resettlement'
 const PTY_ID = `${WORKTREE_ID}${PTY_SESSION_ID_SEPARATOR}session-1`
 
-/** Drives synchronize past each retry deadline until the budget is exhausted. */
 async function exhaustRetryBudget(
   resolver: (ids: string[]) => Promise<{ id: string; authoritative: boolean | null }[]>,
   startMs: number
@@ -64,14 +56,12 @@ describe('terminal provider snapshot capability re-settlement', () => {
       throw new Error('daemon unavailable')
     })
     const settledAtMs = await exhaustRetryBudget(failingResolver, 1_000)
-    // The outage itself must leave the pty exempt.
     expect(isEvictionExemptTerminalPty(PTY_ID, WORKTREE_ID)).toBe(true)
 
     const healthyResolver = vi.fn(async (ids: string[]) =>
       ids.map((id) => ({ id, authoritative: true }))
     )
-    // Daemon recovered; give the slow re-ask cadence generous room (a fresh
-    // pty-set identity models the session's ordinary tab churn too).
+    // Allow slow re-ask after recovery; a fresh PTY set also models ordinary tab churn.
     const recoveredAtMs = settledAtMs + 10 * 60_000
     await synchronizeTerminalProviderSnapshotCapabilities([PTY_ID], healthyResolver, recoveredAtMs)
     const secondPassMs = recoveredAtMs + 10 * 60_000
@@ -106,8 +96,7 @@ describe('terminal provider snapshot capability re-settlement', () => {
     }
   })
 
-  // Why: these counts land in the force-park breadcrumb, so a mis-bucketed
-  // route would misdirect the field triage the breadcrumb exists for.
+  // Force-park breadcrumbs consume these buckets; misclassification misdirects triage.
   it('buckets route counts per classification for the force-park breadcrumb', () => {
     const counts = countEvictionExemptTabRoutes(
       [

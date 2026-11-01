@@ -1,6 +1,7 @@
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { withAiVaultSessionCwdAliases } from '../../../../shared/ai-vault-session-cwd-aliases'
 
 export function aiVaultSearchHitToSession(
   hit: AiVaultSearchHit,
@@ -30,11 +31,51 @@ export function aiVaultSearchHitToSession(
     subagentTranscriptCount: 0,
     resumeCommand: hit.resumeCommand ?? '',
     subagent: null,
+    ...(hit.accountHome !== undefined
+      ? { accountHome: hit.accountHome, accountWslDistro: hit.accountWslDistro }
+      : {}),
     ...(hit.structuredSession ? { structuredSession: hit.structuredSession } : {})
   }
 }
 
-/** A native chat opens through its owner, like its list row; only other hits need a command. */
+/** Hits carry no turns and remote hosts cannot reparse a first prompt, so borrow the scanned row's preview. */
+export function withAiVaultHistoryPreviews(
+  hitSessions: AiVaultSession[],
+  history: readonly AiVaultSession[]
+): AiVaultSession[] {
+  if (hitSessions.length === 0 || history.length === 0) {
+    return hitSessions
+  }
+  // Relay hits are redacted of their transcript path, so join on host, agent and session id; skip ambiguous ones.
+  const historyByIdentity = new Map<string, AiVaultSession | null>()
+  for (const session of history) {
+    const key = previewIdentity(session)
+    historyByIdentity.set(key, historyByIdentity.has(key) ? null : session)
+  }
+  return hitSessions.map((hitSession) => {
+    const row = historyByIdentity.get(previewIdentity(hitSession))
+    const hydrated =
+      row && (!hitSession.filePath || hitSession.filePath === row.filePath)
+        ? withAiVaultSessionCwdAliases(hitSession, row)
+        : hitSession
+    return row && hitSession.previewMessages.length === 0
+      ? {
+          ...hydrated,
+          previewMessages: row.previewMessages,
+          ...(row.previewMessagesTruncated ? { previewMessagesTruncated: true } : {}),
+          ...(row.lastUserPrompt !== undefined ? { lastUserPrompt: row.lastUserPrompt } : {}),
+          ...(row.firstUserPrompt !== undefined ? { firstUserPrompt: row.firstUserPrompt } : {})
+        }
+      : hydrated
+  })
+}
+
+function previewIdentity(
+  session: Pick<AiVaultSession, 'executionHostId' | 'agent' | 'sessionId'>
+): string {
+  return JSON.stringify([session.executionHostId, session.agent, session.sessionId])
+}
+
 export function canResumeAiVaultSearchHit(hit: AiVaultSearchHit): boolean {
   return (
     hit.structuredSession !== undefined ||

@@ -3,9 +3,11 @@ import '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { QuickSubmitOptions } from './composer-state/quick-creation-request'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { WorkspaceStatus } from '../../../shared/worktree/types'
+import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import { buildComposerCardProps } from './composer-state/composer-card-props'
 import {
   canResolveFolderSmartGitHubSubmit,
@@ -49,6 +51,7 @@ export type UseComposerStateOptions = {
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
   initialGitHubWorkItem?: GitHubWorkItem | null
   initialTaskSourceContext?: TaskSourceContext | null
+  initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus?: WorkspaceStatus
   initialBaseBranch?: string
   persistDraft: boolean
@@ -68,8 +71,9 @@ export type UseComposerStateResult = {
   onComposerNodeChange: (node: HTMLDivElement | null) => void
   promptTextareaRef: RefObject<HTMLTextAreaElement | null>
   nameInputRef: RefObject<HTMLInputElement | null>
-  submitQuick: (agent: TuiAgent | null) => Promise<void>
+  submitQuick: (agent: TuiAgent | null, options?: QuickSubmitOptions) => Promise<void>
   createDisabled: boolean
+  selectAddedProjectGroup: (groupId: string) => boolean
   selectAddedProjectRepo: (repoId: string) => void
 }
 
@@ -101,6 +105,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     nameInputRef: model.nameInputRef,
     submitQuick: model.submitQuick,
     createDisabled,
-    selectAddedProjectRepo: model.selectAddedProjectRepo
+    selectAddedProjectRepo: model.selectAddedProjectRepo,
+    selectAddedProjectGroup: model.selectAddedProjectGroup
   }
 }

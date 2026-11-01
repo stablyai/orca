@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import {
   CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS,
@@ -9,7 +9,7 @@ import {
 } from '../../shared/closed-terminal-tab-tombstones'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { Store } from '../persistence/loading-store/store'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   LEAF_ID,
@@ -20,6 +20,8 @@ import {
   makeSession
 } from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
 import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { RuntimeMachineName } from './runtime-machine-name'
 
 const SSH_REPO_ID = 'ssh-repo'
 const SSH_HOST_ID = 'ssh:target-1'
@@ -68,7 +70,7 @@ function createPersistedRuntime(session: WorkspaceSessionState = makeSession()) 
   }
 }
 
-/** A renderer save: membership as the renderer holds it, and no close records, which it never sends. */
+/** Renderer saves membership, never main-owned close records. */
 function rendererSave(session: WorkspaceSessionState): WorkspaceSessionState {
   const {
     terminalTopologyRevisionByRepoId: _hostPrivate,
@@ -101,7 +103,7 @@ describe('close records', () => {
     }
   )
 
-  // The store keeps main's map only when a write omits it; main's own writes carry it and win.
+  // Store preserves omitted close maps; explicit main-owned maps replace them.
   it("keeps main's own record writes across later store writes", async () => {
     const { store, runtime } = createPersistedRuntime()
 
@@ -141,7 +143,6 @@ describe('close records', () => {
     )
   })
 
-  // A write cannot list a tab its partition recorded as closed, so legacy rows beside a record go.
   it('drops a listed tab its partition already recorded as closed, and keeps the record', async () => {
     const earlier = Date.now() - 24 * 60 * 60 * 1000
     const record = { closedAt: earlier, worktreeId: WORKTREE_ID, reason: 'cleanup' as const }
@@ -193,7 +194,6 @@ describe('close records', () => {
     expect(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId).toBeUndefined()
   })
 
-  // Why: only a resolved tab close records; a pane target never widens here, even on the last pane.
   it("records nothing for a pane close aimed at its tab's only pane", async () => {
     const { store, runtime } = createPersistedRuntime()
 
@@ -212,8 +212,7 @@ describe('close records', () => {
     ])
   })
 
-  // The durable half of refusing a late graft: the close lands while the tab's spawn is in
-  // flight, so main has never listed the tab, and the spawn commits only after a relaunch.
+  // Durable close must reject in-flight spawns committing after crash/reload, even if the tab was never listed.
   it('refuses a closed tab whose spawn commits after a crash and reload', async () => {
     const { runtime, reload } = createPersistedRuntime()
 
@@ -255,7 +254,7 @@ describe('close records', () => {
     expect(
       store.getWorkspaceSession(SSH_HOST_ID).closedTerminalTabTombstonesByTabId?.[LATE_TAB_ID]
     ).toBeDefined()
-    // A relay reattach binds into `local`, not the partition the close was recorded in.
+    // Reattach targets local, distinct from the partition recording close.
     expect(
       await store.persistPtyBinding({
         worktreeId: SSH_WORKTREE_ID,
@@ -297,5 +296,79 @@ describe('close records', () => {
     expect(
       store.getWorkspaceSession(SSH_HOST_ID).closedTerminalTabTombstonesByTabId?.['ssh-tab']
     ).toBeDefined()
+  })
+})
+
+describe('terminal resume cleanup characterization', () => {
+  class ResumeRecordsRuntime extends OrcaRuntimeService {
+    clearResumeRecords() {
+      return this['clearWorktreeTerminalResumeRecords']('folder-proof', LOCAL_EXECUTION_HOST_ID, [
+        'closed-tab'
+      ])
+    }
+  }
+
+  beforeEach(() => {
+    vi.spyOn(RuntimeMachineName.prototype, 'start').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function persistedRuntime() {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-stop-resume-'))
+    directories.push(directory)
+    const store = createSqliteTestStore(Store, { dataFile: join(directory, 'orca-data.json') })
+    store.setWorkspaceSession({
+      ...store.getWorkspaceSession(),
+      terminalPtyIncarnationsByPaneKey: { 'closed-tab:left': 'incarnation-proof' }
+    })
+    store.flushOrThrow()
+    return { store, runtime: new ResumeRecordsRuntime(store) }
+  }
+
+  function removeSessionReader(store: Store) {
+    const original = store.getWorkspaceSession
+    Object.defineProperty(store, 'getWorkspaceSession', { configurable: true, value: undefined })
+    return () => {
+      Object.defineProperty(store, 'getWorkspaceSession', { configurable: true, value: original })
+    }
+  }
+
+  describe('terminal resume cleanup guarded Store accesses', () => {
+    it('removes stale pane incarnations through the real durable Store callback', async () => {
+      const { store, runtime } = persistedRuntime()
+      expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey).toEqual({
+        'closed-tab:left': 'incarnation-proof'
+      })
+      await expect(runtime.clearResumeRecords()).resolves.toBeUndefined()
+      expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey).toEqual({})
+    })
+
+    it('refuses a missing capability before the durable callback', async () => {
+      const { store, runtime } = persistedRuntime()
+      const durable = vi.spyOn(store, 'runDurableMutation')
+      const restore = removeSessionReader(store)
+      try {
+        await expect(runtime.clearResumeRecords()).rejects.toThrow('workspace_session_unavailable')
+        expect(durable).not.toHaveBeenCalled()
+      } finally {
+        restore()
+      }
+    })
+  })
+  it('uses the session reader with its Store receiver and local host partition', async () => {
+    const { store, runtime } = persistedRuntime()
+    const original = store.getWorkspaceSession
+    const reader = vi.spyOn(store, 'getWorkspaceSession').mockImplementation(function (
+      this: Store,
+      ...args: Parameters<Store['getWorkspaceSession']>
+    ) {
+      expect(this).toBe(store)
+      expect(args).toEqual([LOCAL_EXECUTION_HOST_ID])
+      return original.apply(this, args)
+    })
+    await expect(runtime.clearResumeRecords()).resolves.toBeUndefined()
+    expect(reader).toHaveBeenCalled()
   })
 })

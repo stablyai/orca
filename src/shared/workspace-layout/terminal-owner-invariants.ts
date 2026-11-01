@@ -5,8 +5,7 @@ import type { TerminalTab } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 
-// The two terminal-layout invariants: a terminal is bound to at most one leaf, and a leaf id is in
-// at most one tab. The binding write reports breaches; nothing removes them yet.
+// Require one leaf per terminal and one tab per leaf ID; binding writes report breaches without removing them.
 
 export type TerminalSessionPartition = { hostId: ExecutionHostId; session: WorkspaceSessionState }
 
@@ -64,10 +63,7 @@ function isRepeatingRelayPtyId(ptyId: string): boolean {
   return relayPtyId !== undefined && /^pty-\d+$/.test(relayPtyId)
 }
 
-/**
- * One terminal is one PTY incarnation; with either incarnation unrecorded, the PTY id alone,
- * unless it is a repeating relay id.
- */
+/** Incarnations identify terminals; missing incarnation may fall back to PTY ID only when that ID does not repeat across relay restarts. */
 export function isSameTerminal(
   left: { ptyId: string | undefined; incarnationId?: string },
   right: { ptyId: string | undefined; incarnationId?: string }
@@ -81,10 +77,7 @@ export function isSameTerminal(
   return !isRepeatingRelayPtyId(left.ptyId)
 }
 
-/**
- * The saved leaf a binding into `hostId` would duplicate, if any. The same tab:leaf in two
- * partitions is one surface: older relay reattaches left SSH panes in `local`.
- */
+/** Find duplicate saved ownership; the same tab:leaf across partitions is one surface because older SSH reattaches left local copies. */
 export function findTerminalBindingConflict(
   binding: { tabId: string; leafId: string; ptyId: string; incarnationId?: string },
   hostId: ExecutionHostId,

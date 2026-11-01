@@ -1,13 +1,6 @@
-// Which part of the host's conversation outline the rail may use.
-//
-// The loaded window is a contiguous suffix of the journal and is authoritative for
-// everything it covers, so the outline only ever speaks for messages older than it.
-// The outline is current through `cursor.sequence`; if that falls short of the
-// loaded window's first row there is a gap no source covers, and a rail built over
-// the gap would silently skip messages. That outline is stale: the rail shows
-// loaded messages only until a fresh one arrives.
+// Use outline entries only before the authoritative loaded suffix; gaps in sequence coverage make the outline stale and require loaded-only rail entries.
 
-import type { AgentSessionConversationOutline } from '../../../../shared/agent-session-conversation-outline'
+import type { AgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 
 export type StructuredRailOutlineWindow = {
@@ -15,6 +8,8 @@ export type StructuredRailOutlineWindow = {
   /** Sequence of the oldest loaded journal item; null when nothing is loaded. */
   oldestLoadedSequence: number | null
   hasOlder: boolean
+  /** The latest `/clear` divider's sequence, 0 for none: nothing before it is listed. */
+  contextFloor: number
 }
 
 export type StructuredRailOutlineView =
@@ -28,14 +23,14 @@ const STALE: StructuredRailOutlineView = { kind: 'stale' }
 
 const views = new WeakMap<
   AgentSessionConversationOutline,
-  { edge: number; count: number; view: StructuredRailOutlineView }
+  { edge: number; floor: number; count: number; view: StructuredRailOutlineView }
 >()
 
 export function selectStructuredRailOutline(
   outline: AgentSessionConversationOutline | null,
   window: StructuredRailOutlineWindow
 ): StructuredRailOutlineView {
-  const { epoch, oldestLoadedSequence, hasOlder } = window
+  const { epoch, oldestLoadedSequence, hasOlder, contextFloor } = window
   if (!hasOlder || epoch === null || oldestLoadedSequence === null) {
     return COMPLETE
   }
@@ -46,15 +41,17 @@ export function selectStructuredRailOutline(
   ) {
     return STALE
   }
-  // The rail's merge sees one array until the covered entries change. A trimmed live
-  // window moves its edge on every new row, and usually past no user message.
-  const cached = views.get(outline)
+  // Reuse view identity until covered entries change; streaming often moves the edge without crossing a prompt.
+  const prior = views.get(outline)
+  const cached = prior?.floor === contextFloor ? prior : undefined
   if (cached?.edge === oldestLoadedSequence) {
     return cached.view
   }
+  const listed = (entry: { sequence: number }) =>
+    entry.sequence > contextFloor && entry.sequence < oldestLoadedSequence
   let count = 0
   for (const entry of outline.entries) {
-    if (entry.sequence < oldestLoadedSequence) {
+    if (listed(entry)) {
       count += 1
     }
   }
@@ -64,16 +61,14 @@ export function selectStructuredRailOutline(
       ? cached.view
       : {
           kind: 'fresh',
-          entries: outline.entries
-            .filter((entry) => entry.sequence < oldestLoadedSequence)
-            .map((entry) => ({
-              id: entry.itemId,
-              text: entry.preview,
-              hasImages: entry.imageCount > 0,
-              reply: entry.reply,
-              turnKey: entry.turnKey
-            }))
+          entries: outline.entries.filter(listed).map((entry) => ({
+            id: entry.itemId,
+            text: entry.preview,
+            hasImages: entry.imageCount > 0,
+            reply: entry.reply,
+            turnKey: entry.turnKey
+          }))
         }
-  views.set(outline, { edge: oldestLoadedSequence, count, view })
+  views.set(outline, { edge: oldestLoadedSequence, floor: contextFloor, count, view })
   return view
 }

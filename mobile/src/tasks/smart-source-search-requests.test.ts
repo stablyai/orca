@@ -15,7 +15,6 @@ function fakeClient(result: unknown, calls: Call[]): RpcClient {
 
 describe('scopeGitHubQuery', () => {
   it('passes the raw trimmed query so BOTH issues and PRs are returned', () => {
-    // Empty stays empty (runtime lists recent issues + PRs); no forced is:issue.
     expect(scopeGitHubQuery('')).toBe('')
     expect(scopeGitHubQuery('  login bug  ')).toBe('login bug')
   })

@@ -1,7 +1,11 @@
 import { useCallback, useEffect } from 'react'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
-import { getConnectionId } from '@/lib/connection-context'
+import {
+  resolveWorktreeGitCopyNow,
+  useWorktreeGitCopyHostId,
+  worktreeCopyPushTarget
+} from '@/lib/worktree-git-copy'
 import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 import {
   beginHugeRepoWarningProbe,
@@ -11,6 +15,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
+import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
 import type { PullRequestGenerationContext } from '@/store/slices/pull-request-generation'
 import { refreshGitStatusForWorktree } from '../../git-status-refresh'
 
@@ -30,8 +35,7 @@ export function useSourceControlStatusRefresh({
   isFolder,
   repositoryHuge,
   activeConnectionId,
-  activeWorktreeInstanceId,
-  worktreeMap
+  activeWorktreeInstanceId
 }: {
   activeRepoTarget: RuntimeClientTarget | null
   activeWorktreeId: string | null
@@ -41,13 +45,12 @@ export function useSourceControlStatusRefresh({
   repositoryHuge: { limit: number } | null | undefined
   activeConnectionId: string | null
   activeWorktreeInstanceId?: string
-  worktreeMap: ReadonlyMap<string, { pushTarget?: GitPushTarget }>
 }): SourceControlStatusRefresh {
   const setGitStatus = useAppStore((s) => s.setGitStatus)
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
-  // Why: activeRepoTarget is pinned to the repo owner's runtime.
+  const activeCopyHostId = useWorktreeGitCopyHostId(activeWorktreeId)
   const localIgnoreBlocked = isLocalPathOpenBlocked(
     getLocalPathOpenOwnerForRoute({
       runtimeEnvironmentId:
@@ -60,13 +63,17 @@ export function useSourceControlStatusRefresh({
       if (!activeWorktreeId || !worktreePath || isFolder || !activeRepoTarget) {
         return
       }
-      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      // Why the captured host: a mutation callback can outlive a switch to a same-path twin.
+      const copy = resolveWorktreeGitCopyNow(activeWorktreeId, activeCopyHostId)
+      if (!copy) {
+        return
+      }
       await refreshGitStatusForWorktree({
-        // Why: route git status by the repo OWNER host, not the focused runtime.
-        target: activeRepoTarget,
+        target: copy.transport,
+        ownerHostId: copy.hostId,
         worktreeId: activeWorktreeId,
         worktreePath,
-        connectionId,
+        connectionId: copy.connectionId,
         pushTarget: activePushTarget,
         deps: {
           setGitStatus,
@@ -78,6 +85,7 @@ export function useSourceControlStatusRefresh({
       })
     },
     [
+      activeCopyHostId,
       activeRepoTarget,
       activeWorktreeId,
       activePushTarget,
@@ -97,7 +105,7 @@ export function useSourceControlStatusRefresh({
     }
   }, [refreshActiveGitStatus])
 
-  // Why: when status is truncated, offer once per worktree to .gitignore the flooding folder; desktop-only since the probe and write run on this machine, and managed repos have no connectionId.
+  // Offer huge-folder ignores once per desktop worktree; the probe/write is local and managed repos can lack connectionId.
   useEffect(() => {
     if (!repositoryHuge || !activeWorktreeId || !worktreePath || localIgnoreBlocked) {
       return
@@ -133,7 +141,7 @@ export function useSourceControlStatusRefresh({
                 'Add to .gitignore'
               ),
               onClick: () => {
-                // Why: the toast can outlive its worktree; a purged probe must not write .gitignore in a same-path replacement.
+                // Toasts can outlive worktrees; a purged probe must not write into a same-path replacement.
                 if (!hasDismissedHugeRepoWarning(warningProbe)) {
                   return
                 }
@@ -146,7 +154,11 @@ export function useSourceControlStatusRefresh({
           }
         )
       })
-      .catch((error) => console.warn('[SourceControl] findHugeFoldersToIgnore failed', error))
+      .catch((error) => {
+        if (!isWslDistroNotRunningRefusal(error)) {
+          console.warn('[SourceControl] findHugeFoldersToIgnore failed', error)
+        }
+      })
     return () => {
       cancelled = true
     }
@@ -166,12 +178,17 @@ export function useSourceControlStatusRefresh({
       }
       try {
         await refreshGitStatusForWorktree({
-          // Why: generation can finish after a host switch; refresh the host that owned the generation request.
+          // Generation may finish after host navigation; refresh its original owner.
           target: context.runtimeTarget,
+          ownerHostId: context.ownerHostId ?? null,
           worktreeId: context.worktreeId,
           worktreePath: context.worktreePath,
           connectionId: context.connectionId,
-          pushTarget: worktreeMap.get(context.worktreeId)?.pushTarget,
+          pushTarget: worktreeCopyPushTarget(
+            useAppStore.getState(),
+            context.worktreeId,
+            context.ownerHostId ?? null
+          ),
           deps: {
             setGitStatus,
             updateWorktreeGitIdentity,
@@ -183,14 +200,7 @@ export function useSourceControlStatusRefresh({
         console.warn('[SourceControl] post-generation git status refresh failed', error)
       }
     },
-    [
-      fetchUpstreamStatus,
-      isFolder,
-      setGitStatus,
-      setUpstreamStatus,
-      updateWorktreeGitIdentity,
-      worktreeMap
-    ]
+    [fetchUpstreamStatus, isFolder, setGitStatus, setUpstreamStatus, updateWorktreeGitIdentity]
   )
 
   return {

@@ -28,13 +28,7 @@ const CLIENT_NAME = 'STA-4150 client-hosted ghost close'
 /** Longer than the runtime's 15s reconnect grace, so the runtime treats the host as gone for good. */
 const RECONNECT_GRACE_OVERSHOOT_MS = 20_000
 
-/**
- * Strips what the runtime persisted, leaving a host that has genuinely forgotten the page.
- *
- * This is what a client meets against a server that predates page persistence, and what it meets
- * when recovery released a record as unrecoverable. Both leave the same shape: a client row that
- * nothing on the host answers for.
- */
+// Remove persisted host records to model older servers or unrecoverable page retirement, leaving a client-only row.
 function forgetPersistedClientHostedPages(userDataDir: string): number {
   const profilesDir = path.join(userDataDir, 'profiles')
   return readdirSync(profilesDir, { withFileTypes: true })
@@ -76,20 +70,8 @@ function forgetPersistedClientHostedPages(userDataDir: string): number {
     )
 }
 
-/**
- * The X on a restored client-hosted row whose host has no record of it.
- *
- * The restored marker exempts such a row from the absent-from-snapshot cull, so nothing retires it
- * on its own; and the close plan hands a connected owner the teardown on the grounds that the owner
- * removes its own mirror through tab sync. An owner that has forgotten the page does neither, which
- * left the row standing with an inert X and no way to dismiss it.
- *
- * What this pins is the CLIENT-side fallback: the X exits through session.tabs.close, which throws
- * tab_not_found before browserTabClose is ever reached, so the runtime's own ghost retirement never
- * runs here. Do not simplify the client fallback on the strength of this spec -- the server-side
- * retirement is covered by orca-runtime-browser-ghost-session-row-close.test.ts, and neither
- * covers the other.
- */
+// Require the restored ghost row’s real X to dismiss it after session.tabs.close returns tab_not_found.
+// This pins client fallback; server-side browser ghost retirement is independently covered by orca-runtime-browser-ghost-session-row-close.test.ts.
 test('closes a restored client-hosted row whose runtime has no record of it', async ({
   testRepoPath
 }, testInfo) => {
@@ -127,16 +109,14 @@ test('closes a restored client-hosted row whose runtime has no record of it', as
     await closeElectronAppForE2E(quitting)
     await new Promise((resolve) => setTimeout(resolve, RECONNECT_GRACE_OVERSHOOT_MS))
 
-    // Between processes, not before the restart: the quitting serve flushes its own state on the
-    // way out, so an earlier edit would be written straight back over.
+    // Edit between processes or serve’s quit-time flush overwrites the fixture change.
     let forgotten = 0
     await host.restartServeProcess({
       betweenProcesses: () => {
         forgotten = forgetPersistedClientHostedPages(host.userDataDir)
       }
     })
-    // Presence precondition for the strip: an empty edit would leave a passing test that never set
-    // up the case at all.
+    // Require records before stripping them so an empty fixture cannot pass.
     expect(
       forgotten,
       'the runtime must have persisted the page before this test can take it away'
@@ -165,9 +145,7 @@ test('closes a restored client-hosted row whose runtime has no record of it', as
     const ghost = await findMirroredBrowserPage(client.page, relaunchedWorktreeId, fixture.origin)
     expect(ghost?.visibleTabId, 'the restored row must have a visible tab to close').not.toBeNull()
 
-    // The product affordance, not a store action: the defect is that this X does nothing, and a
-    // store call would route around the very close policy under test. The strip keys a browser row
-    // by its workspace id, and the X is the row's only button.
+    // Click the row’s real X; a store close would bypass the broken user close policy.
     const ghostTab = client.page.locator(`[data-tab-id="${ghost!.workspaceId}"]`)
     await expect(ghostTab).toBeVisible({ timeout: 60_000 })
     await ghostTab.locator('> button').click()

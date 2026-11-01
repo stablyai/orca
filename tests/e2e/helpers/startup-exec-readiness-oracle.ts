@@ -10,7 +10,7 @@ import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-
 import { expect } from './orca-app'
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
 import { readFreshTerminalInventory } from './terminal-inventory-observation'
-import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
 
 const RECOVERY_DEADLINE_MS = 8_000
 

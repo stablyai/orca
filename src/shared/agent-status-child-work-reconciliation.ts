@@ -1,18 +1,14 @@
-// Fold one structured session's child-work evidence into the host's records.
-//
-// The store holds the only current record per child; evidence patches it. A child settles on its
-// own ending, or `unknown` when its session ends while it is still live; work with nothing to
-// report once it stops is removed instead. Settled children stay until the user's next turn (the
-// next send the provider accepts) or the host drops the parent's row. It owns only the records its
-// own producer admitted, and never claims an outcome the evidence did not report.
+// Patch only this producer's child records. Own endings settle; session loss settles unknown; reportless work is removed. Keep settled children until the next accepted user send or parent removal, without inferring outcomes.
 
 import type { AgentChildWorkAdmission } from './agent-status-child-work-admission'
+import { agentChildWorkFencesEqual } from './agent-status-child-work'
 import { settledOwnersOfLiveWork } from './agent-status-child-work-liveness'
 import type {
   AgentChildWorkEndedEvidence,
   AgentChildWorkEvidence,
   AgentChildWorkOperationEvidence,
-  AgentChildWorkRemovedEvidence
+  AgentChildWorkRemovedEvidence,
+  AgentChildWorkStopAcknowledgedEvidence
 } from './agent-status-child-work-evidence'
 import {
   applyAgentChildWorkLive,
@@ -47,18 +43,33 @@ function applyEnded(ctx: ReconcileContext, edge: AgentChildWorkEndedEvidence): v
   if (!existing) {
     return
   }
-  // A run that is already over cannot end the current one; a run id the record never saw can,
-  // so an ending is never lost to a spawn call the host missed.
+  // Ignore known ended runs; accept unknown run IDs so a missed spawn cannot lose an ending.
   if (agentChildWorkRunVerdict(ctx, existing, edge.handle.runId) === 'previous') {
     return
   }
-  // Admission owns what a second ending may change: an `unknown` one keeps a definite outcome and
-  // lands its evidence; a conflicting definite one is refused as `stale-invocation`.
+  // Admission preserves definite outcomes against unknown evidence and refuses contradictory definite endings as stale-invocation.
   settleAgentChildWork(ctx, existing, edge.outcome, edge.observedAt, {
     ...(edge.lastMessage !== undefined ? { lastMessage: edge.lastMessage } : {}),
-    ...(edge.totalTokens !== undefined ? { totalTokens: edge.totalTokens } : {}),
-    ...(edge.basis !== undefined ? { basis: edge.basis } : {})
+    ...(edge.totalTokens !== undefined ? { totalTokens: edge.totalTokens } : {})
   })
+}
+
+/** Settle only the Stop's captured run, preserving its own earlier ending or using the provider reply's verdict. */
+function applyStopAcknowledged(
+  ctx: ReconcileContext,
+  edge: AgentChildWorkStopAcknowledgedEvidence
+): void {
+  const record = ownedStructuredChildWork(ctx).find(
+    (candidate) => candidate.childWorkId === edge.childWorkId
+  )
+  if (!record || !agentChildWorkFencesEqual(record.invocation, edge.invocation)) {
+    return
+  }
+  if (edge.outcome !== undefined) {
+    settleAgentChildWork(ctx, record, edge.outcome, edge.observedAt)
+  } else if (record.membership === 'live') {
+    settleAgentChildWork(ctx, record, 'cancelled', edge.observedAt, { basis: 'stop-acknowledged' })
+  }
 }
 
 /** A live child's current operation, and nothing else about it. */
@@ -120,8 +131,7 @@ function applyRemoved(ctx: ReconcileContext, edge: AgentChildWorkRemovedEvidence
   removeChildren(ctx, [existing.childWorkId])
 }
 
-/** Settled children, less any that still owns live work at any depth: those stay so that work
- *  keeps every owner, by the same rule the surfaces list them by. */
+/** Retire settled children except owners of live descendants at any depth, matching surface retention. */
 function removableSettled(ctx: ReconcileContext): string[] {
   const owned = ownedStructuredChildWork(ctx)
   const owners = settledOwnersOfLiveWork(
@@ -136,8 +146,7 @@ function removableSettled(ctx: ReconcileContext): string[] {
     .map((record) => record.childWorkId)
 }
 
-/** Apply one batch of evidence. The parent must already be held: the store refuses a child whose
- *  parent it does not hold, which keeps a producer from inventing a parent of its own. */
+/** Require the stored parent before admitting evidence; producers cannot invent parent identities. */
 export function reconcileAgentChildWorkEvidence(
   input: AgentChildWorkReconcileInput
 ): AgentChildWorkReconcileOutcome {
@@ -157,6 +166,8 @@ export function reconcileAgentChildWorkEvidence(
       applyEnded(ctx, edge)
     } else if (edge.type === 'removed') {
       applyRemoved(ctx, edge)
+    } else if (edge.type === 'stop-acknowledged') {
+      applyStopAcknowledged(ctx, edge)
     } else if (edge.type === 'turn-started') {
       removeChildren(ctx, removableSettled(ctx))
     } else {

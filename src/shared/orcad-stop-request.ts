@@ -1,10 +1,4 @@
-/**
- * Stop requests for a running orcad, as files beside the process they address.
- *
- * Why files and not signals: a PID can be reused once its process exits, so a signal sent
- * from a stale record can stop an unrelated process. A file in the slot or data root reaches
- * only the orcad that watches it.
- */
+/** Stop files reach only the watching orcad; signals from stale PID records could stop an unrelated reused process. */
 import { z } from 'zod'
 import { openEnum } from './zod-salvage'
 
@@ -22,12 +16,14 @@ export const ORCAD_MANAGED_STOP_REQUEST_FILE_FLAG = '--request-file'
 export const OrcadManagedStopInstanceSchema = z.object({
   pid: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   startedAtMs: z.number().finite().nonnegative().nullable(),
+  /** Linux only, copied from the lock; older clients omit it and older slots drop it. */
+  linuxStartTicks: z.string().regex(/^\d+$/).max(32).optional().catch(undefined),
+  bootId: z.string().min(1).max(255).optional().catch(undefined),
   nonce: z.string().min(1).max(255),
   lockPath: z.string().min(1).max(4096)
 })
 
-// Not strict: the slot's own (possibly older) build parses what a newer client wrote, so an
-// unknown optional field is dropped rather than refusing the stop.
+// Older slots drop newer optional request fields rather than refuse the stop.
 export const OrcadManagedStopRequestSchema = z.object({
   schemaVersion: z.literal(1),
   transactionId: z.uuid(),
@@ -40,6 +36,13 @@ export const OrcadManagedStopRequestSchema = z.object({
 
 export type OrcadManagedStopInstance = z.infer<typeof OrcadManagedStopInstanceSchema>
 export type OrcadManagedStopRequest = z.infer<typeof OrcadManagedStopRequestSchema>
+
+/** Equality key for a request; omits the incarnation, which an older client recovering it drops. */
+export function orcadManagedStopRequestKey(request: OrcadManagedStopRequest): string {
+  const { instance, ...rest } = OrcadManagedStopRequestSchema.parse(request)
+  const { linuxStartTicks: _ticks, bootId: _bootId, ...bound } = instance
+  return JSON.stringify({ ...rest, instance: bound })
+}
 /** What a stopping orcad must match before a managed request may stop it. */
 export type OrcadManagedStopContext = Omit<
   OrcadManagedStopRequest,
@@ -96,10 +99,7 @@ export const ORCAD_CANCEL_MANAGED_STOP_FLAG = '--cancel-managed-stop'
 /** Readiness `health.stopRequests`: this build consumes stop files and both commands above. */
 export const ORCAD_STOP_REQUESTS_CAPABILITY = 1
 
-/**
- * Which side won a managed request: the running orcad acting on it, or a client cancelling it.
- * Created exclusively once per transaction, so the two can never both believe they won.
- */
+/** Exclusive per-transaction creation ensures only orcad dispatch or client cancellation can win. */
 export const OrcadManagedStopDecisionSchema = z.strictObject({
   schemaVersion: z.literal(1),
   kind: z.literal('orcad_managed_stop_decision'),

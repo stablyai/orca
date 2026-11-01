@@ -33,9 +33,10 @@ describe('mcp-config', () => {
   })
 
   it('reports invalid JSON without exposing file contents', () => {
-    const result = inspectMcpConfigContent(workspaceCandidate, '{')
+    const result = inspectMcpConfigContent(workspaceCandidate, '{"API_TOKEN":"secret-token",}')
     expect(result.status).toBe('invalid')
     expect(result.error).toContain('JSON')
+    expect(JSON.stringify(result)).not.toContain('secret-token')
     expect(result.servers).toEqual([])
   })
 

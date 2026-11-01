@@ -6,18 +6,13 @@ import { durableWriteTempPath, removeStaleDurableWriteTempFiles } from '../durab
 const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 export type AtomicSnapshotWriterOptions = {
-  /** Creation mode for the published file, e.g. 0o600 for state other users must not read. */
   fileMode?: number
-  /** Mode for the parent directory, re-applied best-effort off Windows on every write. */
+  /** Reapplied best-effort on POSIX; Windows permissions use ACLs. */
   directoryMode?: number
-  /** Skip the write when the serialized bytes equal the last committed snapshot. */
   skipUnchanged?: boolean
 }
 
-/**
- * Whole-file snapshot writer: async temp-plus-rename off the event loop, with a synchronous twin for
- * quit paths. One async write runs at a time and requests made meanwhile coalesce into the next one.
- */
+/** Coalesce async temp/rename writes; quit paths can synchronously supersede pending generations. */
 export class AtomicSnapshotWriter {
   private writeGeneration = 0
   private lastCommittedGeneration = 0
@@ -44,17 +39,9 @@ export class AtomicSnapshotWriter {
     }
     this.writeRequested = true
     this.pendingSerialize = serialize
-    if (this.pendingWrite) {
-      return this.pendingWrite
-    }
-    const run = this.drainWrites()
-    const tracked = run.finally(() => {
-      if (this.pendingWrite === tracked) {
-        this.pendingWrite = null
-      }
-    })
-    this.pendingWrite = tracked
-    return tracked
+    // drainWrites awaits before clearing pendingWrite, so this assignment wins.
+    this.pendingWrite ??= this.drainWrites()
+    return this.pendingWrite
   }
 
   writeSync(serialize: () => string): void {
@@ -75,7 +62,7 @@ export class AtomicSnapshotWriter {
     }
     const { tmpFile, json, generation } = this.preparePayload(file, serialize)
     if (this.isUnchanged(json)) {
-      // Why: disk already holds these newest bytes; an older async write must not rename over them.
+      // Fence older async renames even when the newest bytes are already on disk.
       this.lastCommittedGeneration = Math.max(this.lastCommittedGeneration, generation)
       return
     }
@@ -88,9 +75,7 @@ export class AtomicSnapshotWriter {
     } catch (error) {
       try {
         unlinkSync(tmpFile)
-      } catch {
-        // tmp already gone
-      }
+      } catch {}
       throw error
     }
     this.lastCommittedGeneration = Math.max(this.lastCommittedGeneration, generation)
@@ -101,12 +86,11 @@ export class AtomicSnapshotWriter {
     return this.pendingWrite ?? Promise.resolve()
   }
 
-  /** Records bytes already on disk (e.g. just loaded) so an identical first write is skipped. */
   primeCommittedContent(content: string | null): void {
     this.lastCommittedContent = content
   }
 
-  /** Drops queued requests and stops in-flight async writes from publishing. Sync writes still work. */
+  /** Prevent async publication and drop queued work; synchronous quit writes remain allowed. */
   close(): void {
     this.closed = true
     this.writeRequested = false
@@ -138,9 +122,7 @@ export class AtomicSnapshotWriter {
     if (this.options.directoryMode !== undefined && process.platform !== 'win32') {
       try {
         chmodSync(dir, this.options.directoryMode)
-      } catch {
-        // best-effort
-      }
+      } catch {}
     }
   }
 
@@ -155,22 +137,27 @@ export class AtomicSnapshotWriter {
   }
 
   private async drainWrites(): Promise<void> {
-    await this.staleTempCleanup
-    let firstError: unknown = null
-    while (this.writeRequested && !this.closed) {
-      this.writeRequested = false
-      const serialize = this.pendingSerialize!
-      try {
-        await this.writeToDiskAsync(serialize)
-      } catch (error) {
-        firstError ??= error
-        if (!this.writeRequested) {
-          throw error
+    try {
+      await this.staleTempCleanup
+      let firstError: unknown = null
+      while (this.writeRequested && !this.closed) {
+        this.writeRequested = false
+        const serialize = this.pendingSerialize!
+        try {
+          await this.writeToDiskAsync(serialize)
+        } catch (error) {
+          firstError ??= error
+          if (!this.writeRequested) {
+            throw error
+          }
         }
       }
-    }
-    if (firstError) {
-      throw firstError
+      if (firstError) {
+        throw firstError
+      }
+    } finally {
+      // Clear synchronously with the empty-queue observation so later callers start a fresh drain.
+      this.pendingWrite = null
     }
   }
 

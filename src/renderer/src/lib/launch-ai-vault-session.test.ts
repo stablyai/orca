@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mockCreateTab = vi.fn()
 const mockCreateEmptySplitGroup = vi.fn()
 const mockCloseEmptyGroup = vi.fn()
-const mockQueueTabStartupCommand = vi.fn()
+function queuedStartups() {
+  return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
+}
 const mockSetActiveTabType = vi.fn()
 const mockSetTabBarOrder = vi.fn()
 const runtimeMocks = vi.hoisted(() => ({
   createWebRuntimeSessionTerminal: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn<() => string | null>(() => null),
+  runtimeEnvironmentIdOrLocalUnlessTwin: vi.fn<() => string | null>(() => null),
   isWebRuntimeSessionActive: vi.fn(() => false)
 }))
 
@@ -16,7 +18,6 @@ const mockState = {
   createTab: mockCreateTab,
   createEmptySplitGroup: mockCreateEmptySplitGroup,
   closeEmptyGroup: mockCloseEmptyGroup,
-  queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: mockSetActiveTabType,
   setTabBarOrder: mockSetTabBarOrder,
   tabsByWorktree: {} as Record<string, { id: string }[]>,
@@ -45,11 +46,13 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: runtimeMocks.getRuntimeEnvironmentIdForWorktree
+  runtimeEnvironmentIdOrLocalUnlessTwin: runtimeMocks.runtimeEnvironmentIdOrLocalUnlessTwin
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
-  createWebRuntimeSessionTerminal: runtimeMocks.createWebRuntimeSessionTerminal,
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: runtimeMocks.createWebRuntimeSessionTerminal
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: runtimeMocks.isWebRuntimeSessionActive
 }))
 
@@ -58,7 +61,7 @@ import { launchAiVaultSessionInNewTab } from './launch-ai-vault-session'
 describe('launchAiVaultSessionInNewTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    runtimeMocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
+    runtimeMocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue(null)
     runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(false)
     runtimeMocks.createWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
     mockState.tabsByWorktree = {}
@@ -73,82 +76,8 @@ describe('launchAiVaultSessionInNewTab', () => {
     mockCreateEmptySplitGroup.mockReturnValue('group-new')
   })
 
-  it('creates a terminal in the requested tab group and queues the resume command', () => {
-    const result = launchAiVaultSessionInNewTab({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      targetGroupId: 'group-1',
-      command: 'claude --resume session-1'
-    })
-
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-1')
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
-      command: 'claude --resume session-1',
-      telemetry: {
-        agent_kind: 'claude',
-        launch_source: 'sidebar',
-        request_kind: 'resume'
-      }
-    })
-    // Why: a resume can target a worktree the user is not viewing (it is activated afterwards).
-    expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', 'wt-1')
-    expect(mockSetTabBarOrder).toHaveBeenCalledWith('wt-1', ['tab-1'])
-    expect(result).toEqual({ tabId: 'tab-1', groupId: 'group-1' })
-  })
-
-  it('queues configured resume startup details for agent history resumes', () => {
-    launchAiVaultSessionInNewTab({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
-      cwd: 'C:\\Users\\alice\\repo',
-      env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
-      envToDelete: ['CODEX_HOME'],
-      launchConfig: {
-        agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
-        agentArgs: '--dangerously-skip-permissions --effort max',
-        agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
-      },
-      providerSession: { key: 'session_id', id: 'session-1' }
-    })
-
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      startupCwd: 'C:\\Users\\alice\\repo'
-    })
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
-      command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
-      env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
-      envToDelete: ['CODEX_HOME'],
-      launchConfig: {
-        agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
-        agentArgs: '--dangerously-skip-permissions --effort max',
-        agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
-      },
-      launchAgent: 'claude',
-      resumeProviderSession: { key: 'session_id', id: 'session-1' },
-      telemetry: {
-        agent_kind: 'claude',
-        launch_source: 'sidebar',
-        request_kind: 'resume'
-      }
-    })
-  })
-
-  it('creates a split group before launching when a split direction is provided', () => {
-    launchAiVaultSessionInNewTab({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      targetGroupId: 'group-1',
-      splitDirection: 'right',
-      command: 'codex resume session-2'
-    })
-
-    expect(mockCreateEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-new')
-  })
-
   it('creates runtime-hosted resume terminals through the paired host', async () => {
-    runtimeMocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-1')
+    runtimeMocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue('env-1')
     runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(true)
 
     const result = launchAiVaultSessionInNewTab({
@@ -167,26 +96,29 @@ describe('launchAiVaultSessionInNewTab', () => {
     })
 
     expect(result.tabId).toBeNull()
-    expect(runtimeMocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'env-1',
-      targetGroupId: 'group-1',
-      agentSessionKind: 'resume',
-      launchAgent: 'codex',
-      command: "codex resume 'session-1'",
-      env: { CODEX_PROFILE: 'runtime' },
-      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
-      launchConfig: {
-        agentCommand: 'codex',
+    expect(runtimeMocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      {
+        worktreeId: 'wt-1',
+        environmentId: 'env-1',
+        targetGroupId: 'group-1',
+        agentSessionKind: 'resume',
+        launchAgent: 'codex',
+        command: "codex resume 'session-1'",
+        env: { CODEX_PROFILE: 'runtime' },
+        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+        launchConfig: {
+          agentCommand: 'codex',
+          agentArgs: '',
+          agentEnv: { CODEX_PROFILE: 'runtime' }
+        },
+        providerSession: { key: 'session_id', id: 'session-1' },
         agentArgs: '',
-        agentEnv: { CODEX_PROFILE: 'runtime' }
+        activate: true
       },
-      providerSession: { key: 'session_id', id: 'session-1' },
-      agentArgs: '',
-      activate: true
-    })
+      { notifyFailure: false }
+    )
     expect(mockCreateTab).not.toHaveBeenCalled()
-    expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
+    expect(queuedStartups()).toEqual([])
 
     if (result.tabId === null) {
       await expect(result.runtimeLaunch).resolves.toEqual({ status: 'created' })
@@ -196,7 +128,7 @@ describe('launchAiVaultSessionInNewTab', () => {
 
   // #22791: a drop on a pane edge in a paired-runtime worktree opened a tab instead of a split.
   it('splits the pane before a runtime-hosted resume and targets the new group', async () => {
-    runtimeMocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-1')
+    runtimeMocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue('env-1')
     runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(true)
 
     const result = launchAiVaultSessionInNewTab({
@@ -209,9 +141,9 @@ describe('launchAiVaultSessionInNewTab', () => {
 
     expect(mockCreateEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
     expect(runtimeMocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({ targetGroupId: 'group-new' })
+      expect.objectContaining({ targetGroupId: 'group-new' }),
+      { notifyFailure: false }
     )
-    expect(result.groupId).toBe('group-new')
     if (result.tabId === null) {
       await result.runtimeLaunch
     }
@@ -219,7 +151,7 @@ describe('launchAiVaultSessionInNewTab', () => {
   })
 
   it('removes the still-empty split group when the runtime create does not succeed', async () => {
-    runtimeMocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-1')
+    runtimeMocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue('env-1')
     runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(true)
     runtimeMocks.createWebRuntimeSessionTerminal.mockResolvedValue({
       status: 'failed',

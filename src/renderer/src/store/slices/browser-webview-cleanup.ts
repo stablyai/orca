@@ -3,15 +3,29 @@ import {
   destroyPersistentWebview,
   moveFocusToRendererBeforeFocusedWebviewHidden
 } from '../../components/browser-pane/host-guest/webview-registry'
-import {
-  getExplicitBrowserPageZoomLevel,
-  rememberExplicitBrowserPageZoomLevel
-} from '../../components/browser-pane/host-guest/browser-page-zoom'
+import { releaseBrowserPageMount } from '../../components/browser-pane/host-guest/browser-page-mount-admission'
 
 export { moveFocusToRendererBeforeFocusedWebviewHidden }
 
+// Release admission with guest destruction on close, purge, conversion or eviction.
 export function destroyRemovedBrowserWebview(browserPageId: string): void {
+  releaseBrowserPageMount(browserPageId)
   destroyPersistentWebview(browserPageId)
+}
+
+/** Destroys every page in `previousIds` the store no longer holds; returns the ids it holds now. */
+export function destroyWebviewsRemovedFromStore(
+  previousIds: ReadonlySet<string>,
+  browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
+  browserPagesByWorkspace: Record<string, BrowserPage[]>
+): Set<string> {
+  const currentIds = collectBrowserWebviewIds(browserTabsByWorktree, browserPagesByWorkspace)
+  for (const previousId of previousIds) {
+    if (!currentIds.has(previousId)) {
+      destroyRemovedBrowserWebview(previousId)
+    }
+  }
+  return currentIds
 }
 
 export function collectBrowserWebviewIds(
@@ -35,12 +49,7 @@ export function collectBrowserWebviewIds(
   return ids
 }
 
-// Why: guest-budget eviction destroys every guest a hidden worktree retains
-// while its tabs/pages stay in the store, so a revisit rebuilds from state.
-// Eviction is not a user close — the tab stays in the UI, so the user's zoom
-// is re-remembered past the destroy-path forget: the revisit reasserts it
-// instead of writing the default through Chromium's partition-wide HostZoomMap
-// (which would also reset same-host sibling tabs).
+// Evict hidden guests without removing tabs/pages so revisit rebuilds from saved state.
 export function destroyWorktreeBrowserGuests(
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
   browserPagesByWorkspace: Record<string, BrowserPage[]>,
@@ -48,15 +57,10 @@ export function destroyWorktreeBrowserGuests(
 ): void {
   for (const tab of browserTabsByWorktree[worktreeId] ?? []) {
     const pages = browserPagesByWorkspace[tab.id] ?? []
-    // Legacy sessions persisted before pages existed key their webview by the
-    // workspace tab id (same fallback as collectBrowserWebviewIds).
+    // Legacy pre-page sessions key guests by workspace tab ID, like collectBrowserWebviewIds.
     const guestIds = pages.length === 0 ? [tab.id] : pages.map((page) => page.id)
     for (const guestId of guestIds) {
-      const explicitZoomLevel = getExplicitBrowserPageZoomLevel(guestId)
       destroyRemovedBrowserWebview(guestId)
-      if (explicitZoomLevel !== null) {
-        rememberExplicitBrowserPageZoomLevel(guestId, explicitZoomLevel)
-      }
     }
   }
 }
@@ -67,8 +71,7 @@ export function destroyWorkspaceWebviews(
 ): void {
   const pages = browserPagesByWorkspace[workspaceId] ?? []
   if (pages.length === 0) {
-    // Why: legacy sessions persisted before pages existed still key their
-    // webview by workspace id. Preserve the legacy destroy as a fallback.
+    // Preserve workspace-ID destruction for legacy pre-page sessions.
     destroyRemovedBrowserWebview(workspaceId)
     return
   }

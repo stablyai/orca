@@ -315,26 +315,105 @@ describe('LinuxLidSleepAssertion', () => {
     vi.useRealTimers()
   })
 
-  it('logs repeated identical failures at debug until reset', () => {
-    const logger = createLogger()
-    const spawn = vi.fn(() => {
-      throw new Error('dbus unavailable')
-    })
-    let now = 1_000
-    const assertion = new LinuxLidSleepAssertion({
-      logger,
-      now: () => now,
-      platform: 'linux',
-      spawn
+  describe('when systemd-inhibit starts but exits immediately (no usable logind)', () => {
+    function createRetryingAssertion() {
+      const logger = createLogger()
+      const children: FakeSystemdInhibitProcess[] = []
+      const spawnTimes: number[] = []
+      const spawn = vi.fn(() => {
+        const child = new FakeSystemdInhibitProcess()
+        children.push(child)
+        spawnTimes.push(Date.now())
+        return child
+      })
+      const assertion: LinuxLidSleepAssertion = new LinuxLidSleepAssertion({
+        logger,
+        now: () => Date.now(),
+        // Mirrors AgentAwakeService: every failure or retry tick re-runs start().
+        onUnexpectedFailure: (reason) => assertion.start(reason),
+        platform: 'linux',
+        spawn
+      })
+      const failLatestChild = (): void => {
+        const child = children.at(-1)
+        child?.emit('exit', 1, null)
+        child?.emit('close', 1, null)
+      }
+      const spawnGaps = (): number[] =>
+        spawnTimes.slice(1).map((time, index) => time - spawnTimes[index])
+      return { assertion, failLatestChild, logger, spawn, spawnGaps }
+    }
+
+    it('warns once while it keeps retrying, doubling the wait up to a cap', () => {
+      vi.useFakeTimers()
+      try {
+        const { assertion, failLatestChild, logger, spawnGaps } = createRetryingAssertion()
+
+        assertion.start('status-change')
+        for (let attempt = 0; attempt < 8; attempt++) {
+          failLatestChild()
+          vi.advanceTimersToNextTimer()
+        }
+
+        expect(spawnGaps()).toEqual(
+          [1, 2, 4, 8, 16, 16, 16, 16].map((factor) => factor * LINUX_LID_SLEEP_ASSERTION_RETRY_MS)
+        )
+        expect(logger.warn).toHaveBeenCalledTimes(1)
+        expect(logger.debug).toHaveBeenCalledTimes(7)
+        assertion.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
-    assertion.start('status-change')
-    now += LINUX_LID_SLEEP_ASSERTION_RETRY_MS + 1
-    assertion.start('power-resume')
-    assertion.stop('settings-change')
-    assertion.start('status-change')
+    it('stays quiet across idle/active cycles until an inhibitor is held', () => {
+      vi.useFakeTimers()
+      try {
+        const { assertion, failLatestChild, logger, spawn } = createRetryingAssertion()
 
-    expect(logger.warn).toHaveBeenCalledTimes(2)
-    expect(logger.debug).toHaveBeenCalledTimes(1)
+        assertion.start('status-change')
+        for (let attempt = 0; attempt < 4; attempt++) {
+          failLatestChild()
+          vi.advanceTimersToNextTimer()
+        }
+        assertion.stop('status-change')
+        assertion.start('status-change')
+        failLatestChild()
+
+        expect(spawn).toHaveBeenCalledTimes(6)
+        expect(logger.warn).toHaveBeenCalledTimes(1)
+
+        vi.advanceTimersToNextTimer()
+        vi.advanceTimersByTime(LINUX_LID_SLEEP_ASSERTION_RETRY_MS)
+        assertion.stop('status-change')
+        assertion.start('status-change')
+        failLatestChild()
+
+        expect(logger.warn).toHaveBeenCalledTimes(2)
+        assertion.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('treats an inhibitor that held for a full retry interval as recovered', () => {
+      vi.useFakeTimers()
+      try {
+        const { assertion, failLatestChild, logger } = createRetryingAssertion()
+
+        assertion.start('status-change')
+        for (let attempt = 0; attempt < 4; attempt++) {
+          failLatestChild()
+          vi.advanceTimersToNextTimer()
+        }
+        vi.advanceTimersByTime(LINUX_LID_SLEEP_ASSERTION_RETRY_MS)
+        failLatestChild()
+
+        expect(logger.warn).toHaveBeenCalledTimes(2)
+        assertion.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 })

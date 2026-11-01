@@ -31,10 +31,7 @@ export type WebRuntimeSessionMocks = {
   hasMaterializedWebRuntimeBrowserPage: SessionMock
 }
 
-/**
- * Store actions the optimistic browser stage drives, owned here rather than by each test file's
- * hoisted mock object so every browser-create suite models staging the same way.
- */
+/** Centralize optimistic browser actions so every browser-create suite models staging consistently. */
 export const stagedBrowserTabMocks: {
   closeBrowserTab: SessionMock
   removeRemoteBrowserPageHandle: SessionMock

@@ -5,10 +5,9 @@ import {
   assertRuntimeEnvironmentCapability,
   clearRecentRuntimeCompatibilityFailure,
   clearRuntimeCompatibilityCacheForTests,
-  runtimeEnvironmentSupportsCapability,
-  RuntimeRpcCallError,
-  unwrapRuntimeRpcResult
+  runtimeEnvironmentSupportsCapability
 } from './runtime-rpc-client'
+import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
@@ -406,10 +405,7 @@ describe('runtime RPC client routing', () => {
   })
 
   it('re-probes when a status success clears a still-pending compatibility probe', async () => {
-    // Reconnect race: the offline probe stays queued on the dropped connection
-    // (pending, not yet failed) while a fresh status publish reports the host
-    // reachable. The clear must drop that doomed pending probe so the next
-    // reuse-flagged call starts a fresh probe instead of coalescing onto it.
+    // Reachable status can overtake an offline probe still queued on the dead connection. Clear that pending probe so reuse calls start fresh without inheriting its late rejection.
     let rejectFirstStatus!: (error: Error) => void
     let statusCalls = 0
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {

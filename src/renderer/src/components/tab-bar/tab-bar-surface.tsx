@@ -10,8 +10,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
-import TabBarCreateEntry from './TabBarCreateEntry'
+import { ProjectedAgentMenuItems } from './QuickLaunchButton'
+import { TabBarAgentPickerEntry } from './TabBarAgentPickerEntry'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { TabStripTooltipProvider } from './TabStripTooltipProvider'
 import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
@@ -67,7 +67,6 @@ export function renderTabBarSurface({
     showMobileEmulatorIntroCallout,
     windowsTerminalCapabilities,
     defaultWindowsPowerShellImplementation,
-    agentLaunchOptions,
     newTerminalShortcut,
     newBrowserShortcut,
     newSimulatorShortcut,
@@ -75,6 +74,10 @@ export function renderTabBarSurface({
     openMarkdownShortcut
   } = runtime
   const {
+    agentMenu,
+    agentPickerInventory,
+    selectPickerAgent,
+    launchAgentRow,
     newTabMenuOpen,
     setNewTabMenuOpen,
     setCreateMenuQuery,
@@ -84,7 +87,6 @@ export function renderTabBarSurface({
     launchAgentFromNewTabEntry,
     runPendingNewTabMenuFocusAfterClose,
     queueNewActiveTerminalFocusAfterNewTabMenuClose,
-    queueTerminalTabFocusAfterNewTabMenuClose,
     queueFocusAfterNewTabMenuClose,
     showStaticCreateMenuItems
   } = createMenu
@@ -97,6 +99,7 @@ export function renderTabBarSurface({
     scrollTabStrip,
     subscribeToStripResize
   } = tabStripNavigation
+  const singleTab = orderedItems.length + clientHostedBrowserRows.length === 1
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
   const renderedItems = renderTabBarItems({
     items: orderedItems,
@@ -116,7 +119,7 @@ export function renderTabBarSurface({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="mx-0.5 my-auto h-6 w-5 text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:opacity-35"
+              className="mx-0.5 my-auto h-6 w-5 @max-[260px]/tab-strip:hidden"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               aria-label={translate(
                 'auto.components.tab.bar.TabBar.7a9b4af2af',
@@ -138,11 +141,12 @@ export function renderTabBarSurface({
           </TooltipContent>
         </Tooltip>
       ) : null}
-      {/* Why: no strategy stops dnd-kit animating siblings, so tabs stay anchored during drag; only the insertion bar moves. */}
+      {/* Keep drag siblings anchored; only the insertion bar moves. */}
       <SortableContext items={sortableIds}>
         {/* Why: no-drag lets tab interactions work inside the titlebar's drag region (outer container stays window-draggable). */}
         <div
-          className="group/tab-strip relative flex min-h-0 min-w-0 max-w-full flex-[0_1_auto]"
+          data-single-tab={singleTab ? '' : undefined}
+          className="group/tab-strip relative flex min-h-0 min-w-0 max-w-full flex-1"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <div
@@ -150,7 +154,8 @@ export function renderTabBarSurface({
             data-active-tab-docked={activeTabDockSide ?? undefined}
             // Why: only `border-r` here — a strip-level `border-l` would render a heavier L-corner than the first tab's own `border-l`.
             className={[
-              'terminal-tab-strip flex h-full min-w-0 max-w-full flex-1 items-stretch overflow-x-auto overflow-y-hidden border-r border-border/70',
+              'terminal-tab-strip flex h-full min-w-0 max-w-full flex-1 items-stretch overflow-x-auto overflow-y-hidden',
+              'border-r border-border/70',
               getTabStripScrollMaskClassName(tabStripOverflowState, activeTabDockSide)
             ]
               .filter(Boolean)
@@ -183,7 +188,7 @@ export function renderTabBarSurface({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="mx-0.5 my-auto h-6 w-5 text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:opacity-35"
+              className="mx-0.5 my-auto h-6 w-5 @max-[260px]/tab-strip:hidden"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               aria-label={translate(
                 'auto.components.tab.bar.TabBar.232e075b07',
@@ -214,7 +219,6 @@ export function renderTabBarSurface({
             className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
-            // Why: aria-label matches the tooltip so E2E can locate the "+" via getByRole('button', { name: 'New tab' }).
             aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
           >
             <Plus className="w-3.5 h-3.5" />
@@ -232,13 +236,13 @@ export function renderTabBarSurface({
         >
           {!terminalOnly && onOpenEntry ? (
             <>
-              <TabBarCreateEntry
+              <TabBarAgentPickerEntry
+                inventory={agentPickerInventory}
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
                 menuOpen={newTabMenuOpen}
                 menuOptions={createMenuOptions}
-                agentOptions={agentLaunchOptions}
-                onLaunchAgent={launchAgentFromNewTabEntry}
+                onLaunchAgentOption={launchAgentFromNewTabEntry}
                 onOpenDefaultTerminal={() => {
                   queueNewActiveTerminalFocusAfterNewTabMenuClose()
                   onNewTerminalTab()
@@ -255,6 +259,7 @@ export function renderTabBarSurface({
           {showStaticCreateMenuItems ? (
             <TabBarStaticCreateMenu
               props={props}
+              groupId={resolvedGroupId}
               terminalOnly={terminalOnly}
               mobileEmulatorEnabled={mobileEmulatorEnabled}
               managedBrowserCreationEnabled={managedBrowserCreationEnabled}
@@ -277,10 +282,12 @@ export function renderTabBarSurface({
           {showStaticCreateMenuItems && showAgentLaunchItems ? (
             <>
               <DropdownMenuSeparator />
-              <QuickLaunchAgentMenuItems
-                worktreeId={worktreeId}
-                groupId={resolvedGroupId}
-                onFocusTerminal={queueTerminalTabFocusAfterNewTabMenuClose}
+              <ProjectedAgentMenuItems
+                model={agentMenu}
+                pickerInventory={agentPickerInventory}
+                onSelectPickerAgent={selectPickerAgent}
+                hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
+                runLaunch={launchAgentRow}
               />
             </>
           ) : null}

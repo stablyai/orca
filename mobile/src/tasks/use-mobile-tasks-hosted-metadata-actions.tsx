@@ -109,8 +109,6 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
       setMutatingStatus(true)
       setError('')
       try {
-        // The method and its params were a pair of local ternaries over the item type, not a step
-        // handed in at runtime, so each arm sends its own operation with its own params type.
         const updated =
           item.source.type === 'issue'
             ? gitlabIssueUpdate.interpret(

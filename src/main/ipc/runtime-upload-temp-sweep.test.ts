@@ -15,7 +15,7 @@ const callRuntimeEnvironment =
     ) => unknown
   >()
 
-vi.mock('./runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: Parameters<typeof callRuntimeEnvironment>) =>
     callRuntimeEnvironment(...args)
 }))

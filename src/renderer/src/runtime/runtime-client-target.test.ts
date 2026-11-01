@@ -2,24 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../shared/execution-host'
 import {
   hostRouteForAuthority,
-  runtimeTargetForExecutionHostId,
+  runtimeRpcTargetForAuthorityKey,
   runtimeTargetForOwnerEnvironment,
-  runtimeTargetForOwnerHostId
+  ipcOrRuntimeTargetForHostId
 } from './runtime-client-target'
 
-describe('runtimeTargetForExecutionHostId', () => {
+describe('runtimeRpcTargetForAuthorityKey', () => {
   it('keeps the answers for plain host ids', () => {
-    expect(runtimeTargetForExecutionHostId('local')).toEqual({ kind: 'local' })
-    expect(runtimeTargetForExecutionHostId('runtime:env%2Fa')).toEqual({
+    expect(runtimeRpcTargetForAuthorityKey('local')).toEqual({ kind: 'local' })
+    expect(runtimeRpcTargetForAuthorityKey('runtime:env%2Fa')).toEqual({
       kind: 'environment',
       environmentId: 'env/a'
     })
-    expect(runtimeTargetForExecutionHostId('ssh:box')).toBeNull()
-    expect(runtimeTargetForExecutionHostId(UNRESOLVED_OWNER_HOST_ID)).toBeNull()
+    expect(runtimeRpcTargetForAuthorityKey('ssh:box')).toBeNull()
+    expect(runtimeRpcTargetForAuthorityKey(UNRESOLVED_OWNER_HOST_ID)).toBeNull()
   })
 
   it('routes a nested SSH key to the server that owns the target', () => {
-    expect(runtimeTargetForExecutionHostId('nested:env-a/box')).toEqual({
+    expect(runtimeRpcTargetForAuthorityKey('nested:env-a/box')).toEqual({
       kind: 'environment',
       environmentId: 'env-a'
     })
@@ -52,13 +52,13 @@ describe('owner transports', () => {
   })
 
   it('routes local and direct SSH owners through this app and never dials the sentinel', () => {
-    expect(runtimeTargetForOwnerHostId('local')).toEqual({ kind: 'local' })
-    expect(runtimeTargetForOwnerHostId('ssh:box')).toEqual({ kind: 'local' })
-    expect(runtimeTargetForOwnerHostId('runtime:env%2Fa')).toEqual({
+    expect(ipcOrRuntimeTargetForHostId('local')).toEqual({ kind: 'local' })
+    expect(ipcOrRuntimeTargetForHostId('ssh:box')).toEqual({ kind: 'local' })
+    expect(ipcOrRuntimeTargetForHostId('runtime:env%2Fa')).toEqual({
       kind: 'environment',
       environmentId: 'env/a'
     })
-    expect(runtimeTargetForOwnerHostId(UNRESOLVED_OWNER_HOST_ID)).toBeNull()
-    expect(runtimeTargetForOwnerHostId(undefined)).toBeNull()
+    expect(ipcOrRuntimeTargetForHostId(UNRESOLVED_OWNER_HOST_ID)).toBeNull()
+    expect(ipcOrRuntimeTargetForHostId(undefined)).toBeNull()
   })
 })

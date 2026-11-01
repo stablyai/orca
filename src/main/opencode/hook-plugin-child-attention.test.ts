@@ -1,8 +1,3 @@
-/**
- * Executes the generated OpenCode plugin artifact to verify that descendant
- * blockers roll up to their root pane without giving child lifecycle or
- * message events authority over that pane.
- */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -454,7 +449,7 @@ describe('OpenCode plugin child attention', () => {
   it('keeps the oldest blocker waiting when 128 newer blockers resolve', async () => {
     const hooks = await createHooks([])
 
-    // Why: live blocker ownership cannot be LRU-evicted; 129 crosses the prior 128-entry cap.
+    // Cross the old 128-entry cap: live blocker ownership must survive ancestry-cache eviction.
     for (let index = 1; index <= 129; index += 1) {
       await hooks.event({
         event: attention('question.asked', `question-${String(index)}`, `session-${String(index)}`)
@@ -603,8 +598,6 @@ describe('OpenCode plugin child attention', () => {
     }
     await Promise.all([seedRole, preview, childIdle])
 
-    // Why: child completion may clean its blockers, but it cannot cancel or
-    // replace a parent preview that was already on its way to the pane.
     expect(names()).toEqual(['MessagePart'])
   })
 })

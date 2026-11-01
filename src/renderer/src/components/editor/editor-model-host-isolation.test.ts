@@ -83,9 +83,12 @@ describe('same-path models on different execution hosts', () => {
     async (filePath) => {
       const { owners } = createHostModels(filePath)
       expect(new Set(owners.map((owner) => owner.modelKey)).size).toBe(HOSTS.length)
-      expect(new Set(owners.map((owner) => owner.model.uri.fsPath))).toEqual(
-        new Set([monaco.Uri.file(filePath).fsPath])
-      )
+      for (const owner of owners) {
+        // Drive letters fold to lower case in model URIs.
+        expect(
+          owner.model.uri.path.toLowerCase().endsWith(monaco.Uri.file(filePath).path.toLowerCase())
+        ).toBe(true)
+      }
       for (const [index, owner] of owners.entries()) {
         expect(monaco.editor.getModel(monaco.Uri.parse(owner.modelKey))).toBe(owner.model)
         edit(owner.model, `edited host ${index}`)

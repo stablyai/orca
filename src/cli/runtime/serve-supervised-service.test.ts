@@ -15,9 +15,12 @@ import {
   SERVE_SUPERVISOR_FAILURE_LIMIT,
   SERVE_SUPERVISOR_FAILURE_WINDOW_MS,
   SERVE_SUPERVISOR_BACKOFF_MAX_MS,
+  SERVE_GAVE_UP_ADVICE,
   type ServeSupervisorBrake
 } from './serve-supervisor-brake'
 import type { ServeInstallEvidence } from './serve-install-hold'
+import { resolveOrcadExitCode } from '../../main/orcad/orcad-exit-code'
+import { OrcadInstanceLockError } from '../../main/orcad/orcad-data-root-privacy'
 
 /** Virtual clock: timers fire in order as soon as the loop awaits them. */
 function harness(overrides: Partial<SupervisedServeOptions> & { userDataPath: string }) {
@@ -85,7 +88,6 @@ describe('superviseServeService', () => {
     const record = readServeSupervisorBrake(userDataPath)
     expect(record?.gaveUp?.reason).toContain('exited with code 1')
 
-    // A restart by the service manager must not start the loop again.
     let rerun = 0
     const again = harness({
       userDataPath,
@@ -156,6 +158,7 @@ describe('superviseServeService', () => {
     await expect(superviseServeService(h.options)).resolves.toBe(0)
     expect(runs).toBe(0)
     expect(h.logs.join('\n')).toContain('Not starting')
+    expect(h.logs.join('\n')).toContain(SERVE_GAVE_UP_ADVICE)
   })
 
   it('never spawns while the installer holds the bundle, even when the check fails', async () => {
@@ -214,6 +217,27 @@ describe('superviseServeService', () => {
     expect(Math.max(...h.sleeps)).toBe(60_000)
   })
 
+  // #32177: a lock this machine cannot judge (a shared home) is a peer, not a fault to give up on.
+  it('waits on a lock holder it cannot judge, without giving up', async () => {
+    const holderUnverifiable = resolveOrcadExitCode(
+      new OrcadInstanceLockError('orcad_instance_lock_holder_unverifiable', 'shared home')
+    )
+    let runs = 0
+    const h = harness({
+      userDataPath,
+      runOnce: async () => {
+        runs++
+        if (runs === 10) {
+          h.stop()
+        }
+        return holderUnverifiable
+      }
+    })
+    await expect(superviseServeService(h.options)).resolves.toBe(0)
+    expect(runs).toBe(10)
+    expect(readServeSupervisorBrake(userDataPath)).toBeNull()
+  })
+
   it('counts a thrown child failure and keeps supervising', async () => {
     let runs = 0
     const h = harness({
@@ -229,7 +253,88 @@ describe('superviseServeService', () => {
     })
     await expect(superviseServeService(h.options)).resolves.toBe(0)
     expect(runs).toBe(2)
-    expect(h.logs.join('\n')).toContain('SIGKILL')
+    expect(h.logs).toContain('[serve] Orca serve exited via SIGKILL; restarting in 1s.')
+  })
+
+  it('restarts from a replaced AppImage before starting a child, not after it', async () => {
+    const order: string[] = []
+    const h = harness({
+      userDataPath,
+      runOnce: async () => (order.push('spawn'), 0),
+      appImageUpdate: {
+        inspect: () => 'superseded',
+        restart: async () => {
+          order.push('restart')
+          h.stop()
+          return 'the service is stopping'
+        }
+      }
+    })
+    await expect(superviseServeService(h.options)).resolves.toBe(0)
+    expect(order).toEqual(['restart'])
+  })
+
+  it('does not let a give-up on the old build block a replaced AppImage', async () => {
+    let restarts = 0
+    const h = harness({
+      userDataPath,
+      readBrake: () => ({
+        ...emptyServeSupervisorBrake('build-a'),
+        gaveUp: { at: 1, reason: 'crashed' }
+      }),
+      appImageUpdate: {
+        inspect: () => 'superseded',
+        restart: async () => {
+          restarts++
+          h.stop()
+          return 'the service is stopping'
+        }
+      }
+    })
+    await expect(superviseServeService(h.options)).resolves.toBe(0)
+    expect(restarts).toBe(1)
+    expect(h.logs.join('\n')).not.toContain('Not starting')
+  })
+
+  it('keeps serving the running build when the restart fails, without retrying it', async () => {
+    let runs = 0
+    let restarts = 0
+    const h = harness({
+      userDataPath,
+      runOnce: async () => {
+        if (++runs === 2) {
+          h.stop()
+        }
+        return 1
+      },
+      appImageUpdate: {
+        inspect: () => 'superseded',
+        restart: async () => (restarts++, 'the new AppImage could not be unpacked')
+      }
+    })
+    await expect(superviseServeService(h.options)).resolves.toBe(0)
+    expect(restarts).toBe(1)
+    expect(runs).toBe(2)
+    expect(h.logs).toContain(
+      '[serve] Kept the running build: the new AppImage could not be unpacked.'
+    )
+  })
+
+  it('waits for a half-copied AppImage instead of starting either build', async () => {
+    const states = ['settling', 'settling', 'current'] as const
+    let inspections = 0
+    let runs = 0
+    const h = harness({
+      userDataPath,
+      runOnce: async () => (runs++, h.stop(), 0),
+      appImageUpdate: {
+        inspect: () => states[Math.min(inspections++, states.length - 1)]!,
+        restart: async () => 'unused'
+      }
+    })
+    await expect(superviseServeService(h.options)).resolves.toBe(0)
+    expect(h.sleeps).toEqual([SERVE_INSTALL_HOLD_POLL_MS, SERVE_INSTALL_HOLD_POLL_MS])
+    expect(runs).toBe(1)
   })
 
   it('exits 0 on a stop signal during backoff without starting again', async () => {

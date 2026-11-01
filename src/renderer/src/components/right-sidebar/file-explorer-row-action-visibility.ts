@@ -1,4 +1,4 @@
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { TreeNode } from './file-explorer-types'
 
 export function shouldShowCollapseFolderAction(node: TreeNode, isExpanded: boolean): boolean {
@@ -21,12 +21,10 @@ export function shouldShowRemoteDownloadAction(
   node: TreeNode,
   connectionId?: string | null,
   runtimeDownloadContext?: RuntimeFileOperationArgs | null,
-  // Why: fail closed — only show folder download when the connection explicitly
-  // advertises SFTP recursive transfer (system-SSH and unknown states stay off).
+  // Require advertised SFTP recursive transfer; unknown and system-SSH folder downloads stay hidden.
   supportsFolderDownload = false
 ): boolean {
-  // Why: Desktop-only because download depends on Electron's native save/folder dialogs;
-  // runtime and system-SSH folders have no recursive transfer contract.
+  // Native save dialogs require desktop; runtime/system-SSH folders lack recursive transfer contracts.
   const hasDownloadCapability = node.isDirectory
     ? Boolean(connectionId && supportsFolderDownload)
     : Boolean(connectionId || runtimeDownloadContext)
@@ -45,8 +43,7 @@ export function shouldShowCopyFileAction(
   if (node.operationOwner?.kind === 'runtime' || node.operationOwner?.kind === 'unresolved') {
     return false
   }
-  // Why: remote directories would require recursive materialization semantics;
-  // keep this to a single concrete file reference until multi-file copy exists.
+  // Remote directories need recursive materialization; support only a single concrete file reference.
   return (
     (!connectionId || !node.isDirectory) &&
     selectionSize === 1 &&

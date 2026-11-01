@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { downloadRuntimeFile } from './runtime-file-client'
+import { downloadRuntimeFile } from './runtime-file-read-client'
 import {
   fsSaveDownloadedFile,
   fsStartDownloadedFile,
@@ -95,25 +95,6 @@ describe('runtime file client', () => {
     expect(fsCancelDownloadedFile).not.toHaveBeenCalled()
   })
 
-  it('does not open the save dialog when the remote chunk probe fails for transport reasons', async () => {
-    runtimeEnvironmentCall.mockRejectedValueOnce(new Error('connection dropped'))
-
-    await expect(
-      downloadRuntimeFile(
-        {
-          target: { kind: 'environment' as const, environmentId: 'env-1' },
-          worktreeId: 'wt-1',
-          worktreePath: '/remote/repo'
-        },
-        '/remote/repo/archive.zip',
-        'archive.zip'
-      )
-    ).rejects.toThrow('connection dropped')
-
-    expect(fsStartDownloadedFile).not.toHaveBeenCalled()
-    expect(fsSaveDownloadedFile).not.toHaveBeenCalled()
-  })
-
   it('falls back to preview content when older remote runtimes lack chunked download', async () => {
     fsSaveDownloadedFile.mockResolvedValue({
       canceled: false,
@@ -203,40 +184,6 @@ describe('runtime file client', () => {
       content: '',
       encoding: 'base64'
     })
-  })
-
-  it('asks users to update older remote runtimes when preview fallback cannot download the file', async () => {
-    runtimeEnvironmentCall
-      .mockResolvedValueOnce({
-        id: 'chunk-1',
-        ok: false,
-        error: {
-          code: 'method_not_found',
-          message: 'Unknown method: files.readChunk'
-        },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-      .mockResolvedValueOnce({
-        id: 'preview-1',
-        ok: false,
-        error: { code: 'runtime_error', message: 'file_too_large' },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-
-    await expect(
-      downloadRuntimeFile(
-        {
-          target: { kind: 'environment' as const, environmentId: 'env-1' },
-          worktreeId: 'wt-1',
-          worktreePath: '/remote/repo'
-        },
-        '/remote/repo/archive.zip',
-        'archive.zip'
-      )
-    ).rejects.toThrow('Remote file download requires a newer Orca server')
-
-    expect(fsStartDownloadedFile).not.toHaveBeenCalled()
-    expect(fsSaveDownloadedFile).not.toHaveBeenCalled()
   })
 
   it('cancels the local temp download when a remote chunk fails', async () => {

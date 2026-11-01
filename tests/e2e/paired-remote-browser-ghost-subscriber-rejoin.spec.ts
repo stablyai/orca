@@ -14,32 +14,16 @@ import {
   type PairedElectronClient
 } from './helpers/paired-electron-client'
 
-// What this proves, live: a paired client SIGKILLed mid-screencast — no unsubscribe, no graceful
-// socket close — can reopen on the same device identity and get a WORKING stream back, and the
-// runtime is left holding exactly one subscriber for the page, never the dead client's as well.
-// The page is server-placed, so a screencast is the only way pixels can reach the client at all.
-//
-// The runtime-side oracle is the guest page's own viewport. A screencast subscriber that declares a
-// viewport size owns the page's device-metrics override while it is subscribed; when it leaves,
-// ownership falls back to whatever subscriber is still registered, and the override is cleared
-// outright when none is. So `innerWidth` read inside the runtime's guest page names WHICH
-// subscriber the runtime still believes is watching — the fact under test, in one integer.
-//
-// Note on the ghost window: over a loopback pairing the kernel closes the dead client's socket at
-// once, so the runtime usually drops the orphaned subscriber in well under a second and the
-// same-device replacement never has to fire. That is recorded as evidence, not asserted, because
-// the ghost this guards against belongs to transports that leave the socket half-open. The
-// subtraction check at the end holds either way: whatever the runtime kept, it must not be the
-// force-quit client's.
+// SIGKILL a server-screencast client, reopen its device identity, and require decoded live frames with one subscriber.
+// Guest innerWidth fingerprints viewport ownership; after clean replacement quit it must return to the unwatched width.
+// Loopback often reaps the dead socket immediately, so record orphan timing but assert subtraction independently.
 
 const ROUTE_COLORS = {
   '/server': { name: 'teal', rgb: [0, 128, 128] },
   '/next': { name: 'crimson', rgb: [220, 20, 60] }
 } as const
 
-// Deliberately far apart, and far from the guest's natural width, so the three states the runtime
-// can be in (first client's viewport / rejoined client's viewport / no subscriber at all) are
-// unmistakable in a single integer.
+// Separate initial, rejoined and natural widths so viewport ownership has an unambiguous fingerprint.
 const FIRST_CLIENT_WINDOW = { width: 900, height: 700 }
 const REJOINED_CLIENT_WINDOW = { width: 1600, height: 1040 }
 
@@ -50,11 +34,7 @@ type GhostBrowserFixture = {
   nextUrl: string
 }
 
-/**
- * Two solid, far-apart full-viewport colors. The client can only tell them apart by decoding a
- * frame it actually received, which is what makes "the screencast is live" checkable on screen
- * rather than by transport bookkeeping.
- */
+// Decode distinct full-viewport colors to prove received pixels change, not just transport bookkeeping.
 async function startGhostBrowserFixture(): Promise<GhostBrowserFixture> {
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
@@ -130,10 +110,7 @@ async function setClientWindowSize(
   }, bounds)
 }
 
-/**
- * The runtime's own answer to "who is watching this page": the device-metrics override a screencast
- * subscriber's viewport imposes on the guest, read from inside the guest itself.
- */
+// Read viewport ownership inside the runtime guest, where subscriber device metrics apply.
 async function readGuestViewportWidth(
   app: ElectronApplication,
   originPrefix: string
@@ -190,11 +167,7 @@ type FrameSample = {
   dominant: 'teal' | 'crimson' | 'other' | 'undecodable'
 }
 
-/**
- * Decodes the frame the pane is actually showing. The <img> src alone cannot tell a live stream
- * from a frozen one holding a stale object URL, and cannot say WHICH page is on screen. The pixels
- * can.
- */
+// Decode shown pixels: an img src can remain frozen on a stale object URL.
 async function sampleRenderedFrame(page: Page): Promise<FrameSample> {
   return page.evaluate(async () => {
     const img = document.querySelector<HTMLImageElement>('[data-testid="remote-browser-frame"]')
@@ -287,7 +260,6 @@ test('replaces a force-quit client screencast subscriber when the same device re
     )
     const remotePageId = created.browserPageId
 
-    // The page really is on the runtime, not on the client.
     await expect
       .poll(() => readGuestUrls(host.app, fixture.origin), {
         timeout: 60_000,
@@ -296,7 +268,6 @@ test('replaces a force-quit client screencast subscriber when the same device re
       .toHaveLength(1)
     expect(await readGuestUrls(client.app, fixture.origin)).toHaveLength(0)
 
-    // Unwatched width, before any subscriber imposes a viewport.
     await expect
       .poll(() => readGuestViewportWidth(host.app, fixture.origin), {
         timeout: 30_000,
@@ -305,9 +276,7 @@ test('replaces a force-quit client screencast subscriber when the same device re
       .not.toBeNull()
     const unwatchedWidth = await readGuestViewportWidth(host.app, fixture.origin)
 
-    // The client mirrors the host's tab on its own; opening that pane is the whole user path. A
-    // second locally built pane for the same page would subscribe over this one — the runtime keeps
-    // one screencast per connection — and the viewport fingerprint below would name the wrong pane.
+    // Use the mirrored pane; a second local pane would replace its one-screencast-per-connection subscription.
     await focusMaterializedRemoteBrowserPane(client.page, {
       environmentId: client.environmentId,
       remotePageId,
@@ -318,8 +287,7 @@ test('replaces a force-quit client screencast subscriber when the same device re
     })
     await expectPaneShows(client.page, 'teal', 'first client never rendered the server page pixels')
 
-    // The first client is now the page's viewport owner, so the runtime is stamping ITS pane size
-    // onto the guest — a per-subscriber fingerprint the rest of the test reads back.
+    // Read the first client’s viewport fingerprint from the host guest.
     await expect
       .poll(() => readGuestViewportWidth(host.app, fixture.origin), {
         timeout: 60_000,
@@ -328,14 +296,11 @@ test('replaces a force-quit client screencast subscriber when the same device re
       .not.toBe(unwatchedWidth)
     const firstClientWidth = await readGuestViewportWidth(host.app, fixture.origin)
 
-    // Force-quit: SIGKILL the whole app, no unsubscribe, no dispose, no graceful close.
     const killedApp = client.app
     client = null
     await forceQuitElectronAppForE2E(killedApp)
 
-    // What the runtime does with the orphaned subscriber while NO client exists at all. Recorded as
-    // evidence: the socket may or may not be reaped in this window, and both are legitimate — the
-    // assertion that matters is what the runtime does when the same device comes back.
+    // Record orphan handling while no client exists; immediate socket reap and later same-device replacement are both valid.
     const orphanTimeline: { atMs: number; guestWidth: number | null }[] = []
     const killedAt = Date.now()
     for (const waitMs of [500, 1_500, 3_000, 5_000]) {
@@ -353,8 +318,7 @@ test('replaces a force-quit client screencast subscriber when the same device re
     // leaves a subscriber behind to be ghosted in the first place.
     expect(await readGuestUrls(host.app, fixture.origin)).toHaveLength(1)
 
-    // Reopen the app on the SAME profile: same stored pairing credential, so the runtime
-    // authenticates the same pairedDeviceId over a brand new socket.
+    // Reuse the profile’s credential so the new socket authenticates the same pairedDeviceId.
     client = await launchPairedElectronClient(host.offer, testInfo, 'Ghost subscriber rejoin', {
       reuseUserDataDir: clientProfile
     })
@@ -371,15 +335,12 @@ test('replaces a force-quit client screencast subscriber when the same device re
     await expect(client.page.getByTestId('remote-browser-frame').first()).toBeVisible({
       timeout: 90_000
     })
-    // Pixels the rejoined client decoded itself — not the dead client's last paint, which died with
-    // its renderer.
     await expectPaneShows(
       client.page,
       'teal',
       'rejoined client never rendered a screencast frame of the surviving page'
     )
 
-    // The rejoined device, on a different window size, is now the runtime's viewport owner.
     await expect
       .poll(() => readGuestViewportWidth(host.app, fixture.origin), {
         timeout: 60_000,
@@ -389,8 +350,7 @@ test('replaces a force-quit client screencast subscriber when the same device re
     const rejoinedClientWidth = await readGuestViewportWidth(host.app, fixture.origin)
     expect(rejoinedClientWidth).not.toBe(unwatchedWidth)
 
-    // The strongest on-screen proof that the stream is live rather than one stale snapshot: drive a
-    // navigation from the runtime side and require the pane's pixels to follow it.
+    // Navigate at the host and require changed decoded client pixels, ruling out a stale snapshot.
     await callEnvironment(client.page, client.environmentId, 'browser.goto', {
       worktree: `id:${rejoinedWorktreeId}`,
       page: remotePageId,
@@ -417,14 +377,8 @@ test('replaces a force-quit client screencast subscriber when the same device re
       contentType: 'image/png'
     })
 
-    // Ghost replacement, checked by subtraction. Quit the rejoined client through the front door so
-    // its own subscription unwinds cleanly, then ask the runtime who is left watching:
-    //   - nobody: the device-metrics override is cleared and the guest returns to its unwatched
-    //     width, which is only true if the force-quit client's subscriber is gone;
-    //   - the force-quit client: its subscriber is still registered, inherits viewport ownership on
-    //     the way out, and stamps ITS width back onto the guest.
-    // A clean departure settles this in well under a second (measured), so the bounded window below
-    // cannot be satisfied by the slow fallbacks — the 90-refusal sweep or the 15s heartbeat reap.
+    // Cleanly quit the rejoined client, then require natural guest width: the dead subscriber must not regain viewport ownership.
+    // Bound this below heartbeat/90-refusal cleanup so slow fallback cannot satisfy it.
     const departingClient = client
     client = null
     await departingClient.dispose()

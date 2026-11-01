@@ -4,11 +4,14 @@ import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import {
   buildSmartWorkspaceSourceRows,
   getSmartWorkspaceEmptyHint,
+  isBlockingJiraUrlIntent,
   type SmartNameMode,
   type SmartWorkspaceSourceRow
 } from '../../../src/shared/new-workspace/smart-workspace-source-results'
+import type { JiraIssue, JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { fanOutSmartSearch, type SmartFanOutResult } from './smart-source-fan-out'
+import { lookupJiraIssueByUrl } from './jira-mobile-url-lookup'
 import type { MrStateFilter } from './mobile-composer-source-types'
 import {
   findRepoMatchingSlugForPaste,
@@ -40,8 +43,11 @@ export type UseSmartWorkspaceSourceArgs = {
   githubAvailable: boolean
   gitlabAvailable: boolean
   linearAvailable: boolean
+  jiraAvailable: boolean
   mrStateFilter: MrStateFilter
   linearWorkspaceId?: string | null
+  jiraSiteId?: JiraSiteSelection | null
+  jiraSites: readonly JiraSite[]
   repos: readonly PasteRepoCandidate[]
 }
 
@@ -49,12 +55,19 @@ const EMPTY_FAN: SmartFanOutResult = {
   githubItems: [],
   gitlabItems: [],
   linearIssues: [],
+  jiraIssues: [],
   branches: [],
   needsGitHubRemote: false,
   error: ''
 }
 
-type PasteResolved = { github: GitHubWorkItem | null; gitlab: GitLabWorkItem | null }
+type PasteResolved = {
+  github: GitHubWorkItem | null
+  gitlab: GitLabWorkItem | null
+  jira: JiraIssue | null
+}
+
+const EMPTY_PASTE: PasteResolved = { github: null, gitlab: null, jira: null }
 
 export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
   const {
@@ -66,16 +79,18 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
     githubAvailable,
     gitlabAvailable,
     linearAvailable,
+    jiraAvailable,
     mrStateFilter,
     linearWorkspaceId,
+    jiraSiteId,
+    jiraSites,
     repos
   } = args
   const [fan, setFan] = useState<SmartFanOutResult>(EMPTY_FAN)
-  const [paste, setPaste] = useState<PasteResolved>({ github: null, gitlab: null })
+  const [paste, setPaste] = useState<PasteResolved>(EMPTY_PASTE)
   const [loading, setLoading] = useState(false)
   const [crossRepoPrompt, setCrossRepoPrompt] = useState<SmartCrossRepoPrompt | null>(null)
-  // Why: preserve results across keystrokes (debounce) but drop them the moment
-  // the mode/repo changes so one provider's rows never render under another tab.
+  // Keep results during debounce, but clear on mode/repo switches before another provider’s rows can render.
   const scopeRef = useRef('')
   const dismissedPasteRef = useRef<string>('')
   const repoSlugCacheRef = useRef<
@@ -85,7 +100,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
   useEffect(() => {
     if (!client || !enabled || mode === 'text') {
       setFan(EMPTY_FAN)
-      setPaste({ github: null, gitlab: null })
+      setPaste(EMPTY_PASTE)
       setLoading(false)
       setCrossRepoPrompt(null)
       return
@@ -95,7 +110,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
     scopeRef.current = scope
     if (scopeChanged) {
       setFan(EMPTY_FAN)
-      setPaste({ github: null, gitlab: null })
+      setPaste(EMPTY_PASTE)
       setCrossRepoPrompt(null)
     }
     setLoading(true)
@@ -109,8 +124,11 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
         githubAvailable,
         gitlabAvailable,
         linearAvailable,
+        jiraAvailable,
         mrStateFilter,
         linearWorkspaceId,
+        jiraSiteId,
+        jiraSites,
         repos,
         dismissedPasteRef,
         repoSlugCache: repoSlugCacheRef.current
@@ -143,8 +161,11 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
     githubAvailable,
     gitlabAvailable,
     linearAvailable,
+    jiraAvailable,
     mrStateFilter,
     linearWorkspaceId,
+    jiraSiteId,
+    jiraSites,
     repos
   ])
 
@@ -155,6 +176,9 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
         githubItems: paste.github ? [paste.github] : fan.githubItems,
         gitlabAvailable,
         gitlabItems: paste.gitlab ? [paste.gitlab] : fan.gitlabItems,
+        jiraIntent: isBlockingJiraUrlIntent(mode, query),
+        jiraIssue: paste.jira,
+        jiraIssues: fan.jiraIssues,
         linearAvailable,
         linearIssues: fan.linearIssues,
         mode,
@@ -183,11 +207,10 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
 type PasteLookup = { paste: PasteResolved; crossRepoPrompt: SmartCrossRepoPrompt | null }
 
 const EMPTY_PASTE_LOOKUP: PasteLookup = {
-  paste: { github: null, gitlab: null },
+  paste: EMPTY_PASTE,
   crossRepoPrompt: null
 }
 
-// Resolves a pasted issue/PR/MR reference to the exact item it names.
 async function resolvePastedItem(args: {
   client: RpcClient
   intent: NonNullable<ReturnType<typeof resolvePasteIntent>>
@@ -199,8 +222,8 @@ async function resolvePastedItem(args: {
   if (intent.kind === 'github-number') {
     return {
       paste: {
-        github: await lookupGitHubItemByNumber(client, repoId, intent.number),
-        gitlab: null
+        ...EMPTY_PASTE,
+        github: await lookupGitHubItemByNumber(client, repoId, intent.number)
       },
       crossRepoPrompt: null
     }
@@ -214,26 +237,26 @@ async function resolvePastedItem(args: {
     )
     if (matchingRepo && matchingRepo.id !== repoId) {
       return {
-        paste: { github: null, gitlab: null },
+        paste: EMPTY_PASTE,
         crossRepoPrompt: { link: intent.link, matchingRepo }
       }
     }
     return {
       paste: {
+        ...EMPTY_PASTE,
         github: await lookupGitHubItemByOwnerRepo(
           client,
           repoId,
           intent.link.slug,
           intent.link.number,
           intent.link.type
-        ),
-        gitlab: null
+        )
       },
       crossRepoPrompt: null
     }
   }
   return {
-    paste: { github: null, gitlab: await lookupGitLabItemByPath(client, repoId, intent.link) },
+    paste: { ...EMPTY_PASTE, gitlab: await lookupGitLabItemByPath(client, repoId, intent.link) },
     crossRepoPrompt: null
   }
 }
@@ -246,8 +269,11 @@ async function runSmartSearch(args: {
   githubAvailable: boolean
   gitlabAvailable: boolean
   linearAvailable: boolean
+  jiraAvailable: boolean
   mrStateFilter: MrStateFilter
   linearWorkspaceId: string | null | undefined
+  jiraSiteId: JiraSiteSelection | null | undefined
+  jiraSites: readonly JiraSite[]
   repos: readonly PasteRepoCandidate[]
   dismissedPasteRef: { current: string }
   repoSlugCache: Map<string, { owner: string; repo: string; host?: string } | null>
@@ -257,18 +283,28 @@ async function runSmartSearch(args: {
   crossRepoPrompt: SmartCrossRepoPrompt | null
 }> {
   const { client, mode, query, repoId, repos, dismissedPasteRef, repoSlugCache } = args
+  const paste: PasteResolved = { ...EMPTY_PASTE }
+
+  // Exact Jira URL lookup needs no fan-out; other provider results would be discarded.
+  if (args.jiraAvailable && isBlockingJiraUrlIntent(mode, query)) {
+    try {
+      paste.jira = await lookupJiraIssueByUrl(client, query, args.jiraSites)
+    } catch {
+      // Unresolvable links may show the empty state.
+    }
+    return { fan: EMPTY_FAN, paste, crossRepoPrompt: null }
+  }
+
   const intent =
     mode === 'branches' || dismissedPasteRef.current === query.trim()
       ? null
       : resolvePasteIntent(query)
-  // Why: the paste lookup and the provider fan-out hit different host endpoints,
-  // so awaiting the fan-out first stacked two full round trips on the one path a
-  // user is most likely to take — typing a PR/issue number. Run them together.
+  // Exact paste lookup and provider search use independent endpoints; run together to avoid a second round-trip delay.
   const [fan, pasteLookup] = await Promise.all([
     fanOutSmartSearch(args),
     intent && repoId
       ? resolvePastedItem({ client, intent, repoId, repos, repoSlugCache }).catch(
-          // Best-effort paste resolution; fall back to the fan-out results.
+          // Failed exact lookup can still use provider fan-out results.
           () => EMPTY_PASTE_LOOKUP
         )
       : Promise.resolve(EMPTY_PASTE_LOOKUP)

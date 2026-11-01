@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
-import type { Worktree } from '../../shared/worktree/types'
 import { listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
-import { makeWorktreeMeta } from './worktrees-test-fixtures'
+import { makeWorktreeMeta, expectDetectedWorktreeListResult } from './worktrees-test-fixtures'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -27,9 +30,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -100,10 +100,12 @@ describe('registerWorktreeHandlers', () => {
       [childId]: { instanceId: 'child-instance' }
     }
     store.getWorktreeMeta.mockImplementation((id: string) => metaById[id])
-    store.setWorktreeMeta.mockImplementation((id: string, updates: Partial<WorktreeMeta>) => ({
-      ...metaById[id],
-      ...updates
-    }))
+    store.setWorktreeMeta.mockImplementation(
+      ({ id }: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => ({
+        ...metaById[id],
+        ...updates
+      })
+    )
     store.getAllWorktreeLineage.mockReturnValue({
       [childId]: {
         worktreeId: childId,
@@ -132,15 +134,19 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
 
-    const result = (await handlers['worktrees:listDetected'](null, {
-      repoId: 'repo-1'
-    })) as { worktrees: (Worktree & { lineage?: unknown; parentWorktreeId?: string | null })[] }
+    const result = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-1'
+      })
+    )
 
     expect(result.worktrees).toEqual([
       expect.objectContaining({
         id: childId,
         parentWorktreeId: parentId,
-        lineage: expect.objectContaining({ parentWorktreeInstanceId: 'parent-instance' })
+        lineage: expect.objectContaining({
+          parentWorktreeInstanceId: 'parent-instance'
+        })
       }),
       expect.objectContaining({
         id: parentId,
@@ -192,9 +198,11 @@ describe('registerWorktreeHandlers', () => {
       }
     })
 
-    const result = (await handlers['worktrees:listDetected'](null, {
-      repoId: folderRepo.id
-    })) as { worktrees: (Worktree & { lineage?: unknown; parentWorktreeId?: string | null })[] }
+    const result = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: folderRepo.id
+      })
+    )
 
     expect(result.worktrees).toEqual([
       expect.objectContaining({
@@ -206,7 +214,9 @@ describe('registerWorktreeHandlers', () => {
       expect.objectContaining({
         id: childId,
         parentWorktreeId: parentId,
-        lineage: expect.objectContaining({ parentWorktreeInstanceId: 'parent-instance' })
+        lineage: expect.objectContaining({
+          parentWorktreeInstanceId: 'parent-instance'
+        })
       })
     ])
   })
@@ -238,19 +248,19 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
 
-    const detected = (await handlers['worktrees:listDetected'](null, {
-      repoId: 'repo-1'
-    })) as { worktrees: (Worktree & { ownership: string; visible: boolean })[] }
-    const visible = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as Worktree[]
+    const detected = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-1'
+      })
+    )
 
     expect(detected.worktrees.find((worktree) => worktree.path === scratchPath)).toMatchObject({
       ownership: 'agent-scratch',
       visible: false
     })
-    expect(visible.map((worktree) => worktree.path)).toEqual([
-      '/workspace/repo',
-      linkedCheckoutPath
-    ])
+    expect(
+      detected.worktrees.filter((worktree) => worktree.visible).map((worktree) => worktree.path)
+    ).toEqual(['/workspace/repo', linkedCheckoutPath])
   })
 
   it('does not repeatedly rotate already-invalid missing parent metadata', async () => {
@@ -263,7 +273,6 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'conn-1'
     }
     store.getRepos.mockReturnValue([repo])
-    // Why: this process serves no SSH git, so the SSH repo lists its stored rows.
     store.getAllWorktreeMeta.mockReturnValue({
       'repo-ssh::/remote/live-child': {}
     })
@@ -274,12 +283,17 @@ describe('registerWorktreeHandlers', () => {
         parentWorktreeInstanceId: 'old-parent-instance'
       }
     })
-    store.getWorktreeMeta.mockReturnValue({ instanceId: 'rotated-parent-instance' })
+    store.getWorktreeMeta.mockReturnValue({
+      instanceId: 'rotated-parent-instance'
+    })
 
-    await handlers['worktrees:list'](null, { repoId: 'repo-ssh' })
+    await handlers['worktrees:listDetected'](null, { repoId: 'repo-ssh' })
 
     expect(store.setWorktreeMeta).not.toHaveBeenCalledWith(
-      'repo-ssh::/remote/missing-parent',
+      hostWorktreeTarget({
+        id: 'repo-ssh::/remote/missing-parent',
+        hostId: 'local'
+      }),
       expect.objectContaining({ instanceId: expect.any(String) })
     )
   })

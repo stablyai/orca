@@ -26,23 +26,21 @@ export default function CodexRestartChip({
   onReturnFocus: () => void
   shouldFocus?: boolean
 }): React.JSX.Element | null {
-  // Why: one O(1) selector per mounted pane stays idle when unrelated PTY maps
-  // churn and prevents a worktree-wide scan for every split pane.
+  // Select by PTY in O(1) so split panes ignore unrelated map churn without per-pane workspace scans.
   const restartNotice = useAppStore((state) => state.codexRestartNoticeByPtyId[ptyId])
   if (!restartNotice || !awaitsCodexRestartAnswer(restartNotice)) {
     return null
   }
 
   const handleRestart = (): void => {
-    useAppStore.getState().queueCodexPaneRestarts([ptyId])
+    useAppStore.getState().queuePaneAccountRestarts([ptyId], 'codex')
     onReturnFocus()
   }
 
   const handleDismiss = (): void => {
     useAppStore.getState().dismissCodexRestartNotices([ptyId])
     onReturnFocus()
-    // Why: notices are renderer-only, so the persisted launch record must be
-    // cleared for this pane or the startup sweep re-raises its answered prompt.
+    // Clear the persisted launch record too, or startup recreates this answered renderer notice.
     void window.api.codexAccounts.forgetStalePanes({ ptyIds: [ptyId] }).catch((err: unknown) => {
       console.warn('Failed to forget dismissed Codex pane account:', err)
     })
@@ -79,11 +77,7 @@ function LoudRestartOverlay({
   const bodyId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
 
-  // Why: move focus to the card only when the user isn't typing elsewhere;
-  // unconditional autoFocus would steal keys from an active composer.
-  //
-  // The target is the dialog itself, never Restart, so the next Space/Enter
-  // cannot destroy a session the user did not explicitly choose. See #10863.
+  // Focus only if the user is not typing elsewhere. Focus the dialog, never Restart, so Space/Enter cannot destroy an unchosen session (#10863).
   useEffect(() => {
     if (!isVisible || !shouldFocus) {
       return
@@ -108,8 +102,7 @@ function LoudRestartOverlay({
     <div
       ref={rootRef}
       role="dialog"
-      // Why: programmatically focusable so the card can take focus itself, but
-      // out of the Tab order — Tab from here still reaches Restart/Keep.
+      // Allow programmatic focus while keeping Tab navigation on Restart/Keep.
       tabIndex={-1}
       aria-live="assertive"
       aria-labelledby={titleId}

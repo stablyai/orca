@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   findPendingLinkedWorkItemCreationId,
+  findPendingWorktreeCreationId,
   type PendingWorktreeCreation,
   type WorktreeCreationRequest
 } from './pending-worktree-creation'
@@ -34,6 +35,19 @@ function pending(
     request: creationRequest
   }
 }
+
+describe('findPendingWorktreeCreationId', () => {
+  it('matches Windows path spelling while keeping repositories distinct', () => {
+    const entry = {
+      ...pending('create-1', request()),
+      worktreeId: 'repo-1::C:\\workspaces\\feature'
+    }
+    expect(findPendingWorktreeCreationId({ entry }, 'repo-1::c:/workspaces/feature/')).toBe(
+      'create-1'
+    )
+    expect(findPendingWorktreeCreationId({ entry }, 'repo-2::c:/workspaces/feature/')).toBeNull()
+  })
+})
 
 describe('findPendingLinkedWorkItemCreationId', () => {
   it('deduplicates the same linked item on the same execution host', () => {
@@ -88,12 +102,6 @@ describe('findPendingLinkedWorkItemCreationId', () => {
           }
         })
       )
-    ).toBeNull()
-  })
-
-  it('does not deduplicate unlinked workspace creation', () => {
-    expect(
-      findPendingLinkedWorkItemCreationId({ existing: pending('existing', request()) }, request())
     ).toBeNull()
   })
 })

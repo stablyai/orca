@@ -41,8 +41,7 @@ function segmentLists(alphabet: string[], maxLength: number): string[][] {
   return result
 }
 
-// Pre-change oracle: a regular expression per wildcard segment, plus an unmemoized `**` walk over
-// uncollapsed segments. Differential cases hold the shipped matcher to exactly this behaviour.
+// Original regex/unmemoized matcher provides the differential oracle.
 function referenceSegment(pattern: string): string | RegExp {
   if (!pattern.includes('*') && !pattern.includes('?')) {
     return pattern
@@ -102,8 +101,7 @@ describe('nested repository wildcard work budget', () => {
       }
     })
     expect(ignored).toBe(0)
-    // O(pattern length x name length) per name, ~51 steps in practice; the pre-change expression
-    // revisited earlier stars and needed ~25 ms for each of these names.
+    // Count work rather than timing pathological multi-star backtracking.
     expect(steps).toBeLessThan(50 * 100)
   })
 
@@ -111,7 +109,6 @@ describe('nested repository wildcard work budget', () => {
     const rules = await readRules(`${'**/'.repeat(24)}z`)
     const candidate = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
     let ignored = true
-    // Parse-time collapse of the `**` run; uncollapsed this shape cost ~49M recursive calls.
     const steps = stepsSpentOn(() => {
       ignored = isIgnoredNestedRepoDirectory('h', candidate, rules)
     })
@@ -123,7 +120,6 @@ describe('nested repository wildcard work budget', () => {
     const rules = await readRules(Array.from({ length: 12 }, () => '**/*').join('/'))
     const candidate = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
     let ignored = true
-    // Memoization; without it this shape revisits pairs and costs over a thousand calls.
     const steps = stepsSpentOn(() => {
       ignored = isIgnoredNestedRepoDirectory('h', candidate, rules)
     })
@@ -160,7 +156,6 @@ describe('nested repository wildcard work budget', () => {
     const candidates = segmentLists(['a', 'b', 'ab'], 3)
     for (const patternSegments of segmentLists(['a', 'b', '*', '?', '**'], 3)) {
       const joined = patternSegments.join('/')
-      // The leading slash anchors the rule, which is the non-basenameOnly path even at one segment.
       for (const line of [joined, `/${joined}`]) {
         const rules = await readRules(line)
         for (const candidate of candidates) {

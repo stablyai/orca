@@ -3,7 +3,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
 import { translate } from '@/i18n/i18n'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import { useAppStore } from '../../store'
 
 export async function connectRuntimeEnvironmentAndRecordStatus(
@@ -48,8 +48,14 @@ export async function connectRuntimeHostForNavigation(args: {
   return true
 }
 
-/** The status bar's Connect for a paired host; also the chat's Reconnect when its host is offline. */
-export async function connectRuntimeHostAndReloadProjects(environmentId: string): Promise<boolean> {
+/**
+ * The status bar's Connect for a paired host; also the chat's Reconnect when its host is offline
+ * and a stopped WSL host’s Start, which passes its own failure message.
+ */
+export async function connectRuntimeHostAndReloadProjects(
+  environmentId: string,
+  failureMessage?: string
+): Promise<boolean> {
   const store = useAppStore.getState()
   const reachable = await connectRuntimeHostForNavigation({
     environmentId,
@@ -60,10 +66,11 @@ export async function connectRuntimeHostAndReloadProjects(environmentId: string)
   })
   if (!reachable) {
     toast.error(
-      translate(
-        'auto.components.status.bar.SshStatusSegment.runtime_connect_unavailable',
-        'Remote host is not reachable'
-      )
+      failureMessage ??
+        translate(
+          'auto.components.status.bar.SshStatusSegment.runtime_connect_unavailable',
+          'Remote host is not reachable'
+        )
     )
   }
   return reachable

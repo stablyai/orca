@@ -1,10 +1,6 @@
 import type { LinearTeam } from '../../../shared/linear/workspace-types'
 
-/**
- * Resolve which Linear team ids should feed attribute-filter metadata.
- * Empty selection falls back to the same primary-team default as before;
- * non-empty selection returns every selected team (sorted for stable loads).
- */
+/** Use every selected team in stable order, falling back to the primary team only when selection is empty. */
 export function resolveLinearIssueAttributeFilterTeamIds(options: {
   selectedTeamIds: readonly string[]
   availableTeams: readonly LinearTeam[]
@@ -32,7 +28,6 @@ export function resolveLinearIssueAttributeFilterTeamIds(options: {
   return []
 }
 
-/** Deduplicate metadata rows by id, preserving first-seen order. */
 export function unionLinearMetadataById<T extends { id: string }>(groups: readonly T[][]): T[] {
   const seen = new Set<string>()
   const out: T[] = []
@@ -48,14 +43,9 @@ export function unionLinearMetadataById<T extends { id: string }>(groups: readon
   return out
 }
 
-/** One picker row standing for every id that shares a display name. */
 export type LinearMetadataNameGroup = { key: string; name: string; ids: string[] }
 
-/**
- * Collapse metadata rows that share a display name. Linear workflow states (and team
- * labels) are per team, so every selected team contributes its own "Todo" id — the app
- * already treats status identity as the name, so the picker must too (#16785).
- */
+/** Collapse same-named per-team states/labels into one picker row that selects all their ids. */
 export function groupLinearMetadataByName<T extends { id: string; name: string }>(
   rows: readonly T[]
 ): LinearMetadataNameGroup[] {
@@ -66,17 +56,12 @@ export function groupLinearMetadataByName<T extends { id: string; name: string }
       group.ids.push(row.id)
       continue
     }
-    // First id doubles as the row key: unique, and stable while metadata is unchanged.
     byName.set(row.name, { key: row.id, name: row.name, ids: [row.id] })
   }
   return [...byName.values()]
 }
 
-/**
- * Group keys for the selected ids. An id no loaded group covers — a facet from a team
- * whose metadata is not in yet — passes through as its own key so toggling another row
- * never drops it (R12).
- */
+/** Pass unknown ids through as group keys so incomplete metadata cannot lose selections when another row toggles. */
 export function selectedLinearMetadataGroupKeys(
   groups: readonly { key: string; ids: readonly string[] }[],
   selectedIds: readonly string[]
@@ -109,12 +94,7 @@ export function linearMetadataGroupCoverage(
   }
 }
 
-/**
- * The ids a cap is known to have trimmed, kept as the ids that survived it. A row the cap
- * could not fit leaves no trace in those ids, so truncation is recorded where it happens
- * rather than inferred from the bounded filter — a complete selection landing exactly on the
- * cap is indistinguishable from a trimmed one and used to warn anyway (STA-5996).
- */
+/** Record truncation where it occurs, storing surviving ids; a result exactly at the cap cannot reveal lost rows. */
 export type LinearMetadataTruncationRecord = readonly string[] | null
 
 export function recordLinearMetadataTruncation(
@@ -129,8 +109,7 @@ export function isLinearMetadataTruncated(
   record: LinearMetadataTruncationRecord,
   appliedIds: readonly string[]
 ): boolean {
-  // Why: an empty record matches an empty facet vacuously, and a facet filtering nothing
-  // cannot be under-covering — so no empty record ever reports truncation.
+  // Empty records match vacuously but empty filters cannot have incomplete coverage.
   if (record === null || record.length === 0) {
     return false
   }
@@ -150,13 +129,7 @@ export function isLinearMetadataGroupSelectionPartial(
   return truncated || intended > applied
 }
 
-/**
- * Trim an expanded selection to `max` ids by taking turns across the picked groups.
- * A plain slice of the canonical (sorted) id list can drop every id of one picked row,
- * which then renders unchecked with no explanation and vanishes from the coverage count.
- * More picked rows than `max` cannot all be represented; the caller records that shortfall
- * with `recordLinearMetadataTruncation` so the starved row is never passed off as coverage.
- */
+/** Distribute cap slots across rows; callers record truncation because excess rows may leave no surviving id or coverage trace. */
 export function capLinearMetadataIdsAcrossGroups(
   groups: readonly { key: string; ids: readonly string[] }[],
   ids: readonly string[],
@@ -166,8 +139,7 @@ export function capLinearMetadataIdsAcrossGroups(
     return [...ids]
   }
   const selected = new Set(ids)
-  // Why: the picker hands us click order, so bucket by metadata order instead — the same
-  // visible selection must always cap to the same ids (#17342).
+  // Use metadata order so equivalent selections cap identically regardless of click order.
   const lists = groups
     .map((group) => group.ids.filter((id) => selected.has(id)))
     .filter((list) => list.length > 0)

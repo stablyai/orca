@@ -1,31 +1,10 @@
-// Single source of truth for cohort state attached to telemetry events.
-// See docs/onboarding-funnel-cohort-addendum.md.
-//
-// `nth_repo_added` is the count of repos the user has at the moment the
-// event fires — read from `store.getRepoCount()`. The rule is single
-// and consistent: the value reflects current store state at emit time.
-// On `repo_added` the read happens *after* `store.addRepo` lands, so the
-// user's Nth repo addition emits `N` (the just-landed write is included).
-// On every other event, the same read returns whatever the count is —
-// including `0` for a brand-new user on `app_opened` who has never added
-// a repo. That `0` is the canonical session-zero / pre-repo cohort signal,
-// not a sentinel and not "undefined."
-//
-// Failure mode: this module never throws. On any read error or
-// store-not-yet-initialized condition, `getCohortAtEmit` returns
-// `{ nth_repo_added: undefined }`. The schemas declare the field
-// `.optional()`, so an event with an undefined cohort still validates and
-// emits — it just lands without the cohort property. This preserves the
-// telemetry rule "must never crash the app."
+// Read current repo count at emit time, after repo additions land; zero identifies pre-repo sessions. Uninitialized/failed reads omit the optional cohort field so telemetry never blocks the app (onboarding-funnel-cohort-addendum.md).
 
 import type { Store } from '../persistence'
 
 let storeRef: Store | null = null
 
-// Session-scoped flag analogous to `appOpenedTrackedThisSession` in
-// `client.ts`: emit one debug breadcrumb per session if the classifier
-// has to fail soft, so missing cohort data has a corresponding log line
-// without flooding stderr.
+// Warn once per session so missing cohort data has evidence without per-event stderr noise.
 let warnedThisSession = false
 
 export function initCohortClassifier(store: Store): void {

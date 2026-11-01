@@ -5,10 +5,7 @@ import {
   resolveTerminalTabActivityStatus
 } from './terminal-tab-activity-status'
 
-// Why: #9040 — the tab-bar dot shares the sidebar's attribution gate, so Claude's
-// token-less spinner title must reach 'working' here too. TerminalTabActivityInput
-// narrows `tab` with a Pick; because launchAgent is optional, dropping it from that
-// Pick compiles cleanly and would silently revert this path alone.
+// Keep optional launchAgent in the resolver’s Pick so providerless spinners retain sidebar attribution.
 describe('#9040 terminal tab dot attributes spinner titles to the launched agent', () => {
   beforeEach(() => {
     resetTerminalTabActivityFlagsCacheForTest()

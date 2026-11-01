@@ -1,12 +1,14 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import type { useAppStore as AppStore } from '@/store'
+import type { SshRoutedBrowserPageGate as Gate } from './ssh-routed-browser-page-gate'
 
 const mocks = vi.hoisted(() => ({
   executionHostId: 'local' as string,
   prepare: vi.fn(),
-  destroyPersistentWebview: vi.fn()
+  destroyPersistentWebview: vi.fn(),
+  webviewRegistry: new Map<string, { getAttribute: (name: string) => string | null }>()
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
@@ -14,13 +16,14 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 }))
 
 vi.mock('../host-guest/webview-registry', () => ({
-  destroyPersistentWebview: mocks.destroyPersistentWebview
+  destroyPersistentWebview: mocks.destroyPersistentWebview,
+  webviewRegistry: mocks.webviewRegistry
 }))
 
-import { SshRoutedBrowserPageGate } from './ssh-routed-browser-page-gate'
+let useAppStore: typeof AppStore
+let SshRoutedBrowserPageGate: typeof Gate
 
 const PAGE_IDS = ['page-1', 'page-2'] as const
-const initialHostState = useAppStore.getState()
 
 const settle = () =>
   act(async () => {
@@ -28,7 +31,11 @@ const settle = () =>
   })
 
 describe('SshRoutedBrowserPageGate', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Verified routes outlive mounts at module scope; each test starts with a fresh store and no verified route.
+    vi.resetModules()
+    ;({ useAppStore } = await import('@/store'))
+    ;({ SshRoutedBrowserPageGate } = await import('./ssh-routed-browser-page-gate'))
     useAppStore.setState({
       sshConnectionStates: new Map([
         [
@@ -39,15 +46,13 @@ describe('SshRoutedBrowserPageGate', () => {
     })
     mocks.prepare.mockReset().mockResolvedValue({ partition: 'persist:orca-browser-v1-routed' })
     mocks.destroyPersistentWebview.mockReset()
+    mocks.webviewRegistry.clear()
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { browser: { prepareSshWorkspacePartition: mocks.prepare } }
     })
   })
-  afterEach(() => {
-    cleanup()
-    useAppStore.setState({ sshConnectionStates: initialHostState.sshConnectionStates })
-  })
+  afterEach(() => cleanup())
 
   it('renders children with no override for non-SSH workspaces without any prepare call', async () => {
     mocks.executionHostId = 'local'
@@ -76,6 +81,52 @@ describe('SshRoutedBrowserPageGate', () => {
     expect(mocks.prepare).toHaveBeenCalledWith({
       targetId: 'target-a',
       browserProfileId: 'session-x'
+    })
+  })
+
+  describe('remounting after the route was verified', () => {
+    const gate = () => (
+      <SshRoutedBrowserPageGate worktreeId="wt-1" sessionProfileId={null} pageIds={PAGE_IDS}>
+        {(partition) => <div data-testid="page">{String(partition)}</div>}
+      </SshRoutedBrowserPageGate>
+    )
+    beforeEach(async () => {
+      mocks.executionHostId = 'ssh:target-a'
+      render(gate())
+      await settle()
+      cleanup()
+      mocks.destroyPersistentWebview.mockClear()
+    })
+
+    const parkGuest = (pageId: string, partition: string): void => {
+      mocks.webviewRegistry.set(pageId, { getAttribute: () => partition })
+    }
+
+    it('keeps guests already on the routed partition instead of reloading them', async () => {
+      parkGuest('page-1', 'persist:orca-browser-v1-routed')
+      parkGuest('page-2', 'orca-doc-preview')
+      // Worktree switches and paint mounts remount the chrome; a preparing pass would destroy and reload the guest.
+      render(gate())
+      expect(screen.getByTestId('page').textContent).toBe('persist:orca-browser-v1-routed')
+      await settle()
+      expect(screen.getByTestId('page').textContent).toBe('persist:orca-browser-v1-routed')
+      expect(mocks.destroyPersistentWebview).not.toHaveBeenCalled()
+    })
+
+    it('destroys a parked guest that browsed with local egress meanwhile', () => {
+      // Routing was off when this page opened; another gate on the target has since re-verified the route.
+      parkGuest('page-1', 'persist:orca-browser-v1-routed')
+      parkGuest('page-2', 'persist:local-default')
+      render(gate())
+      expect(mocks.destroyPersistentWebview.mock.calls).toEqual([['page-2']])
+    })
+
+    it('shows the error card when main has retired the route since', async () => {
+      mocks.prepare.mockRejectedValue(new Error('browser_local_route_profile_unavailable'))
+      render(gate())
+      await settle()
+      expect(screen.queryByTestId('page')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
     })
   })
 
@@ -187,9 +238,7 @@ describe('SshRoutedBrowserPageGate', () => {
   })
 
   it('unmounts unrouted pages in the SAME render a target appears, and destroys their guests', async () => {
-    // Why (review P1-1): the routed decision lags state by one commit on an
-    // already-mounted instance; a stale 'unrouted' render would mount a
-    // local-egress webview behind the preparing card, and unmount only parks it.
+    // A stale unrouted render could create a local-egress guest behind the card; unmounting only parks it.
     mocks.executionHostId = 'local'
     mocks.prepare.mockResolvedValue({ partition: 'persist:orca-browser-v1-routed' })
     const view = render(

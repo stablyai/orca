@@ -1,13 +1,7 @@
-// One structured Codex session driven end to end over `agentSession.*`.
-//
-// Nothing here is stubbed except the Codex child itself: the RPC dispatcher, the
-// zod schemas, the capability gate, the durable record store, the journal, the
-// lease, the Codex adapter, and the event-to-journal translation are all the ones
-// that ship. The fake app-server answers the same JSON-RPC calls the real one
-// does and pushes the same notifications and blocking requests back.
+// Exercise shipped RPC, schemas, capability gate, stores, lease and adapter; only the Codex app-server child is fake.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type * as JournalStoreFactory from '../native-chat/agent-session-journal/journal-store-factory'
 import {
@@ -21,7 +15,7 @@ import {
   TURN,
   type StructuredCodexRpcHarness
 } from './structured-codex-session-rpc-test-harness'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const { journalOpenHold } = vi.hoisted(() => {
   const journalOpenHold: { next: { entered: () => void; released: Promise<void> } | null } = {
@@ -90,7 +84,6 @@ describe('a structured codex session over agentSession.*', () => {
     const turnStarts = () =>
       harness.codex.live().calls.filter((entry) => entry.method === 'turn/start')
     await harness.ok('agentSession.send', params)
-    // Accepted first; the delivery loop hands it over once.
     await vi.waitFor(() => expect(turnStarts()).toHaveLength(1))
     const replay = await harness.call('agentSession.send', params)
 
@@ -122,16 +115,12 @@ describe('a structured codex session over agentSession.*', () => {
       delta: 'Buffered while the journal opens.'
     })
 
-    let stopped = false
-    const stopping = stopStructuredAgentSessionRuntime().then(() => {
-      stopped = true
-    })
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    const waitedForJournalBind = !stopped
     openGate.resolve()
     await creating
-    await stopping
-    expect(waitedForJournalBind).toBe(true)
+    await vi.waitFor(() =>
+      expect(harness.codex.live().calls.some((entry) => entry.method === 'thread/start')).toBe(true)
+    )
+    await stopStructuredAgentSessionRuntime()
 
     const identity = {
       sessionId: SESSION,

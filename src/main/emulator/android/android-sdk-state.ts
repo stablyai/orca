@@ -1,13 +1,9 @@
 import { discoverAndroidSdkFromHost } from './android-sdk-host-discovery'
 import { EmulatorError } from '../emulator-errors'
+import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 
-const SDK_MISSING = 'Android SDK not found. Install Android Studio and set ANDROID_HOME.'
-
-// Resolves the backend's Android SDK. An injected SDK (tests, or an explicit
-// null) is fixed; for the real host it re-runs discovery on every call so a
-// newly-installed SDK or a changed configured path takes effect without a
-// restart. Host discovery is only a few existsSync probes, so this is cheap.
+// Rediscover host SDKs per call so installs and settings changes work without restarting.
 export class AndroidSdkState {
   constructor(
     private readonly injected: boolean,
@@ -21,7 +17,7 @@ export class AndroidSdkState {
   require(): AndroidSdkPaths {
     const sdk = this.resolve()
     if (!sdk) {
-      throw new EmulatorError('emulator_error', SDK_MISSING)
+      throw new EmulatorError('emulator_error', emulatorFailureText('androidSdkMissing'))
     }
     return sdk
   }

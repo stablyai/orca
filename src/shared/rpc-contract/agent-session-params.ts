@@ -2,16 +2,18 @@ import { z } from 'zod'
 import { isValidTerminalTabId } from '../terminal-tab-id'
 import {
   RESUMABLE_TUI_AGENTS,
-  getAgentResumeArgv,
   hasUnsafeProviderSessionIdChars
-} from '../agent-session-resume'
-import { parseAgentSessionOperationTimestamp } from '../agent-session-host-authority'
-import type {
-  RuntimeCreateAgentSessionRequest,
-  RuntimeEnsureAgentSessionRequest
-} from '../agent-session-host-authority'
+} from '../agent-session/lifecycle/agent-session-resume'
+import { getAgentResumeArgv } from '../agent-resume-argv'
+import { AGENT_EFFORT_LEVEL } from '../agent-effort-level'
+import {
+  parseAgentSessionOperationTimestamp,
+  type RuntimeCreateAgentSessionRequest,
+  type RuntimeEnsureAgentSessionRequest
+} from '../agent-session/agent-session-host-authority'
 import { isTuiAgent } from '../tui-agent-config'
 import { RESTORE_SPAWN_INTENTS } from '../host-spawn-admission'
+import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
 
 export const MAX_WORKTREE_SELECTOR_LENGTH = 32_768
 
@@ -109,7 +111,8 @@ export const ProviderSession = z
           Buffer.byteLength(value, 'utf8') <= MAX_TRANSCRIPT_PATH_BYTES,
         'Invalid transcript path'
       )
-      .optional()
+      .optional(),
+    effort: z.string().regex(AGENT_EFFORT_LEVEL, 'Invalid effort level').optional()
   })
   .strict()
 
@@ -128,6 +131,7 @@ export const AutomaticEnsure = z
 export const ExplicitEnsure = z
   .object({
     kind: z.literal('explicit'),
+    resumeOrigin: z.literal('saved').optional(),
     worktree: WorktreeSelector,
     agent: z.enum(RESUMABLE_TUI_AGENTS),
     providerSession: ProviderSession,
@@ -137,7 +141,9 @@ export const ExplicitEnsure = z
     launchPreferences: LaunchPreferences.optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),
-    spawnIntent: SpawnIntentParam.optional()
+    spawnIntent: SpawnIntentParam.optional(),
+    /** Sent only to hosts advertising `agent-session.account-env.v1`; outside replay identity. */
+    accountEnv: AgentLaunchAccountEnv.optional()
   })
   .strict()
   .superRefine((value, context) => {
@@ -184,7 +190,9 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),
-    viewMode: z.enum(['terminal', 'chat']).optional()
+    viewMode: z.enum(['terminal', 'chat']).optional(),
+    /** Sent only to hosts advertising `agent-session.account-env.v1`; outside the fingerprint. */
+    accountEnv: AgentLaunchAccountEnv.optional()
   })
   .strict()
   .superRefine((value, context) => {

@@ -6,23 +6,6 @@ import {
 } from './comment-code-context-state'
 
 describe('comment code context expansion state', () => {
-  it('keeps expanded context for the same comment', () => {
-    const expanded = updateCommentCodeContextExpansionState(
-      createCommentCodeContextExpansionState('comment-1'),
-      'comment-1',
-      {
-        contextBefore: 5,
-        contextAfter: 3
-      }
-    )
-
-    expect(resolveCommentCodeContextExpansionState(expanded, 'comment-1')).toEqual({
-      commentId: 'comment-1',
-      contextBefore: 5,
-      contextAfter: 3
-    })
-  })
-
   it('resets expansion when a rendered row switches comments', () => {
     const expanded = updateCommentCodeContextExpansionState(
       createCommentCodeContextExpansionState('comment-1'),

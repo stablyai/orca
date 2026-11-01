@@ -4,41 +4,36 @@ import {
   MAILBOX_POINTER_WRITE_ATTEMPTED
 } from './db/messages/mailbox-pointer-enter-state'
 import {
-  shouldReleaseOrchestrationPointer,
-  type OrchestrationMessageWaiter
-} from './mailbox-pointer-eligibility'
-import type { OrchestrationMailboxLeaf, OrchestrationMailboxOwner } from './mailbox-owner'
+  isMailboxTerminalTakingInput,
+  type OrchestrationMailboxOwner,
+  type OrchestrationMailboxTerminal
+} from './mailbox-owner'
 import type {
   OrchestrationMailboxDeliveryFlight,
   OrchestrationMailboxPointerState
 } from './mailbox-pointer-state'
 import type { WriteSettlement } from '../../../shared/pty-write-settlement'
 
-type PointerSubmitDependencies<TWaiter extends OrchestrationMessageWaiter> = {
+type PointerSubmitDependencies = {
   mailboxOwner: OrchestrationMailboxOwner
   state: OrchestrationMailboxPointerState
   getDb: () => OrchestrationDb | null
-  resolveSubmitTarget: (
-    leaf: OrchestrationMailboxLeaf,
-    ptyId: string
-  ) => OrchestrationMailboxPointerSubmitTarget | null
-  getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
+  resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  isPtyAwaitingUserInput: (ptyId: string) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
 
 export type OrchestrationMailboxPointerSubmitTarget = {
-  leaf: OrchestrationMailboxLeaf
-  terminalHandle: string
+  terminal: OrchestrationMailboxTerminal
   processIncarnation: string
 }
 
-export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationMessageWaiter>(
-  deps: PointerSubmitDependencies<TWaiter>,
+export function submitOrchestrationMailboxPointer(
+  deps: PointerSubmitDependencies,
   input: {
-    leaf: OrchestrationMailboxLeaf
     mailboxHandle: string
     messages: readonly { id: string; type: string }[]
     newestSequence: number
@@ -71,61 +66,46 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
         finalizeReservation = false
         return
       }
-      const target = deps.resolveSubmitTarget(input.leaf, input.ptyId)
-      const exactTarget =
-        target?.terminalHandle === input.expectedTarget.terminalHandle &&
+      const target = deps.resolveSubmitTarget(input.ptyId)
+      const terminal =
+        target?.terminal.handle === input.expectedTarget.terminal.handle &&
         target.processIncarnation === input.expectedTarget.processIncarnation
-          ? target
+          ? target.terminal
           : null
       const sameMailbox =
-        exactTarget &&
-        deps.mailboxOwner.resolve(exactTarget.leaf, undefined, {
-          terminalHandle: exactTarget.terminalHandle
-        }) === input.mailboxHandle
-      const queueSafe =
-        exactTarget?.leaf.lastAgentStatusObservedLive === true &&
-        (exactTarget.leaf.lastAgentStatus === 'idle' ||
-          exactTarget.leaf.lastAgentStatus === 'working')
-      if (!exactTarget?.leaf.writable || !sameMailbox) {
+        terminal && deps.mailboxOwner.resolve(terminal, input.mailboxHandle) === input.mailboxHandle
+      const queueSafe = !!terminal && isMailboxTerminalTakingInput(terminal)
+      if (!terminal || !sameMailbox) {
         clearAndRedrive = true
       } else if (
-        exactTarget.leaf.lastAgentStatusObservedLive &&
-        exactTarget.leaf.lastAgentStatus === null
+        (terminal.lastAgentStatusObservedLive && terminal.lastAgentStatus === null) ||
+        deps.isPtyAwaitingUserInput(input.ptyId)
       ) {
-        // A neutral title can outlive the foreground check; no Enter has been attempted yet.
+        // A neutral title can outlive the foreground check, and an open dialog would take the
+        // Enter as its answer; no Enter has been attempted yet.
         deps.state.deferFlightUntilIdle(input.ptyId)
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
         deferredUntilIdle = true
       } else if (!queueSafe) {
         releaseWithoutRedrive = true
       } else {
-        if (
-          shouldReleaseOrchestrationPointer(
-            deps.getDb(),
-            input.mailboxHandle,
-            input.messages,
-            deps.getMessageWaiters(input.mailboxHandle)
-          )
-        ) {
-          releaseWithoutRedrive = true
-        } else {
-          preserveAmbiguousDelivery = true
-          const db = deps.getDb()
-          if (!db?.markMailboxPointerEnterAttempted(messageIds, reservationTarget)) {
-            return
-          }
+        preserveAmbiguousDelivery = true
+        const db = deps.getDb()
+        if (db?.markMailboxPointerEnterAttempted(messageIds, reservationTarget)) {
           expectedPhase = MAILBOX_POINTER_ENTER_ATTEMPTED
-          const enterSettlement = await deps.writePty(input.ptyId, '\r')
-          submitted = enterSettlement.outcome === 'accepted'
-          if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
-            finalizeReservation = false
-            return
-          }
-          // An unverifiable Enter stays at ENTER_ATTEMPTED: neither settling it as delivered
-          // nor rolling it back to a state that would send a second Enter is provable here.
-          if (enterSettlement.outcome === 'refused') {
-            releaseWithoutRedrive = true
-          }
+        } else if (db?.areUnreadMessages(input.mailboxHandle, messageIds) !== false) {
+          // Unread mail lost its claim to an earlier Enter or a release; read mail still gets its Enter.
+          return
+        }
+        const enterSettlement = await deps.writePty(input.ptyId, '\r')
+        submitted = enterSettlement.outcome === 'accepted'
+        if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
+          finalizeReservation = false
+          return
+        }
+        // Unverifiable Enter stays attempted: neither delivery nor safe resend is proven.
+        if (enterSettlement.outcome === 'refused') {
+          releaseWithoutRedrive = true
         }
       }
     })

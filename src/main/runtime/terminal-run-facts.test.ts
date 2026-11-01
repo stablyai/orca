@@ -46,6 +46,32 @@ describe('terminal run facts', () => {
     expect(facts.read('pty-1', 'inc-1')).toEqual({ freshSpawn: false, firstUserInputAt: null })
   })
 
+  it('dates only the processes main started, across a re-registration of the same one', () => {
+    const facts = new TerminalRunFactsRegister()
+    facts.recordSpawnCommit({
+      id: 'pty-1',
+      incarnationId: 'inc-1',
+      coldRestore: {},
+      spawnRequestedAt: 100
+    })
+    facts.recordSpawnCommit({
+      id: 'pty-1',
+      incarnationId: 'inc-1',
+      isReattach: true,
+      spawnRequestedAt: 200
+    })
+    facts.recordSpawnCommit({
+      id: 'pty-2',
+      incarnationId: 'inc-9',
+      isReattach: true,
+      spawnRequestedAt: 300
+    })
+
+    expect(facts.readProcessStartedAt('pty-1', 'inc-1')).toBe(100)
+    expect(facts.readProcessStartedAt('pty-1', 'inc-0')).toBeNull()
+    expect(facts.readProcessStartedAt('pty-2', 'inc-9')).toBeNull()
+  })
+
   it('never reads a reattached process as fresh', () => {
     const facts = new TerminalRunFactsRegister()
 

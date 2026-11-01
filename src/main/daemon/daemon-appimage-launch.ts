@@ -1,19 +1,10 @@
-/**
- * Launching the daemon through the AppImage file itself (#18200).
- *
- * Run from `$APPDIR/orca-ide`, the daemon executes out of the parent's FUSE mount, which the
- * AppImage runtime tears down when the window process exits or the login session ends; the
- * surviving daemon then SIGBUSes on its next cold page. Exec'ing `$APPIMAGE` instead gives the
- * daemon its own runtime and mount, created inside the daemon's own scope and released when the
- * daemon exits. The new mount's path is unknown to the parent, so a `-e` bootstrap resolves the
- * entry against the `APPDIR` the child runtime exports.
- */
+// Launch APPIMAGE to give the daemon its own FUSE mount; the window's mount dies with its runtime.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { relativePathInsideRoot } from '../../shared/cross-platform-path'
 import { resolveAppImageRuntimeIdentity } from '../appimage-runtime-identity'
 import type { DurableDaemonScopeCommand } from './daemon-cgroup-scope'
-import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
+import { envWithoutAppImageRuntime } from '../pty/appimage-terminal-env'
 
 export type AppImageDaemonLaunch = {
   appImagePath: string
@@ -37,7 +28,7 @@ function decodeMountInfoPath(value: string): string {
   )
 }
 
-function isFuseMountPoint(mountInfo: string, mountPoint: string): boolean {
+export function isFuseMountPoint(mountInfo: string, mountPoint: string): boolean {
   return mountInfo.split('\n').some((line) => {
     const [mountFields, fsFields] = line.split(' - ')
     const point = mountFields?.split(' ')[4]
@@ -49,8 +40,7 @@ function isFuseMountPoint(mountInfo: string, mountPoint: string): boolean {
   })
 }
 
-/** Null keeps the in-mount launch: not a validated AppImage, or the payload is not on a FUSE
- *  mount (extract-and-run, where a second run would share and delete the same extraction dir). */
+/** Null outside FUSE AppImages: extract-and-run launches may share an extraction directory. */
 export function resolveAppImageDaemonLaunch({
   entryPath,
   appPath,
@@ -67,7 +57,7 @@ export function resolveAppImageDaemonLaunch({
   if (!entryPathInAppDir || !appPathInAppDir) {
     return null
   }
-  // Why after the path checks: identity validation does several synchronous file reads.
+  // Defer synchronous identity reads until cheap path checks pass.
   const identity = resolveAppImageRuntimeIdentity({ environment })
   if (!identity) {
     return null
@@ -82,11 +72,7 @@ export function resolveAppImageDaemonLaunch({
   return { appImagePath: identity.appImagePath, entryPathInAppDir, appPathInAppDir, appVersion }
 }
 
-/**
- * The `--entry-path` identity an own-mount daemon records. Why not the mount path: each launch
- * mounts at a fresh random dir, so the next window could never match a surviving daemon. A new
- * release at the same `$APPIMAGE` still gets replaced via the recorded `--app-version`.
- */
+/** Use APPIMAGE plus the relative entry: random mount paths cannot identify surviving daemons. */
 export function appImageDaemonIdentityPath(launch: AppImageDaemonLaunch): string {
   return join(launch.appImagePath, launch.entryPathInAppDir)
 }
@@ -96,7 +82,7 @@ function buildBootstrap(launch: AppImageDaemonLaunch): string {
   return [
     `const {join}=require('path')`,
     `const v=require(join(process.env.APPDIR,${JSON.stringify(launch.appPathInAppDir)},'package.json')).version`,
-    // Why: the file at $APPIMAGE may already be a different release (manual replace, updater).
+    // The file at APPIMAGE may already contain an updated release.
     `if(v!==${version}){console.error('[daemon] AppImage is '+v+', expected '+${version});process.exit(1)}`,
     `const e=join(process.env.APPDIR,${JSON.stringify(launch.entryPathInAppDir)})`,
     `process.argv.splice(1,0,e)`,
@@ -104,23 +90,16 @@ function buildBootstrap(launch: AppImageDaemonLaunch): string {
   ].join(';')
 }
 
-/** The program/args/env replacing `execPath entry ...scriptArgs` for an AppImage launch. */
 export function buildAppImageDaemonCommand(
   launch: AppImageDaemonLaunch,
   scriptArgs: string[],
   env: NodeJS.ProcessEnv
 ): DurableDaemonScopeCommand {
-  const childEnv: Record<string, string> = {}
-  for (const [key, value] of Object.entries(env)) {
-    if (value !== undefined) {
-      childEnv[key] = value
-    }
-  }
-  // Why: AppRun prepends the new mount but keeps inherited entries, so drop the parent's mount.
-  removeAppImageRuntimeEnv(childEnv)
+  // AppRun prepends the new mount but retains old PATH and loader entries unless scrubbed.
+  const childEnv = envWithoutAppImageRuntime(env)
   return {
     command: launch.appImagePath,
-    // Why trailing --no-sandbox: without it AppRun injects one before the script, which Node rejects.
+    // Suppress AppRun's injected Node-incompatible flag by placing --no-sandbox after the script.
     args: ['-e', buildBootstrap(launch), '--', ...scriptArgs, '--no-sandbox'],
     env: childEnv
   }

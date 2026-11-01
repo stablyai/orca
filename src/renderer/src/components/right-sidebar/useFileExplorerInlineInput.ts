@@ -9,7 +9,7 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-client'
+import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-mutation-client'
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
@@ -115,7 +115,6 @@ export function useFileExplorerInlineInput({
         return
       }
       const name = value.trim()
-      // No-op if the user submitted the same name (e.g. blur without editing)
       if (inlineInput.type === 'rename' && name === inlineInput.existingName) {
         setInlineInput(null)
         return
@@ -228,7 +227,6 @@ export function useFileExplorerInlineInput({
               )
             }
           } catch (err) {
-            // Refresh the directory even on failure so the tree stays consistent
             await refreshDir(inlineInput.parentPath)
             toast.error(extractIpcErrorMessage(err, `Failed to create '${name}'.`))
           }

@@ -26,7 +26,6 @@ function forkTarget(overrides: Partial<GitPushTarget> = {}): GitPushTarget {
   }
 }
 
-// Why: cleanup only reads meta.pushTarget, so the rest of WorktreeMeta is irrelevant.
 function metaWith(pushTarget: GitPushTarget | undefined): WorktreeMeta {
   return { pushTarget } as unknown as WorktreeMeta
 }
@@ -93,9 +92,7 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
       exec
     )
     expect(removeCalls(exec)).toEqual([])
-    // Why: the store flag alone can't rule out ownership -- on-demand
-    // materialization (#17828) never sets it, so cleanup also probes the
-    // repo-local `orca-created` config provenance before bailing.
+    // Deferred materialization can omit store ownership; cleanup must also inspect Git config provenance.
     expect(exec).toHaveBeenCalledWith(
       ['config', '--get', `remote.${FORK_REMOTE}.orca-created`],
       REPO_PATH
@@ -233,8 +230,6 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
   })
 
   it('removes a remote owned only via git-config provenance (lazily materialized, #17828)', async () => {
-    // Why: on-demand materialization never sets the store's `remoteCreated`
-    // flag, so ownership must also be provable from `remote.<name>.orca-created`.
     const exec = makeExec({ branchConfig: 'true' })
     await cleanupUnusedWorktreePushTargetRemoteWithExec(
       REPO_PATH,
@@ -286,7 +281,7 @@ describe('hasBranchConfigUsingRemote', () => {
         return { stdout: `branch.contributor/fix.remote ${FORK_REMOTE}`, stderr: '' }
       }
       if (args[0] === 'for-each-ref') {
-        return { stdout: 'main\n', stderr: '' } // contributor/fix no longer exists
+        return { stdout: 'main\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })

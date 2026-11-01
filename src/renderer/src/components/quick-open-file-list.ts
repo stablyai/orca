@@ -1,4 +1,4 @@
-import { getRuntimeFileListTarget } from './quick-open-file-list-target'
+import { getRuntimeFileListTarget, useKeyedExcludeRequest } from './quick-open-file-list-target'
 export {
   getRuntimeFileListTarget,
   getNestedWorktreeExcludeRequest
@@ -12,7 +12,6 @@ import {
   clearQuickOpenRecentCache,
   useQuickOpenRecentCache
 } from './quick-open-recent-validation'
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: quick-open file lists are fetched over local or SSH runtime IPC, so loading/error/results track the request lifecycle. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 export { isNestedWorktreePath, getNestedWorktreeExcludePaths } from './quick-open-nested-worktrees'
@@ -23,7 +22,7 @@ import {
   cancelRuntimeFileList,
   listRuntimeFiles,
   searchRuntimeFilePaths
-} from '@/runtime/runtime-file-client'
+} from '@/runtime/runtime-file-search-client'
 import { debounceRuntimeFileRequest } from '@/runtime/runtime-file-request-debounce'
 import { splitFileNameFilterTokens } from '../../../shared/file-name-filter-tokens'
 import {
@@ -94,7 +93,7 @@ export function useRuntimeFileListForWorktree({
     () => getRuntimeFileListTarget(worktreeId, worktreePath, repoWorktrees),
     [repoWorktrees, worktreeId, worktreePath]
   )
-  const { excludeRequest } = target
+  const excludeRequest = useKeyedExcludeRequest(target.excludeRequest)
 
   const operationOwnerState = useAppStore(
     useShallow((state) => ({
@@ -146,16 +145,14 @@ export function useRuntimeFileListForWorktree({
   const eligibilityKey = `${listingKey}\n${recentKey}`
   const eligibleRecentCache = useQuickOpenRecentCache(enabled, eligibilityKey)
   const requestKey = `${listingKey}\n${recentKey}${usesRuntimePathSearch ? `\n${remoteQuery}` : ''}${hostNameFilter ? `\nname-filter\n${hostNameFilter}` : ''}`
-  // Why: the render between a request change and the effect that starts the next request must
-  // not show the previous listing, so a listing is only visible for the request that produced it.
+  // Hide results immediately on request-key changes, before passive effects start the replacement request.
   const currentListing = listing.requestKey === requestKey ? listing : NO_LISTING
   const startsRequest =
     enabled &&
     target.canList &&
     operationRouteAvailable &&
     !(usesRuntimePathSearch && remoteQueryTooLarge)
-  // Why: in that same gap the effect has not flipped loading yet, so fall back to whether this
-  // render is going to start a request — otherwise the empty listing reads as "no results".
+  // In the same render/effect gap, report upcoming-request loading instead of a false no-results state.
   const loading = loadingRequest.requestKey === requestKey ? loadingRequest.loading : startsRequest
 
   useEffect(() => {
@@ -209,9 +206,7 @@ export function useRuntimeFileListForWorktree({
         ...(nameFilter ? { nameFilter } : {}),
         signal: requestAbortController.signal
       }).then((files) => ({
-        // #12547: naming the cap is what makes a full page readable as "there is more". Reporting
-        // false unconditionally is what made the truncation silent — the host bounds the scan to
-        // the cap it is given, so a full page means there are more paths behind it.
+        // A full caller-capped page may have more paths; surface possible truncation instead of silently calling it complete (#12547).
         files,
         truncated: files.length >= QUICK_OPEN_LISTING_MAX_RESULTS
       }))
@@ -293,10 +288,7 @@ export function useRuntimeFileListForWorktree({
     return () => {
       cancelled = true
       requestAbortController.abort()
-      // Why #7721: switching workspaces (or closing the palette) must abort
-      // the previous full-tree scan host- and relay-side. Over SSH, abandoned
-      // scans otherwise stack up and starve fs.readDir/fs.stat past their
-      // 30s timeout ("Could not load files for this workspace").
+      // Abort host/relay scans on close/workspace switch; abandoned SSH scans would starve filesystem RPCs past their 30s timeout (#7721).
       clearQuickOpenRecentCache(eligibleRecentCache, true)
       cancelRuntimeFileList(requestContext, requestToken)
     }

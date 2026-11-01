@@ -1,5 +1,5 @@
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import type { IPtyProvider } from '../../../providers/types'
+import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership } from './ownership-state'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
@@ -12,15 +12,10 @@ import {
 } from '../../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
 
-// ─── Provider Registry ──────────────────────────────────────────────
-// Routes PTY operations by the execution host that runs the PTY; this machine is `local`.
-
 export let localProvider: IPtyProvider = new LocalPtyProvider()
 let colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null
 
-// Why push to every owner: each process that owns PTYs (in-process or daemon) answers
-// OSC 10/11 itself, so a theme change must reach it before its next query, not at spawn.
-// Why never push "unknown": a daemon outlives the app and keeps the last run's theme.
+// Push theme updates to every PTY owner before its next OSC query; never erase a surviving daemon's theme with unknown.
 function pushColorQueryReplyColors(provider: IPtyProvider): void {
   if (!colorQueryReplyColors) {
     return
@@ -33,7 +28,6 @@ function pushColorQueryReplyColors(provider: IPtyProvider): void {
 }
 
 export function publishColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
-  // Why: a re-install republishes unchanged colours; that must not re-notify every daemon.
   if (colorQueryReplyColorsEqual(colorQueryReplyColors, colors)) {
     return
   }
@@ -61,7 +55,7 @@ function ptyHostNotDispatchableMessage(hostId: ResolvedPtyHost): string {
   if (connectionId === null) {
     return `PTY host "${hostId}" is not dispatchable from this process`
   }
-  // Why: this surfaces verbatim in `terminal create`; keep the prefix — the renderer matches it.
+  // Preserve this renderer-matched reconnect error prefix.
   return (
     `No PTY provider for connection "${connectionId}": the SSH relay for this host is not attached ` +
     '(reconnecting or disconnected). Wait for the host to reconnect, or use Reconnect on the SSH target.'
@@ -92,17 +86,15 @@ export function resolvePtyExecutionHost(ptyId: string): ResolvedPtyHost {
   if (owner !== undefined) {
     return owner
   }
-  // Why: disconnected SSH PTYs retain their encoded owner and must never fall through to the HUB-local provider.
+  // Disconnected SSH IDs retain their host and must never reach local fallback.
   const ssh = parseAppSshPtyId(ptyId)
   if (ssh) {
     return toSshExecutionHostId(ssh.connectionId)
   }
-  // Why: local PTY ids are bare (daemon-restored ids arrive before any ownership is recorded), so
-  // only an id that names no host may run here; `remote:` and malformed `ssh:` ids never do.
+  // Bare restored IDs may be local before ownership hydration; encoded remote/malformed SSH IDs may not.
   return getPtyExecutionHost(ptyId) ?? LOCAL_EXECUTION_HOST_ID
 }
 
-/** The SSH target a PTY runs on, or null for any other host. */
 export function getPtySshConnectionId(ptyId: string): string | null {
   const hostId = resolvePtyExecutionHost(ptyId)
   return hostId === 'foreign' ? null : getSshTargetIdForExecutionHost(hostId)
@@ -155,15 +147,12 @@ export function closeStartupQueryAuthorityForPty(ptyId: string): void {
   }
 }
 
-/** Get the installed PTY provider (for direct access in tests/runtime).
- *  After daemon init this may be a DaemonPtyAdapter/DaemonPtyRouter, not LocalPtyProvider;
- *  callers needing LocalPtyProvider-specific methods must type-narrow or import the class. */
+/** Daemon startup can replace LocalPtyProvider; narrow before using in-process-only methods. */
 export function getLocalPtyProvider(): IPtyProvider {
   return localProvider
 }
 
-/** Replace the local PTY provider with a daemon-backed one.
- *  Call before registerPtyHandlers so the IPC layer routes through the daemon. */
+/** Install before handler registration so PTY operations use the new provider. */
 export function setLocalPtyProvider(provider: IPtyProvider): void {
   localProvider = provider
   pushColorQueryReplyColors(provider)

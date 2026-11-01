@@ -4,6 +4,7 @@ import { getSecretStore } from '../../shared/secret-store'
 import { writeCredentialFileAtomic } from '../integration-credential-file'
 import type { AntigravityAccountSummary } from '../../shared/antigravity-account-types'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
+import { readPrivateWindowsFile } from '../../shared/secure-path-windows-acl'
 
 export type StoredAntigravityAccount = AntigravityAccountSummary & { credentials: string }
 export type AntigravityAccountVault = {
@@ -44,7 +45,10 @@ function requireProtection(): void {
   }
 }
 
-export function createEncryptedAntigravityAccountStore(path: string): AntigravityAccountStore {
+export function createEncryptedAntigravityAccountStore(
+  path: string,
+  parseCredential = parseAntigravityNativeCredential
+): AntigravityAccountStore {
   return {
     read() {
       if (!existsSync(path)) {
@@ -60,7 +64,14 @@ export function createEncryptedAntigravityAccountStore(path: string): Antigravit
         ) {
           throw new Error('unsafe vault')
         }
-        const value: unknown = JSON.parse(getSecretStore().decryptString(readFileSync(path)))
+        const raw =
+          process.platform === 'win32'
+            ? readPrivateWindowsFile(path, MAX_VAULT_BYTES)
+            : readFileSync(path)
+        if (!raw) {
+          throw new Error('vault disappeared')
+        }
+        const value: unknown = JSON.parse(getSecretStore().decryptString(raw))
         if (
           !isRecord(value) ||
           !Array.isArray(value.accounts) ||
@@ -77,10 +88,11 @@ export function createEncryptedAntigravityAccountStore(path: string): Antigravit
           throw new Error('invalid selection')
         }
         for (const account of value.accounts) {
-          const credential = parseAntigravityNativeCredential(account.credentials)
+          const credential = parseCredential(account.credentials)
+          // agy refreshes drop the id_token, so a saved account may hold a credential without one.
           if (
             credential.authMethod !== account.authMethod ||
-            credential.identity?.subject !== account.subject
+            (credential.identity !== null && credential.identity.subject !== account.subject)
           ) {
             throw new Error('inconsistent identity')
           }
@@ -100,7 +112,7 @@ export function createEncryptedAntigravityAccountStore(path: string): Antigravit
         if (encrypted.length > MAX_VAULT_BYTES) {
           throw new Error('vault exceeds readable size')
         }
-        writeCredentialFileAtomic(path, encrypted)
+        writeCredentialFileAtomic(path, encrypted, undefined, true)
         if (process.platform !== 'win32' && (statSync(path).mode & 0o077) !== 0) {
           throw new Error('unsafe permissions')
         }

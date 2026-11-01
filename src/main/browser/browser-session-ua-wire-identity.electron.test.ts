@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { chromium } from 'playwright'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
 import {
   BrowserSessionUaCdpCollector,
@@ -20,6 +20,19 @@ import {
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
+let processIdentityModulePath: string
+let exceptionModulePath: string
+
+beforeAll(async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-wire-identity-modules-'))
+  fixtureRoots.push(root)
+  processIdentityModulePath = join(root, 'browser-process-user-agent.cjs')
+  exceptionModulePath = join(root, 'browser-session-ua.cjs')
+  await Promise.all([
+    buildModule('src/main/browser/browser-process-user-agent.ts', processIdentityModulePath),
+    buildModule('src/main/browser/browser-session-ua.ts', exceptionModulePath)
+  ])
+})
 
 afterAll(() => {
   for (const root of fixtureRoots) {
@@ -90,9 +103,6 @@ describe('browser session wire identity under Electron', () => {
     expect(result.receipts.some(({ userAgent }) => /Firefox\//.test(userAgent ?? ''))).toBe(false)
   }, 40_000)
 
-  // Viewport emulation is a per-target CDP override. It reaches the emulated target and nothing
-  // else, so every context must report on the wire the same identity its own JavaScript reports —
-  // a document that fetches as mobile and a worker that fetches as whatever it says it is.
   it('emulates the targeted tab and leaves every other context self-consistent', async () => {
     const result = await runProbe('mobile')
     assertCoverage(result)
@@ -114,9 +124,7 @@ describe('browser session wire identity under Electron', () => {
     expect(identityForContext(result.identities, 'document').userAgent).toBe(result.mobileUserAgent)
     expect(identityForContext(result.identities, 'blob').userAgent).toBe(result.mobileUserAgent)
 
-    // A per-target override cannot reach a worker, so the worker stays on the session identity in
-    // JavaScript. Its requests must leave on that same identity rather than borrowing the preset
-    // of whichever tab happened to start it.
+    // Shared/service workers retain session identity without a guest-specific override.
     for (const [context, paths] of [
       ['shared-worker', ['/shared-worker-fetch-a', '/shared-worker-fetch-b']],
       ['service-worker', ['/service-worker-fetch']]
@@ -131,11 +139,6 @@ describe('browser session wire identity under Electron', () => {
     expect(identityForContext(result.identities, 'popup').userAgent).toBe(result.cleanUserAgent)
   }, 40_000)
 
-  // The leak this closes: with one tab emulated mobile and a desktop peer sharing the session, the
-  // shared worker reported desktop in JavaScript while its fetches left as mobile — and the peer's
-  // own worker traffic inherited a preset that peer never had. Closing the emulated tab silently
-  // reverted it. A single context was internally inconsistent, which is worse than two contexts
-  // that disagree but are each coherent.
   it('leaves a desktop peer and the shared worker untouched by another tab emulation', async () => {
     const result = await runProbe('mixed-mobile')
     assertCoverage(result)
@@ -145,7 +148,6 @@ describe('browser session wire identity under Electron', () => {
     )
     expect(userAgentForPath(result.receipts, '/desktop-peer')).toBe(result.cleanUserAgent)
 
-    // Both shared workers report clean in JavaScript, so both must fetch as clean.
     expect(
       result.identities
         .filter(({ context }) => context === 'shared-worker')
@@ -180,12 +182,6 @@ describe('browser session wire identity under Electron', () => {
 async function runProbe(arm: ProbeArm): Promise<ProbeResult> {
   const root = mkdtempSync(join(tmpdir(), `orca-wire-identity-${arm}-`))
   fixtureRoots.push(root)
-  const processIdentityModulePath = join(root, 'browser-process-user-agent.cjs')
-  const exceptionModulePath = join(root, 'browser-session-ua.cjs')
-  await Promise.all([
-    buildModule('src/main/browser/browser-process-user-agent.ts', processIdentityModulePath),
-    buildModule('src/main/browser/browser-session-ua.ts', exceptionModulePath)
-  ])
   const server = await startBrowserSessionUaWireProbeServer()
   const resultPath = join(root, 'result.json')
   const barrierPath = join(root, 'continue')
@@ -351,9 +347,7 @@ async function run() {
           callback({ requestHeaders: details.requestHeaders })
           return
         }
-        // Models the viewport-emulation rule: only the emulated target's own requests are rewritten.
-        // A worker request carries no webContentsId, so it keeps the session identity here — which is
-        // the identity the worker's own JavaScript reports.
+        // Shared/service workers lack a guest id and keep their session identity.
         if (details.webContentsId !== mainWebContentsId) {
           callback({ requestHeaders: details.requestHeaders })
           return

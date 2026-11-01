@@ -26,12 +26,10 @@ describe('useTabStripPointerActivation', () => {
     const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
 
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10), dragListener))
-    // Why: the dnd-kit gesture must start on pointerdown even though activation
-    // is deferred.
+    // Start dnd-kit on pointerdown while deferring activation until release.
     expect(dragListener).toHaveBeenCalledTimes(1)
     expect(onActivate).not.toHaveBeenCalled()
 
-    // Release within the threshold -> click -> activate.
     firePointer('pointerup', 12, 11)
     expect(onActivate).toHaveBeenCalledTimes(1)
   })
@@ -51,8 +49,7 @@ describe('useTabStripPointerActivation', () => {
     const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
 
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
-    // Why: packaged Chromium can deliver one stale/coalesced move immediately
-    // after pointerdown; the release position is the click/drag authority.
+    // A stale/coalesced first move cannot override the actual release position.
     firePointer('pointermove', 200, 200)
     firePointer('pointerup', 11, 11)
 
@@ -79,13 +76,11 @@ describe('useTabStripPointerActivation', () => {
       { initialProps: { disabled: false } }
     )
 
-    // Right-click: ignored.
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10, 2), dragListener))
     firePointer('pointerup', 10, 10)
     expect(onActivate).not.toHaveBeenCalled()
     expect(dragListener).not.toHaveBeenCalled()
 
-    // Disabled: ignored.
     rerender({ disabled: true })
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10), dragListener))
     firePointer('pointerup', 10, 10)
@@ -97,13 +92,11 @@ describe('useTabStripPointerActivation', () => {
     const onActivate = vi.fn()
     const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
 
-    // First gesture: a drag (reorder). No activation.
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
     firePointer('pointermove', 300, 10)
     firePointer('pointerup', 300, 10)
     expect(onActivate).not.toHaveBeenCalled()
 
-    // Second gesture: a plain click. Must activate.
     act(() => result.current.onPointerDown(pointerDownEvent(400, 10)))
     firePointer('pointerup', 400, 10)
     expect(onActivate).toHaveBeenCalledTimes(1)
@@ -120,9 +113,7 @@ describe('useTabStripPointerActivation', () => {
     expect(onActivate).not.toHaveBeenCalled()
   })
 
-  // Why this is not that flush: an in-page <webview> holding the keyboard leaves the embedder
-  // blurred, so the press on the tab is itself what pulls window focus back. Treating it as an app
-  // switch is what shut the tab strip for anyone reading a browser page or a document preview.
+  // A press leaving an in-page guest restores embedder focus itself; do not mistake that handoff for an app switch.
   it('still activates when the press is what pulled focus back from a guest', () => {
     const onActivate = vi.fn()
     const guest = document.createElement('webview')
@@ -139,8 +130,7 @@ describe('useTabStripPointerActivation', () => {
     guest.remove()
   })
 
-  // The forgiveness is spent on that one handoff: a press held across a real app switch still
-  // flushes rather than activating whenever the release happens to land.
+  // Forgive only the initial guest handoff; a later real app switch must cancel the press.
   it('flushes a press that outlives the guest handoff it started with', () => {
     const onActivate = vi.fn()
     const guest = document.createElement('webview')

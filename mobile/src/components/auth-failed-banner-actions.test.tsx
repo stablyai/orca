@@ -42,20 +42,20 @@ function labelOf(node: ReactTestInstance): string {
 
 /** The app owns the connection, the keychain and the host list, so all three do something here. */
 describe('the auth-failed banner in the app', () => {
-  it('offers Retry, Re-pair and Remove', () => {
-    const tree = render({ retry: 0, repair: 0, remove: 0 })
-    expect(pressables(tree).map(labelOf)).toEqual(['Retry', 'Re-pair', 'Remove'])
-  })
-
   it('routes each press to the action the screen gave it', () => {
     const presses: Presses = { retry: 0, repair: 0, remove: 0 }
     const tree = render(presses)
-    act(() => {
-      for (const node of pressables(tree)) {
-        node.props.onPress()
-      }
-    })
-    expect(presses).toEqual({ retry: 1, repair: 1, remove: 1 })
+    const controls = pressables(tree)
+    expect(controls.map(labelOf)).toEqual(['Retry', 'Re-pair', 'Remove'])
+    for (const [label, action] of [
+      ['Retry', 'retry'],
+      ['Re-pair', 'repair'],
+      ['Remove', 'remove']
+    ] as const) {
+      presses.retry = presses.repair = presses.remove = 0
+      act(() => controls.find((node) => labelOf(node) === label)!.props.onPress())
+      expect(presses).toEqual({ retry: 0, repair: 0, remove: 0, [action]: 1 })
+    }
   })
 
   it('drops Retry alone when there is no host to retry against', () => {

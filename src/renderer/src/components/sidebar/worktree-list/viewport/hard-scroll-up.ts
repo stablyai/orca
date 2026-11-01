@@ -1,36 +1,24 @@
-/**
- * Detects intentional "hard scroll up" on a long worktree list so we can offer
- * a jump-to-top control. Tuned for trackpad wheel streams and scrollbar drags.
- */
+/** Detect sustained upward wheel/scrollbar intent to offer jump-to-top on long lists. */
 
 export const HARD_SCROLL_UP = {
   /** Only samples inside this window contribute to intent. */
   windowMs: 480,
-  /** List must be scrollable by at least this much. */
   minScrollablePx: 480,
-  /** Must be at least this far from the top before the button can appear. */
   minDepthPx: 280,
-  /** Hide once the viewport is this close to the top. */
   nearTopPx: 56,
-  /** Minimum upward wheel samples in the window. */
   minUpEvents: 3,
-  /** Accumulated |deltaY| (px) for a sustained hard-up gesture. */
+  /** Sustained upward travel in CSS pixels. */
   hardTotalDeltaPx: 720,
-  /** Peak single-sample |deltaY| that marks a fling/burst. */
+  /** Peak upward delta for burst intent, paired with burstTotalDeltaPx. */
   burstPeakDeltaPx: 90,
-  /** Accumulated |deltaY| paired with a burst peak. */
   burstTotalDeltaPx: 320,
   /** Scroll-position velocity (px/s upward) that counts as hard drag/fling. */
   hardVelocityPxPerSec: 1600,
-  /** How long hard velocity must be sustained. */
   velocitySustainMs: 160,
-  /** Clear intent after idle so the button does not linger forever. */
   hideAfterIdleMs: 2600,
   /** Significant down-scroll cancels upward intent. */
   significantDownDeltaPx: 48,
-  /** Cap stored samples so long sessions stay cheap. */
   maxSamples: 32,
-  /** Ignore scroll input this long after a programmatic jump to top. */
   suppressAfterJumpMs: 120
 } as const
 
@@ -46,8 +34,7 @@ export type HardScrollUpScrollSample = {
 }
 
 export type HardScrollUpDetectorState = {
-  // Why: wheel + scroll both fire for the same gesture; keep them separate so
-  // wheel magnitude is not double-counted with scrollTop deltas.
+  // Keep wheel and scroll samples separate so one gesture’s travel cannot be counted twice.
   wheelSamples: HardScrollUpWheelSample[]
   scrollSamples: HardScrollUpScrollSample[]
   wheelDownDeltaPx: number
@@ -137,8 +124,7 @@ function computeVelocityIntent(samples: readonly HardScrollUpScrollSample[], t: 
     return false
   }
 
-  // Walk backward to the oldest sample still inside the window, then measure
-  // average upward velocity across that span.
+  // Measure average upward velocity over the oldest sample still inside the window.
   let oldest = newest
   for (let i = samples.length - 2; i >= 0; i -= 1) {
     const sample = samples.at(i)
@@ -191,8 +177,7 @@ function withVisibility(
     }
   }
 
-  // Why: hide on the deadline itself even if only non-intent scroll noise arrives;
-  // the hook also arms a timer, but event-driven hide must not depend on timer re-arms.
+  // Expire on the deadline even when only scroll noise arrives; timer scheduling must not extend visibility.
   if (state.visible && t - state.lastIntentAt >= HARD_SCROLL_UP.hideAfterIdleMs) {
     return createHardScrollUpDetectorState()
   }
@@ -200,9 +185,7 @@ function withVisibility(
   return state
 }
 
-/**
- * Ingest a wheel event. `deltaY` follows the browser convention (negative = up).
- */
+/** Browser wheel deltas are negative when scrolling upward. */
 export function reduceHardScrollUpOnWheel(
   state: HardScrollUpDetectorState,
   {
@@ -222,7 +205,6 @@ export function reduceHardScrollUpOnWheel(
   }
 
   const pixelDeltaY = normalizeWheelDeltaY(deltaY, deltaMode)
-  // Browser: negative deltaY = scroll up (content moves down, viewport toward top).
   const upDeltaPx = -pixelDeltaY
   const wheelDownDeltaPx =
     upDeltaPx < 0
@@ -253,10 +235,7 @@ export function reduceHardScrollUpOnWheel(
   )
 }
 
-/**
- * Ingest a scroll position sample from an active scrollbar/touch gesture.
- * Velocity-based; ignores tiny no-op scrolls.
- */
+/** Use velocity for observed scrollbar/touch gestures, ignoring tiny no-op scrolls. */
 export function reduceHardScrollUpOnScroll(
   state: HardScrollUpDetectorState,
   { scrollTop, maxScroll, t }: HardScrollUpViewport
@@ -311,7 +290,6 @@ export function reduceHardScrollUpOnScroll(
   )
 }
 
-/** Idle tick so the button auto-hides without requiring more input. */
 export function reduceHardScrollUpOnIdle(
   state: HardScrollUpDetectorState,
   { scrollTop, maxScroll, t }: HardScrollUpViewport

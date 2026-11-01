@@ -172,8 +172,7 @@ describe('terminal-parked-tab-watchers', () => {
 
   afterEach(() => {
     unownedExitPtyIds.clear()
-    // Module-level registries persist across tests; clear them through the
-    // public prune path so each test starts from an empty parked state.
+    // Prune persistent module registries so each suite starts without parked watchers.
     pruneParkedTerminalWatchers(new Set())
     startedWatchers.length = 0
     exitSubscriptions.length = 0
@@ -232,25 +231,19 @@ describe('terminal-parked-tab-watchers', () => {
     syncParked({ tabs: [{ id: TAB_ID, ptyId: null }] })
 
     expect(startParkedTerminalByteWatcher).not.toHaveBeenCalled()
-    // Why: the tab is still tracked as parked so debug introspection
-    // (window.__terminalParkingDebug) reflects every parked tab.
+    // Retain the parked entry for complete debug introspection.
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
   })
 
   it('never starts a watcher for a PTY that exited into the park handoff gap', () => {
-    // The pane's primary exit handler is gone from unmount and this sidecar
-    // arrives a passive effect later, so an exit landing between them is
-    // buffered and replayed to nobody. Registering anyway would make the
-    // registry claim a dead PTY is a live parked owner, and the runtime graph
-    // publishes its leaf on exactly that claim (STA-2854).
+    // An exit in the primary/sidecar handoff gap must not become a live parked claim that republishes the dead leaf (STA-2854).
     unownedExitPtyIds.add(PTY_ID)
     capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
     syncParked({ tabs: [{ id: TAB_ID, ptyId: PTY_ID }] })
 
     expect(startParkedTerminalByteWatcher).not.toHaveBeenCalled()
     expect(collectParkedTerminalWatcherPtyIds().has(PTY_ID)).toBe(false)
-    // No live pane will ever overwrite this slot again, so a stranded
-    // 'working' title would pin worktree status forever.
+    // Clear stranded working titles or they pin worktree status indefinitely.
     expect(mockStoreState.clearRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, 1)
   })
 
@@ -334,11 +327,7 @@ describe('terminal-parked-tab-watchers', () => {
   })
 
   it('collapses a dead split leaf even when a concurrent primary handler also observed the exit', () => {
-    // Why (regression, #ghost-blank-pane): a primary can coexist with a parked
-    // sidecar — an eager pre-mount handle, or a reveal remount racing watcher
-    // disposal. Neither collapses the persisted parked layout (eager handlers
-    // never touch layout; detach dropped the session observer that once did) —
-    // hadPrimary must not skip this sidecar's collapse for a surviving leaf.
+    // Coexisting eager/reveal primary handlers do not collapse parked layout; sidecar must still remove dead split leaves.
     capturePanes([
       { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
       { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
@@ -392,8 +381,7 @@ describe('terminal-parked-tab-watchers', () => {
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
     const options = closeTerminalTab.mock.calls[0]?.[1] as CloseTerminalTabOptions
     expect(options.captureRecentlyClosed).toBe(false)
-    // Why: the wire must carry the pty-exit intent so a paired host can refuse
-    // the echo while its PTY is live, without skipping the pinned guard here.
+    // Carry pty-exit intent so paired hosts can reject live-PTY echoes without bypassing the local pinned guard.
     expect(options.hostCloseReason).toBe('pty-exit')
     expect(options.lifecyclePtyId).toBe(PTY_ID)
     options.onClosed?.()
@@ -489,16 +477,14 @@ describe('terminal-parked-tab-watchers', () => {
     syncParked()
     exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0, { hadPrimary: false })
 
-    // Why: a manual pinned close can be ahead of this autonomous exit request
-    // in the confirmation queue and remove the tab before the exit resolves.
+    // A queued pinned close may remove the tab before the autonomous exit request resolves.
     syncParked({ tabs: [] })
 
     expect(consumePreHandlerPtyState).toHaveBeenCalledWith(PTY_ID)
     expect(getParkedTerminalWatcherTabIds()).toEqual([])
   })
 
-  // Why still reachable post detach-fix: an eager pre-mount handle or a reveal
-  // remount's fresh registerExit can own the exit while this sidecar is live.
+  // Eager/reveal primary handlers can still overlap a parked sidecar after detach drops the session observer.
   it('does not queue a second close when a concurrent primary handled the parked exit', () => {
     capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
     syncParked()
@@ -522,8 +508,7 @@ describe('terminal-parked-tab-watchers', () => {
     expect(startedWatchers[0].dispose).toHaveBeenCalledTimes(1)
     expect(exitSubscriptions[0].unsubscribe).toHaveBeenCalledTimes(1)
     expect(startedWatchers[1].dispose).not.toHaveBeenCalled()
-    // Why: the entry survives so a sleeping parked tab cannot restart a
-    // watcher against its stale PTY ids before wake re-mints them.
+    // Keep the empty entry so sleep cannot restart watchers against stale PTY IDs before wake.
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
     syncParked()
     expect(startParkedTerminalByteWatcher).toHaveBeenCalledTimes(2)
@@ -619,9 +604,7 @@ describe('terminal-parked-tab-watchers', () => {
     })
 
     it('collapses the exited leaf out of the stored layout when deferring', () => {
-      // Why (regression, ghost/resurrected pane): a deferred parked exit that
-      // leaves the leaf and its binding in the stored layout reattaches on
-      // reveal — the daemon re-creates the exited session id as a fresh shell.
+      // Remove exited leaf/binding before reveal or the daemon recreates its session as a new shell.
       capturePanes([
         { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
         { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
@@ -724,9 +707,7 @@ describe('terminal-parked-tab-watchers', () => {
     })
 
     it('collapses a dead leaf then closes when the last parked split leaf exits', () => {
-      // Why: hosts' onPtyExit runs from a mounted TerminalPane, so an exit
-      // that lands while parked reaches ONLY the watcher sidecar — it must run
-      // the layout collapse itself or the leaf resurrects on reveal.
+      // Parked exits reach only sidecars; they must collapse layout themselves to prevent leaf resurrection.
       capturePanes([
         { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
         { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }

@@ -72,8 +72,7 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
     }
     trimmedRows += excess
     truncated = true
-    // Why batched: splicing one row off a full tail per newline made a long chunk, such as a TUI
-    // replaying its whole history, cost O(lines x MAX_TAIL_LINES).
+    // Batch front splices to avoid O(lines × MAX_TAIL_LINES) work when one chunk replays long history.
     if (trimmedRows >= MAX_TAIL_LINES) {
       spliceTrimmedRows()
     }
@@ -254,10 +253,7 @@ function finalizeRetainedTerminalRows(
 
   return {
     lines,
-    // Why only the partial: redraw runs are owned as they are written, so rows never slice the
-    // chunk, but the partial is re-sliced from its own row on every chunk, so it alone can
-    // accumulate a backing string across frames. Owning the rows too costs 20-36% on TUI floods
-    // for no measured retention.
+    // Only partial lines accumulate backing slices across frames; written runs already own storage, and owning rows adds 20–36% TUI cost.
     partialLine: ownRetainedString(partialLine),
     redrawCursor,
     truncated,

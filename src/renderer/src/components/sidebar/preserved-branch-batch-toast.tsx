@@ -25,12 +25,16 @@ function PreservedBranchBatchToastBody({
 }): React.JSX.Element {
   const actionableCount = branches.filter((branch) => branch.expectedHead).length
   return (
-    <div className="flex w-[300px] max-w-[calc(100vw-96px)] flex-col gap-3">
+    <div className="flex w-full flex-col gap-3">
       <p className="min-w-0 break-words text-sm leading-5 text-popover-foreground/80">
         {translate(
           'auto.components.sidebar.preserved.branch.batch.toast.a3cdd9d9e6',
           'Git kept {{count}} local branches because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.',
-          { count: branches.length }
+          {
+            count: branches.length,
+            defaultValue_one:
+              'Git kept {{count}} local branch because it may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.'
+          }
         )}
       </p>
       {actionableCount > 0 ? (
@@ -39,7 +43,7 @@ function PreservedBranchBatchToastBody({
           {translate(
             'auto.components.sidebar.preserved.branch.batch.toast.6310412304',
             'Review {{count}} Branches',
-            { count: actionableCount }
+            { count: actionableCount, defaultValue_one: 'Review {{count}} Branch' }
           )}
         </Button>
       ) : null}
@@ -59,12 +63,12 @@ export function showPreservedBranchBatchToast(
   const removedWorkspaces = translate(
     'auto.components.sidebar.preserved.branch.batch.toast.cea24c2b7d',
     '{{count}} workspaces removed',
-    { count: workspaceCount }
+    { count: workspaceCount, defaultValue_one: '{{count}} workspace removed' }
   )
   const keptBranches = translate(
     'auto.components.sidebar.preserved.branch.batch.toast.0e0379f24a',
     '{{count}} branches kept',
-    { count: branches.length }
+    { count: branches.length, defaultValue_one: '{{count}} branch kept' }
   )
   const onReview = (): void => {
     useAppStore.getState().openModal('preserved-branch-review', { branches })
@@ -161,7 +165,7 @@ export async function forceDeletePreservedBranchBatch(
     {
       id: progressToastId,
       description: (
-        <div className="flex w-[300px] max-w-[calc(100vw-96px)] flex-col gap-3">
+        <div className="flex w-full flex-col gap-3">
           <p className="min-w-0 break-words text-sm leading-5 text-popover-foreground/80">
             {description}
           </p>
@@ -178,7 +182,7 @@ export async function forceDeletePreservedBranchBatch(
             {translate(
               'auto.components.sidebar.preserved.branch.batch.toast.d42f1f14e0',
               'Retry {{count}} Branches',
-              { count: failedBranches.length }
+              { count: failedBranches.length, defaultValue_one: 'Retry {{count}} Branch' }
             )}
           </Button>
         </div>

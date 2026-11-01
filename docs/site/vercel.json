@@ -1,4 +1,6 @@
 {
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm build",
   "github": {
     "enabled": false
   }

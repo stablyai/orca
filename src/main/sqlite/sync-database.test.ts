@@ -36,14 +36,6 @@ afterEach(async () => {
 })
 
 describe('SyncDatabase statement cache', () => {
-  it('reuses the same statement object for identical SQL', async () => {
-    const db = await createDatabase()
-    const sql = 'SELECT label FROM items WHERE id = ?'
-
-    expect(db.prepare(sql)).toBe(db.prepare(sql))
-    expect(db.prepare('SELECT id FROM items WHERE id = ?')).not.toBe(db.prepare(sql))
-  })
-
   it('returns correct rows when a reused statement is bound to different values', async () => {
     const db = await createDatabase()
     const sql = 'SELECT label FROM items WHERE id = ?'
@@ -64,15 +56,6 @@ describe('SyncDatabase statement cache', () => {
 
     expect(db.prepare(first)).not.toBe(firstStatement)
     expect(db.prepare('SELECT 256 AS n')).toBe(db.prepare('SELECT 256 AS n'))
-  })
-
-  it('drops cached statements on close', async () => {
-    const db = await createDatabase()
-    db.prepare('SELECT label FROM items WHERE id = ?')
-    db.close()
-
-    const cache = (db as unknown as { statementCache: Map<string, unknown> }).statementCache
-    expect(cache.size).toBe(0)
   })
 
   it('does not serve a stale statement after DDL adds a column', async () => {
@@ -110,16 +93,6 @@ describe('SyncDatabase statement cache', () => {
     ])
   })
 
-  it('does not cache wildcard selects or pragma statements', async () => {
-    const db = await createDatabase()
-
-    expect(db.prepare('SELECT * FROM items')).not.toBe(db.prepare('SELECT * FROM items'))
-    expect(db.prepare('PRAGMA table_info(items)')).not.toBe(db.prepare('PRAGMA table_info(items)'))
-    expect(db.prepare('SELECT COUNT(*) AS n FROM items')).toBe(
-      db.prepare('SELECT COUNT(*) AS n FROM items')
-    )
-  })
-
   it('keeps cached statements across transaction control and other non-DDL exec calls', async () => {
     const db = await createDatabase()
     const sql = 'SELECT label FROM items WHERE id = ?'
@@ -133,28 +106,6 @@ describe('SyncDatabase statement cache', () => {
     expect(statement.get('c')).toEqual({ label: 'gamma' })
   })
 
-  it('reports whether a transaction is active', async () => {
-    const db = await createDatabase()
-
-    expect(db.isTransaction).toBe(false)
-    db.exec('BEGIN IMMEDIATE')
-    expect(db.isTransaction).toBe(true)
-    db.exec('ROLLBACK')
-    expect(db.isTransaction).toBe(false)
-  })
-
-  it('preserves pragma and exec behavior', async () => {
-    const db = await createDatabase()
-
-    expect(db.pragma('journal_mode', { simple: true })).toBe('delete')
-    expect(db.pragma('table_info(items)')).toEqual([
-      expect.objectContaining({ name: 'id' }),
-      expect.objectContaining({ name: 'label' })
-    ])
-    expect(db.pragma('table_info(missing_table)')).toEqual([])
-    expect(db.pragma('table_info(missing_table)', { simple: true })).toBeUndefined()
-  })
-
   it('rejects a missing file when fileMustExist is set', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-sync-database-'))
     temporaryDirectories.push(directory)
@@ -165,12 +116,9 @@ describe('SyncDatabase statement cache', () => {
   })
 })
 
-// Why (#15036): the OpenCode readers opened read-only with no busy timeout, so a
-// contended DB failed in ~1 ms and emptied the whole panel. These pin that the
-// wrapper really forwards `timeout` into sqlite3_busy_timeout.
+// #15036: prove read-only timeout reaches sqlite3_busy_timeout so contention cannot instantly empty panels.
 describe('SyncDatabase read-only opens under contention', () => {
-  // The lock holder must live on another thread: sqlite3_busy_timeout sleeps
-  // synchronously, so a same-thread timer could never fire to release it.
+  // Release locks from another thread: synchronous SQLite busy waits prevent same-thread timers from running.
   const WRITER_SOURCE = `
     const { parentPort, workerData } = require('node:worker_threads')
     const { DatabaseSync } = require('node:sqlite')

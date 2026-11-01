@@ -1,19 +1,12 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../shared/rate-limit-types'
 
-// Why: pure data-shape helpers for the MiniMax Coding Plan API. Lives in its
-// own file so both minimax-fetcher.ts (transport) and minimax-fetcher-parse.ts
-// (response handling) can import without creating a dependency cycle.
-
 export type MiniMaxUsageItem = {
   model_name?: unknown
   current_interval_remaining_percent?: unknown
   start_time?: unknown
   end_time?: unknown
   remains_time?: unknown
-  // Why: Coding Plan also reports a separate 7-day quota. The API returns the
-  // raw remaining percent against the un-boosted base; the opencode-tku
-  // equivalent uses the value as-is. weekly_boost_permille exists in the
-  // payload but is intentionally not parsed yet (see handleMiniMaxWeeklyBoost).
+  // API percent uses the unboosted weekly base; weekly_boost_permille remains unparsed (handleMiniMaxWeeklyBoost).
   current_weekly_remaining_percent?: unknown
   weekly_remains_time?: unknown
   weekly_boost_permille?: unknown
@@ -21,8 +14,7 @@ export type MiniMaxUsageItem = {
 
 export type MiniMaxUsageSnapshot = {
   modelName: string
-  // Why: weekly may be absent if the API omits it (older schema, mid-migration
-  // window). Session is required (matches the existing parseUsageItem contract).
+  // Older/migrating schemas may omit weekly quota; session remains required.
   session: RateLimitWindow
   weekly: RateLimitWindow | null
 }
@@ -44,8 +36,7 @@ export function makeMiniMaxUnavailable(error: string): ProviderRateLimits {
 export function makeMiniMaxError(
   error: string,
   failureKind: NonNullable<ProviderRateLimits['usageMetadata']>['failureKind'],
-  // Why: the status bar localizes the expiry copy per credential kind; the raw
-  // `error` string stays English for logs.
+  // Localize credential-expiry guidance by source; raw errors remain English for logs.
   credentialSource?: 'api-key' | 'session-cookie'
 ): ProviderRateLimits {
   return {
@@ -89,14 +80,9 @@ export function parseMiniMaxModels(models: MiniMaxModelList): string[] {
   return ['general']
 }
 
-// Why: MiniMax's API returns `end_time - start_time` that can drift below the
-// 5-hour bucket (e.g. 4h or 295 min). The UI labels must reflect the contracted
-// session — a fixed 5-hour window — so the status bar reads "5h" regardless of
-// what the API reports. Mirrors how Codex always reports 300/10080 minutes.
+// API durations can drift below 5h; label the contracted session window consistently.
 const MINIMAX_SESSION_WINDOW_MINUTES = 300
-// Why: 7-day window. The API doesn't expose a `weekly_end_time` analog of the
-// session's end_time, so we label the chip via windowMinutes + a relative
-// `resetsAt` derived from `weekly_remains_time` + now.
+// Weekly resets have only a remaining duration, anchored to now.
 const MINIMAX_WEEKLY_WINDOW_MINUTES = 10080
 
 export function parseMiniMaxUsageItem(value: unknown): MiniMaxUsageSnapshot | null {
@@ -126,9 +112,7 @@ export function parseMiniMaxWeeklyWindow(item: MiniMaxUsageItem): RateLimitWindo
   if (weeklyRemaining === null) {
     return null
   }
-  // Why: `weekly_remains_time` is a duration (matches `remains_time` units
-  // for the 5h window). Anchor to `Date.now()` so the status bar's
-  // countdown stays in lockstep with the session window shape.
+  // weekly_remains_time uses the session remains_time duration units.
   const weeklyRemainsMs = asNumber(item.weekly_remains_time)
   return {
     usedPercent: clampPercent(100 - weeklyRemaining),

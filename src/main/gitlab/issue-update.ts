@@ -14,14 +14,10 @@ import {
   type ProjectRef
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { codeHostFailure, combinedClassifiedFailure } from '../../shared/code-host-failure-copy'
+import type { ClassifiedError } from '../../shared/classified-error'
 
-/**
- * Update an existing GitLab issue.
- *
- * Why: callers that list through a per-repo issue source preference must
- * mutate the same GitLab project, or identical IIDs on origin/upstream can
- * silently edit the wrong issue.
- */
+/** Mutate the preference-selected project so equal origin/upstream issue numbers cannot retarget edits. */
 export async function updateIssue(
   repoPath: string,
   issueNumber: number,
@@ -43,16 +39,12 @@ export async function updateIssue(
       )
     ).source
   if (!projectRef) {
-    return {
-      ok: false,
-      error: 'Could not resolve GitLab project for this repository'
-    }
+    return codeHostFailure('gitlab.projectUnresolved')
   }
 
   const repoFlag = projectRef.path
-  const errors: string[] = []
+  const errors: ClassifiedError[] = []
 
-  // State change requires a separate command (parallel to github's split).
   if (updates.state) {
     await acquire()
     try {
@@ -62,11 +54,9 @@ export async function updateIssue(
         ...glabHostEnvOptions(projectRef, connectionId)
       })
     } catch (err) {
+      // glab already-state transitions exit 0; any rejected command remains a real failure.
       const stderr = err instanceof Error ? err.message : String(err)
-      // Treat "already closed/reopened" as a no-op (matches gh path).
-      if (!stderr.toLowerCase().includes('already')) {
-        errors.push(classifyGlabError(stderr).message)
-      }
+      errors.push(classifyGlabError(stderr))
     } finally {
       release()
     }
@@ -89,13 +79,12 @@ export async function updateIssue(
       )
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGlabError(stderr).message)
+      errors.push(classifyGlabError(stderr))
     } finally {
       release()
     }
   }
 
-  // Field edits via `glab issue update`.
   const editArgs: string[] = ['issue', 'update', String(issueNumber), '-R', repoFlag]
   let hasEditArgs = false
 
@@ -111,12 +100,13 @@ export async function updateIssue(
     editArgs.push('--unlabel', label)
     hasEditArgs = true
   }
+  // Bare --assignee replaces everyone; + and - prefixes perform incremental edits (glab >=1.22).
   for (const assignee of updates.addAssignees ?? []) {
-    editArgs.push('--assignee', assignee)
+    editArgs.push(`--assignee=+${assignee}`)
     hasEditArgs = true
   }
   for (const assignee of updates.removeAssignees ?? []) {
-    editArgs.push('--unassignee', assignee)
+    editArgs.push(`--assignee=-${assignee}`)
     hasEditArgs = true
   }
 
@@ -129,14 +119,14 @@ export async function updateIssue(
       })
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGlabError(stderr).message)
+      errors.push(classifyGlabError(stderr))
     } finally {
       release()
     }
   }
 
   if (errors.length > 0) {
-    return { ok: false, error: errors.join('; ') }
+    return combinedClassifiedFailure(errors)
   }
   return { ok: true }
 }

@@ -1,25 +1,21 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { TerminalInputAckKind } from '../../../../shared/terminal-stream-protocol'
-import type { RemoteRuntimeMultiplexedTerminal } from '../../runtime/remote-runtime-terminal-multiplexer'
+import type { RemoteRuntimeMultiplexedTerminal } from '../../runtime/remote-runtime-terminal-multiplexer-types'
 import {
   isSameRemoteRuntimeInputEndpoint,
   type RemoteRuntimeInputEndpoint
 } from './remote-runtime-recovery-input-hold'
 
-// Why: a retention budget for input in flight across one outage, not a paste ceiling. Past it the
-// oldest bytes go, and nothing after that gap is replayed (it would run without its prefix).
+// Bound retained outage input; dropping its prefix also forbids replaying later command suffixes.
 export const REMOTE_RUNTIME_INPUT_JOURNAL_MAX_CODE_UNITS = 1024 * 1024
 
-// Why backoff: a host refuses input mostly while its PTY is briefly unwritable (an SSH provider
-// reconnecting), and each resend refused again costs a round trip.
+// Back off host refusals because each retry costs a round trip while the PTY is unwritable.
 export const REMOTE_RUNTIME_INPUT_RESEND_BACKOFF_MS: readonly number[] = [
   100, 250, 500, 1000, 2000, 4000, 8000
 ]
-// Why: a lost frame or ack must not strand input on a healthy link; resending is safe because the
-// host dedupes by sequence.
+// Resend stalled ACKs safely because the host deduplicates by sequence.
 export const REMOTE_RUNTIME_INPUT_ACK_STALL_MS = 5000
-// Why: some refusals never clear while the stream stays open (a stale handle, an unwritable PTY);
-// past the whole backoff ladder (~16 s) the pane must fall back to its remount path.
+// Persistent unwritable/stale handles need remount after the bounded refusal ladder.
 export const REMOTE_RUNTIME_INPUT_REFUSAL_ROUNDS_BEFORE_ESCALATION =
   REMOTE_RUNTIME_INPUT_RESEND_BACKOFF_MS.length + 1
 
@@ -30,12 +26,7 @@ export type RemoteRuntimeInputStream = Pick<
 
 export type RemoteRuntimeInputSegment = { text: string; queryReply: boolean }
 
-/**
- * Go-back-N sender for one pane's input to a host that acks it. Every unacked input is kept in
- * order and resent from the host's cumulative ack on a resend request, on a new stream, or when
- * acks stall. Input that must not run again (a stale query reply, a withdrawn paste, bytes past the
- * retention budget) is resent as empty text so the host can move past its slot.
- */
+/** Replay unacked input in order from cumulative host ACKs across stream replacement/stalls; withdrawn, stale-reply or over-budget slots resend empty so later sequence numbers can advance. */
 export type RemoteRuntimeInputJournal = {
   readonly sessionId: string
   /** Assigns the next sequences to `segments` and sends them, after any input `stream` still owes. */
@@ -51,6 +42,8 @@ export type RemoteRuntimeInputJournal = {
   whenAcknowledged: (seq: number) => Promise<boolean>
   /** Withdraws `seq` for its caller; a resend fills its slot with nothing. */
   cancel: (seq: number) => void
+  /** True while input the host has not applied is still held for a resend. */
+  hasUnacknowledgedInput: () => boolean
   discard: () => void
 }
 
@@ -101,8 +94,7 @@ export function createRemoteRuntimeInputJournal(deps: {
       bound &&
       (!isSameRemoteRuntimeInputEndpoint(bound.endpoint, endpoint) || bound.ledgerId !== ledgerId)
     ) {
-      // Why: another shell (#10065) or a restarted host runtime has no record of what was sent,
-      // so it would run it twice; its sequence space starts at the next input.
+      // New terminal/runtime ledgers lack dedup history; skip old writes and start their sequence at fresh input to avoid duplicates (#10065).
       dropEntries()
       ackedSeq = nextSeq - 1
     }
@@ -222,8 +214,7 @@ export function createRemoteRuntimeInputJournal(deps: {
         for (; settled < entries.length && entries[settled].seq <= appliedSeq; settled += 1) {
           const entry = entries[settled]
           codeUnits -= entry.text.length
-          // Why only its own ack proves it applied: a cumulative ack can cover a write whose
-          // delivery-unknown ack died with its connection (a paste opener that never arrived).
+          // Require the write’s own applied ACK; cumulative progress may cover an earlier delivery-unknown paste opener.
           settle(entry.seq, kind === 'applied' && entry.seq === appliedSeq)
         }
         entries = entries.slice(settled)
@@ -247,6 +238,9 @@ export function createRemoteRuntimeInputJournal(deps: {
       return new Promise((resolve) => {
         waiters.set(seq, resolve)
       })
+    },
+    hasUnacknowledgedInput() {
+      return entries.some((entry) => entry.text.length > 0)
     },
     cancel(seq) {
       const index = entries.findIndex((entry) => entry.seq === seq)

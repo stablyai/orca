@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
 import { AndroidEmulatorBackend } from './android-emulator-backend'
+import { scrcpyVideoRegistry } from '../scrcpy-video-registry'
 import type { AndroidCommandResult, AndroidCommandRunner } from '../android/android-command-runner'
 import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
 
-// The AVD boot spawns the emulator detached (not via the command runner).
+// AVD boot spawns directly, bypassing the injected command runner.
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, spawn: vi.fn(() => ({ on: () => {}, unref: () => {} })) }
@@ -22,8 +23,6 @@ const ok = (stdout: string): AndroidCommandResult => ({ stdout, stderr: '', code
 const RUNNING_ADB =
   'List of devices attached\nemulator-5554\tdevice product:sdk_gphone64 model:Pixel_7 device:emu64a'
 
-// Default runner answering the standard discovery/query calls for a single
-// booted Pixel_7 emulator plus a shutdown Pixel_Tablet AVD.
 function defaultRunner(): ReturnType<typeof vi.fn> {
   return vi.fn(async (binary: string, args: readonly string[]) => {
     const a = args.join(' ')
@@ -140,7 +139,7 @@ describe('AndroidEmulatorBackend', () => {
       'shell',
       'input',
       'text',
-      'hi%sthere'
+      "'hi%sthere'"
     ])
     expect(runner).toHaveBeenCalledWith(SDK.adb, [
       '-s',
@@ -150,6 +149,102 @@ describe('AndroidEmulatorBackend', () => {
       'keyevent',
       '4'
     ])
+  })
+
+  describe('with a live scrcpy session', () => {
+    const sent: Buffer[] = []
+    const sendControl = vi.fn((message: Buffer) => {
+      sent.push(message)
+      return true
+    })
+
+    beforeEach(() => {
+      sent.length = 0
+      sendControl.mockClear()
+      scrcpyVideoRegistry.register('emulator-5554', () => {})
+      scrcpyVideoRegistry.attachControl('emulator-5554', {
+        videoSize: () => ({ width: 600, height: 1280 }),
+        sendControl
+      })
+    })
+
+    afterEach(() => {
+      scrcpyVideoRegistry.stop('emulator-5554')
+    })
+
+    const touches = (): [number, number, number][] =>
+      sent
+        .filter((message) => message[0] === 2)
+        .map((message) => [message[1], message.readInt32BE(10), message.readInt32BE(14)])
+
+    it('sends input over the control socket in video pixels without adb', async () => {
+      const sleep = vi.fn(async () => {})
+      const android = new AndroidEmulatorBackend({
+        runner: runner as unknown as AndroidCommandRunner,
+        sdk: SDK,
+        sleep
+      })
+
+      await android.tap('emulator-5554', 0.5, 0.5)
+      expect(touches()).toEqual([
+        [0, 300, 640],
+        [1, 300, 640]
+      ])
+      expect(sent[0].readUInt16BE(18)).toBe(600)
+      expect(sent[0].readUInt16BE(20)).toBe(1280)
+
+      sent.length = 0
+      await android.gesture(
+        'emulator-5554',
+        [
+          { type: 'begin', x: 0.5, y: 0.75 },
+          { type: 'end', x: 0.5, y: 0.25 }
+        ],
+        null
+      )
+      const swipe = touches()
+      expect(swipe[0]).toEqual([0, 300, 960])
+      expect(swipe.at(-1)).toEqual([1, 300, 320])
+      expect(swipe.slice(1, -1).every(([action]) => action === 2)).toBe(true)
+      expect(sleep.mock.calls.length * 16).toBeGreaterThanOrEqual(300)
+
+      sent.length = 0
+      await android.type('emulator-5554', 'héllo wörld')
+      await android.button('emulator-5554', 'back')
+      expect(sent[0][0]).toBe(1)
+      expect(sent[0].subarray(5).toString('utf8')).toBe('héllo wörld')
+      expect(
+        sent.slice(1).map((message) => [message[0], message[1], message.readInt32BE(2)])
+      ).toEqual([
+        [0, 0, 4],
+        [0, 1, 4]
+      ])
+
+      expect(runner).not.toHaveBeenCalled()
+    })
+
+    it('finds the session by serial when input names the AVD', async () => {
+      await backend(runner).tap('Pixel_7', 0, 0)
+      expect(touches()).toEqual([
+        [0, 0, 0],
+        [1, 0, 0]
+      ])
+      expect(runner.mock.calls.some(([, args]) => args.includes('input'))).toBe(false)
+    })
+
+    it('falls back to adb input once the control socket is gone', async () => {
+      sendControl.mockReturnValueOnce(false)
+      await backend(runner).tap('emulator-5554', 0.5, 0.5)
+      expect(runner).toHaveBeenCalledWith(SDK.adb, [
+        '-s',
+        'emulator-5554',
+        'shell',
+        'input',
+        'tap',
+        '540',
+        '1200'
+      ])
+    })
   })
 
   it('rotates via user_rotation and forgets the cached screen size', async () => {
@@ -237,6 +332,9 @@ describe('AndroidEmulatorBackend', () => {
       if (binary === SDK.adb && a === '-s emulator-5556 shell getprop sys.boot_completed') {
         return ok('1')
       }
+      if (binary === SDK.adb && a === '-s emulator-5556 emu avd name') {
+        return ok('Pixel_Tablet\nOK\n')
+      }
       if (binary === SDK.emulator && a === '-list-avds') {
         return ok('Pixel_Tablet')
       }
@@ -270,7 +368,43 @@ describe('AndroidEmulatorBackend', () => {
     })
     const info = await android.startSession('emulator-5554')
     expect(info).toMatchObject({ deviceUdid: 'emulator-5554', streamCodec: 'h264' })
-    await android.stopHelperForDevice('emulator-5554')
+    await android.stopHelperForDevice('emulator-5554', { includeOrphaned: true })
+    await android.stopHelperForDevice('emulator-5554', { includeOrphaned: true })
     expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves all unowned forwards when stopping without a live session', async () => {
+    // adb forward listing/removal is server-wide, so unowned forwards must survive.
+    const forwards = [
+      'emulator-5554 tcp:41234 localabstract:scrcpy_1a2b3c4d',
+      'emulator-5554 tcp:8081 tcp:8081',
+      'emulator-5556 tcp:41235 localabstract:scrcpy_5e6f7a8b',
+      'R58M12345 tcp:9222 localabstract:chrome_devtools_remote'
+    ]
+    const before = [...forwards]
+    runner.mockImplementation(async (binary: string, args: readonly string[]) => {
+      if (binary === SDK.adb && args.join(' ') === 'devices -l') {
+        return ok(RUNNING_ADB)
+      }
+      const [flag, local] = args.includes('forward') ? args.slice(args.indexOf('forward') + 1) : []
+      if (flag === '--list') {
+        return ok(`${forwards.join('\n')}\n\n`)
+      }
+      if (flag === '--remove-all') {
+        forwards.length = 0
+      } else if (flag === '--remove') {
+        const index = forwards.findIndex((line) => line.split(' ')[1] === local)
+        if (index !== -1) {
+          forwards.splice(index, 1)
+        }
+      }
+      return ok('')
+    })
+
+    const android = backend(runner)
+    await android.stopHelperForDevice('emulator-5554', { includeOrphaned: true })
+    await android.stopHelperForDevice('emulator-5554', { includeOrphaned: true })
+
+    expect(forwards).toEqual(before)
   })
 })

@@ -13,11 +13,7 @@ import { computeOrcaCodexHookHashes } from './codex-hook-definition'
 import type { CodexHookAnswer } from './codex-hook-trust-derivation'
 import { CODEX_VERSION_FOR_TESTS } from './codex-hook-trust-derivation.test-fixture'
 
-// Why (#16441): the grant session now runs in-process instead of in a
-// forked bundle that never existed under vitest. Without this stub these
-// suites spawn the developer's real `codex app-server`, so they pass in CI
-// (no codex installed) and fail on any machine that has one. Stand in for the
-// missing binary so the fallback lane is exercised either way.
+// Exercise fallback trust without launching the developer's real Codex binary.
 function stubMissingCodexBinary(): never {
   throw Object.assign(new Error('spawn codex ENOENT'), { code: 'ENOENT' })
 }
@@ -27,7 +23,6 @@ export type CodexHookHomes = {
   userDataDir: string
 }
 
-/** The answer a real Codex gives about Orca's entry. */
 export function codexHookAnswerForTests(): CodexHookAnswer {
   return {
     kind: 'hashes',
@@ -36,7 +31,6 @@ export function codexHookAnswerForTests(): CodexHookAnswer {
   }
 }
 
-/** Applies the stubs above; for suites that build their own temp homes. */
 export function stubCodexTrustSessionsForTests(): void {
   grantInternals.setGrantSessionRunner(stubMissingCodexBinary)
 }

@@ -6,11 +6,12 @@ import { markRpcDeliveryUnknown, isRpcDeliveryUnknown } from './rpc-delivery-amb
 import { LogicalClientCutoverError, isLogicalClientCutoverError } from './stable-logical-rpc-client'
 import {
   settingsRead,
+  nativeChatQueueFollowUpsRead,
   optionalSettingsRead,
   botOverridesRead,
   newTabSettingsRead,
   terminalCopyTrimsGutterRead,
-  showPinnedWorktreesInGroupsRead
+  hostListSettingsRead
 } from './settings-read-operations'
 import type { RpcResponse } from './types'
 
@@ -50,6 +51,29 @@ async function drain() {
 }
 
 describe('settings historical acceptance', () => {
+  it.each([
+    undefined,
+    null,
+    {},
+    { nativeChatQueueFollowUps: true },
+    { nativeChatQueueFollowUps: false },
+    { nativeChatQueueFollowUps: 'false' }
+  ])(
+    'reads the existing queue boolean without treating false as missing (%j)',
+    async (settings) => {
+      const response = await nativeChatQueueFollowUpsRead.request(replyWith(success({ settings })))
+      expect(nativeChatQueueFollowUpsRead.interpret(response)).toEqual({
+        accepted: true,
+        value: settings?.nativeChatQueueFollowUps !== false
+      })
+      expect(
+        nativeChatQueueFollowUpsRead.interpret(
+          await nativeChatQueueFollowUpsRead.request(replyWith(refusal()))
+        )
+      ).toEqual({ accepted: false })
+    }
+  )
+
   it('distinguishes a skipped refusal from an accepted absent settings member', async () => {
     const skipped = await settingsRead.request(replyWith(refusal()))
     const missing = await settingsRead.request(replyWith(success({})))
@@ -111,28 +135,36 @@ describe('settings historical acceptance', () => {
     expect(terminalCopyTrimsGutterRead.interpret(refused)).toEqual({ accepted: false })
   })
 
-  it('reads pinned placement, treating an absent or malformed key as the desktop default', async () => {
-    const showFor = async (settings: unknown) =>
-      showPinnedWorktreesInGroupsRead.interpret(
-        await showPinnedWorktreesInGroupsRead.request(replyWith(success(settings)))
+  it('reads the list settings, treating an absent or malformed key as the desktop default (off)', async () => {
+    const readFor = async (settings: unknown) =>
+      hostListSettingsRead.interpret(
+        await hostListSettingsRead.request(replyWith(success(settings)))
       )
-    expect(await showFor({ settings: { showPinnedWorktreesInGroups: true } })).toEqual({
+    const off = {
+      showPinnedWorktreesInGroups: false,
+      compactWorktreeCards: false,
+      newCardStyle: false
+    }
+    expect(
+      await readFor({
+        settings: {
+          showPinnedWorktreesInGroups: true,
+          compactWorktreeCards: true,
+          experimentalNewWorktreeCardStyle: true
+        }
+      })
+    ).toEqual({
       accepted: true,
-      value: true
+      value: { showPinnedWorktreesInGroups: true, compactWorktreeCards: true, newCardStyle: true }
     })
-    expect(await showFor({ settings: { showPinnedWorktreesInGroups: false } })).toEqual({
-      accepted: true,
-      value: false
-    })
-    // A host predating the setting sends no key; the desktop default is off.
-    expect(await showFor({ settings: {} })).toEqual({ accepted: true, value: false })
-    expect(await showFor({ settings: { showPinnedWorktreesInGroups: 'true' } })).toEqual({
-      accepted: true,
-      value: false
-    })
-    expect(await showFor(null)).toEqual({ accepted: true, value: false })
-    const refused = await showPinnedWorktreesInGroupsRead.request(replyWith(refusal()))
-    expect(showPinnedWorktreesInGroupsRead.interpret(refused)).toEqual({ accepted: false })
+    // A host predating the settings sends no keys.
+    expect(await readFor({ settings: {} })).toEqual({ accepted: true, value: off })
+    expect(
+      await readFor({ settings: { showPinnedWorktreesInGroups: 'true', compactWorktreeCards: 1 } })
+    ).toEqual({ accepted: true, value: off })
+    expect(await readFor(null)).toEqual({ accepted: true, value: off })
+    const refused = await hostListSettingsRead.request(replyWith(refusal()))
+    expect(hostListSettingsRead.interpret(refused)).toEqual({ accepted: false })
   })
 
   it('does not read a stale payload until its caller permits interpretation', async () => {
@@ -244,10 +276,7 @@ describe('new-tab settlement barriers', () => {
 })
 
 describe('the bound descriptor', () => {
-  // Eleven call sites pass `interpret` detached from its descriptor, five of them
-  // settlePreviewSend's second argument in files/mobile-file-preview-request.ts:
-  // filePreviewTextRead, filePreviewImageRead, terminalArtifactTextRead,
-  // terminalArtifactImageRead and terminalArtifactWrite.
+  // Callers pass interpret detached from its descriptor, including file-preview settlement callbacks.
   it('interprets the same reply when taken as an unbound reference', async () => {
     const settings = { futureField: 'kept' }
     const accepted = await settingsRead.request(replyWith(success({ settings })))
@@ -260,7 +289,6 @@ describe('the bound descriptor', () => {
     expect(readOverrides(refused)).toEqual(botOverridesRead.interpret(refused))
     expect(readOverrides(refused)).toEqual({ accepted: false })
 
-    // The throwing acceptance family keeps its throw unbound rather than losing it.
     const missing = await newTabSettingsRead.request(replyWith(success(null)))
     const readNewTab = newTabSettingsRead.interpret
     expect(() => readNewTab(missing)()).toThrow(TypeError)

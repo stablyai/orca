@@ -11,24 +11,14 @@ function api(): typeof pathPosix {
   return nativeSkillPathSemantics().sep === '\\' ? pathWin32 : pathPosix
 }
 
-/**
- * Aliases stage before the canonical directory, so plain reversal of the move
- * list is exactly the rollback order the design requires: canonical restored
- * first, then `alias-dir`, then `alias-file` symlinks last — a restored alias
- * never points at a canonical directory that does not exist yet.
- */
+/** Stage aliases before canonical content; reverse rollback restores content before links. */
 const STAGING_ORDER: Record<SkillDeletePlacement['kind'], number> = {
   'alias-file': 0,
   'alias-dir': 1,
   canonical: 2
 }
 
-/**
- * A staged sibling shares one parent directory with its source by construction,
- * so the rename cannot fail with `EXDEV` — there is no volume to cross. The one
- * failure that survives is staging a placement that is itself a mount point,
- * which fails with `EBUSY` and is reported per placement.
- */
+/** Same-parent staging avoids cross-volume EXDEV; mount-point EBUSY remains a per-placement failure. */
 export function planSkillDeleteMoves(
   placements: readonly SkillDeletePlacement[],
   toFilesystemPath: (path: string) => string
@@ -37,9 +27,7 @@ export function planSkillDeleteMoves(
   return [...placements]
     .sort((left, right) => STAGING_ORDER[left.kind] - STAGING_ORDER[right.kind])
     .map((placement) => {
-      // An `alias-file` stages only the symlinked SKILL.md, in place. Its
-      // directory is never staged, because it has to survive when it holds
-      // anything besides that symlink.
+      // For alias-file remove only the SKILL.md link; its directory may contain unrelated files.
       const source =
         placement.kind === 'alias-file'
           ? path.join(toFilesystemPath(placement.path), SKILL_FILE_NAME)
@@ -67,8 +55,7 @@ export async function stageSkillDeleteMoves(input: {
 }): Promise<SkillDeleteStagingOutcome> {
   const staged: SkillDeleteJournalMove[] = []
   for (const move of input.moves) {
-    // Record the intent before the rename, so a crash in between leaves a move
-    // recovery treats as possibly-done rather than orphaning the directory.
+    // Persist intent before rename so recovery tracks a crash between them.
     await input.onProgress(staged.length + 1)
     try {
       await input.filesystem.rename(move.sourcePath, move.stagedPath)
@@ -83,22 +70,18 @@ export async function stageSkillDeleteMoves(input: {
   return { status: 'staged' }
 }
 
-/** Returns the staged paths that could not be put back. */
 export async function rollbackSkillDeleteMoves(
   staged: readonly SkillDeleteJournalMove[],
   filesystem: SkillInstallFilesystem
 ): Promise<string[]> {
   const unrestored: string[] = []
-  // Indexed rather than `toReversed()`: the delete modules reach the Node 18
-  // relay bundle, where the ES2023 array-copy methods do not exist.
+  // Indexed reverse iteration supports the Node 18 relay, which lacks toReversed().
   for (let index = staged.length - 1; index >= 0; index -= 1) {
     const move = staged[index]
     try {
       await filesystem.rename(move.stagedPath, move.sourcePath)
     } catch {
-      // Neither fully restored nor fully removed. Reported as `partial` with the
-      // staged path so the result band can say where the files actually are,
-      // rather than `failed`, which would wrongly imply nothing changed.
+      // Report partial with its parked path; failed would imply nothing changed.
       unrestored.push(move.stagedPath)
     }
   }
@@ -128,9 +111,7 @@ export async function removeStagedSkillDeleteMoves(
   return { removedPaths, unremoved }
 }
 
-/** Matches the model's guarantee: a directory holding anything besides the
- *  removed symlink is left in place, because "not shared with another
- *  placement" is not the same guarantee as "contains nothing else". */
+/** Remove alias directories only when empty; unshared placement does not imply no unrelated files. */
 async function removeDirectoryIfEmpty(
   directory: string,
   filesystem: SkillInstallFilesystem

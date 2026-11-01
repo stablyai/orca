@@ -1,23 +1,33 @@
+import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
 import type { AcpStructuredSession } from './acp-structured-session'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpChildStops, AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpAgentError } from './acp-errors'
-import type { AgentSessionBackgroundTaskStops } from '../../shared/agent-child-work-stop-targets'
+import type {
+  AgentChildWorkStopAcknowledgement,
+  AgentSessionBackgroundTaskStops
+} from '../../shared/agent-child-work-stop-targets'
 import { acpBackgroundTaskStopId } from './acp-background-task-child-work'
+import { acpSubagentOutcome } from './acp-subagents'
 
-type ChildStopResult = { cancelled: boolean; stillRunning?: true }
+type ChildStopResult = {
+  cancelled: boolean
+  stillRunning?: true
+  acknowledged?: AgentChildWorkStopAcknowledgement
+}
 type SubagentStop = NonNullable<AcpDialect['subagentStop']>
 type BackgroundTaskStop = NonNullable<AcpDialect['backgroundTaskStop']>
 
 export const NO_ACP_CHILD_STOPS: AcpChildStops = { subagents: false, backgroundTasks: false }
 
 export function acpChildStopCapabilities(
-  session?: AcpStructuredSession
+  session?: AcpStructuredChild
 ): AgentSessionBackgroundTaskStops | undefined {
   return session?.journalClosed === null
     ? {
         supportsTaskStop:
-          session.childStops?.subagents === true || session.childStops?.backgroundTasks === true,
+          isAcpReadySession(session) &&
+          (session.childStops?.subagents === true || session.childStops?.backgroundTasks === true),
         supportsStopAll: false
       }
     : undefined
@@ -40,8 +50,7 @@ async function probeAcpSubagentStop(
   }
 }
 
-/** Only the agent naming the route unknown hides Stop; any other answer leaves the Stop itself to
- *  report what happened. */
+/** Only an explicit unknown-route response hides Stop. */
 async function probeAcpBackgroundTaskStop(
   connection: AcpStructuredConnection,
   dialect: AcpDialect
@@ -72,25 +81,31 @@ export async function probeAcpChildStops(
 async function stopAcpSubagent(
   session: AcpStructuredSession,
   control: SubagentStop,
-  id: string,
-  at: () => number
+  id: string
 ): Promise<ChildStopResult> {
   const request = control.request(session.lane.translator.providerSessionId, id)
   let value: unknown
   try {
     value = await session.connection.requestExtension(request.method, request.params)
   } catch (error) {
-    // Grok answers an ended or unknown subagent normally, so its refusal means it did nothing; anything else leaves the effect unknown.
+    // Grok reports missing subagents normally; a refusal proves no cancellation occurred.
     if (error instanceof AcpAgentError) {
       return { cancelled: false, stillRunning: true }
     }
     throw error
   }
   const result = control.response(value, id)
-  if (result.state && result.state !== 'working') {
-    session.lane.apply(session.lane.translator.reconcileSubagent(id, result.state, at()))
+  if (result.state === 'working') {
+    return { cancelled: result.cancelled }
   }
-  return { cancelled: result.cancelled }
+  // Missing is not accepted; a terminal state supplies its own outcome.
+  const outcome = result.state === undefined ? undefined : acpSubagentOutcome(result.state)
+  return result.cancelled || outcome !== undefined
+    ? {
+        cancelled: result.cancelled,
+        acknowledged: { taskId: id, ...(outcome !== undefined ? { outcome } : {}) }
+      }
+    : { cancelled: false }
 }
 
 async function stopAcpBackgroundTask(
@@ -103,7 +118,7 @@ async function stopAcpBackgroundTask(
   try {
     value = await session.connection.requestExtension(request.method, request.params)
   } catch (error) {
-    // Grok answers a task it no longer holds normally, so a refusal means it killed nothing.
+    // Grok reports missing tasks normally; a refusal proves nothing was killed.
     if (error instanceof AcpAgentError) {
       return { cancelled: false, stillRunning: true }
     }
@@ -113,21 +128,20 @@ async function stopAcpBackgroundTask(
   if (outcome === 'refused') {
     return { cancelled: false, stillRunning: true }
   }
-  // A killed task's own completion ends its row. A gone one settles here, and any completion
-  // Grok still sends for it (exited but not yet swept) overwrites this with the real result.
+  // Settle missing tasks now; later provider completion replaces this with its actual result.
   if (outcome === 'gone') {
     session.lane.apply(session.lane.translator.reconcileBackgroundTask(taskId))
   }
   return { cancelled: true }
 }
 
-/** The host has already resolved these handles from this parent's stoppable child records. */
+/** Handles come from the host's authoritative stoppable-child records. */
 export async function stopAcpChildren(
   session: AcpStructuredSession,
   fence: number,
   taskIds: readonly string[],
-  at: () => number
-): Promise<ChildStopResult> {
+  acknowledge: (acknowledgement: AgentChildWorkStopAcknowledgement) => void = () => {}
+): Promise<{ cancelled: boolean; stillRunning?: true }> {
   const subagentStop = session.childStops?.subagents ? session.spec.dialect.subagentStop : undefined
   const taskStop = session.childStops?.backgroundTasks
     ? session.spec.dialect.backgroundTaskStop
@@ -141,14 +155,17 @@ export async function stopAcpChildren(
   let stillRunning = false
   for (const id of taskIds) {
     const taskId = acpBackgroundTaskStopId(id)
-    const result =
+    const result: ChildStopResult =
       taskId !== undefined && taskStop
         ? await stopAcpBackgroundTask(session, taskStop, taskId)
         : subagentStop
-          ? await stopAcpSubagent(session, subagentStop, id, at)
+          ? await stopAcpSubagent(session, subagentStop, id)
           : { cancelled: false }
     cancelled ||= result.cancelled
     stillRunning ||= result.stillRunning === true
+    if (result.acknowledged) {
+      acknowledge(result.acknowledged)
+    }
   }
   return { cancelled, ...(stillRunning ? { stillRunning: true as const } : {}) }
 }

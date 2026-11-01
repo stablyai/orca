@@ -4,6 +4,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 const {
   applyAppIconMock,
   applyAgentStatusHooksEnabledMock,
+  reconcileClaudeAgentViewMock,
   applyElectronProxySettingsMock,
   browserWindowGetAllWindowsMock,
   handleMock,
@@ -20,6 +21,7 @@ const {
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
   applyAgentStatusHooksEnabledMock: vi.fn(),
+  reconcileClaudeAgentViewMock: vi.fn(),
   applyElectronProxySettingsMock: vi.fn(),
   browserWindowGetAllWindowsMock: vi.fn(),
   handleMock: vi.fn(),
@@ -70,8 +72,14 @@ vi.mock('../ai-vault-search/session-search-enablement', () => ({
   applySessionSearchSettingsChange: applySessionSearchSettingsChangeMock
 }))
 
+vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
+}))
+
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: reconcileClaudeAgentViewMock })
 }))
 
 vi.mock('../worktree-root-preparation', () => ({
@@ -112,6 +120,7 @@ describe('registerSettingsHandlers', () => {
     onMock.mockClear()
     applyAppIconMock.mockClear()
     applyAgentStatusHooksEnabledMock.mockReset().mockResolvedValue([])
+    reconcileClaudeAgentViewMock.mockReset().mockResolvedValue(undefined)
     applyElectronProxySettingsMock.mockClear()
     applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
     previewGhosttyImportMock.mockClear()
@@ -162,8 +171,7 @@ describe('registerSettingsHandlers', () => {
   })
 
   it('answers the synchronous settings read with the persisted settings', () => {
-    // Why: panes can bind PTYs before async hydration; the side-effect
-    // authority kill switch needs the persisted value synchronously.
+    // PTYs can bind before hydration; authority selection needs persisted settings synchronously.
     store.getSettings.mockReturnValue({ terminalMainSideEffectAuthority: false })
     registerSettingsHandlers(store as never)
 
@@ -177,23 +185,19 @@ describe('registerSettingsHandlers', () => {
     expect(event.returnValue).toEqual({ terminalMainSideEffectAuthority: false })
   })
 
-  it('does not reconcile hooks when the disabled-agent set is unchanged', async () => {
-    const before = {
-      agentStatusHooksEnabled: true,
-      disabledTuiAgents: ['codex', 'claude']
-    }
+  it.each([
+    { disabledTuiAgents: ['claude', 'codex'] },
+    { claudeSubagentNavigationEnabled: true },
+    { claudeSubagentNavigationEnabled: false }
+  ])('reconciles navigation without reinstalling unchanged status hooks: %j', async (updates) => {
+    const before = { agentStatusHooksEnabled: true, disabledTuiAgents: ['codex', 'claude'] }
     store.getSettings.mockReturnValue(before)
-    store.updateSettings.mockReturnValue({
-      ...before,
-      disabledTuiAgents: ['claude', 'codex']
-    })
+    store.updateSettings.mockReturnValue({ ...before, ...updates })
     registerSettingsHandlers(store as never)
-    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
-      event: typeof settingsInvokeEvent,
-      args: { disabledTuiAgents: string[] }
-    ) => Promise<unknown>
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
 
-    await handler(settingsInvokeEvent, { disabledTuiAgents: ['claude', 'codex'] })
+    await handler(settingsInvokeEvent, updates)
+    expect(reconcileClaudeAgentViewMock).toHaveBeenCalledWith({ ...before, ...updates })
 
     expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
   })
@@ -254,6 +258,23 @@ describe('registerSettingsHandlers', () => {
     ).rejects.toThrow('Disk full')
     expect(store.updateSettingsAndFlush).toHaveBeenCalledWith(
       { alwaysForceDeleteWorktrees: true, editorWordWrap: false },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('flushes the preserved-branch deletion preference before returning', async () => {
+    store.getSettings.mockReturnValue({ alwaysForceDeletePreservedBranches: false })
+    store.updateSettingsAndFlush.mockRejectedValue(new Error('Disk full'))
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
+    if (typeof handler !== 'function') {
+      throw new Error('Missing settings:set handler')
+    }
+    await expect(
+      handler(settingsInvokeEvent, { alwaysForceDeletePreservedBranches: true })
+    ).rejects.toThrow('Disk full')
+    expect(store.updateSettingsAndFlush).toHaveBeenCalledWith(
+      { alwaysForceDeletePreservedBranches: true },
       { notifyListeners: true, originWebContentsId: 1 }
     )
   })
@@ -522,8 +543,8 @@ describe('registerSettingsHandlers', () => {
     ) => Promise<unknown>
 
     await handler(settingsInvokeEvent, {
-      pluginConsents: { 'orca-samples.demo': 'sha256-forged' },
-      disabledPlugins: ['orca-samples.demo']
+      pluginConsents: { 'samples.demo': 'sha256-forged' },
+      disabledPlugins: ['samples.demo']
     })
 
     expect(store.updateSettings).toHaveBeenCalledWith(
@@ -880,8 +901,6 @@ describe('registerSettingsHandlers', () => {
     expect(rebuildAppMenuMock).toHaveBeenCalledTimes(1)
   })
 
-  // 3b stores the two booleans and nothing else; the consent copy and the
-  // history picker are PR 8's. A profile that has never opted in has no key.
   it('normalizes an agent-session-search write and hands the change to the index', async () => {
     const before = { aiVaultSearch: { enabled: false, historyDays: null } }
     store.getSettings.mockReturnValue(before)

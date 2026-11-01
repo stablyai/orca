@@ -16,6 +16,8 @@ export type ClaudeOAuthCredentialSource =
 export type ClaudeOAuthCredentialReadResult = {
   token: string | null
   hasRefreshableCredentials: boolean
+  /** Epoch ms; Claude Code 2.1.x records it beside the refresh token. */
+  refreshTokenExpiresAt?: number
   source: ClaudeOAuthCredentialSource
   keychainUnavailable?: boolean
   unavailable?: boolean
@@ -30,7 +32,8 @@ const schema = z.object({
   claudeAiOauth: z
     .object({
       accessToken: z.string().optional(),
-      refreshToken: z.string().optional()
+      refreshToken: z.string().optional(),
+      refreshTokenExpiresAt: z.unknown().optional()
     })
     .optional()
 })
@@ -40,10 +43,13 @@ export function parseClaudeOAuthCredentialsJson(
 ): ClaudeOAuthCredentialReadResult {
   try {
     const oauth = schema.parse(JSON.parse(raw)).claudeAiOauth
-    // Why: expiresAt is not authoritative for the usage endpoint; let the server decide.
+    // The usage server, not stored expiresAt, decides token validity.
     return {
       token: oauth?.accessToken || null,
       hasRefreshableCredentials: Boolean(oauth?.refreshToken),
+      ...(typeof oauth?.refreshTokenExpiresAt === 'number'
+        ? { refreshTokenExpiresAt: oauth.refreshTokenExpiresAt }
+        : {}),
       source
     }
   } catch {
@@ -84,7 +90,7 @@ async function readClaudeKeychainCredentials(
     return scoped
   }
   const legacy = await readClaudeCredentialsFromStrictKeychain(undefined, 'legacy-keychain')
-  // Why: as before profiles, a token wins over an unreadable item.
+  // A readable token takes precedence over an unavailable keychain item.
   const candidates = [scoped, legacy]
   return (
     candidates.find((candidate) => candidate.token) ??
@@ -126,7 +132,7 @@ export function resolveClaudeOAuthCredentialReadOptions(
   const accountDir = authPreparation.envPatch.CLAUDE_CONFIG_DIR
   return {
     credentialsFileConfigDir: authPreparation.configDir,
-    // Why the user's own folder, login shell first: Claude names System default's item from it.
+    // Claude keys System Default items by the user config folder resolved from the login environment.
     keychainConfigDir:
       accountDir ??
       getClaudeProfileRouter()?.userConfigDir() ??

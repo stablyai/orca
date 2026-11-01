@@ -1,6 +1,4 @@
-// An install that fails after it opened the chat journal leaves that one connection to the record
-// store slot, which launch admission may already be using, and the next install builds on it: the
-// process never holds a second connection.
+// Failed host installation reuses the record-store slot's open journal connection; launch admission may already hold it.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

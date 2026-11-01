@@ -31,8 +31,6 @@ describe('browser Find subscriptions', () => {
     expect(samePageCallback).not.toHaveBeenCalled()
   })
 
-  // A client-hosted guest is registered by main's host runtime with no workspace, so its forwarded
-  // chord can only name the page.
   it('dispatches a page-only target to every workspace holding that page', () => {
     const subscriptions = createBrowserFindSubscriptions()
     const firstCallback = vi.fn()
@@ -54,8 +52,7 @@ describe('browser Find subscriptions', () => {
     const callback = vi.fn()
     subscriptions.subscribe(FIRST_SOURCE, callback)
 
-    // Structured-clone IPC preserves an explicitly-undefined property, so main's optional field
-    // arrives as a present key rather than an absent one.
+    // Structured-clone IPC preserves explicitly undefined properties.
     subscriptions.dispatch({
       browserPageId: FIRST_SOURCE.browserPageId,
       browserWorkspaceId: undefined
@@ -92,12 +89,9 @@ describe('browser Find subscriptions', () => {
     subscriptions.dispatch(FIRST_SOURCE)
     subscriptions.dispatch({ browserPageId: FIRST_SOURCE.browserPageId })
     expect(callback).not.toHaveBeenCalled()
-    // Not just silent — the entry is gone, so a long session cannot accumulate empty maps.
     expect(subscriptions.subscribedPageCount()).toBe(0)
   })
 
-  // Why: the page entry is shared, so pruning it on one workspace's cleanup would silently
-  // unsubscribe its siblings.
   it('keeps the other workspaces on a page when one of them unsubscribes', () => {
     const subscriptions = createBrowserFindSubscriptions()
     const firstCallback = vi.fn()

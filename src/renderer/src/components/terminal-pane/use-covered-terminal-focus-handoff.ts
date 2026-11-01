@@ -1,11 +1,8 @@
 import { useLayoutEffect, type RefObject } from 'react'
 import type { Terminal } from '@xterm/xterm'
+import { focusNativeChatPromptCard } from '../native-chat/use-native-chat-prompt-card-focus'
 
-/**
- * A terminal under a chat cover must never hold focus: its keys would reach an
- * agent the user cannot see. Hands focus to the cover in the commit that mounts
- * it, then marks the xterm inert so no later terminal.focus() can take it back.
- */
+/** Commit focus to the visible chat cover before making xterm inert, preventing later terminal.focus from sending keys to a hidden agent. */
 export function useCoveredTerminalFocusHandoff(
   coverRef: RefObject<HTMLElement | null>,
   terminal: Pick<Terminal, 'element' | 'focus'>
@@ -19,7 +16,9 @@ export function useCoveredTerminalFocusHandoff(
     const ownerDocument = cover.ownerDocument
     // Focus first: making a focused element inert drops focus to <body>.
     if (terminalElement.contains(ownerDocument.activeElement)) {
-      cover.focus({ preventScroll: true })
+      if (!focusNativeChatPromptCard(cover, null)) {
+        cover.focus({ preventScroll: true })
+      }
     }
     terminalElement.inert = true
     return () => {

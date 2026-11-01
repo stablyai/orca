@@ -1,9 +1,7 @@
 import { useMemo } from 'react'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import {
-  runtimeTargetForOwnerEnvironment,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/actions/git-operation-target'
@@ -15,10 +13,7 @@ function ownerTargetFor(
   return worktreeId ? runtimeTargetForWorkspaceOwner(state, { workspaceId: worktreeId }) : null
 }
 
-/**
- * Transport to the worktree's owner for right-sidebar git work, or `null` when its rows name none
- * or disagree. Never the focused server, which can change while a poll is in flight.
- */
+/** Resolve the worktree owner, never mutable host focus; missing/disagreeing rows return null. */
 export function getWorktreeGitOwnerTarget(
   worktreeId: string | null | undefined
 ): RuntimeClientTarget | null {
@@ -29,7 +24,7 @@ export function getWorktreeGitOwnerTarget(
 export function useWorktreeGitOwnerTarget(
   worktreeId: string | null | undefined
 ): RuntimeClientTarget | null {
-  // Why a key: the resolver returns a fresh object per call, which would re-render every write.
+  // Subscribe by primitive owner key; fresh resolver objects would rerender every write.
   const ownerKey = useAppStore((state) => {
     const target = ownerTargetFor(state, worktreeId)
     return target ? (target.kind === 'environment' ? `env:${target.environmentId}` : 'local') : null

@@ -1,16 +1,12 @@
 // @vitest-environment happy-dom
 //
-// Faithful end-to-end check of the markdown-preview http link routing: renders
-// the real MarkdownPreview, lets react-markdown produce a real <a>, and fires
-// real modifier clicks so the component's own handleClick + modifier detection
-// run. openHttpLink stays real (wired through its registerHttpLinkStoreAccessor
-// seam); only its store data and window.api are controlled. This is the
-// regression guard for "Cmd+Shift-click opens the system browser, plain/Cmd
-// click opens the Orca browser".
+// Exercise real MarkdownPreview links, modifier detection and openHttpLink; control only store data and IPC.
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import type { MarkdownPreviewSourceOpenFile } from './markdown-preview-types'
 
 const createBrowserTabMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
@@ -24,8 +20,10 @@ const worktreeLookup = vi.hoisted(() => ({
 }))
 const statRuntimePathMock = vi.hoisted(() => vi.fn(async () => ({ isDirectory: false })))
 
-// Minimal store: MarkdownPreview reads settings/worktreesByRepo plus a handful
-// of action functions. None of the actions fire on the http path under test.
+const openFiles: MarkdownPreviewSourceOpenFile[] = []
+const activeFileIdByWorktree: Record<string, string | null> = {}
+
+// Provide only store reads used by this HTTP-link path; file actions should remain idle.
 const storeState = {
   openFile: vi.fn(),
   activateMarkdownLink: vi.fn(),
@@ -42,8 +40,8 @@ const storeState = {
   repos: [],
   folderWorkspaces: [],
   projectGroups: [],
-  openFiles: [],
-  activeFileIdByWorktree: {},
+  openFiles,
+  activeFileIdByWorktree,
   settings: { openLinksInApp: true },
   editorFontZoomLevel: 0
 }
@@ -79,9 +77,7 @@ vi.mock('@/runtime/use-worktree-runtime-target', () => ({
       ? { kind: 'environment', environmentId: runtimeEnvironmentId }
       : { kind: 'local' }
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
-  statRuntimePath: statRuntimePathMock
-}))
+vi.mock('@/runtime/runtime-file-metadata-client', () => ({ statRuntimePath: statRuntimePathMock }))
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: (worktreeId: string) => targetConnectionOwners.get(worktreeId)
 }))
@@ -102,6 +98,8 @@ vi.mock('./NotesSendMenu', () => ({ NotesSendMenu: () => null }))
 vi.mock('./MarkdownTableOfContentsPanel', () => ({ MarkdownTableOfContentsPanel: () => null }))
 
 import MarkdownPreview from './MarkdownPreview'
+import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
+import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import { registerHttpLinkStoreAccessor } from '../../lib/http-link-routing'
 
 describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
@@ -252,5 +250,120 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
       activate: true
     })
     expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  describe('file links with a #L line', () => {
+    const frames = new Map<number, FrameRequestCallback>()
+    let nextFrameId = 0
+
+    beforeEach(() => {
+      frames.clear()
+      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+        nextFrameId += 1
+        frames.set(nextFrameId, callback)
+        return nextFrameId
+      })
+      vi.stubGlobal('cancelAnimationFrame', (frameId: number) => {
+        frames.delete(frameId)
+      })
+      const diffComments: never[] = []
+      const sourceWorktree = { id: 'wt-1', path: '/repo', diffComments }
+      const otherWorktree = { id: 'wt-2', path: '/other', diffComments }
+      worktreeLookup.value = [sourceWorktree, otherWorktree]
+      storeState.worktreesByRepo = { repo: [sourceWorktree], other: [otherWorktree] }
+      targetConnectionOwners.set('wt-1', null)
+      targetConnectionOwners.set('wt-2', null)
+      storeState.openFile.mockReset()
+      storeState.setPendingEditorReveal.mockClear()
+    })
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      storeState.openFiles = []
+      storeState.activeFileIdByWorktree = {}
+    })
+
+    function flushFrames(): void {
+      // Map iteration also visits frames queued by the callbacks it runs.
+      for (const [frameId, callback] of frames) {
+        frames.delete(frameId)
+        callback(0)
+      }
+    }
+
+    async function clickLineLink(href: string): Promise<void> {
+      const anchor = render(`[target](${href})`, href)
+      await act(async () => {
+        anchor.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }))
+      })
+    }
+
+    it('reveals the line in another worktree after the preview unmounts', async () => {
+      const targetFileId = buildOwnedEditorFileId('/other/src/Example.cs', 'wt-2', null)
+      // Use the real owner-qualified file ID so the editor can match and apply the reveal.
+      storeState.openFile.mockImplementation(
+        (file: { filePath: string; relativePath: string; worktreeId: string }) => {
+          storeState.openFiles = [{ ...file, id: targetFileId, mode: 'edit' }]
+          storeState.activeFileIdByWorktree = { [file.worktreeId]: targetFileId }
+        }
+      )
+      await clickLineLink('file:///other/src/Example.cs#L120')
+      // Worktree switching unmounts this preview before reveal frames execute.
+      act(() => {
+        root.unmount()
+      })
+      flushFrames()
+
+      expect(storeState.openFile).toHaveBeenCalledWith(
+        expect.objectContaining({ worktreeId: 'wt-2', filePath: '/other/src/Example.cs' })
+      )
+      expect(storeState.setPendingEditorReveal).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          fileId: targetFileId,
+          filePath: '/other/src/Example.cs',
+          line: 120,
+          column: 1
+        })
+      )
+    })
+
+    it('reveals the line after replacing the preview in the same worktree', async () => {
+      await clickLineLink('file:///repo/src/Example.cs#L42C7')
+      act(() => {
+        root.unmount()
+      })
+      flushFrames()
+
+      expect(storeState.openFile).toHaveBeenCalledWith(
+        expect.objectContaining({ worktreeId: 'wt-1', filePath: '/repo/src/Example.cs' })
+      )
+      expect(storeState.setPendingEditorReveal).toHaveBeenLastCalledWith(
+        expect.objectContaining({ filePath: '/repo/src/Example.cs', line: 42, column: 7 })
+      )
+    })
+
+    it('lets a newer editor navigation supersede the detached preview reveal', async () => {
+      await clickLineLink('file:///other/src/Example.cs#L120')
+      act(() => {
+        root.unmount()
+      })
+      const successorId = buildOwnedEditorFileId('/repo/src/Newer.ts', 'wt-1', null)
+      scheduleEditorLineReveal(useAppStore.getState, '/repo/src/Newer.ts', 75, 3, successorId)
+      flushFrames()
+
+      expect(storeState.setPendingEditorReveal.mock.calls).toEqual([
+        [null],
+        [null],
+        [
+          {
+            filePath: '/repo/src/Newer.ts',
+            fileId: successorId,
+            line: 75,
+            column: 3,
+            matchLength: 0
+          }
+        ]
+      ])
+    })
   })
 })

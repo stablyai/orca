@@ -13,3 +13,12 @@ export const AntigravityAccountMutationParams = z
     accountId: z.string().min(1).max(128)
   })
   .strict()
+
+export const AntigravityChatSignInFlowParams = z.strictObject({
+  flowId: z.string().min(1).max(64)
+})
+
+export const AntigravityChatSignInCompleteParams = z.strictObject({
+  flowId: z.string().min(1).max(64),
+  callbackUrl: z.string().min(1).max(16_384)
+})

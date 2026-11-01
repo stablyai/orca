@@ -40,7 +40,7 @@ function threePanes() {
   return { ctx, model: second.model, tabId, a, b, c }
 }
 
-/** Params as an old desktop sends them (`use-terminal-pane-layout-persistence.ts`), parsed as today. */
+/** Parse older desktop persistence params from use-terminal-pane-layout-persistence.ts. */
 function sent(tabId: string, fields: Record<string, unknown>) {
   return UpdatePaneLayout.parse({
     worktree: WS,

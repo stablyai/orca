@@ -4,11 +4,10 @@ import type { WorkspaceCleanupUIState } from '../../../../shared/workspace-clean
 import type { UiUpdateFieldsSchema } from './client-ui-schemas'
 import type { AssertNoMissingKeys, AssertNoMissingValues } from './ui-state-schema-parity'
 
-// Why: state only the main process ever writes (store.updateUI, star-nag's own
-// IPC, window lifecycle). Clients never send these, so keeping them out of the
-// strict schema is deliberate — but it must stay deliberate rather than
-// forgotten, which is what the parity assertion below enforces.
+// Main-only UI fields never arrive from clients; parity checks enforce their deliberate omission from the strict schema.
 type MainOwnedUIState =
+  | 'jiraSavedFilterState'
+  | 'jiraQuickFilterState'
   | '_explorerDisplayRootMigrated'
   | 'trayMinimizeNoticeShown'
   | 'dashboardPopoutBounds'
@@ -21,27 +20,22 @@ type MainOwnedUIState =
   | 'starNagCompleted'
   | 'starNagDeferredUntil'
   | 'starNagAgentValueMomentAppVersion'
+  // Desktop-local replay queue: a paired client must not overwrite it.
+  | 'pendingRuntimeRepoRemovals'
 const _uiUpdateParity: AssertNoMissingKeys<
   Omit<PersistedUIState, MainOwnedUIState>,
   z.infer<UiUpdateFieldsSchema>
 > = true
 void _uiUpdateParity
 
-// Why: key parity is blind to enum drift, which is how 'cli' and three
-// rightSidebarTab members went missing while the guard above stayed green.
-// Checked over every shared key, not a hand-picked pair — naming the two known
-// offenders would leave the next field to drift exactly as unguarded.
-// z.input, not z.infer: what a client may SEND, before `.transform()` narrows it.
+// Check every shared key's z.input domain: key parity alone missed enum values, and transforms narrow z.infer.
 const _uiUpdateValueParity: AssertNoMissingValues<
   Omit<PersistedUIState, MainOwnedUIState>,
   z.input<UiUpdateFieldsSchema>
 > = true
 void _uiUpdateValueParity
 
-// Why a nested pair: the guards above only walk PersistedUIState's OWN keys, and
-// a structural `extends` is satisfied by extra properties — so a sub-key added
-// to workspaceCleanup (e.g. `browse`) and never added to its `.strict()` schema
-// would keep both green while every paired client's ui.set payload is rejected.
+// Check nested keys too: structural extends permits extras that strict workspaceCleanup would reject, including newer filter groups.
 type WorkspaceCleanupSchema = NonNullable<z.input<UiUpdateFieldsSchema>['workspaceCleanup']>
 const _workspaceCleanupParity: AssertNoMissingKeys<
   WorkspaceCleanupUIState,

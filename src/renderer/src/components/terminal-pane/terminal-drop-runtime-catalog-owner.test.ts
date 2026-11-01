@@ -44,7 +44,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
@@ -176,7 +176,7 @@ describe.each(['native', 'internal'])('%s runtime terminal catalog ownership', (
           },
           ['/client/file.txt'],
           '/owner/workspace/.orca/drops',
-          { assertCurrent: expect.any(Function) }
+          { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
         )
         expect(sendInput).toHaveBeenCalledExactlyOnceWith(
           '/owner/workspace/.orca/drops/file.txt ',

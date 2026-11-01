@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
 const rpc = vi.hoisted(() => ({ call: vi.fn(), supports: vi.fn(), status: vi.fn() }))
 vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
@@ -21,7 +21,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 // @ts-expect-error -- minimal API stub for the store under test
 globalThis.window = { api: {} }
-import { createTestStore } from './store-test-helpers'
+import { createRuntimeDetectedAgentsPairingTestStore as createTestStore } from './runtime-detected-agents-pairing.test-fixture'
 import { getRuntimeAgentInventoryKey } from './runtime-agent-inventory-key'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 

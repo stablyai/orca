@@ -7,9 +7,6 @@ const { recordAgentSessionRuntimeEndMock } = vi.hoisted(() => ({
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
@@ -68,6 +65,7 @@ describe('createMainWindow', () => {
         }),
         setZoomLevel: vi.fn(),
         setBackgroundThrottling: vi.fn(),
+        setWebRTCIPHandlingPolicy: vi.fn(),
         invalidate: vi.fn(),
         setWindowOpenHandler: vi.fn(),
         send: vi.fn(),
@@ -207,7 +205,6 @@ describe('createMainWindow', () => {
       expect(preventDefault).toHaveBeenCalled()
       expect(instance.hide).toHaveBeenCalledTimes(1)
       expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', expect.anything())
-      // Notice already shown, so it must not fire again.
       expect(notificationMock).not.toHaveBeenCalled()
     })
 
@@ -288,9 +285,7 @@ describe('createMainWindow', () => {
       })
     })
 
-    // Why: on Windows the renderer-drawn X routes through window:request-close,
-    // not the native close event — regression guard for the bug where the app
-    // quit instead of hiding because the guard only covered the native event.
+    // Windows custom X uses window:request-close; the native close guard alone would quit instead of hide.
     function captureIpcHandlers(): Record<string, (...args: any[]) => void> {
       const ipcHandlers: Record<string, (...args: any[]) => void> = {}
       vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {

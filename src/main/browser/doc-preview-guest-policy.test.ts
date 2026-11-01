@@ -18,7 +18,6 @@ const HOST_RENDERER_ID = 42
 
 function installOnFakeGuest(
   hostId: number = HOST_RENDERER_ID,
-  /** What the guest is already showing when the embedder hands it over, as a real one usually is. */
   initialUrl = ''
 ): {
   contents: object
@@ -28,7 +27,7 @@ function installOnFakeGuest(
   send: ReturnType<typeof vi.fn>
   setWebRTCIPHandlingPolicy: ReturnType<typeof vi.fn>
   windowOpenHandler: (details: { url: string }) => { action: string }
-  /** Why without the `destroyed` event: Chromium tears the contents down before main runs it. */
+  /** Model contents teardown before its destroyed event reaches main. */
   markContentsDestroyed: () => void
 } {
   const handlers: GuestHandlers = {}
@@ -74,7 +73,6 @@ function startMainFrameNavigation(guest: FakeGuest, url: string): void {
   guest.handlers['did-start-navigation']?.({ url, isMainFrame: true } as never)
 }
 
-/** A guest already showing a document, which is the only state a link can be pressed in. */
 function boundGuest(): { grant: ReturnType<typeof mintGrant>; guest: FakeGuest } {
   const grant = mintGrant()
   const guest = installOnFakeGuest()
@@ -86,8 +84,7 @@ function reportClick(guest: FakeGuest, url: string): void {
   reportDocPreviewLinkClick(guest.contents as never, url)
 }
 
-// Why a fresh page per grant: the registry is keyed by the page now, so two grants sharing one
-// would have the second silently replace the first rather than stand beside it.
+// Distinct pages keep simultaneously live grants from replacing each other in the registry.
 let nextDocPageOrdinal = 0
 
 function mintGrant(): ReturnType<typeof mintDocPreviewGrant> {
@@ -119,9 +116,6 @@ describe('doc preview guest policy', () => {
     expect(guest.send).not.toHaveBeenCalled()
   })
 
-  // Why an unlatched guest is refused rather than trusted: the renderer-set src is
-  // browser-initiated and never reaches will-navigate, so a navigation arriving before the latch is
-  // one the guest started for itself.
   it('blocks a navigation the guest starts before a document has bound it', () => {
     const grant = mintGrant()
     const guest = installOnFakeGuest()
@@ -202,8 +196,6 @@ describe('doc preview guest policy', () => {
     expect(guest.send).not.toHaveBeenCalled()
   })
 
-  // Why: will-navigate never fires for a subframe, so an <iframe src="https://…"> would load
-  // off-machine even though the top frame cannot.
   it('blocks a subframe navigating outside the grant, without opening a tab for it', () => {
     const { guest } = boundGuest()
     const preventDefault = vi.fn()
@@ -231,18 +223,11 @@ describe('doc preview guest policy', () => {
     expect(preventDefault).not.toHaveBeenCalled()
   })
 
-  // Why this group exists: the external-link route ends in a real browser tab with full network, so
-  // a document that can read its grant and reach that route can exfiltrate it. Only a reader's own
-  // press on a link may, and only the guest's preload can tell that a press was one.
   describe('the trusted-click route out of the preview', () => {
-    // The headline. The earlier design read a recent-input timestamp, so a script that navigated
-    // shortly after any genuine press was routed out as if the press had asked for it. Here the
-    // navigation sinks route nothing at all, so when the input happened cannot matter.
     it('routes nothing for a scripted location change or window.open, whenever input happened', () => {
       const { guest } = boundGuest()
       const preventDefault = vi.fn()
 
-      // Genuine input the guest would report, delivered immediately before the document acts.
       guest.handlers['input-event']?.({} as never, { type: 'mouseDown' } as never)
       guest.handlers['before-input-event']?.({} as never, { type: 'keyDown' } as never)
       guest.handlers['will-navigate']?.(
@@ -254,30 +239,54 @@ describe('doc preview guest policy', () => {
       expect(preventDefault).toHaveBeenCalledOnce()
       expect(popup).toEqual({ action: 'deny' })
       expect(guest.send).not.toHaveBeenCalled()
-      // Why assert the absence of the listeners too: with them gone there is no timing a document
-      // could hit, rather than a window it merely failed to hit in this test.
+      // No input listeners means there is no timing window for scripted navigation.
       expect(guest.handlers['input-event']).toBeUndefined()
       expect(guest.handlers['before-input-event']).toBeUndefined()
     })
 
     it('routes a reported click on an external link exactly once', () => {
-      const { guest } = boundGuest()
+      const { grant, guest } = boundGuest()
 
       reportClick(guest, 'https://example.com/docs')
 
       expect(guest.send).toHaveBeenCalledExactlyOnceWith('docPreview:externalLink', {
-        url: 'https://example.com/docs'
+        url: 'https://example.com/docs',
+        grantId: grant.id,
+        modifiers: { metaKey: false, ctrlKey: false, shiftKey: false }
       })
     })
 
     it("does not mistake Electron's false webview focus flag for an untrusted click", () => {
-      const { guest } = boundGuest()
+      const { grant, guest } = boundGuest()
       guest.isFocused.mockReturnValue(false)
 
       reportClick(guest, 'https://example.com/docs')
 
       expect(guest.send).toHaveBeenCalledExactlyOnceWith('docPreview:externalLink', {
-        url: 'https://example.com/docs'
+        url: 'https://example.com/docs',
+        grantId: grant.id,
+        modifiers: { metaKey: false, ctrlKey: false, shiftKey: false }
+      })
+    })
+
+    it('copies only boolean modifiers and derives grant identity from the sender', () => {
+      const { grant, guest } = boundGuest()
+      const contents = getWorkspaceDocPageGuest(grant.browserPageId, guest.hostId)
+      if (!contents) {
+        throw new Error('Expected a registered preview guest')
+      }
+
+      reportDocPreviewLinkClick(contents, 'https://example.com/docs', {
+        metaKey: true,
+        ctrlKey: 'true',
+        shiftKey: 1,
+        grantId: 'forged-grant'
+      })
+
+      expect(guest.send).toHaveBeenCalledExactlyOnceWith('docPreview:externalLink', {
+        url: 'https://example.com/docs',
+        grantId: grant.id,
+        modifiers: { metaKey: true, ctrlKey: false, shiftKey: false }
       })
     })
 
@@ -331,16 +340,12 @@ describe('doc preview guest policy', () => {
     })
   })
 
-  // Why: a peer connection is UDP straight off the network stack — the response CSP and the
-  // session's request filter both miss it, so this is the only place it can be refused.
   it('denies the guest non-proxied WebRTC UDP at attach', () => {
     const guest = installOnFakeGuest()
 
     expect(guest.setWebRTCIPHandlingPolicy).toHaveBeenCalledWith('disable_non_proxied_udp')
   })
 
-  // Why: latching from a subframe would let an in-document iframe decide which grant the guest
-  // belongs to, and every later main-frame check would be measured against that.
   it('binds the guest from the main frame only', () => {
     const grant = mintGrant()
     const otherGrant = mintGrant()
@@ -374,10 +379,6 @@ describe('doc preview guest policy', () => {
       expect(getWorkspaceDocPageGuest(grant.browserPageId, HOST_RENDERER_ID + 1)).toBeNull()
     })
 
-    // Why this is the ordinary case and not an edge one: the embedder hands the guest over after
-    // it has already started loading its src, so the navigation that binds most previews to their
-    // grant happens before any listener here exists. Missing it leaves the tools unable to name
-    // the guest for as long as the reader stays on the page they opened.
     it('binds a guest that is already showing its document when the policy installs', () => {
       const grant = mintGrant()
       const guest = installOnFakeGuest(HOST_RENDERER_ID, buildDocPreviewUrl(grant.id, 'index.html'))
@@ -385,7 +386,6 @@ describe('doc preview guest policy', () => {
       expect(getWorkspaceDocPageGuest(grant.browserPageId, HOST_RENDERER_ID)).toBe(guest.contents)
     })
 
-    // The same miss, one event later: the load started before the listener and commits after it.
     it('binds a guest whose first navigation only reaches the commit', () => {
       const grant = mintGrant()
       const guest = installOnFakeGuest()
@@ -398,8 +398,6 @@ describe('doc preview guest policy', () => {
       expect(getWorkspaceDocPageGuest(grant.browserPageId, HOST_RENDERER_ID)).toBe(guest.contents)
     })
 
-    // Why: the src commit is what proves this guest is showing that grant. Before it, the id names
-    // a document nothing has been asked to render.
     it('refuses a guest that has not committed a document yet', () => {
       const grant = mintGrant()
       installOnFakeGuest()
@@ -407,8 +405,6 @@ describe('doc preview guest policy', () => {
       expect(getWorkspaceDocPageGuest(grant.browserPageId, HOST_RENDERER_ID)).toBeNull()
     })
 
-    // Why: revoking is how a closed tab withdraws its preview, and it happens while the guest is
-    // still being torn down — a tool must stop answering at revoke, not at destroy.
     it('stops answering once the grant is revoked', () => {
       const { grant } = boundGuest()
 
@@ -425,8 +421,6 @@ describe('doc preview guest policy', () => {
       expect(getWorkspaceDocPageGuest(grant.browserPageId, HOST_RENDERER_ID)).toBeNull()
     })
 
-    // Why this is separate from the destroy event: the contents die before main runs that listener,
-    // so in that window the registration still looks live and only this check refuses it.
     it('refuses a guest whose contents died before the destroy event arrived', () => {
       const { grant, guest } = boundGuest()
 
@@ -441,10 +435,6 @@ describe('doc preview guest policy', () => {
       expect(getWorkspaceDocPageGuest(grant.browserPageId, HOST_RENDERER_ID)).toBeNull()
     })
 
-    // Why this is what makes three latch call sites safe: install, did-start-navigation and
-    // did-navigate all feed the same latch, so without the no-rebind guard the second and third
-    // would let a later navigation move a bound guest onto another grant — and a tool asking for
-    // that grant would be handed a guest showing someone else's document.
     it('never rebinds a bound guest onto a second grant', () => {
       const { grant, guest } = boundGuest()
       const other = mintGrant()
@@ -459,9 +449,6 @@ describe('doc preview guest policy', () => {
       expect(getWorkspaceDocPageGuest(grant.browserPageId, HOST_RENDERER_ID)).toBe(guest.contents)
     })
 
-    // Why the replacement is registered before the old guest's teardown runs: a re-mint attaches
-    // the new guest first, and Chromium runs the outgoing guest's destroyed listener afterwards. A
-    // teardown that deleted by page alone would unregister the guest the reader is now looking at.
     it('leaves a re-minted preview registered when the guest it replaced tears down', () => {
       const first = mintGrant()
       const outgoing = installOnFakeGuest(
@@ -489,9 +476,6 @@ describe('doc preview guest policy', () => {
       )
     })
 
-    // Why the grant has to be live at the latch and not only at each later request: registering the
-    // page a dead grant names would put a guest that can read nothing into the registry the tool
-    // door answers from, under a page a live grant may later want.
     it('registers nothing for a guest showing a grant that is already revoked', () => {
       const grant = mintGrant()
       revokeDocPreviewGrant(grant.id)
@@ -499,14 +483,12 @@ describe('doc preview guest policy', () => {
       const guest = installOnFakeGuest(HOST_RENDERER_ID, buildDocPreviewUrl(grant.id, 'index.html'))
 
       expect(getWorkspaceDocPageGuest(grant.browserPageId, HOST_RENDERER_ID)).toBeNull()
-      // The presence half: the same install does register when the grant is still live.
       const live = mintGrant()
       installOnFakeGuest(HOST_RENDERER_ID, buildDocPreviewUrl(live.id, 'index.html'))
       expect(getWorkspaceDocPageGuest(live.browserPageId, HOST_RENDERER_ID)).not.toBeNull()
       expect(guest.contents).toBeDefined()
     })
 
-    // Why both directions: two previews open at once must not be able to drive each other's guest.
     it('keeps two live previews on their own guests', () => {
       const first = boundGuest()
       const second = boundGuest()
@@ -520,8 +502,6 @@ describe('doc preview guest policy', () => {
     })
   })
 
-  // Session events name the contents and nothing else, so this is how a fence firing on the whole
-  // partition works out which preview — if any — the reader should be told about.
   describe('naming the grant a contents is showing', () => {
     it('answers the bound grant for a live preview guest', () => {
       const { grant, guest } = boundGuest()

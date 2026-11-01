@@ -1,17 +1,5 @@
-/**
- * Counts a comment spells out, read back and compared with the table each is a count of.
- *
- * Prose is where a count drifts. #22072 removed one grant from the session route and left
- * "Fourteen grants" and "the four audio verbs" standing in five files, none of which a reader can
- * tell from a fact. Naming the table in the sentence does not help either: the number is still a
- * copy, and a copy is what goes stale.
- *
- * A row names the words a number precedes. Every number word found before them anywhere in the
- * file has to be the one the table counts, so a second spelling left behind fails too rather than
- * passing on the first correct hit, and a phrase rewrapped at a different column still matches.
- * Repeats of the right word collapse, because a claim restated is still one claim; a phrase with no
- * number before it anywhere reads as the empty list, which no table count matches.
- */
+// Compare every spelled count before selected phrases with actual table length; stale duplicates fail even if one spelling is correct (#22072).
+// Ignore wraps/comment markers, collapse repeated correct words, and treat missing number as empty mismatch.
 
 export const NUMBER_WORDS = [
   'zero',
@@ -44,12 +32,7 @@ export function numberWordsBefore(source, words) {
     .filter((word) => NUMBER_WORDS.includes(word))
 }
 
-/**
- * One entry per row: what the prose spells, and what the table counts, ready to compare.
- *
- * Returned rather than asserted so the caller's failure names the phrase, which is the only thing
- * that says where in the file to look.
- */
+// Return phrase/count rows so caller’s assertion identifies which prose claim drifted.
 export function spelledCountsAgainstTables(source, rows) {
   return rows.map(({ precedes, counted }) => {
     const word = NUMBER_WORDS[counted]

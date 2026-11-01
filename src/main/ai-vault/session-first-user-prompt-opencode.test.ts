@@ -12,7 +12,7 @@ beforeEach(() => {
   reader.v2.mockReset().mockResolvedValue({ firstUserPrompt: 'full second-schema prompt' })
 })
 
-it('asks the host reader for the full prompt instead of opening SQLite in the calling process', async () => {
+it('requests the full prompt through the host reader', async () => {
   expect(
     await readAiVaultFirstUserPrompt({
       agent: 'opencode',
@@ -74,7 +74,7 @@ it('does not substitute local history for a remote session', async () => {
   expect(reader.v1).not.toHaveBeenCalled()
 })
 
-it('degrades a failed guest read to an unavailable prompt', async () => {
+it('degrades a failed host-reader request to an unavailable prompt', async () => {
   reader.v1.mockRejectedValue(new Error('guest stopped'))
   expect(
     await readAiVaultFirstUserPrompt({

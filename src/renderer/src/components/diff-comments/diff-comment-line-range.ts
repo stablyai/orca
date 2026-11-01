@@ -1,5 +1,4 @@
-// Why: the line arithmetic behind ranged review notes, kept free of Monaco so the drag
-// controller, the keyboard chord and the markdown selection path all agree on one definition.
+// Share Monaco-free range rules across gutter, keyboard and markdown annotations.
 
 export type DiffCommentLineRange = {
   startLine: number
@@ -49,9 +48,7 @@ export function toDiffCommentLineTarget(range: DiffCommentLineRange): DiffCommen
   }
 }
 
-// Why: on review surfaces only the lines of a patch hunk can carry a comment, so a drag that
-// runs past a hunk edge clamps to the last line it can still reach instead of freezing or
-// silently jumping the gap.
+// Clamp at the hunk edge instead of jumping an uncommentable gap.
 export function clampFocusLineToCommentable(
   anchorLine: number,
   focusLine: number,
@@ -75,8 +72,7 @@ export function clampFocusLineToCommentable(
   return reachable
 }
 
-// Why: a selection dragged to the start of the next line visually covers only the lines above
-// it, so the note must not claim that trailing line. Shared with the markdown annotation path.
+// A selection ending at column one excludes that trailing line, including markdown annotations.
 export function getSelectionEndLine(selection: LineSelection): number {
   if (selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber) {
     return selection.endLineNumber - 1
@@ -84,8 +80,7 @@ export function getSelectionEndLine(selection: LineSelection): number {
   return selection.endLineNumber
 }
 
-// Why: `startLineNumber`/`endLineNumber` are sorted, so they lose which end the user dragged
-// from — and clamping needs the anchor, or an upward selection clamps into the wrong hunk.
+// Sorted bounds lose drag direction; clamping needs the original anchor to choose the correct hunk.
 export function getSelectionAnchorFocus(selection: DirectionalLineSelection): {
   anchorLine: number
   focusLine: number

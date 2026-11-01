@@ -1,5 +1,6 @@
 import type { BrowserScreencastResult } from '../../shared/runtime-types'
-import type { RuntimeBrowserCommands, RuntimeBrowserCommandHost } from './orca-runtime-browser'
+import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
+import type { RuntimeBrowserCommands } from './browser/browser-commands'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import { RuntimeBrowserScreencastController } from './runtime-browser-screencast-controller'
 import { createRuntimeBrowserCommands } from './runtime-browser-commands-factory'
@@ -109,6 +110,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserProfileDelete',
   'browserProfileDetectBrowsers',
   'browserProfileImportFromBrowser',
+  'browserProfileClearGoogleCookies',
   'browserProfileClearDefaultCookies',
   'browserTabClose'
 ] as const satisfies readonly (keyof RuntimeBrowserCommands)[]
@@ -136,7 +138,7 @@ function bindNamedMethods<T extends object>(
 }
 
 export class RuntimeEdgeCommandController {
-  private readonly jira = new RuntimeJiraCommands()
+  private readonly jira: RuntimeJiraCommands
   private readonly browser: RuntimeBrowserCommands
   private readonly screencasts: RuntimeBrowserScreencastController
   private readonly emulator: RuntimeEmulatorCommands
@@ -144,10 +146,12 @@ export class RuntimeEdgeCommandController {
 
   constructor(args: {
     browserHost: RuntimeBrowserCommandHost
+    jiraHost: ConstructorParameters<typeof RuntimeJiraCommands>[0]
     screencast: Omit<ScreencastDependencies, 'getCommands'>
     emulatorHost: EmulatorHost
     getBrowserCommands?: () => RuntimeBrowserCommands
   }) {
+    this.jira = new RuntimeJiraCommands(args.jiraHost)
     this.browser = createRuntimeBrowserCommands(args.browserHost)
     this.screencasts = new RuntimeBrowserScreencastController({
       ...args.screencast,

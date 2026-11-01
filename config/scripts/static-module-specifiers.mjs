@@ -3,7 +3,7 @@ import ts from 'typescript-api'
 const MODULE_BUILTINS = new Set(['module', 'node:module'])
 const PROCESS_BUILTINS = new Set(['process', 'node:process'])
 
-function unwrap(node) {
+export function unwrap(node) {
   while (
     node &&
     (ts.isParenthesizedExpression(node) ||
@@ -22,14 +22,14 @@ function isNamed(node, name) {
   return ts.isIdentifier(node) && node.text === name
 }
 
-function literalString(node) {
+export function literalString(node) {
   node = unwrap(node)
   return node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
     ? node.text
     : null
 }
 
-function propertyName(node) {
+export function propertyName(node) {
   if (ts.isPropertyAccessExpression(node)) {
     return node.name.text
   }
@@ -98,15 +98,8 @@ function collectBindings(source) {
   return { strings, declarations, destructures, imports, modules }
 }
 
-/**
- * Specifiers a file statically loads: imports, re-exports, `import()`, `require`/`require.resolve`,
- * `module.require`, `createRequire(...)` loaders and their aliases, and `process.getBuiltinModule`.
- * A specifier argument may be a literal or a file-level `const` string. Name bindings are
- * file-wide, not scope-aware. Literal property keys are resolved; computed key values are not.
- * Computed specifiers (concatenation, templates with substitutions, parameters, values imported
- * from other files), loaders stored in objects or passed as arguments, and `eval`/`Function`
- * are not resolved.
- */
+// Resolve file-wide static import/re-export/import()/require/module.require/createRequire aliases and getBuiltinModule; literals/const strings and literal property keys only.
+// No scope tracking, computed values/specifiers, imported parameters, object/argument loaders or eval/Function resolution.
 export function collectModuleSpecifiers(file, contents) {
   const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, false)
   if (source.parseDiagnostics.length > 0) {

@@ -81,9 +81,7 @@ export function getServeFlagTypoError(argv: readonly string[]): string | null {
       return `Unknown flag ${name}. Did you mean ${suggestion}?`
     }
 
-    // A value that is not flag-shaped belongs to the preceding known value flag.
-    // A `--`-prefixed space token remains a flag, matching parseArgs; use `=` when
-    // a value itself starts with `--`.
+    // Non-flags belong to known value flags; use = for values starting -- to match parseArgs.
     if (!token.includes('=') && SERVE_VALUE_FLAG_NAMES.has(name)) {
       const value = argv[index + 1]
       if (value !== undefined && !value.startsWith('--')) {

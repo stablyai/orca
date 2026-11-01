@@ -1,12 +1,11 @@
 import {
   admitAgentSessionMutation,
   computeAgentSessionPayloadFingerprint
-} from '../../../shared/agent-session-mutation-envelope'
+} from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionMutationRequest } from './structured-agent-session-mutation-admission'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 
-/** Whether admission would run `plan` for the first time now, placing nothing: for an effect that
- *  must not wait in the session's queue for its turn. */
+/** Read-only first-run admission check for effects that cannot wait for session serialization. */
 export function agentSessionMutationAdmitsNow<TValue>(
   request: Pick<AgentSessionMutationRequest<TValue>, 'store' | 'callerKey' | 'envelope' | 'now'> & {
     plan: Pick<MutationPlan<TValue>, 'method' | 'fields' | 'operationIdScope' | 'conversationWrite'>
@@ -25,13 +24,16 @@ export function agentSessionMutationAdmitsNow<TValue>(
     now: request.now(),
     ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
   })
+  const selected = request.store.selectWritableRecord(envelope.sessionId)
   return (
+    selected.kind === 'writable' &&
     evaluated !== null &&
+    evaluated.decision.decision === 'admit' &&
     admitAgentSessionMutation({
       envelope,
       hostFingerprint,
       ledger: evaluated.decision,
-      lease: evaluated.record.lease,
+      lease: selected.record.lease,
       ...(plan.conversationWrite ? { conversationWrite: true } : {})
     }).decision === 'admit'
   )

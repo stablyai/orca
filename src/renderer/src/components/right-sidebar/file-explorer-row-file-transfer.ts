@@ -2,7 +2,8 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { downloadRuntimeFile, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { downloadRuntimeFile } from '@/runtime/runtime-file-read-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { TreeNode } from './file-explorer-types'
 import { shouldShowCopyFileAction } from './file-explorer-row-action-visibility'
 
@@ -31,11 +32,10 @@ export async function downloadRemoteFile(
               connectionId: connectionIdOrRuntimeContext
             })
         : await downloadRuntimeFile(connectionIdOrRuntimeContext, node.path, node.name)
-    // Why: Suppress toasts when the user cancels the native save dialog per design.
     if (result.canceled) {
       return
     }
-    // Why: POSIX permits backslashes in saved names; only Windows treats them as separators.
+    // POSIX allows backslashes in filenames; only Windows treats them as separators.
     const savedName = getLocalDownloadName(
       result.destinationPath,
       window.api.platform.get().platform

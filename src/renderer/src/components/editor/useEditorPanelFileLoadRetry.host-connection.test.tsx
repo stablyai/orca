@@ -31,9 +31,11 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: () => 'ssh-a',
   isWorktreeConnectionResolved: () => true
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-routing', () => ({
   getRuntimeFileReadScope: (_settings: unknown, connectionId: string | undefined) =>
-    connectionId ?? 'local',
+    connectionId ?? 'local'
+}))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
 

@@ -1,13 +1,5 @@
-// Why: iOS keyboard frame height includes the home-indicator region; Android
-// IME height does not include the system nav bar. That split is already used
-// by the session terminal keyboard lift — keep fill/content-sized drawers on
-// the same contract so OEM/Android and iPhone behave consistently.
-//
-// Fill sheets dock chrome to the *true keyboard top* via marginBottom + height
-// shrink. They always use the raw frame height (subtracting safe-bottom on iOS
-// parks the TextInput under the keys). Content-sized sheets keep the legacy
-// translate path: iOS subtracts safe-bottom (padding already covers it),
-// Android uses the full IME height.
+// iOS keyboard frame includes home indicator; Android IME excludes nav bar, matching session terminal contract.
+// Fill sheets always use raw height for dock/marginBottom. Content-sized translate path subtracts safe-bottom only on iOS, where padding already covers it.
 
 export function resolveBottomDrawerKeyboardInset(input: {
   keyboardHeight: number

@@ -1,3 +1,4 @@
+import { noteProviderCacheAnswer } from '../source-control/hosted-review-provider-read'
 import type { RawGiteaPullRequest } from './pull-request-mappers'
 
 export type GiteaPullRequestPageFetcher = (page: number) => Promise<RawGiteaPullRequest[] | null>
@@ -8,21 +9,16 @@ type GiteaPullRequestScanEntry = {
   pullRequests: RawGiteaPullRequest[]
 }
 
-// Why: long enough to absorb a push-event burst that refreshes every worktree
-// card at once, short enough that a PR opened outside Orca shows up promptly.
+// Absorb card-refresh bursts while promptly discovering externally created PRs.
 const SCAN_TTL_MS = 30_000
-// Why: a short failure cooldown still coalesces rapid card retries without
-// turning a transient outage into a 30-second authoritative "no PR" result.
+// Retry failures sooner than successful listings so outages do not look like durable misses.
 const FAILED_SCAN_RETRY_MS = 3_000
-// Why: each entry can retain hundreds of full PR payloads, so TTL alone is not
-// enough protection when many repositories are opened during one app session.
+// Each payload can retain hundreds of PRs; TTL alone does not bound session memory.
 const MAX_SCAN_CACHE_ENTRIES = 32
 
 const scanCache = new Map<string, GiteaPullRequestScanEntry>()
 const inFlightScans = new Map<string, Promise<RawGiteaPullRequest[]>>()
-// Why: an invalidation (PR just created) must also defeat a scan already in
-// flight — otherwise that scan finishes afterwards and re-caches a listing
-// from before the mutation, hiding the new PR for a full TTL.
+// Fence in-flight scans so invalidation cannot recache pre-create listings.
 const scanGenerations = new Map<string, number>()
 const activeScanCounts = new Map<string, number>()
 
@@ -68,21 +64,13 @@ function reusableScanCacheEntry(repoKey: string): GiteaPullRequestScanEntry | nu
     removeScanCacheEntry(repoKey, entry)
     return null
   }
-  // Keep the cap useful for users actively switching among several repositories.
+  // Refresh recency for users switching among repositories.
   scanCache.delete(repoKey)
   scanCache.set(repoKey, entry)
   return entry
 }
 
-/**
- * Why: every worktree card resolves its branch by paginating the same
- * /repos/{repo}/pulls listing — Gitea/Forgejo have no head-branch filter.
- * Self-hosted forges serve that endpoint slowly, and a push event refreshes
- * all cards at once, so per-card scans multiplied one page walk into hundreds
- * of requests and OOM-killed a small Forgejo pod (#8807). All concurrent
- * callers share one in-flight scan per repo, and the result is cached briefly
- * so a burst costs a single page walk.
- */
+/** Gitea/Forgejo lacks head-branch filtering; share pagination so card bursts cannot overload self-hosted servers. */
 export async function scanGiteaPullRequests(
   repoKey: string,
   fetchPage: GiteaPullRequestPageFetcher,
@@ -91,10 +79,12 @@ export async function scanGiteaPullRequests(
 ): Promise<RawGiteaPullRequest[]> {
   const cached = reusableScanCacheEntry(repoKey)
   if (cached) {
+    noteProviderCacheAnswer()
     return cached.pullRequests
   }
   const running = inFlightScans.get(repoKey)
   if (running) {
+    noteProviderCacheAnswer()
     return running
   }
   const generation = scanGenerations.get(repoKey) ?? 0
@@ -135,8 +125,7 @@ export async function scanGiteaPullRequests(
   }
 }
 
-/** Drop the cached scan after a mutation Orca itself performed (PR create),
- *  so the next card refresh sees the new PR instead of a stale miss. */
+/** Invalidate after mutations to prevent stale missing-review results. */
 export function invalidateGiteaPullRequestScan(repoKey: string): void {
   removeScanCacheEntry(repoKey)
   inFlightScans.delete(repoKey)

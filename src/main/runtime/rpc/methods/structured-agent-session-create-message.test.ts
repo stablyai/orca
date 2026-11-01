@@ -1,8 +1,8 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
-import { structuredAgentSessionCreateParams } from '../../../../shared/structured-agent-session-create'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
+import { structuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
 import {
   createRestTestRig,
   restTestSend,
@@ -42,7 +42,11 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-function params(options?: Readonly<Record<string, string>>, withMessage = false) {
+function params(
+  options?: Readonly<Record<string, string>>,
+  withMessage = false,
+  optionsMode?: 'replace-model-selection'
+) {
   return structuredAgentSessionCreateParams({
     sessionId: SESSION,
     worktree: 'id:workspace-1',
@@ -50,6 +54,7 @@ function params(options?: Readonly<Record<string, string>>, withMessage = false)
     randomUuid: () => '00000000-0000-0000-0000-0000000000fa',
     now: NOW,
     ...(options ? { options } : {}),
+    ...(optionsMode ? { optionsMode } : {}),
     ...(withMessage
       ? {
           firstMessage: { clientMessageId: hostTestOperationId(), body: hostTestMessage('opening') }
@@ -191,20 +196,72 @@ it.each(['firstMessage', 'options'] as const)(
   }
 )
 
-it('merges held option overrides with host seeds before the first acquisition', async () => {
-  const input = params({ model: 'held-model' })
+it('replaces unrelated host model defaults before the first acquisition', async () => {
+  const input = params({ model: 'held-model' }, false, 'replace-model-selection')
   expect(await call('agentSession.create', input, capable)).toMatchObject({
     ok: true,
     result: { ok: true }
   })
-  expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: 'held-model', effort: 'medium' })
+  expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: 'held-model' })
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
   expect(await rig.host.send({ callerKey: 'client-1' }, restTestSend('first work'))).toMatchObject({
     ok: true
   })
   await vi.waitFor(() => expect(rig.adapter.acquire).toHaveBeenCalledOnce())
   expect(rig.adapter.acquire).toHaveBeenCalledWith(
-    expect.objectContaining({ options: { model: 'held-model', effort: 'medium' } })
+    expect.objectContaining({ options: { model: 'held-model' } })
+  )
+})
+
+it('keeps the seeded permission mode beside explicit picks on an acquired create', async () => {
+  // The fixture's Codex intent, seeded with a permission mode.
+  const resolveStructuredAgentSessionCreateIntent = async (input: { envelope: unknown }) => ({
+    envelope: input.envelope,
+    location: {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace-1',
+      workspaceKind: 'git-worktree'
+    },
+    provider: 'codex',
+    agent: 'codex',
+    accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
+    options: { model: 'gpt-5.6-sol', effort: 'medium', permissionMode: 'full-access' },
+    runtimeKind: 'native'
+  })
+  expect(
+    await call('agentSession.create', params({ model: 'held-model' }), legacy, {
+      resolveStructuredAgentSessionCreateIntent
+    })
+  ).toMatchObject({ ok: true, result: { ok: true } })
+  expect(rig.adapter.acquire).toHaveBeenCalledWith(
+    expect.objectContaining({ options: { model: 'held-model' }, permissionMode: 'full-access' })
+  )
+})
+
+it('keeps the remembered model under a permission mode picked alone on an acquired create', async () => {
+  // The not-at-rest path `agent.launch` with a prompt takes.
+  const resolveStructuredAgentSessionCreateIntent = async (input: { envelope: unknown }) => ({
+    envelope: input.envelope,
+    location: {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace-1',
+      workspaceKind: 'git-worktree'
+    },
+    provider: 'codex',
+    agent: 'codex',
+    accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
+    options: { model: 'saved', effort: 'low', permissionMode: 'full-access' },
+    runtimeKind: 'native'
+  })
+  expect(
+    await call('agentSession.create', params({ permissionMode: 'ask' }), legacy, {
+      resolveStructuredAgentSessionCreateIntent
+    })
+  ).toMatchObject({ ok: true, result: { ok: true } })
+  expect(rig.adapter.acquire).toHaveBeenCalledWith(
+    expect.objectContaining({ options: { model: 'saved', effort: 'low' }, permissionMode: 'ask' })
   )
 })
 
@@ -223,7 +280,7 @@ it('rejects an explicit option the resting agent would reject before founding', 
 it.each(['options', 'firstMessage'] as const)(
   'rejects changes to firstMessage or explicit options under a replayed create operation: %s',
   async (field) => {
-    const original = params({ model: 'held-model' }, true)
+    const original = params({ model: 'held-model' }, true, 'replace-model-selection')
     // Keep delivery held while reusing the create id with different intent.
     expect(
       await call('agentSession.create', original, capable, {
@@ -232,7 +289,7 @@ it.each(['options', 'firstMessage'] as const)(
         }
       })
     ).toMatchObject({ ok: true, result: { ok: false } })
-    expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: 'held-model', effort: 'medium' })
+    expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: 'held-model' })
     const first = original.firstMessage
     if (!first) {
       throw new Error('fixture first message missing')
@@ -246,6 +303,7 @@ it.each(['options', 'firstMessage'] as const)(
       agent: original.agent,
       now: NOW,
       randomUuid: () => '00000000-0000-0000-0000-0000000000fa',
+      optionsMode: original.optionsMode,
       options: field === 'options' ? { model: 'other-model' } : original.options,
       firstMessage:
         field === 'firstMessage' ? { ...first, body: hostTestMessage('changed') } : first
@@ -257,3 +315,49 @@ it.each(['options', 'firstMessage'] as const)(
     expect(rig.adapter.acquire).not.toHaveBeenCalled()
   }
 )
+
+it.each([undefined, 'replace-model-selection'] as const)(
+  'declared composition %s preserves ordinary defaults only when absent',
+  async (optionsMode) => {
+    const input = params({ model: 'held-model', effort: 'high' }, false, optionsMode)
+    await call('agentSession.create', input, capable, {
+      resolveStructuredAgentSessionCreateIntent: async ({ envelope }: { envelope: unknown }) => ({
+        envelope,
+        location: {
+          executionHostId: 'local',
+          wslDistro: null,
+          workspaceId: 'workspace-1',
+          workspaceKind: 'git-worktree'
+        },
+        provider: 'codex',
+        agent: 'codex',
+        accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
+        options: { model: 'saved', effort: 'low', fastMode: 'false' },
+        runtimeKind: 'native'
+      })
+    })
+    expect(rig.store.getRecord(SESSION)?.options).toEqual({
+      model: 'held-model',
+      effort: 'high',
+      ...(optionsMode ? {} : { fastMode: 'false' })
+    })
+  }
+)
+
+it('answers an old client whose start failed before spawning in plain words', async () => {
+  const raw = 'codex sessions pin CODEX_HOME, not CLAUDE_CONFIG_DIR'
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  rig.adapter.acquire.mockRejectedValueOnce(new AgentSessionPreSpawnError(new Error(raw)))
+
+  const answer = await call('agentSession.create', params(), legacy)
+
+  // Thrown as before, so the wire code an old client reads is unchanged; only the words are new.
+  expect(answer).toMatchObject({
+    ok: false,
+    error: {
+      code: 'runtime_error',
+      message: "Codex couldn't start. Send your message to try again."
+    }
+  })
+  expect(JSON.stringify(answer)).not.toContain(raw)
+})

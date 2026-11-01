@@ -37,7 +37,6 @@ const HighlightedLine = memo(function HighlightedLine({ line }: { line: SyntaxLi
   return (
     <>
       {line.tokens.map((token) =>
-        // Uncolored text needs no element of its own.
         token.content.trim() &&
         (token.light || token.dark || token.lightFontStyle || token.darkFontStyle) ? (
           <span

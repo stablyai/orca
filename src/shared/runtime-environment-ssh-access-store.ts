@@ -74,7 +74,7 @@ export function linkVerifiedRuntimeEnvironmentSshAccess(
   const views = readEnvironmentStore(userDataPath).environments
   const completed = views.find((entry) => entry.id === args.expectedEnvironment.id)
   if (completed?.sshAccess?.requestId && completed.sshAccess.requestId === args.requestId) {
-    return requireMatchingCompletedLink(completed, args)
+    return requireMatchingCompletedLink(completed, linkedRuntimeId(userDataPath, completed), args)
   }
   const context = readAccessContext(userDataPath, args.expectedEnvironment)
   const existing = context.view
@@ -198,6 +198,7 @@ export function cancelRuntimeEnvironmentSshAccessLink(
 /** A retried completion must name exactly the link it already completed. */
 function requireMatchingCompletedLink(
   completed: KnownRuntimeEnvironment,
+  linkedRuntime: string | undefined,
   args: Parameters<typeof linkVerifiedRuntimeEnvironmentSshAccess>[1]
 ): KnownRuntimeEnvironment {
   const access = completed.sshAccess!
@@ -205,7 +206,6 @@ function requireMatchingCompletedLink(
   const prior = expectedIntent
     ? {
         ...completed,
-        runtimeId: args.expectedEnvironment.runtimeId,
         pairingRevision: args.expectedEnvironment.pairingRevision,
         sshAccess: undefined,
         connectionDependency: undefined,
@@ -217,7 +217,7 @@ function requireMatchingCompletedLink(
   requireUnchangedEnvironment([prior], args.expectedEnvironment)
   const offer = getPreferredPairingOffer(completed)
   if (
-    completed.runtimeId !== args.verifiedRuntimeId ||
+    linkedRuntime !== args.verifiedRuntimeId ||
     offer.endpoint !== args.verifiedConnection.endpoint ||
     offer.deviceToken !== args.verifiedConnection.credential.deviceToken ||
     offer.publicKeyB64 !== args.verifiedConnection.hostPublicKeyB64 ||
@@ -234,6 +234,17 @@ function requireMatchingCompletedLink(
     throw invalid('SSH access retry does not match its completed link.')
   }
   return completed
+}
+
+/** The runtime the link verified; the store's runtimeId moves on at every server restart. */
+function linkedRuntimeId(
+  userDataPath: string,
+  completed: KnownRuntimeEnvironment
+): string | undefined {
+  const persisted = readPersistedEnvironmentStore(userDataPath).environments.find(
+    (entry) => entry.id === completed.id
+  )
+  return persisted && readCurrentRuntimeEnvironmentSidecarEntry(userDataPath, persisted)?.runtimeId
 }
 
 function readAccessContext(

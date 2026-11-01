@@ -8,7 +8,7 @@ vi.mock('./runtime-rpc-client', () => ({
 }))
 
 import { gitLabApiFor } from './gitlab-owner-api'
-import { forgeCredentialTarget, forgeOwnerHostIdForWorkspace } from './forge-credential-target'
+import { forgeCredentialTarget } from './forge-credential-target'
 
 const glListIssues = vi.fn()
 
@@ -20,33 +20,31 @@ beforeEach(() => {
 })
 
 describe('gitLabApiFor', () => {
-  it('reads a server-owned repo on that server', async () => {
+  it('offers no reviewers from a server older than the reviewer RPC', async () => {
+    rpc.call.mockRejectedValue(
+      Object.assign(new Error('Unknown method'), { code: 'method_not_found' })
+    )
     const selector = {
       repoPath: '/work/app',
       repoId: 'server-repo',
       repoOwnerExecutionHostId: 'runtime:owner-server'
     }
-    await gitLabApiFor(selector).listIssues({ ...selector, state: 'opened' })
 
-    expect(glListIssues).not.toHaveBeenCalled()
-    expect(rpc.call).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'owner-server' },
-      'gitlab.listIssues',
-      expect.objectContaining({ repo: 'id:server-repo', state: 'opened' }),
-      { timeoutMs: 30_000 }
-    )
+    await expect(gitLabApiFor(selector).listAssignableUsers(selector)).resolves.toEqual([])
   })
 
-  it.each(['ssh:devbox', 'local'])(
-    'uses this computer for a %s repo',
-    async (repoOwnerExecutionHostId) => {
-      const selector = { repoPath: '/work/app', repoId: 'repo', repoOwnerExecutionHostId }
-      await gitLabApiFor(selector).listIssues(selector)
-
-      expect(rpc.call).not.toHaveBeenCalled()
-      expect(glListIssues).toHaveBeenCalledOnce()
+  it('surfaces other reviewer lookup failures', async () => {
+    rpc.call.mockRejectedValue(Object.assign(new Error('glab failed'), { code: 'runtime_error' }))
+    const selector = {
+      repoPath: '/work/app',
+      repoId: 'server-repo',
+      repoOwnerExecutionHostId: 'runtime:owner-server'
     }
-  )
+
+    await expect(gitLabApiFor(selector).listAssignableUsers(selector)).rejects.toThrow(
+      'glab failed'
+    )
+  })
 
   it('lets a task source name the host and the server-side repo id', async () => {
     const selector = {
@@ -83,26 +81,5 @@ describe('gitLabApiFor', () => {
     )
     expect(rpc.call).not.toHaveBeenCalled()
     expect(glListIssues).not.toHaveBeenCalled()
-  })
-
-  it('sends an SSH workspace behind a server to that server, a direct SSH one to this computer', async () => {
-    const repo = { executionHostId: 'runtime:owner-server' as const }
-    const nested = forgeOwnerHostIdForWorkspace(repo, {
-      hostId: 'ssh:devbox',
-      runtimeOwnerEnvironmentId: 'owner-server'
-    })
-    const selector = { repoPath: '/work/app', repoId: 'repo', repoOwnerExecutionHostId: nested }
-    await gitLabApiFor(selector).listIssues(selector)
-
-    expect(rpc.call).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'owner-server' },
-      'gitlab.listIssues',
-      expect.anything(),
-      expect.anything()
-    )
-    expect(forgeOwnerHostIdForWorkspace({ connectionId: 'devbox' }, { hostId: 'ssh:devbox' })).toBe(
-      'ssh:devbox'
-    )
-    expect(forgeOwnerHostIdForWorkspace({ connectionId: 'devbox' }, null)).toBe('ssh:devbox')
   })
 })

@@ -1,61 +1,41 @@
-# AGENTS.md — E2E Tests
+# E2E Tests
 
-## Build the App With `--mode e2e` Before Running Tests
+## Build and Run
 
-E2E tests read Zustand state via `window.__store`. That global is only assigned when the preload bundle is built in `e2e` mode, which is applied when you pass `--mode e2e` to `electron-vite build`. A plain `pnpm build` or `pnpm build:electron-vite` produces an `out/` tree **without** the store exposed, so reusing it with `SKIP_BUILD=1` makes every spec hang on `waitForFunction(() => Boolean(window.__store))` and time out at 30s.
+- `ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e` builds with `--mode e2e`, which exposes
+  `window.__store`.
+- For iteration, build with `pnpm exec electron-vite build --mode e2e`, then run
+  `ORCA_BACKGROUND_LAUNCH=1 SKIP_BUILD=1 pnpm run test:e2e …` only while that build is current.
+  A plain build omits `window.__store`; if tests time out waiting for it, rebuild in E2E
+  mode before changing the harness.
 
-- Default path: `pnpm run test:e2e` — `globalSetup` runs `electron-vite build --mode e2e` for you.
-- Fast iteration: `pnpm exec electron-vite build --mode e2e` once, then `SKIP_BUILD=1 pnpm run test:e2e …`.
-- If **every** E2E test times out at the `window.__store` line, do **not** assume the harness is broken. The `out/` build is almost certainly stale or was produced without `--mode e2e`. Rebuild with `--mode e2e` and retry before changing test code.
+## Choose the Test Boundary
 
-## Prefer a Store-Slice Unit Test When the Logic Is Pure
+- Test pure store logic in `src/renderer/src/store/slices/*.test.ts` with
+  `createTestAppStore()`. Use E2E for real UI events, IPC, persistence/restarts, or
+  Electron lifecycle interactions.
+- Use `window.__store` for setup; assert user-visible behavior through the DOM
+  (`getByRole`, `toBeVisible`, `toHaveText`). Writing state and reading it back cannot
+  catch broken rendering. This applies to hidden CDP-driven renderers too.
 
-An E2E spec that calls `store.getState().someAction(...)` inside `page.evaluate` is a unit test paying the cost of an Electron launch (~1.5s) for no extra coverage. Before adding one, check `src/renderer/src/store/slices/*.test.ts` — most store-level behavior (tab moves, splits, reorders, merges, no-op guards) is already covered there with `createTestAppStore()`.
+## Layout Regression Gates
 
-Reach for E2E only when the test needs something a unit test genuinely cannot reach:
-
-- Real dnd-kit / pointer events, focus, keyboard shortcuts, or drag-and-drop UI cues.
-- IPC round-trips through the main process (repos, filesystem, PTY, Git).
-- Persistence: app restart, userData dir, session rehydration.
-- Multi-window or multi-worktree interactions that depend on Electron lifecycle.
-
-If the test could be rewritten to import the slice and drive it directly without losing fidelity, do that instead.
-
-## E2E Assertions Must Target the DOM, Not the Store
-
-`window.__store` is fine for _setup_ (seeding a repo, pre-filling a draft, stubbing hydration timing) but the thing a spec finally `expect()`s on must be user-observable — `getByRole`, `toBeVisible`, `toHaveText`, `toContainText`. A spec that both writes to the store and reads it back is asserting that Zustand's setter works, not that Orca works.
-
-Why this matters: the `'create-worktree'` modal key lived on in the `activeModal` union long after `AddWorktreeDialog.tsx` was deleted in #710, so `store.openModal('create-worktree')` + `store.activeModal === 'create-worktree'` round-trips succeeded against a modal that rendered nothing. That tautology is what let #1186 (React error #31 in `StartFromField`) ship — the store-layer test passed while the composer actively crashed for real users.
-
-Concretely:
-
-- Use the store to reach a state; use the DOM to prove the state is correct.
-- If a render-layer regression would leave the store clean but the UI broken, a store-only test will not catch it. Mount the affected subtree and assert on what the user sees.
-- Headless (`ORCA_E2E_HEADLESS=1`) does not exempt you from this rule — Playwright drives the real DOM via CDP regardless of window visibility. The rare cases that need focus or pointer capture use `ORCA_E2E_HEADFUL=1` via `project.metadata.orcaHeadful`.
-
-## Terminal Layout Parity Check
-
-Terminal-topology refactor PRs must be inert or fix a named bug. `terminal-layout-parity.spec.ts` runs fixed journeys in the real app (create tab, split right then down, close pane, close tab, reorder panes, drag a pane out to a new tab across two restarts, CLI split, split plus new tab across restart, non-git folder workspace), captures the renderer's terminal topology and the saved `workspaceSession` from `profile-state.db`, and `terminal-layout-parity-snapshot.ts` relabels volatile values (UUIDs and PTY suffixes by first appearance in ordered structure, times, pids, temp paths) so two runs of one commit compare equal.
-
-- `pnpm run test:e2e:terminal-layout-parity` compares the working tree with its merge-base on `origin/main`; `-- --base <ref> --head <ref>` compares two commits (each built once in a detached worktree under `.tmp/terminal-layout-parity`); `--base X --head X` is the determinism check. `-- -g close-pane` runs only matching scenarios. A checkout is stamped only after its build finishes; the working tree builds in Playwright's global setup. CI needs `fetch-depth: 0`.
-- The head's spec drives both builds (cwd picks which `out/` the helpers launch), so a journey cannot depend on a test hook main lacks.
-- A fix declares itself in `terminal-layout-parity-declared-differences.ts` (scenario, bug id, report path prefixes). Undeclared differences fail, and so does a declaration that matches nothing.
-- Journeys wait for every pane's PTY to bind and for main's `terminal.list` to match the renderer before quitting; without that pacing, `activeLeafId` and the saved host-authority fields race on main. A path main still does not reproduce goes in `TERMINAL_LAYOUT_PARITY_UNSTABLE_ON_MAIN` with its evidence; it is reported, not failed.
-- Follow-ups: setup-script split, SSH Docker relay split plus restart, second client or mobile edit.
-
-## Workspace Layout Oracle
-
-`workspace-layout-oracle.spec.ts` (window attached) and `workspace-layout-oracle-headless.spec.ts` (orcad and Electron `orca serve`, no window) drive layout journeys through the commands users, the CLI and paired clients send, and after every step decide pass/fail with no reviewer:
-
-- **rules**: the runtime's live layout, read from its `layout.subscribe` stream (the window subscribes through its renderer; a headless host over its pairing offer), against the model rules in `workspace-layout-model-rules.ts` on every published frame: a terminal in two panes, a pane in two tabs, a tab outside exactly one group, an empty group, a group tree that disagrees with the groups, an id changing for the same pane, tab or group. Breaches that heal before a step settles are recorded as `(transient)`. On main the stream publishes a projection of the saved-format session, which already drops ungrouped tabs and stray pane data, so most model rules cannot fire there yet. At each settled step the saved profile (`profile-state.db`) is also checked against the disk-format rules in `workspace-layout-rules.ts` (tab rows and tab bar disagreeing, two tab orders), reported as `<rule>: saved profile: …`. (The unit model test checks every write exactly, via `store.onWorkspaceSessionWritten`.)
-- **roundTrip**: each saved partition, through the layout module's Loader then Serializer, must reach a fixed point: a second load changes nothing (`workspace-layout-round-trip-check.ts`). This is an idempotence check; its list of change kinds a first load may make is broad. It runs on the saved profile (`profile-state.db`) at each settled step.
-- **view**: what the window draws, read from the DOM (`[data-tab-group-strip-id]`, `[data-terminal-tab-id] .pane[data-leaf-id][data-pty-id]`), against the live layout: every group's tab order exactly, every tab of every kind drawn, and each terminal tab's panes. Exited or slept bindings are compared as unbound.
-- **client**: `session.tabs.list` and `terminal.list` against the live layout: every group and its tab order exactly (which covers editor, browser and agent tabs), terminal panes and custom titles, and running terminals with no pane.
-- **expected**: panes per tab the step must produce, which panes it removes, and that every other pane still shows the terminal it showed before (a command applied to the wrong pane, or lost). An empty layout cannot pass.
-- **restart**: the layout after a relaunch, a cold relaunch with the PTY daemon killed, or the in-app daemon restart, against before.
-- **marker**: an `echo` written to each visible pane's terminal must appear in that pane's xterm accessibility tree (frozen or crossed panes).
-- **remount**: xterm instances are counted per pane in the window; one created again outside a relaunch, reload or daemon restart fails.
-
-`workspace-layout-oracle-latency.spec.ts` records command-to-drawn-update p50/p95 for split, close pane, new tab, rename, tab reorder and close tab, idle and while another tab floods output. It never fails on a number.
-
-A step waits up to `ORCA_LAYOUT_ORACLE_SETTLE_MS` (12 s) for every view to agree with the live layout, with no new frame across three reads, before recording; the views have no change events, so they are re-read every 300 ms. A difference the known-on-main list covers does not hold the wait, since it never converges. Findings main still has are listed in `workspace-layout-oracle-known-on-main.ts` with their bug; anything else fails. A new entry must cite, in its PR, a run on `main` that reproduced the finding; for an intermittent finding, rerun until one does. `ORCA_LAYOUT_ORACLE_RECORD=1` records without failing, `ORCA_LAYOUT_ORACLE_REPEAT=<n>` repeats each scenario, and each run writes a JSON report (with the evidence each side held) to `ORCA_LAYOUT_ORACLE_REPORT_DIR`. `node config/scripts/check-workspace-layout-rules.mjs <userDataDir>` runs the rules over any profile, including a running dev app's.
+- Terminal-topology refactors must preserve behavior or fix a named bug. Run
+  `ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e:terminal-layout-parity` to compare the working
+  tree with its merge-base on `origin/main`. See the
+  [runner](../../config/scripts/run-terminal-layout-parity.mjs) for commit comparisons
+  and scenario filters. The head's journeys must work against both builds.
+- Declare intended fixes in [declared differences](terminal-layout-parity-declared-differences.ts)
+  with scenario, bug ID, and report path prefixes; undeclared or unmatched declarations fail.
+  Preserve PTY-binding and main/renderer agreement waits before quitting. Unstable-on-main
+  exclusions need evidence in `TERMINAL_LAYOUT_PARITY_UNSTABLE_ON_MAIN`.
+- Use the [window](workspace-layout-oracle.spec.ts) and
+  [headless](workspace-layout-oracle-headless.spec.ts) layout oracles for live/saved layout,
+  DOM/client agreement, command effects, restarts, terminal output, and remount checks.
+  [Latency](workspace-layout-oracle-latency.spec.ts) measurements are informational.
+- New [known-on-main](workspace-layout-oracle-known-on-main.ts) entries must cite a reproducing
+  run on `main` in the PR; rerun intermittent findings until reproduced. Use
+  `ORCA_LAYOUT_ORACLE_REPEAT=<n>` for repeats and `ORCA_LAYOUT_ORACLE_REPORT_DIR` for JSON
+  reports. `ORCA_LAYOUT_ORACLE_RECORD=1` records without failing; do not use it as a passing gate.
+- Inspect any profile with
+  `node config/scripts/check-workspace-layout-rules.mjs <userDataDir>`.

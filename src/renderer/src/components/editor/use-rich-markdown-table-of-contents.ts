@@ -1,3 +1,4 @@
+import { revealMarkdownNavigationDetails } from './markdown-navigation-details'
 import { useCallback, useMemo, type MutableRefObject } from 'react'
 import type { MarkdownTocItem } from './markdown-table-of-contents'
 import { findRichMarkdownTocHeadingTarget } from './rich-markdown-toc-heading-target'
@@ -15,10 +16,6 @@ export function useRichMarkdownTableOfContents(
   tableOfContentsItems: MarkdownTocItem[]
   navigateToTableOfContentsItem: (id: string) => void
 } {
-  // Why: building the table of contents runs a full-document remark parse on
-  // every content change. The result is only used while the panel is open
-  // (closed by default), so gate the parse on visibility; including
-  // showTableOfContents in deps rebuilds the outline the moment it opens.
   const tableOfContentsItems = useMemo(
     () => selectMarkdownTableOfContents(showTableOfContents, content),
     [content, showTableOfContents]
@@ -35,7 +32,10 @@ export function useRichMarkdownTableOfContents(
         return
       }
       const heading = findRichMarkdownTocHeadingTarget(container, flatTableOfContentsItems, id)
-      heading?.scrollIntoView({ block: 'center' })
+      if (heading) {
+        revealMarkdownNavigationDetails(heading)
+        heading.scrollIntoView({ block: 'center' })
+      }
     },
     [flatTableOfContentsItems, scrollContainerRef]
   )

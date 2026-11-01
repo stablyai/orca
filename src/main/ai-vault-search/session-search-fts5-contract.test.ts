@@ -8,9 +8,6 @@ import { indexTokens } from './session-search-query-planner'
 import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
 import { openSessionSearchDatabase } from './session-search-schema'
 
-// SQLite/FTS5 behaviours the query layer depends on. Each one cost a live
-// debugging session; a refactor that reintroduces the trap fails here.
-
 const FIRST_ROWID = 101
 const SECOND_ROWID = 202
 
@@ -75,9 +72,7 @@ describe('a rowid constraint beside MATCH is honoured only as a subselect', () =
     const rows = db
       .prepare('SELECT rowid FROM messages_fts WHERE messages_fts MATCH ? AND rowid = ?')
       .all('alpha', SECOND_ROWID) as { rowid: number }[]
-    // The planner drops the constraint entirely: both rows come back.
     expect(rows.map((row) => row.rowid)).toEqual([FIRST_ROWID, SECOND_ROWID])
-    // A caller reading one row therefore gets the first match, not the one asked for.
     const single = db
       .prepare('SELECT rowid FROM messages_fts WHERE messages_fts MATCH ? AND rowid = ?')
       .get('alpha', SECOND_ROWID) as { rowid: number } | undefined
@@ -109,9 +104,7 @@ describe('a rowid constraint beside MATCH is honoured only as a subselect', () =
     insertMessageRow(db, FIRST_ROWID, 'alpha marmoset one')
     insertMessageRow(db, SECOND_ROWID, 'alpha capybara two')
 
-    // The shape the snippet read uses: the joins are what subtract a row whose
-    // session a purge cut loose, and they must not cost the rowid constraint
-    // its effect.
+    // Snippet joins must exclude orphaned sessions while preserving the rowid constraint.
     const snippet = db
       .prepare(
         `SELECT snippet(messages_fts, -1, '[', ']', '…', 12) AS s
@@ -134,7 +127,6 @@ describe('sessions.file_path is deliberately not unique', () => {
       `INSERT INTO sessions(agent, session_id, file_path, title, resume_command)
        VALUES (?, ?, ?, ?, ?)`
     )
-    // OpenCode and Cursor keep every session in one SQLite store; files.path is the key.
     const storePath = '/home/user/.local/share/opencode/storage.db'
     insert.run('opencode', 'ses_one', storePath, 'first', 'opencode --session ses_one')
     expect(() =>
@@ -150,14 +142,12 @@ describe('sessions.file_path is deliberately not unique', () => {
 })
 
 describe('the planner tokenizer draws the same boundaries as unicode61', () => {
-  // unicode61 folds case and strips Latin diacritics on both index and query side.
   function asIndexed(token: string): string {
     return token.toLowerCase().normalize('NFD').replaceAll(/\p{M}/gu, '')
   }
 
   it('produces exactly the terms fts5vocab reports for the same text', async () => {
     const db = await openDatabase()
-    // The vocabulary is the engine's own object, not the store's.
     ensureSessionSearchQuerySchema(db)
     const corpus =
       'resolveTerminalPath src/main/foo-bar.ts a.b C++ #123 修复 café naïve MAX_TOKEN x'

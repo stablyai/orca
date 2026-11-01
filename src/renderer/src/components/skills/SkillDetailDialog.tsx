@@ -12,15 +12,18 @@ import {
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { sourceKindLabel } from './skill-display-labels'
 import { skillAgentLabel } from './skill-agent-filter'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
-const updatedFormatter = new Intl.DateTimeFormat(undefined, {
+const UPDATED_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric'
-})
+}
 
 function DetailRow({
   label,
@@ -37,8 +40,7 @@ function DetailRow({
   )
 }
 
-/** Agent names come from the roots that reached the file, so a skill shared by
- *  several agents lists all of them rather than the coarse provider tag. */
+/** Root provenance identifies every consuming agent, unlike the coarse provider tag. */
 function agentNames(
   skill: DiscoveredSkill,
   agentByRootPath: ReadonlyMap<string, string>
@@ -60,26 +62,30 @@ export function SkillDetailDialog({
   onOpenChange,
   onShare,
   onDelete,
-  onReveal
+  onReveal,
+  ownerHostId
 }: {
   skill: DiscoveredSkill | null
   agentByRootPath: ReadonlyMap<string, string>
   shareable: boolean
   deletable: boolean
-  /** Why a reason string rather than share's bare boolean: delete is valid on a
-   *  remote host, so "can't" always has a specific cause worth showing. */
+  /** Remote deletion is supported, so disabled actions need a specific cause. */
   deleteDisabledReason: string | null
   onOpenChange: (open: boolean) => void
   onShare: () => void
   onDelete: () => void
   onReveal: () => void
+  /** Host the skill file lives on. */
+  ownerHostId: ExecutionHostId
 }): React.JSX.Element | null {
   if (!skill) {
     return null
   }
 
   const copyPath = async (): Promise<void> => {
-    await window.api.ui.writeClipboardText(skill.skillFilePath)
+    await window.api.ui.writeClipboardText(
+      formatClipboardFilePath(skill.skillFilePath, ownerHostId)
+    )
     toast.success(translate('auto.components.skills.SkillRow.pathCopied', 'Path copied'))
   }
 
@@ -122,12 +128,11 @@ export function SkillDetailDialog({
               label={translate('auto.components.skills.SkillDetailDialog.updated', 'Updated')}
             >
               {skill.updatedAt
-                ? updatedFormatter.format(new Date(skill.updatedAt))
+                ? uiDateTimeFormat(UPDATED_OPTIONS).format(new Date(skill.updatedAt))
                 : translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')}
             </DetailRow>
             <DetailRow label={translate('auto.components.skills.SkillRow.detailPath', 'Path')}>
-              {/* Why: a labelled button beats an icon + tooltip here — the
-                  tooltip would cover the very path it names. */}
+              {/* Use a labelled button so its tooltip cannot cover the path itself. */}
               <span className="flex min-w-0 items-start gap-2">
                 <span className="min-w-0 flex-1 break-all font-mono">{skill.skillFilePath}</span>
                 <Button

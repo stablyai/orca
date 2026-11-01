@@ -1,13 +1,6 @@
 import type { DiscoveredSkill } from '../../../../shared/skills'
 
-/**
- * The range/select-all/retain-across-rescan logic both selection modes share.
- *
- * `collisionKey` is what they do *not* share. Share collapses selections by
- * lowercase name, because two skills cannot publish under one name. Delete has
- * no such constraint — two rows named `foo` from different roots must both be
- * selectable — so it passes `null` and nothing collapses.
- */
+/** Share collapses lowercase names to satisfy publishing constraints; Delete uses null collision keys to keep distinct files. */
 export type SkillSelectionPolicy = {
   isEligible: (skill: DiscoveredSkill) => boolean
   collisionKey: (skill: DiscoveredSkill) => string | null
@@ -51,7 +44,6 @@ export function eligibleSkillSelectionCount(
   return policy.maxSelection === undefined ? count : Math.min(count, policy.maxSelection)
 }
 
-/** Used by both select-all and shift-range. */
 export function addSelectableSkillResults(
   current: ReadonlySet<string>,
   skills: readonly DiscoveredSkill[],
@@ -79,8 +71,7 @@ export function addSelectableSkillResults(
   return next
 }
 
-/** Rebuilds the selection from a fresh scan, dropping rows that vanished or
- *  became ineligible. Returns the same reference when nothing changed. */
+/** Drop missing/ineligible scan results, preserving selection identity when membership stays equal. */
 export function retainedSkillSelection(
   current: Set<string>,
   skills: readonly DiscoveredSkill[],

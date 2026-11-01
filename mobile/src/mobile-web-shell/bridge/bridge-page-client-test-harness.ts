@@ -1,5 +1,3 @@
-/** The page-side client harness the bridge frame suites share: one fake port, its sent frames,
- *  its diagnostics, and the readers a case needs to talk about either. */
 import {
   BRIDGE_PROTOCOL_VERSION,
   readBridgeClientMessage,
@@ -18,8 +16,7 @@ export const CONNECTION = {
 
 export const GRANTS = { rpc: { maxPendingRequests: 64, maxSubscriptions: 32 }, native: [] }
 
-/** The init member, not the whole union: an imported binding keeps its declared type, and a
- *  case reads `INIT.grants` off it. */
+// Keep INIT narrowed to its union member so tests can read grants without assertion.
 export const INIT: Extract<BridgeHostMessage, { type: 'init' }> = {
   v: BRIDGE_PROTOCOL_VERSION,
   type: 'init',
@@ -31,7 +28,7 @@ export const INIT: Extract<BridgeHostMessage, { type: 'init' }> = {
 
 type PageClientOptions = {
   send?: (json: string) => void
-  /** A port that ignores its own unsubscribe, which is the only way to observe the read guard. */
+  // Ignore unsubscribe to expose late-read guards after cleanup.
   keepDeliveringAfterUnsubscribe?: boolean
 }
 
@@ -81,7 +78,6 @@ export function createPageClient(options: PageClientOptions = {}) {
   }
 }
 
-/** Narrows what a rejection handed back, so a test reads an error rather than asserting one. */
 export function readError(thrown: unknown): Error {
   if (!(thrown instanceof Error)) {
     throw new Error(`expected an Error, got ${typeof thrown}`)
@@ -93,7 +89,6 @@ export function eventFrame(id: string, seq: number, payload: unknown): BridgeHos
   return { v: BRIDGE_PROTOCOL_VERSION, type: 'event', id, seq, payload }
 }
 
-/** The id the client minted for the nth exchange it opened, read back off its own frame. */
 export function idOf(page: ReturnType<typeof createPageClient>, index: number): string {
   const frame = page.frames().filter((message) => 'id' in message)[index]
   if (frame === undefined || !('id' in frame)) {

@@ -37,6 +37,11 @@ export const SelectAccountParams = z.object({
     .transform((v) => (v === null ? null : v))
 })
 
+export const SelectClaudeAccountParams = SelectAccountParams.extend({
+  // The web client moves running sessions in its own window; older hosts strip this.
+  movesRunningSessions: z.literal(true).optional()
+})
+
 export const SelectCodexAccountForTargetParams = SelectAccountParams.extend({
   target: CodexSelectionTarget
 })
@@ -56,8 +61,7 @@ export const CodexResetExpectedScope = z
 
 export const ConsumeCodexResetCreditParams = z
   .object({
-    // Why: the phone owns the logical attempt key so a lost response can be
-    // retried without spending a finite earned credit twice.
+    // Retries share a host-ledger attempt so the same offer/account never spends a credit twice.
     idempotencyKey: z.uuid('Invalid idempotencyKey'),
     expectedScope: CodexResetExpectedScope
   })
@@ -80,9 +84,7 @@ export const AddCodexFromHomeParams = z.object({
   wslDistro: z.string().nullish()
 })
 
-// Why: `orca account list` prints only emails and the active ids, so it opts out
-// of the forced all-provider usage refresh below — that lane bypasses the poll
-// throttle and Retry-After gate and costs one serial round-trip per account.
+// Account list opts out: forced usage refresh bypasses throttle/Retry-After and costs a serial round trip per account.
 export const ListAccountsParams = z.object({
   refreshUsage: z.boolean().default(true)
 })
@@ -106,3 +108,22 @@ export const BeginClaudeSignInParams = z
 export const FinishClaudeSignInParams = z
   .object({ accountId: z.string().min(1), ...ClaudeSignInTarget })
   .strict()
+
+export const HostAccountSignInStartParams = z.object({ provider: z.enum(['claude', 'codex']) })
+
+export const HostAccountSignInWaitParams = z.object({
+  flowId: z.string().min(1).max(64),
+  afterRevision: z.number().int().nonnegative().default(0)
+})
+
+export const HostAccountSignInFlowParams = z.object({ flowId: z.string().min(1).max(64) })
+
+export const HostAccountSignInCodeParams = HostAccountSignInFlowParams.extend({
+  code: z
+    .string()
+    .trim()
+    .min(1, 'Paste the code from the sign-in page.')
+    .max(4_096)
+    // Why: the code becomes one line on the login's stdin; a newline inside it would answer twice.
+    .regex(/^[^\s\p{Cc}]+$/u, 'That code has spaces or line breaks in it. Copy it again.')
+})

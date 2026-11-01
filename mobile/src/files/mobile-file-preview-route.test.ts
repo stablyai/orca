@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createMobileFilePreviewHref,
   displayNameFromPreviewPath,
   mobileFilePreviewShellParams,
   normalizeMobileFilePreviewRouteParams
@@ -112,27 +111,6 @@ describe('mobile-file-preview-route', () => {
     ).toEqual({ ok: false, message: 'Unable to load preview' })
   })
 
-  it('builds the Expo href object so Expo owns URL encoding', () => {
-    const relativePath = 'src/#hash ?query%20\\file.ts'
-
-    expect(
-      createMobileFilePreviewHref({
-        hostId: 'host-1',
-        worktreeId: 'wt-1',
-        relativePath,
-        name: 'file.ts'
-      })
-    ).toEqual({
-      pathname: '/h/[hostId]/files/preview/[worktreeId]',
-      params: {
-        hostId: 'host-1',
-        worktreeId: 'wt-1',
-        relativePath,
-        name: 'file.ts'
-      }
-    })
-  })
-
   it('hands the shell every param but the two the pathname spells as segments', () => {
     expect(
       mobileFilePreviewShellParams({
@@ -146,11 +124,8 @@ describe('mobile-file-preview-route', () => {
   })
 
   it('leaves an absent param out rather than sending it empty', () => {
-    // Driven through the normalizer because that is the only producer: it sets every optional key,
-    // so `line` is present with an `undefined` value rather than missing, and a literal written by
-    // hand here would omit the key and test nothing. The page reads these back through
-    // useLocalSearchParams, where a key present and empty is a different answer from one that was
-    // never there: `line: ''` scrolls nowhere, `line` absent opens the file at the top.
+    // Use the real normalizer, which emits optional keys as undefined; a hand-written literal would miss this case.
+    // Omit absent params: the page distinguishes missing line (open at top) from line:"" (scroll nowhere).
     const route = normalizeMobileFilePreviewRouteParams({
       hostId: 'host-1',
       worktreeId: 'wt-1',

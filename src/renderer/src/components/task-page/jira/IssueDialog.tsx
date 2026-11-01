@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Button } from '@/components/ui/button'
 import { getJiraProjectPickerDisplayLabel as getJiraProjectDisplayLabel } from '@/components/jira-project-picker-filter'
 import { ChevronDown, Check, LoaderCircle } from 'lucide-react'
+import { TaskPageJiraIssueTitleField } from './IssueTitleField'
 import {
   Command,
   CommandInput,
@@ -20,7 +21,7 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
-import { getJiraProjectSelectionKey } from '@/components/task-page-jira-project-selection'
+import { getJiraProjectSelectionKey } from '@/components/task-page/jira/task-page-jira-project-selection'
 import { cn } from '@/lib/utils'
 import {
   Select,
@@ -30,8 +31,12 @@ import {
   SelectItem
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
-import { getJiraCreateAllowedValueLabel } from '@/components/task-page-jira-create-fields'
+import {
+  getJiraCreateAllowedValueLabel,
+  isJiraScalarUserCreateField
+} from '@/components/task-page/jira/task-page-jira-create-fields'
 import { TaskPageJiraIssueAssigneeField } from './IssueAssigneeField'
+import { TaskPageJiraIssueUserField } from './IssueUserField'
 export function TaskPageJiraIssueDialog({
   model
 }: {
@@ -42,7 +47,6 @@ export function TaskPageJiraIssueDialog({
     newJiraIssueOpen,
     setNewJiraIssueOpen,
     newJiraIssueTitle,
-    setNewJiraIssueTitle,
     newJiraIssueBody,
     setNewJiraIssueBody,
     newJiraIssueProjectComboboxOpen,
@@ -230,24 +234,7 @@ export function TaskPageJiraIssueDialog({
               </Select>
             </div>
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.TaskPage.16cba35bee', 'Title')}
-            </label>
-            <Input
-              autoFocus
-              value={newJiraIssueTitle}
-              onChange={(e) => setNewJiraIssueTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                  e.preventDefault()
-                  void handleCreateNewJiraIssue()
-                }
-              }}
-              placeholder={translate('auto.components.TaskPage.578f730c16', 'Short summary')}
-              disabled={newJiraIssueSubmitting}
-            />
-          </div>
+          <TaskPageJiraIssueTitleField model={model} />
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-medium text-muted-foreground">
               {translate('auto.components.TaskPage.f161bf9ede', 'Description (optional)')}
@@ -282,7 +269,28 @@ export function TaskPageJiraIssueDialog({
                     <label className="text-[11px] font-medium text-muted-foreground">
                       {field.name}
                     </label>
-                    {field.allowedValues?.length && field.schema?.type !== 'array' ? (
+                    {isJiraScalarUserCreateField(field) && !field.allowedValues?.length ? (
+                      model.jiraTaskSourceContext ? (
+                        <TaskPageJiraIssueUserField
+                          key={JSON.stringify([
+                            model.providerRuntimeContextKey,
+                            newJiraIssueTargetProjectSelectionKey,
+                            newJiraIssueTargetType?.id
+                          ])}
+                          providerSettings={model.jiraTaskSourceContext}
+                          siteId={newJiraIssueTargetProject?.siteId}
+                          value={fieldValue}
+                          onChange={(id) =>
+                            setNewJiraIssueCustomFieldValues((prev) => ({
+                              ...prev,
+                              [field.key]: id
+                            }))
+                          }
+                          disabled={newJiraIssueSubmitting}
+                          label={field.name}
+                        />
+                      ) : null
+                    ) : field.allowedValues?.length && field.schema?.type !== 'array' ? (
                       <Select
                         value={fieldValue}
                         onValueChange={(value) =>
@@ -344,7 +352,9 @@ export function TaskPageJiraIssueDialog({
             </div>
           ) : null}
           <p className="text-[10px] text-muted-foreground">
-            {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+            {translate('auto.components.TaskPage.shortcutToSubmit', '{{shortcut}} to submit.', {
+              shortcut: submitShortcutLabel
+            })}
           </p>
         </div>
         <DialogFooter>

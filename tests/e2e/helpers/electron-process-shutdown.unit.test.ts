@@ -146,18 +146,71 @@ describe('Electron shutdown with inherited pipes', () => {
   it('does not release pipes if shutdown times out without confirmed process exit', async () => {
     vi.useFakeTimers()
     const { proc, app } = exitedAppFixture()
-    const closing = closeElectronAppForE2E(app)
-    await vi.advanceTimersByTimeAsync(10_000)
-    await closing
-    expect(proc.stdio.every((stream) => !stream.destroyed)).toBe(true)
-    expect(proc.listenerCount('exit')).toBe(0)
-    for (const stream of proc.stdio) {
-      stream.destroy()
+    let closingSettled = false
+    const closing = closeElectronAppForE2E(app).then(() => {
+      closingSettled = true
+    })
+    try {
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(closingSettled).toBe(true)
+      await closing
+      expect(proc.stdio.every((stream) => !stream.destroyed)).toBe(true)
+      expect(proc.listenerCount('exit')).toBe(0)
+    } finally {
+      for (const stream of proc.stdio) {
+        stream.destroy()
+      }
     }
   })
 })
 
 describe.skipIf(process.platform === 'win32')('owned POSIX daemon cleanup', () => {
+  it('preserves a running daemon when final cleanup is not requested', async () => {
+    const daemon = await ownedDaemon('exit')
+    const { proc, app } = exitedAppFixture()
+    proc.exitCode = 0
+    await closeElectronAppForE2E(app)
+    expect(daemon.pids.every((pid) => !pidIsGone(pid))).toBe(true)
+  })
+
+  it('starts final daemon cleanup after app exit and awaits public close and all descendants', async () => {
+    const daemon = await ownedDaemon('descendant')
+    const { proc, app, close } = exitedAppFixture()
+    let finishPublicClose: () => void = () => {}
+    const publicClose = new Promise<void>((resolve) => {
+      finishPublicClose = resolve
+    })
+    let publicCloseFinished = false
+    close.mockImplementation(async () => {
+      await daemon.exited
+      await publicClose
+      publicCloseFinished = true
+      return []
+    })
+    let shutdownFinished = false
+    const closing = closeElectronAppForE2E(app, {
+      cleanupDaemonsForUserDataDir: daemon.profile
+    }).then(() => {
+      shutdownFinished = true
+    })
+    expect(close).toHaveBeenCalledOnce()
+    expect(daemon.pids.every((pid) => !pidIsGone(pid))).toBe(true)
+    proc.exitCode = 0
+    proc.emit('exit', 0, null)
+    const [, signal] = await daemon.exited
+    expect(signal).toBe('SIGTERM')
+    expect(pidIsGone(daemon.pids[1])).toBe(false)
+    expect(publicCloseFinished).toBe(false)
+    expect(shutdownFinished).toBe(false)
+    finishPublicClose()
+    await expect.poll(() => publicCloseFinished).toBe(true)
+    expect(shutdownFinished).toBe(false)
+    await closing
+    await expect.poll(() => daemon.pids.every(pidIsGone), { timeout: 5_000 }).toBe(true)
+    expect(close).toHaveBeenCalledOnce()
+    expect(proc.listenerCount('exit')).toBe(0)
+  }, 10_000)
+
   it('returns when every captured process exits on SIGTERM', async () => {
     const daemon = await ownedDaemon('exit')
     const started = performance.now()

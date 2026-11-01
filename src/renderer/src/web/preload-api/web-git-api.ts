@@ -3,6 +3,7 @@ import { callAbortableRuntimeEnvironment } from '../../runtime/abortable-runtime
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
+import { mutateGitPath, mutateGitPaths, resolveGitConflict } from './web-git-mutations'
 import { requireGitStageWorktreeScopeReceipt } from '../../../../shared/git-stage-worktree-scope'
 import { requireActiveEnvironment, updateEnvironmentFromResponse } from './web-runtime-session'
 import {
@@ -88,12 +89,20 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     // Why: the "add huge folder to .gitignore" flow is desktop-only; the web runtime makes no offer, so return no candidates.
     findHugeFoldersToIgnore: async () => [],
     appendGitignore: async () => false,
-    history: async ({ worktreePath, limit, baseRef }) => {
+    history: async ({ worktreePath, limit, baseRef, branchOnly, skip }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.history', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         limit,
-        baseRef
+        baseRef,
+        branchOnly,
+        skip
+      })
+    },
+    mutationInFlight: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.mutationInFlight', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
       })
     },
     conflictOperation: async ({ worktreePath }) => {
@@ -114,13 +123,14 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id)
       })
     },
-    diff: async ({ worktreePath, filePath, staged, compareAgainstHead }) => {
+    diff: async ({ worktreePath, filePath, staged, compareAgainstHead, oldPath }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
       return callRuntimeResult('git.diff', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         filePath: file.relativePath,
         staged,
-        compareAgainstHead
+        compareAgainstHead,
+        ...(oldPath ? { oldPath } : {})
       })
     },
     branchCompare: async ({ worktreePath, baseRef, admissionTier }) => {
@@ -218,6 +228,12 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         message
       })
     },
+    completeMerge: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.completeMerge', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
+      })
+    },
     generateCommitMessage: async () => ({
       success: false,
       error: translate(
@@ -242,6 +258,8 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     }),
     cancelGeneratePullRequestFields: () => Promise.resolve(),
     stage: async ({ worktreePath, filePath }) => mutateGitPath('git.stage', worktreePath, filePath),
+    resolveConflict: async ({ worktreePath, filePath, resolution }) =>
+      resolveGitConflict(worktreePath, filePath, resolution),
     bulkStage: async ({ worktreePath, filePaths, scope }) => {
       if (!scope) {
         return mutateGitPaths('git.bulkStage', worktreePath, filePaths)
@@ -266,12 +284,13 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         await mutateGitPath('git.discard', worktreePath, filePath)
       }
     },
-    remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
+    remoteFileUrl: async ({ worktreePath, relativePath, line, endLine }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.remoteFileUrl', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         relativePath,
-        line
+        line,
+        endLine
       })
     },
     remoteCommitUrl: async ({ worktreePath, sha }) => {
@@ -282,25 +301,4 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       })
     }
   }
-}
-
-export async function mutateGitPath(
-  method: string,
-  worktreePath: string,
-  filePath: string
-): Promise<void> {
-  const file = await resolveRuntimeFilePath(filePath, worktreePath)
-  await callRuntimeResult(method, {
-    worktree: toRuntimeWorktreeSelector(file.worktree.id),
-    filePath: file.relativePath
-  })
-}
-
-export async function mutateGitPaths(
-  method: string,
-  worktreePath: string,
-  filePaths: string[]
-): Promise<void> {
-  const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-  await callRuntimeResult(method, { worktree: toRuntimeWorktreeSelector(worktree.id), filePaths })
 }

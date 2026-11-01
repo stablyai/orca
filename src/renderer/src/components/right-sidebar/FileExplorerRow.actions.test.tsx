@@ -9,7 +9,7 @@ import {
   shouldShowViewFileAction
 } from './file-explorer-row-action-visibility'
 import { directoryNode, fileNode } from './file-explorer-tree-node-test-fixtures'
-import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
+import type * as RuntimeFileReadClient from '@/runtime/runtime-file-read-client'
 
 const { downloadRuntimeFileMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   downloadRuntimeFileMock: vi.fn(),
@@ -24,8 +24,8 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-file-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeFileClient>()
+vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeFileReadClient>()
   return {
     ...actual,
     downloadRuntimeFile: downloadRuntimeFileMock
@@ -98,8 +98,7 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(shouldShowRemoteDownloadAction({ ...fileNode, isSymlink: true }, 'ssh-1')).toBe(true)
     expect(shouldShowRemoteDownloadAction(fileNode, null, runtimeContext)).toBe(true)
     expect(shouldShowRemoteDownloadAction(fileNode, null)).toBe(false)
-    // Why: directory download defaults fail-closed until the connection advertises
-    // supportsFolderDownload (SFTP); system-SSH and unknown capability stay hidden.
+    // Directory download stays hidden until the connection advertises SFTP folder support.
     expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1')).toBe(false)
     expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1', null, true)).toBe(true)
     expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1', null, false)).toBe(false)

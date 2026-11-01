@@ -9,7 +9,6 @@ describe('claude session roots', () => {
     vi.unstubAllEnvs()
   })
 
-  // The CLI writes to CLAUDE_CONFIG_DIR; History listed only ~/.claude while chat read both.
   it('lists the CLAUDE_CONFIG_DIR tree ahead of the default home', () => {
     vi.stubEnv('CLAUDE_CONFIG_DIR', '/opt/claude-home')
 
@@ -36,8 +35,7 @@ describe('claude session roots', () => {
 
 describe('ompSessionsRootDirs', () => {
   it('drops a degenerate root that would resolve to the process cwd', () => {
-    // normalizeAgentSessionsDir('/') returns ''. Kept, that root would resolve()
-    // to the cwd and allowlist it for renderer-supplied subagent paths.
+    // A normalized empty root resolves to cwd and would allowlist arbitrary renderer-supplied paths.
     expect(ompSessionsRootDirs({ ompSessionsDir: '' })).toEqual([])
     expect(ompSessionsRootDirs({ ompSessionsDir: '   ' })).toEqual([])
   })

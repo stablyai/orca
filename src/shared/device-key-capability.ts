@@ -1,8 +1,6 @@
-// Why dependency-free: protocol-version.ts reaches the terminal daemon's bundle, and the relocated
-// Windows daemon-host cannot resolve crypto packages; the proof code lives in device-key-proof.ts.
+// Keep crypto out: protocol-version reaches the relocated Windows daemon bundle, which cannot resolve crypto packages. Proofs live in device-key-proof.ts.
 
-// Why: an older host refuses the key-auth shape with bad_auth and has no
-// pairing.registerDeviceKey; clients migrate or present a key only when this is advertised.
+// Older hosts reject key-auth as bad_auth and lack registerDeviceKey; migrate/present keys only after capability negotiation.
 export const DEVICE_KEY_RUNTIME_CAPABILITY = 'pairing.device-key.v1' as const
 
 // Why: registerDeviceKey's params are strict on older hosts, so `ephemeral` is sent only when advertised.

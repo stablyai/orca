@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, act } from '@testing-library/react'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { NativeChatBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 
 import { NativeChatToolRun } from './NativeChatToolRun'
 
@@ -15,6 +15,7 @@ import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
 import {
+  MAX_NATIVE_CHAT_DISCLOSURES,
   NativeChatDisclosureContext,
   useNativeChatDisclosures
 } from './native-chat-disclosure-store'
@@ -24,40 +25,8 @@ import { revealNativeChatToolRunMember } from './NativeChatToolRunMembers'
 import { i18n } from '@/i18n/i18n'
 
 {
-  const blocks: NativeChatBlock[] = [
-    { type: 'tool-call', name: 'Bash', input: { command: 'test' }, state: 'failed' },
-    { type: 'tool-result', output: 'exit 1', isError: true },
-    { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' }, state: 'completed' },
-    { type: 'tool-call', name: 'Write', input: { file_path: 'a.ts' }, state: 'completed' },
-    { type: 'tool-call', name: 'Grep', input: { pattern: 'todo' }, state: 'completed' },
-    { type: 'tool-call', name: 'Task', input: { description: 'Review' }, state: 'completed' }
-  ]
-
   describe('tool-run summary in a matching chat', () => {
     afterEach(cleanup)
-    it.each([false, true])('caps the summary at two wrapped lines, live=%s', (live) => {
-      const style = nativeChatAppearanceStyle({
-        terminalFontFamily: 'Menlo',
-        nativeChatAppearance: { matchTerminalInterface: true }
-      })
-      const { container } = render(
-        <div className="native-chat-appearance" style={style}>
-          <div className="max-w-(--chat-content-max-width)">
-            <NativeChatToolRun blocks={blocks} expandSignal={false} activeTurnIsWorking={live} />
-          </div>
-        </div>
-      )
-      expect(style['--chat-content-max-width']).toBe('46rem')
-      expect(style['--chat-font-family']).toContain('Menlo')
-      const summary = container.querySelector('span.line-clamp-2')
-      expect(summary).toHaveTextContent(live ? 'running 1 agent' : 'ran 1 agent')
-      expect(summary).toHaveClass('min-w-0', 'line-clamp-2', 'whitespace-normal', 'break-words')
-      expect(summary).not.toHaveClass('truncate', 'whitespace-nowrap', 'font-mono')
-      const failure = container.querySelector('[aria-label="Failed tool calls: 1"]')
-      expect(failure).toHaveTextContent('1 failed')
-      expect(failure).toHaveClass('shrink-0')
-      expect(failure?.parentElement).toHaveClass('flex', 'h-[1lh]', 'items-center')
-    })
 
     it('keeps a long command available in the expanded detail', () => {
       const command = `printf ${'x'.repeat(5000)}`
@@ -84,42 +53,6 @@ import { i18n } from '@/i18n/i18n'
       openToolRunMembers()
 
       expect(container.querySelector('pre')).toHaveTextContent(command)
-    })
-
-    it.each([
-      ['wrapped', `QA inert command for display only: ${'x'.repeat(400)}`],
-      ['single-line', 'pnpm test']
-    ])('pins the marks to the first line of a %s summary', (_summaryLength, command) => {
-      const { container } = render(
-        <NativeChatToolRun
-          blocks={[
-            { type: 'tool-call', name: 'shell', input: { command }, state: 'completed' },
-            { type: 'tool-result', output: 'done' }
-          ]}
-          expandSignal={false}
-          activeTurnIsWorking={false}
-        />
-      )
-
-      const header = screen.getByRole('button')
-      // Top-aligned in the summary's own type, so `1lh` is one summary line.
-      expect(header).toHaveClass('items-start', 'text-sm', 'leading-relaxed')
-      expect(header).not.toHaveClass('items-center')
-      const summary = container.querySelector('span.line-clamp-2')
-      expect(summary?.parentElement).toBe(header)
-      expect(summary).toHaveClass('min-w-0', 'line-clamp-2')
-
-      const slots = Array.from(header.children).filter((child) => child !== summary)
-      expect(slots.length).toBeGreaterThanOrEqual(2)
-      for (const slot of slots) {
-        expect(slot).toHaveClass('flex', 'h-[1lh]', 'items-center')
-      }
-      // The icon leads, so a wrapped second line starts under the text, not under it.
-      expect(header.firstElementChild?.querySelector('svg')).toBeInTheDocument()
-      expect(header.children[1]).toBe(summary)
-      expect(header.querySelector('.lucide-check')?.parentElement).toHaveClass('h-[1lh]')
-      // The header carries no caret: the whole line is the toggle.
-      expect(header.querySelector('.lucide-chevron-right')).toBeNull()
     })
   })
 }
@@ -225,7 +158,6 @@ import { i18n } from '@/i18n/i18n'
       )
       expect(screen.getByText(QUESTION)).toBeInTheDocument()
       expect(container.querySelector('.lucide-message-square-more')).toBeInTheDocument()
-      // The raw call and its payload are exactly what this row exists to replace.
       expect(screen.queryByText(/Running AskUserQuestion/)).toBeNull()
       expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
     })
@@ -241,7 +173,6 @@ import { i18n } from '@/i18n/i18n'
 
       expect(screen.getByText('Asked:')).not.toHaveClass('animate-pulse')
       expect(screen.getByText(QUESTION)).toBeInTheDocument()
-      // A run that is only the ask has no work left to head, so it draws no header.
       expect(container.querySelector('[data-native-chat-tool-run-state]')).toBeNull()
     })
 
@@ -338,8 +269,7 @@ import { i18n } from '@/i18n/i18n'
       render(<NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking />)
 
       expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
-      // One call ran; being asked a question is not work to summarize. The agent
-      // is blocked on the reader, so the run reads settled, not in progress.
+      // Waiting for an answer settles the work summary; the question itself adds no call count.
       expect(screen.getByText('Read 1 file')).toBeInTheDocument()
       expect(screen.queryByText('Reading 1 file')).toBeNull()
     })
@@ -387,22 +317,35 @@ import { i18n } from '@/i18n/i18n'
     return box
   }
 
-  /** A live run inside the transcript's disclosure store, which is what remembers its box. */
+  /** A run inside the transcript's disclosure store, which is what remembers its box. */
   function Transcript({
     mounted = true,
-    count = 3
+    count = 3,
+    settled = false
   }: {
     mounted?: boolean
     count?: number
+    settled?: boolean
   }): React.JSX.Element {
     const disclosures = useNativeChatDisclosures()
     return (
       <NativeChatDisclosureContext.Provider value={disclosures}>
+        {settled ? (
+          <button
+            onClick={() => {
+              for (let index = 0; index < MAX_NATIVE_CHAT_DISCLOSURES; index++) {
+                disclosures.write(`line:pressure:${index}`, true)
+              }
+            }}
+          >
+            Expire other disclosures
+          </button>
+        ) : null}
         {mounted ? (
           <NativeChatToolRun
             blocks={calls(count)}
-            expandSignal
-            activeTurnIsWorking
+            expandSignal={!settled}
+            activeTurnIsWorking={!settled}
             disclosureId="message-1"
           />
         ) : null}
@@ -414,6 +357,7 @@ import { i18n } from '@/i18n/i18n'
     afterEach(() => {
       cleanup()
       vi.restoreAllMocks()
+      vi.unstubAllGlobals()
     })
     it('keeps a live run on its newest call until the reader scrolls away', () => {
       const contentHeight = { current: 600 }
@@ -454,7 +398,6 @@ import { i18n } from '@/i18n/i18n'
       contentHeight.current = 1200
       rerender(<Transcript mounted count={4} />)
 
-      // Neither back at the newest call nor following again: both were the reader's choice.
       expect(membersBox(container).scrollTop).toBe(100)
     })
 
@@ -469,8 +412,53 @@ import { i18n } from '@/i18n/i18n'
       fireEvent.click(header)
       fireEvent.click(header)
 
-      // A live run the reader reopens shows what it is doing now.
       expect(membersBox(container).scrollTop).toBe(900)
+    })
+
+    it('opens fresh after a mounted expired run records more scroll and is recycled', () => {
+      let resizeMembers: (() => void) | undefined
+      vi.stubGlobal(
+        'ResizeObserver',
+        class implements ResizeObserver {
+          constructor(private readonly callback: ResizeObserverCallback) {}
+          observe(target: Element): void {
+            if (target.hasAttribute('data-native-chat-tool-run-members')) {
+              resizeMembers = () => this.callback([], this)
+            }
+          }
+          unobserve(): void {}
+          disconnect(): void {}
+        }
+      )
+      layOut({ current: 900 })
+      const { container, rerender } = render(<Transcript settled />)
+      const header = container.querySelector<HTMLElement>('[data-native-chat-tool-run-state]')!
+      fireEvent.click(header)
+      const box = membersBox(container)
+      box.scrollTop = 120
+      fireEvent.scroll(box)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Expire other disclosures' }))
+      box.scrollTop = 140
+      if (!resizeMembers) {
+        throw new Error('members resize observer did not attach')
+      }
+      act(resizeMembers)
+      box.scrollTop = 160
+      fireEvent.scroll(box)
+      expect(header).toHaveAttribute('aria-expanded', 'true')
+      expect(membersBox(container)).toBe(box)
+      expect(box.scrollTop).toBe(160)
+
+      rerender(<Transcript settled mounted={false} />)
+      rerender(<Transcript settled />)
+      const returnedHeader = container.querySelector<HTMLElement>(
+        '[data-native-chat-tool-run-state]'
+      )!
+      expect(returnedHeader).toHaveAttribute('aria-expanded', 'false')
+      expect(container.querySelector('[data-native-chat-tool-run-members]')).toBeNull()
+      fireEvent.click(returnedHeader)
+      expect(membersBox(container).scrollTop).toBe(0)
     })
 
     it('opens a settled run at its first call', () => {

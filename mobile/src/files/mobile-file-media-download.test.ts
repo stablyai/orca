@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer/index.js'
+import { Buffer as NodeBuffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import {
@@ -76,14 +77,15 @@ describe('mobile media download', () => {
       'files.readChunk',
       'files.stat'
     ])
-    expect(r.sink.append).toHaveBeenNthCalledWith(
-      1,
-      Buffer.from(bytes.subarray(0, MOBILE_MEDIA_CHUNK_BYTES))
-    )
-    expect(r.sink.append).toHaveBeenNthCalledWith(
-      2,
-      Buffer.from(bytes.subarray(MOBILE_MEDIA_CHUNK_BYTES))
-    )
+    expect(r.sink.append.mock.calls.map((args) => args.length)).toEqual([1, 1])
+    const appended = r.sink.append.mock.calls.map(([value]) => {
+      if (!(value instanceof Uint8Array)) {
+        throw new Error('The sink received something other than bytes')
+      }
+      return NodeBuffer.from(value)
+    })
+    expect(appended.map((part) => part.length)).toEqual([MOBILE_MEDIA_CHUNK_BYTES, 3])
+    expect(NodeBuffer.concat(appended).equals(NodeBuffer.from(bytes))).toBe(true)
     expect(r.progress).toHaveBeenLastCalledWith(bytes.length, bytes.length)
     expect(r.sink.dispose).not.toHaveBeenCalled()
   })
@@ -145,8 +147,10 @@ describe('mobile media download', () => {
     expect(r.sink.dispose).toHaveBeenCalledOnce()
   })
   it('discards cached bytes when the owning host disconnects', async () => {
+    const bytes = new Uint8Array([1, 2, 3])
     const r = rig([
-      stat(3),
+      stat(6),
+      chunk(bytes, false),
       {
         id: '1',
         ok: false,
@@ -155,6 +159,8 @@ describe('mobile media download', () => {
       }
     ])
     await expect(r.run()).rejects.toThrow('SSH provider unavailable')
+    expect(r.sink.append).toHaveBeenCalledExactlyOnceWith(new Uint8Array(bytes))
+    expect(r.sink.finish).not.toHaveBeenCalled()
     expect(r.sink.dispose).toHaveBeenCalledOnce()
   })
 })

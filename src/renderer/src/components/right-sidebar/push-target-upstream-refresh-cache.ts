@@ -1,5 +1,5 @@
 import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 
 const AUTOMATIC_PUSH_TARGET_UPSTREAM_REFRESH_TTL_MS = 60_000

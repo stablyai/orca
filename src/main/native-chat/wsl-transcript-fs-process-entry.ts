@@ -22,11 +22,10 @@ function serializeError(error: unknown): WslTranscriptFsProcessError {
 
 function respond(response: WslTranscriptFsProcessResponse): void {
   try {
-    // The callback absorbs an async send failure (channel torn mid-write) that
-    // would otherwise surface as an unhandled 'error' event and crash the child.
+    // Consume async channel-send errors so teardown cannot crash the helper.
     process.send?.(response, () => {})
   } catch {
-    // Channel closed while the op settled (parent teardown); disconnect exits.
+    // Parent teardown closed the channel; disconnect exits.
   }
 }
 

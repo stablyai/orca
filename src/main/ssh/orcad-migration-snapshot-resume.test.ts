@@ -7,10 +7,10 @@ import { toSshExecutionHostId } from '../../shared/execution-host'
 import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
-import type { OrcadMigrationSnapshotChunkRequest } from '../../shared/orcad-migration-scrollback'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationSnapshotChunkRequest } from '../../shared/orcad-migration/orcad-migration-scrollback'
 import type { SshTarget } from '../../shared/ssh-types'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
 import { transferOrcadMigrationSnapshots } from './orcad-migration-snapshot-coordinator'
@@ -38,7 +38,7 @@ function openStore(dataFile: string): Store {
   return createSqliteTestStore(Store, { dataFile })
 }
 
-/** A relay host whose dormant tab keeps its scrollback inline, as `ssh:` partitions do. */
+/** Model relay ssh: partitions that retain dormant-tab scrollback inline. */
 function relayProfile(): { store: Store; dataFile: string } {
   const directory = mkdtempSync(join(tmpdir(), 'orcad-snapshot-resume-'))
   directories.push(directory)
@@ -85,7 +85,6 @@ function relayProfile(): { store: Store; dataFile: string } {
   return { store, dataFile }
 }
 
-/** A staged destination that loses the connection on its first chunk. */
 function destination(manifest: OrcadMigrationManifest, failFirst: boolean) {
   const [snapshot] = manifest.payload.dormantState?.terminalScrollbackSnapshots ?? []
   let received = 0

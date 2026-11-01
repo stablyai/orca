@@ -7,7 +7,6 @@ import type {
 } from './project-types'
 
 export type ProjectBoardColumn = {
-  /** Stable key used for React reconciliation. */
   key: string
   label: string
   /** GitHub single-select color token ('GREEN', …) when the column is one. */

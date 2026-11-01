@@ -46,7 +46,10 @@ function command(
       browserProfileId: 'profile-a',
       executionHostKey: 'execution-host-a'
     },
-    closePage: { type: 'closePage' as const, targetAuthority: previousAuthority },
+    closePage: {
+      type: 'closePage' as const,
+      targetAuthority: previousAuthority
+    },
     restorePage: {
       type: 'restorePage' as const,
       browserProfileId: 'profile-a',
@@ -115,6 +118,7 @@ function createHarness() {
   const dependencies = {
     orcaProfileId: 'orca-profile-a',
     authorityConnectionIdentity: 'authority-record-a',
+    pairingAuthorityConnectionIdentity: 'pairing-authority-record-a',
     legacyAuthorityConnectionIdentity: 'legacy-authority-record-a',
     storageScope: 'a'.repeat(64),
     retainNetworkRoute: vi.fn(async () => route),

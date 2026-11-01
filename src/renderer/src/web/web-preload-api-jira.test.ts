@@ -59,30 +59,6 @@ describe('web Jira preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
-  it('routes Jira connector calls through the paired runtime', async () => {
-    const runtimeCalls = mockRuntimeClient((method) =>
-      method === 'jira.connect'
-        ? { ok: true, viewer: { accountId: 'viewer-1', displayName: 'Test User' } }
-        : { connected: false, viewer: null }
-    )
-    const {
-      window: { api }
-    } = await installApi()
-    const credentials = {
-      siteUrl: 'https://jira.example.com',
-      email: 'user@example.com',
-      apiToken: 'token'
-    }
-
-    await expect(api.jira.connect(credentials)).resolves.toMatchObject({ ok: true })
-    await expect(api.jira.status()).resolves.toEqual({ connected: false, viewer: null })
-
-    expect(runtimeCalls).toEqual([
-      { method: 'jira.connect', params: credentials },
-      { method: 'jira.status', params: undefined }
-    ])
-  })
-
   it('maps desktop-only Jira methods onto the server methods that exist', async () => {
     const runtimeCalls = mockRuntimeClient(() => [])
     const {

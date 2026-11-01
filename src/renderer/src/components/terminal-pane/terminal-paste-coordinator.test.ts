@@ -8,19 +8,21 @@ import {
 } from './terminal-bracketed-paste'
 import { createRedactedPasteExecutionDiagnostic } from './terminal-paste-diagnostics'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import { chunkTerminalPastePlan, iterateTerminalPastePlanChunks } from './terminal-paste-chunks'
 import {
-  chunkTerminalPastePlan,
   createTerminalPastePayload,
-  executeTerminalPastePlan,
-  getTerminalPasteOperationTimeoutMs,
-  iterateTerminalPastePlanChunks,
   planTerminalPaste,
-  planTerminalPasteWithYield,
-  TERMINAL_PASTE_OPERATION_TIMEOUT_MS,
-  TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS,
-  type TerminalPasteRuntime,
-  type TerminalPasteTarget
+  planTerminalPasteWithYield
 } from './terminal-paste-coordinator'
+import {
+  executeTerminalPastePlan,
+  getTerminalPasteOperationTimeoutMs
+} from './terminal-paste-executor'
+import {
+  TERMINAL_PASTE_OPERATION_TIMEOUT_MS,
+  TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
+} from './terminal-paste-limits'
+import type { TerminalPasteRuntime, TerminalPasteTarget } from './terminal-paste-model'
 
 const textEncoder = new TextEncoder()
 
@@ -214,8 +216,7 @@ describe('terminal paste coordinator', () => {
   })
 
   it('normalizes forced multiline chunked paste line endings like xterm native paste', () => {
-    // Why: 4-byte chunks would split this CRLF pair ('abc\r' | '\ndef'), so the
-    // pre-chunk normalization is what keeps the LF half away from ConPTY.
+    // Normalize before chunking so the CRLF split cannot leak LF into ConPTY.
     const plan = planTerminalPaste({
       text: 'abc\r\ndef\nghi',
       source: 'keyboard',
@@ -796,8 +797,7 @@ describe('terminal paste coordinator', () => {
   })
 
   it('skips the bracketed close when the paste target is already gone', async () => {
-    // Why: canContinue false means the pane/PTY is unmounted, so an end marker has
-    // nowhere to land — the frame dies with the target.
+    // A vanished pane/PTY cannot receive the end marker; its open frame dies with the target.
     let writable = true
     const writes: string[] = []
 

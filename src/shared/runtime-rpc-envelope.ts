@@ -1,11 +1,8 @@
-// Why: runtime clients can be CLI, desktop, or future non-Electron shells.
-// Keeping the envelope contract here avoids making those clients import each
-// other just to validate the shared RPC frame shape.
+// Share envelopes across CLI/desktop/non-Electron clients without client-to-client imports.
 import { z } from 'zod'
 import type { OrchestrationCompatibilityEvidence } from './orchestration-compatibility-evidence'
 
-// Why: clients and runtimes update independently; strip additive envelope
-// fields while continuing to validate every known discriminator and field.
+// Independently updated peers may add envelope fields; strip unknown fields while validating known ones.
 const MetaSuccess = z
   .object({
     runtimeId: z.string()
@@ -100,4 +97,17 @@ export function isKeepaliveFrame(frame: unknown): frame is RuntimeRpcKeepaliveFr
     '_keepalive' in frame &&
     (frame as { _keepalive: unknown })._keepalive === true
   )
+}
+
+/** Same-machine IPC observation only; remote hosts own their own monotonic operation budget. */
+export type RuntimeRpcDispatchObservation = {
+  expiresAt: number
+  responseTimeoutMs: number
+  responseExpiresAt?: number
+}
+
+/** Select request params from the status of the socket that will send them. */
+export type RuntimeRequestSelection = {
+  paramsForStatus: (status: unknown) => unknown
+  onDispatch?: () => void
 }

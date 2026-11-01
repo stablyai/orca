@@ -28,7 +28,10 @@ import {
 } from '../../../../shared/hosted-review'
 import { stripBaseRef } from './create-pull-request-base-ref-normalization'
 import type { HostedReviewStackParent } from './useHostedReviewStackParent'
-import type { DropdownActionKind, DropdownEntry } from './source-control-dropdown-item-types'
+import type {
+  DropdownActionKind,
+  DropdownEntry
+} from '../../../../shared/source-control-dropdown-item-types'
 import { CreateHostedReviewComposerFields } from './CreateHostedReviewComposerFields'
 import { getCreateButtonLabel } from './create-hosted-review-button-label'
 import {
@@ -144,8 +147,7 @@ export function CreateHostedReviewComposer({
     title.trim().length === 0 ||
     normalizedBase.trim().length === 0 ||
     baseSameAsBranch
-  // Why: surface a concrete reason on the disabled Create PR button so the
-  // user knows what's blocking submission instead of a silent gray state.
+  // Explain disabled submission instead of leaving a silent gray button.
   let createDisabledReason: string | undefined
   if (generating) {
     createDisabledReason = translate(
@@ -170,9 +172,7 @@ export function CreateHostedReviewComposer({
     )
   }
 
-  // Why: lock the title/body/base inputs while AI generation is running so
-  // the user can't race the request; generated fields only hydrate safely if
-  // the hook still sees untouched field revisions.
+  // Lock fields during generation to preserve the untouched revisions required for safe hydration.
   const fieldsLocked = generating
   const generateDetailsLabel = translate(
     'auto.components.right.sidebar.SourceControl.02d8c04339',
@@ -221,8 +221,6 @@ export function CreateHostedReviewComposer({
 
   return (
     <div className={cn('px-3 pb-2', className)}>
-      {/* Why: one gap between groups, tighter gaps inside them — the form reads as
-          content → merge target → options → action instead of a stack of boxes. */}
       <div className="space-y-3">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5 text-xs">

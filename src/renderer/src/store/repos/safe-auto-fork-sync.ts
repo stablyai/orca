@@ -1,8 +1,8 @@
 import type { Repo } from '../../../../shared/repo-types'
-import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
+import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-sync-client'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
-import { runtimeTargetForOwnerHostId } from '../../runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '../../runtime/runtime-client-target'
 
 export const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
 
@@ -46,7 +46,7 @@ export function scheduleSafeAutoForkSync(repos: readonly Repo[]): void {
     ) {
       continue
     }
-    const target = runtimeTargetForOwnerHostId(getRepoExecutionHostId(repo))
+    const target = ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo))
     if (!target) {
       continue
     }

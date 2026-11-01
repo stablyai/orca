@@ -3,8 +3,7 @@ export type RemoteBrowserViewportSize = {
   height: number
 }
 
-// Why: sub-pixel jitter from the resize observer must not count as a resize, or every layout
-// settle would tear down a healthy stream.
+// Ignore sub-pixel resize jitter so layout settling cannot tear down healthy streams.
 export function areRemoteViewportSizesNear(
   a: RemoteBrowserViewportSize | null,
   b: RemoteBrowserViewportSize | null
@@ -35,8 +34,6 @@ export type RemoteBrowserOperationToken = {
   generation: number
 }
 
-// Why: pane identity lives in React refs; the lifecycle reads it through this port so the same
-// staleness guards can run in a test with no component mounted.
 export type RemoteBrowserPaneIdentity = {
   isMounted(): boolean
   isActive(): boolean
@@ -45,9 +42,7 @@ export type RemoteBrowserPaneIdentity = {
   browserPageExists(tabId: string): boolean
 }
 
-// Owns the two generation counters every async remote-browser operation is guarded by: the
-// operation generation (a new pane/page/environment epoch) and the stream generation (one
-// screencast subscription). Anything that supersedes work bumps one of them.
+// Separate pane/page operation epochs from individual stream subscriptions so each can supersede in-flight work independently.
 export class RemoteBrowserOperationTokens {
   private operationGeneration = 0
   private streamGeneration = 0
@@ -105,8 +100,7 @@ export class RemoteBrowserOperationTokens {
     )
   }
 
-  // Why: every supersession site bumps the operation generation so in-flight awaits fail their own
-  // token guard on resume — clearing a timer cannot recall work already dispatched into an await.
+  // Timers cannot recall dispatched awaits; bump the operation generation so they reject their own stale token on resume.
   supersedeOperations(): void {
     this.operationGeneration += 1
   }

@@ -1,29 +1,22 @@
 import type { MarkdownDocState, MobileSessionTab } from './mobile-session-route-types'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
-import {
-  BULK_TAB_CLOSE_ACTIONS,
-  selectBulkCloseTabs,
-  type BulkTabCloseMode
-} from './mobile-tab-close-selection'
+import { selectBulkCloseTabs } from './mobile-tab-close-selection'
+import { closeTabsAfterConfirmation } from '../../../src/shared/bulk-tab-close-confirmation'
+import { translate } from '../i18n/mobile-i18n'
 
-/** Session-route state the bulk close orchestration reads and drives. */
 type BulkCloseSheetDeps = {
   sessionTabsRef: { readonly current: readonly MobileSessionTab[] }
   markdownDocs: ReadonlyMap<string, MarkdownDocState>
   activeSessionTabIdRef: { readonly current: string | null }
   switchSessionTab: (tab: MobileSessionTab) => void
   closeSessionTab: (tab: MobileSessionTab) => Promise<void>
+  confirmBulkClose: () => Promise<boolean>
 }
 
-/**
- * Builds the long-press bulk-close entries (Close Others / Left) shared
- * by every session tab sheet. Lives outside the session route to keep the
- * orchestration out of its max-lines budget; anchors are passed by tab id so
- * sheets never need the full tab object.
- */
+// Pass tab ids so long-press sheets share bulk-close orchestration without retaining full tabs.
 export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
-  const selectClosable = (anchorTabId: string, mode: BulkTabCloseMode) =>
-    selectBulkCloseTabs(deps.sessionTabsRef.current, anchorTabId, mode).filter((candidate) => {
+  const selectClosable = (anchorTabId: string) =>
+    selectBulkCloseTabs(deps.sessionTabsRef.current, anchorTabId).filter((candidate) => {
       if (candidate.type !== 'markdown') {
         return true
       }
@@ -33,8 +26,8 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
       return !(doc?.status === 'ready' && doc.isDirty)
     })
 
-  const bulkClose = async (anchor: MobileSessionTab, mode: BulkTabCloseMode) => {
-    const targets = selectClosable(anchor.id, mode)
+  const bulkClose = async (anchor: MobileSessionTab, tabIds: readonly string[]) => {
+    const targets = deps.sessionTabsRef.current.filter((candidate) => tabIds.includes(candidate.id))
     const activeWasTargeted = targets.some(
       (candidate) => candidate.id === deps.activeSessionTabIdRef.current
     )
@@ -48,38 +41,41 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
     }
   }
 
-  return (anchorTabId: string | null | undefined, dismiss: () => void): ActionSheetAction[] => {
+  return (anchorTabId: string | null | undefined): ActionSheetAction[] => {
     const anchor =
       anchorTabId == null
         ? undefined
         : deps.sessionTabsRef.current.find((candidate) => candidate.id === anchorTabId)
-    if (!anchor) {
+    if (!anchor || selectClosable(anchor.id).length === 0) {
       return []
     }
-    return BULK_TAB_CLOSE_ACTIONS.filter(
-      ({ mode }) => selectClosable(anchor.id, mode).length > 0
-    ).map(({ mode, label }) => ({
-      label,
-      destructive: true,
-      onPress: () => {
-        dismiss()
-        void bulkClose(anchor, mode)
+    return [
+      {
+        id: 'closeOtherTabs',
+        label: translate('session.bulkCloseSheetActions.closeOtherTabs', 'Close Other Tabs'),
+        destructive: true,
+        // Why: the confirm is its own native Modal; wait for this sheet to unmount (#10331).
+        closeBeforePress: true,
+        onPress: () => {
+          void closeTabsAfterConfirmation(
+            () => selectClosable(anchor.id).map((candidate) => candidate.id),
+            deps.confirmBulkClose,
+            (tabIds) => void bulkClose(anchor, tabIds)
+          )
+        }
       }
-    }))
+    ]
   }
 }
 
-/**
- * Builds the destructive Close entry followed by the bulk-close entries, so
- * per-tab-type sheets in the session route stay at one spread per call site.
- */
 export function createCloseWithBulkActions(
   closeSessionTab: (tab: MobileSessionTab) => Promise<void>,
   bulkActions: ReturnType<typeof createBulkCloseSheetActions>
 ) {
   return (target: MobileSessionTab | null, dismiss: () => void): ActionSheetAction[] => [
     {
-      label: 'Close',
+      id: 'close',
+      label: translate('common.close', 'Close'),
       destructive: true,
       onPress: () => {
         dismiss()
@@ -88,6 +84,6 @@ export function createCloseWithBulkActions(
         }
       }
     },
-    ...bulkActions(target?.id, dismiss)
+    ...bulkActions(target?.id)
   ]
 }

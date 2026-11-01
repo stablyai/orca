@@ -14,6 +14,15 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
+// These paths use supplied file context without resolving its editor connection.
+const boundaryMocks = vi.hoisted(() => ({
+  getConnectionId: vi.fn(() => {
+    throw new Error('These fixtures must not resolve editor connections')
+  })
+}))
+
+vi.mock('@/lib/connection-context', () => ({ getConnectionId: boundaryMocks.getConnectionId }))
+
 const editors: Editor[] = []
 
 function makePasteEvent(text: string, html = ''): ClipboardEvent {
@@ -68,8 +77,13 @@ async function flushPromises(count = 12): Promise<void> {
 afterEach(() => {
   editors.splice(0).forEach((editor) => editor.destroy())
   document.body.replaceChildren()
-  vi.restoreAllMocks()
-  vi.clearAllMocks()
+  try {
+    expect(boundaryMocks.getConnectionId).not.toHaveBeenCalled()
+  } finally {
+    boundaryMocks.getConnectionId.mockClear()
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
+  }
 })
 
 describe('rich markdown large text paste', () => {

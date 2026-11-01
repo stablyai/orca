@@ -1,16 +1,11 @@
 import type { RpcResponse } from '../transport/types'
 
-// What a `worktree.show` answer proves about the target still existing on the host.
-// 'unknown' is the safe verdict: every transient failure lands there, so a caller may
-// only act destructively (bounce the route) on 'missing'.
+// Only missing permits a destructive route bounce; ambiguous/transient failures remain unknown.
 export type WorktreeShowResolution = 'present' | 'missing' | 'unknown'
 
 const NOT_FOUND_CODE = 'selector_not_found'
 
-// Why: older desktops predate the passthrough allowlist and answer a missing selector as
-// runtime_error carrying the token as its whole message, so the code alone under-detects.
-// The token must end the message after a real boundary — prose that merely trails off in
-// it ("…a prior selector_not_found diagnostic") is not a not-found answer.
+// Older desktops wrap missing selectors in runtime_error; require an exact terminal token with a real boundary.
 const CODE_TOKEN_BOUNDARY = /(?:: |\n)[ \t]*$/
 
 function endsWithNotFoundToken(message: string): boolean {
@@ -29,8 +24,7 @@ export function classifyWorktreeShowResponse(response: RpcResponse): WorktreeSho
   if (response.error.code === NOT_FOUND_CODE) {
     return 'missing'
   }
-  // Why: the wrapped-token form only ever ships as runtime_error; any other code
-  // whose message trails off in the token proves nothing about the worktree.
+  // Wrapped tokens are authoritative only with runtime_error, never arbitrary codes with matching prose.
   if (response.error.code !== 'runtime_error') {
     return 'unknown'
   }

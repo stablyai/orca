@@ -1,8 +1,6 @@
+import { ClaudeHelperKillPoller } from '../shared/agent-hook-listener/providers/claude-helper-kill-poller'
 import { pollCodexTranscriptStatus } from '../shared/agent-hook-listener/providers/codex-transcript-poll'
-// Deferred re-normalization timers for late-arriving agent results: the transcript hadn't caught up
-// when the hook fired, so re-read the same body on a timer and re-apply only if it changed. Both
-// timer families live in one owner so pane teardown and server stop tear both down in one ordered
-// place before the listener caches are cleared.
+// Retry late transcript results against the same cached event; one owner cancels both timer families before cache teardown.
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
@@ -11,6 +9,7 @@ import { normalizeHookPayload } from '../shared/agent-hook-listener'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
+import { pickHostTurnEnd } from '../shared/agent-status-types'
 import {
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
@@ -41,17 +40,25 @@ export type AgentHookResultRetryHost = {
     source: AgentHookSource,
     env?: string,
     version?: string
-  ) => void
+  ) => AgentHookEventPayload | undefined
 }
 
 export class AgentHookResultRetryScheduler {
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private transcriptPollScheduler: AgentTranscriptPollScheduler<TranscriptPoll>
   private host: AgentHookResultRetryHost
+  private readonly claudeHelperKills: ClaudeHelperKillPoller
   private claudeOwedNotificationExpiry: ClaudeOwedNotificationExpiryTimers
 
   constructor(host: AgentHookResultRetryHost) {
     this.host = host
+    this.claudeHelperKills = new ClaudeHelperKillPoller(host.state, {
+      current: (paneKey) => host.state.lastStatusByPaneKey.get(paneKey),
+      publish: (event) => {
+        host.applyEvent(event, 'claude')
+      },
+      listening: host.isListening
+    })
     this.claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(host.state)
     this.transcriptPollScheduler = new AgentTranscriptPollScheduler(
       CODEX_SUBAGENT_POLL_MS,
@@ -65,6 +72,7 @@ export class AgentHookResultRetryScheduler {
     }
     this.assistantMessageRetryTimers.clear()
     this.transcriptPollScheduler.clearAll()
+    this.claudeHelperKills.clearAll()
     this.claudeOwedNotificationExpiry.clearAll()
   }
 
@@ -93,6 +101,15 @@ export class AgentHookResultRetryScheduler {
 
   clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
+    this.claudeHelperKills.clear(paneKey)
+  }
+
+  observeClaudeHook(row: AgentHookEventPayload, receivedAt?: number): void {
+    this.claudeHelperKills.schedule(row, receivedAt)
+  }
+
+  activateClaudeHelperObservations(): void {
+    this.claudeHelperKills.activate()
   }
 
   scheduleTranscriptPoll(
@@ -102,6 +119,9 @@ export class AgentHookResultRetryScheduler {
     env?: string,
     version?: string
   ): void {
+    if (source === 'claude') {
+      return
+    }
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
     if (source !== 'codex' && source !== 'muse') {
       return
@@ -136,17 +156,17 @@ export class AgentHookResultRetryScheduler {
     }
     const event =
       source === 'codex'
-        ? pollCodexTranscriptStatus(this.host.state, original)
+        ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env)
         : normalizeHookPayload(this.host.state, source, body, this.host.env)
     if (!event) {
       return
     }
     const update = transcriptPollUpdate(source, original, event)
-    const next = update ?? original
-    if (update) {
-      this.host.applyEvent(update, source, env, version)
+    // Why: the next tick's identity check compares against the stored row, not the update it was copied from.
+    const next = update ? this.host.applyEvent(update, source, env, version) : original
+    if (next) {
+      this.scheduleTranscriptPoll(source, body, next, env, version)
     }
-    this.scheduleTranscriptPoll(source, body, next, env, version)
   }
 
   scheduleAssistantMessageRetry(
@@ -240,6 +260,7 @@ export class AgentHookResultRetryScheduler {
       )
       return
     }
-    this.host.applyEvent(event, source, env, version)
+    // Why: the retry only adds text to the same turn end, so it restates that end instead of minting one.
+    this.host.applyEvent({ ...event, ...pickHostTurnEnd(current) }, source, env, version)
   }
 }

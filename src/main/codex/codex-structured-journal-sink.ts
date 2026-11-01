@@ -1,12 +1,12 @@
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalRowAttribution
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type {
   StructuredAgentSessionItemAppendOptions,
   StructuredAgentSessionEventSink,
-  StructuredAgentSessionLifecycleIdentityResolver,
+  StructuredAgentSessionIdentityResolver,
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
@@ -16,6 +16,7 @@ import {
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-contracts'
 import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'
+import { reviseCodexTurnRow } from './codex-structured-journal-translation-turns'
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 
@@ -28,7 +29,31 @@ export function appendCodexLifecycleMutations(
     return ADMITTED
   }
   let admission: StructuredAgentSessionSinkAdmission = ADMITTED
-  if (sink.tryAppendLifecycleBatch) {
+  if (sink.tryAppendTransition) {
+    // Resolve against the journal at execution time to preserve queued turn revisions.
+    admission = sink.tryAppendTransition({
+      steps: [
+        {
+          kind: 'settlement',
+          settlementId,
+          reservedBytes:
+            Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 512,
+          resolve: (journal) =>
+            mutations.map((mutation) =>
+              mutation.kind === 'item' && mutation.body.kind === 'turn'
+                ? {
+                    ...mutation,
+                    body: reviseCodexTurnRow(journal, mutation.identity, mutation.body)
+                  }
+                : mutation
+            )
+        }
+      ],
+      lifecycle: true,
+      // Publish below to coalesce with queued publications.
+      publish: false
+    })
+  } else if (sink.tryAppendLifecycleBatch) {
     admission = sink.tryAppendLifecycleBatch(settlementId, mutations, { lifecycle: true })
   } else if (sink.appendLifecycleBatch) {
     admission = sink.appendLifecycleBatch(settlementId, mutations, { lifecycle: true }) ?? ADMITTED
@@ -63,7 +88,6 @@ export function appendCodexLifecycleMutations(
     : (sink.publish({ lifecycle: true }), ADMITTED)
 }
 
-/** An ordinary (non-lifecycle) append, published once admitted. */
 export function appendCodexItemAndPublish(
   sink: StructuredAgentSessionEventSink,
   identity: AgentJournalItemIdentity,
@@ -89,7 +113,7 @@ export function appendCodexLifecycleItem(
   sink: StructuredAgentSessionEventSink,
   identity: AgentJournalItemIdentity,
   body: AgentJournalItemBody,
-  /** With the host time a row first written here should carry instead of its append time. */
+  /** observedAt overrides append time for a delayed first write. */
   attribution: AgentJournalRowAttribution & { observedAt?: number }
 ): CodexJournalTranslationAdmission {
   const options = { lifecycle: true, ...attribution }
@@ -104,7 +128,7 @@ export function appendCodexLifecycleTransition(
   sink: StructuredAgentSessionEventSink,
   identitySizeBound: AgentJournalItemIdentity,
   body: AgentJournalItemBody,
-  resolveIdentity: StructuredAgentSessionLifecycleIdentityResolver,
+  resolveIdentity: StructuredAgentSessionIdentityResolver,
   attribution: AgentJournalRowAttribution
 ): CodexJournalTranslationAdmission {
   if (sink.tryAppendLifecycleTransition) {
@@ -126,7 +150,6 @@ export function publishCodexLifecycle(
   return CODEX_JOURNAL_ADMITTED
 }
 
-/** One producer's rows, admitted together. */
 export function admitCodexLifecycleItems(
   sink: StructuredAgentSessionEventSink,
   settlementId: string,

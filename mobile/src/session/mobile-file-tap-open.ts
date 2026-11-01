@@ -1,3 +1,4 @@
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import type {
   RuntimeNativeChatFileContext,
   RuntimeTerminalPathResolution
@@ -6,8 +7,14 @@ import { filesystemPathToFileUri } from '../../../src/shared/file-uri-path'
 import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
 import { fileTapOpenRun, fileTapPathResolve } from './mobile-session-launch-operations'
+import { mapWithConcurrency } from '../../../src/shared/map-with-concurrency'
 import { shouldActivateOpenedMobileSessionTab } from './opened-mobile-session-tab'
+import { isRendererUnavailableReply } from '../transport/renderer-unavailable-reply'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcResponse } from '../transport/types'
+
+// Hard-wrap guesses can number in the hundreds; stay far below the page bridge's 64 pending requests.
+const FILE_TAP_RESOLVE_CONCURRENCY = 8
 
 export type FileTapSessionTab = {
   id: string
@@ -20,11 +27,10 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   worktreeId: string
   worktreeName?: string
   terminalHandle?: string | null
-  pathText: string
   cwd?: string | null
   nativeChatContext?: RuntimeNativeChatFileContext | null
-  line: number | null
-  column: number | null
+  // Every reading of the tapped text; like desktop, the longest that exists opens.
+  candidates: readonly ParsedFileLinkLocation[]
   pushPreviewRoute: (href: ReturnType<typeof createMobileFilePreviewHref>) => void
   openBrowser: (url: string) => void
   triggerOpenFeedback: () => void
@@ -43,8 +49,7 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   }
   switchSessionTab: (tab: T) => void
   scheduleDelayedAction: (callback: () => void, delayMs: number) => unknown
-  /** Invoked when the tap cannot open anything (resolve miss, directory, or a
-   *  failed open). Omitted on surfaces that keep the historical silent miss. */
+  // Optional feedback; callers without it retain silent best-effort misses.
   onOpenFailed?: () => void
 }
 
@@ -56,6 +61,39 @@ export function openMobileFileTap<T extends FileTapSessionTab>(
     // focus/input untouched. Surfaces that want feedback pass onOpenFailed.
     reportOpenFailure(options)
   })
+}
+
+function requestFileTapResolution<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>,
+  pathText: string
+) {
+  return fileTapPathResolve.request(
+    options.client,
+    {
+      worktree: `id:${options.worktreeId}`,
+      pathText,
+      // Why: opts into sibling-workspace resolutions; this caller honors resolved.worktree.
+      crossWorkspace: true,
+      ...(options.terminalHandle && options.terminalHandle.trim().length > 0
+        ? { terminal: options.terminalHandle }
+        : {}),
+      ...(options.cwd && options.cwd.trim().length > 0 ? { cwd: options.cwd } : {}),
+      ...(options.nativeChatContext ? { nativeChatContext: options.nativeChatContext } : {})
+    },
+    { timeoutMs: 10_000 }
+  )
+}
+
+function existingFileTapResolution(
+  response: RpcResponse | null
+): RuntimeTerminalPathResolution | null {
+  const accepted = response ? fileTapPathResolve.interpret(response) : null
+  if (!accepted?.accepted) {
+    return null
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const resolved = accepted.value as RuntimeTerminalPathResolution
+  return resolved.exists && !resolved.isDirectory ? resolved : null
 }
 
 function reportOpenFailure<T extends FileTapSessionTab>(
@@ -72,33 +110,30 @@ function reportOpenFailure<T extends FileTapSessionTab>(
 async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   options: OpenMobileFileTapOptions<T>
 ): Promise<void> {
-  const worktree = `id:${options.worktreeId}`
-  const response = await fileTapPathResolve.request(
-    options.client,
-    {
-      worktree,
-      pathText: options.pathText,
-      // Why: opts into sibling-workspace resolutions; this caller honors resolved.worktree.
-      crossWorkspace: true,
-      ...(options.terminalHandle && options.terminalHandle.trim().length > 0
-        ? { terminal: options.terminalHandle }
-        : {}),
-      ...(options.cwd && options.cwd.trim().length > 0 ? { cwd: options.cwd } : {}),
-      ...(options.nativeChatContext ? { nativeChatContext: options.nativeChatContext } : {})
-    },
-    { timeoutMs: 10_000 }
+  const readings = await mapWithConcurrency(
+    options.candidates,
+    FILE_TAP_RESOLVE_CONCURRENCY,
+    async (target) => ({
+      target,
+      // Why: a reading the host cannot answer must not hide a sibling.
+      resolved: existingFileTapResolution(
+        await requestFileTapResolution(options, target.pathText).catch(() => null)
+      )
+    })
   )
-  const accepted = fileTapPathResolve.interpret(response)
-  if (!accepted.accepted) {
+  const found = readings.reduce<(typeof readings)[number] | undefined>(
+    (best, reading) =>
+      reading.resolved && (!best || reading.target.pathText.length > best.target.pathText.length)
+        ? reading
+        : best,
+    undefined
+  )
+  if (!found?.resolved) {
     reportOpenFailure(options)
     return
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const resolved = accepted.value as RuntimeTerminalPathResolution
-  if (!resolved.exists || resolved.isDirectory) {
-    reportOpenFailure(options)
-    return
-  }
+  const { target } = found
+  const resolved = found.resolved
   // Not a failure: the user moved off the source tab mid-resolve.
   if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
     return
@@ -117,7 +152,7 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
         source: 'terminalArtifact',
         absolutePath: resolved.openTarget.absolutePath,
         grantId: resolved.openTarget.grantId,
-        pathText: options.pathText,
+        pathText: target.pathText,
         ...(options.cwd && options.cwd.trim().length > 0 ? { cwd: options.cwd } : {}),
         ...(options.terminalHandle && options.terminalHandle.trim().length > 0
           ? { terminal: options.terminalHandle }
@@ -129,8 +164,8 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
             }
           : {}),
         name: displayNameFromPath(resolved.openTarget.absolutePath),
-        ...(options.line !== null ? { line: String(options.line) } : {}),
-        ...(options.column !== null ? { column: String(options.column) } : {}),
+        ...(target.line !== null ? { line: String(target.line) } : {}),
+        ...(target.column !== null ? { column: String(target.column) } : {}),
         ...(resolvedWorktreeName ? { worktreeName: resolvedWorktreeName } : {})
       })
     )
@@ -146,11 +181,7 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     return
   }
   options.triggerOpenFeedback()
-  if (
-    resolvedWorktreeId !== options.worktreeId ||
-    options.line !== null ||
-    options.column !== null
-  ) {
+  const pushWorktreePreview = (): void =>
     options.pushPreviewRoute(
       createMobileFilePreviewHref({
         hostId: options.hostId,
@@ -158,11 +189,13 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
         source: 'worktree',
         relativePath: openedPath,
         name: displayNameFromPath(openedPath),
-        ...(options.line !== null ? { line: String(options.line) } : {}),
-        ...(options.column !== null ? { column: String(options.column) } : {}),
+        ...(target.line !== null ? { line: String(target.line) } : {}),
+        ...(target.column !== null ? { column: String(target.column) } : {}),
         ...(resolvedWorktreeName ? { worktreeName: resolvedWorktreeName } : {})
       })
     )
+  if (resolvedWorktreeId !== options.worktreeId || target.line !== null || target.column !== null) {
+    pushWorktreePreview()
     return
   }
   if (
@@ -178,6 +211,15 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     { worktree: resolvedWorktree, relativePath: openedPath },
     { timeoutMs: 15_000 }
   )
+  // Why: a host with no desktop window opens no editor tabs; the preview route reads the file through files.read.
+  if (isRendererUnavailableReply(openResponse)) {
+    // Not a failure: the user moved off the source tab during the call.
+    if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
+      return
+    }
+    pushWorktreePreview()
+    return
+  }
   const opened = fileTapOpenRun.interpret(openResponse)
   if (!opened.accepted) {
     reportOpenFailure(options)

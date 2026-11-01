@@ -3,9 +3,9 @@ import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
 import {
   ORCAD_WINDOWS_BREAKAWAY_CONTRACT,
   parseWindowsBreakawayLaunchReport,
-  RELAY_WINDOWS_BREAKAWAY_CONTRACT,
   WINDOWS_BREAKAWAY_EXIT_CODES as RELAY_WINDOWS_BREAKAWAY_EXIT_CODES,
-  WINDOWS_BREAKAWAY_LAUNCH_FLAG as RELAY_WINDOWS_BREAKAWAY_LAUNCH_FLAG
+  WINDOWS_BREAKAWAY_LAUNCH_FLAG as RELAY_WINDOWS_BREAKAWAY_LAUNCH_FLAG,
+  type WindowsBreakawayLaunchContract
 } from './windows-breakaway-launch'
 import {
   launchOutsideJob,
@@ -14,6 +14,12 @@ import {
   type SpawnOutsideJob,
   type WindowsBreakawayLauncher
 } from './windows-breakaway-launcher'
+
+// The launcher is contract-agnostic; this stands in for the retired relay's contract.
+const RELAY_WINDOWS_BREAKAWAY_CONTRACT: WindowsBreakawayLaunchContract = {
+  argsFlag: '--relay-args',
+  reportMarker: 'ORCA_RELAY_LAUNCH'
+}
 
 const parseRelayWindowsBreakawayLaunch = (args: readonly string[]) =>
   parseWindowsBreakawayLaunchRequest(RELAY_WINDOWS_BREAKAWAY_CONTRACT, args)

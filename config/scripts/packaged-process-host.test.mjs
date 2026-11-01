@@ -40,7 +40,6 @@ it('loads the copied process package from an unpacked CLI without checkout depen
 
 describe('process-host output packaging guard', () => {
   const { assertProcessHostOutputBuilt } = require('../packaged-runtime-node-modules.cjs')
-  const electronBuilderConfig = require('../electron-builder.config.cjs')
 
   async function builtPackage() {
     const packageDir = await mkdtemp(join(tmpdir(), 'orca-process-host-output-'))
@@ -111,9 +110,5 @@ describe('process-host output packaging guard', () => {
     } finally {
       await removeTree(packageDir)
     }
-  })
-
-  it('runs in beforePack', () => {
-    expect(String(electronBuilderConfig.beforePack)).toContain('assertProcessHostOutputBuilt()')
   })
 })

@@ -2,7 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { isShipItRunningForBundle, readServeInstallEvidence } from './serve-install-hold'
+import { readServeInstallEvidence } from './serve-install-hold'
+import { isShipItRunningForBundle } from '../../shared/shipit-process-listing'
 
 describe('readServeInstallEvidence', () => {
   let root: string

@@ -1,15 +1,4 @@
-/**
- * Which execution host a worktree create runs on.
- *
- * Two entry points create the same workspace and disagreed about how to read its host. The runtime
- * path resolved (`orca-runtime-create-managed-worktree.ts`) and then normalized the row; the IPC
- * handler branched on raw `repo.connectionId`, so a row naming its owner only as
- * `executionHostId: 'ssh:<target>'` ran `git worktree add` on the client against a remote path
- * (#11163). Same repo, two entry points, two answers.
- *
- * Both now take this one route. An `ssh:` route is not served here: both entry points refuse it
- * with `SshHostNotServedError`, never by creating locally.
- */
+/** Resolve the filesystem owner consistently for IPC and runtime creates. */
 
 import { getRepoExecutionHostId, type LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import type { Repo } from '../shared/repo-types'
@@ -35,12 +24,7 @@ export function resolveWorktreeCreateRoute(repo: Repo): WorktreeCreateRoute {
   }
 }
 
-/**
- * For the two create forks that put files on a host. `runtime:<env>` is not one of them: the
- * environment's own server creates the worktree, and the SSH target on its repo row is that
- * server's nested one, addressable only as (environmentId, targetId). Creating through this
- * client's SSH table would `git worktree add` on a same-named target on the wrong machine.
- */
+/** Runtime SSH targets belong to the server's namespace; the client must not resolve them locally. */
 export function requireWorktreeCreateRoute(
   repo: Repo
 ): Exclude<WorktreeCreateRoute, { kind: 'runtime' }> {

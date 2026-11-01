@@ -4,6 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
+import { normalizeJiraProjectReference } from '../../../../shared/jira/jira-project-reference'
 import {
   findRepoForHost,
   getRepoHostIdentityForParts,
@@ -22,6 +23,14 @@ import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-ident
 
 export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   const sanitized = { ...updates }
+  if ('defaultJiraProject' in sanitized) {
+    const reference = normalizeJiraProjectReference(sanitized.defaultJiraProject)
+    if (reference === undefined) {
+      delete sanitized.defaultJiraProject
+    } else {
+      sanitized.defaultJiraProject = reference
+    }
+  }
   if ('badgeColor' in sanitized) {
     const badgeColor = normalizeRepoBadgeColor(sanitized.badgeColor)
     if (!badgeColor) {
@@ -210,7 +219,7 @@ export function createRepoUpdateActions(
         }
       }
       const previous = updateRepoChains.get(updateChainKey)
-      // Why: settings persist as full nested values, so preserve per-repo call order — a slower response mustn't overwrite newer state.
+      // Persisted nested settings replace whole values; serialize per repo so slow replies cannot overwrite newer edits.
       const next = previous
         ? previous.catch(() => undefined).then(applyRepoUpdate)
         : applyRepoUpdate()

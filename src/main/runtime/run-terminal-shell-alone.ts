@@ -1,9 +1,4 @@
-/**
- * Proof that a run terminal's shell is alone at its prompt, read from the execution host's own
- * process table. The daemon's shell-ownership flag cannot carry it: that flag turns 'shell' only
- * after a full-screen command exits, so a plain "command not found" or an agent that already
- * exited never sets it. Every failure to observe reads as unproven.
- */
+/** Read execution-host process tables: daemon shell-ownership changes only after full-screen exit and misses plain failed/finished commands. Observation failure is unproven. */
 import { confirmShellForegroundProcess } from '../providers/agent-foreground-process'
 import { getFreshProcessTableSnapshot } from '../../shared/process-table-snapshot-reader'
 import { getProcessTableIndex } from '../../shared/process-table-index'

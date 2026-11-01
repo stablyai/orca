@@ -4,7 +4,7 @@ import remarkParse from 'remark-parse'
 import { unified } from 'unified'
 import { resolveImageAbsolutePath } from './markdown-preview-links'
 import { getLocalImageCacheKey, loadLocalImageAbsolutePath } from './useLocalImageSrc'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { documentResourceAccess } from '@/lib/local-file-access'
 
 export const MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT = 64
@@ -75,8 +75,7 @@ export function extractMarkdownPreviewLocalImageCandidates(
     return []
   }
 
-  // Why: parser extraction matches rendered Markdown image/reference/table
-  // nodes without scanning raw text or accidentally prewarming HTML <img> tags.
+  // Extract parser nodes so prewarming matches Markdown images/references/tables without accidentally including HTML img tags.
   const tree = unified()
     .use(remarkParse)
     .use(remarkGfm)
@@ -99,7 +98,6 @@ export function extractMarkdownPreviewLocalImageCandidates(
     const cacheKey = getLocalImageCacheKey(
       absolutePath,
       options.connectionId,
-      // Null returned early above.
       options.runtimeContext ?? undefined,
       documentResourceAccess(filePath)
     )

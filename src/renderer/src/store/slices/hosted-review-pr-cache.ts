@@ -1,7 +1,10 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
 import type { AppState } from '../types'
-import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
+import {
+  getGitHubPRCacheKey,
+  getLegacyGitHubPRCacheKey
+} from '../../../../shared/github/github-cache-key'
 
 export function clearHostedReviewConflictingPrCache(args: {
   cache: NonNullable<AppState['prCache']>

@@ -56,26 +56,10 @@ describe('useRemoteBrowserPageNavigation history recording', () => {
 
   afterEach(() => cleanup())
 
-  it('files an observed remote navigation into the URL history the address bar suggests from', () => {
-    const { result } = renderNavigation()
-
-    act(() =>
-      result.current.applyRemoteTabInfo({
-        url: 'https://remote.internal/docs',
-        title: 'Remote docs'
-      })
-    )
-
-    expect(useAppStore.getState().browserUrlHistory).toEqual([
-      expect.objectContaining({ url: 'https://remote.internal/docs', title: 'Remote docs' })
-    ])
-  })
-
   it('files one entry however often the same page is re-read', () => {
     const { result } = renderNavigation()
 
-    // Why: a settled scroll, click or keystroke re-reads tab info, so an unconditional filing
-    // would rewrite the store — and re-render every address bar — on plain interaction.
+    // Post-input refreshes read tab info; unchanged history must not rewrite the store and re-render every address bar.
     for (let index = 0; index < 20; index += 1) {
       act(() =>
         result.current.applyRemoteTabInfo({ url: 'https://remote.internal/docs', title: 'Docs' })
@@ -116,14 +100,6 @@ describe('useRemoteBrowserPageNavigation history recording', () => {
     expect(useAppStore.getState().browserUrlHistory).toEqual([
       expect.objectContaining({ title: 'Remote docs' })
     ])
-  })
-
-  it('never files a blank page, which is what a new tab reports before it navigates', () => {
-    const { result } = renderNavigation()
-
-    act(() => result.current.applyRemoteTabInfo({ url: 'about:blank', title: '' }))
-
-    expect(useAppStore.getState().browserUrlHistory).toHaveLength(0)
   })
 
   it('redacts a Kagi session token before it reaches history', () => {

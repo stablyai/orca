@@ -1,7 +1,4 @@
-// What `layout.subscribe` publishes for one workspace: an explicit projection of the model, so the
-// model's internal shape is never a wire contract. Runtime records (incarnations, sleeping agents,
-// closed tabs, default-tabs marks), terminal spawn inputs and the legacy persistence record are
-// not in it; neither are content facts or any view's selection.
+// Explicit layout.subscribe wire projection includes terminal startup inputs and permits live pane titles/status. Persistence-only records and view selection stay private.
 
 import type { AgentType } from '../agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault-session-title'
@@ -10,24 +7,52 @@ import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
 import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
 import { pickStoredFields } from './stored-record-fields'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
-import { tabsInOrder, type LayoutTab, type WorkspaceLayout } from './workspace-layout-model'
+import {
+  tabsInOrder,
+  type LayoutBrowserTab,
+  type LayoutEditorFile,
+  type LayoutTab,
+  type LayoutTerminalCreation,
+  type WorkspaceLayout
+} from './workspace-layout-model'
 import { tabExecutionHostId } from './workspace-layout-tab-host'
+import type { LayoutEditorView } from './layout-editor-view'
 
 export type PublishedPane = {
   leafId: string
-  /** The terminal the pane shows; absent while unbound. */
+  /** Absent while unbound. */
   ptyId?: string
+  /** Rises on each pty bind, retire and rollback of the pane in this process (a same-id respawn too). */
+  ptyGeneration?: number
   title?: string
+  /** Unsaved live terminal title; each view chooses its tab title from its focused pane. */
+  liveTitle?: string
+  /** Main's start of the pane's terminal, while it has none: live state, never saved. */
+  status?: PaneStartStatus
+  /** Why a start failed or is held, for the pane's card. */
+  statusReason?: string
+  /** Unsaved outcome for the terminal main started; absent on older hosts/plain starts and removed when that terminal changes. */
+  resumeOutcome?: PaneResumeOutcome
 }
+
+/** restored: resumed the agent; resume-unavailable: unverifiable agent session forced a fresh start. */
+export type PaneResumeOutcome = 'restored' | 'resume-unavailable'
+
+/** A status means no view may attach ptyId yet: it names restore input.
+ * starting/resuming: main is starting; failed: start failed; sleeping: resume on first view/use; held: a newer terminal service may still run it. */
+export type PaneStartStatus = 'starting' | 'failed' | 'sleeping' | 'resuming' | 'held'
 
 export type PublishedTerminal = {
   root: TerminalPaneLayoutNode | null
   /** In tree order. */
   panes: PublishedPane[]
   chatLeafId?: string
-  /** "Terminal N", the title shown when no other title is set. */
+  /** Fallback "Terminal N" title. */
   defaultTitle?: string
-}
+} & Pick<
+  LayoutTerminalCreation,
+  'shellOverride' | 'forceHostRuntime' | 'startupCwd' | 'launchAgent'
+>
 
 export type PublishedTab = {
   id: string
@@ -46,32 +71,61 @@ export type PublishedTab = {
   isPreview?: boolean
   agentSessionAgent?: AgentType
   terminal?: PublishedTerminal
+  /** What a non-plain editor tab shows, so a window lacking its open file can rebuild it. */
+  editorView?: LayoutEditorView
 }
 
-export type PublishedEditorFile = {
-  filePath: string
-  relativePath: string
-  language: string
-  readOnly?: boolean
-  liveTail?: boolean
-}
+export type PublishedEditorFile = Pick<
+  LayoutEditorFile,
+  | 'filePath'
+  | 'relativePath'
+  | 'language'
+  | 'readOnly'
+  | 'liveTail'
+  | 'runtimeEnvironmentId'
+  | 'externalSshTargetId'
+>
 
-export type PublishedBrowserTab = {
-  id: string
-  sessionProfileId?: string | null
-  pageIds?: string[]
-}
+/** `createdAt` is optional on the wire: a host from before it was published omits it. */
+export type PublishedBrowserTab = Omit<LayoutBrowserTab, 'createdAt'> & { createdAt?: number }
 
 /** Addressed by its workspace key alone; which partition owns it stays the host's routing. */
 export type PublishedWorkspaceLayout = {
   worktreeId: string
-  /** In the one tab order. */
+  /** In canonical tab order. */
   groups: { id: string; tabIds: string[] }[]
   groupLayout?: TabGroupLayoutNode
-  /** In the one tab order. */
+  /** In canonical tab order. */
   tabs: PublishedTab[]
   editorFiles: PublishedEditorFile[]
   browserTabs: PublishedBrowserTab[]
+}
+
+export function publishEditorView(editorView: LayoutEditorView): LayoutEditorView {
+  const { file } = editorView
+  return {
+    view: editorView.view,
+    file: {
+      filePath: file.filePath,
+      relativePath: file.relativePath,
+      language: file.language,
+      ...pickStoredFields(file, ['runtimeEnvironmentId', 'externalSshTargetId', 'readOnly'])
+    }
+  }
+}
+
+export function publishEditorFile(file: LayoutEditorFile): PublishedEditorFile {
+  return {
+    filePath: file.filePath,
+    relativePath: file.relativePath,
+    language: file.language,
+    ...pickStoredFields(file, [
+      'readOnly',
+      'liveTail',
+      'runtimeEnvironmentId',
+      'externalSshTargetId'
+    ])
+  }
 }
 
 function publishTab(
@@ -83,7 +137,7 @@ function publishTab(
     id: tab.id,
     kind: tab.kind,
     entityId: tab.entityId,
-    executionHostId: tabExecutionHostId(tab, workspace.editorFiles, partition),
+    executionHostId: tabExecutionHostId(tab, workspace, partition),
     createdAt: tab.createdAt,
     customTitle: tab.customTitle,
     color: tab.color,
@@ -97,16 +151,29 @@ function publishTab(
       'agentSessionAgent'
     ])
   }
+  const editorView = workspace.editorViews?.[tab.id]
+  if (editorView) {
+    published.editorView = publishEditorView(editorView)
+  }
   if (tab.kind === 'terminal') {
     const panes = collectLayoutLeafIdsInOrder(tab.panes.root).map((leafId): PublishedPane => {
       const leaf = workspace.leaves?.[leafId]
-      return { leafId, ...(leaf ? pickStoredFields(leaf, ['ptyId', 'title']) : {}) }
+      return {
+        leafId,
+        ...(leaf ? pickStoredFields(leaf, ['ptyId', 'ptyGeneration', 'title']) : {})
+      }
     })
     published.terminal = {
       root: tab.panes.root,
       panes,
       ...pickStoredFields(tab.panes, ['chatLeafId']),
-      ...pickStoredFields(tab.terminal, ['defaultTitle'])
+      ...pickStoredFields(tab.terminal, [
+        'defaultTitle',
+        'shellOverride',
+        'forceHostRuntime',
+        'startupCwd',
+        'launchAgent'
+      ])
     }
   }
   return published
@@ -121,15 +188,16 @@ export function publishWorkspaceLayout(
     groups: workspace.groups.map((group) => ({ id: group.id, tabIds: [...group.tabOrder] })),
     ...(workspace.groupLayout ? { groupLayout: workspace.groupLayout } : {}),
     tabs: tabsInOrder(workspace).map((tab) => publishTab(tab, workspace, partition)),
-    editorFiles: (workspace.editorFiles ?? []).map((file) => ({
-      filePath: file.filePath,
-      relativePath: file.relativePath,
-      language: file.language,
-      ...pickStoredFields(file, ['readOnly', 'liveTail'])
-    })),
+    editorFiles: (workspace.editorFiles ?? []).map(publishEditorFile),
     browserTabs: (workspace.browserTabs ?? []).map((tab) => ({
       id: tab.id,
-      ...pickStoredFields(tab, ['sessionProfileId', 'pageIds'])
+      ...pickStoredFields(tab, [
+        'createdAt',
+        'label',
+        'sessionProfileId',
+        'sessionPartition',
+        'pageIds'
+      ])
     }))
   }
 }

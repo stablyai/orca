@@ -4,7 +4,7 @@ import {
   useStructuredAgentSessionHostCapabilityState,
   type StructuredAgentSessionHostCapabilityState
 } from '@/runtime/structured-agent-session-host-capability'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export type ServerSshProjects = {
   state: StructuredAgentSessionHostCapabilityState

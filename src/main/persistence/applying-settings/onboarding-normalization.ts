@@ -43,8 +43,7 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
     typeof rawVolume === 'number' && Number.isFinite(rawVolume)
       ? Math.min(100, Math.max(0, rawVolume))
       : defaults.customSoundVolume
-  // Why field-by-field: a blanket spread let a type-flipped value on disk through, so `enabled: "false"`
-  // stayed truthy and `customSoundPath: 42` reached the sound loader.
+  // Validate fields individually: spreading disk JSON can admit truthy strings and invalid paths.
   const booleanOr = (raw: unknown, fallback: boolean): boolean =>
     typeof raw === 'boolean' ? raw : fallback
   return {
@@ -60,6 +59,10 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
     customSoundVolume,
     mutedNotificationSourceIds: normalizeMutedNotificationSourceIds(
       candidate.mutedNotificationSourceIds
+    ),
+    notifyHiddenWorkspaces: booleanOr(
+      candidate.notifyHiddenWorkspaces,
+      defaults.notifyHiddenWorkspaces
     )
   }
 }
@@ -84,11 +87,7 @@ function sameNotificationSettingValue(raw: unknown, normalized: unknown): boolea
   return raw === normalized
 }
 
-/**
- * Whether normalization had to repair the persisted notification block. Callers use this to mark the
- * load dirty; an in-memory-only repair is redone on every launch until some other write lands.
- * A missing block is not a repair — nothing on disk was overridden.
- */
+/** Persist repairs so they do not repeat on launch; an absent block is not a repair. */
 export function persistedNotificationSettingsRepaired(
   value: unknown,
   normalized: NotificationSettings
@@ -116,11 +115,11 @@ export function remapLegacyOnboardingLastCompletedStep(
   if (raw.outcome === 'completed' && lastCompletedStep >= 4) {
     return ONBOARDING_FINAL_STEP
   }
-  // Why: v3 (pre-Windows-terminal-page) step 4 already meant notifications, so resume there, not the inserted Windows step.
+  // v3 step 4 meant notifications, before the Windows terminal step was inserted.
   if (raw.flowVersion === 3) {
     return Math.min(4, lastCompletedStep)
   }
-  // Why: v2's five-step flow had step 4 = removed agent setup, not completed integrations.
+  // v2 step 4 was agent setup, before integrations replaced it.
   if (raw.flowVersion === 2) {
     if (lastCompletedStep === 3) {
       return 2
@@ -155,13 +154,13 @@ export function sanitizeOnboardingUpdate(
   } = {}
 
   if ('closedAt' in raw) {
-    // Why: NaN/Infinity serialize to null on save, reverting closedAt and reopening the wizard; require a finite timestamp.
+    // Nonfinite timestamps serialize to null and would reopen onboarding.
     if (typeof raw.closedAt === 'number' && Number.isFinite(raw.closedAt) && raw.closedAt >= 0) {
       out.closedAt = raw.closedAt
     } else if (raw.closedAt === null) {
       out.closedAt = null
     }
-    // else: omit — preserve existing persisted value on merge.
+    // Invalid updates omit the field to preserve its saved value.
   }
   if ('outcome' in raw) {
     const v = raw.outcome
@@ -170,32 +169,29 @@ export function sanitizeOnboardingUpdate(
     } else if (v === null) {
       out.outcome = null
     }
-    // else: omit.
   }
   if ('flowVersion' in raw) {
     const v = raw.flowVersion
     if (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= ONBOARDING_FLOW_VERSION) {
       out.flowVersion = v
     }
-    // else: omit.
   }
   if ('lastCompletedStep' in raw) {
     const v = raw.lastCompletedStep
     if (typeof v === 'number' && Number.isInteger(v) && v >= -1) {
       const isLegacyFlow =
         options.migrateLegacyProgress && raw.flowVersion !== ONBOARDING_FLOW_VERSION
-      // Why: removing two wizard pages changed step numbering; migrate legacy values before the final-step bound drops them.
+      // Migrate old step numbers before applying bounds for the shorter flow.
       const normalized = isLegacyFlow ? remapLegacyOnboardingLastCompletedStep(v, raw) : v
       if (normalized <= ONBOARDING_FINAL_STEP) {
         out.lastCompletedStep = normalized
       }
     }
-    // else: omit.
   }
   if ('checklist' in raw) {
     const rawChecklist = raw.checklist
     if (rawChecklist && typeof rawChecklist === 'object' && !Array.isArray(rawChecklist)) {
-      // Why: copy ONLY caller-sent boolean keys so partial updates don't reset other checklist items to false.
+      // Partial checklist updates must not reset omitted items.
       const defaults = getDefaultOnboardingState().checklist
       const rc = rawChecklist as Record<string, unknown>
       const checklist: Partial<OnboardingChecklistState> = {}
@@ -217,7 +213,7 @@ export function normalizeLoadedOnboardingState(
   input: unknown,
   defaults: OnboardingState
 ): OnboardingState {
-  // Why: an existing file with no onboarding block is an upgrade user; backfill as completed so they skip the wizard.
+  // Existing files without onboarding state belong to upgrade users; skip the wizard.
   if (!input) {
     return {
       ...defaults,
@@ -226,11 +222,10 @@ export function normalizeLoadedOnboardingState(
       lastCompletedStep: ONBOARDING_FINAL_STEP
     }
   }
-  // Why: sanitize persisted onboarding keys so a type-flipped field on disk can't poison in-memory state.
   const sanitized = sanitizeOnboardingUpdate(input, {
     migrateLegacyProgress: true
   })
-  // Why: a completed/dismissed outcome means the user left; recover a bad closedAt instead of reopening the checklist.
+  // Recover closure from the outcome so corrupt timestamps do not reopen onboarding.
   const recoveredClosedAt =
     typeof sanitized.closedAt === 'number'
       ? sanitized.closedAt
@@ -252,11 +247,11 @@ export function resolveSetupGuideSidebarDismissedOnLoad(
   persistedDismissed: unknown,
   onboarding: OnboardingState
 ): boolean {
-  // Why: once onboarding is closed, persisted false is just the old default, not a user opt-in to the sidebar checklist.
+  // Once closed, a saved false is the old default, not a request to reopen the checklist.
   return onboarding.closedAt !== null || persistedDismissed === true
 }
 
-// Why: read a settings field removed from GlobalSettings but still on disk; one-shot for the inline-agents migration.
+// Read the retired on-disk flag only for inline-agent migration.
 export function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
   return (
     (parsed?.settings as { experimentalAgentDashboard?: boolean } | undefined)

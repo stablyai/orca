@@ -9,7 +9,9 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: vi.fn(),
-  assertRuntimeEnvironmentCapability: vi.fn(),
+  assertRuntimeEnvironmentCapability: vi.fn()
+}))
+vi.mock('@/runtime/runtime-rpc-result', () => ({
   RuntimeRpcCallError: class RuntimeRpcCallError extends Error {
     code?: string
   }
@@ -79,19 +81,6 @@ describe('publishWorkspacePortScanForHost', () => {
     remoteScan = scanWithPort(3000, 20)
   })
 
-  it('publishes the single tracked host under its own key', () => {
-    const harness = makeStoreHarness()
-
-    publishWorkspacePortScanForHost({
-      ...harness.publisher,
-      scanKey: 'local:all',
-      scan: localScan
-    })
-
-    expect(harness.projections).toEqual([{ key: 'local:all', result: localScan }])
-    expect(Object.keys(harness.scansByKey)).toEqual(['local:all'])
-  })
-
   it('keeps the other host in the projection when one host refreshes', () => {
     const harness = makeStoreHarness({ 'local:all': localScan })
 
@@ -117,8 +106,7 @@ describe('publishWorkspacePortScanForHost', () => {
       scan: remoteScan
     })
 
-    // Why: two sequential setter calls notify subscribers twice for one scan;
-    // one atomic replace keeps map and projection from ever disagreeing.
+    // Atomic replacement must notify once and keep map/projection coherent.
     expect(replaceSpy).toHaveBeenCalledTimes(1)
     const [nextScans, projection] = replaceSpy.mock.calls[0]
     expect(Object.keys(nextScans).sort()).toEqual(['environment:env-1:all', 'local:all'])
@@ -139,8 +127,7 @@ describe('publishWorkspacePortScanForHost', () => {
       scan: { ...remoteScan, scannedAt: 30 }
     })
 
-    // Why: the aggregate must never land in the per-host map, or the next merge
-    // folds the merged result back into itself and rows multiply.
+    // Never store aggregate in per-host state or the next merge multiplies its own rows.
     expect(harness.scansByKey[WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY]).toBeUndefined()
     expect(
       harness.projections

@@ -1,20 +1,16 @@
-// "Stopping…" read straight off a journal: it holds while a person's Stop settles, and then while
-// the turn it named or its settle bound still runs, whatever the Stop's answer. It reads only the
-// journal's tail to tell.
-
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
   type AgentJournalRenderItem,
   type AgentJournalStatusItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
@@ -72,7 +68,6 @@ function stopping(): boolean {
 }
 
 describe("a person's Stop's Stopping", () => {
-  // The Stop is the person's whatever the agent answered; only the turn's end clears it.
   it('holds through an answer that says the Stop stopped nothing, until the turn ends', async () => {
     await turn('turn-1', 'running')
     await journal.appendStopEvent({ reason: 'user-stop', turnId: 'turn-1' }, FENCE)

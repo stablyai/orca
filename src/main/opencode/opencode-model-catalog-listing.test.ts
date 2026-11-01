@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { parseOpenCodeModelListing } from './opencode-model-catalog-listing'
 
-// What `opencode models --verbose` prints: each id, then `JSON.stringify(model, null, 2)`.
+// Match opencode models --verbose: ID followed by pretty-printed model JSON.
 function listing(models: Record<string, unknown>): string {
   return Object.entries(models)
     .map(([id, model]) => `${id}\n${JSON.stringify(model, null, 2)}\n`)
@@ -9,6 +10,24 @@ function listing(models: Record<string, unknown>): string {
 }
 
 describe('OpenCode verbose model listing', () => {
+  it('does not claim that a recorded listing runs its first variant by default', () => {
+    // OpenCode 1.18.31 models --verbose capture, 2026-10-30; one complete model row.
+    const stdout = readFileSync(
+      new URL('../acp/fixtures/opencode-v1-model-listing.txt', import.meta.url),
+      'utf8'
+    )
+    const [model] = parseOpenCodeModelListing(stdout)
+    expect(model?.efforts.map(({ value }) => value)).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+      'default'
+    ])
+    expect(model).toMatchObject({ defaultEffort: 'low', declaredDefaultEffort: null })
+  })
+
   it('reads every model and its variants through multiline metadata', () => {
     const stdout = listing({
       'anthropic/claude-sonnet': {
@@ -30,14 +49,14 @@ describe('OpenCode verbose model listing', () => {
       {
         id: 'anthropic/claude-sonnet',
         label: 'anthropic/Claude Sonnet',
+        defaultEffort: 'high',
+        declaredDefaultEffort: null,
         isDefault: false,
         efforts: [
           { value: 'high', label: 'High' },
           { value: 'max', label: 'Max' },
           { value: 'default', label: 'Default' }
-        ],
-        // No `default` variant: a new session runs the first one, as OpenCode's own ACP does.
-        defaultEffort: 'high'
+        ]
       },
       {
         id: 'opencode/grok-code',
@@ -47,9 +66,16 @@ describe('OpenCode verbose model listing', () => {
           { value: 'default', label: 'Default' },
           { value: 'fast', label: 'Fast' }
         ],
-        defaultEffort: 'default'
+        defaultEffort: 'default',
+        declaredDefaultEffort: 'default'
       },
-      { id: 'openai/gpt-plain', label: 'openai/GPT Plain', isDefault: false, efforts: [] }
+      {
+        id: 'openai/gpt-plain',
+        label: 'openai/GPT Plain',
+        isDefault: false,
+        declaredDefaultEffort: null,
+        efforts: []
+      }
     ])
   })
 
@@ -75,8 +101,20 @@ describe('OpenCode verbose model listing', () => {
   it('keeps a model whose metadata does not parse, with no effort menu', () => {
     const stdout = 'openai/gpt-broken\n{\n  "name": \n}\nopenai/gpt-next\n'
     expect(parseOpenCodeModelListing(stdout)).toEqual([
-      { id: 'openai/gpt-broken', label: 'openai/gpt-broken', isDefault: false, efforts: [] },
-      { id: 'openai/gpt-next', label: 'openai/gpt-next', isDefault: false, efforts: [] }
+      {
+        id: 'openai/gpt-broken',
+        label: 'openai/gpt-broken',
+        isDefault: false,
+        declaredDefaultEffort: null,
+        efforts: []
+      },
+      {
+        id: 'openai/gpt-next',
+        label: 'openai/gpt-next',
+        isDefault: false,
+        declaredDefaultEffort: null,
+        efforts: []
+      }
     ])
   })
 })

@@ -20,7 +20,6 @@ describe('workspace cleanup streaming row order', () => {
   it('keeps existing rows in their frozen slots when streamed values would resort them', () => {
     const order = createWorkspaceCleanupFrozenRowOrder([row('a'), row('b'), row('c')], 'name:asc')
 
-    // The live sort now says c < a < b (values changed mid-stream).
     const arranged = arrangeWorkspaceCleanupRowsByFrozenOrder([row('c'), row('a'), row('b')], order)
 
     expect(ids(arranged)).toEqual(['a', 'b', 'c'])
@@ -33,7 +32,6 @@ describe('workspace cleanup streaming row order', () => {
       'a',
       'c'
     ])
-    // Un-hiding b restores its original slot between a and c.
     expect(
       ids(arrangeWorkspaceCleanupRowsByFrozenOrder([row('c'), row('b'), row('a')], order))
     ).toEqual(['a', 'b', 'c'])
@@ -45,7 +43,6 @@ describe('workspace cleanup streaming row order', () => {
 
     expect(ids(arrangeWorkspaceCleanupRowsByFrozenOrder(firstRows, order))).toEqual(['b', 'd'])
     const extendedOrder = extendWorkspaceCleanupFrozenRowOrder(firstRows, order)
-    // New rows slot after the already-presented ones even when they sort earlier.
     expect(
       ids(
         arrangeWorkspaceCleanupRowsByFrozenOrder(

@@ -1,10 +1,6 @@
 import { sha256 } from '@noble/hashes/sha256'
 
-/** Full sha256 hex, never a slice of the host id and never the id itself: the key names the
- *  directory that holds one host's bundle, two hosts sharing one is the cross-host cache use the
- *  rollback runbook escalates as a security incident, and a host id is free-form text that would
- *  otherwise reach a path. `deriveHostFingerprint` is not this: it hashes the host public key and
- *  truncates to 16 chars for the push gateway. */
+// Hash the full free-form host id to prevent path injection and cross-host cache reuse; push fingerprints instead hash the public key and truncate, so cannot substitute.
 export function deriveHostCacheKey(hostId: string): string {
   return Array.from(sha256(new TextEncoder().encode(hostId)), (byte) =>
     byte.toString(16).padStart(2, '0')
@@ -13,7 +9,7 @@ export function deriveHostCacheKey(hostId: string): string {
 
 const HOST_CACHE_KEY_PATTERN = /^[a-f0-9]{64}$/
 
-/** The store checks every key it is handed, so a caller passing a raw host id cannot build a path. */
+// Validate every store key so raw host ids never reach cache paths.
 export function isHostCacheKey(value: string): boolean {
   return HOST_CACHE_KEY_PATTERN.test(value)
 }

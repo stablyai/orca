@@ -1,21 +1,21 @@
-// The coordinator-mail rig, shared by every suite that drives a worker's result into a structured
-// chat end to end in one process.
-//
-// Real: the structured agent-session host, its record store, journal, lease and Codex adapter; the
-// orchestration database, RPC dispatcher and methods; the runtime's pointer lanes. Fake: only the
-// Codex app-server child, which answers the JSON-RPC calls the real one does. Importing it
-// registers the rig's own beforeEach/afterEach for the importing file.
+// End-to-end coordinator-mail rig: real session/orchestration state and RPC, fake Codex child. Import registers lifecycle hooks.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { activeProviderContext } from '../../shared/agent-session-provider-context'
+import { activeProviderContext } from '../../shared/agent-session/agent-session-provider-context'
 import { OrcaRuntimeService } from './orca-runtime'
+import {
+  createStore,
+  closeTestStores,
+  makeRepo,
+  testState
+} from '../persistence/persistence-test-harness'
 import { OrchestrationDb } from './orchestration/db'
 import { localOrchestrationCliCommand } from './orchestration/cli-command'
 import { formatMessagePointer } from './orchestration/formatter'
@@ -35,6 +35,7 @@ import {
   type FakeConnection
 } from './structured-chat-coordinator-fake-codex-fixture'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 export const COORDINATOR = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
 export const PEER_CHAT = '7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64'
@@ -43,6 +44,7 @@ export const WORKER_2_PANE = 'tab_worker2:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 
 export let codex: ReturnType<typeof fakeCodex>
 export let root: string
+let profile: ReturnType<typeof createStore>
 export let runtime: OrcaRuntimeService
 export let db: OrchestrationDb
 export let host: StructuredAgentSessionHost
@@ -103,7 +105,6 @@ export function connectionFor(sessionId: string): FakeConnection {
   return connection
 }
 
-/** Codex's own sequence for a turn: it starts, echoes the user message, and completes. */
 export async function settleTurn(sessionId: string, turnIndex: number): Promise<void> {
   const connection = connectionFor(sessionId)
   const turn = connection.turns[turnIndex]!
@@ -123,7 +124,6 @@ export async function settleTurn(sessionId: string, turnIndex: number): Promise<
   await host.flushStreamedEvents(sessionId)
 }
 
-/** A user message typed into the chat, as the chat surface sends it. */
 export function sendUserMessage(sessionId: string, text: string) {
   const body = {
     kind: 'message' as const,
@@ -156,7 +156,7 @@ export async function userTexts(sessionId: string): Promise<string[]> {
   )
 }
 
-/** A supervised terminal worker under the coordinator's Run, and its worker_done; its dispatch id. */
+/** Finish a supervised worker and return its dispatch id. */
 export async function finishWorker(
   taskId: string,
   worker: { handle: string; paneKey: string } = { handle: 'term_worker', paneKey: WORKER_PANE }
@@ -205,7 +205,7 @@ export async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: 
   return { runId, taskId: idOf(task.task) }
 }
 
-/** `/clear` as the chat surface runs it: the same conversation gets a fresh context. */
+/** Clear context without replacing the conversation. */
 export async function clearChat(sessionId: string): Promise<string> {
   const command = 'clear' as const
   const cleared = await host.conversationCommand(
@@ -234,7 +234,6 @@ export async function clearChat(sessionId: string): Promise<string> {
   return sessionId
 }
 
-/** A cleared context starts when the user writes to the same conversation. */
 export async function startClearedContext(sessionId: string): Promise<void> {
   expect(await sendUserMessage(sessionId, 'hello')).toMatchObject({ ok: true })
   await vi.waitFor(() => expect(connectionFor(sessionId).turns).toHaveLength(1), WAIT)
@@ -244,6 +243,9 @@ export async function startClearedContext(sessionId: string): Promise<void> {
 beforeEach(async () => {
   resetProviderFaults()
   root = await mkdtemp(join(tmpdir(), 'orca-structured-coordinator-mail-'))
+  testState.dir = root
+  profile = createStore()
+  profile.addRepo(makeRepo({ id: 'workspace-1', path: root, executionHostId: 'local' }))
   codex = fakeCodex()
   db = new OrchestrationDb(':memory:')
   runtime = startRuntime()
@@ -252,29 +254,30 @@ beforeEach(async () => {
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',
-    resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
-    resolveCodexCommand: () => '/usr/local/bin/codex',
+    resolveWorkspacePath: async () => root,
+    resolveCodexCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] }),
     resolveLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
-    openCodexConnection: codex.openConnection,
-    readProcessStartTime: async () => 1_700_000_000_000,
-    // The same calls the runtime's own host install makes.
-    onSessionStatusChanged: (summary) => runtime.onStructuredSessionStatusForMail(summary),
+    ...scriptedCodexTransport(codex.openConnection),
+    onRequestFailure: (failure) => runtime.onStructuredRequestFailureForErrorMail(failure),
+    onSessionStatusChanged: (summary) => {
+      runtime.onStructuredSessionStatusForMail(summary)
+    },
     onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId)
   })
   dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 })
 
-/** The runtime over the shared database; a second call is what an Orca restart leaves behind. */
+/** Restart reuses the same database with a fresh runtime. */
 export function startRuntime(): OrcaRuntimeService {
-  const started = new OrcaRuntimeService()
+  const started = new OrcaRuntimeService(profile)
   started.setOrchestrationDb(db)
   vi.spyOn(started, 'ensureStructuredAgentSessionHost').mockResolvedValue()
   vi.spyOn(started, 'getTerminalPaneKey').mockImplementation((handle) =>
     handle === 'term_worker' ? WORKER_PANE : handle === 'term_worker_2' ? WORKER_2_PANE : null
   )
-  // The exact process `finishWorker` records, so a worker's report is accepted and settles.
+  // Match the process incarnation recorded by finishWorker so reports can settle dispatches.
   vi.spyOn(started, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
     handle === 'term_worker' || handle === 'term_worker_2' ? `runtime_test:${handle}:1` : null
   )
@@ -286,6 +289,7 @@ afterEach(async () => {
     await stopStructuredAgentSessionRuntime()
     db.close()
     await observationClock.drainClosedDatabaseRepair()
+    await closeTestStores()
     vi.restoreAllMocks()
     await rm(root, { recursive: true, force: true })
   } finally {
@@ -293,18 +297,17 @@ afterEach(async () => {
   }
 })
 
-// Pointers are sent on asynchronous edges; the default 1s wait is too tight under a loaded parallel run.
-export const WAIT = { timeout: 10_000 }
+// Asynchronous pointer edges need slack under parallel load.
+export const WAIT = { timeout: 10_000, interval: 10 }
 
 export const POINTER =
   /You have 1 orchestration message\. Run `orca(-dev)? orchestration check --run run_\w+`\./
 
-/** The text the PTY lane types into a local terminal for this mailbox, byte for byte. */
+/** Exact PTY mailbox pointer, including CLI spelling. */
 export function ptyPointer(mailboxHandle: string): string {
   return formatMessagePointer(1, mailboxHandle, localOrchestrationCliCommand()).trim()
 }
 
-/** The text of a turn the fake provider received. */
 export function turnText(turn: { text: string }): string {
   const input: unknown = JSON.parse(turn.text)
   return Array.isArray(input)
@@ -312,13 +315,11 @@ export function turnText(turn: { text: string }): string {
     : ''
 }
 
-/** What an Orca restart leaves behind: a new runtime over the same database and host. */
 export function restartRuntime(): void {
   runtime = startRuntime()
   dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 }
 
-/** The text of every card the chat lists in its queue, as the person sees it. */
 export async function queuedCardTexts(sessionId = COORDINATOR): Promise<string[]> {
   const page = await host.history({ sessionId, direction: 'tail' })
   if (!page.ok) {

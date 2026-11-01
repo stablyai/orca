@@ -29,6 +29,13 @@ function warmPlacer(now: { value: number }, random = () => 0.3) {
 }
 
 describe('reserve placer', () => {
+  it('reports free seats under the ceiling, never below zero or without a ceiling', () => {
+    const placer = warmPlacer({ value: 0 })
+    expect(placer.free(cell('c1', { seats: 60, bookings: 10 }))).toBe(30)
+    expect(placer.free(cell('c1', { seats: 120 }))).toBe(0)
+    expect(placer.free(cell('c1', { ceiling: undefined }))).toBe(0)
+  })
+
   it('places on the first cell that answers ok and counts one call', async () => {
     const now = { value: 0 }
     const placer = warmPlacer(now)
@@ -120,7 +127,6 @@ describe('reserve placer', () => {
     placer.pick(cells, 'us-central1', new Set())
     now.value = 1_000
     cells[0]!.polledAt = 1_000
-    // Two of this director's own bookings fill the estimated ceiling.
     void placer.place({ cells, region: 'us-central1', epoch: 1, reserve: async () => ({ outcome: 'ok' }) })
     void placer.place({ cells, region: 'us-central1', epoch: 1, reserve: async () => ({ outcome: 'ok' }) })
     expect(placer.pick(cells, 'us-central1', new Set())).toBeNull()

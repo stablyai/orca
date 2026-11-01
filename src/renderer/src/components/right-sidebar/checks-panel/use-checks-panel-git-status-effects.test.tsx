@@ -9,7 +9,20 @@ const mocks = vi.hoisted(() => ({
   getRuntimeGitUpstreamStatus: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-git-client', () => mocks)
+vi.mock('@/runtime/runtime-git-status-client', () => ({
+  getRuntimeGitStatus: mocks.getRuntimeGitStatus
+}))
+vi.mock('@/runtime/runtime-git-sync-client', () => ({
+  getRuntimeGitUpstreamStatus: mocks.getRuntimeGitUpstreamStatus
+}))
+vi.mock('@/lib/worktree-git-copy', () => ({
+  resolveWorktreeGitCopyNow: (worktreeId: string) => ({
+    worktreeId,
+    hostId: 'local',
+    connectionId: undefined,
+    transport: { kind: 'local' }
+  })
+}))
 
 import { useChecksPanelGitStatusEffects } from './use-checks-panel-git-status-effects'
 import { deferred, flush, mountProbe, unmountProbes } from '../source-control-hook-test-harness'

@@ -1,20 +1,27 @@
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
+import type { RpcRequest } from '../rpc/core'
 import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   openRemoteRuntimePassthroughSocket,
   type RemoteRuntimePassthroughSocket
-} from '../../../shared/remote-runtime-passthrough-socket'
-import { syncDelegatedPhoneGrants, type DelegatedPhoneGrants } from './delegated-phone-grants'
-import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
+} from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
+import { DelegatedPhoneGrantCache } from './delegated-phone-grant-cache'
+import { localHostedBrowserPageRequest } from './hosted-browser-page-route'
+import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { RELAYED_STREAM_CARRIERS } from './relayed-stream-carriers'
-import { RelayedPhoneReplies, rewriteRelayedPhoneRequest } from './relayed-phone-frames'
+import {
+  declareRelayedPhoneCapabilities,
+  RelayedPhoneReplies,
+  relayedPhoneCapabilities,
+  rewriteRelayedPhoneRequest,
+  withRelayedLaunchChatDefault
+} from './relayed-phone-frames'
 
 const RELAY_CONNECT_TIMEOUT_MS = 15_000
 
-/** The phone connection a relayed request arrived on. */
 export type RelayedPhone = {
   connectionId: string
   deviceId: string
@@ -22,12 +29,6 @@ export type RelayedPhone = {
   clientCapabilities: () => readonly RuntimeCapability[]
   reply: (frame: string) => void
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
-}
-
-type GrantsEntry = {
-  promise: Promise<DelegatedPhoneGrants>
-  settled: boolean
-  result?: DelegatedPhoneGrants
 }
 
 type OpenedRelayLink = { socket: RemoteRuntimePassthroughSocket; hostToken: string }
@@ -47,20 +48,12 @@ class RelayLink {
   }
 }
 
-/**
- * Relays a phone request carrying `executionHost: runtime:<env>` to that configured server, over one
- * socket per (phone connection, server) signed in as the phone's delegated device (minted by
- * `pairing.delegatedMobileDevice.sync`, tokens held in memory only). Contract:
- * - The desktop never interprets replies; it renumbers only host stream ids (RELAYED_STREAM_CARRIERS).
- * - Upstream, the phone's desktop token is swapped wherever it appears, not per field.
- * - Only `execution-host` methods (MOBILE_RPC_METHOD_ROUTES) reach here; `paired-desktop` ones run locally.
- * - A server without the delegated-devices capability is `update-needed`; nothing relays to it.
- * - A server-side revoke of a phone is final until the next sync.
- * - Hidden until S2: MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY is not advertised yet.
- */
+/** One socket per (phone connection, configured server), authenticated with memory-only delegated phone grants.
+ * Forward execution-host methods only; old servers require an update, and revocation lasts until the next sync.
+ * Replies stay opaque except stream-id renumbering; replace every upstream desktop-token occurrence. */
 export class MobileDesktopRelay {
   private readonly links = new Map<string, RelayLink>()
-  private readonly grants = new Map<string, GrantsEntry>()
+  private readonly grants: DelegatedPhoneGrantCache
   private readonly stopRetirementWatch: () => void
 
   constructor(
@@ -68,8 +61,11 @@ export class MobileDesktopRelay {
       hosts: MobileDesktopRelayHosts
       listPhones: () => DelegatedMobileDeviceSyncParams['phones']
       allocateStreamId: () => number
+      /** Whether this desktop's settings open `agent` as a chat. */
+      nativeChatDefault: (agent: string) => boolean
     }
   ) {
+    this.grants = new DelegatedPhoneGrantCache(options.hosts, options.listPhones)
     this.stopRetirementWatch = options.hosts.onEnvironmentRetired((environmentId) =>
       this.retireEnvironment(environmentId)
     )
@@ -81,6 +77,14 @@ export class MobileDesktopRelay {
       this.endLink(link, unavailable('The paired desktop stopped relaying.'))
     }
     this.grants.clear()
+  }
+
+  localRequestFor(request: RpcRequest, environmentId: string): RpcRequest | null {
+    return localHostedBrowserPageRequest(
+      request,
+      environmentId,
+      this.options.hosts.hostsBrowserPage
+    )
   }
 
   forward(
@@ -103,17 +107,20 @@ export class MobileDesktopRelay {
     link.replies.noteForwarded(request.id)
     link.opened.then(
       ({ socket, hostToken }) => {
-        // Why: a link ended while opening already answered this request; never send it late.
+        // An opening link may already have ended and answered; never send its request late.
         if (!this.isCurrent(link)) {
           return
         }
-        if (!socket.send(rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken))) {
+        const outgoing = withRelayedLaunchChatDefault(
+          rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
+          request.method,
+          this.options.nativeChatDefault
+        )
+        if (!socket.send(outgoing)) {
           this.endLink(link, unavailable('The server connection could not take the request.'))
         }
       },
-      () => {
-        // The open failure already answered every request queued on this link.
-      }
+      () => {}
     )
   }
 
@@ -123,14 +130,18 @@ export class MobileDesktopRelay {
       if (link.phone.connectionId !== connectionId) {
         continue
       }
-      // Why a fresh id: the phone already has the desktop's answer to its own id.
+      // The phone already has the desktop reply for its original id.
       const id = `relay-capabilities:${randomUUID()}`
       link.replies.noteForwarded(id, { swallowReplies: true })
       link.opened.then(
         ({ socket, hostToken }) => {
           if (
             this.isCurrent(link) &&
-            !socket.send(rewriteRelayedPhoneRequest(frame, link.phone.deviceToken, hostToken, id))
+            !socket.send(
+              declareRelayedPhoneCapabilities(
+                rewriteRelayedPhoneRequest(frame, link.phone.deviceToken, hostToken, id)
+              )
+            )
           ) {
             this.endLink(link, unavailable('The server connection could not take the request.'))
           }
@@ -148,7 +159,6 @@ export class MobileDesktopRelay {
     }
   }
 
-  /** The server was removed, re-paired or disconnected: drop its sockets and grants. */
   retireEnvironment(environmentId: string): void {
     this.grants.delete(environmentId)
     for (const link of this.links.values()) {
@@ -158,9 +168,8 @@ export class MobileDesktopRelay {
     }
   }
 
-  /** The desktop's paired phones changed: re-sync every server already holding grants. */
   phonesChanged(): void {
-    for (const environmentId of this.grants.keys()) {
+    for (const environmentId of this.grants.environmentIds()) {
       this.grants.delete(environmentId)
       void this.resync(environmentId)
     }
@@ -170,11 +179,9 @@ export class MobileDesktopRelay {
     try {
       const host = await this.options.hosts.resolve(environmentId)
       if (host) {
-        await this.grantsFor(host, null)
+        await this.grants.get(host, null)
       }
-    } catch {
-      // An unreachable server syncs again on its next relayed request.
-    }
+    } catch {}
   }
 
   private linkFor(phone: RelayedPhone, environmentId: string): RelayLink {
@@ -202,11 +209,11 @@ export class MobileDesktopRelay {
     if (!host) {
       throw unavailable('The server is not configured on this computer.')
     }
-    const grants = await this.grantsFor(host, phone.deviceId)
+    const grants = await this.grants.get(host, phone.deviceId)
     if (grants.kind === 'update-needed') {
       throw unavailable('The server needs an Orca update to open its workspaces from a phone.')
     }
-    // Why: the phone left or the server was retired while syncing; open nothing for it.
+    // Sync can outlive phone departure or server retirement; never open a stale link.
     if (!this.isCurrent(link)) {
       throw unavailable('The relayed request was cancelled.')
     }
@@ -221,7 +228,7 @@ export class MobileDesktopRelay {
           credential: { kind: 'token', deviceToken: grant.token },
           pairedDeviceId: grant.deviceId
         },
-        phone.clientCapabilities(),
+        relayedPhoneCapabilities(phone.clientCapabilities()),
         {
           onText: (plaintext) => {
             const frame = link.replies.text(plaintext)
@@ -242,52 +249,12 @@ export class MobileDesktopRelay {
       return { socket, hostToken: grant.token }
     } catch (error) {
       if (error instanceof RemoteRuntimeClientError && error.code === 'unauthorized') {
-        // Why: retrying a revoked token would only raise the host's "unpaired device" prompt.
+        // Retrying revoked tokens would repeatedly raise the host unpaired-device prompt.
         grants.refused.add(phone.deviceId)
         throw unavailable('The server revoked this phone.')
       }
       throw error
     }
-  }
-
-  private grantsFor(
-    host: MobileDesktopRelayHost,
-    phoneKey: string | null
-  ): Promise<DelegatedPhoneGrants> {
-    const cached = this.grants.get(host.environmentId)
-    if (cached && !cached.settled) {
-      // Why: phones racing to one server share its sync.
-      return cached.promise.then((grants) =>
-        grants.fence === host.fence ? grants : this.grantsFor(host, phoneKey)
-      )
-    }
-    const answered =
-      cached?.result?.kind === 'ready' &&
-      cached.result.fence === host.fence &&
-      (phoneKey === null || cached.result.asked.has(phoneKey))
-    // Why update-needed is never reused: a server upgraded in place must relay without a re-pair.
-    return answered && cached.result ? Promise.resolve(cached.result) : this.sync(host)
-  }
-
-  private sync(host: MobileDesktopRelayHost): Promise<DelegatedPhoneGrants> {
-    const entry: GrantsEntry = {
-      promise: syncDelegatedPhoneGrants(this.options.hosts, host, this.options.listPhones()),
-      settled: false
-    }
-    this.grants.set(host.environmentId, entry)
-    entry.promise.then(
-      (result) => {
-        entry.settled = true
-        entry.result = result
-      },
-      () => {
-        // Why: an unreachable server is not an answer; the next request syncs again.
-        if (this.grants.get(host.environmentId) === entry) {
-          this.grants.delete(host.environmentId)
-        }
-      }
-    )
-    return entry.promise
   }
 
   private isCurrent(link: RelayLink): boolean {

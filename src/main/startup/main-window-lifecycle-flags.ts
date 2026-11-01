@@ -30,7 +30,7 @@ export function markRecoveryReloadInFlight(webContentsId: number, durationMs = 1
 }
 
 export function isRecoveryReloadInFlight(webContentsId: number): boolean {
-  // Why: consume on read — the recovery reload fires exactly one did-finish-load, so a later genuine reload still sweeps orphaned PTYs.
+  // Consume once for recovery did-finish-load so later genuine reloads still sweep orphaned PTYs.
   return state.recoveryReloadInFlight.matches(webContentsId, { consume: true })
 }
 

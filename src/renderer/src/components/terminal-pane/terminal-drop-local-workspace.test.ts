@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   recordInput: vi.fn()
 }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: mocks.recordInput }))

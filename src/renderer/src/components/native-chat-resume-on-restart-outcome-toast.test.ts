@@ -19,7 +19,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   // A failed row opens the status feed; these cases never drive it.
   subscribeStructuredAgentSessionStatus: () => new Promise(() => {})
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 const offered: ResumeCandidate[] = ['a', 'b'].map((sessionId) => ({
   sessionId,
@@ -55,26 +57,33 @@ function hostLostAfterListing(): void {
   })
 }
 
-/** Clicks and opted-in launches use the same bulk action over their selection. */
 const resumes = {
   click: () => continueNativeChatRestartOffer(['a', 'b']),
   launch: () => continueNativeChatRestartOffer(offered.map((candidate) => candidate.sessionId))
 }
 
-// With the host unreachable there is no list to narrow by: every chat the resume reported failed,
-// and nothing is listed for Show to open.
+// An unavailable host cannot settle delivery; Review still opens the retained action summary.
 it.each(['click', 'launch'] as const)(
-  'counts every chat of a lost %s resume when the host cannot be read either',
+  'keeps every chat of a lost %s resume unconfirmed when the host cannot be read either',
   async (caller) => {
     hostLostAfterListing()
     await refreshNativeChatRestartOffer()
     await resumes[caller]()
-    expect(vi.mocked(toast).mock.calls).toEqual([['2 chats couldn’t be resumed', {}]])
+    expect(vi.mocked(toast).mock.calls).toEqual([
+      [
+        'Couldn’t confirm 2 chats were resumed',
+        expect.objectContaining({ action: expect.objectContaining({ label: 'Review' }) })
+      ]
+    ])
+    expect(lastToastShow()).toBeDefined()
+    lastToastShow()?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
   }
 )
 
-// The re-read lists the chats the lost request reported as failed, so the one toast keeps Show.
-it('answers an opted-in launch that loses its resume request with one toast and Show', async () => {
+// A fresh host offer is an observation, so the lost request still needs Review.
+it('answers an opted-in launch that loses its resume request with one unconfirmed toast', async () => {
   rpc.mockImplementation(async (_target, method) => {
     if (method === 'agentSession.restartResumable') {
       return { sessions: offered, failed: [] }
@@ -85,12 +94,11 @@ it('answers an opted-in launch that loses its resume request with one toast and 
   await resumes.launch()
   expect(getNativeChatRestartOffer().failed.map((entry) => entry.sessionId)).toEqual(['a', 'b'])
   expect(vi.mocked(toast).mock.calls.map(([title]) => title)).toEqual([
-    '2 chats couldn’t be resumed'
+    'Couldn’t confirm 2 chats were resumed'
   ])
   expect(lastToastShow()).toBeDefined()
 })
 
-// The same toast and copy as a click: the chats it resumed ride along under the one it could not.
 it('answers a mixed opted-in launch with one toast', async () => {
   const failure = { ...offered[1]!, failedAt: 1, outcome: 'refused', reason: 'unknown' }
   let acted = false
@@ -117,7 +125,6 @@ it('answers a mixed opted-in launch with one toast', async () => {
   expect(lastToastShow()).toBeDefined()
 })
 
-// Between the listing and the request every chat moved on by itself: nothing happened to report.
 it('raises no toast when the host had nothing left for an opted-in launch to resume', async () => {
   rpc.mockImplementation(async (_target, method) =>
     method === 'agentSession.restartResumable'
@@ -129,7 +136,6 @@ it('raises no toast when the host had nothing left for an opted-in launch to res
   expect(toast).not.toHaveBeenCalled()
 })
 
-// A withdrawn failure cannot recreate attention, but the unseen run summary stays available.
 it('opens the retained summary from Show after the host withdraws a failure', async () => {
   let failed = [{ ...offered[0]!, failedAt: 1, outcome: 'unconfirmed', reason: 'unknown' }]
   rpc.mockImplementation(async (_target, method) =>

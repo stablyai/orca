@@ -1,12 +1,6 @@
 #!/usr/bin/env node
-// Counts how many whole-host process-table captures the agent-completion cadence costs.
-//
-// Local panes all resolve out of one TTL-deduped snapshot, and the inspection queue collapses
-// every shared-observation task enqueued in the same tick onto a single capture. So the capture
-// count is the number of DISTINCT wake instants across panes, not the number of pane wakes.
-//
-// This drives the production interval picker (`nextCadenceInspectionDelayMs`) against a baseline
-// that reproduces the pre-change ±10% jitter, over a simulated wall-clock window.
+// Measure real cadence picker against independent ±10% jitter over simulated time.
+// TTL-deduped same-tick work shares one capture, so count distinct wake instants rather than pane wakes.
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import nodeModule from 'node:module'
@@ -79,8 +73,7 @@ function simulate(paneCount, baseMs, pickDelay) {
       wakes.push(clock)
     }
   }
-  // A wake is served from the snapshot the previous capture produced until that snapshot's TTL
-  // lapses, so the TTL window starts at the capture, not on an epoch grid.
+  // Snapshot TTL starts at actual capture, not epoch grid; nearby wakes reuse it.
   let captures = 0
   let snapshotExpiresAt = -Infinity
   for (const wakeAt of wakes.sort((left, right) => left - right)) {
@@ -115,8 +108,7 @@ for (const paneCount of PANE_COUNTS) {
       })
     )
   )
-  // A window shorter than one cadence tier can leave the baseline at zero; reporting a
-  // percentage off that divides by zero and prints a meaningless reduction.
+  // Short windows may yield no baseline captures; avoid meaningless division by zero.
   const reduction = before > 0 ? `${(((before - after) / before) * 100).toFixed(0)}%` : 'n/a'
   console.log(`| ${paneCount} | ${before} | ${after} | ${reduction} |`)
 }

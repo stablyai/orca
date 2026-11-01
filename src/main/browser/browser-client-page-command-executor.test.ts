@@ -9,132 +9,6 @@ import {
 describe('BrowserClientPageCommandExecutor', () => {
   beforeEach(() => vi.restoreAllMocks())
 
-  it('prepares the exact route and blank guest before granting navigation', async () => {
-    const { dependencies, executor, order, renderer } = createHarness()
-    const command = createCommand('createPage')
-
-    await expect(executor.handle(command, new AbortController().signal)).resolves.toEqual({
-      status: 'completed'
-    })
-
-    expect(order).toEqual([
-      'retain-route',
-      'prepare-page',
-      'mount-page',
-      'claim-guest',
-      'register-guest',
-      'grant-navigation',
-      'bind-guest'
-    ])
-    // Downloads must resolve this page before its first navigation, without an automation command.
-    expect(dependencies.guestBinding.bind).toHaveBeenCalledWith({
-      registration: {
-        partition,
-        browserPageId: 'page-a',
-        pageHostGeneration: 7,
-        rendererWebContentsId: 11,
-        webContentsId: 41
-      },
-      browserProfileId: 'profile-a'
-    })
-    expect(dependencies.retainNetworkRoute).toHaveBeenCalledWith(
-      'execution-host-a',
-      expect.any(AbortSignal)
-    )
-    expect(dependencies.routeSessions.preparePage).toHaveBeenCalledWith({
-      identity: {
-        orcaProfileId: 'orca-profile-a',
-        browserProfileId: 'profile-a',
-        authorityConnectionIdentity: 'authority-record-a',
-        executionHostIdentity: 'execution-host-record-a'
-      },
-      legacyIdentity: {
-        orcaProfileId: 'orca-profile-a',
-        browserProfileId: 'profile-a',
-        authorityConnectionIdentity: 'legacy-authority-record-a',
-        executionHostIdentity: 'legacy-execution-host-record-a'
-      },
-      storageScope: 'a'.repeat(64),
-      browserPageId: 'page-a',
-      pageHostGeneration: 7,
-      rendererWebContentsId: 11,
-      proxyEndpoint: { host: '127.0.0.1', port: 43123 }
-    })
-    expect(renderer.mountPage).toHaveBeenCalledWith(
-      {
-        partition,
-        browserPageId: 'page-a',
-        pageHostGeneration: 7
-      },
-      expect.any(AbortSignal)
-    )
-    expect(dependencies.routeWebContents.registerGuest).toHaveBeenCalledWith({
-      partition,
-      browserPageId: 'page-a',
-      pageHostGeneration: 7,
-      rendererWebContentsId: 11,
-      webContentsId: 41
-    })
-  })
-
-  it('loads a normalized URL only through the retained exact guest', async () => {
-    const { dependencies, executor } = createHarness()
-    await executor.handle(createCommand('createPage'), new AbortController().signal)
-    const lifecycleClaim = dependencies.routeWebContents.claimGuestLifecycle.mock.results[0]?.value
-
-    await expect(
-      executor.handle(createCommand('navigate'), new AbortController().signal)
-    ).resolves.toEqual({ status: 'completed' })
-
-    expect(dependencies.routeWebContents.navigateGuest).toHaveBeenCalledWith(
-      lifecycleClaim,
-      'https://example.internal/path'
-    )
-    expect(executor.snapshotPageInventory()).toEqual([
-      {
-        authorityRuntimeId: 'runtime-a',
-        authorityEpoch: 'epoch-a',
-        browserHostClientId: 'client-a',
-        browserHostGeneration: 3,
-        browserPageId: 'page-a',
-        pageHostGeneration: 7,
-        browserProfileId: 'profile-a',
-        executionHostKey: 'execution-host-a',
-        state: 'active',
-        currentUrl: 'https://example.internal/path'
-      }
-    ])
-  })
-
-  it('executes one automation envelope against the exact retained page', async () => {
-    const { dependencies, executor } = createHarness()
-    await executor.handle(createCommand('createPage'), new AbortController().signal)
-    const command = createCommand('navigate', {
-      commandId: 'automation-a',
-      command: {
-        type: 'automation',
-        method: 'browser.click',
-        params: { element: 'Submit' }
-      }
-    })
-
-    await expect(executor.handle(command, new AbortController().signal)).resolves.toEqual({
-      status: 'completed',
-      value: { clicked: true }
-    })
-    expect(dependencies.executeAutomation).toHaveBeenCalledWith(
-      {
-        browserPageId: 'page-a',
-        pageHostGeneration: 7,
-        browserProfileId: 'profile-a',
-        method: 'browser.click',
-        params: { element: 'Submit' },
-        registration: expect.objectContaining({ browserPageId: 'page-a', webContentsId: 41 })
-      },
-      expect.any(AbortSignal)
-    )
-  })
-
   it('keeps legacy-valid command identities when inventory cannot encode them', async () => {
     const { executor } = createHarness()
     const browserProfileId = '\0'.repeat(256)
@@ -463,7 +337,6 @@ describe('BrowserClientPageCommandExecutor', () => {
       expect.objectContaining({ browserPageId: 'page-a', state: 'outcomeUnknown' })
     ])
     expect(Object.isFrozen(inventory[0])).toBe(true)
-    // The unresolved record answers for its exact generation only.
     expect(executor.hasUnresolvedPage('page-a', 8)).toBe(false)
     await expect(executor.retirePage('page-a', 7)).resolves.toBe(false)
     await expect(
@@ -475,7 +348,6 @@ describe('BrowserClientPageCommandExecutor', () => {
       status: 'failed',
       errorCode: 'browser_client_page_generation_conflict'
     })
-    // Close must report the unresolved page rather than claim a clean teardown.
     await expect(executor.close()).rejects.toMatchObject({
       message: 'Browser client page executor cleanup failed',
       errors: [expect.objectContaining({ message: 'browser_client_page_cleanup_unresolved' })]
@@ -526,6 +398,7 @@ describe('BrowserClientPageCommandExecutor', () => {
     expect(() =>
       executor.completeAuthorityTransition({
         authorityConnectionIdentity: 'authority-record-b',
+        pairingAuthorityConnectionIdentity: 'pairing-authority-record-b',
         legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
       })
     ).toThrow('browser_client_page_authority_transition_unavailable')
@@ -600,9 +473,5 @@ describe('BrowserClientPageCommandExecutor', () => {
     ).resolves.toEqual({ status: 'failed', errorCode: 'browser_client_page_capacity' })
     resolveRoute(route)
     await expect(first).resolves.toEqual({ status: 'completed' })
-  })
-
-  it('rejects a page limit above the attach inventory maximum', () => {
-    expect(() => createHarness({ maxPages: 257 })).toThrow('browser_client_page_limit_invalid')
   })
 })

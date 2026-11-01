@@ -11,6 +11,7 @@ import {
 import { resolveSafePtyDefaultCwd } from '../../providers/pty-default-cwd'
 import { TerminalAttachCanceledError } from '../daemon-errors'
 import { DaemonProtocolError } from '../types'
+import { checkDaemonAsyncIo } from '../daemon-async-io-probe'
 
 export const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 
@@ -59,9 +60,7 @@ function repairDaemonCwd(): string | null {
       try {
         process.chdir(candidate)
         return candidate
-      } catch {
-        // Try the next stable cwd candidate.
-      }
+      } catch {}
     }
   }
   return null
@@ -98,9 +97,7 @@ function preflightMacNodePtySpawnEnvironment(): void {
       if (statSync(candidate).isFile()) {
         return
       }
-    } catch {
-      // Try the next node-pty native location.
-    }
+    } catch {}
   }
   throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
 }
@@ -109,7 +106,7 @@ function preflightUnixPtySpawnEnvironment(): void {
   if (process.platform === 'win32') {
     return
   }
-  // Why: detached daemons can outlive their launch cwd; repair before every spawn.
+  // Detached daemons can outlive their launch cwd; repair before spawning.
   preflightDaemonCwd()
   preflightMacNodePtySpawnEnvironment()
 }
@@ -169,6 +166,11 @@ export function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: s
 export async function runPtySpawnHealthProbe(
   timeoutMs = PTY_SPAWN_HEALTH_TIMEOUT_MS
 ): Promise<void> {
+  if ((await checkDaemonAsyncIo()).state === 'stalled') {
+    throw new DaemonProtocolError(
+      'Terminal daemon asynchronous I/O is stalled; restart the terminal daemon.'
+    )
+  }
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
     : resolveSafePtyDefaultCwd()
@@ -190,7 +192,7 @@ export async function runPtySpawnHealthProbe(
       rows: 1,
       cwd,
       env,
-      // Qualify the bundled ConPTY the daemon spawns with (native-pty-spawn.ts), not the OS one.
+      // Probe the same bundled ConPTY used for terminal spawns.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
   } catch (err) {
@@ -207,14 +209,11 @@ export async function runPtySpawnHealthProbe(
       settled = true
       clearTimeout(timer)
       exitDisposable?.dispose()
-      // Windows keeps the conout worker thread and pseudoconsole until kill(), even after the
-      // shell exits; left alive, they hold the probing process open.
+      // Windows needs kill() after shell exit to close the pseudoconsole and its conout worker.
       if (opts?.kill || process.platform === 'win32') {
         try {
           proc.kill()
-        } catch {
-          // Best-effort cleanup for a short-lived health probe.
-        }
+        } catch {}
       }
       if (error) {
         reject(error)

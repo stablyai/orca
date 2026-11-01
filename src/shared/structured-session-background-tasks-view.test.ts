@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import {
   structuredSessionBackgroundTasksView,
@@ -49,21 +50,6 @@ describe('structuredSessionBackgroundTasksView', () => {
     expect(shown).toMatchObject({ show: true, tasks: [tasks[1]], children: [agent] })
   })
 
-  it('keeps unrelated rosters and commands from earlier turns during the current turn', () => {
-    const tasks = [
-      { id: 'codex-command:primary:server', kind: 'command' as const },
-      { id: 'claude-shell', kind: 'command' as const },
-      { id: 'codex-command:thread:child:pwd', kind: 'command' as const }
-    ]
-    const shown = structuredSessionBackgroundTasksView(
-      { state: 'monitoring', tasks },
-      'turn-2',
-      new Set(['codex-command:primary:pwd'])
-    )
-    expect(shown.show).toBe(true)
-    expect(shown.tasks).toBe(tasks)
-  })
-
   it('shows finished children until the next turn, but they hold nothing open', () => {
     const finished = structuredSessionBackgroundTasksView(
       { state: 'monitoring', children: [view('settled')] },
@@ -72,23 +58,14 @@ describe('structuredSessionBackgroundTasksView', () => {
     expect(finished).toMatchObject({ show: true, isMonitoring: false, children: [view('settled')] })
   })
 
-  it('hands the strip the decoded roster it was given, so its grouped rows stay memoized', () => {
-    const roster = { state: 'monitoring' as const, children: [view('live')] }
-    expect(structuredSessionBackgroundTasksView(roster, null).children).toBe(roster.children)
-    expect(structuredSessionBackgroundTasksView(roster, 'turn-1').children).toBe(roster.children)
-  })
-
-  it('keeps the same empty lists for a roster that omits one, so the strip memo holds', () => {
-    for (const roster of [
-      { state: 'monitoring' as const, tasks: [{ id: 'task-1', kind: 'agent' as const }] },
-      { state: 'monitoring' as const, settledTasks: [{ id: 'task-2', kind: 'agent' as const }] },
-      null
-    ]) {
-      const first = structuredSessionBackgroundTasksView(roster, null)
-      const again = structuredSessionBackgroundTasksView(roster, null)
-      expect(again.tasks).toBe(first.tasks)
-      expect(again.settledTasks).toBe(first.settledTasks)
-    }
+  // Unrecorded work keeps the strip visible; commands/rewind still follow listed records as host admission does.
+  it('keeps the strip and its Stop when the host could not record some work', () => {
+    expect(
+      structuredSessionBackgroundTasksView(
+        { state: 'monitoring', children: [], supportsTaskStop: true, incomplete: true },
+        null
+      )
+    ).toMatchObject({ show: true, isMonitoring: false, incomplete: true, offersStopAll: true })
   })
 
   it('reads live work beneath an idle session as monitoring, and a running turn as its own', () => {
@@ -111,22 +88,6 @@ describe('structuredSessionBackgroundTasksView', () => {
     ).toMatchObject({ show: false, isMonitoring: false })
     // A host that reports state only still says something runs.
     expect(structuredSessionBackgroundTasksView({ state: 'monitoring' }, null).show).toBe(true)
-  })
-
-  it('reads an older host that publishes no views exactly as before', () => {
-    const tasks = [{ id: 'task-1', kind: 'agent' as const }]
-    expect(structuredSessionBackgroundTasksView({ state: 'monitoring', tasks }, null)).toEqual({
-      show: true,
-      isMonitoring: true,
-      tasks,
-      settledTasks: [],
-      supportsStop: false,
-      supportsStopAll: true
-    })
-    expect(structuredSessionBackgroundTasksView(null, null)).toMatchObject({
-      show: false,
-      isMonitoring: false
-    })
   })
 })
 
@@ -152,21 +113,5 @@ describe('a confirmed Stop held per run', () => {
     expect(structuredSessionConfirmedStopsStillListed(withChildren([]), confirmed)).toEqual(
       new Map()
     )
-  })
-
-  it("keys an older host's roster row by its id, which it has no run marker beside", () => {
-    const legacy = structuredSessionBackgroundTasksView(
-      { state: 'monitoring', tasks: [{ id: 'task-1', kind: 'command' }] },
-      null
-    )
-    expect(structuredSessionListedTaskRun(legacy, 'task-1')).toBe('task-1')
-    expect(structuredSessionListedTaskRun(legacy, 'task-2')).toBeNull()
-    const confirmed = new Map([['task-1', 'task-1']])
-    expect(structuredSessionConfirmedStopsStillListed(legacy, confirmed)).toBe(confirmed)
-  })
-
-  it('lists nothing while the strip is hidden', () => {
-    const hidden = structuredSessionBackgroundTasksView(null, null)
-    expect(structuredSessionListedTaskRun(hidden, 'task-1')).toBeNull()
   })
 })

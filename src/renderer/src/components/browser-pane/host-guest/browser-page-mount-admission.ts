@@ -1,7 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-// Newly requested pages must start a guest even when opened in the background. Restored pages are
-// deliberately absent so worktree restoration can remain lazy.
+// Start newly requested background pages once, ending admission at first load settlement/close; restored pages stay lazy and normal paint rules resume afterward.
 const admittedPageIds = new Set<string>()
 const listeners = new Set<() => void>()
 let version = 0

@@ -1,6 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { isClientHostedBrowserPageHandle } from '@/store/slices/browser'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,
@@ -14,19 +16,15 @@ function downloadToastId(downloadId: string): string {
   return `browser-download:${downloadId}`
 }
 
-/**
- * A client-hosted page has no download shelf and its bytes never land in this desktop's Downloads
- * folder, so these toasts are the only signal that a download started, landed on the remote
- * workspace, or was refused.
- */
-export function useBrowserClientHostedDownloadNotices(browserPageId: string): void {
-  const filenamesRef = useRef<Map<string, string>>(new Map())
-
+/** Observe at app scope: downloads land remotely and outlive their panes, so missing completion would leave an unclosable loading toast. */
+export function useBrowserClientHostedDownloadNotices(): void {
   useEffect(() => {
-    const filenames = filenamesRef.current
+    // Claimed at request time: the finish can arrive after the page's handle is gone.
+    const filenames = new Map<string, string>()
     const releaseRequested = window.api.browser.onDownloadRequested(
       (event: BrowserDownloadRequestedEvent) => {
-        if (event.browserPageId !== browserPageId) {
+        const handle = useAppStore.getState().remoteBrowserPageHandlesByPageId[event.browserPageId]
+        if (!handle || !isClientHostedBrowserPageHandle(handle)) {
           return
         }
         filenames.set(event.downloadId, event.filename)
@@ -38,8 +36,6 @@ export function useBrowserClientHostedDownloadNotices(browserPageId: string): vo
         )
       }
     )
-    // Why: progress carries no page id once the guest is gone, so a filename this pane recorded is
-    // what proves the download is ours — an unknown id belongs to another page and is ignored.
     const releaseProgress = window.api.browser.onDownloadProgress(
       (event: BrowserDownloadProgressEvent) => {
         const filename = filenames.get(event.downloadId)
@@ -53,10 +49,10 @@ export function useBrowserClientHostedDownloadNotices(browserPageId: string): vo
     )
     const releaseFinished = window.api.browser.onDownloadFinished(
       (event: BrowserDownloadFinishedEvent) => {
-        if (event.browserPageId !== browserPageId) {
+        const filename = filenames.get(event.downloadId)
+        if (filename === undefined) {
           return
         }
-        const filename = filenames.get(event.downloadId) ?? ''
         filenames.delete(event.downloadId)
         emitBrowserClientHostedDownloadNotice(event, filename)
       }
@@ -65,9 +61,8 @@ export function useBrowserClientHostedDownloadNotices(browserPageId: string): vo
       releaseRequested()
       releaseProgress()
       releaseFinished()
-      filenames.clear()
     }
-  }, [browserPageId])
+  }, [])
 }
 
 /** "Downloading report.pdf… 2.1 MB / 8 MB", falling back to the plain line when size is unknown. */

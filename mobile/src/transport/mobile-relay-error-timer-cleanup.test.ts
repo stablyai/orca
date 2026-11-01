@@ -156,18 +156,18 @@ describe('closed relay link transport-error timer ownership', () => {
     expect(onHostCloseReason).toHaveBeenCalledExactlyOnceWith(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
   })
 
-  it('retains late host-reason reporting after a rejected handshake', async () => {
+  it('holds a rejected handshake for its close and leaves no timer after it', async () => {
     const { socket, onError, onHostCloseReason } = linkFixture()
     socket.onmessage?.({ data: JSON.stringify({ type: 'relay-hello', ok: false, code: 4409 }) })
     await vi.advanceTimersByTimeAsync(0)
-    expect(onError).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ message: 'relay_outer_4409' })
-    )
+    expect(onError).not.toHaveBeenCalled()
     socket.onerror?.()
-    expect(vi.getTimerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(1)
     socket.onclose?.({ code: 4409, reason: RELAY_HOST_CLOSE_REASON.SIGNED_OUT })
     expect(onHostCloseReason).toHaveBeenCalledExactlyOnceWith(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
-    expect(onError).toHaveBeenCalledOnce()
+    expect(onError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: 'relay_outer_4409', rejectedByRelayHello: true })
+    )
     expect(vi.getTimerCount()).toBe(0)
   })
 

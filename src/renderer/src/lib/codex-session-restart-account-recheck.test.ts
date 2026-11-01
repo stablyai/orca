@@ -33,7 +33,7 @@ describe('Codex account switch recheck against main', () => {
         ]
       },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-      pendingCodexPaneRestartIds: {},
+      pendingPaneAccountRestarts: {},
       codexRestartNoticeByPtyId: {}
     })
     vi.stubGlobal('window', {
@@ -66,7 +66,7 @@ describe('Codex account switch recheck against main', () => {
         nextAccountId: 'account-b'
       }
     ])
-    useAppStore.getState().queueCodexPaneRestarts(['pty-1'])
+    useAppStore.getState().queuePaneAccountRestarts(['pty-1'], 'codex')
 
     await markLiveCodexSessionsForRestart({
       owner: focusedOwner(),
@@ -78,7 +78,7 @@ describe('Codex account switch recheck against main', () => {
 
     expect(listStalePanes).toHaveBeenCalledWith({ ptyIds: ['pty-1'] })
     expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-    expect(useAppStore.getState().pendingCodexPaneRestartIds).toEqual({})
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
   })
 
   it('falls back to the switch it was given when main cannot answer', async () => {

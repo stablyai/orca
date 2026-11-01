@@ -1,9 +1,4 @@
-// Maps the local AdvertisedUrlWatcher cache onto SSH port shapes.
-//
-// SSH PTY data already flows through `runtime.onPtyData`, so the watcher
-// captures URLs from remote dev servers running inside SSH-hosted terminals.
-// What the SSH side lacks is the link between a connection's port scan and
-// the worktreeIds the watcher keyed those URLs under.
+// Remote PTY banners are workspace-keyed; SSH listener scans are connection-scoped.
 
 import type { DetectedPort, EnrichedDetectedPort, PortForwardEntry } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
@@ -14,9 +9,7 @@ import {
   type AdvertisedUrlWatcher
 } from './advertised-url-watcher'
 
-/** Collect every worktreeId attached to a given SSH connection. The watcher
- *  is keyed per worktree, but SSH port scans are per connection, so callers
- *  need the union to find the best advertised URL across the connection. */
+/** Union connection workspaces because SSH scans cover the whole connection. */
 export function getWorktreeIdsForConnection(
   store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>,
   connectionId: string
@@ -58,8 +51,7 @@ function applyAdvertisedUrl<T extends object>(
   target: T,
   found: AdvertisedUrl
 ): T & EnrichmentTarget {
-  // Spread to keep callers' inputs immutable — important for the broadcast
-  // path which sends the same array to multiple subscribers.
+  // Broadcast subscribers share inputs; enrichment must not mutate them.
   return { ...target, advertisedUrl: found.origin, advertisedProtocol: found.protocol }
 }
 
@@ -73,8 +65,7 @@ export function enrichSshDetectedPorts(
     return [...ports]
   }
   if (options.validatePid !== false) {
-    // Why: SSH scans are connection-scoped while URLs are worktree-scoped; use
-    // the scan snapshot to invalidate stale same-port candidates before lookup.
+    // Reconcile connection-wide listener evidence before looking up workspace-keyed banners.
     watcher.reconcileScan(
       worktreeIds,
       ports.map((port) => ({ port: port.port, pid: port.pid }))
@@ -89,9 +80,7 @@ export function enrichSshDetectedPorts(
     if (pidState?.kind === 'ambiguous') {
       return port
     }
-    // Why: pass the remote listener PID so the watcher can evict stale URLs
-    // when the port has been reused by a different process. The relay-side
-    // scanner reads /proc/net/tcp and includes the PID when available.
+    // Use remote PID evidence to evict banners after port reuse.
     const found = watcher.lookupBest(
       worktreeIds,
       port.port,
@@ -113,8 +102,7 @@ function getPidStateByPort(ports: readonly DetectedPort[]): Map<number, PortPidS
       continue
     }
     if (existing.pid !== port.pid || existing.pid === undefined) {
-      // Why: SSH scans can report several host-specific listeners for one
-      // numeric port, but advertised URLs are cached only by port.
+      // Several listeners may share a numeric port, making its banner PID ambiguous.
       states.set(port.port, { kind: 'ambiguous' })
     }
   }
@@ -129,10 +117,7 @@ export function enrichSshForwardEntries(
   if (worktreeIds.length === 0 || entries.length === 0) {
     return [...entries]
   }
-  // Why: forward entries are user-configured (persisted by remotePort), not
-  // observed listeners — we cannot validate against a current listener PID
-  // here. Detected-port enrichment is the eviction path; whatever survives
-  // there is safe to surface for the matching forward.
+  // Persisted forwards supply no live PID proof; detected-port reconciliation handles eviction.
   return entries.map((entry) => {
     const found = watcher.lookupBest(worktreeIds, entry.remotePort)
     return found ? applyAdvertisedUrl(entry, found) : entry

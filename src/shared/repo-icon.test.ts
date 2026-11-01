@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type * as ImageDataUriModule from './image-data-uri'
 import { githubAvatarIcon, githubAvatarSlug, sanitizeRepoIcon } from './repo-icon'
 
-// Why a module mock: `validateRasterImageDataUri` is the leaf that base64-decodes an inline icon's
-// header, so counting its invocations is the direct measure of what re-hydrating a repo costs.
+// Count leaf data-URI header decodes to measure repeated hydration cost.
 const { dataUriValidations } = vi.hoisted(() => ({ dataUriValidations: { count: 0 } }))
 
 vi.mock('./image-data-uri', async (importOriginal) => {
@@ -173,8 +172,7 @@ describe('sanitizeRepoIcon', () => {
     expect(
       githubAvatarIcon({ owner: 'acme', repo: 'widgets', host: 'GitHub.Acme.Test:8443' })
     ).toMatchObject({ src: 'https://github.acme.test:8443/acme.png?size=64' })
-    // Explicit default port 443 is canonical for an HTTPS host: accept it
-    // (serialized without the port) rather than falling back to github.com.
+    // HTTPS serialization strips default port 443; a valid GHES host must still qualify.
     expect(
       githubAvatarIcon({ owner: 'acme', repo: 'widgets', host: 'ghe.example:443' })
     ).toMatchObject({ src: 'https://ghe.example/acme.png?size=64' })
@@ -226,8 +224,6 @@ describe('repo icon source validation memo', () => {
       }
     }
 
-    // Unmemoized this is HYDRATIONS x icons full base64 header decodes; memoized an unchanged
-    // persisted icon costs nothing.
     expect(dataUriValidations.count).toBe(0)
   })
 
@@ -249,9 +245,7 @@ describe('repo icon source validation memo', () => {
     expect(sanitizeRepoIcon({ type: 'image', src, source: 'upload' })).toBeUndefined()
   })
 
-  // Guard for the removed cap: the memo hangs off the persisted icon object, so it holds a verdict
-  // for every live icon no matter how many there are. A fixed-size map would evict the earliest
-  // entries here and re-decode them on the next hydration.
+  // Object-keyed caching must retain all live icons; a fixed cap would evict and decode early entries again.
   it('keeps a verdict for every live icon, however many repos have one', () => {
     const LIVE_ICONS = 200
     const icons = Array.from({ length: LIVE_ICONS }, (_, index) => uploadIcon(1000 + index))
@@ -267,8 +261,7 @@ describe('repo icon source validation memo', () => {
     expect(dataUriValidations.count).toBe(0)
   })
 
-  // Guard for the hazard object keying introduces: the stored src/source are re-checked on a hit,
-  // so a persisted icon edited in place can never be served its previous verdict.
+  // Recheck src/source on hits so in-place mutations cannot reuse stale verdicts.
   it('re-validates an icon object whose src or source is mutated in place', () => {
     const icon = { type: 'image', src: `data:image/png;base64,${pngBase64(7, 1)}`, source: 'file' }
     expect(sanitizeRepoIcon(icon)).toEqual(icon)

@@ -1,9 +1,9 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { RESET_GRAPHIC_RENDITION } from '../../../../../shared/terminal-mode-reset-profiles'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
-import type { PtyBufferSnapshot } from '../pty-transport'
+import type { PtyBufferSnapshot } from '../pty-transport-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { PARK_REVEAL_NO_HOST_IMAGE_WARNING } from './hidden-output-restore-limits'
@@ -15,13 +15,7 @@ export type ParkRevealRetryLedger = 'host' | 'local' | null
 /** The explicit answer that closed the door: only these two ever reach `no-host-image`. */
 export type ParkRevealNoHostImageReason = 'permanently-unavailable' | 'unavailable'
 
-/**
- * What a park-reveal's host snapshot probe proved. Three verdicts, no synonyms
- * (docs/reference/ssh-execution-boundary.md): only `host-snapshot` is positive
- * evidence of the pane's contents, and a probe that proves nothing must never
- * be read as "the pane is empty". Retention is never inferred from image
- * content: `no-host-image` is reachable only from an explicit host answer.
- */
+/** Only host-snapshot proves content; unverifiable never means empty, and no-host-image requires an explicit host verdict (docs/reference/ssh-execution-boundary.md). */
 export type ParkRevealSnapshotVerdict =
   | { kind: 'host-snapshot'; snapshot: PtyBufferSnapshot }
   /** Timeout, host declined for now, local request-lane gate, or an imageless success. */
@@ -36,10 +30,7 @@ export function classifyParkRevealSnapshot(
   switch (result.kind) {
     case 'snapshot': {
       const { snapshot } = result
-      // Why remote-only: a remote host's fallback serializer can answer `data: ''` before its
-      // pane has hydrated, so an imageless success proves nothing there (applyMainBufferSnapshot
-      // refuses it too) and painting it would clear the client's own copy. Local main is the
-      // execution host for a local pty; its empty model is the positive answer.
+      // Remote imageless success can precede hydration and must not erase local output; local main’s empty model is authoritative.
       const carriesNoImage =
         isRemoteRuntimePtyId(ptyId) &&
         snapshot.alternateScreen !== true &&
@@ -60,10 +51,7 @@ export function classifyParkRevealSnapshot(
 }
 
 export function bindParkRevealSnapshotVerdictActions(session: ConnectPanePtySession): void {
-  // Why a hand-off, not a loop: the hidden-output restore loop already budgets
-  // retry-worthy answers (7 host declines / 30 local gates / 5 re-arm cycles),
-  // repaints from the host on success, and ends in an explicit loss banner.
-  // A second loop here would double every bound.
+  // Reuse the restore loop’s budgets, repaint and loss disclosure; a second retry loop would double its bounds.
   session.retryUnverifiableParkRevealSnapshot = function (
     ptyId: string,
     ledger: ParkRevealRetryLedger
@@ -89,10 +77,7 @@ export function bindParkRevealSnapshotVerdictActions(session: ConnectPanePtySess
     return true
   }
 
-  // Unavoidable loss must be visible: a pane the host could not image must not
-  // look like an empty terminal. Remote-only because local main is the
-  // execution host and a local pane's layout copy is never released, so the
-  // pane already shows everything there is.
+  // Disclose permanent remote image loss; local main is authoritative and its pane’s layout copy remains available.
   session.warnParkRevealNoHostImage = function (
     ptyId: string,
     reason: ParkRevealNoHostImageReason
@@ -108,13 +93,13 @@ export function bindParkRevealSnapshotVerdictActions(session: ConnectPanePtySess
     ) {
       return false
     }
-    // Why no CAN byte here: the subscribe-time push snapshot may have left a pending escape
-    // tail for the next live chunk to complete; only the pen is reset.
+    // Reset only the pen; CAN would abort a subscribe-time escape tail awaiting live continuation.
     writeTerminalOutput(
       session.pane.terminal,
       `${RESET_GRAPHIC_RENDITION}${PARK_REVEAL_NO_HOST_IMAGE_WARNING}`,
       { foreground: true, beforeWrite: session.beforeTerminalOutputWrite }
     )
+    session.requestRemoteProgramRedraw('park-reveal-no-host-image')
     return true
   }
 }

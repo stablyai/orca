@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  activateWebRuntimeSessionTab,
-  createWebRuntimeSessionBrowserTab
-} from './web-runtime-session'
+import { activateWebRuntimeSessionTab } from './web-runtime-session-tab-lifecycle'
+import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import { peekWebSessionFocusIntent } from './web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
@@ -16,6 +14,7 @@ import {
 import { stubBrowserCreateRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
+  changedAgentPaneKeys: new Set<string>(),
   getState: vi.fn(),
   setState: vi.fn(),
   subscribe: vi.fn(),
@@ -33,7 +32,6 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
@@ -45,25 +43,30 @@ vi.mock('../store', () => ({
   }
 }))
 
-vi.mock('./web-session-tabs-sync', () => ({
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
-  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
-  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
-    mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
+  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
+}))
+vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/store-patch', () => ({
+  applyWebSessionTabsStorePatch: (
+    buildPatch: (state: unknown, changedAgentPaneKeys: Set<string>) => unknown
+  ) => {
+    mocks.setState((state: unknown) => buildPatch(state, mocks.changedAgentPaneKeys))
     return () => {}
-  },
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
@@ -125,11 +128,9 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         worktree: `id:${WORKTREE_ID}`,
         url: 'https://example.com/',
         profileId: undefined,
-        // Why: a user-initiated "New Browser Tab" focuses the new tab, which on a
-        // headless host marks it active in the session snapshot.
+        // User creation marks the new tab active in the headless session snapshot.
         activate: true,
-        // Why: without this the host moved every paired device — and its own UI — onto a tab
-        // only this client asked for.
+        // Without caller-local navigation, the host UI and every paired device switch to this tab.
         navigation: 'caller',
         waitForRegistration: false
       },
@@ -146,7 +147,10 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
       { state: 'before', activeWorktreeId: WORKTREE_ID },
       snapshot,
-      ENVIRONMENT_ID
+      ENVIRONMENT_ID,
+      undefined,
+      undefined,
+      mocks.changedAgentPaneKeys
     )
     expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
       ENVIRONMENT_ID,
@@ -156,8 +160,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       mocks.applyWebSessionTabsSnapshot.mock.invocationCallOrder[0]!
     )
     expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toBeNull()
-    // Why: the optimistic tab must be runtime-backed — a local browser tab here would be the
-    // confusing split-ownership fallback the paired create path deliberately refuses.
+    // A local browser fallback would split ownership; optimistic rows must remain runtime-backed.
     expect(mocks.createBrowserTab).toHaveBeenCalledWith(
       WORKTREE_ID,
       'https://example.com/',
@@ -424,7 +427,10 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
       { state: 'before-stage', activeWorktreeId: 'other-worktree' },
       snapshot,
-      ENVIRONMENT_ID
+      ENVIRONMENT_ID,
+      undefined,
+      undefined,
+      mocks.changedAgentPaneKeys
     )
     expect(setStateResults.at(-1)).toEqual({ state: 'after' })
   })

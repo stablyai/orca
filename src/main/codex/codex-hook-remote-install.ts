@@ -35,9 +35,7 @@ export async function installCodexHooksRemote(
     options?.codexHomeDir?.replace(/\/$/, '') ?? `${remoteHome.replace(/\/$/, '')}/.codex`
   const remoteConfigPath = `${codexHomeBase}/hooks.json`
   const remoteTomlPath = `${codexHomeBase}/config.toml`
-  // Redirected WSL homes must use the same script location and command shape
-  // as the runtime installer; two representations of one hooks.json race
-  // into stale trust keys. Plain SSH keeps its guest-home script contract.
+  // WSL must match runtime script paths/commands to avoid trust-key races; SSH uses guest-home scripts.
   const redirectedCodexHome = options?.codexHomeDir?.replace(/\/$/, '')
   const remoteScriptPath = redirectedCodexHome
     ? `${redirectedCodexHome}/.orca/agent-hooks/codex-hook.sh`
@@ -88,15 +86,17 @@ export async function installCodexHooksRemote(
         groupIndex: redirectedCodexHome ? 0 : cleaned.length,
         handlerIndex: 0,
         command,
-        timeoutSec: hook.timeout
+        timeoutSec: hook.timeout,
+        // Orca's setting overrides Codex's /hooks off switch for this hook, as local installs do.
+        enabled: true
       })
     }
 
     config.hooks = nextHooks
-    // Why: write script/settings before trust TOML; a partial trust write leaves Codex asking approval instead of running a missing script.
-    // Why: SSH remotes use POSIX `.sh` paths even when Orca runs on Windows; never derive remote script syntax from local OS.
+    // Write scripts/settings before trust so partial writes cannot approve a missing script.
+    // SSH scripts use POSIX syntax even on Windows hosts.
     await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-    // Why: SSH edits the user's remote ~/.codex/hooks.json directly, so preserve non-Orca top-level metadata while replacing the hooks tree.
+    // Preserve other managers' metadata in the user's remote hooks.json.
     await writeHooksJsonRemote(sftp, remoteConfigPath, { ...config, hooks: nextHooks })
     try {
       const existingTomlRaw = await readTextFileRemote(sftp, remoteTomlPath)

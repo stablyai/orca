@@ -1,17 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Defect under test: a startup-gate-open pass can install an activation
- * deferral plan (restrictions.set(worktree, EMPTY set) — every tab deferred,
- * zero panes rendered) by mutating only refs. The admission drain's effect
- * used to depend only on [backgroundMountRevision, renderedActiveWorktreeId],
- * and the only producers of backgroundMountRevision are the drain itself and
- * the background-mount EVENT path — never the activation plan. Neither dep
- * changes on the gate-open pass, so the plan stranded every tab unmounted
- * until the user switched workspaces and back. The fix returns
- * activationDeferralPlanRevision from applyTerminalColdActivation as a third
- * dep, bumped only when a plan actually installs.
- */
+/** Startup gate opening can install ref-only deferral without changing active workspace or mount revision. The plan revision must wake idle admission or every deferred tab remains stranded until a workspace switch. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useRef, useState } from 'react'
@@ -60,7 +49,6 @@ function terminalTab(id: string, ptyId: string): TerminalTab {
   }
 }
 
-/** Seeds the real store and primes real authoritative-snapshot capabilities. */
 async function seedDeferrableWorktree(): Promise<void> {
   useAppStore.setState({
     tabsByWorktree: { [WORKTREE_ID]: [terminalTab(TAB_1, PTY_1), terminalTab(TAB_2, PTY_2)] }
@@ -78,7 +66,6 @@ async function seedDeferrableWorktree(): Promise<void> {
 
 type HarnessProps = { worktreeId: string | null; gateOpen: boolean }
 
-/** Mirrors use-terminal-controller.ts:30-32: cold activation during render, then admission. */
 function useStrandingHarness(props: HarnessProps) {
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
@@ -121,7 +108,6 @@ function useStrandingHarness(props: HarnessProps) {
   return { activationDeferredMountTabIdsByWorktreeRef, backgroundMountTabIdsByWorktreeRef }
 }
 
-/** Fires the timer-fallback admission chain: one tab admitted per pass. */
 function drainIdleAdmissions(passes: number): void {
   for (let index = 0; index < passes; index += 1) {
     act(() => {
@@ -172,15 +158,11 @@ describe('cold-activation deferral stranding', () => {
   it('drains a plan installed by the gate-open pass without the active worktree changing', async () => {
     await seedDeferrableWorktree()
     vi.useFakeTimers()
-    // Pass 1: worktree already rendered-active while the startup gate is
-    // closed — the else branch resets lastActivationWorktreeIdRef to null.
     const { result, rerender } = renderHook((props: HarnessProps) => useStrandingHarness(props), {
       initialProps: { worktreeId: WORKTREE_ID, gateOpen: false }
     })
     expect(result.current.activationDeferredMountTabIdsByWorktreeRef.current.size).toBe(0)
 
-    // Pass 2: gate opens with the SAME rendered-active worktree; the plan
-    // installs an empty allowed set — every tab deferred, zero panes.
     rerender({ worktreeId: WORKTREE_ID, gateOpen: true })
     const restrictions = result.current.backgroundMountTabIdsByWorktreeRef.current
     const deferred = result.current.activationDeferredMountTabIdsByWorktreeRef.current
@@ -192,8 +174,7 @@ describe('cold-activation deferral stranding', () => {
       false
     )
 
-    // The fix: the install bumps activationDeferralPlanRevision, so the
-    // admission effect re-runs and drains — no worktree switch required.
+    // Plan installation must wake admission without a workspace switch.
     drainIdleAdmissions(3)
     expect(deferred.has(WORKTREE_ID)).toBe(false)
     expect(shouldMountBackgroundWorktreeTab(restrictions.get(WORKTREE_ID) ?? null, TAB_1)).toBe(
@@ -215,8 +196,7 @@ describe('cold-activation deferral stranding', () => {
       result.current.activationDeferredMountTabIdsByWorktreeRef.current.get(WORKTREE_ID)?.size
     ).toBe(2)
 
-    // Bounce: renderedActiveWorktreeId changes, so the admission effect's
-    // pre-fix deps already covered this path — the drain must always work here.
+    // Workspace bounce already changes a drain dependency; preserve that admission path too.
     rerender({ worktreeId: OTHER_WORKTREE_ID, gateOpen: true })
     rerender({ worktreeId: WORKTREE_ID, gateOpen: true })
     drainIdleAdmissions(3)

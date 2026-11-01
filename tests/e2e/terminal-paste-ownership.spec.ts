@@ -23,16 +23,20 @@ function keyboardPasteChords(): string[] {
     : ['Control+V', 'Control+Shift+V', 'Shift+Insert']
 }
 
-function pasteEchoScript(runId: string): string {
+function pasteEchoScript(runId: string, options?: { mouseTracking?: boolean }): string {
+  const mouseTracking = options?.mouseTracking === true
   return `
 process.stdin.setEncoding('utf8')
 if (process.stdin.isTTY) process.stdin.setRawMode(true)
 process.stdin.resume()
 let seq = 0
 const interrupt = String.fromCharCode(3)
+const esc = String.fromCharCode(27)
+if (${mouseTracking}) process.stdout.write(esc + '[?1000h' + esc + '[?1006h')
 process.stdout.write('PASTE_READY_${runId}\\n')
 process.stdin.on('data', (chunk) => {
   if (chunk.includes(interrupt)) {
+    if (${mouseTracking}) process.stdout.write(esc + '[?1006l' + esc + '[?1000l')
     process.exit(0)
   }
   seq += 1
@@ -312,6 +316,57 @@ test.describe('terminal paste ownership', () => {
     }
   })
 
+  test('right-click paste into a mouse-tracking terminal app sends the clipboard once and no right-button report', async ({
+    electronApp,
+    orcaPage,
+    testRepoPath
+  }) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await installTerminalPtyWriteSpy(electronApp)
+
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const runId = randomUUID()
+    const scriptPath = path.join(testRepoPath, `.orca-paste-right-click-${runId}.mjs`)
+    writeFileSync(scriptPath, pasteEchoScript(runId, { mouseTracking: true }))
+    let scriptStarted = false
+
+    try {
+      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      scriptStarted = true
+      await waitForTerminalOutput(orcaPage, `PASTE_READY_${runId}`, 10_000)
+      await orcaPage.evaluate(() =>
+        window.__store?.getState().updateSettings({ terminalRightClickToPaste: true })
+      )
+      await expect
+        .poll(() =>
+          orcaPage.evaluate(() => window.__store?.getState().settings?.terminalRightClickToPaste)
+        )
+        .toBe(true)
+
+      const payload = `ORCA_E2E_RIGHT_CLICK_PASTE_${runId}`
+      const encodedPayload = Buffer.from(payload, 'utf8').toString('base64')
+      await clearTerminalPtyWriteLog(electronApp)
+      await orcaPage.evaluate((text) => window.api.ui.writeClipboardText(text), payload)
+      await focusActiveTerminalInput(orcaPage)
+
+      await rightClickActiveTerminalSurface(orcaPage)
+      await waitForTerminalOutput(orcaPage, encodedPayload, 10_000, 12_000)
+
+      const writes = (await readTerminalPtyWrites(electronApp)).join('')
+      expect(countOccurrences(writes, payload), 'right-click PTY write count').toBe(1)
+      // Why: a TUI that pastes on its own right-button report would paste again (#25192).
+      expect(writes, 'right-button mouse report').not.toContain('\x1b[<2;')
+    } finally {
+      if (scriptStarted) {
+        await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+      }
+      rmSync(scriptPath, { force: true })
+    }
+  })
+
   test('Windows multiline keyboard paste normalizes terminal newlines with one PTY owner', async ({
     electronApp,
     orcaPage,
@@ -336,8 +391,7 @@ test.describe('terminal paste ownership', () => {
       'Unicode: caf\u00e9 \u4f60\u597d \u0645\u0631\u062d\u0628\u0627 \ud83d\ude00',
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
-    // Why: xterm translates clipboard line endings to terminal Enter bytes;
-    // Orca's direct Windows bracketed-paste path must produce the same bytes.
+    // Match xterm’s clipboard line-ending→Enter translation in Orca’s direct Windows bracketed-paste path.
     const terminalText = payload.replace(/\r?\n/g, '\r')
     const scriptPath = path.join(testRepoPath, `.orca-paste-multiline-${runId}.mjs`)
     writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, terminalText))

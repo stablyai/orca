@@ -2,13 +2,7 @@ import type { WorkerDispatchRow } from '../../types'
 import type { OrchestrationDb } from '../orchestration-db'
 import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
 
-/**
- * A start that dies before `prepareStartingWorkerAuthority` never filled the Dispatch context in,
- * and release re-proves identity through it — so the custody row written at terminal creation would
- * name a pane no release path could match. Copy that identity across.
- *
- * No transaction: composes inside `failWorkerStart`'s.
- */
+/** Copy pre-boot custody identity into the failed Dispatch so release can re-prove it; caller owns the transaction. */
 export function recordFailedStartDispatchIdentity(
   db: OrchestrationDb,
   worker: WorkerDispatchRow
@@ -22,7 +16,7 @@ export function recordFailedStartDispatchIdentity(
       `UPDATE dispatch_contexts
          SET assignee_handle = ?, assignee_pane_key = ?, assignee_orca_session_id = ?,
              process_incarnation = ?, host_scope = ?
-       WHERE id = ? AND status = 'failed' AND process_incarnation IS NULL`
+       WHERE id = ? AND status IN ('failed', 'circuit_broken') AND process_incarnation IS NULL`
     )
     .run(
       resource.terminal_handle,

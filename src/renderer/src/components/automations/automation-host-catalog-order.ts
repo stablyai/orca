@@ -1,12 +1,7 @@
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import { uiCollator } from '@/i18n/ui-intl-formatters'
 
-/**
- * The one deterministic catalog order, shared by the picker and the All-hosts
- * grouped list so responses arriving out of order never reflow the page.
- *
- * Sort fields are precomputed once per rebuild and a single `Intl.Collator` is
- * constructed per call — never one per comparison.
- */
+/** Share deterministic picker/list ordering despite response order; precompute sort fields and build one Intl.Collator per rebuild. */
 
 export type AutomationHostCatalogOrderOptions = {
   /** Injectable so tests can prove exactly one collator is built per rebuild. */
@@ -29,8 +24,10 @@ const KIND_RANK: Record<AutomationHostCatalogEntry['kind'], number> = {
   orphan: 2
 }
 
+const COLLATOR_OPTIONS: Intl.CollatorOptions = { sensitivity: 'base', numeric: true }
+
 function defaultCollator(): Intl.Collator {
-  return new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
+  return uiCollator(COLLATOR_OPTIONS)
 }
 
 function toSortFields(entry: AutomationHostCatalogEntry): SortFields {

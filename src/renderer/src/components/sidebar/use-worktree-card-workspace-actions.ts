@@ -1,9 +1,10 @@
+import { draggedWorktreeCopiesOf } from './worktree-list/drag/dragged-worktree-copies'
 import React, { useCallback } from 'react'
 
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { runWorktreeDelete } from './delete-worktree-flow'
+import { deleteFolderWorkspaceUnlessUnsaved } from './folder-workspace-delete'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import type { ResolvedWorktreeCardProps } from './worktree-card-model'
 import { writeWorkspaceDragData } from './workspace-status'
@@ -26,8 +27,6 @@ export function useWorktreeCardWorkspaceActions({
   onCardDragEnd,
   onContextMenuSelect,
   folderWorkspaceId,
-  deleteFolderWorkspace,
-  setActiveWorktree,
   setShowRenameErrorDialog,
   isDeleting,
   showDeleteQuickAction
@@ -43,7 +42,7 @@ export function useWorktreeCardWorkspaceActions({
   | 'onCardDragEnd'
   | 'onContextMenuSelect'
 > &
-  Pick<Foundation, 'deleteFolderWorkspace' | 'setActiveWorktree' | 'setShowRenameErrorDialog'> &
+  Pick<Foundation, 'setShowRenameErrorDialog'> &
   Pick<LinkedDetails, 'isDeleting'> &
   Pick<ReviewDetails, 'folderWorkspaceId'> & {
     showDeleteQuickAction: boolean
@@ -54,34 +53,18 @@ export function useWorktreeCardWorkspaceActions({
       event.stopPropagation()
       if (showDeleteQuickAction) {
         if (folderWorkspaceId) {
-          void deleteFolderWorkspace(
+          void deleteFolderWorkspaceUnlessUnsaved(
+            useAppStore.getState,
             folderWorkspaceId,
-            worktree.hostId ? { executionHostId: worktree.hostId } : undefined
-          ).then((deleted) => {
-            if (
-              deleted &&
-              useAppStore.getState().activeWorktreeId === folderWorkspaceKey(folderWorkspaceId) &&
-              (!worktree.hostId ||
-                useAppStore.getState().activeWorkspaceExecutionHostId === worktree.hostId)
-            ) {
-              setActiveWorktree(null)
-            }
-          })
+            worktree.hostId
+          )
           return
         }
-        // Why the host (STA-4343): this row is one of possibly two for the same
-        // `repoId::path`, so it has to name its own or the delete lands on the other.
+        // Qualify deletion with the row’s host so a twin with the same repo/path ID cannot be removed.
         runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
       }
     },
-    [
-      deleteFolderWorkspace,
-      folderWorkspaceId,
-      worktree.hostId,
-      setActiveWorktree,
-      showDeleteQuickAction,
-      worktree.id
-    ]
+    [folderWorkspaceId, worktree.hostId, showDeleteQuickAction, worktree.id]
   )
   const handleOpenRenameErrorDialog = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -91,36 +74,25 @@ export function useWorktreeCardWorkspaceActions({
     },
     [setShowRenameErrorDialog]
   )
-  const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
-  const lineageChildAriaLabel =
-    lineageChildCount === 1
-      ? lineageCollapsed
-        ? translate(
-            'auto.components.sidebar.WorktreeList.20bebf9c7f',
-            'Show {{value0}} child workspace',
-            { value0: lineageChildCount }
-          )
-        : translate(
-            'auto.components.sidebar.WorktreeList.e97297cb75',
-            'Hide {{value0}} child workspace',
-            { value0: lineageChildCount }
-          )
-      : lineageCollapsed
-        ? translate(
-            'auto.components.sidebar.WorktreeList.c1f4a31623',
-            'Show {{value0}} child workspaces',
-            { value0: lineageChildCount }
-          )
-        : translate(
-            'auto.components.sidebar.WorktreeList.0cd15956d4',
-            'Hide {{value0}} child workspaces',
-            { value0: lineageChildCount }
-          )
-  const childWorkspaceShortLabel = `${lineageChildCount} ${
-    lineageChildCount === 1
-      ? translate('auto.components.sidebar.WorktreeList.0c6ee14f23', 'child')
-      : translate('auto.components.sidebar.WorktreeList.045a8aed48', 'children')
-  }`
+  const unreadTooltip = worktree.isUnread
+    ? translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markRead', 'Mark read')
+    : translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markUnread', 'Mark unread')
+  const lineageChildAriaLabel = lineageCollapsed
+    ? translate(
+        'auto.components.sidebar.WorktreeList.showChildWorkspaces',
+        'Show {{count}} child workspaces',
+        { count: lineageChildCount, defaultValue_one: 'Show {{count}} child workspace' }
+      )
+    : translate(
+        'auto.components.sidebar.WorktreeList.hideChildWorkspaces',
+        'Hide {{count}} child workspaces',
+        { count: lineageChildCount, defaultValue_one: 'Hide {{count}} child workspace' }
+      )
+  const childWorkspaceShortLabel = translate(
+    'auto.components.sidebar.WorktreeList.childCount',
+    '{{count}} children',
+    { count: lineageChildCount, defaultValue_one: '{{count}} child' }
+  )
   const showLineageChildChip = lineageChildCount > 0 && onLineageToggle !== undefined
 
   const handleDragStart = useCallback(
@@ -133,14 +105,18 @@ export function useWorktreeCardWorkspaceActions({
         event.preventDefault()
         return
       }
-      const dragIds =
-        isMultiSelected && selectedWorktrees && selectedWorktrees.length > 1
-          ? selectedWorktrees.map((item) => item.id)
-          : worktree.id
-      writeWorkspaceDragData(event.dataTransfer, dragIds)
-      onCardDragStart?.(event, worktree.id, Array.isArray(dragIds) ? dragIds : [dragIds])
+      const draggedCopies = draggedWorktreeCopiesOf(
+        worktree,
+        selectedWorktrees,
+        Boolean(isMultiSelected && selectedWorktrees && selectedWorktrees.length > 1)
+      )
+      writeWorkspaceDragData(
+        event.dataTransfer,
+        draggedCopies.map((copy) => copy.id)
+      )
+      onCardDragStart?.(event, worktree.id, draggedCopies)
     },
-    [isDeleting, isMultiSelected, onCardDragStart, selectedWorktrees, worktree.id]
+    [isDeleting, isMultiSelected, onCardDragStart, selectedWorktrees, worktree]
   )
 
   const handleDragEnd = useCallback(

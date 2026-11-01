@@ -1,14 +1,12 @@
+import { availableRevealWorkspace } from '../../session-tabs/structured-workspace-authority.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
-/**
- * A chat tab's pointer to the conversation it shows, driven end to end: a real record store on disk,
- * the real structured host, the real runtime, and the real RPC handlers. Only the provider is faked.
- */
+/** Drive chat tab pointers through real disk records, structured host, runtime and RPC; fake only the provider. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import {
@@ -29,9 +27,12 @@ import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
 import { SESSION_TAB_METHODS } from './session-tabs'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { commitStructuredAgentSessionCreate } from './structured-agent-session-create'
-import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 
 export const WORKTREE = `id:${HOST_TEST_LOCATION.workspaceId}`
@@ -55,12 +56,16 @@ function providerAdapter(): StructuredAgentSessionAdapter {
   return {
     supportsLocation: (location) =>
       location.executionHostId === 'local' && location.wslDistro === null,
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire: vi.fn(async (input) => {
       if (acquireFails) {
         throw new Error('provider failed to start')
       }
       acquisitions++
       return {
+        acquisitionGeneration: globalThis.crypto.randomUUID(),
         process: {
           hostId: 'local',
           pid: 4000 + acquisitions,
@@ -187,10 +192,10 @@ beforeEach(async () => {
   closeSession = vi.fn(async () => true)
   directory = await mkdtemp(join(tmpdir(), 'orca-chat-tab-table-'))
   runtime = new OrcaRuntimeService()
-  vi.spyOn(runtime, 'getClientSettings').mockReturnValue(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the structured-chat policy reads only this one setting on these paths.
-    { experimentalNativeChat: true } as ReturnType<OrcaRuntimeService['getClientSettings']>
+  vi.spyOn(runtime, 'prepareStructuredAgentSessionRevealWorkspace').mockImplementation(
+    availableRevealWorkspace
   )
+  vi.spyOn(runtime['workspaceSessions'], 'tryGetHostId').mockReturnValue('local')
   dispatcher = new RpcDispatcher({
     runtime,
     methods: [...STRUCTURED_AGENT_SESSION_METHODS, ...SESSION_TAB_METHODS]
@@ -202,5 +207,6 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await host?.flushAllStreamedEvents()
   setStructuredAgentSessionHost(null)
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })

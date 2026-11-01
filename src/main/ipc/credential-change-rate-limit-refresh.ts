@@ -1,9 +1,6 @@
 import type { RateLimitService } from '../rate-limits/service'
 
-/**
- * Drops a provider's stale usage, then refreshes in the background.
- * Why fire-and-forget: callers return the persisted credential status immediately; a failed refresh only logs.
- */
+/** Refresh usage in the background so callers can return persisted credential status even if refresh fails. */
 export function refreshAfterCredentialChange<T extends Pick<RateLimitService, 'refresh'>>(
   rateLimits: T | null,
   invalidate: (rateLimits: T) => void,

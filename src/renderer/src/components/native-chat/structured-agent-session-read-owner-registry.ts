@@ -1,22 +1,31 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { StructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
 
 const owners = new Map<string, StructuredAgentSessionReadOwner>()
-export function structuredReadOwnerKey(sessionId: string, target: RuntimeClientTarget): string {
+export function structuredReadOwnerKey(
+  sessionId: string,
+  target: RuntimeClientTarget | null,
+  unroutableHost = ''
+): string {
+  if (!target) {
+    return `unroutable:${unroutableHost}:${sessionId}`
+  }
   return `${target.kind === 'local' ? 'local' : `environment:${target.environmentId}`}:${sessionId}`
 }
 export function findStructuredAgentSessionReadOwner(
   sessionId: string,
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget | null,
+  unroutableHost = ''
 ): StructuredAgentSessionReadOwner | undefined {
-  return owners.get(structuredReadOwnerKey(sessionId, target))
+  return owners.get(structuredReadOwnerKey(sessionId, target, unroutableHost))
 }
 /** A closed chat no longer needs an unmounted create page or an active reader. */
 export function retireStructuredAgentSessionReadOwner(
   sessionId: string,
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget | null,
+  unroutableHost = ''
 ): void {
-  const key = structuredReadOwnerKey(sessionId, target)
+  const key = structuredReadOwnerKey(sessionId, target, unroutableHost)
   const owner = owners.get(key)
   owners.delete(key)
   try {

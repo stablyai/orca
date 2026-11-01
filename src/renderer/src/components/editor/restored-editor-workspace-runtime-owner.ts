@@ -1,7 +1,7 @@
 import type { OpenFile } from '@/store/slices/editor'
 import type { AppState } from '@/store/types'
 import { hasOpenFileExecutionHostEvidence } from '@/lib/unified-tab-host-ownership'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import {
   findRuntimeWorkspaceFileRoute,
   type RuntimeWorkspaceFileRoute
@@ -12,11 +12,7 @@ export type RestoredEditorWorkspaceRuntimeOwner = {
   runtimeEnvironmentId: string
 }
 
-/**
- * The managed server a restored tab now belongs to, when its workspace moved there from an SSH
- * host. Such tabs name no host because the relay era derived it from the workspace, so they would
- * keep reading through the relay; they take the workspace's server instead, as a fresh open does.
- */
+/** Migrate unstamped relay-era tabs to their workspace’s managed server so reads and saves do not retain the old SSH route. */
 export function findRestoredEditorWorkspaceRuntimeOwner(
   state: AppState,
   file: Pick<
@@ -32,7 +28,8 @@ export function findRestoredEditorWorkspaceRuntimeOwner(
   if (!worktreeId || file.worktreeId !== worktreeId || hasOpenFileExecutionHostEvidence(file)) {
     return null
   }
-  const runtimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  // Why: re-homing a tab moves where it saves; a twin keeps the tab where it was.
+  const runtimeEnvironmentId = runtimeEnvironmentIdUnlessTwin(state, worktreeId)
   // Why skip the focused server: its unstamped tabs already read and save there.
   if (
     !runtimeEnvironmentId ||

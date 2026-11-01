@@ -13,12 +13,7 @@ import { parseSearchCommand } from '../search-command-arguments'
 export const MALFORMED_CURSOR_MESSAGE =
   'The host did not recognise that --cursor value. Cursors belong to one query on one host; re-run the search without --cursor.'
 
-/**
- * The shared contract client over the CLI's runtime RPC. Reusing it is what makes
- * an old host's unknown-method refusal an `unavailable/no-service` answer instead
- * of a raw JSON-RPC error, and it applies the same exposure policy the host did:
- * a paired runtime is a relay caller, a local one is not.
- */
+// Reuse contract compatibility and exposure policy: paired runtimes are relay callers.
 function createCliSessionSearch(client: RuntimeClient) {
   let lastEnvelope: RuntimeRpcSuccess<unknown> | undefined
   const search = createSessionSearchClient(
@@ -28,8 +23,7 @@ function createCliSessionSearch(client: RuntimeClient) {
     },
     client.isRemote ? 'relay' : 'runtime'
   )
-  // Why `client`: an answer synthesised from a refusal had no successful call, so
-  // no runtime produced it and none of its identifiers may be claimed here.
+  // A synthesized refusal has no runtime envelope; do not claim an unobserved runtime identity.
   const envelope = <TResult>(result: TResult): RuntimeRpcSuccess<TResult> =>
     lastEnvelope
       ? { ...lastEnvelope, result }
@@ -37,7 +31,6 @@ function createCliSessionSearch(client: RuntimeClient) {
   return { search, envelope }
 }
 
-/** `orca search` over `aiVault.searchSessions` / `aiVault.searchStatus` on one host. */
 export const SEARCH_HANDLERS: Record<string, CommandHandler> = {
   search: async ({ client, flags, json }) => {
     const command = parseSearchCommand(flags)

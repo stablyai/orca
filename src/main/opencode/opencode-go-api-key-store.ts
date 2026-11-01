@@ -11,3 +11,4 @@ export const hasOpenCodeGoApiKey = store.has
 export const saveOpenCodeGoApiKey = store.save
 export const readOpenCodeGoApiKey = store.read
 export const clearOpenCodeGoApiKey = store.clear
+export const openCodeGoApiKeyEnvelopeFile = store.envelopeFile

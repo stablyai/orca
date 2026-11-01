@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { prepareNativeChatLiveMessages } from './native-chat-live-message-preparation'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 
@@ -48,8 +48,7 @@ describe('prepareNativeChatLiveMessages command output', () => {
         parentId: 'd-envelope'
       }
     ]
-    // `/model` is outside the catalog, so its envelope surfaces as the typed turn
-    // and its linked reply stays hidden.
+    // Unsupported command envelopes surface as typed turns while their linked replies stay hidden.
     expect(visibleText('openclaude', [...CONTEXT_ROWS, ...modelRows])).toEqual([
       'Context Usage',
       '/model'
@@ -57,7 +56,6 @@ describe('prepareNativeChatLiveMessages command output', () => {
   })
 
   it('keeps the reply row hidden for Claude', () => {
-    // Outside Claude's catalog the envelope reads as the typed turn, as on main.
     expect(visibleText('claude', CONTEXT_ROWS)).toEqual(['/context'])
   })
 })

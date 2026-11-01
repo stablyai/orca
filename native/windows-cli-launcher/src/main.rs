@@ -20,7 +20,12 @@ use std::process::{exit, Command};
 
 const SERVER_CONFIG_FILENAME: &str = "orca-launcher.cfg";
 
+#[cfg(windows)]
+mod administrator_status;
+
 fn main() {
+    #[cfg(windows)]
+    administrator_status::run_if_requested();
     let launcher = match env::current_exe() {
         Ok(path) => path,
         Err(error) => fail(&format!("Unable to start the Orca CLI: {error}")),
@@ -66,10 +71,7 @@ fn main() {
         ));
     }
 
-    // Why mutate this process rather than hand the child an environment map:
-    // an explicit map collapses a block carrying both PATH and Path into one
-    // entry, which is what killed the CLI in #12046. Leaving the map untouched
-    // makes the child inherit our block verbatim.
+    // Preserve duplicate PATH/Path entries by inheriting this process’s environment verbatim; an explicit map broke #12046.
     move_environment_variable("NODE_OPTIONS", "ORCA_NODE_OPTIONS");
     move_environment_variable(
         "NODE_REPL_EXTERNAL_MODULE",
@@ -111,7 +113,14 @@ fn run_server_cli(config_path: &Path) -> ! {
         }
     }
     env::set_var("ORCA_USER_DATA_PATH", user_data_path);
-    for name in ["NODE_OPTIONS", "NODE_REPL_EXTERNAL_MODULE", "ELECTRON_RUN_AS_NODE"] {
+    for name in [
+        "NODE_OPTIONS",
+        "NODE_REPL_EXTERNAL_MODULE",
+        "ELECTRON_RUN_AS_NODE",
+        // A server started by the desktop's `orca serve` inherits this marker, which would make
+        // orchestration demand a bare `orca` resume command.
+        "ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER",
+    ] {
         env::remove_var(name);
     }
     run_cli(&node_path, &cli_path)

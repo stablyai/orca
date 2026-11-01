@@ -15,11 +15,7 @@ export type CodexSettingsConflict = {
 export type CodexSettingsBaseline = {
   settings: ReadonlyMap<string, string | null>
   conflicts: ReadonlyMap<string, CodexSettingsConflict>
-  /**
-   * Plugin/marketplace tables the last mirror made canonical, with the fields a
-   * three-way needs. An absent entry means "never mirrored", so a runtime-only
-   * table reads as an addition rather than as a canonical removal.
-   */
+  /** Absent registrations were never mirrored, so runtime-only tables count as additions. */
   registrations: ReadonlyMap<string, ReadonlyMap<string, string>>
   /** MCP server names the last mirror copied from the canonical source. */
   mcpServers: ReadonlySet<string>
@@ -35,12 +31,7 @@ type StoredSettingsBaseline = {
   mcpServerRoot?: boolean
 }
 
-/**
- * Why callers need three answers, not two: without a readable baseline,
- * promotion cannot distinguish an in-Codex edit from Orca's last mirror. An
- * unreadable baseline must stall that mirror; absent and unparseable still map
- * to `absent` because rebuilding those is the intent.
- */
+/** Unreadable baselines stall the mirror; absent or invalid baselines can be rebuilt. */
 export type CodexSettingsBaselineObservation =
   | { kind: 'present'; baseline: CodexSettingsBaseline }
   | { kind: 'absent' }
@@ -95,8 +86,6 @@ function readParsedCodexSettingsBaseline(
       mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true
     }
   } catch (error) {
-    // Why: invalid baseline state is still `null` — resetting it is the intent,
-    // and only a read that FAILED must be preserved.
     return isDefinitiveAbsence(error) || isRebuildableBaselineError(error) ? null : 'unreadable'
   }
 }
@@ -125,7 +114,7 @@ function readStoredRegistrations(
   return registrations
 }
 
-/** Why: known-present baseline state outside its parse/capacity contract is rebuildable, not unreadable. */
+/** Invalid or oversized derived state can be rebuilt after a successful read. */
 function isRebuildableBaselineError(error: unknown): boolean {
   return (
     error instanceof SyntaxError ||
@@ -160,12 +149,12 @@ export function writeCodexSettingsBaseline(
   try {
     existing = readAgentStateFileSync(baselinePath)
   } catch (error) {
-    // Why: only absence or known-invalid derived state may authorize replacement.
+    // Preserve state that could not be read; only absent or invalid state can be replaced.
     if (!isDefinitiveAbsence(error) && !isRebuildableBaselineError(error)) {
       throw error
     }
   }
-  // Why: launch prep runs repeatedly; byte-identical baselines should not churn disk metadata.
+  // Avoid disk metadata churn during repeated launch preparation.
   if (existing === serialized) {
     return
   }

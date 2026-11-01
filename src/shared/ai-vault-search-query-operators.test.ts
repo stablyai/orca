@@ -34,8 +34,7 @@ describe('what counts as an operator', () => {
   })
 
   it('preserves operator case, which the panel folds and the index must not', () => {
-    // cwd_key keeps execution-host case, so folding here would lose a POSIX
-    // directory whose name differs only in case.
+    // Keep execution-host case in cwd_key so distinct POSIX directories remain searchable.
     expect(splitAiVaultSearchQuery('path:/Work/App').pathTerms).toEqual(['/Work/App'])
     expect(parseVaultQuery('path:/Work/App').pathTerms).toEqual(['/work/app'])
   })
@@ -45,18 +44,13 @@ describe('what counts as an operator', () => {
   })
 })
 
-// The panel parses through this module now, so the two cannot disagree by
-// construction. What is worth pinning is the handful of shapes where the
-// panel's old hand-rolled tokenizer answered differently, so the change of
-// behaviour is a decision on the record rather than a surprise.
+// Pin intentional differences from the former panel tokenizer; the shared parser now guarantees panel/index agreement.
 describe('the shapes where the panel parser used to answer differently', () => {
   it.each([
     ['repo:"" x', 'repoTerms'],
     ['path:"" x', 'pathTerms']
   ] as const)('drops the empty operator value in %s instead of filtering on `""`', (query, key) => {
-    // The old tokenizer kept the quote characters as the value, so `repo:""`
-    // filtered on a label no session has and silently emptied the list. An
-    // operator with nothing in it is not a narrowing.
+    // Drop empty operators; filtering on a quoted empty label once silently emptied the list.
     expect(splitAiVaultSearchQuery(query)[key]).toEqual([])
     expect(parseVaultQuery(query)[key]).toEqual([])
   })
@@ -65,8 +59,7 @@ describe('the shapes where the panel parser used to answer differently', () => {
     ['repo:"  " x', 'repoTerms'],
     ['path:"  " x', 'pathTerms']
   ] as const)('drops the whitespace-only operator value in %s too', (query, key) => {
-    // Same defect as `repo:""` wearing a different hat: an untrimmed `"  "`
-    // survives as a term, matches no label, and empties the list.
+    // Whitespace-only operator values also narrow nothing; retaining spaces once emptied results.
     expect(splitAiVaultSearchQuery(query)[key]).toEqual([])
     expect(parseVaultQuery(query)[key]).toEqual([])
   })
@@ -78,9 +71,7 @@ describe('the shapes where the panel parser used to answer differently', () => {
   it.each(['"" empty', "'' empty", '"  " empty'])(
     'reads the empty quotes in %s as an empty term',
     (query) => {
-      // Same reason one level up: the old parser searched for the two characters
-      // and found nothing, where an empty term matches everything and leaves the
-      // rest of the query to do the work.
+      // Empty free-text terms match everything instead of searching literal quotes.
       expect(parseVaultQuery(query).terms).toEqual(['', 'empty'])
     }
   )
@@ -92,10 +83,7 @@ describe('the shapes where the panel parser used to answer differently', () => {
     ['path:"a"b', { terms: ['b'], repoTerms: [], pathTerms: ['a'] }],
     ['repo:"a b"c d', { terms: ['c', 'd'], repoTerms: ['a b'], pathTerms: [] }]
   ])('reads %s exactly as the panel always has', (query, expected) => {
-    // A closing quote does not have to end a word. Requiring it turned each of
-    // these into one term carrying its own quote characters, which matches
-    // nothing; the apostrophe case below is protected by the token start, not
-    // by that rule.
+    // Closing quotes may end mid-word; token-start rules protect apostrophes without retaining literal quotes in search terms.
     expect(parseVaultQuery(query)).toEqual(expected)
   })
 })

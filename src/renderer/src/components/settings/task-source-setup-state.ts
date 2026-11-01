@@ -29,7 +29,7 @@ export const TASK_PROVIDER_SETUP_STATUS_TONE: Record<
 > = {
   checking: 'neutral',
   ready: 'connected',
-  // Why: hiding a provider is a deliberate choice, not something to warn about.
+  // Hiding a provider is deliberate; suppress setup warnings.
   hidden: 'neutral',
   'connect-required': 'attention',
   'skill-required': 'attention',
@@ -87,14 +87,13 @@ export function getTaskProviderSetupStatus(
   if (!readiness.connected) {
     return 'connect-required'
   }
-  // Why before `skill-required`: that status offers Install, which reinstalls a skill that may be present.
+  // Unverifiable scans must not offer Install for skills that may already exist.
   if (readiness.skillUnverifiable) {
     return 'skill-unverified'
   }
   if (readiness.skillInstalled === false) {
     return 'skill-required'
   }
-  // Fallback if a future readiness field can leave connected+skill true but not ready.
   return 'incomplete'
 }
 
@@ -112,15 +111,11 @@ export function getIncompleteVisibleTaskProviders(
   })
 }
 
-// A provider nobody has touched is the shipped default, not a problem: settings
-// expose all four, so treating "never connected" as a warning would fire on
-// every fresh install. Setup counts as started once a credential or the skill
-// landed.
+// All providers start visible; warn only once credentials or a skill prove setup began.
 export function hasStartedTaskProviderSetup(readiness: TaskProviderReadiness): boolean {
   return readiness.connected || readiness.skillInstalled === true
 }
 
-// Warn only about setup that started and stalled partway.
 export function getStalledVisibleTaskProviders(
   providers: readonly TaskProvider[],
   readinessByProvider: Record<TaskProvider, TaskProviderReadiness>
@@ -130,7 +125,7 @@ export function getStalledVisibleTaskProviders(
   )
 }
 
-// Expand one unfinished provider because defaults expose every provider.
+// Expand only one unfinished provider because every provider starts visible.
 export function getAutoExpandedTaskProvider(
   providers: readonly TaskProvider[],
   readinessByProvider: Record<TaskProvider, TaskProviderReadiness>
@@ -138,10 +133,7 @@ export function getAutoExpandedTaskProvider(
   return getIncompleteVisibleTaskProviders(providers, readinessByProvider)[0] ?? null
 }
 
-// Auto-expand is a one-time first-open affordance. Once a card has claimed it,
-// it keeps it for the life of the pane: releasing the slot when that provider
-// finishes (or gets hidden) would let a later gh/glab preflight pop a different
-// card open under the user, and could unmount an open install terminal.
+// Retain the first expansion slot until unmount; later preflights must not pop open another card or unmount an install terminal.
 export function resolveStickyAutoExpandedTaskProvider({
   providers,
   readinessByProvider,

@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WebSocket } from 'ws'
 import { RemoteRuntimeServerHeartbeat } from './remote-runtime-server-heartbeat'
+import { setActiveSink } from '../../observability/tracer'
 
 afterEach(() => {
+  setActiveSink(null)
   vi.useRealTimers()
 })
 
@@ -34,19 +36,18 @@ describe('RemoteRuntimeServerHeartbeat', () => {
     expect(responsiveSocket.ping).not.toHaveBeenCalled()
     expect(deadSocket.ping).not.toHaveBeenCalled()
 
-    // Tick #1: probe #1 goes out to both.
     now += 100
     await vi.advanceTimersByTimeAsync(100)
     heartbeat.noteAlive(responsiveSocket)
 
-    // Tick #2: miss #1 is not yet evidence, so the silent socket is re-probed.
+    // First miss re-probes without reaping.
     now += 100
     await vi.advanceTimersByTimeAsync(100)
     heartbeat.noteAlive(responsiveSocket)
     expect(deadSocket.ping).toHaveBeenCalledTimes(2)
     expect(deadSocket.terminate).not.toHaveBeenCalled()
 
-    // Tick #3: miss #2 reaches the limit: consecutive silence is evidence.
+    // Consecutive silence reaches the configured limit.
     now += 100
     await vi.advanceTimersByTimeAsync(100)
 
@@ -66,14 +67,14 @@ describe('RemoteRuntimeServerHeartbeat', () => {
     heartbeat.noteAlive(socket)
     heartbeat.start(() => [socket])
     now += 100
-    await vi.advanceTimersByTimeAsync(100) // ping #1, socket pongs
+    await vi.advanceTimersByTimeAsync(100)
     heartbeat.noteAlive(socket)
 
     now += 100
-    await vi.advanceTimersByTimeAsync(100) // ping #2, socket pongs
+    await vi.advanceTimersByTimeAsync(100)
     heartbeat.noteAlive(socket)
     now += 3_600_000
-    await vi.advanceTimersByTimeAsync(100) // resumed-from-pause: re-grants a probe (ping #3), no reap
+    await vi.advanceTimersByTimeAsync(100)
 
     expect(socket.ping).toHaveBeenCalledTimes(3)
     expect(socket.terminate).not.toHaveBeenCalled()
@@ -81,6 +82,42 @@ describe('RemoteRuntimeServerHeartbeat', () => {
     now += 100
     await vi.advanceTimersByTimeAsync(100)
     expect(socket.terminate).toHaveBeenCalledTimes(1)
+    heartbeat.stop()
+  })
+
+  it('writes a trace span for each reap with the socket uptime and last round trip', async () => {
+    vi.useFakeTimers()
+    const records: unknown[] = []
+    setActiveSink({ push: (record) => records.push(record), flush() {}, close() {} })
+    let now = 1_000
+    // SAFETY: the heartbeat only calls ping() and terminate() on its sockets.
+    const socket = { ping: vi.fn(), terminate: vi.fn() } as unknown as WebSocket
+    const heartbeat = new RemoteRuntimeServerHeartbeat(100, () => now, 128, 1)
+    heartbeat.track(socket)
+    heartbeat.noteAlive(socket)
+    heartbeat.start(() => [socket])
+    now += 100
+    await vi.advanceTimersByTimeAsync(100)
+    now += 40
+    heartbeat.notePong(socket)
+
+    now += 60
+    await vi.advanceTimersByTimeAsync(100)
+    now += 100
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(socket.terminate).toHaveBeenCalledTimes(1)
+    expect(records).toEqual([
+      expect.objectContaining({
+        name: 'remote-runtime.server-socket-reaped',
+        attributes: expect.objectContaining({
+          cause: 'heartbeat_missed_probes',
+          lastRttMs: 40,
+          socketUptimeMs: 300,
+          trackedSockets: 1
+        })
+      })
+    ])
     heartbeat.stop()
   })
 })

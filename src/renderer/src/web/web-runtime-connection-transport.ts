@@ -1,5 +1,4 @@
 import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { withReconnectJitter } from '../../../shared/reconnect-jitter'
 import { WebRuntimeConnectionHeartbeat } from './web-runtime-connection-heartbeat'
 import {
@@ -39,7 +38,7 @@ export class WebRuntimeConnectionTransport {
   private intentionallyClosed = false
   private readonly timers = new WebRuntimeConnectionTimers()
   private readonly subscriptionRegistry: WebRuntimeSubscriptionRegistry
-  private readonly requestRegistry: WebRuntimeRequestRegistry
+  readonly requestRegistry: WebRuntimeRequestRegistry
   private readonly connectionWaiters: WebRuntimeConnectionWaiters
 
   constructor(
@@ -85,13 +84,8 @@ export class WebRuntimeConnectionTransport {
     this.openConnection()
   }
 
-  async call(
-    method: string,
-    params?: unknown,
-    options?: { timeoutMs?: number; signal?: AbortSignal }
-  ): Promise<RuntimeRpcResponse<unknown>> {
-    return this.requestRegistry.call(method, params, options)
-  }
+  readonly call: WebRuntimeRequestRegistry['call'] = (method, params, options) =>
+    this.requestRegistry.call(method, params, options)
 
   close(options: { notifySubscriptions?: boolean } = {}): void {
     this.intentionallyClosed = true
@@ -182,6 +176,7 @@ export class WebRuntimeConnectionTransport {
   setState(next: WebRuntimeConnectionState): void {
     this.state = next
     if (next === 'connected') {
+      this.requestRegistry.connectionOpened()
       this.subscriptionRegistry.replayInterrupted()
       this.heartbeat.start()
       this.connectionWaiters.resolveAll()
@@ -238,6 +233,7 @@ export class WebRuntimeConnectionTransport {
       this.timers.arm('handshake', HANDSHAKE_TIMEOUT_MS, () => {
         if (this.ws === socket && (this.state === 'handshaking' || this.state === 'migrating')) {
           socket.close()
+          this.handleSocketClosed(socket)
         }
       })
     }
@@ -250,7 +246,7 @@ export class WebRuntimeConnectionTransport {
     }
     socket.onclose = () => this.handleSocketClosed(socket)
     socket.onerror = () => {
-      if (this.state === 'connecting') {
+      if (this.ws === socket && this.state === 'connecting') {
         this.connectionWaiters.rejectUnavailable()
       }
     }

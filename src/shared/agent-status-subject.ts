@@ -1,4 +1,7 @@
-import { isAgentSessionId, type AgentSessionExecutionLocation } from './agent-session-record'
+import {
+  isAgentSessionId,
+  type AgentSessionExecutionLocation
+} from './agent-session/lifecycle/agent-session-record'
 import { isAgentStatusRunId, type AgentStatusRunId } from './agent-status-run'
 import {
   parseExecutionHostId,
@@ -236,9 +239,6 @@ export function deserializeAgentStatusSubject(value: string): AgentStatusSubject
   }
   return null
 }
-
-export const agentStatusSubjectKey = serializeAgentStatusSubject
-export const parseAgentStatusSubjectKey = deserializeAgentStatusSubject
 
 export function agentStatusSubjectsEqual(
   left: AgentStatusSubject,

@@ -5,27 +5,15 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { Store } from '../persistence'
+import { resolveFloatingWorkspacePath } from '../persistence/restoring-sessions/floating-workspace-normalization'
+
+type FloatingTerminalSettings = Pick<GlobalSettings, 'floatingTerminalTrustedCwds'>
 
 const FLOATING_WORKSPACE_DIRNAME = 'floating-workspace'
 
-function expandHomePath(input: string, home: string): string {
-  if (input === '~') {
-    return home
-  }
-  if (input.startsWith(`~${path.sep}`)) {
-    return path.join(home, input.slice(2))
-  }
-  if (process.platform === 'win32' && input.startsWith('~/')) {
-    return path.join(home, input.slice(2))
-  }
-  return input
-}
-
 function resolveFloatingWorkspaceInput(input: string): string {
-  // Why the environment port: the headless runtime resolves this too, and it has no Electron app.
-  const home = getAppEnvironment().getPath('home')
-  const expanded = expandHomePath(input, home)
-  return path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(home, expanded)
+  // Headless runtime uses this path resolver without an Electron app.
+  return resolveFloatingWorkspacePath(input, getAppEnvironment().getPath('home'))
 }
 
 async function canonicalizeAccessibleDirectory(dirPath: string): Promise<string | null> {
@@ -41,7 +29,7 @@ async function canonicalizeAccessibleDirectory(dirPath: string): Promise<string 
   }
 }
 
-function getTrustedFloatingWorkspaceDirectories(settings: GlobalSettings): Set<string> {
+function getTrustedFloatingWorkspaceDirectories(settings: FloatingTerminalSettings): Set<string> {
   return new Set(
     (settings.floatingTerminalTrustedCwds ?? [])
       .map((trustedPath) => trustedPath.trim())
@@ -63,14 +51,14 @@ async function getPreservedTrustedFloatingWorkspaceDirectories(
 
 function isTrustedFloatingWorkspaceDirectory(
   canonicalDirPath: string,
-  settings: GlobalSettings
+  settings: FloatingTerminalSettings
 ): boolean {
   return getTrustedFloatingWorkspaceDirectories(settings).has(path.resolve(canonicalDirPath))
 }
 
-/** The app-owned folder floating markdown documents are created in; a desktop-only root. */
+/** Default folder for floating Markdown documents. */
 export function getDefaultFloatingWorkspacePath(): string {
-  // Why the environment port: the headless runtime resolves this too, and it has no Electron app.
+  // Headless runtime uses this resolver too.
   return path.join(getAppEnvironment().getPath('userData'), FLOATING_WORKSPACE_DIRNAME)
 }
 
@@ -81,7 +69,7 @@ export async function ensureDefaultFloatingWorkspacePath(): Promise<string> {
 }
 
 export async function resolveFloatingTerminalCwd(
-  store: Store,
+  store: { getSettings(): FloatingTerminalSettings },
   args?: FloatingTerminalCwdRequest
 ): Promise<string> {
   const configuredPath = typeof args?.path === 'string' ? args.path.trim() : ''
@@ -97,7 +85,7 @@ export async function resolveFloatingTerminalCwd(
     return ensureDefaultFloatingWorkspacePath()
   }
 
-  // Why: only picker-approved directories may become the cwd, so arbitrary settings text can't.
+  // Only picker-approved directories may become terminal cwd.
   if (isTrustedFloatingWorkspaceDirectory(canonicalCwd, store.getSettings())) {
     return canonicalCwd
   }

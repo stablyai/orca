@@ -6,7 +6,8 @@ import {
   BRACKETED_PASTE_START,
   wrapTerminalBracketedPasteText
 } from './terminal-bracketed-paste'
-import { executeTerminalPastePlan, planTerminalPaste } from './terminal-paste-coordinator'
+import { executeTerminalPastePlan } from './terminal-paste-executor'
+import { planTerminalPaste } from './terminal-paste-coordinator'
 import { runTerminalPtyInputTransaction } from './terminal-pty-input-transaction'
 
 function chunkedWindowsPaste() {

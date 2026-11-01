@@ -1,9 +1,9 @@
 import { describeCreatedWorktree, listWorktreesSharedStrict } from '../git/worktree'
-// Not via the worktree barrel: suites mock that module wholesale and would blank the constant.
+// Import directly because suites mock the worktree barrel wholesale.
 import { WORKTREE_LIST_TIMEOUT_MS } from '../git/worktree-operation-options'
 import type { GitWorktreeExecOptions } from '../git/worktree'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
-import { areWorktreePathsEqual } from './worktree-path-comparison'
+import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 
 export function findCreatedWorktree<T extends { path: string; branch?: string }>(
   worktrees: readonly T[],
@@ -29,7 +29,7 @@ export type CreatedWorktreeResolution = {
   listingComplete: boolean
 }
 
-/** `created but not found in listing` is load-bearing for `classifyWorkspaceCreateError`. */
+/** Preserve this wording for classifyWorkspaceCreateError. */
 export function createdWorktreeNotFoundError(worktreePath: string, branchName: string): Error {
   return new Error(
     `Worktree created but not found in listing: ${worktreePath} (branch ${branchName})`

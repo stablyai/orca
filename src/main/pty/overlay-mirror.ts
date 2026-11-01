@@ -1,11 +1,4 @@
-// Why: Pi (PI_CODING_AGENT_DIR) and OpenCode (OPENCODE_CONFIG_DIR) both inject
-// Orca-owned files into overlay directories that mirror a user-owned
-// source dir via symlinks/junctions. The safety guarantees here -- never
-// descend into a symlink/junction during teardown, refuse to operate outside
-// the overlay root, lstat-not-stat to avoid following links -- are the result
-// of debugging issue #1083 (Windows directory junctions causing fs.rmSync to
-// delete the user's real Pi state). Shared in one module so a new overlay
-// consumer cannot accidentally diverge from the audited cleanup behavior.
+// Pi/OpenCode overlays link into user-owned state; teardown must never follow symlinks/junctions or leave the owned root (#1083).
 
 import {
   cpSync,
@@ -19,12 +12,7 @@ import {
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 export function mirrorEntry(sourcePath: string, targetPath: string): void {
-  // Why: lstatSync (not statSync) so that if the user's source dir contains
-  // its OWN symlinks (e.g. skills symlinked from ~/.agents/skills), we mirror
-  // the link itself rather than resolving it to a type and then creating a
-  // junction at an unrelated path. isSymbolicLink() MUST be checked before
-  // isDirectory() on Windows because directory junctions/reparse points
-  // report both true.
+  // Mirror user symlinks themselves; Windows junctions can also report isDirectory(), so test isSymbolicLink() first.
   const sourceStats = lstatSync(sourcePath)
   const isSymlink = sourceStats.isSymbolicLink()
   const isDirectoryLike = !isSymlink && sourceStats.isDirectory()
@@ -47,32 +35,7 @@ export function mirrorEntry(sourcePath: string, targetPath: string): void {
   symlinkSync(sourcePath, targetPath, isDirectoryLike ? 'dir' : 'file')
 }
 
-export function mirrorWritableFileEntry(sourcePath: string, targetPath: string): void {
-  if (process.platform === 'win32') {
-    try {
-      linkSync(sourcePath, targetPath)
-      return
-    } catch {
-      // Cross-device homes cannot hardlink; try a file symlink so writable
-      // SQLite state can still flow to source instead of a disposable copy.
-    }
-
-    try {
-      symlinkSync(sourcePath, targetPath, 'file')
-      return
-    } catch {
-      throw new Error(`Unable to create source-backed writable file mirror: ${targetPath}`)
-    }
-  }
-
-  symlinkSync(sourcePath, targetPath, 'file')
-}
-
-// Exported for tests. A "descend candidate" is an entry whose children we
-// should recurse into when tearing down the overlay. Anything that is a
-// symlink (including a Windows directory junction) must NOT be a candidate
-// even if it also reports isDirectory() -- following it would walk into the
-// link target and delete user data, which is the bug in #1083.
+// A junction may report both flags; descending into it would delete the linked user directory (#1083).
 export function isSafeDescendCandidate(stats: {
   isSymbolicLink(): boolean
   isDirectory(): boolean
@@ -83,12 +46,7 @@ export function isSafeDescendCandidate(stats: {
   return stats.isDirectory()
 }
 
-// Why: the overlay tree contains symlinks/junctions that point back into the
-// user's real state dir. fs.rmSync with { recursive: true } has repeatedly
-// regressed on Windows when walking NTFS junctions -- it can follow them and
-// delete the *target*, destroying the user's data. Never descend into a
-// symlink/junction here: for any non-real-directory entry we unlink the link
-// itself; only entries that are truly directories on disk are recursed into.
+// fs.rmSync recursion has followed Windows junctions into user state; unlink links and recurse only into real directories.
 export function safeRemoveTree(path: string): void {
   let stat
   try {
@@ -97,16 +55,11 @@ export function safeRemoveTree(path: string): void {
     return
   }
 
-  // On Windows, lstat on a directory junction can report BOTH
-  // isSymbolicLink() === true AND isDirectory() === true, so we MUST check
-  // isSymbolicLink first -- otherwise a junction enters the recursive branch
-  // and readdirSync enumerates the link's target, the exact bug in #1083.
   if (!isSafeDescendCandidate(stat)) {
     try {
       unlinkSync(path)
     } catch {
-      // Best-effort: antivirus/indexers can hold handles briefly on Windows.
-      // A leftover link is harmless; the next spawn rebuilds the overlay.
+      // Windows indexers/antivirus may hold links; leftovers are safe and rebuilt on next spawn.
     }
     return
   }
@@ -126,19 +79,17 @@ export function safeRemoveTree(path: string): void {
     }
     try {
       unlinkSync(child)
-    } catch {
-      // Best-effort, see above.
-    }
+    } catch {}
   }
 
   try {
     rmdirSync(path)
   } catch {
-    // Directory may be non-empty if an unlink above failed; harmless.
+    // Failed child unlinks may leave a harmless nonempty directory.
   }
 }
 
-// Why: cleanup must not traverse a symlink parent inside the owned overlay.
+// Reject symlink parents inside the owned overlay.
 function hasSafeOverlayAncestors(root: string, relativeTarget: string): boolean {
   let current = root
   try {
@@ -165,11 +116,7 @@ function hasSafeOverlayAncestors(root: string, relativeTarget: string): boolean 
   return true
 }
 
-// Why: last-line guard against an overlay-root constant ever being
-// mis-resolved. Any caller that points safeRemoveTree at a path outside its
-// designated overlay root is refused so a misconfiguration cannot turn into
-// an `rm -rf` of arbitrary user data. Logs (rather than throws) so a buggy
-// caller stays visible without crashing the PTY spawn.
+// Refuse paths outside the owned root; log misconfiguration without crashing PTY spawn.
 export function safeRemoveOverlay(overlayDir: string, overlayRoot: string): void {
   const resolvedRoot = resolve(overlayRoot)
   const resolvedTarget = resolve(overlayDir)

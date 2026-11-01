@@ -45,7 +45,7 @@ describe('execution health', () => {
     expect(resolveSshExecutionHealth('unhydrated', 'connected', 'disconnected')).toBe('unknown')
   })
 
-  it('maps every SSH status onto a distinct execution state', () => {
+  it('maps reported SSH statuses and absent status to execution health', () => {
     expect(resolveSshExecutionHealth('authoritative', 'connected', undefined)).toBe('connected')
     expect(resolveSshExecutionHealth('authoritative', 'reconnecting', undefined)).toBe('connecting')
     expect(resolveSshExecutionHealth('authoritative', 'deploying-relay', undefined)).toBe(

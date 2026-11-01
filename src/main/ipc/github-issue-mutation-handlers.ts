@@ -77,7 +77,7 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
         getGitHubRepoConnectionId(repo),
         args.prRepo ?? null,
         getGitHubLocalGitOptionArgs(store, repo)[0],
-        // Why: the issue source selector only scopes issues; PR comments keep their resolution.
+        // Issue-source preference must not change PR comment resolution.
         args.type === 'pr' ? undefined : repo.issueSourcePreference
       )
       if (result.ok) {

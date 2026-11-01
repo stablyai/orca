@@ -1,20 +1,10 @@
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 type WorktreesByRepo = Record<string, Worktree[]>
 
-/**
- * Non-archived rows by id — the map `computeVisibleWorktrees` hands to the
- * lineage projection.
- *
- * Why cached: `getCyclicProjectedWorktreeLineageIds` keys its memo on this map's
- * identity, so a per-call Map is a guaranteed miss that re-walks every workspace
- * and re-runs cycle detection on each PTY, tab and agent-status write.
- *
- * Why not the store's `getIndexedWorktreeMap`: this index excludes archived rows
- * (an archived parent resolving as a valid ancestor would inject a phantom row),
- * and it keeps the last row for a two-host id collision rather than the first.
- */
+/** Cache non-archived rows by host identity to preserve twins and avoid repeated lineage/cycle scans. */
 const lineageAncestorIndexCache = new WeakMap<WorktreesByRepo, Map<string, Worktree>>()
 
 export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<string, Worktree> {
@@ -25,17 +15,14 @@ export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<s
   const index = new Map<string, Worktree>()
   for (const worktree of getIndexedAllWorktrees(worktreesByRepo)) {
     if (!worktree.isArchived) {
-      index.set(worktree.id, worktree)
+      index.set(getWorktreeHostIdentity(worktree), worktree)
     }
   }
   lineageAncestorIndexCache.set(worktreesByRepo, index)
   return index
 }
 
-/**
- * Rank of each id in the frozen sidebar sort order. Keyed on the array the sort
- * hook already holds identity-stable across unrelated store writes.
- */
+/** Reuse ranks while the frozen sidebar sort array retains its identity. */
 const sortedWorktreeRankIndexCache = new WeakMap<readonly string[], Map<string, number>>()
 
 export function getSortedWorktreeRankIndex(sortedIds: readonly string[]): Map<string, number> {

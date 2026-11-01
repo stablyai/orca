@@ -83,7 +83,7 @@ export function createTerminalTabPresentationActions(
       })
     },
     setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt, options) => {
-      // Why: setAgentStatus is high-frequency; skip derive/set unless the feature is on and this tab still needs a (re)generated title.
+      // setAgentStatus is frequent; derive only when enabled and this tab needs a generated title.
       const state = get()
       const tabId = getTabIdFromPaneKey(paneKey)
       if (!tabId || prompt.length === 0 || state.settings?.tabAutoGenerateTitle !== true) {
@@ -185,9 +185,9 @@ export function createTerminalTabPresentationActions(
         } else {
           delete next[tabId]
         }
-        // Why: clearing a classified title changes the smart-sort title-heuristic verdict, so it needs a re-sort. See setRuntimePaneTitle.
+        // Clearing a classified title changes smart-sort’s verdict, like setRuntimePaneTitle.
         const hadClassification = classifyTitleActivity(prevTitle ?? '') !== null
-        // Why: same active-worktree gate as setRuntimePaneTitle — click-driven teardown clears must not re-rank the sidebar; skip when owner is missing (orphaned).
+        // Click-driven teardown must not re-rank active worktrees; skip orphaned owners too.
         const ownerWorktreeId = hadClassification
           ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
           : null

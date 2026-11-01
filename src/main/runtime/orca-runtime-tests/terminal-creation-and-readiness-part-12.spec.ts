@@ -50,7 +50,6 @@ function runtimeWithDesktopWindow(spawnResult: Record<string, unknown> = { id: '
     renameTerminal: vi.fn(),
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn()
   })
@@ -132,8 +131,7 @@ describe('OrcaRuntimeService', () => {
     expect(retained).not.toContain('AAAA')
   })
 
-  // agent.launch's reserved pane lands here: the host reveal stays the only tab creator, and it
-  // must create the tab under the caller's id so the caller's placement lookup can find it.
+  // Reveal must use agent.launch's reserved tab id so placement lookup can find it.
   it('reveals an agent terminal under the pane the caller reserved', async () => {
     const { runtime, revealTerminalSession } = runtimeWithDesktopWindow()
 
@@ -231,8 +229,7 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           tabId: RESERVED_TAB_ID,
-          leafId: RESERVED_LEAF_ID,
-          env: expect.objectContaining({ ORCA_PANE_KEY: surface.paneKey })
+          leafId: RESERVED_LEAF_ID
         })
       )
       expect(spawn.mock.calls[0]?.[0]?.command).toContain('fix the build')
@@ -330,7 +327,6 @@ describe('OrcaRuntimeService', () => {
       leafId: 'not-a-uuid'
     })
 
-    // Still exactly one tab — the caller's reservation lost, and the reported pane says so.
     expect(revealTerminalSession).toHaveBeenCalledTimes(1)
     expect(created.tabId).not.toBe(RESERVED_TAB_ID)
     expect(created.paneKey?.startsWith(`${created.tabId}:`)).toBe(true)
@@ -350,9 +346,8 @@ describe('OrcaRuntimeService', () => {
       })
     ).rejects.toThrow('agent_launch_pane_already_live')
 
-    // Nothing registered, so no handle was issued for the live PTY.
     expect((await runtime.listTerminals()).terminals).toEqual([])
-    // No reveal means no renderer launch-config re-registration over the running agent's.
+    // Refusing reveal also prevents overwriting the running agent's launch config.
     expect(revealTerminalSession).not.toHaveBeenCalled()
     expect(kill).not.toHaveBeenCalled()
     expect(releaseStablePaneCreate).toHaveBeenCalled()
@@ -361,6 +356,10 @@ describe('OrcaRuntimeService', () => {
   it('still attaches to a live pane when the caller did not require a fresh one', async () => {
     // `terminal.create` keeps its reattach; only agent.launch opts into the refusal.
     const { runtime, revealTerminalSession } = runtimeWithDesktopWindow(LIVE_PANE_SPAWN)
+    runtime.registerPty('pty-live', TEST_WORKTREE_ID, null, {
+      ...LIVE_PANE_SPAWN.stablePaneOwner,
+      terminalHandle: 'term_live'
+    })
 
     const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       startupAgent: 'claude',
@@ -373,7 +372,6 @@ describe('OrcaRuntimeService', () => {
     expect(revealTerminalSession).toHaveBeenCalledTimes(1)
   })
 
-  // agent.launch now hands a terminal launch its session picks; this is where they must reach argv.
   it('starts an agent terminal with the model the caller picked', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-picked' })
     const runtime = new OrcaRuntimeService(store)
@@ -407,8 +405,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn.mock.calls[0]?.[0]?.command).not.toMatch(/--model/)
   })
 
-  // Every agent the runtime builds is attributed, so a launch whose caller named no surface still
-  // counts; only the caller's surface is taken, the rest is derived from the agent it resolved.
+  // Attribute every resolved agent launch; only an explicitly supplied surface overrides derived attribution.
   it.each([
     ['orchestration', 'orchestration'],
     [undefined, 'unknown'],

@@ -1,19 +1,4 @@
-/**
- * Host-keyed provider dispatch: one route per execution host kind, `local` included.
- *
- * The input is an `ExecutionHostId`, never null, and an id that names no host throws instead of
- * degrading to `local`, so work whose host is unknown never runs on this client (#11163). The
- * resolution layer (`getRepoExecutionHostId`, `getWorktreeExecutionHostId`,
- * `resolveWorktreeExecutionHost`) reports `unresolved` as its own verdict.
- *
- * Each kind is its own variant so callers switch exhaustively:
- *   - `local` git and filesystem routes carry a per-call factory, because they need per-worktree
- *     options (WSL distro, shared links, admission tier) a shared provider would drop.
- *   - `runtime:<env>` is forwarded to that server. Its repo's `connectionId` names the server's SSH
- *     target, so it must never reach this client's SSH table.
- *   - `ssh` names an SSH target this process does not serve; work on it throws
- *     `SshHostNotServedError`, never runs locally.
- */
+/** Unknown/unserved hosts must fail closed; runtime SSH targets belong to their server, never this client. */
 
 import {
   parseExecutionHostId,
@@ -25,7 +10,6 @@ import { createLocalFilesystemProvider } from './local-filesystem-provider'
 import { createLocalGitProvider } from './local-git-provider'
 import { SshHostNotServedError } from './ssh-host-not-served-error'
 
-/** An id that names no execution host. Never degrade to local — that is the whole defect class. */
 export class UnresolvableExecutionHostError extends Error {
   constructor(readonly hostId: string | null | undefined) {
     super(
@@ -36,7 +20,6 @@ export class UnresolvableExecutionHostError extends Error {
   }
 }
 
-/** Asking this process for a host it does not execute is a routing mistake, not a fallback. */
 export class ExecutionHostNotDispatchableError extends Error {
   constructor(readonly hostId: ExecutionHostId) {
     super(`Execution host ${hostId} is not dispatched by this process.`)
@@ -55,8 +38,7 @@ type SshRoute = { kind: 'ssh'; hostId: `ssh:${string}`; connectionId: string }
 export type ExecutionHostGitRoute = LocalGitRoute | RuntimeRoute | SshRoute
 export type ExecutionHostFilesystemRoute = LocalFilesystemRoute | RuntimeRoute | SshRoute
 
-// Takes an unvalidated string rather than `ExecutionHostId`: validating is the point, and host
-// ids also arrive from persistence and IPC where the compiler cannot vouch for them.
+// Persistence/IPC supply unvalidated strings; the branded type cannot establish routing authority.
 function parseRoutableHost(hostId: string | null | undefined): ParsedExecutionHost {
   const parsed = parseExecutionHostId(hostId)
   if (!parsed) {

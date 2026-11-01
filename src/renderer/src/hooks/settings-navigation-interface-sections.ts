@@ -1,7 +1,9 @@
 import { getAppearancePaneSearchEntries } from '@/components/settings/appearance-search'
 import { getChatAppearanceSearchEntries } from '@/components/settings/chat-appearance-search'
+import { getChatBehaviorSearchEntries } from '@/components/settings/chat-behavior-search'
 import { getChatNamingSearchEntry } from '@/components/settings/chat-naming-search'
 import { getChatInlineVisualsSearchEntry } from '@/components/settings/chat-inline-visuals-search'
+import { getChatPermissionSearchEntry } from '@/components/settings/chat-permission-search'
 import { getInputPaneSearchEntries } from '@/components/settings/input-search'
 import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications-search'
 import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-search'
@@ -15,7 +17,8 @@ export function buildInterfaceSettingsSections({
   isMac,
   isWindows,
   isWebClient,
-  nativeChatEnabled,
+  hostQueuesMessages,
+  typedChatPermissions,
   managedBrowserCreationEnabled,
   mobileEmulatorCreationEnabled
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
@@ -36,26 +39,23 @@ export function buildInterfaceSettingsSections({
       }),
       group: 'interface'
     },
-    ...(nativeChatEnabled
-      ? [
-          {
-            id: 'chat',
-            title: translate('settings.appearance.chat.title', 'Chat'),
-            description: translate(
-              'settings.chat.description',
-              'Choose how chats look and behave.'
-            ),
-            icon: MessageSquare,
-            searchEntries: [
-              ...getChatAppearanceSearchEntries(),
-              ...(showDesktopOnlySettings
-                ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]
-                : [])
-            ],
-            group: 'interface'
-          }
-        ]
-      : []),
+    {
+      id: 'chat',
+      title: translate('settings.appearance.chat.title', 'Chat'),
+      description: translate('settings.chat.description', 'Choose how chats look and behave.'),
+      icon: MessageSquare,
+      searchEntries: [
+        getChatPermissionSearchEntry(typedChatPermissions),
+        ...getChatAppearanceSearchEntries(),
+        ...getChatBehaviorSearchEntries().filter(
+          (entry) => hostQueuesMessages || entry.targetSectionId !== 'chat-queue-follow-ups'
+        ),
+        ...(showDesktopOnlySettings
+          ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]
+          : [])
+      ],
+      group: 'interface'
+    },
     {
       id: 'input',
       title: translate('auto.hooks.useSettingsNavigationMetadata.0c6ee88a5f', 'Input & Editing'),

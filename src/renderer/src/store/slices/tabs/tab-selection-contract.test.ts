@@ -186,8 +186,7 @@ describe('tab selection and hydration ownership', () => {
     ['terminal', 'terminal', 'remembered-file'],
     ['editor', 'editor', 'remembered-file'],
     ['browser', 'browser', 'remembered-file'],
-    // Why: nothing renders a remembered agent-session/simulator once its tab is gone, so the browser
-    // surface takes over and must not leave the remembered file selected underneath it.
+    // Closed chats/simulators cannot render from remembered type; fall back to browser and clear the remembered file.
     ['agent-session', 'browser', null],
     ['simulator', 'browser', null]
   ] as const)(

@@ -2,14 +2,7 @@ import { screen } from 'electron'
 
 export type WindowRect = { x: number; y: number; width: number; height: number }
 
-/**
- * True when `rect` overlaps some currently-attached display's workArea by at
- * least the given visible width/height. Used to reject persisted bounds that
- * would restore a window off-screen — e.g. saved while an external monitor was
- * connected. workArea excludes the menu bar / dock, so a rect hidden entirely
- * under the dock is also correctly rejected. Requiring a *meaningful* overlap
- * (not just >0) avoids a one-pixel sliver leaving the titlebar unreachable.
- */
+/** Require meaningful work-area overlap on a current display so removed monitors, dock coverage or one-pixel slivers cannot strand the titlebar. */
 export function rectHasVisibleAreaOnAnyDisplay(
   rect: WindowRect,
   minVisibleWidth: number,

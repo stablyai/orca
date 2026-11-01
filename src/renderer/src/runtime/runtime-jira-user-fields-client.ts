@@ -1,12 +1,13 @@
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type {
   JiraCreateIssueArgs,
   JiraCreateIssueResult,
   JiraUser
-} from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-types'
 import {
   JIRA_USER_FIELDS_RUNTIME_CAPABILITY,
   JIRA_USER_FIELDS_UPDATE_REQUIRED_MESSAGE
-} from '../../../shared/protocol-version'
+} from '../../../shared/jira/jira-detail-capabilities'
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
@@ -39,10 +40,18 @@ export async function jiraListAssignableUsers(
   query?: string,
   siteId?: string | null
 ): Promise<JiraUser[]> {
+  return jiraListAssignableUsersForTarget(getJiraRuntimeTarget(settings), key, query, siteId)
+}
+
+export async function jiraListAssignableUsersForTarget(
+  target: RuntimeClientTarget,
+  key: string,
+  query?: string,
+  siteId?: string | null
+): Promise<JiraUser[]> {
   if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
     return []
   }
-  const target = getJiraRuntimeTarget(settings)
   const args = { key, query, siteId: siteId ?? undefined }
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraUser[]>(target, 'jira.listAssignableUsers', args, { timeoutMs: 30_000 })

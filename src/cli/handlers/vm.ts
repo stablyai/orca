@@ -12,8 +12,7 @@ import {
   getEphemeralVmRecipeResultWarnings,
   redactEphemeralVmRecipeDiagnosticText
 } from '../../shared/ephemeral-vm-recipe-diagnostics'
-// Why: import directly from the doctor module (not the barrel) — it uses Node
-// fs/path and must stay out of the browser bundle that imports the barrel.
+// This module uses Node fs/path; exporting it through the shared barrel would break browser bundles.
 import { doctorEphemeralVmRecipe } from '../../shared/ephemeral-vm-recipe-doctor'
 import {
   runEphemeralVmRecipeCleanup,
@@ -85,9 +84,6 @@ function readTextFile(path: string): string {
   return readFileSync(path, 'utf8')
 }
 
-// Why: give the agent the full create/destroy output so it can self-diagnose a
-// failed provision instead of relaying logs through the user. Each stream is
-// redacted and capped (head+tail) so a huge log stays readable but complete enough.
 type ProvisionStageTranscript = {
   exitCode: number | null
   signal: NodeJS.Signals | null
@@ -105,16 +101,15 @@ type DoctorResult = EphemeralVmRecipeDoctorResult & {
   provisionTranscript?: ProvisionTranscript
 }
 
-const MAX_TRANSCRIPT_STREAM_BYTES = 16_000
+const MAX_TRANSCRIPT_STREAM_CHARS = 16_000
 
-// Why: keep both ends of a long log — the script's setup context (head) and the
-// failure itself (tail) — rather than only the last 500 chars.
+// Keep setup context and final diagnostics while bounding and redacting each stream.
 function capTranscriptStream(value: string): string {
   const redacted = redactEphemeralVmRecipeDiagnosticText(value)
-  if (redacted.length <= MAX_TRANSCRIPT_STREAM_BYTES) {
+  if (redacted.length <= MAX_TRANSCRIPT_STREAM_CHARS) {
     return redacted
   }
-  const half = Math.floor(MAX_TRANSCRIPT_STREAM_BYTES / 2)
+  const half = Math.floor(MAX_TRANSCRIPT_STREAM_CHARS / 2)
   const omitted = redacted.length - half * 2
   return `${redacted.slice(0, half)}\n…[${omitted} chars omitted]…\n${redacted.slice(-half)}`
 }
@@ -158,8 +153,6 @@ async function doctorRecipeWithProvision(
           remediation: buildProvisionFailureRemediation(start.stderr, start.stdout)
         }
       ],
-      // Why: the create script failed — hand the agent the complete output (not a
-      // tail) so it can see what the script printed and why parsing/exit failed.
       provisionTranscript: {
         provision: {
           exitCode: start.exitCode,
@@ -222,8 +215,7 @@ async function doctorRecipeWithProvision(
     })
   }
 
-  // Why: include both stages' full output even on success — the agent can confirm
-  // pairing/teardown looked right, and diagnose a destroy failure without re-running.
+  // Retain both stages for diagnosis even when creation succeeds and teardown fails.
   const provisionTranscript: ProvisionTranscript = {
     provision: {
       exitCode: 0,

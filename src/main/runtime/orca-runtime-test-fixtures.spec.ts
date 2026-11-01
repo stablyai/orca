@@ -1,5 +1,8 @@
 import { withDurableRuntimeStore, withRuntimePaneAdmission } from './runtime-durable-store-fixture'
-import { expect, vi } from 'vitest'
+import { afterEach, beforeEach, expect, vi } from 'vitest'
+import { forgetInstalledPaneSession } from './bind-first-pane.test-fixture'
+import { announceSessionWrites } from './profile-session-store.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { createHash } from 'node:crypto'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -9,7 +12,11 @@ import {
 } from '../../shared/agent-prompt-injection'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
+import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
+import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
 import { toComparableRelaySshPtyId } from '../../shared/ssh-pty-id'
+import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
 import {
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock
@@ -27,6 +34,7 @@ import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration
 import type { OrchestrationDb } from './orchestration/db'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import type { Store } from '../persistence'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>
 type HeadlessTerminal = InstanceType<typeof HeadlessEmulator>
@@ -119,15 +127,13 @@ async function referenceStatusFrameLines(
 }
 
 const TEST_WINDOW_ID = 1
-// The inventory refresh forwards its own budget so a relay cannot outlive it (STA-517).
-// These assertions are about which provider scope was asked, so the deadline stays loose.
+// STA-517: inventory forwards its deadline; scope assertions accept any budget to avoid timing coupling.
 const LIST_PROVIDER_DEADLINE = expect.objectContaining({ deadlineMs: expect.any(Number) })
 const TEST_REPO_ID = 'repo-1'
 const TEST_REPO_PATH = '/tmp/repo'
 const TEST_WORKTREE_PATH = '/tmp/worktree-a'
 const TEST_WORKTREE_ID = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}`
-/** The render gate's hard cap bounds the wait *after* the paste lands, so it carries the
- *  payload's ingest bound on top of the flat 8 s settlement budget. */
+/** Render settlement starts after paste, adding payload ingest time to the 8s cap. */
 function renderGateCapMs(prompt: string): number {
   return (
     8_000 +
@@ -199,7 +205,7 @@ function antigravityPromptBeforeModelReadyScreen(model = 'Gemini 3.5 Flash (High
   ].join('\n')
 }
 
-// Why: verbatim cursor-agent 2026.07 idle screen; the matcher keys on the "→" glyph, not the placeholder (which changes after the first turn).
+// Captured Cursor 2026.07 idle screen: readiness keys on →, never its changing placeholder.
 function cursorReadyScreen(): string {
   return [
     'Cursor Agent',
@@ -374,14 +380,14 @@ function createStaleRuntimeWorktreeStore(
   const metaById: Record<string, WorktreeMeta> = {
     [worktreeId]: makeWorktreeMeta(metaOverrides)
   }
-  const removeWorktreeMeta = vi.fn((id: string) => {
+  const removeWorktreeMeta = vi.fn(({ id }: HostWorktreeTarget) => {
     delete metaById[id]
   })
   const runtimeStore = {
     ...store,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
       metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
       return metaById[id]
     },
@@ -405,7 +411,7 @@ const store = {
   getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
   mergeRetiredWorktreeNames: () => false,
   addRepo: () => {},
-  updateRepo: (id: string, updates: Record<string, unknown>) =>
+  updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) =>
     ({
       ...store.getRepo(id),
       ...updates
@@ -427,7 +433,7 @@ const store = {
     }
   }),
   getWorktreeMeta: (worktreeId: string) => store.getAllWorktreeMeta()[worktreeId],
-  setWorktreeMeta: (_worktreeId: string, meta: Record<string, unknown>) =>
+  setWorktreeMeta: (_target: HostWorktreeTarget, meta: Record<string, unknown>) =>
     ({
       ...store.getAllWorktreeMeta()[TEST_WORKTREE_ID],
       ...meta
@@ -446,8 +452,7 @@ const store = {
   getProjects: () => []
 }
 
-// Callers pass the pane's APP-form pty id; the lease stores RELAY form, exactly as the relay-era
-// writer did through toStoredPtyId. Non-SSH ids pass through untouched.
+// Callers use app-form SSH ids; leases store relay-form ids via toStoredPtyId. Other ids pass unchanged.
 function createRuntimeWithSshLease(
   ptyId: string,
   tabId: string,
@@ -563,11 +568,11 @@ function makeHeadlessTerminalLayout(
 
 function makeRuntimeStoreWithWorkspaceSession(
   initialSession: WorkspaceSessionState,
-  // Why: sessions are partitioned by execution host, so the stub must answer for
-  // one partition only — a loose stub lets a hardcoded host id pass unnoticed.
+  // Session fixtures must answer only their host partition so hardcoded host ids fail.
   ownerHostId = 'local'
 ): {
   runtimeStore: typeof store & {
+    admitTerminalPane: ReturnType<typeof withRuntimePaneAdmission>['admitTerminalPane']
     getWorkspaceSession: (hostId?: string) => WorkspaceSessionState
     setWorkspaceSession: ReturnType<typeof vi.fn<Store['setWorkspaceSession']>>
     flushOrThrow: ReturnType<typeof vi.fn<() => void>>
@@ -586,8 +591,35 @@ function makeRuntimeStoreWithWorkspaceSession(
       getWorkspaceSession: (hostId?: string) =>
         hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
       setWorkspaceSession: vi.fn(setSession),
-      // Headless close is a durable transaction; keep the in-memory fixture's
-      // persistence contract equivalent to the production store.
+      getWorkspaceSessionHostIds: () => [ownerHostId],
+      applyLayoutCommand: vi.fn(
+        async (
+          command: LayoutCommand,
+          hostIds?: readonly string[],
+          run: NonNullable<Parameters<Store['applyLayoutCommand']>[2]> = {}
+        ) => {
+          const change = applyCommandToSession(
+            resolveHostId(hostIds?.[0] ?? ownerHostId),
+            session,
+            command,
+            undefined,
+            run.live
+          )
+          if (
+            change.value.ok &&
+            change.effects?.stopPtyIds.length &&
+            run.stopBeforeWrite?.(change.effects.stopPtyIds) === false
+          ) {
+            return { ok: false, code: 'pane_already_bound' } as const
+          }
+          session = change.session ?? session
+          if (change.value.ok && change.effects) {
+            run.onEffects?.(change.effects)
+          }
+          return change.value
+        }
+      ),
+      // Match durable headless-close persistence even in this in-memory store.
       flushOrThrow: vi.fn(),
       persistPtyBinding: vi.fn<Store['persistPtyBinding']>(async (input) => {
         const args = typeof input === 'function' ? input() : input
@@ -654,6 +686,14 @@ function makeWorkspaceSessionWithHeadlessTerminal(
   }
 }
 
+// Main-owned layout writes notify shared-store listeners; clear them between tests.
+beforeEach(() => {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    announceSessionWrites(store)
+  }
+})
+afterEach(() => forgetInstalledPaneSession(store))
+
 computeWorktreePathMock.mockImplementation(
   (
     sanitizedName: string,
@@ -687,5 +727,5 @@ export { makeDeferred, makeFolderProjectGroup, makeFolderWorkspace, makeHeadless
 export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession, makeStatusFrame }
 export { makeWorkspaceSessionWithHeadlessTerminal, makeWorktreeInfo, makeWorktreeMeta }
 export { parseHeadlessSnapshotLines, pendingMailPointerRepoints, referenceStatusFrameLines }
-export { renderGateCapMs, setInMemoryOrchestrationMessages, store, syncSinglePty }
+export { renderGateCapMs, setInMemoryOrchestrationMessages, spawnedPtyEnv, store, syncSinglePty }
 export { visibleNonEmptyLines, withPlatform, writeHeadless }

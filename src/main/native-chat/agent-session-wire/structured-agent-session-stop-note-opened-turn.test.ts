@@ -1,16 +1,11 @@
-// A Stop found with no turn running can wait for one to open and interrupt it. Taken, its note is
-// the turn the provider says it took; refused, the row stays with the conversation, as before.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
@@ -38,7 +33,6 @@ afterEach(async () => {
   }
 })
 
-/** A Stop with no turn running whose cancel opens turn-1 while it waits, then answers `outcome`. */
 async function stopWhileTheTurnOpens(
   outcome: Awaited<ReturnType<StructuredAgentSessionAdapter['cancelTurn']>>
 ) {
@@ -52,6 +46,9 @@ async function stopWhileTheTurnOpens(
     agents: NO_STRUCTURED_AGENTS,
     agent: 'codex',
     adapter: {
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire: vi.fn(),
       dispatch: vi.fn(),
       closeSession: vi.fn(),
@@ -71,7 +68,7 @@ async function stopWhileTheTurnOpens(
     publish: vi.fn(),
     now: () => 1
   }
-  await performCancel(ctx, { clientOperationId: 'stop-1' })
+  await performCancel(ctx, { clientOperationId: 'stop-1', endSession: () => {} })
   return journal
     .snapshot()
     .items.flatMap((item) =>
@@ -80,11 +77,11 @@ async function stopWhileTheTurnOpens(
 }
 
 describe('a Stop that waited for a turn to open', () => {
-  it('keeps its note with that turn when the interrupt took it', async () => {
+  it('keeps the request before the turn that opens during interruption', async () => {
     expect(await stopWhileTheTurnOpens({ cancelled: true, turnId: 'turn-1' })).toEqual([
       {
-        itemId: agentJournalItemKey(structuredAgentSessionStopNoteIdentity('turn-1')),
-        turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(TURN) }
+        itemId: agentJournalItemKey(structuredAgentSessionStopNoteIdentity('stop-1')),
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
       }
     ])
   })

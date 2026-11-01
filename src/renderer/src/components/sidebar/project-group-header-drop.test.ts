@@ -8,7 +8,7 @@ import {
   getSidebarOrderedProjectGroupHeaderIdsByBucket,
   mapSidebarProjectGroupDropIndexToSiblingInsertIndex
 } from './project-group-header-drop'
-import type { Row } from './worktree-list/grouping/row-types'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 
@@ -62,22 +62,29 @@ describe('getSidebarOrderedProjectGroupHeaderIdsByBucket', () => {
       [rootB.id, rootB],
       [childA.id, childA]
     ])
-    const rows = [
+    const rows: Row[] = [
       {
         type: 'header',
         key: 'project-group:root-a',
         label: 'A',
         count: 0,
-        tone: '',
+        icon: { kind: 'project' },
         projectGroup: rootA
       },
-      { type: 'header', key: 'repo:repo-a', label: 'repo', count: 0, tone: '', repo },
+      {
+        type: 'header',
+        key: 'repo:repo-a',
+        label: 'repo',
+        count: 0,
+        icon: { kind: 'project' },
+        repo
+      },
       {
         type: 'header',
         key: 'project-group:child-a',
         label: 'A child',
         count: 0,
-        tone: '',
+        icon: { kind: 'project' },
         projectGroup: childA
       },
       {
@@ -85,10 +92,10 @@ describe('getSidebarOrderedProjectGroupHeaderIdsByBucket', () => {
         key: 'project-group:root-b',
         label: 'B',
         count: 0,
-        tone: '',
+        icon: { kind: 'project' },
         projectGroup: rootB
       }
-    ] as Row[]
+    ]
 
     expect(getSidebarOrderedProjectGroupHeaderIdsByBucket(rows, groupsById)).toEqual(
       new Map([

@@ -6,27 +6,20 @@ import {
   type HookDefinition
 } from '../agent-hooks/installer-utils'
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
-import {
-  assertHooksJsonGeneration,
-  getRealHomeHookKeySourcePaths,
-  getRealHomeHooksJsonPath
-} from './codex-real-home-hooks-json'
+import { assertHooksJsonGeneration } from './codex-real-home-hooks-json'
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
-import { getSystemCodexConfigTomlPath } from './codex-hook-definition'
+import { getRealHomeCodexHookHome, type CodexHookHome } from './codex-hook-orca-approvals'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-moves'
 
-/**
- * The opt-out's removal of every Orca entry from the real ~/.codex/hooks.json,
- * moving user approvals that shift; the caller removes Orca's own approvals.
- */
-export function sweepRealHomeCodexHook(): 'removed' | 'unavailable' {
-  const hooksJsonPath = getRealHomeHooksJsonPath()
-  // Why: single read — the pre-write generation guard must compare against
-  // the exact bytes this sweep's parse came from.
+/** Move shifted user approvals; the caller removes Orca's own approvals. */
+export function sweepRealHomeCodexHook(
+  home: CodexHookHome = getRealHomeCodexHookHome()
+): 'removed' | 'unavailable' {
+  const { hooksJsonPath } = home
+  // Guard the exact bytes parsed against concurrent saves.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(hooksJsonPath)
   if (!config) {
-    // Why: a failed or malformed read proves no cleanup; keep the managed lane
-    // until a later pass can inspect and remove the real-home entry.
+    // Keep the managed lane until a readable file proves cleanup succeeded.
     return 'unavailable'
   }
   if (!config.hooks || previousRaw === null) {
@@ -55,8 +48,8 @@ export function sweepRealHomeCodexHook(): 'removed' | 'unavailable' {
   if (removedAny) {
     const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
     mutateRealHomeHooksPreservingUserTrust({
-      sourcePaths: getRealHomeHookKeySourcePaths(),
-      tomlPath: getSystemCodexConfigTomlPath(),
+      sourcePaths: home.keySourcePaths,
+      tomlPath: home.tomlPath,
       beforeHooks: config.hooks,
       afterHooks: nextHooks,
       writeHooks: () => {

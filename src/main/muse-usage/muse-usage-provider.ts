@@ -2,7 +2,7 @@ import type { UsageProvider } from '../usage/usage-provider-contract'
 import { scanMuseUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from './types'
 
-// v2: event keys carry a per-log ordinal.
+// Event-key ordinals require invalidating older caches.
 export const MUSE_USAGE_SCHEMA_VERSION = 2
 
 export const museUsageProvider = {

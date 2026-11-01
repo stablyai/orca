@@ -1,9 +1,7 @@
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { FolderWorkspacePathStatusRequest } from '../../../../shared/folder-workspace-path-status'
-import {
-  runtimeTargetForOwnerEnvironment,
-  type RuntimeClientTarget
-} from '../../runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import type { ExecutionHostId } from '../../../../shared/execution-host'

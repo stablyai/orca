@@ -12,6 +12,7 @@ export type StopInFlight = {
 export type SttSessionState = {
   worker: Worker | null
   cloudSession: OpenAiTranscriptionSession | null
+  cloudStopInFlight: { session: OpenAiTranscriptionSession; promise: Promise<void> } | null
   modelManager: ModelManager
   activeModelId: string | null
   activeHotwordsFilePath: string | undefined
@@ -31,6 +32,7 @@ export function createSttSessionState(modelManager: ModelManager): SttSessionSta
   return {
     worker: null,
     cloudSession: null,
+    cloudStopInFlight: null,
     modelManager,
     activeModelId: null,
     activeHotwordsFilePath: undefined,

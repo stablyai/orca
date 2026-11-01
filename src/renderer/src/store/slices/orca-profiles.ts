@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type {
+  OrcaCloudSignInProgress,
   OrcaProfileAuthStatus,
   OrcaProfileSummary,
   SwitchOrcaProfileResult,
@@ -18,6 +19,7 @@ export type OrcaProfilesSlice = OrcaProfilesAuthActions & {
   orcaProfiles: OrcaProfileSummary[]
   activeOrcaProfileId: string | null
   orcaProfileAuthStatus: OrcaProfileAuthStatus | null
+  orcaProfileSignInProgress: OrcaCloudSignInProgress | null
   orcaProfilesMultiProfileUi: boolean
   orcaProfilesLoading: boolean
   orcaProfileSwitching: boolean
@@ -38,6 +40,7 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
   orcaProfiles: [],
   activeOrcaProfileId: null,
   orcaProfileAuthStatus: null,
+  orcaProfileSignInProgress: null,
   orcaProfilesMultiProfileUi: false,
   orcaProfilesLoading: false,
   orcaProfileSwitching: false,
@@ -104,8 +107,7 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
     try {
       const result = await window.api.orcaProfiles.switchProfile({ profileId })
       if (result?.status !== 'relaunching') {
-        // Why: only a relaunch may keep the switcher locked; a stale
-        // "already-active" answer would otherwise disable it forever.
+        // Only actual relaunch locks switcher; stale already-active answers must unlock it.
         set({ orcaProfileSwitching: false })
       }
       return result

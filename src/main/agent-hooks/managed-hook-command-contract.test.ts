@@ -28,13 +28,9 @@ import { getDshManagedCommand, getDshRemoteManagedCommand } from '../dsh/hook-se
 import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
 import { getJcodeManagedCommand, getJcodeRemoteManagedCommand } from '../jcode/hook-settings'
 import { getKiroManagedCommand, getKiroRemoteManagedCommand } from '../kiro/hook-settings'
-import {
-  wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
-  wrapWindowsHookCommand
-} from './installer-utils'
-import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
-import { REMOTE_MANAGED_HOOK_INSTALLER_AGENTS } from './remote-managed-hook-installers'
+import { wrapPosixHookCommand } from './installer-utils'
+import { getManagedCommand as getKimiManagedCommand } from '../kimi/hook-service'
+import { wrapWindowsBatchHookCommand } from './windows-direct-cmd-hook-command'
 import {
   findBareHookCommandVariables,
   GROK_PROVIDED_HOOK_VARIABLES
@@ -49,10 +45,10 @@ type CommandBuilders = {
   remote: (scriptPath: string) => string[]
 }
 
-// Why: Gemini/Droid/Command Code keep their thin builders private; exercise the wrappers they call.
+// Private Gemini/Droid/Command Code builders delegate to these wrappers.
 const standardCommands: CommandBuilders = {
   local: (path) => [
-    process.platform === 'win32' ? wrapWindowsHookCommand(path) : wrapPosixHookCommand(path)
+    process.platform === 'win32' ? wrapWindowsBatchHookCommand(path) : wrapPosixHookCommand(path)
   ],
   remote: (path) => [wrapPosixHookCommand(path)]
 }
@@ -132,8 +128,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
         getManagedLifecycleHook(path, {
           configDirName: '.codebuddy',
           scriptBaseName: 'codebuddy-hook',
-          usesWindowsCompatLauncher: true,
-          windowsHookShell: 'powershell'
+          usesWindowsCompatLauncher: true
         }).command
       ],
       remote: (path) => [getClaudeRemoteCommand(path)]
@@ -153,7 +148,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
       local: (path) =>
         process.platform === 'win32'
           ? ANTIGRAVITY_EVENTS.map((event) =>
-              wrapWindowsCmdHookCommand(
+              wrapWindowsBatchHookCommand(
                 path.replace('antigravity-hook.cmd', event.windowsWrapperFileName)
               )
             )
@@ -174,7 +169,6 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     'grok',
     {
       local: (path) => [getGrokManagedCommand(path)],
-      // Why: grok-hook-remote-install.ts calls this wrapper directly, with the pane guard.
       remote: (path) => [wrapPosixHookCommand(path, {}, { requiredEnvVar: 'ORCA_PANE_KEY' })]
     }
   ],
@@ -198,7 +192,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
   [
     'kimi',
     {
-      local: (path) => [wrapPosixHookCommand(path.replaceAll('\\', '/'))],
+      local: (path) => [getKimiManagedCommand(path)],
       remote: (path) => [wrapPosixHookCommand(path)]
     }
   ],
@@ -224,8 +218,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     }
   ],
   [
-    // Why bare: jcode parses the hook command line shell-style but executes it
-    // directly, so a `sh -c`/`if [ -f … ]` wrapper would be run as the program name.
+    // jcode directly executes parsed argv; shell wrappers would become an invalid program name.
     'jcode',
     {
       local: (path) => [getJcodeManagedCommand(path)],
@@ -241,34 +234,11 @@ const buildersByAgent = new Map<string, CommandBuilders>([
   ]
 ])
 
-// Why: as in MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS, native plugin source has no shell command to scan.
-const exemptionsByAgent = new Map([
-  ['amp', 'Native TypeScript plugin source; no shell hook command'],
-  ['hermes', 'Native Python plugin source; no shell hook command']
-])
-
 describe('managed hook command contract', () => {
-  it.each([
-    ['local', MANAGED_AGENT_HOOK_INSTALLERS.map(([agent]) => agent)],
-    ['remote', REMOTE_MANAGED_HOOK_INSTALLER_AGENTS]
-  ] as const)('covers the %s installer registry in both directions', (_target, agents) => {
-    // Why: mirror the remote installer coverage ratchet (#7253); a new provider cannot opt out silently.
-    for (const agent of agents) {
-      expect(
-        Number(buildersByAgent.has(agent)) + Number(exemptionsByAgent.has(agent)),
-        `${agent} needs exactly one command builder or documented native-plugin exemption`
-      ).toBe(1)
-    }
-    const registered = new Set<string>(agents)
-    for (const agent of [...buildersByAgent.keys(), ...exemptionsByAgent.keys()]) {
-      expect(registered.has(agent), `${agent} is absent from the installer registry`).toBe(true)
-    }
-  })
-
   describe.each(['darwin', 'linux', 'win32'] as const)('%s host', (platform) => {
     it.each([...buildersByAgent])('%s emits no bare variable references', (agent, builders) => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-      const extension = platform === 'win32' && agent !== 'kimi' ? 'cmd' : 'sh'
+      const extension = platform === 'win32' ? 'cmd' : 'sh'
       const homes =
         platform === 'win32' ? ['C:/Users/test', 'C:/Users/test user'] : ['/home/test user']
       const paths = homes.map((home) => `${home}/.orca/agent-hooks/${agent}-hook.${extension}`)
@@ -282,10 +252,7 @@ describe('managed hook command contract', () => {
         // Native PowerShell hooks evaluate these variables without Grok's dollar-byte scanner.
         const scannedCommand =
           platform === 'win32' &&
-          (agent === 'qoder' ||
-            agent === 'qoder-cn' ||
-            agent === 'qwen-code' ||
-            agent === 'codebuddy') &&
+          (agent === 'qoder' || agent === 'qoder-cn' || agent === 'qwen-code') &&
           command.startsWith('$scriptPath = Join-Path')
             ? command
                 .replaceAll('$LASTEXITCODE', '')

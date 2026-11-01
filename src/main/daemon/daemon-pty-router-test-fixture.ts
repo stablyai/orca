@@ -11,7 +11,10 @@ import {
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
 } from './types'
-import { SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
+import {
+  FENCED_TERMINATION_PROTOCOL_VERSION,
+  SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION
+} from './daemon-protocol-version'
 
 type AdapterMock = DaemonPtyAdapter & {
   emitData: (id: string, data: string, sequenceChars?: number) => void
@@ -46,6 +49,12 @@ export function createAdapter(
       protocolVersion >= AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
     providesAgentSessionOwnerListings: () =>
       protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
+    supportsFencedTermination: () => protocolVersion >= FENCED_TERMINATION_PROTOCOL_VERSION,
+    killFenced: vi.fn(async () =>
+      protocolVersion >= FENCED_TERMINATION_PROTOCOL_VERSION
+        ? { outcome: 'ended' as const }
+        : { outcome: 'refused' as const, reason: 'unsupported' as const }
+    ),
     canProvideAuthoritativeBufferSnapshot: () =>
       protocolVersion >= SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
@@ -63,6 +72,12 @@ export function createAdapter(
     listSessions: vi.fn(async () => sessions.map((sessionId) => ({ sessionId, isAlive: true }))),
     requestIdleRetirement: vi.fn(async () => ({ state: 'retiring' as const })),
     releaseIdleRetirementFence: vi.fn(),
+    isIdleRetirementAdmissionClosed: vi.fn(() => false),
+    getLastAuthenticatedDaemonIdentity: vi.fn(() => ({
+      pid: 4242,
+      startedAtMs: 0,
+      launchNonce: label
+    })),
     hasPty: vi.fn((id: string) => sessions.includes(id)),
     probePtyLiveness: vi.fn(async (id: string) => sessions.includes(id)),
     write: vi.fn((id: string, data: string) => {

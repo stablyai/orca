@@ -28,7 +28,10 @@ function renderTurns(count: number, startedAt: number): void {
 }
 
 function elapsedLabels(): string[] {
-  return Array.from(container.querySelectorAll('[aria-label]'), (node) => node.textContent ?? '')
+  return Array.from(
+    container.querySelectorAll('[data-native-chat-turn-status]'),
+    (node) => node.textContent ?? ''
+  )
 }
 
 beforeEach(() => {
@@ -67,10 +70,20 @@ describe('native chat working status elapsed clock', () => {
     expect(elapsedLabels()).toEqual(['Worked for 1m 9s'])
   })
 
+  it('announces responding only while the turn runs', () => {
+    const status = (): Element | null => container.querySelector('[data-native-chat-turn-status]')
+    renderTurns(1, 1_000_000)
+    expect(status()?.getAttribute('aria-label')).toBe('Agent is responding')
+
+    act(() => {
+      root.render(<NativeChatWorkingStatus startedAt={1_000_000} workedSeconds={69} />)
+    })
+    expect(status()?.hasAttribute('aria-label')).toBe(false)
+  })
+
   it('collapses every in-flight turn onto one shared visibility-gated timer', () => {
     renderTurns(3, 1_000_000)
 
-    // One shared 1s clock for all three turns, not one interval per turn.
     expect(vi.getTimerCount()).toBe(1)
     act(() => vi.advanceTimersByTime(3_000))
     expect(elapsedLabels()).toEqual(['Working for 3s', 'Working for 3s', 'Working for 3s'])

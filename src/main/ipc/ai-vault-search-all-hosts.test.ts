@@ -229,7 +229,6 @@ it('names an unavailable host by its reason without losing the other hosts', asy
     { executionHostId: 'ssh:off', outcome: 'disabled' }
   ])
   expect(response.hits).toHaveLength(2)
-  // Nothing more is owed, so a disabled host does not hold the page open.
   expect(response.page.hasMore).toBe(false)
 })
 
@@ -258,7 +257,6 @@ it('calls a leg that times out unreachable and retries it on the next page', asy
         recovered.leg()
       ])
     )
-    // The healthy host finished, so only the retried host is still in the walk.
     expect(second.hosts).toEqual([{ executionHostId: 'ssh:slow', outcome: 'searched' }])
     expect(second.hits.map((hit) => hit.sessionId)).toEqual(['s-0', 's-1'])
   } finally {
@@ -267,8 +265,7 @@ it('calls a leg that times out unreachable and retries it on the next page', asy
 })
 
 it('reads at most three pages from one host per merged request', async () => {
-  // Twelve hits behind pages of two is six host pages; the bound stops at three
-  // and the cursor carries the unread page so nothing is lost.
+  // Three-page budget stops a six-page host walk; retain its unread cursor for the next merged page.
   const host = new StubHost('local', sessions('a', 12), 2)
   const first = resultsOf(
     await searchAllExecutionHosts({ query: 'needle', limit: 10 }, [host.leg()])

@@ -1,9 +1,6 @@
-import {
-  callRuntimeRpc,
-  runtimeEnvironmentSupportsCapability,
-  RuntimeRpcCallError,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callHostRoute } from '@/runtime/host-route-call'
 import type { HostRoute } from '@/runtime/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -11,6 +8,8 @@ import type {
   WorkspacePort,
   WorkspacePortHostScanResult,
   WorkspacePortKillResult,
+  WorkspacePortPageProbeRequest,
+  WorkspacePortPageProbeResult,
   WorkspacePortScanResult
 } from '../../../shared/workspace-ports'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
@@ -148,10 +147,7 @@ function isMethodNotFound(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
 }
 
-/**
- * Asks the owning endpoint to scan the host the workspace runs on. An older server only knows how to
- * scan itself, so it is never asked: its answer would show the server's ports for the SSH workspace.
- */
+/** Ask the owning endpoint for this execution host; older servers scan only themselves and would falsely report server ports for SSH workspaces. */
 export async function scanWorkspacePortsOnExecutionHost(
   host: HostScopedPortHost
 ): Promise<WorkspacePortHostScanResult> {
@@ -212,6 +208,29 @@ export async function killWorkspacePortOnExecutionHost(
   } catch (error) {
     if (isMethodNotFound(error)) {
       return { ok: false, reason: WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON }
+    }
+    throw error
+  }
+}
+
+/** Probe web support on the port’s host; null means older host capability, so callers retain scan-only fallback. */
+export async function probeWorkspacePortPageForTarget(
+  target: RuntimeClientTarget,
+  request: WorkspacePortPageProbeRequest
+): Promise<WorkspacePortPageProbeResult | null> {
+  if (target.kind === 'local') {
+    return window.api.workspacePorts.probePage(request)
+  }
+  try {
+    return await callRuntimeRpc<WorkspacePortPageProbeResult>(
+      target,
+      'workspacePorts.probePage',
+      request,
+      { timeoutMs: WORKSPACE_PORT_RPC_TIMEOUT_MS }
+    )
+  } catch (error) {
+    if (isMethodNotFound(error)) {
+      return null
     }
     throw error
   }

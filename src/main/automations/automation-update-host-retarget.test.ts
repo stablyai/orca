@@ -3,17 +3,9 @@ import {
   createSqliteTestStore,
   createStore as createFreshStore,
   testState
-} from '../persistence-test-harness'
+} from '../persistence/persistence-test-harness'
 import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
-/**
- * An update may not move a record to another host unless it was asked to.
- *
- * Pause/resume stay enabled on orphans on purpose, so a plain `{ enabled }`
- * update is the one mutation an unrunnable record still accepts. Re-deriving the
- * execution target from the owning repo on that path re-adopts the record onto
- * whatever registration the repo points at today: the user pauses an orphan and
- * silently gets a healthy, dispatchable automation on a host they never chose.
- */
+/** Pausing an orphan must preserve its captured host rather than re-adopting today’s repo host. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -65,7 +57,6 @@ function automation(overrides: Partial<Automation>): Automation {
 }
 
 const REPOS: Repo[] = [
-  // Re-adoption re-pointed this repo onto the freshly minted target.
   {
     id: 'repo-readded',
     path: '/remote',
@@ -74,7 +65,6 @@ const REPOS: Repo[] = [
     addedAt: 1,
     connectionId: 'ssh-new'
   },
-  // Same target id back with a new registration: the repo resolves, the capture does not.
   {
     id: 'repo-same-id',
     path: '/remote2',
@@ -99,7 +89,7 @@ const AUTOMATIONS: Automation[] = [
     executionTargetId: 'ssh-box',
     executionTargetGeneration: 4
   }),
-  // Its project is local now, so re-deriving would strip the capture and call it Self.
+  // Re-deriving from this local project would silently discard the SSH capture.
   automation({
     id: 'local-project',
     projectId: 'repo-local',
@@ -188,14 +178,13 @@ describe('pausing an orphan never re-adopts it', () => {
 
     store.updateAutomation('stranded', { enabled: false }, { expectedOwner: ORPHAN })
 
-    // Run Now against the re-added registration must still be refused; a pause is not a re-adoption.
     expect(() =>
       store.assertAutomationOwnerFence({
         id: 'stranded',
         expectedOwner: { selector: { kind: 'ssh', targetId: 'ssh-new', targetGeneration: 7 } },
         operation: 'execute'
       })
-    ).toThrowError(expect.objectContaining({ code: AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved }))
+    ).toThrowError(expect.objectContaining({ code: AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged }))
   })
 
   it('keeps the stale generation when the same target id came back re-registered', async () => {

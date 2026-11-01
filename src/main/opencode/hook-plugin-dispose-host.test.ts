@@ -1,8 +1,4 @@
-/**
- * Executes the generated plugin through each OpenCode host entry point, because
- * what disposal means differs by host: OpenCode 1 disposes only on instance
- * teardown (which cancels every run), OpenCode 2 also on a plugin hot reload.
- */
+// OpenCode 1 disposes on teardown; OpenCode 2 also disposes during plugin hot reload.
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -40,7 +36,6 @@ const ENV_KEYS = [
   'ORCA_AGENT_HOOK_TOKEN'
 ] as const
 
-// A live OpenCode 2 event bus: stays open until the subscriber aborts.
 function createEventBus(): {
   push: (event: HostEvent) => void
   subscribe: (input: { signal: AbortSignal }) => AsyncGenerator<HostEvent>
@@ -156,7 +151,6 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin disposal by host', 
     await firstCleanup?.()
     expect(names).toEqual(['SessionBusy'])
 
-    // The turn kept running; its end reaches the reloaded plugin.
     const secondBus = createEventBus()
     const secondCleanup = await module.default?.setup?.(setupContext(secondBus))
     secondBus.push({ type: 'session.execution.succeeded', data: { sessionID: 'ses_root' } })

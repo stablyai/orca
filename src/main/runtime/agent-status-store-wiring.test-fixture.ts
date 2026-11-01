@@ -10,21 +10,16 @@ type WiredRuntime = {
   touchMobileSessionTabsForWorktree(worktreeId: string): void
 }
 
-/**
- * The agent-status wiring every real host performs, for the runtime specs: the same
- * `agentHookRuntimeDeps` bindings plus the republish signal. A runtime constructed without these
- * observes agent status and publishes it nowhere.
- */
+/** Match production status wiring; without republish, the runtime observes rows but publishes none. */
 export function makeAgentStatusStoreWiring(): {
   statusStore: AgentHookServer
   deps: ReturnType<typeof agentHookRuntimeDeps>
-  /** Call once the runtime exists; returns the republish teardown. */
   attach: (runtime: WiredRuntime) => () => void
 } {
   const statusStore = new AgentHookServer()
   return {
     statusStore,
-    // Hooks off: these specs drive status through OSC, and must not inject hook endpoint env.
+    // OSC-driven specs must not inject hook endpoints.
     deps: agentHookRuntimeDeps(statusStore, new AgentStatusObservedPaneIdentities(), () => ({
       agentStatusHooksEnabled: false
     })),

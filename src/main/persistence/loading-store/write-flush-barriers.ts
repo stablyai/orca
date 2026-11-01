@@ -137,29 +137,6 @@ export class WriteFlushBarrierOperations {
   }
 }
 
-export async function flushDurableStateOrThrowAsync(
-  owner: WriteFlushBarrierOperations
-): Promise<void> {
-  const { runtime, writes } = owner[writeFlushBarrierOperationsContext]
-  if (runtime.writesFrozen || runtime.profileMaintenancePending || runtime.quitFlushStarted) {
-    throw new Error('Cannot flush while persistence is finalized')
-  }
-  return runProfileStateFlush(runtime, async () => {
-    for (;;) {
-      if (runtime.writeTimer) {
-        clearTimeout(runtime.writeTimer)
-        runtime.writeTimer = null
-      }
-      runtime.firstPendingSaveAt = null
-      const generation = runtime.writeGeneration
-      await enqueueWrite(writes)
-      if (generation === runtime.writeGeneration) {
-        break
-      }
-    }
-  })
-}
-
 export async function flushCurrentStateAsync(
   owner: WriteFlushBarrierOperations,
   {

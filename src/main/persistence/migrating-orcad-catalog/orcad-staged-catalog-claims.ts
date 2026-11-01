@@ -2,7 +2,7 @@ import { normalizeRuntimePathForComparison } from '../../../shared/cross-platfor
 import type {
   OrcadMigrationManifest,
   OrcadMigrationStagedCatalog
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { collectOrcadMigrationSessionEntityOwners } from './orcad-destination-workspace-session'
 
 export function assertOrcadMigrationStagedCatalogClaims(

@@ -19,11 +19,7 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const WORKTREE_ID = 'repo-1::/wt-1'
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 
-/**
- * The two title slots this path straddles: `tab.title` (what it writes) and the layout's
- * `titlesByLeafId` (what only a mounted pane updates). They diverge whenever a hook-driven write
- * lands while the pane is unmounted.
- */
+/** Hook tab titles and mounted-pane titles can diverge; this path writes tab.title and must compare that slot. */
 function storeWithDivergedTitleSlots(args: {
   tabTitle: string
   paneSlotTitle: string
@@ -67,10 +63,7 @@ describe('hook-driven tab title writes', () => {
     expect(resolved.tabTitle).toBe('Codex - action required')
   })
 
-  // Why: Orca writes "Codex - action required" itself on a blocked/waiting hook, into `tab.title`
-  // only. When `done` arrived, the no-op guard compared the resolved title against the PANE slot —
-  // which still read "Codex ready" — so the write was skipped and the tab kept asserting a question
-  // the agent had already finished asking, for as long as the pane stayed unmounted.
+  // Unmounted panes kept old titles, causing the former pane-slot guard to skip clearing Orca’s stale action-required tab title.
   it('rewrites a stale action-required tab title once the agent reports done', () => {
     const store = storeWithDivergedTitleSlots({
       tabTitle: 'Codex - action required',
@@ -83,11 +76,9 @@ describe('hook-driven tab title writes', () => {
     )
 
     expect(nextTitle).toBe('Codex ready')
-    // Comparing against the pane slot is what skipped the write.
     expect(
       shouldApplyResolvedAgentTerminalTitleToTab(store, PANE_KEY, resolved.title, nextTitle)
     ).toBe(false)
-    // The tab record is the slot this path overwrites, so it is the one that decides.
     expect(
       shouldApplyResolvedAgentTerminalTitleToTab(store, PANE_KEY, resolved.tabTitle, nextTitle)
     ).toBe(true)

@@ -8,17 +8,7 @@ export const EMPTY_PENDING_WORKTREE_CREATION_KEYS: string[] = Object.freeze(
 
 const keysBySource = new WeakMap<object, string[]>()
 
-/**
- * Flat `"<creationId> <repoId>"` keys for the pending-creation sidebar rows.
- *
- * Why identity-cached: this runs inside an always-mounted subscriber, so an
- * unmemoized `Object.values(...).map(...)` allocated an array plus one template
- * string per pending creation on every store write in the app. Keyed on the
- * slice reference, so it only rebuilds when the slice itself is replaced.
- *
- * Split on the first space — creationId is a UUID (no space) so a
- * space-containing repoId stays intact.
- */
+/** Cache creationId/repoId keys per slice; split on the first space because UUID creation IDs cannot contain spaces. */
 export function selectPendingWorktreeCreationKeys(
   pendingWorktreeCreations: AppState['pendingWorktreeCreations'] | undefined
 ): string[] {

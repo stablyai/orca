@@ -1,7 +1,3 @@
-/**
- * What the headless automation sweep asks a runtime about a run's terminal before closing it:
- * whether a client used it, and whether only its shell still runs.
- */
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { TerminalRunFactsRegister } from './terminal-run-facts'
 import {
@@ -10,10 +6,7 @@ import {
 } from './run-terminal-shell-alone'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
-/**
- * Whether a client drove or is viewing a PTY's current process, for closing finished run
- * terminals: `unknown` when this process cannot tell (it adopted the PTY rather than spawned it).
- */
+/** For finished-run cleanup, adopted PTYs have unknown client-use history because this process did not spawn them. */
 export function readRunTerminalClientUse(
   host: {
     hasRawTerminalViewSubscriber: (ptyId: string) => boolean
@@ -31,10 +24,7 @@ export function readRunTerminalClientUse(
   return facts.freshSpawn ? 'unused' : 'unknown'
 }
 
-/**
- * Fresh execution-host proof that only the spawned shell runs in a PTY, at its prompt, on POSIX
- * and Windows alike; false whenever that cannot be proven.
- */
+/** Require fresh execution-host proof that only the shell runs at its prompt, on POSIX and Windows; observation failure is unproven. */
 export async function confirmRunTerminalShellAlone(
   controller: RuntimePtyController | null | undefined,
   ptyId: string

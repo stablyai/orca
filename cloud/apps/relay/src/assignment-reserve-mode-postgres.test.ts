@@ -5,8 +5,7 @@ import { CELL_ADMIT_EFFECTIVE_FRESH_MS, RelayAssignmentStore } from './assignmen
 import type { RelayCellConfig } from './config.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 
-// The step-5 census on real PostgreSQL: every new statement (the admit-mode table, the
-// open-flow check under FOR UPDATE, the live-reserve pin) must run there, not only on SQLite.
+// Exercise admit-mode SQL, locked open-flow checks and live-reserve pins on PostgreSQL, not SQLite alone.
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip

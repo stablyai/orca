@@ -23,20 +23,8 @@ import {
   resolveCodexPaneSelectionLane
 } from './codex-pane-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../shared/tui-agent'
-
-// Why: prompt integrations such as Starship can outlast the daemon's 300ms
-// Codex fast-path timeout; account restarts must wait until the shell accepts input.
-// Why launchAgent: pty:spawn runs the managed-auth readiness gate and Codex
-// launch prep only for launchAgent 'codex', so without it a restart respawn
-// could race the account handoff and record a launch account the pane does not
-// actually read.
-export const CODEX_ACCOUNT_RESTART_STARTUP = {
-  command: 'codex',
-  startupCommandDelivery: 'shell-ready',
-  launchAgent: 'codex'
-} as const
 
 export type CodexPaneScanResult = {
   ptyId: string
@@ -46,51 +34,29 @@ export type CodexPaneScanResult = {
   inconclusive: boolean
   /** Orca launched Codex in this tab, so a shell foreground can still be reattach settle. */
   launchedCodex: boolean
-  /** A restart notice was raised for this pane by this scan. */
   notified: boolean
-  /** The lane this pane was filtered on. */
   laneKey: string
-  /** Whether that lane came from main's spawn record or the renderer's derivation. */
   laneSource: 'recorded' | 'derived'
 }
 
-/**
- * Asks main which lane each pane actually launched from.
- *
- * Why failure is silent: the answer only upgrades the derivation's accuracy, so
- * an older preload, a web client, or a missing registry must degrade to the
- * derivation rather than lose every pane's restart notice.
- */
+/** Batch main’s recorded spawn lanes; absent old/web preload methods or registry failures must fall back to derivation rather than suppress notices. */
 async function readRecordedCodexPaneLanes(
   ptyIds: readonly string[]
 ): Promise<Record<string, string>> {
-  // Why filtered: main only records daemon host spawns, so asking about a
-  // remote or SSH pane is a guaranteed miss.
+  // Only daemon host spawns have registry entries; foreign lookups are guaranteed misses.
   const localPtyIds = ptyIds.filter((ptyId) => !isForeignMachineCodexPtyId(ptyId))
   if (localPtyIds.length === 0) {
     return {}
   }
   const listRecordedPaneLanes = window.api.codexAccounts.listRecordedPaneLanes
-  // Why the shape check: a preload older than this handler has no such method,
-  // and reaching that case must read as "no records", not as a scan failure.
+  // Older preloads lack this optional method; treat that as no records rather than scan failure.
   if (typeof listRecordedPaneLanes !== 'function') {
     return {}
   }
   return await listRecordedPaneLanes({ ptyIds: localPtyIds }).catch(() => ({}))
 }
 
-/**
- * Re-checks a shell reading with a fresh, uncached scan before trusting it.
- *
- * Why: the cached foreground read can flap to the pane's shell for a live Codex
- * session (#11064), and a spurious shell here silently skips the restart card —
- * no error, no retry. Mirrors main's terminalHasShellForegroundProcess, which
- * already refuses to conclude "agent done" from an unconfirmed shell reading.
- * Gated to Orca-launched Codex panes so an account switch never spends the
- * expensive fresh scan on ordinary shell terminals, and only an affirmative
- * codex answer flips the decision: a confirmed shell (user exited Codex) and a
- * null (scan failed or unsupported) both keep today's ineligible outcome.
- */
+/** Fresh-scan shell readings only for Orca-launched Codex panes (#11064); cached shell flaps can lose the one-time notice. Only affirmative Codex evidence reverses ineligibility, not null or confirmed shell. */
 async function isConfirmedCodexForegroundDespiteShellReading(
   ptyId: string,
   launchAgent: TuiAgent | undefined,
@@ -108,15 +74,7 @@ async function isConfirmedCodexForegroundDespiteShellReading(
   return isCodexForegroundProcess(confirmed)
 }
 
-/**
- * Reports which panes are running Codex, skipping any outside the caller's lane.
- *
- * Why the lane filter runs BEFORE inspection rather than after: an out-of-lane
- * answer cannot change the outcome, and the inspection is not free — a pane on a
- * relay environment costs a 15s-timeout RPC per look. Skipping first is also
- * what keeps a restart notice (which drops every keystroke in the pane) off a
- * remote Codex session that no local account change can possibly strand.
- */
+/** Filter lanes before process inspection: remote reads cost up to 15s and cannot justify a local-switch notice that swallows their input. */
 async function scanCodexPanes(
   state: AppState,
   args: {
@@ -133,10 +91,7 @@ async function scanCodexPanes(
     )
   const recordedLanes = await readRecordedCodexPaneLanes(panes.map((pane) => pane.ptyId))
 
-  // Why: Codex sessions are not reliably discoverable from tab labels. Tabs keep
-  // fallback names until a CLI emits an OSC title, and Codex does not always do
-  // that. The live process tree plus the tab's recorded launchAgent are the
-  // stable evidence that this pane is running Codex.
+  // Labels can remain fallback names; use live process evidence plus recorded launchAgent to find Codex.
   return Promise.all(
     panes.map(async ({ tab, ptyId }) => {
       const lane = resolveCodexPaneSelectionLane({
@@ -146,8 +101,7 @@ async function scanCodexPanes(
         recordedLaneKey: recordedLanes[ptyId]
       })
       if (!args.isLaneInScope(lane.laneKey)) {
-        // Why not inconclusive: a pane's lane is fixed at spawn, so this is a
-        // final answer and the sweep must not spend a retry rung re-asking.
+        // Spawn lane is immutable; an out-of-lane answer is final and must not consume another retry.
         return {
           ptyId,
           eligible: false,
@@ -180,20 +134,11 @@ async function scanCodexPanes(
   )
 }
 
-/**
- * Prompts the panes a just-applied account change stranded.
- *
- * `target` names the selection slot the change wrote. Panes outside that lane —
- * a WSL pane on a host switch, or anything running on a relay/SSH machine —
- * never had this account injected, so a notice there is pure damage: it mutes a
- * terminal that is working correctly.
- */
+/** Prompt only panes affected by the written machine/runtime selection; unrelated panes would lose input to a needless notice. */
 export async function markLiveCodexSessionsForRestart(args: {
   previousAccountLabel: string
   nextAccountLabel: string
-  /** Ids behind the labels. Two accounts can share a label, so without these the
-   *  store cannot tell a switch back to the launch account from a switch to a
-   *  different account that merely reads the same. */
+  /** Keep account IDs: equal labels cannot distinguish switching back to the launch account from selecting a different account. */
   previousAccountId?: string | null
   nextAccountId?: string | null
   target?: CodexAccountSelectionTarget | null
@@ -217,8 +162,7 @@ export async function markLiveCodexSessionsForRestart(args: {
   }
 
   const recordedLiveScans = scans.filter((scan) => scan.eligible && scan.laneSource === 'recorded')
-  // Why: a reauth can report null -> A even though a pane's immutable launch
-  // route was already A; main's per-PTY record is the restart authority.
+  // Reauth can report null → A while the pane already launched on A; main’s per-PTY record decides staleness.
   const authoritativeStalePanes =
     recordedLiveScans.length === 0
       ? null
@@ -271,22 +215,7 @@ export async function markLiveCodexSessionsForRestart(args: {
   )
 }
 
-/**
- * Re-raises restart prompts for panes that outlived the app.
- *
- * Why: restart notices are renderer state, but the shells they describe live in
- * the PTY daemon and survive a full app restart with the old account still
- * baked into their environment. Without this, quitting Orca before restarting a
- * stale pane silently strands it on the previous account forever.
- *
- * Returns one result per inspected pane so the bind-driven sweep can tell an
- * answered pane from one whose PTY has not reported a usable process yet.
- *
- * Scoped to the local host/WSL lanes because the pane-account registry only
- * records daemon host spawns: a relay or SSH pane can never be listed stale, so
- * inspecting one is a guaranteed-fruitless RPC. listStalePanes then does the
- * host-vs-WSL check itself, against each pane's own recorded lane.
- */
+/** Restore notices lost across app restart while daemon PTYs retain old account env. Return inspected outcomes for bounded retries; only local host/WSL spawns can appear in the registry, which checks each recorded lane. */
 export async function markRestoredStaleCodexSessionsForRestart(args?: {
   ptyIds?: readonly string[]
 }): Promise<CodexPaneScanResult[]> {
@@ -312,15 +241,12 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
       ptyId: pane.ptyId,
       previousAccountLabel: resolveAccountLabel(pane.launchAccountId),
       nextAccountLabel: resolveAccountLabel(pane.activeAccountId),
-      // Why the ids: main decided staleness by id, and the labels can collide.
-      // Passing only labels hands the store a question it cannot answer.
+      // Main decides staleness by ID; colliding labels cannot answer the store’s identity checks.
       previousAccountId: pane.launchAccountId,
       nextAccountId: pane.activeAccountId
     }))
   )
-  // Why not every stale pane: the bind sweep suppresses a "notified" pane for the
-  // rest of the session, so a pane whose notice the store dropped must not claim
-  // one — that trades a missing prompt for a permanently missing prompt.
+  // Claim notified only if the store retained the notice; bind sweeps suppress claimed panes for the rest of the session.
   const notifiedPtyIds = new Set(noticedPtyIds)
   return scans.map((scan) => (notifiedPtyIds.has(scan.ptyId) ? { ...scan, notified: true } : scan))
 }
@@ -345,8 +271,7 @@ export function resolveCodexRestartPromptAccountLabel(
 }
 
 async function createCodexAccountLabelResolver(): Promise<(accountId: string | null) => string> {
-  // Why: a failed roster read still yields usable prompts — the account ids are
-  // already known, only their friendly emails are missing.
+  // Known account IDs still support prompts when roster/email lookup fails.
   const accounts = await window.api.codexAccounts.list().catch(() => null)
   return (accountId) => resolveCodexRestartPromptAccountLabel(accounts?.accounts ?? [], accountId)
 }

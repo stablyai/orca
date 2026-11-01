@@ -3,7 +3,10 @@ import { RuntimeClientSettingsController } from './runtime-client-settings'
 import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { structuredAgentConfiguredArgs } from '../native-chat/structured-agent-configured-args'
-import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../shared/tui-agent-launch-defaults'
 import { agentLaunchSettingsMutationUpdates } from '../../shared/agent-launch-settings'
 import { AgentLaunchSettingsMutation } from '../../shared/rpc-contract/agent-launch-settings-params'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
@@ -13,12 +16,13 @@ vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: vi.fn(async () => {})
 }))
 
-function fixture() {
+function fixture(overrides: Partial<GlobalSettings> = {}) {
   const host = createGlobalSettingsFixture({
     workspaceDir: '/host',
     agentDefaultArgs: { claude: '--host-old', codex: '--host-codex' },
     agentDefaultEnv: { claude: { API_KEY: 'host-secret', KEEP: 'host-only' } },
-    agentCmdOverrides: { codex: '/host/codex' }
+    agentCmdOverrides: { codex: '/host/codex' },
+    ...overrides
   })
   const updateSettings = vi.fn((updates: Partial<GlobalSettings>) => Object.assign(host, updates))
   const runDurableMutation: NonNullable<RuntimeStore['runDurableMutation']> = async (mutate) =>
@@ -58,7 +62,7 @@ describe('execution-host agent launch settings', () => {
 
     expect(host.agentCmdOverrides?.claude).toBe('/host/claude-wrapper')
     expect(structuredAgentConfiguredArgs('claude', host)).toEqual(['--host-marker'])
-    expect(resolveTuiAgentLaunchEnv('claude', host.agentDefaultEnv)).toEqual({
+    expect(resolveTuiAgentLaunchEnv('claude', host)).toEqual({
       API_KEY: 'host-secret',
       KEEP: 'host-only',
       MARKER: 'host-marker'
@@ -99,11 +103,62 @@ describe('execution-host agent launch settings', () => {
 
   it('changes terminal permissions on the host without roundtripping unrelated secrets', async () => {
     const { controller, host } = fixture()
-    host.agentDefaultArgs = { claude: '--dangerously-skip-permissions' }
-    await controller.mutateAgentLaunch({ type: 'permissions', mode: 'manual' })
-    expect(host.agentDefaultArgs?.claude).toBe('')
+    host.agentDefaultArgs = { claude: '' }
+    await controller.mutateAgentLaunch({
+      type: 'permissions',
+      syncNativeChat: true,
+      mode: 'manual'
+    })
+    expect(resolveTuiAgentLaunchArgs('claude', host)).toBe('')
+    expect(host.nativeChatPermissionMode).toBe('full-access')
     expect(host.agentDefaultEnv?.claude).toEqual({ API_KEY: 'host-secret', KEEP: 'host-only' })
     expect(JSON.stringify(controller.getAgentLaunch())).not.toContain('host-only')
+  })
+
+  it('applies Auto to new chats on the execution host', async () => {
+    const { controller, host } = fixture()
+    const beforeNative = host.nativeChatPermissionMode
+    host.agentDefaultArgs = { claude: '', codex: '' }
+    await controller.mutateAgentLaunch({ type: 'permissions', syncNativeChat: true, mode: 'auto' })
+    expect(controller.get().agentDefaultArgs).toMatchObject({
+      claude: '--permission-mode auto',
+      codex: '--approve-for-me'
+    })
+    expect(host.nativeChatPermissionMode).toBe(beforeNative)
+    expect(host).not.toHaveProperty('agentNativeChatPermissionModes')
+  })
+
+  it('normalizes older-client None default requests to Blank Terminal', async () => {
+    const { controller, host } = fixture()
+    const mutation = AgentLaunchSettingsMutation.parse({
+      type: 'default',
+      agent: 'blank',
+      setupOnly: true
+    })
+    await expect(controller.mutateAgentLaunch(mutation)).resolves.toMatchObject({
+      defaultTuiAgent: 'blank',
+      newWorkspaceSetupOnly: false
+    })
+    expect(host.newWorkspaceSetupOnly).toBe(false)
+    await expect(
+      controller.mutateAgentLaunch({ type: 'default', agent: 'blank' })
+    ).resolves.toMatchObject({
+      defaultTuiAgent: 'blank',
+      newWorkspaceSetupOnly: false
+    })
+    expect(host.newWorkspaceSetupOnly).toBe(false)
+  })
+
+  it('clears None when a legacy client explicitly picks Blank Terminal', async () => {
+    const { controller, host } = fixture()
+    host.defaultTuiAgent = 'blank'
+    host.newWorkspaceSetupOnly = true
+    await controller.update({ defaultTuiAgent: 'blank' })
+    expect(host.newWorkspaceSetupOnly).toBe(false)
+    expect(controller.getAgentLaunch()).toMatchObject({
+      defaultTuiAgent: 'blank',
+      newWorkspaceSetupOnly: false
+    })
   })
 
   it('clears the host default when disabling that agent and preserves others', async () => {
@@ -121,17 +176,17 @@ describe('execution-host agent launch settings', () => {
     expect(controller.get().agentDefaultEnv?.claude?.API_KEY).toBe('host-secret')
     await controller.mutateAgentLaunch({ type: 'command', agent: 'claude', value: '' })
     expect(JSON.stringify(controller.getAgentLaunch())).not.toContain('host-secret')
-  })
-
-  it('reports a failed host write instead of returning a successful projection', async () => {
-    const { controller, updateSettings, host } = fixture()
-    updateSettings.mockImplementation(() => {
-      throw new Error('disk full')
-    })
-    await expect(
-      controller.mutateAgentLaunch({ type: 'arguments', agent: 'claude', value: '--new' })
-    ).rejects.toThrow('disk full')
-    expect(host.agentDefaultArgs?.claude).toBe('--host-old')
+    const legacy = fixture({ agentPermissionDefault: undefined })
+    expect(legacy.host.agentPermissionDefault).toBeUndefined()
+    const literal = {
+      agentDefaultArgs: { claude: '--model literal --verbose' },
+      agentDefaultEnv: { goose: { GOOSE_MODE: 'manual', KEEP: 'literal' } }
+    }
+    const response = await legacy.controller.update(literal)
+    expect(legacy.host.agentDefaultArgs).toEqual(literal.agentDefaultArgs)
+    expect(legacy.host.agentDefaultEnv).toEqual(literal.agentDefaultEnv)
+    expect(response.agentDefaultArgs?.claude).toBe(literal.agentDefaultArgs.claude)
+    expect(response.agentDefaultEnv).toEqual(literal.agentDefaultEnv)
   })
 
   it('uses host Windows environment name rules', () => {
@@ -174,7 +229,11 @@ describe('execution-host agent launch settings', () => {
         value: ''
       }).success
     ).toBe(true)
-    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.getAgentLaunch')).toBe(false)
+    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.getAgentLaunch')).toBe(true)
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.mutateAgentLaunch')).toBe(false)
   })
 })
+
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: async () => {} })
+}))

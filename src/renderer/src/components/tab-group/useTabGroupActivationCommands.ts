@@ -3,13 +3,11 @@ import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
-import {
-  activateWebRuntimeSessionTab,
-  isWebRuntimeSessionActive
-} from '../../runtime/web-runtime-session'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { activateWebRuntimeSessionTab } from '../../runtime/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '../../runtime/web-runtime-session-environment'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
-import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
 
 export function useTabGroupActivationCommands({
@@ -40,7 +38,7 @@ export function useTabGroupActivationCommands({
       }
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
-      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+      const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
         useAppStore.getState(),
         worktreeId
       )
@@ -119,7 +117,7 @@ export function useTabGroupActivationCommands({
       }
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
-      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+      const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
         useAppStore.getState(),
         worktreeId
       )

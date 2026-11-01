@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { homedir } from 'node:os'
+
+import type { ReadPath, StatPath } from './worktree-orphan-gitdir-proof'
+import type { WorktreeRemovalHomeAuthority } from './worktree-removal-home-guard'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import {
-  canCleanupUnregisteredOrcaLeftoverDirectory,
-  canSafelyRemoveOrphanedWorktreeDirectory,
+  canSafelyRemoveOrphanedWorktreeDirectory as proveWithAccess,
   findRegisteredDeletableWorktree,
   getRegisteredDeletableWorktree,
   isDangerousWorktreeRemovalPath
@@ -24,6 +25,11 @@ function missingPath(path: string): Error & { code: string } {
   return Object.assign(new Error(`missing ${path}`), { code: 'ENOENT' })
 }
 
+const deniedPath = (operation: string, path: string) =>
+  Object.assign(new Error(`EACCES: permission denied, ${operation} '${path}'`), {
+    code: 'EACCES'
+  })
+
 function makeStatPath(filePaths: readonly string[], directoryPaths: readonly string[] = []) {
   const files = new Set(filePaths)
   const directories = new Set(directoryPaths)
@@ -36,6 +42,25 @@ function makeStatPath(filePaths: readonly string[], directoryPaths: readonly str
     }
     throw missingPath(path)
   }
+}
+
+function canSafelyRemoveOrphanedWorktreeDirectory(
+  candidate: string,
+  owner: string,
+  home: WorktreeRemovalHomeAuthority,
+  statPath: StatPath,
+  readPath: ReadPath
+): Promise<boolean> {
+  // Ordinary fixture entries have identical following and nonfollowing kinds.
+  return proveWithAccess(candidate, owner, home, {
+    statPath,
+    layoutStatPath: statPath,
+    readPath,
+    realPath: async (path) => {
+      await statPath(path)
+      return path
+    }
+  })
 }
 
 function makeReadPath(entries: readonly (readonly [string, unknown])[]) {
@@ -115,55 +140,70 @@ describe('getRegisteredDeletableWorktree', () => {
 })
 
 describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
-  it('accepts a linked worktree .git file that points at this repo worktrees entry', async () => {
+  it('accepts dotdot-prefixed lexical admin membership without canonical operations', async () => {
+    const realPath = vi.fn(async () => {
+      throw new Error('unexpected canonical operation')
+    })
     await expect(
-      canSafelyRemoveOrphanedWorktreeDirectory(
-        '/workspaces/orphan',
-        '/repo',
-        CLIENT_REMOVAL_HOME,
-        makeStatPath(['/workspaces/orphan/.git'], ['/repo/.git']),
-        makeReadPath([
-          ['/workspaces/orphan/.git', 'gitdir: /repo/.git/worktrees/orphan\n'],
-          ['/repo/.git/worktrees/orphan/gitdir', '/workspaces/orphan/.git\n']
-        ])
-      )
-    ).resolves.toBe(true)
-  })
-
-  it('accepts repo worktree admin entries with dotdot-prefixed directory names', async () => {
-    await expect(
-      canSafelyRemoveOrphanedWorktreeDirectory(
-        '/workspaces/orphan',
-        '/repo',
-        CLIENT_REMOVAL_HOME,
-        makeStatPath(['/workspaces/orphan/.git'], ['/repo/.git']),
-        makeReadPath([
+      proveWithAccess('/workspaces/orphan', '/repo', CLIENT_REMOVAL_HOME, {
+        statPath: makeStatPath(['/workspaces/orphan/.git'], ['/repo/.git']),
+        layoutStatPath: makeStatPath([], ['/repo/.git']),
+        readPath: makeReadPath([
           ['/workspaces/orphan/.git', 'gitdir: /repo/.git/worktrees/..orphan\n'],
           ['/repo/.git/worktrees/..orphan/gitdir', '/workspaces/orphan/.git\n']
-        ])
-      )
+        ]),
+        realPath
+      })
     ).resolves.toBe(true)
+    expect(realPath).not.toHaveBeenCalled()
   })
 
-  it('accepts remote filesystem provider readFile results for linked worktree .git files', async () => {
-    await expect(
-      canSafelyRemoveOrphanedWorktreeDirectory(
-        '/workspaces/orphan',
-        '/repo',
-        CLIENT_REMOVAL_HOME,
-        makeStatPath(['/workspaces/orphan/.git'], ['/repo/.git']),
-        makeReadPath([
-          [
-            '/workspaces/orphan/.git',
-            { isBinary: false, content: 'gitdir: /repo/.git/worktrees/orphan\n' }
-          ],
-          [
-            '/repo/.git/worktrees/orphan/gitdir',
-            { isBinary: false, content: '/workspaces/orphan/.git\n' }
-          ]
-        ])
-      )
-    ).resolves.toBe(true)
+  it('requires definitive absence throughout owner fallback and missing-admin proof', async () => {
+    const owner = '/repos/ENOENT'
+    const candidate = '/workspaces/orphan'
+    const admin = `${owner}/worktrees/orphan`
+    const stat = makeStatPath([`${candidate}/.git`])
+    const statPath = vi.fn(stat)
+    const layoutStatPath = vi.fn(makeStatPath([]))
+    const read = makeReadPath([
+      [`${candidate}/.git`, { content: `gitdir: ${admin}\n`, isBinary: false }],
+      [`${owner}/HEAD`, 'ref: refs/heads/main\n']
+    ])
+    const readPath = vi.fn(read)
+    const realPath = vi.fn(async () => {
+      throw new Error('unexpected canonical operation')
+    })
+    const access = { statPath, layoutStatPath, readPath, realPath }
+    const prove = () => proveWithAccess(candidate, owner, CLIENT_REMOVAL_HOME, access)
+    await expect(prove()).resolves.toBe(true)
+    const denied = deniedPath('stat', `${owner}/.git`)
+    for (const error of [denied, new Error(`cannot inspect '${owner}/.git'`)]) {
+      layoutStatPath.mockRejectedValueOnce(error)
+      await expect(prove()).resolves.toBe(false)
+    }
+    // Each unknown replaces one independently missing observation in the successful proof.
+    for (const unknownPath of [`${owner}/commondir`, `${admin}/gitdir`]) {
+      readPath.mockImplementation(async (path) => {
+        if (path === unknownPath) {
+          throw deniedPath('open', path)
+        }
+        return read(path)
+      })
+      await expect(prove()).resolves.toBe(false)
+    }
+    readPath.mockImplementation(read)
+    statPath.mockImplementation(async (path) => {
+      if (path === admin) {
+        throw deniedPath('stat', path)
+      }
+      return stat(path)
+    })
+    await expect(prove()).resolves.toBe(false)
+    statPath.mockImplementation(stat)
+    readPath.mockImplementation(async (path) =>
+      path === `${admin}/gitdir` ? { content: `${candidate}/.git\n`, isBinary: false } : read(path)
+    )
+    await expect(prove()).resolves.toBe(true)
   })
 
   it('preserves forward-slash UNC roots when probing linked worktree .git files', async () => {
@@ -246,16 +286,54 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
     })
   })
 
-  it('accepts a pruned admin entry when the candidate .git points under this repo worktrees dir', async () => {
-    await expect(
-      canSafelyRemoveOrphanedWorktreeDirectory(
-        '/workspaces/orphan',
-        '/repo',
-        CLIENT_REMOVAL_HOME,
-        makeStatPath(['/workspaces/orphan/.git'], ['/repo/.git']),
-        makeReadPath([['/workspaces/orphan/.git', 'gitdir: /repo/.git/worktrees/orphan\n']])
-      )
-    ).resolves.toBe(true)
+  it('proves a pruned admin through an owner link without following candidate entries', async () => {
+    const candidate = '/provider-only/workspaces/orphan'
+    const owner = '/provider-only/repo'
+    const physical = '/provider-only/metadata'
+    const ordinaryStat = makeStatPath([`${candidate}/.git`])
+    const statPath = vi.fn(async (path: string) => {
+      if (path === `${owner}/.git`) {
+        return { type: 'symlink' }
+      }
+      return ordinaryStat(path)
+    })
+    const layoutStatPath = vi.fn(async () => ({ type: 'directory' }))
+    const realPath = vi.fn(async (path: string) => {
+      if (path === `${owner}/.git` || path === physical) {
+        return physical
+      }
+      throw missingPath(path)
+    })
+    const access = {
+      statPath,
+      layoutStatPath,
+      realPath,
+      readPath: makeReadPath([
+        [
+          `${candidate}/.git`,
+          { content: `  gitdir: ${physical}/worktrees/orphan\nignored`, isBinary: false }
+        ]
+      ])
+    }
+    const prove = () => proveWithAccess(candidate, owner, CLIENT_REMOVAL_HOME, access)
+    await expect(prove()).resolves.toBe(true)
+    expect(layoutStatPath).toHaveBeenCalledExactlyOnceWith(`${owner}/.git`)
+    expect(statPath.mock.calls.map(([path]) => path)).toEqual([
+      `${candidate}/.git`,
+      `${physical}/worktrees/orphan`
+    ])
+    expect(realPath.mock.calls.map(([path]) => path)).toEqual([
+      `${physical}/worktrees`,
+      `${owner}/.git/worktrees`,
+      physical,
+      `${owner}/.git`
+    ])
+    realPath.mockResolvedValueOnce('')
+    await expect(prove()).resolves.toBe(false)
+    layoutStatPath.mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EACCES' }))
+    await expect(prove()).resolves.toBe(false)
+    layoutStatPath.mockResolvedValueOnce({ type: 'other' })
+    await expect(prove()).resolves.toBe(false)
   })
 
   it('rejects existing admin entries with a missing gitdir backlink', async () => {
@@ -274,13 +352,14 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
     const readPath = vi.fn()
 
     await expect(
-      canSafelyRemoveOrphanedWorktreeDirectory(
-        '/workspaces/orphan',
-        '/repo',
-        CLIENT_REMOVAL_HOME,
-        async () => ({ type: 'symlink' }),
+      proveWithAccess('/workspaces/orphan', '/repo', CLIENT_REMOVAL_HOME, {
+        statPath: async () => ({ type: 'symlink' }),
+        layoutStatPath: async () => ({ type: 'directory' }),
+        realPath: async () => {
+          throw new Error('candidate link must refuse first')
+        },
         readPath
-      )
+      })
     ).resolves.toBe(false)
 
     expect(readPath).not.toHaveBeenCalled()
@@ -316,21 +395,49 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
     ).resolves.toBe(false)
   })
 
-  it('accepts a repo path that is itself a linked worktree', async () => {
-    await expect(
-      canSafelyRemoveOrphanedWorktreeDirectory(
-        '/workspaces/orphan',
-        '/repos/main-linked',
-        CLIENT_REMOVAL_HOME,
-        makeStatPath(['/workspaces/orphan/.git', '/repos/main-linked/.git']),
-        makeReadPath([
-          ['/workspaces/orphan/.git', 'gitdir: /common/.git/worktrees/orphan\n'],
-          ['/repos/main-linked/.git', 'gitdir: /common/.git/worktrees/main-linked\n'],
-          ['/common/.git/worktrees/main-linked/gitdir', '/repos/main-linked/.git\n'],
-          ['/common/.git/worktrees/orphan/gitdir', '/workspaces/orphan/.git\n']
-        ])
-      )
-    ).resolves.toBe(true)
+  it('checks both owner memberships and the linked-owner alias backlink', async () => {
+    const candidate = '/provider-only/orphan'
+    const owner = '/provider-only/linked-alias'
+    const common = '/provider-only/common-alias'
+    const physical = '/provider-only/ENOENT'
+    const ownerMarker = '/provider-only/linked/.git'
+    const realPath = vi.fn(async (path: string) => {
+      if (path === `${common}/worktrees` || path === `${physical}/worktrees`) {
+        return `${physical}/worktrees`
+      }
+      if (path === `${owner}/.git` || path === ownerMarker) {
+        return ownerMarker
+      }
+      throw missingPath(path)
+    })
+    const access = {
+      statPath: makeStatPath([`${candidate}/.git`, `${owner}/.git`]),
+      layoutStatPath: makeStatPath([`${owner}/.git`]),
+      realPath,
+      readPath: makeReadPath([
+        [`${candidate}/.git`, `gitdir: ${physical}/worktrees/orphan\n`],
+        [`${owner}/.git`, `gitdir: ${physical}/worktrees/owner\n`],
+        [`${physical}/worktrees/owner/commondir`, common],
+        [`${physical}/worktrees/owner/gitdir`, ownerMarker],
+        [`${physical}/worktrees/orphan/gitdir`, `${candidate}/.git`]
+      ])
+    }
+    const prove = () => proveWithAccess(candidate, owner, CLIENT_REMOVAL_HOME, access)
+    await expect(prove()).resolves.toBe(true)
+    expect(realPath).toHaveBeenCalledTimes(6)
+    access.readPath = makeReadPath([
+      [`${candidate}/.git`, `gitdir: ${common}/worktrees/orphan\n`],
+      [`${owner}/.git`, `gitdir: ${physical}/worktrees/owner\n`],
+      [`${physical}/worktrees/owner/commondir`, common],
+      [`${common}/worktrees/orphan/gitdir`, `${candidate}/.git`]
+    ])
+    for (const error of [
+      deniedPath('realpath', `${physical}/worktrees`),
+      new Error(`owner unavailable, realpath '${physical}/worktrees'`)
+    ]) {
+      realPath.mockRejectedValueOnce(error)
+      await expect(prove()).resolves.toBe(false)
+    }
   })
 
   it('rejects POSIX home directories even when host homedir has a different path shape', async () => {
@@ -349,202 +456,7 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
   })
 })
 
-describe('canCleanupUnregisteredOrcaLeftoverDirectory', () => {
-  const repo = { path: '/repos/main' }
-  const ownedMeta = { orcaCreatedAt: 1, orcaCreationSource: 'runtime' as const }
-  const baseArgs = {
-    meta: ownedMeta,
-    worktreePath: '/workspaces/orca-owned',
-    runtimeWorktreePath: '/workspaces/orca-owned',
-    repo,
-    runtimeRepoPath: repo.path,
-    registeredWorktrees: [makeGitWorktree(repo.path, true)],
-    home: CLIENT_REMOVAL_HOME
-  }
-
-  it('rejects unregistered existing targets that are files or symlinks', async () => {
-    const isGitRepository = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      canCleanupUnregisteredOrcaLeftoverDirectory({
-        ...baseArgs,
-        statPath: makeStatPath(['/workspaces/orca-owned']),
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-    await expect(
-      canCleanupUnregisteredOrcaLeftoverDirectory({
-        ...baseArgs,
-        statPath: async (path) => {
-          if (path === '/workspaces/orca-owned') {
-            return { type: 'symlink' }
-          }
-          throw missingPath(path)
-        },
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-
-    expect(isGitRepository).not.toHaveBeenCalled()
-  })
-
-  it('rejects unregistered leftover directories with a .git marker', async () => {
-    const isGitRepository = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      canCleanupUnregisteredOrcaLeftoverDirectory({
-        ...baseArgs,
-        statPath: makeStatPath(['/workspaces/orca-owned/.git'], ['/workspaces/orca-owned']),
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-
-    expect(isGitRepository).not.toHaveBeenCalled()
-  })
-
-  it('rejects no-marker cleanup when only the Orca path shape matches', async () => {
-    const isGitRepository = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      canCleanupUnregisteredOrcaLeftoverDirectory({
-        ...baseArgs,
-        meta: undefined,
-        statPath: makeStatPath([], ['/workspaces/orca-owned']),
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-
-    expect(isGitRepository).not.toHaveBeenCalled()
-  })
-
-  it('checks dangerous paths in the original path space before runtime translation', async () => {
-    const homePath = homedir()
-    const runtimeHomePath = homePath
-      .replace(/^([A-Za-z]):/, (_match, drive: string) => `/mnt/${drive.toLowerCase()}`)
-      .replace(/\\/g, '/')
-    const isGitRepository = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      canCleanupUnregisteredOrcaLeftoverDirectory({
-        ...baseArgs,
-        worktreePath: homePath,
-        runtimeWorktreePath: runtimeHomePath,
-        repo: { path: 'C:\\repos\\main' },
-        runtimeRepoPath: '/mnt/c/repos/main',
-        registeredWorktrees: [makeGitWorktree('C:\\repos\\main', true)],
-        statPath: makeStatPath([], [runtimeHomePath]),
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-
-    expect(isGitRepository).not.toHaveBeenCalled()
-  })
-
-  it('checks dangerous POSIX runtime home paths before no-marker cleanup', async () => {
-    const isGitRepository = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      canCleanupUnregisteredOrcaLeftoverDirectory({
-        ...baseArgs,
-        worktreePath: '/home/dev',
-        runtimeWorktreePath: '/home/dev',
-        repo: { path: '/repos/main' },
-        runtimeRepoPath: '/repos/main',
-        registeredWorktrees: [makeGitWorktree('/repos/main', true)],
-        statPath: makeStatPath([], ['/home/dev']),
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-
-    expect(isGitRepository).not.toHaveBeenCalled()
-  })
-
-  it('rejects unregistered leftover directories that still answer git status', async () => {
-    const isGitRepository = vi.fn().mockResolvedValue(true)
-
-    await expect(
-      canCleanupUnregisteredOrcaLeftoverDirectory({
-        ...baseArgs,
-        statPath: makeStatPath([], ['/workspaces/orca-owned']),
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-
-    expect(isGitRepository).toHaveBeenCalledWith('/workspaces/orca-owned')
-  })
-
-  it('rejects unregistered leftover directories that contain a registered child worktree', async () => {
-    await expect(
-      canCleanupUnregisteredOrcaLeftoverDirectory({
-        ...baseArgs,
-        registeredWorktrees: [
-          makeGitWorktree(repo.path, true),
-          makeGitWorktree('/workspaces/orca-owned/child')
-        ],
-        statPath: makeStatPath([], ['/workspaces/orca-owned']),
-        isGitRepository: vi.fn().mockResolvedValue(false)
-      })
-    ).rejects.toThrow(
-      'Refusing to delete worktree because it contains another registered worktree: /workspaces/orca-owned/child'
-    )
-  })
-
-  it('uses runtime paths for filesystem proof and original paths for nested worktree checks', async () => {
-    const statPath = vi.fn(async (path: string) => {
-      if (path === '/mnt/c/workspaces/orca-owned') {
-        return { type: 'directory' }
-      }
-      throw missingPath(path)
-    })
-    const isGitRepository = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      canCleanupUnregisteredOrcaLeftoverDirectory({
-        ...baseArgs,
-        worktreePath: 'C:\\workspaces\\orca-owned',
-        runtimeWorktreePath: '/mnt/c/workspaces/orca-owned',
-        repo: { path: 'C:\\repos\\main' },
-        runtimeRepoPath: '/mnt/c/repos/main',
-        registeredWorktrees: [
-          makeGitWorktree('C:\\repos\\main', true),
-          makeGitWorktree('C:\\workspaces\\orca-owned-sibling')
-        ],
-        statPath,
-        isGitRepository
-      })
-    ).resolves.toBe(true)
-
-    expect(statPath).toHaveBeenCalledWith('/mnt/c/workspaces/orca-owned')
-    expect(statPath).toHaveBeenCalledWith('/mnt/c/workspaces/orca-owned/.git')
-    expect(statPath).not.toHaveBeenCalledWith('C:\\workspaces\\orca-owned')
-    expect(isGitRepository).toHaveBeenCalledWith('/mnt/c/workspaces/orca-owned')
-  })
-
-  it('rejects translated-runtime cleanup when original path contains a registered child', async () => {
-    await expect(
-      canCleanupUnregisteredOrcaLeftoverDirectory({
-        ...baseArgs,
-        worktreePath: 'C:\\workspaces\\orca-owned',
-        runtimeWorktreePath: '/mnt/c/workspaces/orca-owned',
-        repo: { path: 'C:\\repos\\main' },
-        runtimeRepoPath: '/mnt/c/repos/main',
-        registeredWorktrees: [
-          makeGitWorktree('C:\\repos\\main', true),
-          makeGitWorktree('C:\\workspaces\\orca-owned\\child')
-        ],
-        statPath: makeStatPath([], ['/mnt/c/workspaces/orca-owned']),
-        isGitRepository: vi.fn().mockResolvedValue(false)
-      })
-    ).rejects.toThrow(
-      'Refusing to delete worktree because it contains another registered worktree: C:\\workspaces\\orca-owned\\child'
-    )
-  })
-})
-
 describe('isDangerousWorktreeRemovalPath on an execution host', () => {
-  // #18275: these verdicts are about the machine that runs the delete. The
-  // client home is `homedir()` here — a macOS/Linux path that recognises none
-  // of the Windows rows, and must not be what decides them either way.
   it.each([
     ['/Users', '/opt/src', true],
     ['/Users/alice', '/opt/src', true],
@@ -554,8 +466,7 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
     ['C:\\Users', 'C:\\src\\repo', true],
     ['C:\\Users\\bob\\wt\\foo', 'C:\\src\\repo', false]
   ])('%s under %s -> dangerous=%s', (worktreePath, repoPath, expected) => {
-    // `/var/empty` is a resolved host home that matches no row, so each verdict comes from the
-    // path rules alone — the same verdicts the client authority reaches.
+    // Choose an unrelated resolved home to isolate path-shape rules.
     expect(
       isDangerousWorktreeRemovalPath(worktreePath, repoPath, executionHostRemovalHome('/var/empty'))
     ).toBe(expected)
@@ -565,11 +476,7 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
   })
 
   it('refuses a registered worktree while the execution host home is unanswered', () => {
-    // `git worktree add` accepts a pre-existing empty directory, and that directory can afterwards
-    // be somebody's `$HOME` (a build account's home, a container's `HOME=/workspace`). So the
-    // host's own Git registry proves provenance, not "this is not a home" — and `git worktree
-    // remove --force` deletes the checkout. With the host's answer the path is caught by
-    // containment; without it there is nothing left to catch a non-standard home shape.
+    // Git registration proves provenance, not that a checkout is outside a nonstandard home.
     const registered = [makeGitWorktree('/opt/src/repo', true), makeGitWorktree('/srv/homes/alice')]
 
     expect(() =>
@@ -588,8 +495,7 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
         executionHostRemovalHome('/srv/homes/alice')
       )
     ).toThrow('Refusing to delete protected worktree path: /srv/homes/alice')
-    // An answering host whose home is elsewhere still deletes it: the refusals above are the
-    // missing answer and the matching answer, not the path.
+    // An unrelated resolved home permits the same path.
     expect(
       findRegisteredDeletableWorktree(
         '/opt/src/repo',
@@ -611,8 +517,6 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
   })
 
   it('recognises a POSIX home when the repo path drags the pair into win32 path ops', () => {
-    // `getPathOps` reads both paths, so a `//`-rooted repo path put `/home/alice` under
-    // Windows-only shape rules and the last guard on a recursive delete stopped matching.
     expect(
       isDangerousWorktreeRemovalPath(
         '/home/alice',
@@ -638,8 +542,7 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
 })
 
 describe('canSafelyRemoveOrphanedWorktreeDirectory on an execution host', () => {
-  // A proven-orphan .git file is exactly the state that unlocks the recursive
-  // delete, so the home guard is the only thing left standing in front of it.
+  // The orphan marker satisfies Git provenance, leaving the home guard to refuse unsafe targets.
   const provenOrphan = {
     statPath: makeStatPath(['C:\\Users\\bob\\.git'], ['C:\\src\\repo\\.git']),
     readPath: makeReadPath([
@@ -691,8 +594,6 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory on an execution host', () => 
   })
 
   it('refuses a proven orphan of any shape while the host home is unanswered', async () => {
-    // A bare-repo dotfiles checkout puts exactly this `.git` file at the top of a home directory,
-    // and `/srv/homes/alice` has no home shape to fall back on. Unanswered is not permission.
     const orphan = {
       statPath: makeStatPath(['/srv/homes/alice/.git'], ['/opt/src/repo/.git']),
       readPath: makeReadPath([
@@ -710,8 +611,6 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory on an execution host', () => 
         orphan.readPath
       )
     ).resolves.toBe(false)
-    // The same call with an answer that does not match still removes it, so the refusal above is
-    // the missing answer and not the path.
     await expect(
       canSafelyRemoveOrphanedWorktreeDirectory(
         '/srv/homes/alice',
@@ -720,32 +619,6 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory on an execution host', () => 
         orphan.statPath,
         orphan.readPath
       )
-    ).resolves.toBe(true)
-  })
-
-  it('refuses the leftover-directory cleanup while the host home is unanswered', async () => {
-    const leftoverArgs = {
-      meta: { orcaCreatedAt: 1, orcaCreationSource: 'ssh' as const },
-      worktreePath: '/srv/homes/alice',
-      runtimeWorktreePath: '/srv/homes/alice',
-      repo: { path: '/opt/src/repo' },
-      runtimeRepoPath: '/opt/src/repo',
-      registeredWorktrees: [],
-      statPath: makeStatPath([], ['/srv/homes/alice']),
-      isGitRepository: vi.fn().mockResolvedValue(false)
-    }
-
-    await expect(
-      canCleanupUnregisteredOrcaLeftoverDirectory({
-        ...leftoverArgs,
-        home: executionHostRemovalHome(null)
-      })
-    ).resolves.toBe(false)
-    await expect(
-      canCleanupUnregisteredOrcaLeftoverDirectory({
-        ...leftoverArgs,
-        home: executionHostRemovalHome('/srv/homes/bob')
-      })
     ).resolves.toBe(true)
   })
 })

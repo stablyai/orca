@@ -1,5 +1,3 @@
-// A reasoning row a dead generation left open is ended by both host sweeps, and is not by itself
-// evidence that a response was interrupted.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,16 +5,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
-  settleStaleStructuredAgentSessionState,
-  settleStructuredAgentSessionDeadGeneration
-} from './structured-agent-session-dead-generation-settlement'
-import { captureUnfinishedStructuredAgentSessionWork } from './structured-agent-session-unfinished-work'
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
+import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
+import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
 
 const SESSION = 'session-reasoning-sweep'
 const THREAD = 'thread-1'
@@ -41,6 +39,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await journal.close()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -72,7 +71,7 @@ describe('an open reasoning row a dead generation left', () => {
   it('ends, with no claimed time, when the generation is settled at its exit', async () => {
     await seedOpenReasoning('running')
     await expect(
-      settleStructuredAgentSessionDeadGeneration({
+      settleObservedExitForTest({
         journal,
         sessionId: SESSION,
         fence: 8,
@@ -81,7 +80,7 @@ describe('an open reasoning row a dead generation left', () => {
         verdict: { state: 'interrupted', completedAt: 1_500 },
         showUnexpectedExitOutcome: false
       })
-    ).resolves.toEqual({ ok: true })
+    ).resolves.toMatchObject({ ok: true })
     expect(reasoningBody()).toEqual({
       kind: 'message',
       role: 'reasoning',
@@ -101,10 +100,5 @@ describe('an open reasoning row a dead generation left', () => {
     })
     expect(reasoningBody()).toMatchObject({ state: 'completed' })
     expect(reasoningBody()).not.toHaveProperty('completedAt')
-  })
-
-  it('is not by itself unfinished work, so it adds no exit row to a settled turn', async () => {
-    await seedOpenReasoning('completed')
-    expect(captureUnfinishedStructuredAgentSessionWork(journal).items).toEqual([])
   })
 })

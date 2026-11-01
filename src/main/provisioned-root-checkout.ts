@@ -1,4 +1,3 @@
-/** The host-independent half of adopting a recipe's provisioned root: checkout proof and metadata. */
 import { randomUUID } from 'node:crypto'
 import type { Store } from './persistence'
 import type { Repo } from '../shared/repo-types'
@@ -9,11 +8,11 @@ import type { AutomationWorkspaceProvenance, GitWorktreeInfo } from '../shared/w
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import { getProjectHostSetupWorktreeMeta } from '../shared/project-host-setup-lookup'
 import { isTuiAgent } from '../shared/tui-agent-config'
+import { getWorktreeCreationLayout } from './ipc/worktree-logic'
 import {
-  getWorktreeCreationLayout,
   resolveWorktreeCreateDisplayNameMeta,
   resolveWorktreeCreateDisplayNameRequest
-} from './ipc/worktree-logic'
+} from './ipc/worktree-display-name'
 
 export type ProvisionedRootRequest = Pick<
   CreateWorktreeArgs,
@@ -52,7 +51,6 @@ export function provisionedRootPathsEqual(left: string, right: string): boolean 
   return normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
 }
 
-/** The project root must be the repo's only, primary, non-sparse checkout on the requested branch and ref. */
 export function verifyProvisionedRootCheckout(args: {
   worktrees: readonly GitWorktreeInfo[]
   sparseCheckoutEnabled: boolean

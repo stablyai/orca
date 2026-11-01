@@ -67,10 +67,6 @@ export function userMessages(text: string, count: number): TranscriptMessage[] {
   }))
 }
 
-/**
- * Drives one read through the real fan-out channel, so a test exercises the
- * registration path the transcript reader uses rather than the consumer alone.
- */
 export function replayTranscriptRead(args: {
   candidate?: SessionFileCandidate
   mode?: TranscriptReadStart['mode']
@@ -99,7 +95,6 @@ export function replayTranscriptRead(args: {
 
 export type SessionSearchIndexFile = {
   path: string
-  /** The store keeps its own connection private, so row assertions need this one. */
   db: SyncDatabase
   close: () => Promise<void>
 }

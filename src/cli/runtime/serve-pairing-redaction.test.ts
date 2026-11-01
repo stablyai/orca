@@ -1,5 +1,6 @@
 import { PassThrough } from 'node:stream'
 import { ChildProcess } from 'node:child_process'
+import { once } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createPairingRedactor,
@@ -64,12 +65,15 @@ describe('supervised pairing redaction', () => {
       written.push(String(chunk))
       return true
     })
-    redactingSpawn(spawn)('orca', [], { stdio: ['inherit', 'inherit', 'inherit', 'ipc'] })
-    expect(spawn).toHaveBeenCalledWith('orca', [], {
+    redactingSpawn(spawn)({ program: 'orca', stdio: ['inherit', 'inherit', 'inherit', 'ipc'] })
+    expect(spawn).toHaveBeenCalledWith({
+      program: 'orca',
       stdio: ['inherit', 'pipe', 'inherit', 'ipc']
     })
+    const drained = once(stdout, 'end')
     stdout.end(`${READY.join('\n')}\n`)
-    await vi.waitFor(() => expect(written.join('')).toContain('later log line'))
+    await drained
+    expect(written.join('')).toContain('later log line')
     expect(written.join('')).not.toContain('secret')
   })
 })

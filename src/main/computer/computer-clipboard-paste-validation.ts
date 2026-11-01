@@ -20,8 +20,7 @@ export function validateComputerClipboardPasteText(text: string): void {
 
 export async function validateComputerClipboardPasteTextWithYield(text: string): Promise<void> {
   try {
-    // Why: accepted paste-sized payloads must not monopolize the main process
-    // while preserving the provider-facing invalid_argument error contract.
+    // Yield while measuring large payloads so validation does not monopolize the process.
     await assertClipboardTextWriteWithinLimitWithYield(text)
   } catch (error) {
     if (isClipboardTextWriteTooLargeError(error)) {

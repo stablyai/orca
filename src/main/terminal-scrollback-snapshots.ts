@@ -54,7 +54,10 @@ function snapshotPath(ref: string, snapshotRoot: string): string | null {
   return join(snapshotRoot, `${ref}.bin`)
 }
 
-function snapshotReadPaths(ref: string, storage?: TerminalScrollbackSnapshotStorage): string[] {
+export function snapshotReadPaths(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): string[] {
   const primaryRoot = getTerminalScrollbackSnapshotRoot(storage)
   const primaryPath = snapshotPath(ref, primaryRoot)
   if (!primaryPath) {
@@ -75,23 +78,36 @@ export function getTerminalScrollbackSnapshotPath(
   return snapshotPath(ref, getTerminalScrollbackSnapshotRoot(storage))
 }
 
-/** The stored bytes for `ref`, bounded by the store limit; `null` when absent or out of bounds. */
 export function readTerminalScrollbackStoredBytesSync(
   ref: string,
   storage?: TerminalScrollbackSnapshotStorage
 ): Buffer | null {
-  for (const path of snapshotReadPaths(ref, storage)) {
+  const bytes = readTerminalScrollbackStoredSnapshotSync(ref, storage)
+  return bytes === 'absent' ? null : bytes
+}
+
+/** `'absent'` when no root holds saved bytes; `null` when a snapshot exists but can't be read. */
+export function readTerminalScrollbackStoredSnapshotSync(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): Buffer | 'absent' | null {
+  const paths = snapshotReadPaths(ref, storage)
+  let unreadable = paths.length === 0
+  for (const path of paths) {
     try {
-      const size = statSync(path).size
-      if (size <= 0 || size > TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT) {
+      if (statSync(path).size > TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT) {
         return null
       }
-      return readFileSync(path)
-    } catch {
-      // Try the profile fallback when the primary snapshot is absent.
+      const bytes = readFileSync(path)
+      // An empty file holds no history, but another root may.
+      if (bytes.length > 0) {
+        return bytes
+      }
+    } catch (error) {
+      unreadable ||= !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
     }
   }
-  return null
+  return unreadable ? null : 'absent'
 }
 
 function trailingUtf8Bytes(value: string, maxBytes: number): Buffer {
@@ -119,6 +135,11 @@ function readTrailingUtf8(path: string, maxBytes: number): string {
   } finally {
     closeSync(fd)
   }
+  return decodeFromFirstUtf8Boundary(bytes)
+}
+
+/** Decodes a tail slice, skipping continuation bytes of a character the slice cut in half. */
+export function decodeFromFirstUtf8Boundary(bytes: Buffer): string {
   let start = 0
   while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) {
     start++
@@ -204,7 +225,7 @@ export function readTerminalScrollbackSnapshotSync(
     try {
       return readTrailingUtf8(path, TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT)
     } catch {
-      // Try the legacy/global fallback when a profile-local snapshot is absent.
+      // Try the next snapshot root when this read fails.
     }
   }
   return null
@@ -218,7 +239,7 @@ export function deleteTerminalScrollbackSnapshotSync(
     try {
       rmSync(path, { force: true })
     } catch {
-      // Best-effort cleanup; stale refs are harmless and bounded by per-file caps.
+      // Cleanup failures must not block session deletion.
     }
   }
 }
@@ -256,7 +277,12 @@ export function migrateWorkspaceSessionTerminalScrollbackSnapshots(
     const remainingBuffers: Record<string, string> = {}
     let layoutChanged = false
     for (const [leafId, buffer] of Object.entries(buffers)) {
-      const ref = writeTerminalScrollbackSnapshotSync({ tabId, leafId, buffer, storage })
+      const ref = writeTerminalScrollbackSnapshotSync({
+        tabId,
+        leafId,
+        buffer,
+        storage
+      })
       if (ref) {
         refs[leafId] = ref
         layoutChanged = true

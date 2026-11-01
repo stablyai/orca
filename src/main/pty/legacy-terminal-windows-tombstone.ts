@@ -1,16 +1,5 @@
-// Why: kept beside the POSIX tombstone so the generated wrapper text for every platform lives
-// in one place, and so the shim-dir module stays under the max-lines limit.
-//
-// Keep percent signs out of every emitted `rem` line. cmd expands variables inside rem, so a
-// comment mentioning %CD% substitutes the working directory into itself. That is harmless at top
-// level -- verified on Windows 11 that rem does not re-parse the result, so a cwd of
-// `C:\x&pwned&rem` did not execute anything -- but rem handles separators differently inside a
-// parenthesized block, and this script now has some.
-//
-// Keep both templates ASCII-only, comments included. cmd.exe tracks its position in a batch file
-// in bytes but advances by decoded character count, so every extra UTF-8 byte shifts the whole
-// file: two em dashes in comments made cmd drop the first four characters of every line and the
-// script died with "The syntax of the command is incorrect."
+// Emitted rem lines must contain no percent signs: cmd expands them, even in comments inside blocks.
+// Keep templates ASCII-only: multibyte comments broke cmd's byte-position tracking on Windows 11.
 
 const WIN32_PASSTHROUGH_WRAPPER = String.raw`@echo off
 rem Why explicit: bare setlocal inherits the caller's delayed-expansion state, and a parent shell
@@ -214,9 +203,7 @@ function renderWindowsWrapper(template: string, command: string, upperCommand: s
     .replaceAll('__ORCA_COMMAND__', command)
 }
 
-// Why: cmd locates `call :label` targets by byte offset and that lookup is unreliable in
-// LF-only files — the same script worked at 2.4 KB and failed with "cannot find the batch label"
-// once it grew. Emit CRLF, which is what cmd expects.
+// cmd label seeks failed in longer LF-only wrappers; emit CRLF.
 function toCrlf(text: string): string {
   return text.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n')
 }

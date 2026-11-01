@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-25T06:20:00.000Z",
+  "platform": "darwin",
+  "command": ["codex"],
+  "cols": 80,
+  "rows": 24,
+  "note": "codex-cli 0.137.0 (npm @openai/codex@0.137.0-darwin-arm64): idle at an empty composer showing the rotating dim placeholder 'Explain this codebase'; user and workspace ids replaced with same-length filler. #26992.",
+  "exitCode": 0
+}

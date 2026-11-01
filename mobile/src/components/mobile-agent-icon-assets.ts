@@ -1,19 +1,14 @@
 import type { ImageSourcePropType } from 'react-native'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 
-// Why: mobile previously rendered these agent icons from Google's favicon
-// service, which is unreachable in some regions (e.g. mainland China) and
-// offline, leaving broken images in the agent picker (#8451). Bundle each
-// favicon so Metro packages it into the app and the icon renders without any
-// network request. The PNGs are shared with desktop in src/shared/agent-icons
-// (Metro watches src/shared via metro.config.js sharedRoot). Metro requires
-// static literal require() paths, so keep this as an explicit map rather than
-// building the path from the agent id.
+// Bundle desktop-shared favicons for offline/regional access (#8451), via Metro’s src/shared watch.
+// Keep literal require paths: Metro cannot resolve dynamic agent-id asset paths.
 export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropType>> = {
   openclaude: require('../../../src/shared/agent-icons/openclaude.png'),
   grok: require('../../../src/shared/agent-icons/grok.png'),
   copilot: require('../../../src/shared/agent-icons/copilot.png'),
   opencode: require('../../../src/shared/agent-icons/opencode.png'),
+  opencode2: require('../../../src/shared/agent-icons/opencode.png'),
   'mimo-code': require('../../../src/shared/agent-icons/mimo-code.png'),
   ante: require('../../../src/shared/agent-icons/ante.png'),
   trae: require('../../../src/shared/agent-icons/trae.png'),

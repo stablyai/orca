@@ -5,7 +5,7 @@ import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc
 } from '../../runtime/runtime-rpc-client'
-import type { RuntimeClientTarget } from '../../runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 
 export function getRuntimeEnvironmentDisplayName(state: AppState, environmentId: string): string {

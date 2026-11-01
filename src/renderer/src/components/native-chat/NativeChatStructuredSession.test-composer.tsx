@@ -2,8 +2,7 @@ import { forwardRef, useImperativeHandle, useRef } from 'react'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import { NativeChatComposerNotices } from './NativeChatComposerNotices'
 
-/** The structured session tests' composer: records its props, takes real DOM focus, and draws the
- *  chat's notices above its input as the real composer does. */
+/** Record composer props and render notices with a real focus target for the reveal-focus loop. */
 export function createStructuredSessionComposerMock(mocks: {
   composerProps: unknown
   handlePasteEvent: unknown
@@ -15,7 +14,6 @@ export function createStructuredSessionComposerMock(mocks: {
         mocks.composerProps = props
         const fieldRef = useRef<HTMLTextAreaElement>(null)
         useImperativeHandle(ref, () => ({
-          // Real DOM focus: the reveal-focus loop retries until focus lands in the pane.
           focus: () => {
             fieldRef.current?.focus()
             return true

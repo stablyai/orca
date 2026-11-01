@@ -9,14 +9,7 @@ import { visibleRepos } from '../../../src/main/ssh/orcad-retained-source'
 import type { Repo } from '../../../src/shared/repo-types'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
-/**
- * The downgrade direction for an SSH host converted to managed orcad (#24975, #24979).
- *
- * After conversion this build fences the host in `orcadFence` and keeps its source rows retained
- * but hidden. A user who rolls back to the last release before auto-conversion must still find
- * the host and its project there and reach them over that build's relay. A fence spelled as an
- * `owner` would have hidden the host from that build, which is what this pins.
- */
+// Pin pre-conversion readers: orcadFence must retain relay access and project rows on rollback; owner would hide them (#24975, #24979).
 const LAST_RELAY_ONLY_REF = 'v1.4.218'
 const SUITE_TIMEOUT_MS = 180_000
 const TARGET_ID = 'ssh-converted'
@@ -33,7 +26,6 @@ function isConstructor(value: unknown): value is ConnectionStore {
   return typeof value === 'function'
 }
 
-/** What this build persists for a converted host: the relay endpoint plus its server fence. */
 const persistedTarget = normalizeSshTarget({
   id: TARGET_ID,
   label: 'Converted host',
@@ -57,7 +49,7 @@ describe(`managed orcad conversion read back by ${LAST_RELAY_ONLY_REF}`, () => {
   let userDataPath: string
 
   beforeAll(async () => {
-    // A real conversion leaves a committed cutover journal; it is what makes this build hide the rows.
+    // A committed cutover journal makes this build hide the retained source rows.
     userDataPath = mkdtempSync(join(tmpdir(), 'orcad-convert-downgrade-'))
     writeOrcadMigrationSourceCutover(userDataPath, {
       ...orcadMigrationCutoverFixture('migration-converted', TARGET_ID, {

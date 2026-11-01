@@ -3,10 +3,11 @@ import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import type {
   ExpectedRuntimeSource,
-  RuntimeOrchestrationEnvelope
+  RuntimeOrchestrationEnvelope,
+  RuntimeRequestSelection
 } from '../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
-import { RuntimeClientError, type RuntimeRpcResponse } from './types'
+import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
 
@@ -16,9 +17,14 @@ export async function sendRequest<TResult>(
   params: unknown,
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  // Why separate from the envelope: federation forwards envelopes to other runtimes.
-  expectedRuntimeSource?: ExpectedRuntimeSource
+  // Federation forwards envelopes; the runtime fence must stay local.
+  expectedRuntimeSource?: ExpectedRuntimeSource,
+  options: {
+    classifySocketError?: (error: Error) => RuntimeClientError | null
+    requestSelection?: RuntimeRequestSelection
+  } = {}
 ): Promise<RuntimeRpcResponse<TResult>> {
+  const { classifySocketError = runtimeAccessDeniedError, requestSelection } = options
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -40,6 +46,9 @@ export async function sendRequest<TResult>(
     let lineSegments: string[] = []
     let settled = false
     const requestId = randomUUID()
+    const statusRequestId = requestSelection ? randomUUID() : null
+    let awaitingStatus = statusRequestId !== null
+    let selectedParams = params
 
     const timeout = setTimeout(() => {
       if (settled) {
@@ -77,34 +86,28 @@ export async function sendRequest<TResult>(
     socket.once('error', (error) => {
       finish({
         ok: false,
-        // Why: a sandbox denying the socket/pipe is not a dead app, so restart advice would mislead.
+        // Access denial does not establish that the app is dead.
         error:
-          runtimeAccessDeniedError(error, metadata.pid) ??
+          classifySocketError(error) ??
           new RuntimeClientError(
             'runtime_unavailable',
-            'Could not connect to the running Orca app. Restart Orca and try again.'
+            'This terminal could not connect to Orca.',
+            { nextSteps: ['Check that Orca is open and that this terminal can access it.'] }
           )
       })
     })
-    // Why: a clean peer close (FIN, no 'error') before a terminal frame never
-    // settles the promise, so the call would otherwise hang until the full
-    // timeout fires. Reject promptly. finish() guards double-settle, so this
-    // no-ops on the normal success/error paths that already called socket.end().
+    // A clean close without a terminal frame must reject rather than wait for the timeout.
     socket.once('close', () => {
       finish({
         ok: false,
         error: new RuntimeClientError(
           'runtime_unavailable',
-          'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+          'Orca closed the connection before responding.',
+          { nextSteps: ['Check that Orca is open and that this terminal can access it.'] }
         )
       })
     })
     socket.on('data', (chunk: string) => {
-      // Why: the server may interleave `{"_keepalive":true}\n` frames with the
-      // final success/failure frame to keep both idle timers alive during a
-      // long-poll (see design doc §3.1). Read frames in a loop until we see a
-      // terminal frame. Each keepalive refreshes the client-side timer so a
-      // 10 min wait doesn't trip the 60 s default ceiling.
       let cursor = 0
       while (cursor < chunk.length && !settled) {
         const newlineIndex = chunk.indexOf('\n', cursor)
@@ -138,20 +141,13 @@ export async function sendRequest<TResult>(
           return
         }
 
-        // Fast-path: ignore keepalives without running the full schema.
-        // setTimeout().refresh() is stable since Node 10 (Orca ships on
-        // Node 20+ via Electron and the standalone CLI targets the same
-        // major). See §7 risk #9.
+        // Keepalives refresh the idle timeout without a full envelope validation.
         if (isKeepaliveFrame(raw)) {
           timeout.refresh()
           continue
         }
 
-        // Why: validate the envelope shape (id, ok, result/error, _meta) at
-        // the decode boundary so version skew between the CLI and the Orca
-        // main runtime surfaces as a single invalid_runtime_response instead
-        // of a downstream mis-typed field access. `result` is left as
-        // unknown — the TResult generic is the caller's responsibility.
+        // Validate the envelope at the boundary; callers remain responsible for TResult’s shape.
         const parsed = RuntimeRpcEnvelopeSchema.safeParse(raw)
         if (!parsed.success) {
           finish({
@@ -164,8 +160,6 @@ export async function sendRequest<TResult>(
           return
         }
 
-        // Narrow out keepalive (already filtered above) so TS can see a
-        // Success|Failure shape here.
         const frame = parsed.data
         if ('_keepalive' in frame) {
           timeout.refresh()
@@ -173,7 +167,7 @@ export async function sendRequest<TResult>(
         }
 
         const response = frame as RuntimeRpcResponse<TResult>
-        if (response.id !== requestId) {
+        if (response.id !== (awaitingStatus ? statusRequestId : requestId)) {
           finish({
             ok: false,
             error: new RuntimeClientError(
@@ -188,22 +182,37 @@ export async function sendRequest<TResult>(
             ok: false,
             error: new RuntimeClientError(
               'runtime_unavailable',
-              'The Orca runtime changed while the request was in flight. Retry the command.'
+              'The Orca runtime changed while the request was in flight.',
+              { nextSteps: ['Retry the command.'] }
             )
           })
           return
+        }
+        if (awaitingStatus) {
+          try {
+            if (frame.ok === false) {
+              throw new RuntimeRpcFailureError(frame)
+            }
+            selectedParams = requestSelection?.paramsForStatus(frame.result)
+          } catch (error) {
+            finish({ ok: false, error: error instanceof Error ? error : new Error(String(error)) })
+            return
+          }
+          awaitingStatus = false
+          send(requestId, method, selectedParams)
+          continue
         }
         finish({ ok: true, response })
         return
       }
     })
-    socket.on('connect', () => {
-      socket.write(
-        `${JSON.stringify({
-          id: requestId,
+    const send = (id: string, requestedMethod: string, requestedParams: unknown): void => {
+      try {
+        const serialized = `${JSON.stringify({
+          id,
           authToken: metadata.authToken,
-          method,
-          params,
+          method: requestedMethod,
+          params: requestedParams,
           orchestrationCapability: envelope?.orchestrationCapability,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
@@ -211,6 +220,19 @@ export async function sendRequest<TResult>(
           orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
           expectedRuntimeSource
         })}\n`
+        if (id === requestId) {
+          requestSelection?.onDispatch?.()
+        }
+        socket.write(serialized)
+      } catch (error) {
+        finish({ ok: false, error: error instanceof Error ? error : new Error(String(error)) })
+      }
+    }
+    socket.on('connect', () => {
+      send(
+        statusRequestId ?? requestId,
+        statusRequestId ? 'status.get' : method,
+        statusRequestId ? undefined : params
       )
     })
   })

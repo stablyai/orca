@@ -15,6 +15,7 @@ import { gitExecFileAsync } from '../../git/runner'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { repoCreateFailure, type RepoCreateFailure } from '../../../shared/repo-create-failure-copy'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { addLocalRepoFromPath } from './local-repo-registration'
@@ -29,16 +30,7 @@ export async function probeLocalGitAvailability(): Promise<boolean> {
   })
 }
 
-/**
- * Where the "Create new project" Location field starts. Settings -> Workspace
- * Directory owns this once the user has actually set it, including a per-host
- * override for the local host, which is the only scope this handler answers for.
- *
- * Why the untouched default does not count: `workspaceDir` is never blank -- new
- * installs seed it with `~/orca/workspaces`. Treating that seeded value as a choice
- * would silently relocate every existing user's projects into the worktree root,
- * where each project would then host its own worktrees inside its working tree.
- */
+/** Ignore seeded workspaceDir: treating it as user intent nests projects inside the worktree root. */
 function getDefaultCreateProjectParent(store: Store): string {
   const home = homedir()
   const settings = store.getSettings()
@@ -81,53 +73,52 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
     }
   )
 
-  // Create a repo/folder from scratch (orca#763); git repos need an empty initial commit so HEAD has a branch ref for worktrees.
+  // An initial commit gives Git projects the HEAD ref needed for worktrees.
   ipcMain.handle(
     'repos:create',
     async (
       _event,
       args: { parentPath: string; name: string; kind: 'git' | 'folder' }
-    ): Promise<{ repo: Repo } | { error: string }> => {
+    ): Promise<{ repo: Repo } | RepoCreateFailure> => {
       const name = args.name?.trim() ?? ''
       const parentPath = args.parentPath?.trim() ?? ''
-      // Why: IPC input is untrusted — coerce to the narrow union so a bogus kind can't skip git init yet persist in the store.
+      // Untrusted IPC kinds must not skip Git initialization yet persist as Git projects.
       const repoKind: 'git' | 'folder' = args.kind === 'folder' ? 'folder' : 'git'
 
       if (!name) {
-        return { error: 'Name cannot be empty' }
+        return repoCreateFailure('nameEmpty')
       }
-      // Block slashes and ./.. so the name can't escape the chosen parent (guards direct IPC use).
+      // Reject traversal even for direct IPC callers.
       if (/[\\/]/.test(name) || name === '.' || name === '..') {
-        return { error: 'Name cannot contain slashes or be "." / ".."' }
+        return repoCreateFailure('nameInvalid')
       }
       if (!parentPath) {
-        return { error: 'Parent directory is required' }
+        return repoCreateFailure('parentRequired')
       }
-      // Why: block CWD-relative paths at the IPC boundary — keeps targetPath stable across process cwd changes.
+      // Absolute parents keep target paths stable across process cwd changes.
       if (!isAbsolute(parentPath)) {
-        return { error: 'Parent directory must be an absolute path' }
+        return repoCreateFailure('parentNotAbsolute')
       }
 
       const targetPath = join(parentPath, name)
 
-      // Dedup by path so a double-click on Create doesn't make two entries for one folder (first of three dedup checks).
+      // Repeated Create requests must share one registration.
       const existing = store.getRepos().find((r) => r.path === targetPath)
       if (existing) {
         emitRepoAdded('folder_picker', true, repoKind === 'git')
         return { repo: existing }
       }
 
-      // Empty pre-existing dirs are allowed (e.g. made in Finder first); non-empty ones are rejected so we don't overwrite files.
+      // Accept empty preexisting folders without overwriting user files.
       let createdDir = false
       let targetExists = false
       try {
-        // Why: the default parent (~/orca/projects) may not exist on a fresh install; create only the parent before probing the target.
+        // Fresh installs may lack the default project parent.
         await mkdir(parentPath, { recursive: true })
         await access(targetPath)
         targetExists = true
       } catch (err) {
-        // Why: only ENOENT means the path is free; other codes are something mkdir can't fix, so surface a precise error.
-        // Why: tests/non-Node errors lack a code, so treat an ENOENT-looking message as ENOENT to avoid over-rejecting.
+        // Only ENOENT proves the target is free; uncoded errors retain message-based compatibility.
         const code =
           err && typeof err === 'object' && 'code' in err
             ? (err as NodeJS.ErrnoException).code
@@ -137,7 +128,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
           (code === undefined && err instanceof Error && /ENOENT/.test(err.message))
         if (!looksLikeEnoent) {
           const message = err instanceof Error ? err.message : String(err)
-          return { error: `Cannot access target path: ${message}` }
+          return repoCreateFailure('targetInaccessible', { detail: message })
         }
       }
 
@@ -145,21 +136,18 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         try {
           const entries = await readdir(targetPath)
           if (entries.length > 0) {
-            return {
-              error: `"${name}" already exists at this location and is not empty.`
-            }
+            return repoCreateFailure('targetNotEmpty', { name })
           }
         } catch (err) {
-          // Why: access ok but readdir failed — path exists but isn't an inspectable dir (file or perms); return a distinct error.
           const message = err instanceof Error ? err.message : String(err)
-          return { error: `Failed to read directory: ${message}` }
+          return repoCreateFailure('readDirectoryFailed', { detail: message })
         }
       } else {
         try {
           await mkdir(targetPath, { recursive: false })
           createdDir = true
         } catch (err) {
-          // Why: EEXIST means a concurrent repos:create won the mkdir race; return its store entry instead of a confusing error.
+          // A concurrent create may win mkdir; reuse its registration on EEXIST.
           const code =
             err && typeof err === 'object' && 'code' in err
               ? (err as NodeJS.ErrnoException).code
@@ -172,48 +160,51 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
             }
           }
           const message = err instanceof Error ? err.message : String(err)
-          return { error: `Failed to create directory: ${message}` }
+          return repoCreateFailure('createDirectoryFailed', {
+            detail: message
+          })
         }
       }
 
       if (repoKind === 'git') {
-        // Why: track which git step ran so catch can attribute failure; the identity-hint regex only applies during commit.
+        // The failing Git step controls attribution and commit-only identity hints.
         let step: 'init' | 'commit' = 'init'
         try {
-          await gitExecFileAsync(['init'], { cwd: targetPath })
+          // Host Git on purpose: the new repo has no project yet, even inside one.
+          await gitExecFileAsync(['init'], { cwd: targetPath, hostGit: true })
           step = 'commit'
           await gitExecFileAsync(['commit', '--allow-empty', '-m', 'Initial commit'], {
-            cwd: targetPath
+            cwd: targetPath,
+            // Host Git on purpose: the new repo has no project yet, even inside one.
+            hostGit: true
           })
         } catch (err) {
-          // Only rm the dir if we made it (pre-existing folders must survive retry); otherwise strip just the .git/ that git init created.
+          // Rollback may remove only what this request created; preserve preexisting folders.
           if (createdDir) {
             await rm(targetPath, { recursive: true, force: true }).catch(() => {})
           } else if (step === 'commit') {
-            await rm(join(targetPath, '.git'), { recursive: true, force: true }).catch(() => {})
+            await rm(join(targetPath, '.git'), {
+              recursive: true,
+              force: true
+            }).catch(() => {})
           }
           const message = err instanceof Error ? err.message : String(err)
           if (
             step === 'commit' &&
             /Please tell me who you are|user\.name|user\.email/i.test(message)
           ) {
-            return {
-              error:
-                'Git author identity is not configured. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"`, then try again.'
-            }
+            return repoCreateFailure('gitIdentityMissing')
           }
-          const stepLabel =
-            step === 'init'
-              ? 'Failed to initialize git repository'
-              : 'Failed to create initial commit'
-          return { error: `${stepLabel}: ${message}` }
+          return repoCreateFailure(step === 'init' ? 'gitInitFailed' : 'initialCommitFailed', {
+            detail: message
+          })
         }
       }
 
-      // Why: ipcMain.handle doesn't serialize calls, so re-check dedup here to close the race between the first check and addRepo.
+      // IPC calls interleave while awaiting filesystem and Git work; recheck before registration.
       const raceWinner = store.getRepos().find((r) => r.path === targetPath)
       if (raceWinner) {
-        // Why: don't rm even if we made the dir — the race winner owns it; leaking an empty folder beats deleting a dir in use.
+        // A concurrent winner owns the directory even if this request created it.
         emitRepoAdded('folder_picker', true, repoKind === 'git')
         return { repo: raceWinner }
       }
@@ -243,7 +234,6 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       await prepareLocalWorktreeRootForRepo(store, repo)
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
-      // Why: repos:create git-inits when kind is 'git', so repoKind is the true git-vs-folder signal.
       emitRepoAdded('folder_picker', false, repoKind === 'git')
       return { repo }
     }

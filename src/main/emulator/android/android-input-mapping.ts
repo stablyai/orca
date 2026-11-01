@@ -2,8 +2,7 @@ import { EmulatorError } from '../emulator-errors'
 
 export type DeviceScreenSize = { width: number; height: number }
 
-// Why: serve-sim reports taps in normalized 0..1 (top-left origin); adb input
-// needs integer device pixels, and the max addressable pixel is dimension-1.
+// Input uses normalized coordinates, while the last addressable device pixel is dimension - 1.
 function toPixel(normalized: number, dimension: number): number {
   const rounded = Math.round(normalized * dimension)
   const max = dimension - 1
@@ -16,8 +15,6 @@ function toPixel(normalized: number, dimension: number): number {
   return rounded
 }
 
-// Normalized 0..1 (top-left origin) -> integer device pixels, clamped to
-// [0, width-1]/[0, height-1].
 export function normalizedToDevicePixels(
   x: number,
   y: number,
@@ -45,8 +42,6 @@ const BUTTON_KEYCODES: Record<string, number> = {
   voldown: 25
 }
 
-// Accepts the canonical names plus the common aliases above. Throws
-// EmulatorError('emulator_error', ...) on an unknown name.
 export function androidButtonKeycode(name: string): number {
   const keycode = BUTTON_KEYCODES[name]
   if (keycode === undefined) {

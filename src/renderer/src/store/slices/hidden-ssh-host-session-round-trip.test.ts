@@ -57,9 +57,13 @@ function createSessionBoundary(guarded: boolean) {
         partitions[hostId ?? 'local'] = { ...read(hostId), ...structuredClone(patch) }
       }
     },
-    setSync: (state: WorkspaceSessionState, hostId?: ExecutionHostId) => {
-      if (writable(hostId)) {
-        partitions[hostId ?? 'local'] = structuredClone(state)
+    stageBeforeUnloadSync: (args: {
+      sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
+    }) => {
+      for (const { state, hostId } of args.sessions) {
+        if (writable(hostId)) {
+          partitions[hostId ?? 'local'] = structuredClone(state)
+        }
       }
     }
   }
@@ -94,12 +98,9 @@ async function saveDebouncedPatch(api: ReturnType<typeof createSessionBoundary>)
 
 async function saveQuitSnapshot(api: ReturnType<typeof createSessionBoundary>) {
   const state = await bootRenderer(api)
-  for (const snapshot of buildWorkspaceSessionHostSnapshots(
-    buildWorkspaceSessionPayload(state),
-    state
-  )) {
-    api.setSync(snapshot.state, snapshot.hostId)
-  }
+  api.stageBeforeUnloadSync({
+    sessions: buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(state), state)
+  })
 }
 
 describe('a fenced SSH host keeps its source session partition through renderer saves', () => {

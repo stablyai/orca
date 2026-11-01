@@ -1,26 +1,39 @@
-/**
- * Slots a live terminal daemon still runs from. Local `orca serve` forks its daemon from its own
- * slot, and that daemon outlives orcad, so the instance lock alone stops naming the slot.
- */
+// Daemons outlive instance locks; pin their entry/runtime slots separately.
 import { readdirSync, readFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parseDaemonPidFile } from '../daemon/daemon-pid-file-parse'
 import { hasErrorCode, isProcessAlive } from '../daemon/daemon-process-inspection'
+import {
+  currentOrcadPeerMachine,
+  orcadPeerPidIsJudgeableHere,
+  type OrcadPeerMachine
+} from './orcad-lock-holder-locality'
+import { orcadDataRootIsOnLocalDisk } from './orcad-data-root-locality'
+
+export type OrcadSlotPeerJudge = {
+  self: OrcadPeerMachine
+  dataRootIsOnLocalDisk: (dataRoot: string) => boolean
+}
+
+export function defaultOrcadSlotPeerJudge(): OrcadSlotPeerJudge {
+  return { self: currentOrcadPeerMachine(), dataRootIsOnLocalDisk: orcadDataRootIsOnLocalDisk }
+}
 
 const DAEMON_PID_FILE = /^daemon-v\d+\.pid$/u
 
-/** Slot names under `cacheRoot` holding a live daemon's entry or runtime; null when unprovable. */
+/** Null when live-daemon slot ownership cannot be established. */
 export function liveDaemonOrcadSlots(
   userDataPath: string,
   cacheRoot: string,
-  isAlive: (pid: number) => boolean = isProcessAlive
+  isAlive: (pid: number) => boolean = isProcessAlive,
+  judge: OrcadSlotPeerJudge = defaultOrcadSlotPeerJudge()
 ): string[] | null {
   const runtimeDir = join(userDataPath, 'daemon')
   let names: string[]
   try {
     names = readdirSync(runtimeDir)
   } catch (error) {
-    // No daemon directory means no daemon; anything else leaves the slots unprovable.
+    // Only ENOENT proves absence; other errors leave slot ownership unknown.
     return hasErrorCode(error, 'ENOENT') ? [] : null
   }
   const slots: string[] = []
@@ -32,10 +45,16 @@ export function liveDaemonOrcadSlots(
       return null
     }
     if (!record || !Number.isInteger(record.pid) || record.pid <= 0) {
-      // A record being written or torn names no process we could rule out.
+      // Torn/incomplete records cannot prove that their process is gone.
       return null
     }
-    if (!isAlive(record.pid)) {
+    // Shared-home records from another machine/boot remain unverifiable; keep their slots.
+    const judgeable = orcadPeerPidIsJudgeableHere(
+      { bootId: record.bootId ?? undefined },
+      judge.self,
+      () => judge.dataRootIsOnLocalDisk(userDataPath)
+    )
+    if (judgeable && !isAlive(record.pid)) {
       continue
     }
     for (const path of [record.entryPath, record.spawnerExecPath]) {

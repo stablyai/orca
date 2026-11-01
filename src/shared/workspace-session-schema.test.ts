@@ -104,9 +104,7 @@ describe('parseWorkspaceSession', () => {
   })
 
   it('preserves an isolated browser tab session partition across hydration', () => {
-    // Regression for #6923: the resolved partition must survive persist→load,
-    // otherwise a restored isolated tab falls back to the shared default
-    // partition when the renderer profile mirror is stale at startup.
+    // Preserve isolated storage despite a stale renderer profile mirror after restart (#6923).
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: null,
@@ -169,7 +167,7 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it("keeps a launch pane's state for the tab's life, and drops a malformed one", () => {
+  it('drops a launch pane an older build saved: after a restart its pane is an ordinary pane', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: null,
@@ -205,11 +203,8 @@ describe('parseWorkspaceSession', () => {
     })
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.value.tabsByWorktree.wt[0].agentLaunchPane).toEqual({
-        leafId: 'leaf-1',
-        outcome: { kind: 'not-started', code: 'boom' }
-      })
-      expect(result.value.tabsByWorktree.wt[1].agentLaunchPane).toBeUndefined()
+      expect(result.value.tabsByWorktree.wt[0]).not.toHaveProperty('agentLaunchPane')
+      expect(result.value.tabsByWorktree.wt[1]).not.toHaveProperty('agentLaunchPane')
     }
   })
 
@@ -439,7 +434,6 @@ describe('parseWorkspaceSession', () => {
   it('rejects a session with missing required top-level fields', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null
-      // missing activeWorktreeId, tabsByWorktree, etc.
     })
     expect(result.ok).toBe(false)
   })
@@ -725,9 +719,7 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  // Why: z.object strips unlisted keys, so a page row that reaches disk with the remote page
-  // identity comes back without it — and hydration can only reconstruct the handle it needs to
-  // reclaim a client-hosted page if both halves of that identity survive the round trip.
+  // Reclaiming client-hosted pages after relaunch requires both persisted identity fields; z.object drops unlisted fields.
   it('preserves the remote page identity of a client-hosted browser page', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

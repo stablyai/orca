@@ -18,9 +18,12 @@ on:
         required: false
 permissions:
   contents: read
+
+# Candidate source must not write caches in the dispatch branch's scope.
+cache-mode: read
 jobs:
   compatibility:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
@@ -42,7 +45,7 @@ jobs:
         env:
           VITE_EXPOSE_STORE: 'true'
         run: |
-          pnpm run build:relay
+          pnpm run build:wsl-guest
           pnpm exec electron-vite build --mode e2e
           pnpm run build:web-from-renderer
       - name: Run both mixed-version directions
@@ -64,7 +67,7 @@ jobs:
           path: test-results/
           retention-days: 3
   layout-compat:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
@@ -86,7 +89,7 @@ jobs:
         env:
           VITE_EXPOSE_STORE: 'true'
         run: |
-          pnpm run build:relay
+          pnpm run build:wsl-guest
           pnpm exec electron-vite build --mode e2e
           pnpm run build:cli
           pnpm run build:web-from-renderer

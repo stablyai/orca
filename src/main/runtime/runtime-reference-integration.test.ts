@@ -11,7 +11,7 @@ import { parseWorkspaceReferenceUrl } from '../../shared/workspace-reference-ide
 vi.mock('./agent-session-record-store-slot', () => ({
   peekOpenedAgentSessionRecordStore: () => null,
   openAgentSessionRecordStoreOnce: async () => ({
-    store: { listRecords: () => [], getRecord: () => null }
+    store: { listConversations: () => [], getConversation: () => null }
   })
 }))
 

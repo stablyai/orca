@@ -1,6 +1,5 @@
 import { spawnProcess } from '@orca/process-host'
 import type { ProcessSpec, SpawnedProcess } from '@orca/process-host/process-spec'
-import { daemonScopeUnitName, detectOwnCgroupScopeUnit } from './daemon-cgroup-scope'
 
 // The pipe closes even on SIGKILL; a live/reused owner PID always vetoes cleanup.
 const SCOPE_DEATH_WATCH_SCRIPT = `
@@ -18,29 +17,19 @@ while IFS= read -r cgroup; do
   esac
 done < /proc/self/cgroup
 [ "$owned" = 1 ] || exit 0
-# Slice first: stopping the scope kills this script before a second StopUnit is sent.
-exec systemctl --user --no-block stop \${3:+"$3"} "$2"
+exec systemctl --user --no-block stop "$2"
 `
 
 type ScopeDeathWatchOptions = {
-  freshScope: boolean
-  launchNonce?: string
-  /** The terminal ceiling slice; its scopes sit outside the daemon's and must be reaped too. */
-  ceilingSlice?: string | null
+  /** Stopping the owned daemon scope also reaps its bound terminal slice. */
+  daemonScope: string | null
   log: (event: string, details?: Record<string, unknown>) => void
-  platform?: NodeJS.Platform
-  detectScope?: typeof detectOwnCgroupScopeUnit
   spawn?: (spec: ProcessSpec) => SpawnedProcess
 }
 
 export function startDaemonScopeDeathWatch(options: ScopeDeathWatchOptions): SpawnedProcess | null {
-  const { freshScope, launchNonce, log } = options
-  if ((options.platform ?? process.platform) !== 'linux' || !freshScope || !launchNonce) {
-    return null
-  }
-  const unit = daemonScopeUnitName(launchNonce)
-  // Migrated legacy scopes may also hold the GUI, so a name alone never authorizes cleanup.
-  if ((options.detectScope ?? detectOwnCgroupScopeUnit)() !== unit) {
+  const { daemonScope: unit, log } = options
+  if (!unit) {
     return null
   }
   const env = { ...process.env }
@@ -48,14 +37,7 @@ export function startDaemonScopeDeathWatch(options: ScopeDeathWatchOptions): Spa
   try {
     const child = (options.spawn ?? spawnProcess)({
       program: '/bin/sh',
-      args: [
-        '-c',
-        SCOPE_DEATH_WATCH_SCRIPT,
-        'orca-daemon-scope-watch',
-        String(process.pid),
-        unit,
-        ...(options.ceilingSlice ? [options.ceilingSlice] : [])
-      ],
+      args: ['-c', SCOPE_DEATH_WATCH_SCRIPT, 'orca-daemon-scope-watch', String(process.pid), unit],
       env,
       detached: true,
       stdio: ['pipe', 'ignore', 'ignore']

@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
 
 const shim = vi.hoisted(() => ({ ensureLinuxTerminalOrcaCliShimDir: vi.fn() }))
 vi.mock('../cli/linux-terminal-orca-cli-shim', () => shim)
@@ -61,8 +62,7 @@ afterEach(() => {
 
 describe('sealStructuredSessionChild identity', () => {
   it("gives an ordinary chat session its own id and this app's CLI, and no terminal identity", () => {
-    // The id names the caller, so a bare `orca orchestration check` acts as this session instead of
-    // guessing a terminal — every guess landed on a sibling pane, and `check` consumed its mail.
+    // Session id prevents destructive orchestration check from guessing a sibling terminal's mailbox.
     pinPlatform('linux')
     installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
     const childEnv = { PATH: '/usr/bin' }
@@ -76,6 +76,10 @@ describe('sealStructuredSessionChild identity', () => {
       ORCA_CLI_BIN_DIR: SHIM_DIR,
       // The instance that minted the id, so any current CLI dials it rather than the default.
       ORCA_USER_DATA_PATH: USER_DATA,
+      // Empty, which the CLI reads as unset, so a profile's selector cannot send it elsewhere.
+      ORCA_ENVIRONMENT: '',
+      ORCA_PAIRING_CODE: '',
+      ORCA_REMOTE_PAIRING: '',
       ORCA_AGENT_SESSION_SPAWN_TOKEN: SEALED_TEST_SPAWN_TOKEN
     })
     // A chat names itself by its id alone: no handle, no pane key.
@@ -83,6 +87,24 @@ describe('sealStructuredSessionChild identity', () => {
     expect(env.ORCA_PANE_KEY).toBeUndefined()
     expect(childEnv).toEqual({ PATH: '/usr/bin' })
   })
+
+  it.each(['ORCA_ENVIRONMENT', 'ORCA_PAIRING_CODE', 'ORCA_REMOTE_PAIRING'])(
+    "keeps an inherited %s from sending the agent's CLI to another server",
+    (key) => {
+      installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
+      // A profile's export reaches both the shell snapshot a launch builds on and the server's
+      // own env, which the spawn merges under the launch's overlay.
+      const inherited = { PATH: '/usr/bin', [key]: 'other-server' }
+      const launch = { env: sealedChildEnv(SESSION_ID, inherited) }
+      const childEnv = resolveProviderChildEnv(launch, inherited)
+      expect(childEnv).toMatchObject({
+        ORCA_USER_DATA_PATH: USER_DATA,
+        ORCA_ENVIRONMENT: '',
+        ORCA_PAIRING_CODE: '',
+        ORCA_REMOTE_PAIRING: ''
+      })
+    }
+  )
 
   it('replaces an id inherited from an Orca launched inside another session', () => {
     installFakeAppEnvironment({ isPackaged: () => false, getPath: () => USER_DATA })
@@ -94,8 +116,7 @@ describe('sealStructuredSessionChild identity', () => {
   })
 
   it('gives a structured worker its id and keeps the handle it was minted', () => {
-    // For orchestration the id wins and the host maps it back to this handle, so the worker keeps
-    // one identity; the handle stays for the handle-based surfaces outside orchestration.
+    // Orchestration maps session id back to the worker handle; other surfaces still use the handle directly.
     installFakeAppEnvironment({ isPackaged: () => false, getPath: () => USER_DATA })
     const handle = registerWorker()
     const env = sealedChildEnv(SESSION_ID, { PATH: '/usr/bin' })
@@ -113,10 +134,18 @@ describe('sealStructuredSessionChild identity', () => {
       })
       const env = sealedChildEnv(SESSION_ID, {
         PATH: '/usr/bin',
-        ORCA_USER_DATA_PATH: '/other/profile'
+        ORCA_USER_DATA_PATH: '/other/profile',
+        ORCA_ENVIRONMENT: 'stale-shell-selection',
+        ORCA_PAIRING_CODE: 'stale-pairing',
+        ORCA_REMOTE_PAIRING: 'stale-remote-pairing'
       })
       expect(env.ORCA_CLI_COMMAND).toBe(launcher)
       expect(env.ORCA_USER_DATA_PATH).toBe(USER_DATA)
+      expect(env).toMatchObject({
+        ORCA_ENVIRONMENT: '',
+        ORCA_PAIRING_CODE: '',
+        ORCA_REMOTE_PAIRING: ''
+      })
       expect(env.ORCA_AGENT_SESSION_ID).toBe(SESSION_ID)
       expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}:/usr/bin`)
     })
@@ -127,8 +156,7 @@ describe('sealStructuredSessionChild identity', () => {
     })
 
     it('on packaged Linux, through the bare-orca shim, named by absolute path', () => {
-      // Without this the child's first `orca orchestration check` execs GNOME Orca — the CLI
-      // installs as `orca-ide` on Linux (stablyai/orca#7904) — and the dispatch hangs to timeout.
+      // Bare orca on Linux is GNOME's screen reader; this app installs as orca-ide (#7904).
       pinPlatform('linux')
       installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
       const env = sealedChildEnv(SESSION_ID, { PATH: '/usr/bin:/bin' })
@@ -165,8 +193,7 @@ describe('sealStructuredSessionChild identity', () => {
   })
 
   it('omits the CLI command when no launcher resolves, never naming a bare `orca`', () => {
-    // On packaged Linux the shim can fail to resolve (no bundled launcher, an unverified AppImage);
-    // a bare `orca` there is GNOME's screen reader, and an inherited value names another app's CLI.
+    // An unresolved bundled launcher cannot fall back to bare or inherited orca: those can launch GNOME or another app.
     pinPlatform('linux')
     installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
     shim.ensureLinuxTerminalOrcaCliShimDir.mockReturnValue(null)
@@ -183,8 +210,7 @@ describe('sealStructuredSessionChild identity', () => {
   })
 
   it('never puts a pane key in the child environment', () => {
-    // A pane key here flows into hook-emitted agent statuses and the attestation, agent-row and
-    // mobile-projection pipelines, all of which assume it names a live PTY leaf.
+    // Hook attestation, agent rows and mobile projections assume pane keys name live PTY leaves.
     pinPlatform('linux')
     installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
     registerWorker()
@@ -194,9 +220,7 @@ describe('sealStructuredSessionChild identity', () => {
   })
 
   it('never names the WSL-scoped launcher, because a structured worker cannot run in WSL', () => {
-    // `orca-ide` is the literal the PTY lane exports for WSL only. A structured session that
-    // resolves to a WSL distro is refused a host scope, so it never becomes a worker at all —
-    // which is why the bare-`orca` shim, not the literal, is the right fix on Linux.
+    // WSL exports orca-ide for PTYs; structured WSL sessions cannot become workers, so Linux needs the bare-orca shim.
     expect(
       structuredWorkerHostScope({
         executionHostId: 'local',

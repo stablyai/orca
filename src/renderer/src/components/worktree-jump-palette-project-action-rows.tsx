@@ -12,6 +12,8 @@ import type {
 } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { PaletteHostBadgeChip } from './worktree-jump-palette-primitives'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { BROWSER_NAVIGATION_ACTION_ID } from './cmd-j/browser-navigation-action'
 
 export function WorktreeJumpPaletteProjectRow({
   entry,
@@ -25,7 +27,11 @@ export function WorktreeJumpPaletteProjectRow({
   const result = entry.result
   const isProject = result.kind === 'project'
   const hostBadge = isProject
-    ? getPaletteHostBadge(result.repo, controller.hostOptions, controller.hostFilterActive)
+    ? getPaletteHostBadge(
+        getRepoExecutionHostId(result.repo),
+        controller.hostOptions,
+        controller.hostFilterActive
+      )
     : null
   const badgeLabel = isProject
     ? translate('auto.components.WorktreeJumpPalette.projectBadge', 'Project')
@@ -84,7 +90,9 @@ export function WorktreeJumpPaletteActionRow({
   const kindLabel =
     entry.type === 'settings'
       ? translate('auto.components.WorktreeJumpPalette.settingsBadge', 'Settings')
-      : translate('auto.components.WorktreeJumpPalette.actionBadge', 'Action')
+      : result.id === BROWSER_NAVIGATION_ACTION_ID
+        ? translate('worktreeJumpPalette.websiteBadge', 'Website')
+        : translate('auto.components.WorktreeJumpPalette.actionBadge', 'Action')
 
   return (
     <CommandItem

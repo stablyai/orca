@@ -1,7 +1,6 @@
 import type { IDisposable } from '@xterm/xterm'
 
-/** Installs mouse-hide-while-typing behavior on a single terminal pane.
- *  Returns an IDisposable that cleans up listeners and restores cursor style. */
+/** Restore the cursor and remove listeners on disposal. */
 export function installMouseHideWhileTyping(
   terminal: { onData: (callback: () => void) => IDisposable },
   container: HTMLElement

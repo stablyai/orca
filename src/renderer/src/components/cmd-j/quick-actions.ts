@@ -1,4 +1,12 @@
-import { FileText, FolderPlus, Globe, Play, SquareTerminal, Trash2 } from 'lucide-react'
+import {
+  FileText,
+  FolderPlus,
+  Globe,
+  PanelRightClose,
+  Play,
+  SquareTerminal,
+  Trash2
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CmdJQuickActionAvailability, CmdJQuickActionContext } from './quick-action-context'
 import {
@@ -24,6 +32,8 @@ export type CmdJQuickAction = {
   description: string
   icon: LucideIcon
   verbKeywords: string[]
+  /** Query-bound actions must still match the live input when selected. */
+  sourceQuery?: string
   isAvailable: (ctx: CmdJQuickActionContext) => CmdJQuickActionAvailability
   run: (ctx: CmdJQuickActionContext) => Promise<CmdJQuickActionRunResult>
 }
@@ -40,13 +50,7 @@ function currentWorkspaceActionAvailability(
   return getCurrentWorkspaceActionAvailability(ctx)
 }
 
-function browserWorkspaceActionAvailability(
-  ctx: CmdJQuickActionContext
-): CmdJQuickActionAvailability {
-  return getBrowserWorkspaceActionAvailability(ctx)
-}
-
-async function runWorkspaceAction(
+export async function runWorkspaceAction(
   ctx: CmdJQuickActionContext,
   run: (groupId: string) => Promise<void>
 ): Promise<CmdJQuickActionRunResult> {
@@ -61,9 +65,18 @@ async function runWorkspaceAction(
   return { status: 'ok' }
 }
 
-// Why: Cmd+J actions are for high-frequency, safe, context-light verbs.
-// Context-heavy setup flows such as Ghostty import and browser cookie import
-// stay inside their Settings panes where explanatory UI and failure states fit.
+export async function runBrowserWorkspaceAction(
+  ctx: CmdJQuickActionContext,
+  run: (groupId: string) => Promise<void>
+): Promise<CmdJQuickActionRunResult> {
+  const availability = getBrowserWorkspaceActionAvailability(ctx)
+  if (!availability.available) {
+    return { status: 'unavailable', reason: availability.reason }
+  }
+  return runWorkspaceAction(ctx, run)
+}
+
+// Keep context-heavy imports in Settings, where explanatory UI and failure states fit.
 export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] => [
   {
     id: 'new-browser-tab',
@@ -80,14 +93,29 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
       translate('auto.components.cmd.j.quick.actions.verbs.openBrowser', 'open browser'),
       translate('auto.components.cmd.j.quick.actions.verbs.browserTab', 'browser tab')
     ],
-    isAvailable: browserWorkspaceActionAvailability,
-    run: async (ctx) => {
-      const availability = browserWorkspaceActionAvailability(ctx)
-      if (!availability.available) {
-        return { status: 'unavailable', reason: availability.reason }
-      }
-      return runWorkspaceAction(ctx, ctx.openNewBrowserTab)
-    }
+    isAvailable: getBrowserWorkspaceActionAvailability,
+    run: (ctx) => runBrowserWorkspaceAction(ctx, ctx.openNewBrowserTab)
+  },
+  {
+    id: 'new-browser-tab-split-right',
+    kind: 'action',
+    title: translate(
+      'auto.components.cmd.j.quick.actions.newBrowserTabSplitRight',
+      'New Browser Tab in Right Split'
+    ),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.newBrowserTabSplitRightDescription',
+      'Open a browser tab in a new split to the right.'
+    ),
+    icon: PanelRightClose,
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.browserRight', 'browser right'),
+      translate('auto.components.cmd.j.quick.actions.verbs.splitBrowser', 'split browser'),
+      translate('auto.components.cmd.j.quick.actions.verbs.browserSplit', 'browser split')
+    ],
+    isAvailable: getBrowserWorkspaceActionAvailability,
+    run: (ctx) =>
+      runBrowserWorkspaceAction(ctx, (groupId) => ctx.openNewBrowserTab(groupId, 'right'))
   },
   {
     id: 'new-markdown-file',

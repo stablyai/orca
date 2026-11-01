@@ -6,7 +6,9 @@ export function NativeChatSessionOptionChoiceBody(props: {
     <div className="min-w-0 py-0.5">
       <div>{props.label}</div>
       {props.description ? (
-        <div className="text-xs font-normal text-muted-foreground">{props.description}</div>
+        <div className="text-xs font-normal text-balance text-muted-foreground">
+          {props.description}
+        </div>
       ) : null}
     </div>
   )

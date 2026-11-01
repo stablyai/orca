@@ -1,11 +1,4 @@
-/**
- * The target size an oversized clipboard image is redrawn at, and the type of whatever redraws it.
- *
- * A leaf of its own for the reason `mobile-clipboard-image-upload-chunk.ts` is one: this is the
- * arithmetic the resize is measured by, and the module it came from carries the upload path's RPC
- * operations and its logical client. The render check that measures a real raster in a browser
- * wants the arithmetic and none of that.
- */
+// Keep resize arithmetic free of upload RPC dependencies so browser raster checks can import it alone.
 
 // Why: PNG bytes don't scale exactly with pixel area, so undershoot the target on
 // each pass and let the bounded retry converge instead of distorting in one shot.
@@ -16,10 +9,6 @@ export type MobileClipboardImageResizer = (
   target: { width: number; height: number }
 ) => Promise<{ data: string; width: number; height: number }>
 
-/**
- * Returns the pixel dimensions to resize a clipboard image to so its base64 fits
- * the upload budget, or null when it already fits (or its dimensions are unusable).
- */
 export function computeMobileClipboardImageDownscale(
   base64Length: number,
   width: number,

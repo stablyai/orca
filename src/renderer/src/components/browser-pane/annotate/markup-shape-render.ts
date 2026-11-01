@@ -1,6 +1,4 @@
-// Canvas rendering for markup shapes. Shared by the live overlay (draws into the
-// visible canvas) and the compositor (draws into the offscreen export canvas), so
-// on-screen preview and the delivered PNG are pixel-identical.
+// Use one shape renderer for the live canvas and exported PNG so preview and delivery agree.
 
 import {
   arrowHeadGeometry,
@@ -63,8 +61,7 @@ function drawStroke(ctx: CanvasRenderingContext2D, shape: PenShape): void {
 }
 
 function drawHighlight(ctx: CanvasRenderingContext2D, shape: HighlightShape): void {
-  // Why: translucent + fat so it reads as a marker pass over the screenshot
-  // without hiding the pixels beneath.
+  // Translucent wide ink reads as highlighting without hiding the screenshot.
   ctx.globalAlpha = HIGHLIGHT_ALPHA
   const width = highlightWidth(shape.width)
   ctx.lineWidth = width
@@ -132,8 +129,7 @@ function drawEllipse(ctx: CanvasRenderingContext2D, shape: EllipseShape): void {
 function applyTextStyle(ctx: CanvasRenderingContext2D, shape: TextShape): void {
   ctx.font = `600 ${shape.fontSize}px ${TEXT_FONT_FAMILY}`
   ctx.textBaseline = 'top'
-  // Why: a thin contrasting halo keeps text legible over busy screenshots
-  // regardless of the underlying pixels.
+  // A contrasting halo keeps text legible over busy screenshots.
   ctx.lineWidth = textHaloWidth(shape.fontSize)
   ctx.lineJoin = 'round'
 }

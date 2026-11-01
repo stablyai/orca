@@ -1,13 +1,5 @@
-/**
- * Reliability contract:
- * - Invariant: link actions remain visible and interactive when they cross the Explorer seam.
- * - Failure source: the in-editor bubble was clipped by overflow-hidden workbench ancestors.
- * - Oracle: a real Chromium hit test inside the bubble/Explorer overlap resolves to the bubble.
- * - Layer: Electron is required because DOM shims cannot model clipping or stacking contexts.
- * - Wait: visible editor, Explorer, link, and bubble locators; no timing sleeps.
- * - Artifacts: Playwright retains a trace and screenshot on failure.
- * - Maturity: experimental pending CI soak history.
- */
+// Require real Chromium hit-testing in the link-bubble/Explorer overlap so overflow clipping cannot hide interactive actions.
+// Keep experimental maturity until CI soak; visible locators provide readiness and traces/screenshots retain failure evidence.
 
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'

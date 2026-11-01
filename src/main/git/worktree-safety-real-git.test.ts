@@ -1,9 +1,7 @@
-import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { runner } = vi.hoisted(() => ({ runner: vi.fn() }))
 vi.mock('./runner', () => ({
@@ -15,43 +13,15 @@ vi.mock('./status', () => ({ runWithGitReadCacheInvalidation: (run: () => unknow
 
 import { getBranchConflictKind, getBranchConflictKindViaExec } from './repo-branch-conflict'
 import { clearGitCapabilityStateForTests } from './git-capability-state'
+import { GitBinaryTestFixture } from '../../shared/git-binary.test-fixture'
 
-const execFileAsync = promisify(execFile)
-const image = process.env.ORCA_GIT_COMPAT_IMAGE
-const binary = process.env.ORCA_GIT_COMPAT_BINARY ?? 'git'
 const expectedVersion = process.env.ORCA_GIT_COMPAT_VERSION
-const dockerUser =
-  typeof process.getuid === 'function' && typeof process.getgid === 'function'
-    ? ['--user', `${process.getuid()}:${process.getgid()}`]
-    : []
+let fixture: GitBinaryTestFixture
 let root = ''
 let repo = ''
 
 async function git(args: string[], cwd = repo): Promise<{ stdout: string; stderr: string }> {
-  return image
-    ? execFileAsync(
-        'docker',
-        [
-          'run',
-          '--rm',
-          '--network=none',
-          ...dockerUser,
-          '-v',
-          `${root}:${root}`,
-          '-w',
-          cwd,
-          image,
-          '-c',
-          `safe.directory=${cwd}`,
-          ...args
-        ],
-        { maxBuffer: 2 * 1024 * 1024 }
-      )
-    : execFileAsync(binary, args, {
-        cwd,
-        env: { ...process.env, HOME: root, XDG_CONFIG_HOME: root, GIT_CONFIG_NOSYSTEM: '1' },
-        maxBuffer: 2 * 1024 * 1024
-      })
+  return fixture.exec(args, cwd)
 }
 
 async function initializeRepo(cwd: string): Promise<void> {
@@ -68,23 +38,30 @@ async function initializeRepo(cwd: string): Promise<void> {
 }
 
 beforeAll(async () => {
-  const { stdout } = await execFileAsync(
-    image ? 'docker' : binary,
-    image ? ['run', '--rm', '--network=none', ...dockerUser, image, '--version'] : ['--version']
-  )
+  root = await realpath(await mkdtemp(join(tmpdir(), 'orca-worktree-safety-')))
+  fixture = new GitBinaryTestFixture(root)
+  await fixture.start()
+  const { stdout } = await fixture.exec(['--version'])
   expect(stdout).toContain(expectedVersion ? `git version ${expectedVersion}` : 'git version ')
 })
 
+afterAll(async () => {
+  try {
+    await fixture.stop()
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 beforeEach(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), 'orca-worktree-safety-')))
-  repo = join(root, 'repo')
+  repo = await mkdtemp(join(root, 'repo-'))
   await initializeRepo(repo)
   clearGitCapabilityStateForTests()
   runner.mockImplementation((args: string[], options: { cwd?: string }) => git(args, options.cwd))
 })
 
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true })
+  await rm(repo, { recursive: true, force: true })
 })
 
 describe('worktree safety with the real Git binary', () => {

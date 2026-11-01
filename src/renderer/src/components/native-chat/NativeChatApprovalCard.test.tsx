@@ -190,7 +190,6 @@ describe('NativeChatApprovalCard', () => {
     expect(actions?.classList.contains('shrink-0')).toBe(true)
   })
 
-  // The path is what the request touches; the provider's ask-rule bookkeeping is not something to decide on.
   it('names a blocked path the request does not show, but never the matched ask rule', () => {
     const fromJournal = {
       title: 'Claude wants to run git push',
@@ -272,14 +271,11 @@ describe('NativeChatApprovalCard', () => {
     const actions = document.querySelector('[data-native-chat-approval-actions="true"]')
     const approve = screen.getByRole('button', { name: 'Approve plan' })
 
-    // Living in the shared region is what gives a plan the cap and the scroll.
     expect(content?.contains(plan)).toBe(true)
     expect(content?.classList.contains('max-h-72')).toBe(true)
     expect(content?.classList.contains('overflow-auto')).toBe(true)
-    // A document, not a payload.
     expect(screen.getByRole('heading', { name: 'Release plan' })).toBeTruthy()
     expect(content?.textContent).toContain('/repo/PLAN.md')
-    // A typed plan replaces the generic detail rather than rendering both.
     expect(document.querySelector('[data-native-chat-approval-detail="true"]')).toBeNull()
     expect(content?.textContent).not.toContain('raw json that must not be shown')
     expect(actions?.contains(approve)).toBe(true)

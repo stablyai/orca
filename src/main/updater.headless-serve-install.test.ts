@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 import { MAC_DEFERRED_STAGING_TIMEOUT_MS } from './updater/updater-state'
-import type { BrowserWindow } from 'electron'
-
-function windowSending(send: ReturnType<typeof vi.fn>): BrowserWindow {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the updater only reaches the window through webContents.send.
-  return { webContents: { send } } as unknown as BrowserWindow
-}
+import { updaterMainWindow } from './updater-test-main-window'
 
 const {
   appMock,
@@ -95,7 +90,6 @@ vi.mock('./linux-update-package-type', () => ({
   getLinuxRootPackageType: () => null,
   isExternallyManagedLinuxInstall: () => false
 }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('./ipc/pty/kill-all', () => ({ killAllPty: killAllPtyMock }))
 vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
 vi.mock('./updater-nudge', () => ({
@@ -116,6 +110,11 @@ vi.mock('./update-install-exit-watchdog', () => ({
 vi.mock('./updater-lifecycle-diagnostics', () => ({
   recordUpdaterLifecycle: recordUpdaterLifecycleMock
 }))
+const prepareShipItStagingMock = vi.hoisted(() => vi.fn((): Promise<void> | null => null))
+vi.mock('./updater/shipit-leftover-recovery', () => ({
+  prepareThisProcessShipItStaging: prepareShipItStagingMock
+}))
+
 vi.mock('./serve-update-handoff', () => ({
   failServeUpdateHandoff: failServeUpdateHandoffMock,
   getServeUpdateHandoffFailure: vi.fn(() => null),
@@ -144,6 +143,7 @@ describe('headless serve update install handoff', () => {
     requestServeUpdateHandoffMock.mockReset().mockReturnValue(true)
     failServeUpdateHandoffMock.mockReset()
     armUpdateInstallExitWatchdogMock.mockReset()
+    prepareShipItStagingMock.mockReset().mockReturnValue(null)
     resetHandlers()
   })
 
@@ -175,13 +175,10 @@ describe('headless serve update install handoff', () => {
     killAllPtyMock.mockImplementation(beginSessionCleanup)
 
     const { checkForUpdatesFromMenu, quitAndInstall, setupAutoUpdater } = await loadUpdaterModule()
-    setupAutoUpdater(
-      { webContents: { send } } as never,
-      {
-        getLastUpdateCheckAt: () => Date.now(),
-        installMode: 'unsupported-headless-serve'
-      } as never
-    )
+    setupAutoUpdater(updaterMainWindow(send), {
+      getLastUpdateCheckAt: () => Date.now(),
+      installMode: 'unsupported-headless-serve'
+    })
 
     checkForUpdatesFromMenu()
     await vi.advanceTimersByTimeAsync(0)
@@ -250,7 +247,7 @@ describe('headless serve update install handoff', () => {
     })
 
     const { checkForUpdatesFromMenu, downloadUpdate, setupAutoUpdater } = await loadUpdaterModule()
-    setupAutoUpdater({ webContents: { send } } as never, {
+    setupAutoUpdater(updaterMainWindow(send), {
       getLastUpdateCheckAt: () => Date.now(),
       installMode: 'unsupported-headless-serve'
     })
@@ -307,7 +304,7 @@ describe('headless serve update install handoff', () => {
 
     const { checkForUpdatesFromMenu, downloadUpdate, quitAndInstall, setupAutoUpdater } =
       await loadUpdaterModule()
-    setupAutoUpdater({ webContents: { send } } as never, {
+    setupAutoUpdater(updaterMainWindow(send), {
       getLastUpdateCheckAt: () => Date.now(),
       installMode: 'supervised-headless-serve',
       onBeforeQuit: () => {
@@ -344,6 +341,54 @@ describe('headless serve update install handoff', () => {
     ])
   })
 
+  it('clears leftover ShipIt state on macOS right before its deferred staging, not at download', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    try {
+      const lifecycle: string[] = []
+      prepareShipItStagingMock.mockImplementation(() => {
+        lifecycle.push('shipit-staging-prepared')
+        return Promise.resolve()
+      })
+      requestServeUpdateHandoffMock.mockImplementation(() => {
+        lifecycle.push('handoff-persisted')
+        return true
+      })
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+        return Promise.resolve(null)
+      })
+      autoUpdaterMock.quitAndInstall.mockImplementation(() => {
+        lifecycle.push('native-quit-and-install')
+      })
+      const { checkForUpdatesFromMenu, downloadUpdate, quitAndInstall, setupAutoUpdater } =
+        await loadUpdaterModule()
+      setupAutoUpdater(updaterMainWindow(vi.fn()), {
+        getLastUpdateCheckAt: () => Date.now(),
+        installMode: 'supervised-headless-serve'
+      })
+      checkForUpdatesFromMenu()
+      await vi.advanceTimersByTimeAsync(0)
+      downloadUpdate()
+      expect(prepareShipItStagingMock).not.toHaveBeenCalled()
+      autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+
+      quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(lifecycle).toEqual([
+        'handoff-persisted',
+        'shipit-staging-prepared',
+        'native-quit-and-install'
+      ])
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
   it('keeps the serving owner intact when the supervisor handoff cannot be persisted', async () => {
     const send = vi.fn()
     requestServeUpdateHandoffMock.mockReturnValue(false)
@@ -354,7 +399,7 @@ describe('headless serve update install handoff', () => {
     })
 
     const { checkForUpdatesFromMenu, quitAndInstall, setupAutoUpdater } = await loadUpdaterModule()
-    setupAutoUpdater({ webContents: { send } } as never, {
+    setupAutoUpdater(updaterMainWindow(send), {
       getLastUpdateCheckAt: () => Date.now(),
       installMode: 'supervised-headless-serve'
     })
@@ -399,8 +444,7 @@ describe('headless serve update install handoff', () => {
       'mac-updater-app-quit'
     ]
 
-    // Models electron-updater's MacUpdater with autoInstallOnAppQuit off: each unstaged quitAndInstall adds a
-    // persistent native listener that app.quit()s and only starts Squirrel; native errors are re-emitted first.
+    // Model MacUpdater's persistent native quit listeners, including listeners left by failed attempts.
     const downloadSupervisedUpdate = async (
       lifecycle: string[]
     ): Promise<{
@@ -426,7 +470,7 @@ describe('headless serve update install handoff', () => {
 
       const { checkForUpdatesFromMenu, downloadUpdate, quitAndInstall, setupAutoUpdater } =
         await loadUpdaterModule()
-      setupAutoUpdater(windowSending(send), {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now(),
         installMode: 'supervised-headless-serve'
       })
@@ -435,7 +479,7 @@ describe('headless serve update install handoff', () => {
       downloadUpdate()
       autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
 
-      // Why: EventEmitter semantics — listeners run in registration order and a throw stops the rest.
+      // Preserve EventEmitter ordering: a throwing listener stops later listeners.
       const emitNative = (event: string, ...args: unknown[]): void => {
         for (const [name, handler] of nativeUpdaterMock.on.mock.calls) {
           if (name === event && typeof handler === 'function') {
@@ -497,7 +541,7 @@ describe('headless serve update install handoff', () => {
       expect(requestServeUpdateHandoffMock).toHaveBeenCalledTimes(2)
       expect(armUpdateInstallExitWatchdogMock).toHaveBeenCalledOnce()
       expect(killAllPtyMock).toHaveBeenCalledOnce()
-      // Why: MacUpdater keeps the failed attempt's listener too, so both quit; Orca commits once.
+      // MacUpdater retains both listeners after failure; Orca must commit only once.
       expect(lifecycle).toEqual([
         'native-quit-and-install',
         'native-quit-and-install',
@@ -572,7 +616,7 @@ describe('headless serve update install handoff', () => {
       })
 
       const { checkForUpdatesFromMenu, setupAutoUpdater } = await loadUpdaterModule()
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now(),
         installMode: 'unsupported-headless-serve'
       })
@@ -620,7 +664,7 @@ describe('headless serve update install handoff', () => {
       })
 
       const { checkForUpdatesFromMenu, setupAutoUpdater } = await loadUpdaterModule()
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now(),
         installMode: 'unsupported-headless-serve'
       })
@@ -650,7 +694,7 @@ describe('headless serve update install handoff', () => {
 
       const { checkForUpdatesFromMenu, quitAndInstall, setupAutoUpdater } =
         await loadUpdaterModule()
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now(),
         installMode: 'unsupported-headless-serve'
       })
@@ -685,7 +729,7 @@ describe('headless serve update install handoff', () => {
       getRemoteServerUpdateSupport,
       setupAutoUpdater
     } = await loadUpdaterModule()
-    setupAutoUpdater({ webContents: { send } } as never, {
+    setupAutoUpdater(updaterMainWindow(send), {
       getLastUpdateCheckAt: () => Date.now(),
       installMode: 'interactive'
     })
@@ -711,7 +755,7 @@ describe('headless serve update install handoff', () => {
   it('advertises remote update control only for safely restartable installs', async () => {
     const { checkForRemoteServerUpdate, getRemoteServerUpdateSupport, setupAutoUpdater } =
       await loadUpdaterModule()
-    setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
+    setupAutoUpdater(updaterMainWindow(vi.fn()), {
       getLastUpdateCheckAt: () => Date.now(),
       installMode: 'unsupported-headless-serve'
     })

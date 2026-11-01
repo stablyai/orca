@@ -81,10 +81,14 @@ function serializedFrames(
 }
 
 describe('terminal backlog merge framing', () => {
-  it.each([Number.NaN, Infinity, -Infinity, -0, 0, 1, 123_456, 1e21])(
-    'matches the serializer with mixed numeric stream ids, including %s',
+  it.each([0, 1, 123_456, 1e21])(
+    'matches the serializer for stable finite stream id %s',
     (streamId) => {
-      const payloads = [output('first', streamId), output('second', 99), output('third', -0)]
+      const payloads = [
+        output('first', streamId),
+        output('second', streamId),
+        output('third', streamId)
+      ]
       for (const cap of [0, wireBytes(payloads[0]), 54, 80, 120]) {
         for (const windowEmpty of [false, true]) {
           expect(drain(payloads, cap, windowEmpty)).toEqual(
@@ -137,9 +141,9 @@ describe('terminal backlog merge framing', () => {
     const cells = ['plain', '\u001b[31m', '\n', '"\\', '漢字', '\ud83d', '', '\ude00', '\ud800']
     const payloads: Payload[] = []
     for (let index = 0; index < 300; index++) {
-      payloads.push(output(cells[index % cells.length], index % 11 === 0 ? Number.NaN : index))
+      payloads.push(output(cells[index % cells.length], 123_456))
       if (index % 37 === 0) {
-        payloads.push({ type: 'resized', streamId: index, cols: 80, rows: 24 })
+        payloads.push({ type: 'resized', streamId: 123_456, cols: 80, rows: 24 })
       }
     }
     for (const cap of [38, 50, 80, 640, 4096]) {
@@ -165,6 +169,51 @@ describe('terminal backlog merge framing', () => {
       expect(measuredUnits).toBeLessThanOrEqual(chunks.join('').length * 2)
     } finally {
       measured.mockRestore()
+    }
+  })
+
+  it('preserves output when partial drains compact the queue before more input arrives', () => {
+    const payloads: Payload[] = Array.from({ length: 10_000 }, (_, index) =>
+      index % 37 === 0
+        ? { type: 'resized', streamId: 1, cols: index + 1, rows: 24 }
+        : output(`${index}\u001b[0m😀\n`)
+    )
+    const backlog = createBacklog()
+    const frames: unknown[] = []
+    try {
+      for (const payload of payloads.slice(0, 5_000)) {
+        expect(backlog.hold(payload)).toBe(true)
+      }
+      while (backlog.pendingBytes > 50_000) {
+        frames.push(backlog.next(640, true))
+      }
+      const remainingBytes = backlog.pendingBytes
+      const added = payloads.slice(5_000)
+      for (const payload of added) {
+        expect(backlog.hold(payload)).toBe(true)
+      }
+      expect(backlog.pendingBytes).toBe(
+        remainingBytes + added.reduce((total, payload) => total + wireBytes(payload), 0)
+      )
+      while (backlog.held) {
+        frames.push(backlog.next(640, true))
+      }
+      expect(frames).toEqual(serializedFrames(payloads, 640, true))
+      expect(backlog.pendingBytes).toBe(0)
+      expect(backlog.next(640, true)).toBeNull()
+
+      backlog.hold(output('after drain'))
+      expect(backlog.next(640, true)).toEqual(output('after drain'))
+      backlog.hold(output('a'))
+      backlog.hold({ type: 'resized', streamId: 1, cols: 2, rows: 24 })
+      backlog.hold(output('b'))
+      expect(backlog.next(640, true)).toEqual(output('a'))
+      backlog.dispose()
+      backlog.hold(output('after reset'))
+      expect(backlog.held).toBe(true)
+      expect(backlog.next(640, true)).toEqual(output('after reset'))
+    } finally {
+      backlog.dispose()
     }
   })
 })

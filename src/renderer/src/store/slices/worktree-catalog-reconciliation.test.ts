@@ -84,9 +84,7 @@ describe('reuseEqualCatalogRows', () => {
     expect(reconciled[0]).toBe(current[2])
   })
 
-  // Without the cap this walks the whole bucket, so a 64-row bucket costs 64
-  // deep compares per incoming row. Counting reads keeps the guard deterministic
-  // — a wall-clock assertion would be flaky on shared CI runners.
+  // Cap same-ID deep comparisons; count reads for deterministic O(k²) protection instead of flaky CI timing.
   it('caps the deep compares for one id instead of scanning the whole bucket', () => {
     const bucketSize = 64
     const current = Array.from({ length: bucketSize }, (_, index) => ({

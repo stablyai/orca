@@ -35,26 +35,16 @@ describe('session write acknowledgments', () => {
       .fn<(write: WorkspaceSessionWrite) => void | Promise<void>>()
       .mockImplementationOnce(() => first.promise)
     const onPersistError = vi.fn()
-    let wake: (() => void) | undefined
-    dispose = createSessionWriteSubscriber({
-      store: useAppStore,
-      persist,
-      onPersistError,
-      shouldSchedulePersist: () => true,
-      subscribeToPersistGateOpen: (listener) => {
-        wake = listener
-        return () => {
-          wake = undefined
-        }
-      }
-    })
+    dispose = createSessionWriteSubscriber({ store: useAppStore, persist, onPersistError })
     useAppStore.setState({
       workspaceSessionReady: true,
       hydrationSucceeded: true,
       activeTabId: 'old'
     })
     vi.advanceTimersByTime(200)
-    return { first, persist, onPersistError, wake: () => wake?.() }
+    // An unrelated store update: the only wake a deferred write gets.
+    const wake = () => useAppStore.getState().setCacheTimerStartedAt('tab:pane', Date.now())
+    return { first, persist, onPersistError, wake }
   }
 
   it('serializes writes and preserves a newer edit to the in-flight field', async () => {
@@ -68,27 +58,20 @@ describe('session write acknowledgments', () => {
     expect(persist.mock.calls[1][0].patch.activeTabId).toBe('new')
   })
 
-  it.each(['gate', 'store'] as const)(
-    'retains rejected intent until a %s wake and rebuilds fresh state',
-    async (source) => {
-      const { first, persist, onPersistError, wake } = setup()
-      useAppStore.setState({ activeTabId: 'new' })
-      first.reject(new Error('retirement publication deferred'))
-      await vi.advanceTimersByTimeAsync(10_000)
-      expect(persist).toHaveBeenCalledTimes(1)
-      expect(onPersistError).toHaveBeenCalledTimes(1)
-      expect(vi.getTimerCount()).toBe(0)
-      if (source === 'gate') {
-        wake()
-      } else {
-        useAppStore.getState().setCacheTimerStartedAt('tab:pane', Date.now())
-      }
-      await vi.advanceTimersByTimeAsync(200)
-      expect(persist).toHaveBeenCalledTimes(2)
-      expect(persist.mock.calls[1][0].patch.activeTabId).toBe('new')
-      expect(persist.mock.calls[1][0].patch).toHaveProperty('activeRepoId')
-    }
-  )
+  it('retains rejected intent until a store wake and rebuilds fresh state', async () => {
+    const { first, persist, onPersistError, wake } = setup()
+    useAppStore.setState({ activeTabId: 'new' })
+    first.reject(new Error('retirement publication deferred'))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(onPersistError).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+    wake()
+    await vi.advanceTimersByTimeAsync(200)
+    expect(persist).toHaveBeenCalledTimes(2)
+    expect(persist.mock.calls[1][0].patch.activeTabId).toBe('new')
+    expect(persist.mock.calls[1][0].patch).toHaveProperty('activeRepoId')
+  })
 
   it.each(['resolve', 'reject'] as const)(
     'does not resume after disposal and late %s',

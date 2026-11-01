@@ -9,12 +9,13 @@ import {
 } from '../../../../runtime/runtime-rpc-client'
 import {
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
-import type { RuntimeClientTarget } from '../../../../runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { encodePushTargetClearForRuntimeRpc } from './hosted-review-link-mutation'
@@ -96,9 +97,17 @@ async function persistWorktreeMetaUntracked(
     return
   }
   await assertWorkspaceAttachmentWriteCapability(target, updates)
-  // Why: `worktree.set` parses in strip mode, so an older runtime drops the key
-  // and applies the rest. Both gates key off presence, not value — a dropped
-  // *clear* strands a stale link that the Issue row then hides.
+  if (updates.firstAgentMessageRenameError === null && updates.displayName === undefined) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
+      translate(
+        'auto.store.slices.worktrees.metadata.worktree.meta.persist.dismissRenameError',
+        'Update the remote runtime to dismiss auto-name errors'
+      )
+    )
+  }
+  // Old worktree.set strips unknown keys, including clears; gate by presence so dropped fields cannot strand hidden review links.
   if (
     target.kind === 'environment' &&
     ('linkedWorkItem' in updates || 'linkedTaskSourceContext' in updates)

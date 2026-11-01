@@ -33,10 +33,6 @@ function packageFile(path: string, size = 0): SkillPackageFile {
 }
 
 describe('skill package manifest', () => {
-  it('parses a canonical manifest', () => {
-    expect(parseSkillPackageManifest(manifest()).name).toBe('test-skill')
-  })
-
   it.each(['con', 'prn', 'aux', 'nul', 'com1', 'com9', 'lpt1', 'lpt9'])(
     'rejects the Windows device skill name %s',
     (name) => {

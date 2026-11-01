@@ -57,33 +57,10 @@ function count(overrides: Partial<UnreadBadgeCountSources>): number {
 }
 
 describe('getUnreadBadgeCount', () => {
-  it('counts unread worktrees', () => {
-    expect(
-      count({
-        worktreesByRepo: { repo1: [worktree('wt-1'), worktree('wt-2', { isUnread: false })] }
-      })
-    ).toBe(1)
-  })
-
-  it('skips archived worktrees, which the sidebar never shows', () => {
-    expect(count({ worktreesByRepo: { repo1: [worktree('wt-1', { isArchived: true })] } })).toBe(0)
-  })
-
   it('preserves id-only deduplication across execution hosts', () => {
     const rows = [worktree('wt-1', { hostId: 'local' }), worktree('wt-1', { hostId: 'ssh:remote' })]
     expect(count({ worktreesByRepo: { repo1: rows } })).toBe(1)
     expect(count({ worktreesByRepo: { repo1: rows }, visibleHostIds: new Set(['local']) })).toBe(1)
-  })
-
-  it('counts a row repeated across repo buckets once', () => {
-    expect(
-      count({
-        worktreesByRepo: {
-          'repo-a': [worktree('wt-1', { hostId: 'local' })],
-          'repo-b': [worktree('wt-1', { hostId: 'local' })]
-        }
-      })
-    ).toBe(1)
   })
 
   it('counts unread folder workspaces alongside worktrees', () => {

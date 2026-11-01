@@ -59,7 +59,6 @@ export const GRAB_GUEST_CONTENT_SCRIPT = `  function getSelectedText() {
 
   function getHtmlSnippet(el) {
     var clone = el.cloneNode(true);
-    // Strip script tags for safety
     var scripts = clone.querySelectorAll('script');
     for (var i = 0; i < scripts.length; i++) {
       scripts[i].remove();
@@ -76,14 +75,11 @@ export const GRAB_GUEST_CONTENT_SCRIPT = `  function getSelectedText() {
       var isAria = name.indexOf('aria-') === 0;
       if (!SAFE_ATTRS.has(name) && !isAria) continue;
       var value = attr.value;
-      // Redact secret-looking values
       if (containsSecret(value)) {
         attrs[name] = '[redacted]';
       } else if ((name === 'href' || name === 'src' || name === 'action') && value) {
-        // Strip query strings and fragments from URL-bearing attributes
         attrs[name] = sanitizeUrl(value);
       } else if (name === 'class') {
-        // Cap class list length
         attrs[name] = clampStr(value, 200);
       } else {
         attrs[name] = value;
@@ -92,8 +88,7 @@ export const GRAB_GUEST_CONTENT_SCRIPT = `  function getSelectedText() {
     return attrs;
   }
 
-  // Why: guest pages control aria-labelledby; avoid regex splitting huge
-  // attributes while extracting grab payload accessibility metadata.
+  // Avoid splitting huge page-controlled aria-labelledby values into an unbounded array.
   function getAriaLabelledByIds(value) {
     var ids = [];
     var tokenStart = -1;
@@ -131,7 +126,6 @@ export const GRAB_GUEST_CONTENT_SCRIPT = `  function getSelectedText() {
     var ariaLabel = el.getAttribute('aria-label') || null;
     var ariaLabelledBy = el.getAttribute('aria-labelledby') || null;
     var accessibleName = null;
-    // Attempt to derive accessible name
     if (ariaLabel) {
       accessibleName = ariaLabel;
     } else if (ariaLabelledBy) {
@@ -143,7 +137,6 @@ export const GRAB_GUEST_CONTENT_SCRIPT = `  function getSelectedText() {
       }
       if (names.length) accessibleName = names.join(' ');
     } else {
-      // Fall back to text content for buttons/links
       var tag = el.tagName.toLowerCase();
       if (tag === 'button' || tag === 'a' || tag === 'label') {
         accessibleName = getBoundedText(el, 100);

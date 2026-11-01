@@ -8,8 +8,10 @@ import {
   ProfileStateRecoveryCommandError,
   isProfileStateRecoveryCommandError,
   profileStateRecoveryRequestSchema,
+  type ProfileStateRecoveryRequest,
   type ProfileStateRecoveryResponse
 } from '../../shared/profile-state-recovery-command'
+import { prepareEarlyMainUiLanguage, translateMain } from '../i18n/main-i18n'
 import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
 import { rollbackProfileState } from '../persistence/profile-state/profile-state-recovery-command'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
@@ -42,10 +44,9 @@ export function runProfileStateRecoveryPreflight(argv: readonly string[] = proce
   return true
 }
 
-/** Build the relaunch argv that applies a startup-dialog choice before ordinary startup. */
 export function profileStateDesktopRecoveryArgs(
   argv: readonly string[],
-  request: { userDataPath: string; selector: { kind: 'current-json' | 'current-sqlite' } }
+  request: ProfileStateRecoveryRequest
 ): string[] {
   return [
     ...stripRecoveryArgs(argv.slice(1)),
@@ -71,13 +72,23 @@ function runDesktopRecovery(argv: readonly string[]): void {
   console.error(`[profile-state] Desktop recovery failed: ${response.message}`)
   void app
     .whenReady()
+    .then(prepareEarlyMainUiLanguage)
     .then(() =>
       dialog.showMessageBox({
         type: 'error',
-        buttons: ['Quit'],
-        title: 'Orca profile state was not changed',
-        message: 'Orca could not apply the selected profile state.',
-        detail: `${response.message}\n\nReopen Orca to choose again.`
+        buttons: [translateMain('profileState.recoveryNotApplied.quitButton', 'Quit')],
+        title: translateMain(
+          'profileState.recoveryNotApplied.title',
+          'Orca could not finish recovering this profile'
+        ),
+        message: translateMain(
+          'profileState.recoveryNotApplied.message',
+          'Orca could not apply the selected profile state.'
+        ),
+        detail: `${response.message}\n\n${translateMain(
+          'profileState.recoveryNotApplied.reopenDetail',
+          'Reopen Orca to choose again.'
+        )}`
       })
     )
     .catch((error: unknown) => console.warn('[profile-state] Recovery error dialog failed:', error))

@@ -152,9 +152,7 @@ export async function recordRendererErrorReport(
     return { ok: true, report: null, deduped: true }
   }
   recentRendererErrorReportKeys.set(key, now)
-  // Why: renderer error reports are IPC input. A broken renderer can vary the
-  // component stack/message inside the age window, so bound the main-side
-  // dedupe map by count as well as time.
+  // Bound IPC-controlled dedupe keys by count as well as age.
   pruneRendererErrorReportKeys(now)
 
   const report = await store.record({
@@ -191,8 +189,7 @@ export async function recordRendererErrorReport(
         ? { has_active_worktree: normalized.hasActiveWorktree }
         : {})
     },
-    // Why: React render failures are recoverable only because a boundary
-    // caught them; persist the same recent app breadcrumbs as native crashes.
+    // Boundary-caught React failures need the same pre-crash breadcrumbs as native crashes.
     breadcrumbs: getCrashBreadcrumbSnapshot(
       webContentsId === undefined ? undefined : rendererCrashBreadcrumbOrigin(webContentsId)
     )

@@ -1,7 +1,7 @@
 import type { SshConnectionStatus } from '../../../src/shared/ssh-types'
 import { hostUnionArms } from '../../../src/shared/zod-salvage'
 
-// Pinned to the host's own union through hostUnionArms: an arm added or dropped host-side fails tsc.
+// hostUnionArms makes additions or removals in the host union fail typecheck here.
 export const SSH_CONNECTION_STATUS = hostUnionArms<SshConnectionStatus>({
   disconnected: true,
   connecting: true,

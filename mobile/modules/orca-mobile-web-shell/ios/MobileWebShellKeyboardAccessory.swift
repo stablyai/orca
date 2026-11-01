@@ -2,10 +2,7 @@ import ObjectiveC
 import UIKit
 import WebKit
 
-/// Removes WKWebView's form accessory bar (up, down, done). Native screens have none, and the
-/// keyboard event the shell publishes counts it, so the page lifted by the bar as well. WebKit
-/// exposes no switch, so the content view is moved onto a subclass whose `inputAccessoryView` is
-/// nil, the same technique react-native-webview's `hideKeyboardAccessoryView` uses.
+/// Remove the accessory bar via a content-view subclass (react-native-webview’s technique); its height otherwise lifts the page twice.
 func hideKeyboardAccessoryBar(of webView: WKWebView) {
   guard
     let content = webView.scrollView.subviews.first(where: {
@@ -33,9 +30,7 @@ func hideKeyboardAccessoryBar(of webView: WKWebView) {
   object_setClass(content, subclass)
 }
 
-/// Stops WKWebView reacting to the keyboard itself. It listens for the keyboard's frame and scrolls
-/// the document to reveal the focused field, on top of the lift the page already applies from the
-/// height the shell sends, so the page moved twice. The shell's own listeners are unaffected.
+/// Suppress WebKit’s keyboard scrolling: the shell already reports the height used to lift the page.
 func ignoreKeyboardNotifications(in webView: WKWebView) {
   for name in [
     UIResponder.keyboardWillShowNotification,

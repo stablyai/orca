@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { structuredAgentConfiguredArgs } from './structured-agent-configured-args'
 
 describe('structured chat configured Arguments', () => {
-  it.each(['claude', 'codex'] as const)(
+  it.each(['claude', 'codex', 'opencode', 'omp', 'grok'] as const)(
     'reads the existing %s setting and preserves quoted values',
     (agent) => {
       expect(
@@ -20,8 +20,14 @@ describe('structured chat configured Arguments', () => {
     }
   )
 
-  it('uses the existing default when the Arguments key is absent', () => {
-    expect(structuredAgentConfiguredArgs('claude', {})).toEqual(['--dangerously-skip-permissions'])
+  it('retains original configured raw until the actual native typed replacement is known', () => {
+    expect(
+      structuredAgentConfiguredArgs('claude', {
+        agentPermissionDefault: 'own',
+        agentLaunchChoices: { claude: { model: 'fresh-only', options: { effort: 'high' } } },
+        agentDefaultArgs: { claude: '--model literal --effort low --add-dir docs' }
+      })
+    ).toEqual(['--model', 'literal', '--effort', 'low', '--add-dir', 'docs'])
   })
 
   it('preserves Windows paths under the configured shell', () => {
@@ -43,5 +49,16 @@ describe('structured chat configured Arguments', () => {
         agentDefaultArgs: { claude: '--model "unfinished' }
       })
     ).toThrow('Arguments are invalid')
+  })
+})
+
+describe('future structured provider argument lookup', () => {
+  it('keeps configured arguments and empty fallback for an unregistered provider', () => {
+    const agentDefaultArgs = { claude: '', 'future-provider': '--label "future value"' }
+    expect(structuredAgentConfiguredArgs('future-provider', { agentDefaultArgs })).toEqual([
+      '--label',
+      'future value'
+    ])
+    expect(structuredAgentConfiguredArgs('future-provider', {})).toEqual([])
   })
 })

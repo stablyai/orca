@@ -4,17 +4,15 @@ import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
 import StructuredAgentSessionPaneOverlayLayer from './native-chat/StructuredAgentSessionPaneOverlayLayer'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
+import type { HiddenTerminalPrewarm } from './terminal-pane/terminal-pane-types'
 
-/**
- * The retained pane hosts for one workspace: terminal, browser, emulator and structured-chat
- * panes anchored onto the group tree's pane bodies, plus the vault drop layer. Shared by every
- * host of the group tree so pane lifecycle (retention, parking, guest paint) has one owner.
- */
+/** Share retained pane hosts across group-tree hosts so retention, parking and browser paint have one lifecycle owner. */
 export function WorkspacePaneOverlayLayers({
   worktreeId,
   worktreePath,
   isVisible,
   shouldMeasureHiddenWorktree,
+  hiddenTerminalPrewarm = null,
   shouldColdParkTerminalPanes,
   isForceParked,
   activityTerminalPortals,
@@ -28,6 +26,7 @@ export function WorkspacePaneOverlayLayers({
   worktreePath: string
   isVisible: boolean
   shouldMeasureHiddenWorktree: boolean
+  hiddenTerminalPrewarm?: HiddenTerminalPrewarm | null
   shouldColdParkTerminalPanes: boolean
   isForceParked: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
@@ -35,8 +34,7 @@ export function WorkspacePaneOverlayLayers({
   activationDeferredMountTabIds: ReadonlySet<string> | null
   mountRetainedBrowserOverlay: boolean
   mountEmulatorOverlay: boolean
-  /** False for overlay hosts (the floating panel): the active workspace's listener already owns
-   *  the chord, and two live listeners would both toggle. */
+  /** Floating overlays leave the toggle chord to the active workspace; duplicate listeners would both toggle. */
   ownsNativeChatToggleShortcut?: boolean
 }): React.JSX.Element {
   return (
@@ -48,6 +46,7 @@ export function WorkspacePaneOverlayLayers({
         coldParkTerminalPanes={shouldColdParkTerminalPanes}
         isForceParked={isForceParked}
         shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
+        hiddenTerminalPrewarm={hiddenTerminalPrewarm}
         activityTerminalPortals={activityTerminalPortals}
         backgroundMountTabIds={backgroundMountTabIds}
         activationDeferredMountTabIds={activationDeferredMountTabIds}

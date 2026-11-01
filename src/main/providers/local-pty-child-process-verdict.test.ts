@@ -2,6 +2,11 @@ import * as pty from 'node-pty'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { resolveForegroundMock } = vi.hoisted(() => ({ resolveForegroundMock: vi.fn() }))
+const jobMembers = vi.hoisted(() => vi.fn())
+vi.mock('./windows-pty-job-membership', () => ({
+  readWindowsPtyJobProcessIds: jobMembers,
+  isWindowsPtyJobReadable: () => true
+}))
 
 const { confirmShellForegroundMock } = vi.hoisted(() => ({
   confirmShellForegroundMock: vi.fn()
@@ -12,16 +17,12 @@ vi.mock('./agent-foreground-process', () => ({
   confirmShellForegroundProcess: confirmShellForegroundMock
 }))
 import { isRetiredPtyMaster } from '../pty/node-pty-master-fd-retirement'
-import {
-  confirmLocalPtyShellForeground,
-  hasLocalPtyChildProcesses,
-  inspectLocalPtyChildProcesses
-} from './local-pty-foreground-inspection'
+
 import { LocalPtyProvider } from './local-pty-provider'
-import { ptyProcesses, ptyShellPath } from './local-pty-provider-state'
+import { ptyIncarnations, ptyProcesses, ptyShellPath } from './local-pty-provider-state'
 import { inspectPtyProviderProcess } from './pty-process-inspection'
 
-// Bare, so the retired pane's spawn file equals the recorded name (the path's basename).
+// Match the recorded basename so only the retired descriptor distinguishes the pane from idle.
 const POSIX_SHELL = 'sh'
 
 function registerPane(id: string, foreground: string | (() => string), shell?: string): void {
@@ -43,16 +44,13 @@ function registerPane(id: string, foreground: string | (() => string), shell?: s
     resume() {}
   }
   ptyProcesses.set(id, pane)
+  ptyIncarnations.set(id, `incarnation:${id}`)
   if (shell) {
     ptyShellPath.set(id, shell)
   }
 }
 
-/**
- * A real node-pty whose master has been given up. The getter does not throw here -- it answers
- * `POSIX_SHELL`, which is exactly the recorded shell name, so only the descriptor distinguishes
- * this pane from an idle one.
- */
+/** Retired node-pty getters still report the spawn name; only descriptor state distinguishes this from idle. */
 async function registerRetiredPane(id: string): Promise<pty.IPty> {
   const term = pty.spawn(POSIX_SHELL, ['-c', 'exit 0'], {
     name: 'xterm-256color',
@@ -70,89 +68,63 @@ async function registerRetiredPane(id: string): Promise<pty.IPty> {
     interval: 10
   })
   ptyProcesses.set(id, term)
+  ptyIncarnations.set(id, `incarnation:${id}`)
   ptyShellPath.set(id, POSIX_SHELL)
   return term
 }
 
 beforeEach(() => {
+  // These fake foreground names model POSIX; Windows uses the owned-job fixture below.
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+  jobMembers.mockReset()
   resolveForegroundMock.mockReset()
   resolveForegroundMock.mockResolvedValue({ available: true, processName: '/bin/zsh' })
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   ptyProcesses.clear()
+  ptyIncarnations.clear()
   ptyShellPath.clear()
-})
-
-describe('confirmLocalPtyShellForeground', () => {
-  it('proves against the spawned shell path, which tells the Git Bash launcher apart', async () => {
-    const launcher = 'C:\\Program Files\\Git\\bin\\bash.exe'
-    registerPane('pty-git-bash', 'bash.exe', launcher)
-    confirmShellForegroundMock.mockResolvedValueOnce(true)
-
-    await expect(confirmLocalPtyShellForeground('pty-git-bash')).resolves.toBe(true)
-    expect(confirmShellForegroundMock).toHaveBeenCalledWith(4242, launcher, expect.any(Object))
-  })
 })
 
 // Windows has no master fd to retire, and `WindowsTerminal.process` answers from the spawn name.
 const describeOnPosix = process.platform === 'win32' ? describe.skip : describe
 
-describe('inspectLocalPtyChildProcesses', () => {
-  it('reports unverifiable when the pty fd cannot be read', async () => {
-    registerPane(
-      'pty-closed',
-      () => {
-        throw new Error('EBADF: bad file descriptor')
-      },
-      '/bin/zsh'
-    )
-    expect(await inspectLocalPtyChildProcesses('pty-closed')).toBe('unverifiable')
-  })
-
-  it('still answers no-children when the shell itself is in the foreground', async () => {
-    registerPane('pty-idle', 'zsh', '/bin/zsh')
-    expect(await inspectLocalPtyChildProcesses('pty-idle')).toBe('no-children')
-  })
-
-  it('answers children when something else is in the foreground', async () => {
-    registerPane('pty-busy', 'vim', '/bin/zsh')
-    expect(await inspectLocalPtyChildProcesses('pty-busy')).toBe('children')
-  })
-
-  it('treats a pane this provider does not hold as a real negative', async () => {
-    expect(await inspectLocalPtyChildProcesses('pty-absent')).toBe('no-children')
-  })
-
-  it('preserves uncertainty conservatively in the boolean adapter', async () => {
-    let reads = 0
-    registerPane(
-      'pty-closed',
-      () => {
-        reads += 1
-        throw new Error('EBADF: bad file descriptor')
-      },
-      '/bin/zsh'
-    )
-    await expect(hasLocalPtyChildProcesses('pty-closed')).resolves.toBe(true)
-    // The result must come from the failed read, not from an earlier short-circuit.
-    expect(reads).toBe(1)
-  })
-})
-
-describeOnPosix('inspectLocalPtyChildProcesses on a retired master', () => {
-  it('reports unverifiable rather than reading the spawn file as an idle shell', async () => {
-    const term = await registerRetiredPane('pty-retired')
-
-    // The mechanism is silent: this is the same string an idle pane reports.
-    expect(term.process).toBe(POSIX_SHELL)
-    // Not `no-children`: the close guard reads that as "nothing is running here" and kills the pane.
-    expect(await inspectLocalPtyChildProcesses('pty-retired')).toBe('unverifiable')
-  }, 15000)
-})
-
 describe('inspectPtyProviderProcess child-process evidence', () => {
   const provider = new LocalPtyProvider()
+
+  it('uses the owned Windows job without a static-name marker, preserving uncertain and replaced panes', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    registerPane('pty-win', 'powershell.exe', 'powershell.exe')
+    const inspect = () =>
+      inspectPtyProviderProcess(provider, 'pty-win', {
+        expectedIncarnationId: 'incarnation:pty-win'
+      })
+    jobMembers.mockReturnValue(new Set([4242]))
+    await expect(inspect()).resolves.toMatchObject({
+      childProcessEvidence: 'no-children',
+      hasChildProcesses: false
+    })
+    jobMembers.mockReturnValue(new Set([4242, 4243]))
+    await expect(inspect()).resolves.toMatchObject({
+      childProcessEvidence: 'children',
+      hasChildProcesses: true
+    })
+    jobMembers.mockReturnValue(null)
+    await expect(inspect()).resolves.toMatchObject({
+      childProcessEvidence: 'unverifiable',
+      hasChildProcesses: true
+    })
+    jobMembers.mockImplementationOnce(() => {
+      registerPane('pty-win', 'powershell.exe', 'powershell.exe')
+      return new Set([4242])
+    })
+    await expect(inspect()).resolves.toMatchObject({
+      childProcessEvidence: 'unverifiable',
+      hasChildProcesses: true
+    })
+  })
 
   it('carries unverifiable evidence when the child read fails after foreground inspection', async () => {
     let reads = 0
@@ -179,22 +151,6 @@ describe('inspectPtyProviderProcess child-process evidence', () => {
     registerPane('pty-became-busy', () => (reads++ === 0 ? '/bin/zsh' : 'vim'), '/bin/zsh')
 
     const inspection = await inspectPtyProviderProcess(provider, 'pty-became-busy')
-    expect(inspection.hasChildProcesses).toBe(true)
-    expect(inspection.childProcessEvidence).toBe('children')
-  })
-
-  it('carries no-children evidence from the local inspectProcess operation', async () => {
-    registerPane('pty-idle', 'zsh', '/bin/zsh')
-
-    const inspection = await inspectPtyProviderProcess(provider, 'pty-idle')
-    expect(inspection.hasChildProcesses).toBe(false)
-    expect(inspection.childProcessEvidence).toBe('no-children')
-  })
-
-  it('carries children evidence from the local inspectProcess operation', async () => {
-    registerPane('pty-busy', 'vim', '/bin/zsh')
-
-    const inspection = await inspectPtyProviderProcess(provider, 'pty-busy')
     expect(inspection.hasChildProcesses).toBe(true)
     expect(inspection.childProcessEvidence).toBe('children')
   })

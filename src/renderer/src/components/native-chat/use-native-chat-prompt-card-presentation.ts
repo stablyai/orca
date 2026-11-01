@@ -1,11 +1,16 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useAppStore } from '../../store'
-import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
+import {
+  nativeChatCardDismissKey,
+  nativeChatPromptDismissalMatches,
+  nativeChatPromptOccurrenceKey,
+  nativeChatPromptWaitStartedAt
+} from '../../../../shared/native-chat-prompt-dismiss-key'
 import {
   nativeChatPromptDismissals as dismissals,
   type NativeChatPromptDismissal
 } from './native-chat-prompt-dismissals'
-import type { InteractivePromptCard } from './native-chat-interactive-prompt'
+import type { InteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
 
 export type NativeChatPromptCardPresentation = {
   /** The card that owns the input region now; null leaves it to the composer. */
@@ -20,17 +25,14 @@ export type NativeChatPromptCardPresentation = {
   expand: () => void
 }
 
-/**
- * Which prompt card the pane shows, derived in render so the card and the composer never share a
- * commit. Dismissal is presentation only: it hides or collapses one occurrence and never says the
- * agent moved on. A lingering live status must not reshow it, including after the view remounts.
- */
+/** Derive card/composer ownership in render; persist occurrence-only dismissal across remounts without asserting agent progress. */
 export function useNativeChatPromptCardPresentation({
   paneKey,
   targetPtyId = null,
   card,
   canSend,
-  transcriptSettled = true
+  transcriptSettled = true,
+  dismissAsync
 }: {
   paneKey: string
   targetPtyId?: string | null
@@ -39,15 +41,13 @@ export function useNativeChatPromptCardPresentation({
   canSend: boolean
   /** While the transcript loads, an absent transcript card is unknown, not cleared. */
   transcriptSettled?: boolean
+  dismissAsync?: () => void
 }): NativeChatPromptCardPresentation {
-  // Why the wait's start: two prompts with the same text are separate occurrences.
-  const startedAt = useAppStore((s) => {
-    const entry = s.agentStatusByPaneKey[paneKey]
-    return card && entry?.interactivePrompt ? (entry.stateStartedAt ?? null) : null
-  })
+  const startedAt = useAppStore((s) =>
+    nativeChatPromptWaitStartedAt(card, s.agentStatusByPaneKey[paneKey])
+  )
   const content = nativeChatCardDismissKey(card)
-  const promptKey =
-    content === null || card?.kind !== 'approval' ? content : `${content}@${startedAt}`
+  const promptKey = nativeChatPromptOccurrenceKey(card, content, startedAt)
   const scopeKey = JSON.stringify([paneKey, targetPtyId])
   const occurrenceKey = promptKey === null ? null : `${scopeKey}:${promptKey}`
   const occurrence = useMemo(() => ({ occurrenceKey, canSend }), [occurrenceKey, canSend])
@@ -59,18 +59,17 @@ export function useNativeChatPromptCardPresentation({
     }
   }, [occurrence])
   const dismissal = useSyncExternalStore(dismissals.subscribe, () => dismissals.read(paneKey))
-  // A transcript-only card matches its status-backed record across the post-answer handoff.
+  const isAsync = card?.kind === 'question' && card.prompt.replyAsMessage === true
   const matches =
-    dismissal !== undefined &&
-    dismissal.content === content &&
-    (startedAt === null || dismissal.startedAt === startedAt)
-  // Why retire on a cleared or changed prompt: a later, identical question must show again.
+    (!isAsync || dismissal?.state === 'collapsed') &&
+    nativeChatPromptDismissalMatches(dismissal, content, startedAt)
+  // Retire cleared/changed dismissals so later identical prompts can appear.
   useLayoutEffect(() => {
     if (dismissal !== undefined && !matches && (content !== null || transcriptSettled)) {
       dismissals.forget(paneKey)
     }
   }, [dismissal, matches, content, transcriptSettled, paneKey])
-  // Why: with no wait start to tell occurrences apart, an unobserved stretch may hide a new one.
+  // Without a wait-start stamp, an unobserved interval could contain a new occurrence.
   useLayoutEffect(
     () => () => {
       if (dismissals.read(paneKey)?.startedAt === null) {
@@ -87,7 +86,13 @@ export function useNativeChatPromptCardPresentation({
     },
     [occurrence, canSend, content, startedAt, paneKey]
   )
-  const dismiss = useCallback(() => record('answered'), [record])
+  const dismiss = useCallback(() => {
+    if (isAsync && dismissAsync) {
+      dismissAsync()
+    } else {
+      record('answered')
+    }
+  }, [isAsync, dismissAsync, record])
   const collapse = useCallback(() => record('collapsed'), [record])
   const expand = useCallback(() => dismissals.forget(paneKey), [paneKey])
   const shown = card !== null && canSend

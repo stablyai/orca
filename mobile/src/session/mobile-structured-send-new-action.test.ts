@@ -3,6 +3,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { fieldsOf } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
+import { structuredSessionOperationId } from './structured-session-operation-id'
 
 const storage = vi.hoisted(() => ({ getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() }))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: storage }))
@@ -18,8 +19,8 @@ describe('a new phone send after an acknowledgement was lost', () => {
   })
 
   it.each([false, true])(
-    'delivers identical text as a new action while the old host entry stays unknown (relaunch %s)',
-    async (relaunch) => {
+    'delivers identical text as a new action while the old host entry stays unknown (client rebound %s)',
+    async (rebound) => {
       const ids: string[] = []
       const delivered: string[] = []
       const ledger = new Set<string>()
@@ -80,10 +81,15 @@ describe('a new phone send after an acknowledgement was lost', () => {
         attachments: [],
         onError
       }
-      const send = () => sendMobileStructuredAgentSessionMessage({ ...message, client })
+      const send = () =>
+        sendMobileStructuredAgentSessionMessage({
+          ...message,
+          client,
+          clientMessageId: structuredSessionOperationId()
+        })
 
       expect(await send()).toBe('unknown')
-      if (relaunch) {
+      if (rebound) {
         client = clientFor()
       }
       expect(await send()).toBe('accepted')

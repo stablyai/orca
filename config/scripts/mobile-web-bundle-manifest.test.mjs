@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,7 +11,10 @@ import {
   sha256Hex,
   writeMobileWebBundleTree
 } from './mobile-web-bundle-manifest.mjs'
-import { MobileWebBundleManifestSchema } from '../../src/shared/mobile-web-bundle/manifest-contract.js'
+import {
+  MOBILE_WEB_PAGE_VERSION,
+  MobileWebBundleManifestSchema
+} from '../../src/shared/mobile-web-bundle/manifest-contract.js'
 
 describe('computeMobileWebBundleBuildId', () => {
   const assets = [
@@ -50,14 +54,13 @@ describe('hashedAsset', () => {
     const asset = hashedAsset(Buffer.from('body', 'utf8'), 'js')
 
     expect(asset.path).toBe(`assets/${asset.sha256}.js`)
-    expect(asset.sha256).toMatch(/^[0-9a-f]{64}$/)
+    expect(asset.sha256).toBe('230d8358dc8e8890b4c58deeb62912ee2f20357ae92a5cc861b98e68fe31acb5')
     expect(asset.byteLength).toBe(4)
-    expect(asset.contentType).toBe(contentTypeForExtension('js'))
+    expect(asset.contentType).toBe('text/javascript; charset=utf-8')
   })
 
   it('refuses an extension with no registered content type', () => {
-    // A type the phone has no rule for would otherwise reach the manifest and be served as
-    // whatever the shell guessed, which is the one thing a content-addressed tree cannot allow.
+    // Unknown content type must fail rather than leave phone guessing how to serve addressed bytes.
     expect(() => hashedAsset(Buffer.from('body'), 'wasm')).toThrow(/no content type registered/)
   })
 })
@@ -81,8 +84,38 @@ describe('writeMobileWebBundleTree', () => {
         protocolWindow: { runtimeProtocolVersion: 3, minCompatibleRuntimeProtocolVersion: 3 }
       })
       const manifest = JSON.parse(await readFile(join(outDir, 'manifest.json'), 'utf8'))
-      expect(Number.isInteger(manifest.pageVersion)).toBe(true)
+      expect(manifest.pageVersion).toBe(MOBILE_WEB_PAGE_VERSION)
       expect(MobileWebBundleManifestSchema.parse(manifest).pageVersion).toBe(manifest.pageVersion)
+    } finally {
+      await rm(outDir, { recursive: true, force: true })
+    }
+  })
+
+  it('marks a dark build outside the manifest, so its buildId is the same tree’s', async () => {
+    const outDir = await mkdtemp(join(tmpdir(), 'mobile-web-bundle-manifest-'))
+    try {
+      const bytes = Buffer.from('<!doctype html>\n', 'utf8')
+      const tree = (env) =>
+        writeMobileWebBundleTree({
+          outDir,
+          written: [
+            {
+              path: 'index.html',
+              bytes,
+              sha256: sha256Hex(bytes),
+              byteLength: bytes.byteLength,
+              contentType: contentTypeForExtension('html')
+            }
+          ],
+          desktopVersion: '1.0.0',
+          protocolWindow: { runtimeProtocolVersion: 3, minCompatibleRuntimeProtocolVersion: 3 },
+          env
+        })
+      const dark = await tree({ ORCA_SIDEBAR_INPUTS: 'main' })
+      expect(existsSync(join(outDir, 'ORCA_SIDEBAR_INPUTS_MAIN'))).toBe(true)
+      const off = await tree({})
+      expect(existsSync(join(outDir, 'ORCA_SIDEBAR_INPUTS_MAIN'))).toBe(false)
+      expect(dark.manifest.buildId).toBe(off.manifest.buildId)
     } finally {
       await rm(outDir, { recursive: true, force: true })
     }

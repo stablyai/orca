@@ -1,5 +1,92 @@
-import { isAuthError, isPassphraseError, isTransientError } from './ssh-connection-utils'
+import type { SshTarget } from '../../shared/ssh-types'
+import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
 import { isHostKeyVerificationError } from './ssh-host-key-decision'
+
+export function isPassphraseError(err: Error): boolean {
+  const msg = err.message.toLowerCase()
+  return msg.includes('passphrase') || msg.includes('encrypted key') || msg.includes('bad decrypt')
+}
+
+const TRANSIENT_ERROR_CODES = new Set([
+  'ETIMEDOUT',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'EAI_AGAIN'
+])
+
+function sshErrorLevel(err: Error): unknown {
+  return 'level' in err ? err.level : undefined
+}
+
+export function isAuthError(err: Error): boolean {
+  const msg = err.message.toLowerCase()
+  return (
+    msg.includes('all configured authentication methods failed') ||
+    msg.includes('authentication failed') ||
+    msg.includes('too many authentication failures') ||
+    /permission denied(?:, please try again\.?| \([^)]*(?:publickey|password|keyboard-interactive|gssapi|hostbased)[^)]*\))/.test(
+      msg
+    ) ||
+    sshErrorLevel(err) === 'client-authentication'
+  )
+}
+
+export function isAgentFallbackError(err: Error): boolean {
+  return isAuthError(err) || sshErrorLevel(err) === 'agent'
+}
+
+export function isTransientError(err: Error): boolean {
+  if (
+    sshErrorLevel(err) === 'client-timeout' ||
+    err.message === 'Timed out while waiting for SSH authentication'
+  ) {
+    return true
+  }
+  const code = 'code' in err && typeof err.code === 'string' ? err.code : undefined
+  if (code && TRANSIENT_ERROR_CODES.has(code)) {
+    return true
+  }
+  if (err.message.includes('ETIMEDOUT')) {
+    return true
+  }
+  if (err.message.includes('ECONNREFUSED')) {
+    return true
+  }
+  if (err.message.includes('ECONNRESET')) {
+    return true
+  }
+  return false
+}
+
+const SYSTEM_SSH_FALLBACK_ERROR_CODES = new Set(['EHOSTUNREACH', 'ENETUNREACH'])
+
+export function isSystemSshFallbackError(err: Error): boolean {
+  const code = 'code' in err && typeof err.code === 'string' ? err.code : undefined
+  if (code && SYSTEM_SSH_FALLBACK_ERROR_CODES.has(code)) {
+    return true
+  }
+  return err.message.includes('EHOSTUNREACH') || err.message.includes('ENETUNREACH')
+}
+
+/** ssh2 supports fewer algorithms than OpenSSH (no host certificates, for one), so no shared algorithm is a client gap. */
+export function isSsh2AlgorithmNegotiationError(err: Error): boolean {
+  return err.message.startsWith('Handshake failed: no matching ')
+}
+
+// ssh2 lacks GSSAPI; use system SSH for config-enabled Kerberos only after auth-shaped failures, preserving network retry semantics.
+export function isGssapiSystemSshFallbackCandidate(
+  err: Error,
+  target: Pick<SshTarget, 'gssapiAuthentication'>,
+  resolved: Pick<SshResolvedConfig, 'gssapiAuthentication'> | null
+): boolean {
+  // Explicit per-host GSSAPI already tried system SSH; repeating cannot help.
+  if (target.gssapiAuthentication === true) {
+    return false
+  }
+  return (isAuthError(err) || isPassphraseError(err)) && resolved?.gssapiAuthentication === true
+}
 
 const DEFINITE_HOST_FAILURE_FRAGMENTS = [
   'no route to host',
@@ -12,8 +99,7 @@ const DEFINITE_HOST_FAILURE_FRAGMENTS = [
   'could not resolve hostname'
 ]
 
-// Why: the system-SSH transport reports network failures as OpenSSH prose, not errno codes, so its
-// probe timeouts and connect failures never match isTransientError's code table.
+// OpenSSH reports network faults as prose, bypassing errno-only initial-retry classification.
 const NETWORK_LIKE_ERROR_FRAGMENTS = [
   ...DEFINITE_HOST_FAILURE_FRAGMENTS,
   'system ssh connection timed out',
@@ -27,12 +113,10 @@ const NETWORK_LIKE_ERROR_FRAGMENTS = [
   // Pre-7.x OpenSSH wording for the same banner-exchange failure.
   'ssh_exchange_identification',
   'lost connection',
-  // ssh2's wording when TCP connects but the socket closes before the server's banner, as it does
-  // while a port forwarder or NAT still accepts connections for a host it can no longer reach.
+  // A stale NAT/forwarder can accept TCP then drop before SSH banner; retain ssh2's wording.
   'connection lost before handshake',
   'remote end closed',
-  // Deliberately not the bare 'connection closed by': OpenSSH prints "Connection closed by <ip> port 22"
-  // for server-side rejections (MaxStartups, DenyUsers) too, and those must stay permanent.
+  // Bare connection closed by includes permanent MaxStartups/DenyUsers refusal; require remote wording here.
   'connection closed by remote'
 ]
 
@@ -43,16 +127,9 @@ const OPENSSH_HOST_CONNECT_FAILURE =
 
 const EMPTY_SYSTEM_SSH_PROBE_EXIT_255 = /^system ssh probe failed \(exit 255\)\.$/
 
-/**
- * Why a second classifier: connect() spends isTransientError on INITIAL_RETRY_ATTEMPTS, so widening
- * it would turn one 30s system-SSH timeout into ~160s of silence and five security-key touch
- * prompts. The reconnect ladder has its own backoff and give-up bound, so it can afford to treat a
- * network-shaped failure as recoverable. Auth stays permanent on both paths.
- */
+/** Keep broad network recovery in the bounded ladder: widening initial retries multiplies timeouts/key touches. Authentication remains permanent on both paths. */
 export function isTransientReconnectError(err: Error): boolean {
-  // A denied host key is a decision, not a fault: retrying re-derives the same answer, so the ladder
-  // would back off forever against a host it has already refused. Checked by type rather than left
-  // to the fragment lists below, which would silently start retrying if the wording changed.
+  // Typed host-key denial stays final regardless of network-like reason text.
   if (isHostKeyVerificationError(err)) {
     return false
   }
@@ -69,7 +146,6 @@ export function isTransientReconnectError(err: Error): boolean {
   )
 }
 
-/** Definite host failures where a ControlMaster-free retry cannot help. */
 export function isDefiniteSystemSshHostFailure(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false

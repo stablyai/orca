@@ -6,7 +6,7 @@ import {
   NativeChatReplyRevealsContext,
   type NativeChatReplyReveals
 } from './native-chat-reply-reveals'
-import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS as D } from './native-chat-text-reveal'
+import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS as D } from '../../../../shared/native-chat/transcript/native-chat-text-reveal'
 import { useNativeChatPacedText } from './use-native-chat-paced-text'
 
 const motion = vi.hoisted(() => ({ reduced: false }))

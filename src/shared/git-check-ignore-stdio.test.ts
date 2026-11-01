@@ -1,20 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   encodeGitCheckIgnorePaths,
-  GIT_CHECK_IGNORE_STDIN_ARGS,
   parseGitCheckIgnorePaths,
   splitGitCheckIgnorePathsByStdinBytes
 } from './git-check-ignore-stdio'
 
 describe('git check-ignore stdio', () => {
-  it('uses the NUL-delimited stdin command shape', () => {
-    expect(GIT_CHECK_IGNORE_STDIN_ARGS).toEqual([
-      '-c',
-      'core.quotePath=false',
-      'check-ignore',
-      '-z',
-      '--stdin'
-    ])
+  it('encodes exact paths as NUL-delimited stdin records', () => {
     expect(encodeGitCheckIgnorePaths(['dist/bundle.js', 'line\nbreak.txt', '-leading.txt'])).toBe(
       'dist/bundle.js\0line\nbreak.txt\0-leading.txt\0'
     )

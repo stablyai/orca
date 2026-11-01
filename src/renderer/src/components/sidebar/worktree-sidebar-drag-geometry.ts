@@ -16,15 +16,7 @@ export type WorktreeSidebarDropAnchor = {
 // Why: sub-pixel pointer jitter and scroll rounding must not count as intent.
 const ANCHOR_REEVALUATE_EPSILON_PX = 0.5
 
-/**
- * Why: the pointer is not what the user is placing — the card is. Hit-testing the
- * bare pointer makes the same visual placement resolve differently depending on
- * where the card was grabbed, which is the "unnatural" part with tall expanded
- * agent cards: grab one near its bottom and it drops a slot late.
- *
- * Project the dragged card from the pointer and compare its center instead, so
- * the drop follows where the card actually sits.
- */
+/** Hit-test the projected card center so placement stays consistent regardless of where a tall card was grabbed. */
 export function getWorktreeSidebarDragReferenceY(args: {
   localY: number
   grab: WorktreeSidebarDragGrab | null
@@ -42,18 +34,7 @@ export function getWorktreeSidebarDragReferenceY(args: {
   return args.localY - args.grab.offsetY + height / 2
 }
 
-/**
- * Why: cards resize constantly mid-drag — agent statuses stream in and expansion
- * panels animate open — so re-deciding the slot from geometry every frame lets a
- * card growing under a still pointer move the drop target with zero input.
- *
- * Hold the *decision* (insert before this card) rather than the *geometry* it was
- * made from. Re-deriving that identity against live rects each frame keeps the
- * indicator and row previews on one honest coordinate space, while only real
- * pointer or scroll movement can pick a different neighbour. Freezing the rects
- * instead — the previous approach — kept the target stable but let hit testing
- * and rendering describe two different layouts at once.
- */
+/** Hold target identity until pointer/scroll movement; keep geometry live so resize previews and hit tests still agree. */
 export function shouldReevaluateWorktreeSidebarDropAnchor(args: {
   anchor: WorktreeSidebarDropAnchor | null
   pointerY: number
@@ -68,11 +49,7 @@ export function shouldReevaluateWorktreeSidebarDropAnchor(args: {
   )
 }
 
-/**
- * Resolve a held anchor back to a drop index in the current layout. Returns null
- * when the anchored card is gone (deleted or filtered), so the caller falls
- * back to a fresh geometric decision.
- */
+/** Resolve the held target in the current layout; a removed target returns null for fresh hit-testing. */
 export function resolveWorktreeSidebarDropAnchorIndex(args: {
   anchor: WorktreeSidebarDropAnchor
   groupIds: readonly string[]
@@ -91,13 +68,7 @@ export function getWorktreeSidebarDropAnchorId(args: {
   return args.groupIds[args.dropIndex] ?? null
 }
 
-/**
- * Where inside the dragged card the pointer grabbed it. The floating drag preview
- * is a fixed-size clone of the source row, so these are exactly the numbers that
- * place it on screen — reusing them keeps hit testing agreeing with what the user
- * sees. Returns null for an unmeasured row, degrading to bare-pointer hit testing
- * rather than to a wrong offset.
- */
+/** Reuse the preview’s measured grab offset; unmeasured rows fall back to bare-pointer hit tests. */
 export function getWorktreeSidebarDragGrab(args: {
   offsetY: number
   height: number

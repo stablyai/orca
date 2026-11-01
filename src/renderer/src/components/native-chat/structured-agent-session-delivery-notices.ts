@@ -1,15 +1,14 @@
-// What each of the structured chat's own messages says under it about its delivery. Derived from
-// the sender's in-memory sends and the host's rows on every render, never stored.
-
 import {
+  agentSessionFailureDetailText,
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session-refusal-notice'
-import { structuredAgentSessionRejectionParts } from '../../../../shared/structured-agent-session-rejection-words'
-import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/structured-agent-session-message-projection'
+} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureStatedByRow } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
+import { classifyDispatchRejection } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionRecordedRejectionParts } from '../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
+import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
@@ -18,44 +17,12 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 const STRUCTURED_AGENT_SESSION_DELIVERY_SENDING: NativeChatDeliveryNotice = { sending: true }
 const NO_COMMANDS: ReadonlySet<string> = new Set()
 
-export {
-  agentSessionVisibleFailureFacts as structuredAgentSessionStartFailureFacts,
-  agentSessionFailureStatedByRow as agentSessionFailureStatedByStartRow,
-  sameAgentSessionFailureFact
-} from '../../../../shared/agent-session-visible-failures'
-import { agentSessionFailureStatedByRow as agentSessionFailureStatedByStartRow } from '../../../../shared/agent-session-visible-failures'
-
-function hostRejectionNoticeText(
-  submission: AgentJournalSubmission,
-  agentName: string,
-  startFailures: readonly AgentSessionFailureFact[]
-): string {
-  if (agentSessionFailureStatedByStartRow(submission.rejection, startFailures)) {
-    return agentSessionWriteNoticeText(agentSessionWriteNotDoneParts('send'))
-  }
-  return agentSessionWriteNoticeText(
-    structuredAgentSessionRejectionParts(
-      submission.reason,
-      'send',
-      readWholeAgentSessionFailureFact(submission.rejection),
-      { agentName }
-    )
-  )
-}
-
-/**
- * Keyed by the message id the transcript renders each message under; `agentName` is the chat's
- * agent, for the words. A message on its way says so quietly, and one the host rejected is worded
- * from the host's fact. A message whose delivery nobody can confirm says nothing on its row, as in
- * the common pattern: one this window could not confirm went back to its composer with the reason.
- */
+/** Show sending until host rows arrive and host-worded rejections afterward; unconfirmed sends explain their return in the composer instead. */
 export function structuredAgentSessionDeliveryNotices(args: {
   pending: readonly StructuredAgentSessionPendingSend[]
   submissions: readonly AgentJournalSubmission[]
   agentName: string
-  /** What the loaded start-failure rows state, from `structuredAgentSessionStartFailureFacts`. */
   startFailures: readonly AgentSessionFailureFact[]
-  /** The loaded commands, from `structuredAgentSessionCommandItemIds`: they report their own. */
   commandItemIds?: ReadonlySet<string>
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, submissions } = args
@@ -77,8 +44,23 @@ export function structuredAgentSessionDeliveryNotices(args: {
   for (const submission of submissions) {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
     if (submission.dispatchState === 'rejected' && shown.has(id)) {
+      // A failed start's words, unless its row carries them; other sentences quote their own.
+      const fact = readWholeAgentSessionFailureFact(submission.rejection)
+      const detail =
+        fact &&
+        classifyDispatchRejection({ reason: null, rejection: fact }).category === 'startFailed' &&
+        !agentSessionFailureStatedByRow(fact, args.startFailures)
+          ? agentSessionFailureDetailText(fact)
+          : undefined
       notices.set(id, {
-        text: hostRejectionNoticeText(submission, agentName, args.startFailures)
+        text: agentSessionWriteNoticeText(
+          structuredAgentSessionRecordedRejectionParts(
+            submission,
+            { agentName },
+            args.startFailures
+          )
+        ),
+        ...(detail ? { detail } : {})
       })
     }
   }

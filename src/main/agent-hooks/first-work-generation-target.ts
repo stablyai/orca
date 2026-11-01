@@ -4,7 +4,6 @@ import {
   type CommitMessageAgentEnvironmentResolvers
 } from '../text-generation/commit-message-agent-environment'
 
-/** The local agent env the generation runs in; null when that env can't be prepared. */
 export async function resolveGenerationTarget(
   worktreePath: string,
   agentId: string,

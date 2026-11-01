@@ -33,6 +33,9 @@ describePostgres('PostgreSQL lock-wait sample', () => {
   })
 
   afterAll(async () => {
+    for (const table of ['relay_cell_regions', 'relay_cell_admission']) {
+      await directorDatabase?.query(`DELETE FROM ${table} WHERE cell_id = ?`, [cell.id])
+    }
     await directorDatabase?.query(`DELETE FROM relay_cells WHERE cell_id = ?`, [cell.id])
     await cellDatabase?.close()
     await directorDatabase?.close()

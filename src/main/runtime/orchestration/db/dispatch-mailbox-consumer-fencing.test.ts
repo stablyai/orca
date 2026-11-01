@@ -7,11 +7,7 @@ import type { DeliveryRow } from '../types'
 const PANE_A = 'tab_a:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const PANE_B = 'tab_b:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
-/**
- * Before schema v36 the `dispatch:<id>` mailbox pinned every consumer to generation 0, so the
- * `consumer_fenced` branch could never fire: a stale worker and its replacement shared one
- * outstanding Delivery and either one's ack marked the messages read for both.
- */
+/** Consumer generations fence stale workers so their acknowledgments cannot consume replacement deliveries. */
 describe('dispatch mailbox consumer fencing', () => {
   let db: OrchestrationDb
 
@@ -105,7 +101,6 @@ describe('dispatch mailbox consumer fencing', () => {
     const generation = generationOf(dispatch.id)
     const delivery = openDelivery(dispatch.id, dispatch.runId, generation)
 
-    // A PTY restart with no re-attach must keep the live worker on its own generation.
     expect(generationOf(dispatch.id)).toBe(generation)
     const replayed = openDelivery(dispatch.id, dispatch.runId, generation)
     expect(replayed?.delivery.id).toBe(delivery!.delivery.id)
@@ -178,7 +173,6 @@ describe('dispatch mailbox consumer fencing', () => {
     })
     const stale = openDelivery(dispatchId, 'run-home', 0, 'attachment')
 
-    // The worker host holds no dispatch_contexts row for a federated Dispatch.
     expect(db.getDispatchContextById(dispatchId)).toBeUndefined()
 
     db.prepareRemoteAttachmentAuthority({
@@ -215,7 +209,6 @@ describe('dispatch mailbox consumer fencing', () => {
       startOptions: {}
     })
 
-    // A retry owns a new dispatch id, so it never inherits the failed Attempt's mailbox address.
     expect(retry.dispatch.id).not.toBe(first.dispatch.id)
     expect(retry.dispatch.consumer_generation).toBe(0)
   })

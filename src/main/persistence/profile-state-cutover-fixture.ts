@@ -285,7 +285,7 @@ function sortForStableJson(value: unknown): unknown {
   )
 }
 
-/** Compares state semantics while ignoring object insertion order and preserving array order. */
+/** Ignore object-key order while preserving array order. */
 export function canonicalProfileStateJson(state: unknown): string {
   return JSON.stringify(sortForStableJson(state))
 }

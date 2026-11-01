@@ -11,6 +11,10 @@ import {
 import type { ManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+import {
+  isUnderWindowsDriveMount,
+  readGuestWindowsDriveMounts
+} from '../ipc/wsl-guest-windows-drive-path'
 
 export type LocalCliPresenceState = 'found' | 'missing' | 'unknown'
 export type LocalCliPresenceByAgent = Partial<
@@ -37,6 +41,8 @@ type DetectOptions = {
   hydratePath?: () => Promise<HydrationResult>
   shouldHydrateShellPath?: boolean
   homeDir?: string
+  /** Windows drive mounts to skip in a WSL guest; defaults to this process's own. */
+  guestWindowsDriveMounts?: readonly string[]
 }
 
 type CommandOverrideSettings = Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> | null | undefined
@@ -140,7 +146,6 @@ async function maybeHydrateShellPath(options: DetectOptions): Promise<void> {
   }
 }
 
-/** Merges the login shell's PATH into this process once (cached), as CLI detection does. */
 export async function hydrateAgentCliShellPath(
   hydratePath: () => Promise<HydrationResult> = hydrateShellPath
 ): Promise<void> {
@@ -150,7 +155,6 @@ export async function hydrateAgentCliShellPath(
       mergePathSegments(result.segments)
     }
   } catch (error) {
-    // Detection failure must never permit config mutation.
     console.warn('[agent-hooks] Shell PATH hydration failed; using inherited PATH:', error)
   }
 }
@@ -163,7 +167,10 @@ export async function detectLocalManagedAgentCliPresence(
   await maybeHydrateShellPath(options)
   const platform = options.platform ?? process.platform
   const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
-  const dirs = pathEntries(options.pathEnv ?? process.env.PATH ?? '', delimiter)
+  const guestMounts = options.guestWindowsDriveMounts ?? readGuestWindowsDriveMounts()
+  const dirs = pathEntries(options.pathEnv ?? process.env.PATH ?? '', delimiter).filter(
+    (dir) => !isUnderWindowsDriveMount(dir, guestMounts)
+  )
   const homeDir = options.homeDir ?? homedir()
   const fileProbe = options.fileProbe ?? {
     isExecutableFile: (filePath: string) => isExecutableFile(filePath, platform)

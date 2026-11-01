@@ -218,11 +218,7 @@ export const ATTACHMENT_BY_UUID_QUERY = `
   }
 `
 
-// Why: fetch comments with their author in a single request. Accessing
-// `.user` on the SDK's Comment model lazily issues one user(id) query per
-// comment, so the previous loop was an N+1 (issue + comments + N user
-// fetches, all sequential while holding a shared Linear concurrency slot).
-// first: 50 matches the SDK default page size the previous code relied on.
+// Fetch authors with comments to avoid SDK per-author requests holding the shared concurrency slot; retain its 50-comment page size.
 export const ISSUE_COMMENTS_QUERY = `
   query OrcaLinearIssueComments($id: String!) {
     issue(id: $id) {

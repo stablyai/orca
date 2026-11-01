@@ -6,6 +6,7 @@ import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
+import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type { SmartSourceSelection } from './source-selection-decisions'
 import { useGitHubSourceApplication } from './github-source-application'
 import { useSourceIdentityActions } from './source-identity-actions'
@@ -75,6 +76,7 @@ export function useReviewBaseSelectionFixture(initialReview?: GitHubWorkItem) {
   const [pushTarget, setPushTarget] = useState<GitPushTarget | undefined>()
   const [compareBaseRef, setCompareBaseRef] = useState<string | undefined>()
   const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>()
+  const [, setBranchIntent] = useState<CreateWorktreeArgs['branchIntent']>()
   const [branchNameOverridePreservesNameEdits, setBranchNameOverridePreservesNameEdits] =
     useState(false)
   const [initialSelection] = useState(() =>
@@ -110,6 +112,7 @@ export function useReviewBaseSelectionFixture(initialReview?: GitHubWorkItem) {
     selectedRepoIsGit: true,
     folderSourceRepos: [],
     setBranchNameOverride,
+    setBranchIntent,
     setBranchNameOverridePreservesNameEdits,
     setCreateError: vi.fn(),
     setForkPushWarning: vi.fn(),
@@ -149,7 +152,8 @@ export function useReviewBaseSelectionFixture(initialReview?: GitHubWorkItem) {
     hostOptions: [],
     projectHostSetupOptions: [],
     selectedRepoProjectId: null,
-    setSelectedProjectHostSetupOverrideId: vi.fn()
+    setSelectedProjectHostSetupOverrideId: vi.fn(),
+    setSelectedProjectHostSetupOverrideHostId: vi.fn()
   })
   const project = useProjectTargetActions({
     ...common,

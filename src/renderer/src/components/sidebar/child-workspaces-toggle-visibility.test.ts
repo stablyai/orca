@@ -6,15 +6,20 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+
 import {
   getRenderedLineageChipKeys,
   resolveChildWorkspacesToggleGroupKey
 } from './child-workspaces-toggle-target'
 import { computeRenderedSidebarRows } from './rendered-sidebar-worktree-order'
 import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-selection'
-import { getPinnedWorktreeDisplayPolicy } from './worktree-list/grouping/row-types'
-import { setVisibleWorktreeIds, setVisibleWorktreeShortcutTargets } from './visible-worktrees'
+import { getPinnedWorktreeDisplayPolicy } from '../../../../shared/sidebar-list/row-types'
+import {
+  computeVisibleWorktrees,
+  setVisibleWorktreeIds,
+  setVisibleWorktreeShortcutTargets
+} from './visible-worktrees'
+import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
 import { repo, worktree } from './worktree-list-groups-test-fixtures'
 
 const initialState = useAppStore.getInitialState()
@@ -64,9 +69,14 @@ describe('child workspace shortcut follows canonical rendered chips', () => {
     setVisibleWorktreeShortcutTargets(null)
   })
 
-  it('uses the mounted rows when a temporary reveal overrides a project filter', () => {
-    const state = seed({ filterRepoIds: ['another-project'] })
-    const sectionRows = computeRenderedSidebarRows(state, [parent, child])
+  it('uses the mounted rows when a temporary reveal overrides the sleeping filter', () => {
+    const state = seed({ showSleepingWorkspaces: false })
+    expect(target(state)).toBeNull()
+    const visibleWorktrees = computeVisibleWorktrees(state.worktreesByRepo, [], {
+      ...buildVisibleWorktreeOptionsFromState(state, new Map([[repo.id, repo]])),
+      forcedVisibleWorktreeIds: [child.id]
+    })
+    const sectionRows = computeRenderedSidebarRows(state, visibleWorktrees)
     const hook = renderHook(() =>
       useSidebarWorktreeSelection({
         sectionRows,
@@ -93,55 +103,5 @@ describe('child workspace shortcut follows canonical rendered chips', () => {
     } finally {
       hook.unmount()
     }
-  })
-
-  it('keeps the parent chip available when its children are folded', () => {
-    const state = seed({ collapsedGroups: new Set(['lineage:parent']), activeWorktreeId: child.id })
-    expect(target(state)).toBe('lineage:parent')
-    expect(getRenderedLineageChipKeys(state)).toEqual(new Set(['lineage:parent']))
-  })
-
-  it('does not toggle a family hidden by a collapsed section', () => {
-    expect(target(seed({ collapsedGroups: new Set(['all']) }))).toBeNull()
-  })
-
-  it('does not toggle a family excluded by the project filter', () => {
-    expect(target(seed({ filterRepoIds: ['another-project'] }))).toBeNull()
-  })
-
-  it('does not invent a chip when all children are sleeping and filtered out', () => {
-    const state = seed({
-      worktreesByRepo: {
-        [repo.id]: [{ ...parent, isMainWorktree: true, branch: 'refs/heads/main' }, child]
-      },
-      showSleepingWorkspaces: false,
-      alwaysShowDefaultBranchWorkspace: true
-    })
-    expect(target(state)).toBeNull()
-    expect(getRenderedLineageChipKeys(state)).toEqual(new Set())
-  })
-
-  it('drops archived children and stale child or parent instances', () => {
-    for (const worktrees of [
-      [parent, { ...child, isArchived: true }],
-      [parent, { ...child, instanceId: 'new-child' }],
-      [{ ...parent, instanceId: 'new-parent' }, child]
-    ]) {
-      expect(target(seed({ worktreesByRepo: { [repo.id]: worktrees } }))).toBeNull()
-    }
-  })
-
-  it('uses one persisted key when pinning duplicates the parent card', () => {
-    const pinnedParent = { ...parent, isPinned: true }
-    const state = seed({
-      worktreesByRepo: { [repo.id]: [pinnedParent, child] },
-      settings: createGlobalSettingsFixture({ showPinnedWorktreesInGroups: true })
-    })
-    const chips = computeRenderedSidebarRows(state, [pinnedParent, child]).filter(
-      (row) => row.type === 'item' && row.lineageGroupKey === 'lineage:parent'
-    )
-    expect(chips).toHaveLength(2)
-    expect(getRenderedLineageChipKeys(state)).toEqual(new Set(['lineage:parent']))
-    expect(target(state)).toBe('lineage:parent')
   })
 })

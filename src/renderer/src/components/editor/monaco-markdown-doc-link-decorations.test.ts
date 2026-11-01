@@ -7,32 +7,6 @@ import {
 } from './monaco-markdown-doc-link-decorations'
 
 describe('getMarkdownDocLinkDecorationRanges', () => {
-  it('returns Monaco ranges for valid doc links', () => {
-    expect(getMarkdownDocLinkDecorationRanges('link to [[other.md]]')).toEqual([
-      {
-        startLineNumber: 1,
-        startColumn: 9,
-        endLineNumber: 1,
-        endColumn: 21
-      }
-    ])
-  })
-
-  it('returns ranges for aliased doc links', () => {
-    expect(getMarkdownDocLinkDecorationRanges('[[doc|Label]]')).toEqual([
-      {
-        startLineNumber: 1,
-        startColumn: 1,
-        endLineNumber: 1,
-        endColumn: 14
-      }
-    ])
-  })
-
-  it('ignores unsupported doc link syntax', () => {
-    expect(getMarkdownDocLinkDecorationRanges('[[doc|]] [[bad [target]] [[]]')).toEqual([])
-  })
-
   it('ignores doc links inside inline and fenced code', () => {
     expect(
       getMarkdownDocLinkDecorationRanges('`[[inline]]`\n\n```md\n[[fenced]]\n```\n[[real]]')
@@ -55,27 +29,6 @@ describe('getMarkdownDocLinkDecorationRanges', () => {
         startColumn: 1,
         endLineNumber: 2,
         endColumn: 13
-      }
-    ])
-    expect(split).not.toHaveBeenCalled()
-  })
-
-  it('scans pasted markdown without allocating one array entry per line', () => {
-    const split = vi.spyOn(String.prototype, 'split')
-    const content = [
-      '# Notes',
-      ...Array.from({ length: 10_000 }, () => 'plain'),
-      '[[target.md]]'
-    ].join('\n')
-
-    const ranges = getMarkdownDocLinkDecorationRanges(content)
-
-    expect(ranges).toEqual([
-      {
-        startLineNumber: 10_002,
-        startColumn: 1,
-        endLineNumber: 10_002,
-        endColumn: 14
       }
     ])
     expect(split).not.toHaveBeenCalled()

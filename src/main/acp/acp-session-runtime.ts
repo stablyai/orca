@@ -1,11 +1,7 @@
 import type { Readable, Writable } from 'node:stream'
-import type { z } from 'zod'
-import {
-  AcpAgentError,
-  AcpAuthRequiredError,
-  AcpInvalidResponseError,
-  AcpRpcError
-} from './acp-errors'
+import { z } from 'zod'
+import { AcpRpcError } from './acp-errors'
+import { callAcpSession } from './acp-response-settlement'
 import { AcpJsonRpcPeer, type AcpPeerOptions, type AcpRequestContext } from './acp-json-rpc-peer'
 import {
   answerAcpPermission,
@@ -13,11 +9,8 @@ import {
   type AcpPermissionHandler
 } from './acp-permission-requests'
 import { readAcpSessionEvent, type AcpSessionEvent } from './acp-session-events'
-import {
-  setupAcpSession,
-  type AcpSessionStarted,
-  type AcpSessionStartOptions
-} from './acp-session-setup'
+import { setupAcpSession } from './acp-session-setup'
+import type { AcpSessionStarted, AcpSessionStartOptions } from './acp-session-setup'
 export type { AcpSessionStarted, AcpSessionStartOptions } from './acp-session-setup'
 export type { AcpSessionEvent } from './acp-session-events'
 import {
@@ -28,6 +21,7 @@ import {
   SetSessionModeResponseSchema,
   SetSessionModelResponseSchema,
   SetSessionConfigOptionResponseSchema,
+  SessionIdSchema,
   type InitializeRequest,
   type InitializeResponse,
   type AuthenticateResponse,
@@ -42,6 +36,8 @@ import {
   type SetSessionModelResponse
 } from './generated/acp-protocol.generated'
 
+const ForkSessionResponseSchema = z.looseObject({ sessionId: SessionIdSchema })
+
 type Meta = PromptRequest['_meta']
 const withMeta = (meta: Meta): { _meta?: Meta } => (meta ? { _meta: meta } : {})
 
@@ -49,15 +45,15 @@ export type AcpSessionRuntimeOptions = {
   clientInfo?: InitializeRequest['clientInfo']
   peer?: AcpPeerOptions
   onPermission?: AcpPermissionHandler
-  /** Agent requests other than permissions. The handler owns its request: once `context.signal`
-   *  aborts, send the agent's own cancelled reply, finish an answer already in progress, or throw
-   *  (-32800). The runtime never answers for it; a request left unanswered ends at `close()`. */
+  /** After abort, handlers still reply or throw (-32800); close ends unanswered requests. */
   onRequest?: (method: string, params: unknown, context: AcpRequestContext) => unknown
-  /** Agent notifications other than `session/update` (protocol extensions), delivered
-   *  synchronously in arrival order with the `subscribe` events. */
+  /** Delivered synchronously in arrival order with subscription events. */
   onExtensionNotification?: (method: string, params: unknown) => void
   onDiagnostic?: (message: string) => void
   onClose?: (error: Error) => void
+  onOtherLine?: (line: string, cut?: boolean) => void
+  /** Authentication answers, published synchronously as responses are accepted. */
+  onAuthAnswered?: (signedIn: boolean) => void
 }
 
 /** Stream-level protocol seam; production agents use createAcpAgentConnection. */
@@ -82,7 +78,8 @@ export class AcpSessionRuntime {
         onRequest: (method, params, context) => this.handleRequest(method, params, context),
         onNotification: (method, params) => this.handleNotification(method, params),
         onDiagnostic: options.onDiagnostic,
-        onClose: options.onClose
+        onClose: options.onClose,
+        onOtherLine: options.onOtherLine
       },
       options.peer
     )
@@ -132,8 +129,7 @@ export class AcpSessionRuntime {
     return this.call('authenticate', { methodId }, AuthenticateResponseSchema)
   }
 
-  /** A vendor extension method, answered as the agent sent it. Core methods have typed calls here,
-   *  so a session-free caller can never create or touch a session through this. */
+  /** Reject core session methods for session-free discovery. */
   async requestSessionFreeExtension(method: string, params: unknown): Promise<unknown> {
     if (!method.includes('/') || method.startsWith('session/')) {
       throw new Error(`Not an ACP extension method: ${method}`)
@@ -141,6 +137,15 @@ export class AcpSessionRuntime {
     await this.initialize()
     return this.peer.request(method, params, { timeoutMs: null })
   }
+
+  /** Fork without starting a session here; requires advertised fork support. */
+  async forkSession(sessionId: string, cwd: string): Promise<string> {
+    const params = { sessionId, cwd, mcpServers: [] }
+    return (await this.call('session/fork', params, ForkSessionResponseSchema)).sessionId
+  }
+
+  /** Requires advertised session deletion support. */
+  deleteSession = (sessionId: string) => this.call('session/delete', { sessionId }, z.unknown())
 
   start(options: AcpSessionStartOptions): Promise<AcpSessionStarted> {
     if (this.started) {
@@ -196,7 +201,6 @@ export class AcpSessionRuntime {
     return this.call('session/set_mode', params, SetSessionModeResponseSchema)
   }
 
-  /** Dialect-owned control requests share this session's transport and bounded lifetime. */
   requestExtension(method: string, params: unknown, timeoutMs = 30_000): Promise<unknown> {
     this.sessionId()
     if (!method.startsWith('_')) {
@@ -252,22 +256,8 @@ export class AcpSessionRuntime {
     return this.started.sessionId
   }
 
-  private async call<T>(method: string, params: unknown, schema: z.ZodType<T>): Promise<T> {
-    const result = await this.peer.request(method, params, { timeoutMs: null }).catch((error) => {
-      if (error instanceof AcpAgentError && error.code === -32000) {
-        throw new AcpAuthRequiredError(error.message, error.data)
-      }
-      throw error
-    })
-    const parsed = schema.safeParse(result)
-    if (!parsed.success) {
-      throw new AcpInvalidResponseError(
-        `Invalid ACP response: ${method}`,
-        result,
-        parsed.error.issues
-      )
-    }
-    return parsed.data
+  private call<T>(method: string, params: unknown, schema: z.ZodType<T>): Promise<T> {
+    return callAcpSession(this.peer, method, params, schema, this.options.onAuthAnswered)
   }
 
   private handleRequest(method: string, params: unknown, context: AcpRequestContext): unknown {
@@ -282,7 +272,7 @@ export class AcpSessionRuntime {
     if (!request) {
       throw new AcpRpcError(-32602, 'Invalid ACP permission request')
     }
-    // Whether a turn the agent began itself may ask is the caller's call; the runtime cannot see it.
+    // The caller decides whether agent-initiated turns may request permission.
     if (request.sessionId !== this.started?.sessionId) {
       return { outcome: { outcome: 'cancelled' } }
     }

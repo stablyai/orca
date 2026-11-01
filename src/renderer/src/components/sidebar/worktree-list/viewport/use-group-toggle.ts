@@ -19,8 +19,7 @@ export function useGroupToggleWithScrollAnchor(args: {
     },
     [recordCurrentScrollAnchor, toggleGroup]
   )
-  // Why: memo'd WorktreeCard needs a per-group-key stable onLineageToggle
-  // identity to bail out of re-renders; see worktree-lineage-toggle-handler-cache.
+  // Cache callbacks per group so WorktreeCard can retain its memoized identity.
   const getLineageToggleHandler = useMemo(
     () => createLineageToggleHandlerCache(toggleGroupWithScrollAnchor),
     [toggleGroupWithScrollAnchor]

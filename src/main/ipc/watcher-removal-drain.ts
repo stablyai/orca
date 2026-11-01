@@ -1,10 +1,7 @@
-// Why: worktree deletion has to drain in-flight watcher installs/unsubscribes before Git removes the
-// tree, and a wedged native subscribe can leave those promises unsettled forever. Independent per-await
-// timeouts would compose (two close passes x two drains), so one removal shares one absolute deadline.
+// One absolute removal deadline bounds all install/unsubscribe drains, including wedged native subscriptions.
 
 export const WATCHER_REMOVAL_DRAIN_BUDGET_MS = 60_000
-// Why: the final live unsubscribe is the drain that actually releases the native handle. Earlier drains
-// leave it this slice so a slow-but-finishing unsubscribe on Windows/WSL isn't abandoned at ~0ms left.
+// Reserve time for the final unsubscribe that releases native handles on slow Windows/WSL hosts.
 export const WATCHER_REMOVAL_FINAL_DRAIN_RESERVE_MS = 10_000
 
 export type WatcherRemovalDeadline = {
@@ -27,8 +24,7 @@ export type WatcherRemovalDrainOptions = {
   reserveMs?: number
 }
 
-/** Await `promise` until the removal deadline expires. Rejections still propagate so genuine
- *  teardown failures keep failing the delete closed; only an unsettled wait is abandoned. */
+/** Bound unsettled waits by the removal deadline; propagate actual teardown failures to fail deletion closed. */
 export async function drainBeforeWatcherRemoval(
   promise: Promise<unknown> | undefined,
   deadline: WatcherRemovalDeadline,
@@ -49,10 +45,9 @@ export async function drainBeforeWatcherRemoval(
       })
     ])
     if (outcome === 'timeout') {
-      // Why: nobody awaits the abandoned promise anymore, so a late rejection (an aborted native
-      // subscribe finally reporting) would be an unhandled rejection — fatal in the main process.
+      // Abandoned native work may reject later; consume it to avoid crashing main.
       void settled.catch(() => {})
-      // Why log the budget split: production traces need "slow but finishing" separable from "wedged".
+      // Budget splits distinguish slow completion from wedged teardown in production traces.
       console.warn(
         `[watcher-removal] Timed out waiting for ${label} after ${waitMs}ms ` +
           `(${deadline.remainingMs()}ms of the removal budget left); continuing removal`

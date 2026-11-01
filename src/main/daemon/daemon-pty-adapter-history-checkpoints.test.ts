@@ -1,5 +1,4 @@
 import './mock-descendant-sweep'
-/* Periodic/final history checkpointing: scheduling, work caps, cooldown and shutdown writes. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -14,6 +13,7 @@ import {
 } from './daemon-pty-adapter-test-harness'
 import type * as DaemonHealthModule from './daemon-health'
 import type * as DaemonTccAttributionModule from './daemon-tcc-attribution'
+import * as startupCwdProbe from '../ipc/pty/host-env/startup-cwd-directory-exists'
 
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({
@@ -109,7 +109,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateData('hello from pty\r\n')
       await new Promise((r) => setTimeout(r, 50))
 
-      // Why: checkpoint-based persistence writes checkpoint.json on a timer, never scrollback.bin per data event.
       expect(existsSync(join(historyDir, getHistorySessionDirName(id), 'scrollback.bin'))).toBe(
         false
       )
@@ -133,7 +132,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
         await new Promise((r) => setTimeout(r, 80))
 
-        // Why: idle terminals can be numerous; a periodic pass with no data must not serialize every live session.
         expect(appendSpy).not.toHaveBeenCalled()
 
         lastSubprocess._simulateData('new output\r\n')
@@ -141,7 +139,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect(appendSpy).toHaveBeenCalledWith(id, expect.any(Number), [
           { kind: 'output', data: 'new output\r\n' }
         ])
-        // Why: the periodic tick must persist increments, never re-serialize the full emulator buffer (the issue #5096 stall).
+        // Full emulator serialization on each dirty tick caused main-process stalls (#5096).
         expect(checkpointSpy).not.toHaveBeenCalled()
         const logPath = join(historyDir, getHistorySessionDirName(id), 'output.log')
         await waitFor(() => {
@@ -445,24 +443,20 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       it('bounds overflow-triggered full snapshots to one per cooldown window', async () => {
         const internals = makeCooldownHarness({ overflowed: true })
 
-        // First overflow: full snapshot allowed immediately.
         await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set(['hot']))
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
 
-        // Second tick inside the cooldown: the overflow defers and flags the session; no snapshot write.
         await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set())
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
         expect(internals.sessionsNeedingFullCheckpoint.has('hot')).toBe(true)
         const requestsAfterSecondTick = internals.client.request.mock.calls.length
 
-        // Ticks 3..24 (a hot session over ~2 minutes): flagged + cooling down short-circuits with zero daemon RPCs and zero disk writes.
         for (let i = 0; i < 22; i++) {
           await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set())
         }
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
         expect(internals.client.request.mock.calls.length).toBe(requestsAfterSecondTick)
 
-        // Cooldown expiry: the deferred full snapshot lands and clears the flag.
         internals.lastFullCheckpointAt.set('hot', Date.now() - 46_000)
         await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set(['hot']))
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(2)
@@ -474,7 +468,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         await internals.checkpointSessions(['hot'])
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
 
-        // Cooldown is active, but quit/sleep persistence must not defer — stale-on-crash is acceptable, stale-on-clean-exit is not.
         await expect(internals.checkpointSessions(['hot'], { final: true })).resolves.toEqual(
           new Set(['hot'])
         )
@@ -502,7 +495,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         const internals = makeCooldownHarness({
           overflowed: false,
           checkpointResult: 'retryable',
-          // Held shell-ready bytes ride out with the teardown snapshot (Session.prepareForFinalSnapshot).
+          // Model shell-ready bytes emitted by Session.prepareForFinalSnapshot.
           snapshotRecords: [{ kind: 'output', data: 'held tail' }]
         })
 
@@ -512,8 +505,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
         expect(internals.sessionsNeedingFullCheckpoint.has('sleeping')).toBe(true)
-        // Why the tail must not be appended: the output this take drained went into the failed snapshot, so the tail
-        // would land at a contiguous seq over that hole and pass the log's gap detection.
+        // Appending the held tail would hide the failed snapshot’s gap behind contiguous sequence numbers.
         expect(internals.historyManager.appendIncrements).not.toHaveBeenCalled()
         expect(internals.lastFullCheckpointAt.has('sleeping')).toBe(false)
       })
@@ -639,7 +631,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
         const metaPath = join(historyDir, getHistorySessionDirName(id), 'meta.json')
         const checkpointPath = join(historyDir, getHistorySessionDirName(id), 'checkpoint.json')
-        // Why: keep-history sleep stays unclean so cold restore stays eligible; the final checkpoint is the deterministic handoff signal.
+        // Keep sleep history unclean so wake remains eligible for cold restore.
         expect(JSON.parse(readFileSync(metaPath, 'utf-8')).endedAt).toBeNull()
         expect(JSON.parse(readFileSync(checkpointPath, 'utf-8')).snapshotAnsi).toContain(
           'first cycle content'
@@ -760,15 +752,20 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
     })
 
-    it('returns cold restore data when disk history has unclean shutdown', async () => {
-      // Simulate a previous daemon crash: write history files without endedAt
+    // Preserve an unverified recovered cwd; fall back only when the directory is proven missing.
+    it.each([
+      { deleted: false, source: 'recovered-history', inconclusive: false },
+      { deleted: false, source: 'recovered-history', inconclusive: true },
+      { deleted: true, source: 'request', inconclusive: false }
+    ])('returns cold restore data after an unclean shutdown (deleted: $deleted)', async (c) => {
       const sessionId = 'cold-restore-test'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
       mkdirSync(sessionDir, { recursive: true })
+      const startedCwd = c.deleted ? historyDir : dir
       writeFileSync(
         join(sessionDir, 'meta.json'),
         JSON.stringify({
-          cwd: '/projects/myapp',
+          cwd: c.deleted ? join(dir, 'deleted') : dir,
           cols: 120,
           rows: 40,
           startedAt: '2026-04-15T10:00:00Z',
@@ -780,15 +777,20 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
 
-      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      const probe = c.inconclusive
+        ? vi.spyOn(startupCwdProbe, 'probeRecoveredStartupCwdDirectory').mockResolvedValue(null)
+        : undefined
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId, cwd: historyDir })
+      probe?.mockRestore()
       expect(result.id).toBe(sessionId)
       expect(result.coldRestore).toBeDefined()
       expect(result.coldRestore!.scrollback).toContain('Server running')
-      expect(result.coldRestore!.cwd).toBe('/projects/myapp')
+      expect(result.coldRestore!.cwd).toBe(startedCwd)
+      expect(result.startupCwdSource).toBe(c.source)
       expect(result.coldRestore).toMatchObject({ cols: 120, rows: 40 })
       expect(lastSpawnOpts).toMatchObject({
         sessionId,
-        cwd: '/projects/myapp',
+        cwd: startedCwd,
         cols: 120,
         rows: 40
       })

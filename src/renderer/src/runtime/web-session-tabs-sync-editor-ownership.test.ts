@@ -5,7 +5,7 @@ import type {
 } from '../../../shared/runtime-types'
 import type { OpenFile } from '../store/slices/editor'
 import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
-import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import {
   ENV,
   NOW,
@@ -272,8 +272,8 @@ describe('host editor file ownership', () => {
     expect(patch?.openFiles).toHaveLength(1)
     expect(patch?.unifiedTabsByWorktree?.[WT]).toHaveLength(2)
     expect(patch?.unifiedTabsByWorktree?.[WT]?.map((tab) => tab.entityId)).toEqual([
-      filePath,
-      filePath
+      buildOwnedEditorFileId(filePath, WT, ENV),
+      buildOwnedEditorFileId(filePath, WT, ENV)
     ])
   })
 })

@@ -1,6 +1,6 @@
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { createHash } from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentRowBusyError, RelayAssignmentStore } from './assignment-store.js'
 import {
   encodeMembership,
@@ -14,6 +14,10 @@ const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
 
 const USER_PREFIX = 'isolated-replacement-postgres'
+function databaseApplicationName(index: number): string {
+  return `${USER_PREFIX}-${process.pid}-${index}`
+}
+
 const NOW = 100
 const CAPPED = {
   capacityRequests: 1_000,
@@ -139,6 +143,18 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     }
   }
 
+  async function waitForLock(table: 'relay_cells' | 'relay_assignments'): Promise<void> {
+    await vi.waitFor(async () => {
+      const rows = await databases[0]!.query(
+        `SELECT COUNT(*) AS waiting FROM pg_stat_activity
+         WHERE datname = current_database() AND wait_event_type = 'Lock'
+           AND application_name = ? AND query LIKE ? AND query LIKE '%FOR UPDATE%'`,
+        [databaseApplicationName(1), `%${table}%`]
+      )
+      expect(Number(rows[0]?.['waiting'])).toBeGreaterThan(0)
+    }, { timeout: 4_000, interval: 10 })
+  }
+
   // Puts a host on the source with a live control and a splice, then isolates
   // the source for a roll with both targets open.
   async function seedActiveHostOnIsolatedSource(index: number): Promise<{
@@ -257,11 +273,7 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     await applySelector(Object.fromEntries(CELLS.map((cell) => [cell.id, 'general'])))
   }
 
-  // The selector is fleet-wide and this database is shared with every other
-  // Postgres file in the project, all of which write admission through the
-  // generation-0 helpers. Advancing the generation and leaving it advanced
-  // would fail every one of them with admission_selector_boundary_active, so
-  // this file puts the boundary back exactly as it found it.
+  // Shared PostgreSQL suites use generation-0 helpers; restore the exact selector boundary or later files fail admission_selector_boundary_active.
   async function resetSelectorBoundary(): Promise<void> {
     await databases[0]!.query(
       `UPDATE relay_admission_selectors SET generation = 0, attempt_id = NULL
@@ -289,7 +301,11 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     // Four connections so the concurrent dials below really contend on the
     // fleet-wide relay_cells lock rather than queueing in one client.
     for (let index = 0; index < 4; index += 1) {
-      databases.push(await openRelayDatabase({ databaseUrl, dataDir: '' }))
+      databases.push(await openRelayDatabase({
+        databaseUrl,
+        dataDir: '',
+        applicationName: databaseApplicationName(index)
+      }))
     }
     stores = databases.map(
       (database) =>
@@ -309,9 +325,7 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
   afterAll(async () => {
     if (databases[0]) {
       await deleteHostRows()
-      // Order matters: drop the cells first, then rebuild the selector's
-      // membership from what is left, or it names rows that no longer exist and
-      // every later read fails admission_selector_membership_drift.
+      // Drop cell rows before rebuilding membership or later reads fail admission_selector_membership_drift.
       for (const cell of CELLS) {
         for (const table of [
           'relay_cell_connection_snapshots',
@@ -477,9 +491,7 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     )
     expect(granted.length).toBeGreaterThan(0)
 
-    // However many dials were granted, only one re-placement may have
-    // committed: the epoch advances by exactly one and the target gains exactly
-    // one unit. The source keeps its lease until the source releases it.
+    // Concurrent dials may grant repeatedly but commit one move: one epoch/unit on target, preserving source leases until release.
     const settled = await stores[0]!.resolve(identity)
     expect(settled?.assignmentEpoch).toBe(first.assignmentEpoch + 1)
     expect(settled?.cellId).not.toBe(ISOLATED.id)
@@ -566,13 +578,13 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     const targetsBefore =
       (await reservedRequests(TARGETS[0]!.id)) + (await reservedRequests(TARGETS[1]!.id))
     const release = await holdCellRows(TARGETS.map(({ id }) => id))
-    let settled = false
-    const placement = stores[1]!.assign(identity, 'us-central1').finally(() => {
-      settled = true
-    })
-    await new Promise((resolve) => setTimeout(resolve, 1_000))
-    expect(settled).toBe(false)
-    await release()
+    const placement = stores[1]!.assign(identity, 'us-central1')
+    try {
+      await waitForLock('relay_cells')
+    } finally {
+      await release()
+      await placement.catch(() => undefined)
+    }
     expect(await placement).toMatchObject({ assignmentEpoch: first.assignmentEpoch + 1 })
     expect(
       (await reservedRequests(TARGETS[0]!.id)) + (await reservedRequests(TARGETS[1]!.id))
@@ -858,8 +870,12 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     // A short hold, like a calm host's own release: the sticky re-grant waits.
     const shortHold = await holdAssignment()
     const regrant = stores[1]!.assign(identity, 'us-central1')
-    await new Promise((resolve) => setTimeout(resolve, 200))
-    await shortHold()
+    try {
+      await waitForLock('relay_assignments')
+    } finally {
+      await shortHold()
+      await regrant.catch(() => undefined)
+    }
     expect(await regrant).toMatchObject({
       cellId: first.cellId,
       assignmentEpoch: first.assignmentEpoch
@@ -893,20 +909,22 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
       () => 'granted',
       (error: unknown) => error
     )
-    await new Promise((resolve) => setTimeout(resolve, 150))
-    // The row the retry reaches next, held the way this host's release holds it.
-    const releaseAssignment = await holdRows(
-      `SELECT user_id FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
-      [identity.userId, identity.relayHostId]
-    )
+    let releaseAssignment: (() => Promise<void>) | undefined
     try {
+      await waitForLock('relay_cells')
+      releaseAssignment = await holdRows(
+        `SELECT user_id FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
       await releaseCell()
       const cellFreedAt = performance.now()
       expect(await regrant).toBeInstanceOf(RelayAssignmentRowBusyError)
       // NOWAIT once the cell row is held: nowhere near the 1s bounded wait.
       expect(performance.now() - cellFreedAt).toBeLessThan(300)
     } finally {
-      await releaseAssignment()
+      await releaseAssignment?.()
+      await releaseCell()
+      await regrant
     }
   }, 30_000)
 })

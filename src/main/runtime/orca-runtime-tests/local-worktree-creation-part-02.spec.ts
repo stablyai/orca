@@ -548,11 +548,9 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('bumps the scan generation before the first step after git worktree add', async () => {
-    // Why: a listing stamps the generation its scan began at. Without the bump before any post-add
-    // await, a listing that began before the add and one that began after it share a sequence, and
-    // a client cannot refuse the older one that omits the new worktree.
+    // Bump generation before post-add awaits so clients can reject earlier listings that omit the new worktree.
     const witness: { duringAdd?: number; afterAdd?: number } = {}
-    // Why a generated name: retiring it is the first awaited step after the add.
+    // Generated-name retirement is the first await after add, exposing the generation race.
     const addRetiredWorktreeName = vi.fn(() => {
       if (witness.duringAdd !== undefined && witness.afterAdd === undefined) {
         witness.afterAdd = getLocalWorktreeScanGeneration('repo-1')

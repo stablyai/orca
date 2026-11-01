@@ -61,7 +61,7 @@ afterEach(async () => {
   }
 })
 
-/** A worker whose replies and post-close exit can be held behind shared-memory gates. */
+/** Gate worker replies and exit through shared memory. */
 function createClient({ holdReplies = false, holdExit = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'orca-writer-sleep-'))
   roots.push(root)
@@ -107,7 +107,6 @@ function createClient({ holdReplies = false, holdExit = false } = {}) {
   const clock = { now: 0 }
   const onFailure = vi.fn()
   const onSaveDelayChanged = vi.fn()
-  // The fixture worker reads its shared gates from workerData alongside the protocol fields.
   const initialization = {
     databasePath: join(root, 'unused.db'),
     profileId: 'sleep-test',
@@ -126,11 +125,10 @@ function createClient({ holdReplies = false, holdExit = false } = {}) {
     onSaveDelayChanged,
     root,
     workerStarts: () => Atomics.load(shared, STARTS),
-    /** Hold every reply not yet posted. */
     holdReplies: () => store(ALLOWED_REPLIES, Atomics.load(shared, REPLIES)),
     releaseReplies: () => store(ALLOWED_REPLIES, UNLIMITED),
     releaseExit: () => store(EXIT_ALLOWED, 1),
-    /** Block the main thread until the worker has posted reply number `count` (init is 1). */
+    /** Wait synchronously for reply count; initialization is reply 1. */
     awaitQueuedReply: (count: number) => {
       const deadline = performance.now() + 5_000
       for (let posted = Atomics.load(shared, REPLIES); posted < count;) {
@@ -142,11 +140,11 @@ function createClient({ holdReplies = false, holdExit = false } = {}) {
         posted = Atomics.load(shared, REPLIES)
       }
     },
-    /** Monotonic time passes while the main loop runs no callbacks. */
+    /** Advance monotonic time without running callbacks. */
     stall: (ms: number) => {
       clock.now += ms
     },
-    /** The loop runs normally: timers fire on time. */
+    /** Advance time with normal timer callbacks. */
     run: (ms: number) => {
       clock.now += ms
       vi.advanceTimersByTime(ms)
@@ -177,14 +175,14 @@ it('accepts an acknowledgment queued behind an overdue warning timer', async () 
   useFakeTimers()
   const write = client.writeSerializedDomains([])
   awaitQueuedReply(2)
-  // The incident: the loop stalls for hours, then expired timers run before queued messages.
+  // Reproduce resume after hours stalled: expired timers run before queued replies.
   stall(3 * 60 * 60 * 1000)
   run(WARNING_MS)
   expect(await write).toBe(2)
   expect(onSaveDelayChanged.mock.calls).toEqual([[true], [false]])
   await expect(client.writeSerializedDomains([])).resolves.toBe(3)
   expect(onFailure).not.toHaveBeenCalled()
-  // Only codes, counters, and timings: no payloads, paths, or profile ids.
+  // Diagnostics must exclude payloads, paths and profile IDs.
   expect(diagnostics.slow).toHaveBeenCalledExactlyOnceWith({
     command: 'write-domains',
     requestId: 1,
@@ -297,7 +295,6 @@ it('warns once for a never-replying request without faulting or replacing the wo
   expect(onSaveDelayChanged).toHaveBeenCalledExactlyOnceWith(true)
   expect(workerStarts()).toBe(1)
   expect(vi.getTimerCount()).toBe(0)
-  // Explicit abort keeps the existing fault path and its exit wait.
   const rejected = expect(write).rejects.toMatchObject({
     code: 'profile-state-writer-aborted',
     outcome: 'indeterminate'
@@ -412,7 +409,7 @@ it('waits for actual exit after close acknowledgment with one awaiting-exit warn
   await client.ready
   useFakeTimers()
   const closing = client.close()
-  // close() dispatches after a microtask; let it post before blocking on the reply.
+  // Let the close microtask dispatch before waiting synchronously for its reply.
   await waitForPoll()
   awaitQueuedReply(2)
   await waitForPoll()

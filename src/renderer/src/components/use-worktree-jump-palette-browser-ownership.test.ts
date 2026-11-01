@@ -46,7 +46,7 @@ it('keeps same-id browser results on their owner with recency, and follows owner
     // The store holds {key, result}; the hook takes the unwrapped result.
     workspacePortScan: null,
     paletteStatusInputsActive: true,
-    allWorktrees: worktrees,
+    workspaces: worktrees,
     browserSortedWorktrees: worktrees,
     repoMap: new Map(),
     repoByHostIdentity: new Map(),

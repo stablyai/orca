@@ -44,11 +44,9 @@ type ExecScript = {
   urlByRemote?: Record<string, string>
   branchConfig?: string
   trackingRefsByRemote?: Record<string, string[]>
-  // Simulates #17842's reconciliation sweep concurrently `remote remove`-ing this
-  // remote in between this migration's pre-write and post-write existence checks.
+  // Simulate concurrent reconciliation removing the remote between migration existence checks.
   removeUrlAfterFirstCheck?: Set<string>
-  // Remotes `git remote` (bare list) reports on disk -- drives discovery of a `pr-*`
-  // remote with zero worktree-metadata trace at all.
+  /** On-disk remote names include orphans absent from worktree metadata. */
   remoteNames?: string[]
 }
 
@@ -158,8 +156,7 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
       ],
       REPO_PATH
     ])
-    // `fetch --prune` cannot reclaim strays under a narrow refspec (verified against real
-    // git); the migration must delete them directly instead.
+    // Narrow fetch --prune cannot remove formerly imported refs; migration must delete them locally.
     expect(exec.mock.calls.some(([args]) => args[0] === 'fetch' && args[1] === '--prune')).toBe(
       false
     )
@@ -274,7 +271,6 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
       exec
     )
 
-    // Not reported as migrated -- reconciliation won the race, so this sweep backs off.
     expect(migrated).toEqual([])
     expect(
       exec.mock.calls.some(
@@ -284,7 +280,6 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
           args[2] === `remote.${FORK_REMOTE}`
       )
     ).toBe(true)
-    // No fetch --prune-equivalent local ref deletion ran for a remote that's already gone.
     expect(exec.mock.calls.some(([args]) => args[0] === 'update-ref')).toBe(false)
   })
 
@@ -298,8 +293,7 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
       trackingRefsByRemote
     })
 
-    // No worktree metadata references this remote at all (worktree removed outside
-    // preserve-on-delete, metadata purged) -- only discoverable via `git remote`.
+    // Metadata-free orphans can only be discovered through Git's remote list.
     const migrated = await migrateForkRemoteRefspecsWithExec(REPO_PATH, REPO_ID, storeOf({}), exec)
 
     expect(migrated).toEqual([ORPHAN_REMOTE])
@@ -307,11 +301,9 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
       ['config', '--unset-all', `remote.${ORPHAN_REMOTE}.fetch`],
       REPO_PATH
     ])
-    // No branch to narrow to, so it never adds a replacement refspec.
     expect(exec.mock.calls.some(([args]) => args[0] === 'config' && args[1] === '--add')).toBe(
       false
     )
-    // Every stray tracking ref is pruned, same as the narrowing path.
     expect(trackingRefsByRemote[ORPHAN_REMOTE]).toEqual([])
   })
 
@@ -354,7 +346,6 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
     const migrated = await migrateForkRemoteRefspecsWithExec(
       REPO_PATH,
       REPO_ID,
-      // Only proof of Orca provenance; the branch itself comes from local config.
       storeOf({ [worktreeId('/wt/gone')]: forkTarget({ branchName: 'contributor/fix' }) }),
       exec
     )

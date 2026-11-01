@@ -1,7 +1,4 @@
-/**
- * The runtime's live layout as the oracle reads it: a `layout.subscribe` consumer's cache, applied
- * frame by frame, and the same layout as models for the model rules.
- */
+// Apply layout.subscribe frames to the oracle cache and partition them for model-rule checks.
 
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../src/shared/execution-host'
 import type {
@@ -11,6 +8,7 @@ import type {
   WorkspaceLayoutModel
 } from '../../../src/shared/workspace-layout/workspace-layout-model'
 import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/workspace-layout-published'
+import { applyWorkspaceLayoutRecordChange } from '../../../src/shared/workspace-layout/workspace-layout-records'
 import {
   readWorkspaceLayoutStreamFrame,
   type WorkspaceLayoutChangeFrame
@@ -52,7 +50,12 @@ export class LiveLayoutFeed {
       this.ready = false
       return
     }
-    this.applyChange(frame)
+    try {
+      this.applyChange(frame)
+    } catch (error) {
+      this.fail(`layout frame does not apply: ${String(error)}`)
+      return
+    }
     this.frames += 1
     this.onFrame(this)
   }
@@ -68,6 +71,17 @@ export class LiveLayoutFeed {
         return
       case 'removed':
         this.workspaces.delete(frame.key)
+        return
+      case 'records':
+        // A layout-owner host's one frame per operation: each workspace's changed records.
+        for (const change of frame.workspaces) {
+          const layout = applyWorkspaceLayoutRecordChange(this.workspaces.get(change.key), change)
+          if (layout) {
+            this.workspaces.set(change.key, layout)
+          } else {
+            this.workspaces.delete(change.key)
+          }
+        }
     }
   }
 

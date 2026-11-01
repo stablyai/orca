@@ -13,19 +13,12 @@ import {
   isOverlayOpenCodePluginCurrent
 } from './opencode-installed-plugin'
 
-/**
- * Directory holding the TUI copy of a status plugin file. OpenCode 2 loads a
- * `tui` entrypoint from a plugins/ subdirectory; 1.x needs explicit config registration.
- */
+/** OpenCode 2 loads plugins-subdirectory TUI entrypoints; v1 requires explicit config registration. */
 export function openCodeTuiPluginDirName(pluginFileName: string): string {
   return `${pluginFileName.replace(/\.js$/, '')}-tui`
 }
 
-/**
- * Install the TUI copy beside the server plugin file. The same module serves
- * both: its setup() tells a TUI context from a server context. Call it before
- * writing the server file, which decides at load whether to stand down.
- */
+/** Install the dual-context TUI copy before the server file, whose load-time check decides whether to stand down. */
 export function writeOpenCodeTuiPlugin(
   pluginsDir: string,
   pluginFileName: string,

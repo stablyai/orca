@@ -26,7 +26,7 @@ export function getVerifiedLocalFolderWorkspaceKeys(state: FolderWorkspaceHostSt
     if (resolveFolderWorkspaceHost(state, workspace.id).kind !== 'local') {
       continue
     }
-    // The shared legacy resolver projects runtime ownership as local; attribution cannot.
+    // Legacy resolution can project remote ownership as local; memory attribution must reject it.
     if (
       findFolderWorkspaceCandidateRepos(state, workspace.id).some(
         (repo) => getRepoExecutionHostId(repo) !== 'local'

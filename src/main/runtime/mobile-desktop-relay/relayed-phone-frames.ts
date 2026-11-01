@@ -1,3 +1,5 @@
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/paired-e2ee-compressed-frame'
 import {
   readTerminalStreamFrameId,
   writeTerminalStreamFrameId
@@ -5,8 +7,7 @@ import {
 
 const STRIPPED_ENVELOPE_FIELDS = new Set(['deviceToken', 'executionHost'])
 
-// Why: the phone stamps its desktop token into params (client.id, mobileClient.id, `${terminal}:${token}`
-// subscription ids). A field list would rot silently, so every occurrence in the text is swapped.
+// Swap every desktop-token occurrence, including composite subscription ids; field lists silently rot.
 export function rewriteRelayedPhoneRequest(
   frame: string,
   phoneDesktopToken: string,
@@ -17,20 +18,64 @@ export function rewriteRelayedPhoneRequest(
   if (!isRecord(parsed)) {
     throw new Error('relayed_phone_frame_not_an_object')
   }
-  // Why: the host binds identity to the authenticated socket; the routing target is the desktop's only.
+  // Socket authentication owns host identity; routing targets belong only to the desktop.
   const forwarded = Object.fromEntries(
     Object.entries(parsed).filter(([field]) => !STRIPPED_ENVELOPE_FIELDS.has(field))
   )
   return JSON.stringify(requestId === undefined ? forwarded : { ...forwarded, id: requestId })
 }
 
-/**
- * The host's replies on one relayed socket, passed through except for stream ids. Why renumber:
- * every host allocates terminal stream ids from 1, and the phone routes binary frames by id
- * across everything its desktop socket carries.
- */
+// Servers expose client-placed tabs only with this capability; mobile scope still cannot host them.
+// Withhold compressed frames: they would hide relayed replies and stream ids from the rewriting below.
+export function relayedPhoneCapabilities(capabilities: readonly string[]): readonly string[] {
+  const forwarded = capabilities.filter(
+    (capability) => capability !== COMPRESSED_FRAMES_CLIENT_CAPABILITY
+  )
+  return forwarded.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)
+    ? forwarded
+    : [...forwarded, BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+}
+
+export function declareRelayedPhoneCapabilities(frame: string): string {
+  const parsed: unknown = JSON.parse(frame)
+  const params = isRecord(parsed) ? parsed.params : undefined
+  if (!isRecord(parsed) || !isRecord(params) || !Array.isArray(params.clientCapabilities)) {
+    return frame
+  }
+  const clientCapabilities = params.clientCapabilities.filter(
+    (capability): capability is string => typeof capability === 'string'
+  )
+  return JSON.stringify({
+    ...parsed,
+    params: { ...params, clientCapabilities: relayedPhoneCapabilities(clientCapabilities) }
+  })
+}
+
+const LAUNCH_METHODS_READING_CHAT_DEFAULT = new Set(['agent.launch', 'agent.launchReplay'])
+
+// The relaying desktop owns the user chat default; older servers strip this additive field.
+export function withRelayedLaunchChatDefault(
+  frame: string,
+  method: string,
+  nativeChatDefaultFor: (agent: string) => boolean
+): string {
+  if (!LAUNCH_METHODS_READING_CHAT_DEFAULT.has(method)) {
+    return frame
+  }
+  const parsed: unknown = JSON.parse(frame)
+  if (!isRecord(parsed) || !isRecord(parsed.params)) {
+    return frame
+  }
+  const agent = typeof parsed.params.agent === 'string' ? parsed.params.agent : ''
+  return JSON.stringify({
+    ...parsed,
+    params: { ...parsed.params, nativeChatDefault: nativeChatDefaultFor(agent) }
+  })
+}
+
+/** Renumber host stream ids: each host starts at 1, but the phone routes all binary frames on one socket. */
 export class RelayedPhoneReplies {
-  // Why swallow: requests the relay sends on its own behalf have no phone waiting on them.
+  // Relay-owned requests have no phone awaiting their replies.
   private readonly openRequests = new Map<string, { hostStreamIds: number[]; swallow: boolean }>()
   private readonly desktopStreamIds = new Map<number, number>()
 
@@ -43,7 +88,6 @@ export class RelayedPhoneReplies {
     })
   }
 
-  /** Request ids still waiting on the host; the caller fails them when the socket ends. */
   takeOpenRequestIds(): string[] {
     const ids = [...this.openRequests].filter(([, open]) => !open.swallow).map(([id]) => id)
     this.openRequests.clear()
@@ -51,7 +95,7 @@ export class RelayedPhoneReplies {
     return ids
   }
 
-  /** The frame to hand the phone, or null to drop it. */
+  /** Return the phone frame, or null to drop it. */
   text(plaintext: string): string | null {
     let parsed: unknown
     try {
@@ -69,7 +113,7 @@ export class RelayedPhoneReplies {
       result.streamId = this.desktopStreamId(result.streamId, open.hostStreamIds)
       renumbered = true
     }
-    // Why bounded: a stream ended by its own unsubscribe sends no 'end'; it stays until the link closes.
+    // Unsubscribe sends no end; cap retained streams until link closure.
     if (open && (parsed.streaming !== true || (isRecord(result) && result.type === 'end'))) {
       this.finish(parsed.id, open.hostStreamIds)
     }
@@ -79,7 +123,7 @@ export class RelayedPhoneReplies {
     return renumbered ? JSON.stringify(parsed) : plaintext
   }
 
-  /** The frame to hand the phone, or null to drop a terminal frame for a stream it was never told of. */
+  /** Drop terminal frames for streams never announced to the phone. */
   binary(bytes: Uint8Array<ArrayBufferLike>): Uint8Array<ArrayBufferLike> | null {
     const hostStreamId = readTerminalStreamFrameId(bytes)
     if (hostStreamId === null) {

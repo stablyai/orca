@@ -1,21 +1,21 @@
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { PRCheckRunDetails } from '../../../../src/shared/github/check-types'
 import { presentCheckDetail, type CheckDetailJob } from './pr-check-detail-content'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
-// Per-check lazily-fetched detail. `loading`/`error` track the in-flight fetch;
-// `details` (once set) is the cache so collapse/re-expand never re-fetches.
+// Cache detail after first expansion; loading/error track only in-flight read.
 export type DetailEntry =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'loaded'; details: PRCheckRunDetails | null }
 
-// Renders the expanded detail for one check: conclusion/title/summary, plus the
-// annotations and failed-job/step summary from the github.prCheckDetails payload
-// (parity with the desktop ChecksPanel detail). Muted/monochrome and scrollable
-// so long CI output never breaks the sidebar layout.
+// Match desktop check conclusion/summary/annotations/failed jobs; keep output muted and scrollable to bound sidebar layout.
 export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   if (!entry || entry.status === 'loading') {
     return (
       <View style={styles.checkDetailArea}>
@@ -33,7 +33,9 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
   if (!entry.details) {
     return (
       <View style={styles.checkDetailArea}>
-        <Text style={styles.checkDetailText}>No details available.</Text>
+        <Text style={styles.checkDetailText}>
+          {t('pullRequest.prCheckDetail.noDetails', 'No details available.')}
+        </Text>
       </View>
     )
   }
@@ -47,7 +49,9 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
   return (
     <View style={styles.checkDetailArea}>
       {isEmpty ? (
-        <Text style={styles.checkDetailText}>No details available.</Text>
+        <Text style={styles.checkDetailText}>
+          {t('pullRequest.prCheckDetail.noDetails', 'No details available.')}
+        </Text>
       ) : (
         <>
           {content.summaryLines.map((line, index) => (
@@ -57,7 +61,9 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
           ))}
           {content.annotations.length > 0 ? (
             <View style={styles.checkDetailGroup}>
-              <Text style={styles.checkDetailGroupLabel}>Annotations</Text>
+              <Text style={styles.checkDetailGroupLabel}>
+                {t('pullRequest.prCheckDetail.annotations', 'Annotations')}
+              </Text>
               {content.annotations.map((annotation, index) => (
                 <View key={index}>
                   <Text style={styles.checkDetailLocator} numberOfLines={1}>
@@ -71,7 +77,12 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
                 </View>
               ))}
               {content.annotationsTruncated ? (
-                <Text style={styles.checkDetailText}>Showing first 20 annotations</Text>
+                <Text style={styles.checkDetailText}>
+                  {t(
+                    'pullRequest.prCheckDetail.annotationsTruncated',
+                    'Showing first 20 annotations'
+                  )}
+                </Text>
               ) : null}
             </View>
           ) : null}
@@ -82,7 +93,9 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
                 <JobRow key={index} job={job} />
               ))}
               {content.jobsTruncated ? (
-                <Text style={styles.checkDetailText}>Showing first 100 jobs</Text>
+                <Text style={styles.checkDetailText}>
+                  {t('pullRequest.prCheckDetail.jobsTruncated', 'Showing first 100 jobs')}
+                </Text>
               ) : null}
             </View>
           ) : null}
@@ -93,6 +106,7 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
 }
 
 function JobRow({ job }: { job: CheckDetailJob }) {
+  useMobileColorScheme()
   return (
     <View>
       <View style={styles.checkDetailStepRow}>

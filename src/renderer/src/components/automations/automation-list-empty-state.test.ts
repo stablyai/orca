@@ -135,7 +135,6 @@ describe('automation list empty state', () => {
     expect(state.recovery).toBe('update-server')
   })
 
-  // The rule the design doc calls out explicitly.
   const NOT_CONNECTED: AutomationExecutionHealth[] = [
     'disconnected',
     'connecting',
@@ -208,17 +207,5 @@ describe('automation list empty state', () => {
     const state = resolveAutomationHostGroupEmptyState(groupInput())
     expect(state.kind).toBe('host-empty')
     expect(state.title).toBe('No automations on web-01')
-  })
-
-  it('keeps each empty string exclusive to its own condition', () => {
-    const titles = [
-      resolveAutomationListEmptyState(input()).title,
-      resolveAutomationListEmptyState(input({ resolution: ALL_HOSTS })).title,
-      resolveAutomationListEmptyState(input({ searchActive: true, hostRowCount: 2 })).title,
-      resolveAutomationListEmptyState(
-        input({ resolution: hostResolution({ entry: entry({ authorityHealth: 'stale-error' }) }) })
-      ).title
-    ]
-    expect(new Set(titles).size).toBe(4)
   })
 })

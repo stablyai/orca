@@ -4,10 +4,7 @@ export type RelayLocalReadinessVerdict =
   | { ready: true; failing: RelayReadinessDependency[] }
   | { ready: false; reason: 'not_listening' | 'keys_not_loaded' }
 
-// `readinessLocal`: the load balancer keeps a cell that can still serve its connected hosts and
-// verify new tokens from cached keys, so a database or auth outage costs a per-hello refusal
-// instead of the whole hostname. The heartbeat keeps the SQL verdict, so directors still stop
-// placing here.
+// Keep cells serving connected hosts/cached-key auth through dependency outages; SQL heartbeats still stop director placement.
 export function createRelayLocalReadiness(input: {
   listening: () => boolean
   // The host token verifier's own key set: a fetch by any other client proves nothing about it.

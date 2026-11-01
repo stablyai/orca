@@ -1,6 +1,6 @@
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
-import type { ProcessTableRow } from '../../shared/process-table-snapshot'
+import { unreadableArgvName, type ProcessTableRow } from '../../shared/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
   getFreshShellForegroundSnapshot,
@@ -37,11 +37,7 @@ export {
 export type AgentForegroundProcessResolution = {
   available: boolean
   processName: string | null
-  /**
-   * Windows: pid of the process a recognized name belongs to — a liveness
-   * anchor callers may check against the pane's job. Absent when the name is a
-   * fallback, ambiguous, or resolved on POSIX (where `+` already marks it).
-   */
+  /** Windows liveness anchor for an unambiguous recognized name; omitted for fallbacks and POSIX. */
   processId?: number
   /** Windows: the scan proved the caller's `anchorProcessId` is now a non-agent. */
   anchorPidForeign?: boolean
@@ -96,7 +92,7 @@ export async function confirmShellForegroundProcess(
       return false
     }
     const tree = [{ ...root, depth: 0 }, ...collectDescendantsFromIndex(index, shellPid)]
-    // A path, not a command line: splitting on whitespace would cut `/Users/John Doe/bin/zsh` to `john`.
+    // Shell paths may contain spaces; command-line tokenization would truncate their basename.
     const spawnedShellBasename = spawnedShellProcess.split(/[\\/]/).pop()?.toLowerCase() ?? ''
     const foregroundShell = tree
       .filter(
@@ -147,8 +143,7 @@ export async function resolveAgentForegroundProcessWithAvailability(
     )
     return {
       available: resolution.available,
-      // Why: a forced confirmation scan that no longer sees the recognized
-      // fallback is authoritative evidence that the agent exited meanwhile.
+      // A forced scan that loses the recognized fallback proves exit during confirmation.
       processName:
         resolution.processName ??
         (options.forceProcessScan && recognizeAgentProcessFromCommandLine(fallbackProcess)
@@ -169,6 +164,14 @@ export async function resolveAgentForegroundProcessWithAvailability(
     if (options.fresh && !getProcessTableIndex(rows).byPid.has(shellPid)) {
       return { available: false, processName: fallbackProcess }
     }
+    // A foreground descendant whose argv ps withheld could be the agent, so its absence is not proof.
+    if (
+      collectDescendantsFromIndex(getProcessTableIndex(rows), shellPid).some(
+        (row) => row.stat.includes('+') && unreadableArgvName(row.command) !== null
+      )
+    ) {
+      return { available: false, processName: fallbackProcess }
+    }
     return {
       available: true,
       processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess
@@ -184,8 +187,7 @@ export function resolveAgentForegroundProcessFromPs(
   shellPid: number
 ): string | null {
   const found = selectAgentForegroundFromPs(rows, shellPid)
-  // Why: return the outer wrapper (omp) rather than the deeper wrapped child
-  // (pi) of a shell→omp→pi tree — see resolveOuterWrapperForegroundProcess.
+  // Preserve the outer OMP identity across its embedded Pi child.
   return found
     ? resolveOuterWrapperForegroundProcess(
         found.selected.recognized,
@@ -212,22 +214,17 @@ function selectAgentForegroundFromPs(
   selected: SelectedForegroundProcess
   candidates: (ProcessTableRow & { depth: number })[]
 } | null {
-  // Memoized per snapshot identity, so the caller's own index build is reused.
   const index = getProcessTableIndex(rows)
   const shellRow = index.byPid.get(shellPid)
   const candidates = collectDescendantsFromIndex(index, shellPid)
-  // Why: `+` in `ps stat` marks the process holding the terminal foreground.
-  // The root shell can hold it after Ctrl-Z, so use the whole PTY tree as the
-  // foreground gate; otherwise a stopped agent child still masquerades as live.
+  // Include the shell in the foreground gate: after Ctrl-Z it owns + while the stopped agent remains a child.
   const foregroundIsKnown =
     shellRow?.stat.includes('+') === true ||
     candidates.some((candidate) => candidate.stat.includes('+'))
   const foregroundCandidates = foregroundIsKnown
     ? candidates.filter((candidate) => candidate.stat.includes('+'))
     : candidates
-  // Keep the complete process tree for ancestry checks. A recognized agent can
-  // sit above a non-foreground helper before another recognized process; the
-  // helper is filtered from selection but must remain traversable.
+  // Keep non-foreground helpers in ancestry so wrapper recognition can traverse them.
   const ancestryCandidates = shellRow ? [{ ...shellRow, depth: 0 }, ...candidates] : candidates
   const selected = selectForegroundProcessCandidate(foregroundCandidates, ancestryCandidates)
   return selected ? { selected, candidates } : null

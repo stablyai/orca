@@ -8,12 +8,13 @@ import { prepareTerminalPaneMount } from './terminal-pane-mount-preparation'
 import { createTerminalPaneManagerOptions } from './terminal-pane-manager-options'
 import { restoreTerminalPaneLayout } from './terminal-pane-layout-restore'
 import { runTerminalPaneBootstrapSplits } from './terminal-pane-mount-bootstrap'
+import { runBootstrapSplitInMain } from './terminal-pane-bootstrap-split-in-main'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { installTerminalPaneMountEvents } from './terminal-pane-mount-events'
 import { cleanupTerminalPaneMount } from './terminal-pane-mount-cleanup'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 
-/** Mounts the PaneManager and wires pane creation, close, and split events. */
 export function useTerminalPaneMountLifecycle(
   deps: UseTerminalPaneLifecycleDeps,
   refs: TerminalPaneLifecycleRefs
@@ -43,10 +44,8 @@ export function useTerminalPaneMountLifecycle(
       refs,
       ptyDeps,
       deferredSplitHandoffs,
-      // Keep the raw startup object for identity checks against the store's queued command.
-      // `ptyDeps.startup` may be a setup-wait copy and is consumed/mutated during bootstrap.
+      // Preserve startup identity before bootstrap mutates ptyDeps.startup, so ownership checks compare the queued object.
       startup: deps.startup,
-      startupWithSetupSplitWait: preparation.startupWithSetupSplitWait,
       defaultTabCwd: preparation.defaultTabCwd,
       startupCwd: preparation.startupCwd,
       worktreePath: preparation.worktreePath,
@@ -84,13 +83,23 @@ export function useTerminalPaneMountLifecycle(
       ptyDeps,
       initialLayoutHadBuffers: preparation.initialLayoutHadBuffers
     })
-    runTerminalPaneBootstrapSplits({
-      manager,
-      ptyDeps,
-      setupSplit: deps.setupSplit,
-      issueCommandSplit: deps.issueCommandSplit,
-      isActive: deps.isActive
-    })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      runBootstrapSplitInMain({
+        manager,
+        worktreeId: deps.worktreeId,
+        tabId: deps.tabId,
+        ptyDeps,
+        issueCommandSplit: deps.issueCommandSplit,
+        isActive: deps.isActive
+      })
+    } else {
+      runTerminalPaneBootstrapSplits({
+        manager,
+        ptyDeps,
+        issueCommandSplit: deps.issueCommandSplit,
+        isActive: deps.isActive
+      })
+    }
     shouldPersistLayout = true
     preparation.syncCanExpandState()
     preparation.syncPaneCount()
@@ -105,6 +114,7 @@ export function useTerminalPaneMountLifecycle(
         worktreeId: deps.worktreeId,
         isActive: deps.isActive,
         managerRef: deps.managerRef,
+        showPaneTitle: deps.showPaneTitle,
         persistLayoutSnapshot: deps.persistLayoutSnapshot,
         syncCanExpandState: preparation.syncCanExpandState,
         queueResizeAll

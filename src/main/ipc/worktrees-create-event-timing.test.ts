@@ -5,8 +5,9 @@ import {
   listWorktreesMock,
   setPlatform
 } from './worktrees-test-module-mocks'
-import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { beginPreparationWork } from '../worktree-create-concurrency'
+import { addWorktree } from '../git/worktree'
 
 const { trackMock, probeHookMock, telemetryEnabledMock } = vi.hoisted(() => ({
   trackMock: vi.fn<(name: string, props: Record<string, unknown>) => void>(),
@@ -36,9 +37,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -117,7 +115,7 @@ function makeRepo(fields: Record<string, unknown>) {
 function useRepo(repo: ReturnType<typeof makeRepo>): void {
   store.getRepos.mockReturnValue([repo])
   store.getRepo.mockReturnValue(repo)
-  store.setWorktreeMeta.mockImplementation((_worktreeId: string, meta: unknown) => meta)
+  store.setWorktreeMeta.mockImplementation((_target: unknown, meta: unknown) => meta)
 }
 
 function useLocalListing(): void {
@@ -168,7 +166,7 @@ describe('worktrees:create event timing fields', () => {
 
     await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'wt' })
 
-    // The create already answered; the hook probe has not, so the event is not sent yet.
+    // Create has answered while the hook probe still delays telemetry.
     expect(trackedEvent('workspace_created')).toBeUndefined()
     const gitCallsAtReturn = gitWorkCallCount()
 
@@ -189,13 +187,11 @@ describe('worktrees:create event timing fields', () => {
       repo_file_count_bucket: '1k-10k',
       post_checkout_hook: 'present'
     })
-    // One create, one event: the runtime entry point never runs for an app create.
     expect(trackedEvents('workspace_created')).toHaveLength(1)
     expect(trackedEvents('workspace_create_failed')).toHaveLength(0)
     expect(typeof props?.total_ms).toBe('number')
     expect(typeof props?.git_worktree_add_ms).toBe('number')
     expect(props).toHaveProperty('prepared_checkout')
-    // Nothing that names the repo, the branch or a path rides along.
     expect(JSON.stringify(props)).not.toMatch(/workspace|wt|repo-1/)
   })
 
@@ -296,5 +292,34 @@ describe('worktrees:create event timing fields', () => {
     expect(trackedEvents('workspace_created')).toHaveLength(0)
     expect(typeof props?.total_ms).toBe('number')
     expect(JSON.stringify(props)).not.toMatch(/fatal|work tree/)
+  })
+})
+
+describe('worktrees:create checkout progress event', () => {
+  beforeEach(() => {
+    setupWorktreeHandlers()
+  })
+
+  it("forwards git's checkout meter to the pending create it belongs to", async () => {
+    useRepo(makeRepo({}))
+    useLocalListing()
+    await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'wt', creationId: 'c-7' })
+    const onCheckoutProgress = vi.mocked(addWorktree).mock.calls.at(-1)?.[6]?.onCheckoutProgress
+    vi.mocked(mainWindow.webContents.send).mockClear()
+
+    onCheckoutProgress?.({ percent: 42, completed: 420, total: 1000 })
+    onCheckoutProgress?.(null)
+
+    expect(vi.mocked(mainWindow.webContents.send).mock.calls).toEqual([
+      [
+        'createWorktree:progress',
+        {
+          creationId: 'c-7',
+          phase: 'creating',
+          checkout: { percent: 42, completed: 420, total: 1000 }
+        }
+      ],
+      ['createWorktree:progress', { creationId: 'c-7', phase: 'creating', checkout: null }]
+    ])
   })
 })

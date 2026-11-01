@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
-import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
+import { useTerminalKeyboardShortcuts } from './terminal-keyboard-hook'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -52,6 +52,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     settings,
     settingsRef,
     shouldMeasureHiddenStartup,
+    warmRendererWhileHidden,
     tabId,
     toggleExpandPane,
     worktreeId
@@ -96,6 +97,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     isChatViewMode: effectiveChatViewMode,
     isWorktreeActive,
     isSyncFitEnabled: isRendererVisible || shouldMeasureHiddenStartup,
+    warmRendererWhileHidden: warmRendererWhileHidden === true,
     paneCount,
     managerRef,
     containerRef,
@@ -155,8 +157,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
         cleanup()
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [isActive, isVisible])
+  }, [isActive, isVisible, managerRef, paneTransportsRef])
 
   useEffect(() => {
     const container = containerRef.current
@@ -245,6 +246,5 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
         syncFocused(false)
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [])
+  }, [containerRef])
 }

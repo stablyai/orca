@@ -1,11 +1,10 @@
 import type { MrStateFilter, SmartNameMode } from './mobile-composer-source-types'
+import { translate } from '../i18n/mobile-i18n'
 
-// Icon each tab renders: lucide glyphs for the neutral modes, the inline brand
-// SVGs (TaskProviderLogo) for the provider modes since lucide dropped its brand
-// icons.
+// Lucide has no brand icons; provider modes use TaskProviderLogo SVGs.
 export type SmartModeIcon =
   | { type: 'lucide'; name: 'sparkles' | 'git-branch' | 'case-sensitive' }
-  | { type: 'provider'; provider: 'github' | 'gitlab' | 'linear' }
+  | { type: 'provider'; provider: 'github' | 'gitlab' | 'linear' | 'jira' }
 
 export type SmartModeOption = {
   id: SmartNameMode
@@ -13,15 +12,32 @@ export type SmartModeOption = {
   icon: SmartModeIcon
 }
 
-// Order + labels + icons mirror desktop getSmartWorkspaceNameModes():
-// Smart · GitHub · Linear · GitLab · Branch · Name.
 export const SMART_MODE_OPTIONS: readonly SmartModeOption[] = [
-  { id: 'smart', label: 'Smart', icon: { type: 'lucide', name: 'sparkles' } },
+  {
+    id: 'smart',
+    get label() {
+      return translate('tasks.smartSourceModes.smart', 'Smart')
+    },
+    icon: { type: 'lucide', name: 'sparkles' }
+  },
   { id: 'github', label: 'GitHub', icon: { type: 'provider', provider: 'github' } },
   { id: 'linear', label: 'Linear', icon: { type: 'provider', provider: 'linear' } },
+  { id: 'jira', label: 'Jira', icon: { type: 'provider', provider: 'jira' } },
   { id: 'gitlab', label: 'GitLab', icon: { type: 'provider', provider: 'gitlab' } },
-  { id: 'branches', label: 'Branch', icon: { type: 'lucide', name: 'git-branch' } },
-  { id: 'text', label: 'Name', icon: { type: 'lucide', name: 'case-sensitive' } }
+  {
+    id: 'branches',
+    get label() {
+      return translate('tasks.smartSourceModes.branch', 'Branch')
+    },
+    icon: { type: 'lucide', name: 'git-branch' }
+  },
+  {
+    id: 'text',
+    get label() {
+      return translate('tasks.smartSourceModes.name', 'Name')
+    },
+    icon: { type: 'lucide', name: 'case-sensitive' }
+  }
 ]
 
 export type SmartModeAvailabilityInput = {
@@ -31,12 +47,9 @@ export type SmartModeAvailabilityInput = {
   githubAvailable: boolean
   gitlabAvailable: boolean
   linearAvailable: boolean
+  jiraAvailable: boolean
 }
 
-// Faithful port of the desktop availableModes filter. Non-git repos collapse to
-// the Name tab; provider tabs gate on availability + a selected repo + the tasks
-// RPC surface; branches only need a git repo (new-branch-by-name works without
-// the search capability).
 export function resolveAvailableSmartModes(input: SmartModeAvailabilityInput): SmartNameMode[] {
   if (input.textOnly) {
     return ['text']
@@ -51,6 +64,9 @@ export function resolveAvailableSmartModes(input: SmartModeAvailabilityInput): S
         return input.tasksSupported && input.hasRepo && input.gitlabAvailable
       case 'linear':
         return input.tasksSupported && input.linearAvailable
+      case 'jira':
+        // Jira is not repo-scoped; it needs no selected repo.
+        return input.tasksSupported && input.jiraAvailable
       case 'branches':
         return input.hasRepo
       case 'text':
@@ -59,9 +75,6 @@ export function resolveAvailableSmartModes(input: SmartModeAvailabilityInput): S
   }).map((option) => option.id)
 }
 
-// Default mode when the picker opens: 'smart' for a git repo when search is
-// available, else the first available mode (branches for git without tasks,
-// 'text' for non-git).
 export function resolveDefaultSmartMode(input: SmartModeAvailabilityInput): SmartNameMode {
   const available = resolveAvailableSmartModes(input)
   if (available.includes('smart')) {
@@ -70,8 +83,6 @@ export function resolveDefaultSmartMode(input: SmartModeAvailabilityInput): Smar
   return available[0] ?? 'text'
 }
 
-// Keeps a chosen mode valid as availability changes (e.g. the repo switches to a
-// non-git folder), mirroring desktop's snap-to-available effect.
 export function normalizeSmartMode(
   mode: SmartNameMode,
   input: SmartModeAvailabilityInput
@@ -82,12 +93,31 @@ export function normalizeSmartMode(
 
 export type MrStateFilterOption = { id: MrStateFilter; label: string }
 
-// Desktop getMrStateFilters(): Open · Merged · Closed · All, default 'opened'.
 export const MR_STATE_FILTER_OPTIONS: readonly MrStateFilterOption[] = [
-  { id: 'opened', label: 'Open' },
-  { id: 'merged', label: 'Merged' },
-  { id: 'closed', label: 'Closed' },
-  { id: 'all', label: 'All' }
+  {
+    id: 'opened',
+    get label() {
+      return translate('tasks.smartSourceModes.openState', 'Open')
+    }
+  },
+  {
+    id: 'merged',
+    get label() {
+      return translate('tasks.smartSourceModes.mergedState', 'Merged')
+    }
+  },
+  {
+    id: 'closed',
+    get label() {
+      return translate('tasks.smartSourceModes.closedState', 'Closed')
+    }
+  },
+  {
+    id: 'all',
+    get label() {
+      return translate('tasks.smartSourceModes.allStates', 'All')
+    }
+  }
 ]
 
 export const DEFAULT_MR_STATE_FILTER: MrStateFilter = 'opened'

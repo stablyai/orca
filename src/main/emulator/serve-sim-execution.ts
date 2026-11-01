@@ -1,8 +1,8 @@
 import { runProcess } from '@orca/process-host'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { app } from 'electron'
 import { platform, tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { EmulatorError } from './emulator-errors'
 import { materializeServeSimRuntime } from './serve-sim-runtime-materializer'
 
@@ -60,7 +60,6 @@ function getServeSimEnv(executable: ServeSimExecutable): NodeJS.ProcessEnv {
   return env
 }
 
-// Cached per process: materialization is a one-time copy; later calls only stat.
 let materializedServeSimPackageDir: string | null | undefined
 
 function resolveMaterializedServeSimPackageDir(bundledPackageDir: string): string | null {
@@ -69,8 +68,8 @@ function resolveMaterializedServeSimPackageDir(bundledPackageDir: string): strin
   }
   materializedServeSimPackageDir = materializeServeSimRuntime({
     bundledPackageDir,
-    targetRootDir: join(app.getPath('userData'), 'serve-sim-runtime'),
-    version: app.getVersion()
+    targetRootDir: join(getAppEnvironment().getPath('userData'), 'serve-sim-runtime'),
+    version: getAppEnvironment().getVersion()
   })
   if (materializedServeSimPackageDir === null) {
     console.warn(
@@ -85,11 +84,9 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
   const bundledResourcesPath =
     process.resourcesPath ??
     (process.platform === 'darwin'
-      ? join(app.getPath('exe'), '..', '..', 'Resources')
-      : join(app.getPath('exe'), '..', 'resources'))
-  // macOS releases used to copy serve-sim to Resources/serve-sim explicitly.
-  // The runtime closure now owns a single copy under Resources/node_modules;
-  // keep the root path first so already-installed bundles continue to work.
+      ? join(getAppEnvironment().getPath('exe'), '..', '..', 'Resources')
+      : join(getAppEnvironment().getPath('exe'), '..', 'resources'))
+  // Prefer the legacy Resources/serve-sim path for already-installed bundles.
   for (const bundledPackageDir of [
     join(bundledResourcesPath, 'serve-sim'),
     join(bundledResourcesPath, 'node_modules', 'serve-sim')
@@ -99,9 +96,7 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
       continue
     }
     if (process.platform === 'darwin') {
-      // Why: the bundled camera dylib is signed but has no Gatekeeper ticket
-      // (iOS-simulator arch), so injecting it from the quarantined app bundle
-      // can trip syspolicyd; run serve-sim from an unquarantined copy instead.
+      // Materialize an unquarantined copy so Gatekeeper accepts the injected simulator dylib.
       const materializedDir = resolveMaterializedServeSimPackageDir(bundledPackageDir)
       if (materializedDir) {
         return {
@@ -114,13 +109,18 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
     return { command: process.execPath, baseArgs: [bundledEntry], usesElectronAsNode: true }
   }
 
-  const nodeModulesPackageDir = join(app.getAppPath(), 'node_modules', 'serve-sim')
+  const nodeModulesPackageDir = join(getAppEnvironment().getAppPath(), 'node_modules', 'serve-sim')
   const nodeModulesEntry = join(nodeModulesPackageDir, 'dist', 'serve-sim.js')
   if (existsSync(nodeModulesEntry)) {
     return { command: process.execPath, baseArgs: [nodeModulesEntry], usesElectronAsNode: true }
   }
 
   return { command: 'serve-sim', baseArgs: [], usesElectronAsNode: false }
+}
+
+// Why: `--kill [device]` has an optional value; a detached udid is dropped and serve-sim kills every stream.
+export function serveSimKillArgs(udid: string): string[] {
+  return [`--kill=${udid}`, '-q']
 }
 
 export function parseServeSimCommandArgs(input: string): string[] {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SubprocessHandle } from './session-subprocess-handle'
+import type { TerminalHostOptions } from './terminal-host-options'
 import { TerminalHost } from './terminal-host'
 
 vi.mock('../pty-descendant-termination', () => ({ killWithDescendantSweep: vi.fn() }))
@@ -50,7 +51,6 @@ function createOptions(sessionId: string) {
 
 describe('concurrent createOrAttach across the async spawn', () => {
   it('spawns one shell when two callers race the same session id', async () => {
-    // Both callers reach the async spawn before either can publish the session.
     let releaseSpawn: () => void = () => {}
     const spawnGate = new Promise<void>((resolve) => {
       releaseSpawn = resolve
@@ -74,8 +74,7 @@ describe('concurrent createOrAttach across the async spawn', () => {
   })
 
   it('attaches immediately while an ownership proof is still in flight', async () => {
-    // The proof never resolves: attach must not wait on it. The viewer takes
-    // the pre-reset snapshot and the in-stream reset heals its first frame.
+    // A never-settling proof verifies attach relies on the ordered stream reset instead of waiting.
     const first = mockSubprocess({
       confirmShellForeground: vi.fn(() => new Promise<boolean>(() => {}))
     })
@@ -97,13 +96,15 @@ describe('concurrent createOrAttach across the async spawn', () => {
 
   it('lets the next caller spawn after a failed spawn releases the gate', async () => {
     const spawnSubprocess = vi
-      .fn<() => Promise<SubprocessHandle>>()
-      .mockRejectedValueOnce(new Error('Working directory "X" does not exist.'))
+      .fn<TerminalHostOptions['spawnSubprocess']>()
+      .mockImplementationOnce((opts) => {
+        opts.onCreationDisposition?.({ kind: 'no-fork' })
+        throw new Error('Working directory "X" does not exist.')
+      })
       .mockImplementation(async () => mockSubprocess())
     const host = new TerminalHost({ spawnSubprocess })
 
     await expect(host.createOrAttach(createOptions('race-2'))).rejects.toThrow('does not exist')
-    // A failed spawn must leave the id claimable.
     await expect(host.createOrAttach(createOptions('race-2'))).resolves.toMatchObject({
       isNew: true
     })
@@ -130,7 +131,6 @@ describe('concurrent createOrAttach across the async spawn', () => {
       host.createOrAttach(createOptions('solo-b'))
     ])
 
-    // Global serialization would recreate the cross-session stall.
     expect(maxConcurrent).toBe(2)
 
     await host.dispose()
@@ -156,8 +156,7 @@ describe('concurrent createOrAttach across the async spawn', () => {
     })
     abort.abort()
 
-    // Without this the queued caller waits out the hung probe, holding a create
-    // in flight and blocking shutdown/idle behind it.
+    // Cancellation must release the queued caller even while the earlier spawn remains blocked.
     await expect(queued).rejects.toThrow('Attach canceled')
 
     releaseSpawn()
@@ -202,9 +201,14 @@ describe('concurrent createOrAttach across the async spawn', () => {
       rejectSpawn = () => reject(new Error('spawn failed'))
     })
     const spawnSubprocess = vi
-      .fn<() => Promise<SubprocessHandle>>()
-      .mockImplementationOnce(async () => {
-        await spawnGate
+      .fn<TerminalHostOptions['spawnSubprocess']>()
+      .mockImplementationOnce(async (opts) => {
+        try {
+          await spawnGate
+        } catch (error) {
+          opts.onCreationDisposition?.({ kind: 'no-fork' })
+          throw error
+        }
         return mockSubprocess()
       })
       .mockImplementation(async () => mockSubprocess())

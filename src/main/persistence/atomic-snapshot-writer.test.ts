@@ -2,7 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { AtomicSnapshotWriter } from './atomic-snapshot-writer'
+
+const renameHook = vi.hoisted(() => {
+  const hook: { afterRename: (() => void) | null } = { afterRename: null }
+  return hook
+})
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    rename: async (from: string, to: string) => {
+      await actual.rename(from, to)
+      const afterRename = renameHook.afterRename
+      renameHook.afterRename = null
+      afterRename?.()
+    }
+  }
+})
 
 describe('AtomicSnapshotWriter', () => {
   let dir: string
@@ -10,7 +28,7 @@ describe('AtomicSnapshotWriter', () => {
 
   const tmpFiles = (): string[] =>
     readdirSync(join(dir, 'nested')).filter((name) => name.endsWith('.tmp'))
-  // Resolves once the async write has serialized and its temp-file write is pending.
+  // Signal after serialization, while the asynchronous temporary-file write is pending.
   const inFlight = (content: string): { serialize: () => string; started: Promise<void> } => {
     let markStarted = (): void => {}
     const started = new Promise<void>((resolve) => {
@@ -55,6 +73,31 @@ describe('AtomicSnapshotWriter', () => {
     expect(skipped).not.toHaveBeenCalled()
     expect(newest).toHaveBeenCalledTimes(1)
     expect(readFileSync(file, 'utf8')).toBe('three')
+  })
+
+  it('drains a write requested in any microtask after the previous rename completes', async () => {
+    const nested = (depth: number, fn: () => void): void => {
+      if (depth === 0) {
+        fn()
+        return
+      }
+      queueMicrotask(() => nested(depth - 1, fn))
+    }
+    for (let depth = 0; depth < 8; depth += 1) {
+      const writer = new AtomicSnapshotWriter(() => file)
+      const scheduled = Promise.withResolvers<void>()
+      let second: Promise<void> | undefined
+      renameHook.afterRename = () =>
+        nested(depth, () => {
+          second = writer.write(() => `second ${depth}`)
+          scheduled.resolve()
+        })
+      await writer.write(() => `first ${depth}`)
+      await scheduled.promise
+      await second
+      await writer.waitForPendingWrite()
+      expect(readFileSync(file, 'utf8')).toBe(`second ${depth}`)
+    }
   })
 
   it('skips identical bytes, including content primed from disk', async () => {

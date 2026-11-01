@@ -41,15 +41,13 @@ export class CdpBridgeState {
     return this.bindings.processingQueues
   }
 
-  // ── Private helpers ──
-
   getActiveGuest(): Electron.WebContents {
     if (this.activeWebContentsId !== null) {
       const guest = webContents.fromId(this.activeWebContentsId)
       if (guest && !guest.isDestroyed()) {
         return guest
       }
-      // Why: webContentsId goes stale after a process swap; fall through to auto-select since the tab may have a new id.
+      // Process swaps can replace the tab’s webContents ID; try auto-selection again.
       this.activeWebContentsId = null
     }
 

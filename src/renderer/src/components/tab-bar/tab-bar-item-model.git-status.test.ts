@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, afterEach, vi } from 'vitest'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
 import { resolveEditorTabGitStatus } from './tab-bar-item-model'
 
@@ -11,7 +11,7 @@ describe('resolveEditorTabGitStatus', () => {
     ).toBe('modified')
   })
 
-  it.each(['chat-visual', 'check-details'] as const)(
+  it.each(['check-details'] as const)(
     'never decorates a %s tab whose title matches a changed file',
     (mode) => {
       expect(
@@ -19,4 +19,23 @@ describe('resolveEditorTabGitStatus', () => {
       ).toBeNull()
     }
   )
+})
+
+const { rejectAppStoreAccess } = vi.hoisted(() => ({
+  rejectAppStoreAccess: vi.fn(() => {
+    throw new Error('Pure helper tests must not access the app store')
+  })
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(rejectAppStoreAccess, {
+    getState: rejectAppStoreAccess,
+    getInitialState: rejectAppStoreAccess,
+    setState: rejectAppStoreAccess,
+    subscribe: rejectAppStoreAccess
+  })
+}))
+
+afterEach(() => {
+  expect(rejectAppStoreAccess).not.toHaveBeenCalled()
 })

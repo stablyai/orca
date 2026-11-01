@@ -1,5 +1,4 @@
-// Commands on the panes of one terminal tab. Pane ids never change; a moved pane keeps its id,
-// and so its data and scrollback, which are keyed by it.
+// Pane IDs and their keyed data/scrollback survive moves.
 
 import { getNextTerminalOrdinal } from './terminal-tab-ordinal'
 import {
@@ -19,13 +18,15 @@ import {
   updateTab,
   type Applied
 } from './workspace-layout-command-steps'
-import type { CommandOf, LayoutContext } from './workspace-layout-command-types'
+import type { CommandOf, LayoutContext, WindowPaneDetach } from './workspace-layout-command-types'
 import {
   paneKeyOf,
   type LayoutTerminalTab,
+  type WorkspaceLayout,
   type WorkspaceLayoutModel
 } from './workspace-layout-model'
 import { retireTerminalPane, withWorkspace } from './workspace-layout-removal'
+import { withPaneSplitRatios } from './split-ratio-intents'
 
 type PaneCommand = { workspace: string; tabId: string }
 
@@ -63,7 +64,11 @@ export function closePane(model: WorkspaceLayoutModel, command: CommandOf<'close
   if (!tab || !layoutContainsLeafId(tab.panes.root, command.leafId)) {
     return applied(model, { alreadyClosed: true })
   }
-  const ptyId = model.workspaces[command.workspace]!.leaves?.[command.leafId]?.ptyId
+  const leaf = model.workspaces[command.workspace]!.leaves?.[command.leafId]
+  if (command.userPaneClose && tab.panes.root?.type === 'leaf') {
+    return refuse('last_pane')
+  }
+  const ptyId = leaf?.ptyId
   const retired = retireTerminalPane(
     model,
     { workspaceKey: command.workspace, tab },
@@ -95,7 +100,7 @@ export function movePane(model: WorkspaceLayoutModel, command: CommandOf<'movePa
   return updateTab(model, command.workspace, { ...tab, panes: { ...tab.panes, root: moved } })
 }
 
-/** Divider sizes only: a different tree or different panes is refused (rule 11). */
+/** Accept divider ratios only when the tree and panes still match (rule 11). */
 export function setPaneRatios(
   model: WorkspaceLayoutModel,
   command: CommandOf<'setPaneRatios'>
@@ -104,13 +109,15 @@ export function setPaneRatios(
   if (!tab) {
     return refuse('tab_not_found')
   }
-  if (!samePanesIgnoringRatios(tab.panes.root!, command.root)) {
+  const root = command.ratios
+    ? withPaneSplitRatios(tab.panes.root!, command.ratios)
+    : command.root && samePanesIgnoringRatios(tab.panes.root!, command.root)
+      ? command.root
+      : null
+  if (!root) {
     return refuse('pane_structure_changed')
   }
-  return updateTab(model, command.workspace, {
-    ...tab,
-    panes: { ...tab.panes, root: command.root }
-  })
+  return updateTab(model, command.workspace, { ...tab, panes: { ...tab.panes, root } })
 }
 
 export function equalizePanes(
@@ -151,6 +158,49 @@ export function renamePane(model: WorkspaceLayoutModel, command: CommandOf<'rena
   )
 }
 
+export function setPaneGrid(
+  model: WorkspaceLayoutModel,
+  command: CommandOf<'setPaneGrid'>
+): Applied {
+  const tab = paneTab(model, command)
+  if (!tab) {
+    return refuse('tab_not_found')
+  }
+  if (!layoutContainsLeafId(tab.panes.root, command.leafId)) {
+    return refuse('pane_not_found')
+  }
+  const workspace = model.workspaces[command.workspace]!
+  const leaf = workspace.leaves?.[command.leafId]
+  const { cols, rows } = command.grid
+  if (leaf?.lastGrid?.cols === cols && leaf.lastGrid.rows === rows) {
+    return applied(model)
+  }
+  return applied(
+    withWorkspace(
+      model,
+      command.workspace,
+      setLeaf(workspace, command.leafId, { ...leaf, lastGrid: { cols, rows } })
+    )
+  )
+}
+
+export function releasePaneTerminal(
+  model: WorkspaceLayoutModel,
+  command: CommandOf<'releasePaneTerminal'>
+): Applied {
+  const tab = paneTab(model, command)
+  if (!tab || !layoutContainsLeafId(tab.panes.root, command.leafId)) {
+    return refuse('pane_not_found')
+  }
+  const workspace = model.workspaces[command.workspace]!
+  const leaf = workspace.leaves?.[command.leafId]
+  if (leaf?.ptyId !== command.ptyId) {
+    return applied(model)
+  }
+  const { ptyId: _released, incarnationId: _incarnation, ...rest } = leaf
+  return applied(withWorkspace(model, command.workspace, setLeaf(workspace, command.leafId, rest)))
+}
+
 /** Drag-out (#25380): only the tree moves; the pane's data and scrollback are keyed by its id. */
 export function movePaneToNewTab(
   model: WorkspaceLayoutModel,
@@ -164,12 +214,16 @@ export function movePaneToNewTab(
   if (!layoutContainsLeafId(tab.panes.root, command.leafId)) {
     return refuse('pane_not_found')
   }
-  if (leafIdsOf(tab).length < 2) {
+  const detach = command.windowDetach
+  if (!detach && leafIdsOf(tab).length < 2) {
     return refuse('last_pane')
   }
   const { leafId } = command
-  const workspace = model.workspaces[command.workspace]!
-  const id = context.mintId()
+  const workspace = bindDetachedLeaf(model.workspaces[command.workspace]!, leafId, detach)
+  // An unbound pane's shell starts in the new tab, so it starts in the pane's folder.
+  const startupCwd =
+    (!workspace.leaves?.[leafId]?.ptyId && detach?.startupCwd) || tab.terminal.startupCwd
+  const id = detach?.tabId ?? context.mintId()
   const terminals = workspace.tabs.flatMap((entry) => (entry.kind === 'terminal' ? [entry] : []))
   const ordinal = getNextTerminalOrdinal(
     terminals.map((entry) => ({ defaultTitle: entry.terminal.defaultTitle, title: '' }))
@@ -180,10 +234,11 @@ export function movePaneToNewTab(
     createdAt: context.now(),
     customTitle: null,
     color: null,
+    ...(tab.panes.chatLeafId === leafId ? { viewMode: 'chat' as const } : {}),
     kind: 'terminal',
     terminal: {
       defaultTitle: `Terminal ${ordinal}`,
-      ...(tab.terminal.startupCwd ? { startupCwd: tab.terminal.startupCwd } : {}),
+      ...(startupCwd ? { startupCwd } : {}),
       ...(tab.terminal.shellOverride ? { shellOverride: tab.terminal.shellOverride } : {})
     },
     panes: {
@@ -205,6 +260,7 @@ export function movePaneToNewTab(
   }
   const placed = placeNewTab(
     withSource,
+    command.workspace,
     moved,
     {
       groupId: command.groupId ?? sourceGroup?.id,
@@ -213,5 +269,25 @@ export function movePaneToNewTab(
     },
     context
   )
-  return applied(withWorkspace(model, command.workspace, placed), { tabId: id })
+  return applied(withWorkspace(model, command.workspace, placed), {
+    tabId: id,
+    ...(detach ? { ptyId: placed.leaves?.[leafId]?.ptyId ?? null } : {})
+  })
+}
+
+/** The window's terminal outranks a stale binding here; a stale copy's incarnation is dropped. */
+function bindDetachedLeaf(
+  workspace: WorkspaceLayout,
+  leafId: string,
+  detach: WindowPaneDetach | undefined
+): WorkspaceLayout {
+  const leaf = workspace.leaves?.[leafId]
+  if (!detach?.ptyId || leaf?.ptyId === detach.ptyId) {
+    return workspace
+  }
+  if (!leaf?.ptyId) {
+    return setLeaf(workspace, leafId, { ...leaf, ptyId: detach.ptyId })
+  }
+  const { incarnationId: _stale, ...rest } = leaf
+  return setLeaf(workspace, leafId, { ...rest, ptyId: detach.ptyId })
 }

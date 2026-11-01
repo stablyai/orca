@@ -17,7 +17,7 @@ export function settleWorkItemDetailsFetch(args: {
       const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
       const prev = workItemDetailsCache.get(detailsCacheKey)
       if (invalidatedMidFlight && prev?.pending !== inflight) {
-        // Why: entry was deliberately dropped (or later repopulated) — don't recreate or touch it.
+        // Do not recreate or touch entries deliberately invalidated or replaced during this fetch.
         return
       }
       // Why: null means unavailable/not found, not loaded empty content.
@@ -48,7 +48,7 @@ export function settleWorkItemDetailsFetch(args: {
       if (invalidatedMidFlight && prev?.pending !== inflight) {
         return
       }
-      // Why: stale-on-error — keep cached data, drop the pending promise so next open retries; show the error only when nothing is cached.
+      // Keep cached details on error, but drop the pending promise so later opens can retry.
       touchWorkItemDetailsCache(detailsCacheKey, {
         details: prev?.details ?? null,
         fetchedAt: prev?.fetchedAt ?? 0,

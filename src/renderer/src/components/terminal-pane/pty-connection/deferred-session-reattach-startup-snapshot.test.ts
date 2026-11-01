@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerAgentStatusStartupSnapshot } from '@/hooks/ipc-events/agent-status-startup-snapshot'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 vi.mock('../terminal-lifecycle-diagnostics', () => ({ warnTerminalLifecycleAnomaly: vi.fn() }))
@@ -82,6 +83,21 @@ describe('cold reattach waits for host identity replay', () => {
     bridge.settle()
     await vi.advanceTimersByTimeAsync(0)
     expect(transport.connect).toHaveBeenCalledOnce()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main's start resumes the conversation; the window's reattach is a view.
+      expect(transport.connect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: 'lost-pty',
+          attachOnlyView: true,
+          initiallyHidden: true
+        })
+      )
+      expect(transport.connect).toHaveBeenCalledWith(
+        expect.not.objectContaining({ command: expect.anything() })
+      )
+      bridge.dispose()
+      return
+    }
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         command: "cursor-agent '--resume' 'conversation-742'",

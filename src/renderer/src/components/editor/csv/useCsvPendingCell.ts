@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import { registerPendingEditorFlush } from '../editor-pending-flush'
 import { ORCA_EDITOR_FILE_SAVED_EVENT } from '../editor-autosave'
+import { isEditorSavedEventFor } from '../editor-saved-event-view'
 import type { CsvTextDocument } from './csv-text-document'
 import { editCsvTextCells } from './csv-text-cell-edits'
 import type { CsvCellEditSession } from './csv-grid-interaction'
@@ -42,7 +43,8 @@ export function useCsvPendingCell({
           draft.value !==
             (latest.current.document?.rows[draft.sourceRow]?.[draft.position.column] ?? '')
         )
-      }
+      },
+      () => preservePendingCell(editingRef, latest.current)
     )
     const saved = (event: Event): void => {
       if (!(event instanceof CustomEvent)) {
@@ -52,8 +54,7 @@ export function useCsvPendingCell({
       if (
         typeof detail !== 'object' ||
         detail === null ||
-        !('fileId' in detail) ||
-        detail.fileId !== fileId ||
+        !isEditorSavedEventFor(detail, fileId) ||
         !('content' in detail)
       ) {
         return
@@ -71,23 +72,29 @@ export function useCsvPendingCell({
   }, [fileId, editingRef])
   return useCallback(
     (node: HTMLDivElement | null): void => {
-      if (node) {
-        return
+      if (!node) {
+        preservePendingCell(editingRef, latest.current)
       }
-      const draft = editingRef.current
-      const snapshot = latest.current
-      if (!draft || !snapshot.document || draft.source !== snapshot.document.source) {
-        return
-      }
-      snapshot.onContentChange?.(
-        editCsvTextCells(
-          snapshot.document,
-          [{ row: draft.sourceRow, column: draft.position.column, value: draft.value }],
-          true
-        )
-      )
-      editingRef.current = null
     },
     [editingRef]
   )
+}
+
+/** Preserve active cell text as a draft even when normal commit refuses preview limits. */
+function preservePendingCell(
+  editingRef: RefObject<CsvCellEditSession | null>,
+  snapshot: { document: CsvTextDocument | null; onContentChange?: (content: string) => void }
+): void {
+  const draft = editingRef.current
+  if (!draft || !snapshot.document || draft.source !== snapshot.document.source) {
+    return
+  }
+  snapshot.onContentChange?.(
+    editCsvTextCells(
+      snapshot.document,
+      [{ row: draft.sourceRow, column: draft.position.column, value: draft.value }],
+      true
+    )
+  )
+  editingRef.current = null
 }

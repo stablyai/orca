@@ -157,8 +157,7 @@ describe('createWorktreeChangeRefreshQueue', () => {
     const handler = vi.fn().mockReturnValueOnce(firstRefresh.promise).mockResolvedValue(undefined)
     const queue = createWorktreeChangeRefreshQueue(handler)
 
-    // First refresh starts draining immediately; the next two queue behind it.
-    // A plain refresh and a local-pinned refresh differ, so both are kept.
+    // Keep both the plain and local-pinned refresh queued behind the active drain.
     queue.enqueue({ repoId: 'repo-1', forceLocalOwner: false })
     queue.enqueue({ repoId: 'repo-1', forceLocalOwner: false })
     queue.enqueue({ repoId: 'repo-1', forceLocalOwner: true })
@@ -246,4 +245,44 @@ describe('createWorktreeChangeRefreshQueue', () => {
       })
     }
   )
+
+  it('merges queued published order saves and drops the values once any refresh needs a refetch', async () => {
+    const firstRefresh = Promise.withResolvers<void>()
+    const handler = vi.fn().mockReturnValueOnce(firstRefresh.promise).mockResolvedValue(undefined)
+    const queue = createWorktreeChangeRefreshQueue(handler)
+    const owner = { repoId: 'repo', executionHostId: 'runtime:env-1' as const, sortOrderOnly: true }
+    queue.enqueue({ repoId: 'repo', executionHostId: 'runtime:env-1' })
+    queue.enqueue({
+      ...owner,
+      sortOrders: [
+        { worktreeId: 'a', sortOrder: 1 },
+        { worktreeId: 'b', sortOrder: 2 }
+      ]
+    })
+    queue.enqueue({ ...owner, sortOrders: [{ worktreeId: 'b', sortOrder: 3 }] })
+    firstRefresh.resolve()
+    await flushPromises()
+    expect(handler).toHaveBeenLastCalledWith('repo', undefined, {
+      forceLocalOwner: undefined,
+      executionHostId: 'runtime:env-1',
+      sortOrderOnly: true,
+      sortOrders: [
+        { worktreeId: 'a', sortOrder: 1 },
+        { worktreeId: 'b', sortOrder: 3 }
+      ]
+    })
+
+    const held = Promise.withResolvers<void>()
+    handler.mockReturnValueOnce(held.promise)
+    queue.enqueue({ repoId: 'repo', executionHostId: 'runtime:env-1' })
+    queue.enqueue({ ...owner, sortOrders: [{ worktreeId: 'a', sortOrder: 4 }] })
+    queue.enqueue(owner)
+    held.resolve()
+    await flushPromises()
+    expect(handler).toHaveBeenLastCalledWith('repo', undefined, {
+      forceLocalOwner: undefined,
+      executionHostId: 'runtime:env-1',
+      sortOrderOnly: true
+    })
+  })
 })

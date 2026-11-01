@@ -1,7 +1,7 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { separateImagePasteFromFollowingText } from '../../../../shared/image-paste-following-text'
 import { shellEscapePath } from './pane-helpers'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { wrapTerminalBracketedPasteText } from './terminal-bracketed-paste'
 import {
   canPasteImageDropPathRaw,
@@ -43,30 +43,13 @@ export async function writeTerminalDropPathsToCapturedTarget({
   let sentAnyPath = false
   let pathsWritten = 0
   for (const [index, path] of paths.entries()) {
-    // Why: acknowledged PTY writes are async, so a multi-path drop can outlive
-    // the pane or PTY it originally targeted.
+    // Async writes can outlive the targeted pane or PTY; preserve the captured identity.
     const liveTransport = getCurrentTerminalDropTransport(manager, paneTransports, dropTarget)
     if (!liveTransport) {
       return { sentAnyPath, targetCurrent: false, pathsWritten, failureReason: 'target-stale' }
     }
-    // Why: image drops are attachment payloads for terminal TUIs, which detect
-    // them from a bracketed paste of the path — mirroring the clipboard
-    // screenshot flow (terminal-clipboard-paste.ts, issue #2842). Safe image
-    // paths are pasted raw, because escaping would corrupt the file-existence
-    // check those tools run on the pasted path. Image paths with spaces or shell
-    // metacharacters (`download (1).png`) are pasted escaped so a shell still
-    // gets one argument; agent TUIs undo that escaping before the check.
-    // Unframed, the escaped text reaches the TUI as typed keystrokes and stays
-    // plain text. Paths a paste frame would alter (control bytes) and non-image
-    // drops keep the original shell-escaped, space-separated typed input.
-    //
-    // Image payloads carry no trailing space of their own, so when an image is
-    // immediately followed by another path the two would otherwise collide
-    // (`<bracketed-paste>/repo/a.ts`). Add a single separating space unless
-    // both are raw image pastes — those are self-delimiting for TUIs, and a
-    // stray space between them would land in the TUI input. Keep it when
-    // either side is escaped: a shell ignores paste boundaries, so
-    // `/a\ \(1\).png/b\ \(2\).png` would otherwise become one argument.
+    // TUIs detect image attachments from bracketed paths (like clipboard screenshots). Paste safe paths raw and shell-sensitive paths escaped; agents undo escapes. Control-byte paths that framing would alter, and non-images, stay typed and shell-escaped.
+    // Separate adjacent paths unless both are raw image frames: TUIs self-delimit those, but shells ignore frame boundaries and need a separator for escaped paths.
     const imagePasteText = isImageDropPath(path)
       ? formatImageDropPasteText(path, targetShell)
       : null

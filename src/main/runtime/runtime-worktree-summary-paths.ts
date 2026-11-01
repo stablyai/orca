@@ -1,6 +1,6 @@
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
-import { worktreePathComparisonKey } from '../ipc/worktree-path-comparison'
+import { worktreePathComparisonKey } from '../worktree-path-comparison-key'
 import { parseRuntimeWorktreeId } from './runtime-worktree-path-identity'
 
 type ResolvedWorktreePath = { id: string; repoId: string; path: string }
@@ -110,7 +110,7 @@ export function findRuntimeWorktreeSummaryByPath(
     runtimeWorktreeSummaryPathKey(repoId, worktreePath, platform)
   )
   const windowsCandidate = index.windowsAbsolute.get(windowsKey)
-  // Why: a malformed path can match both the POSIX and Windows indexes; keep the old pairwise scan's first-match order.
+  // Malformed paths can match both indexes; preserve the pairwise scan's first-match order.
   if (!posixCandidate) {
     return windowsCandidate?.summary ?? null
   }

@@ -1,11 +1,11 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
-import {
-  getRemoteRuntimeTerminalMultiplexer,
-  type RemoteRuntimeMultiplexedTerminal,
-  type RemoteRuntimeMultiplexedTerminalCallbacks
-} from '@/runtime/remote-runtime-terminal-multiplexer'
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { getRemoteRuntimeTerminalMultiplexer } from '@/runtime/remote-runtime-terminal-multiplexer'
+import type {
+  RemoteRuntimeMultiplexedTerminal,
+  RemoteRuntimeMultiplexedTerminalCallbacks
+} from '@/runtime/remote-runtime-terminal-multiplexer-types'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload,
@@ -277,11 +277,7 @@ async function refreshSession(
   return UNAVAILABLE
 }
 
-/**
- * Dashboard preview of a paired host's terminal over the same multiplexed stream panes use:
- * the owning host serializes the snapshot and holds the live boundary, so any host that serves
- * panes also serves previews.
- */
+/** Reuse pane multiplexing: the owning paired host serializes snapshots and holds the live-output boundary. */
 export const remoteRuntimeTerminalPreviewApi: TerminalPreviewApi = {
   connect: (ptyId, opts) => {
     const parts = parseRemoteRuntimePtyId(ptyId)

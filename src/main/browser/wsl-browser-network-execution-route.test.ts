@@ -2,11 +2,17 @@ import { EventEmitter, once } from 'node:events'
 import { PassThrough, Writable } from 'node:stream'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
+import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
+import type { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
 import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
-import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
+import {
+  BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
+  type BrowserNetworkTunnelSocket
+} from './browser-network-tunnel-stream-state'
+import type { BrowserNetworkExecutionRoute } from './browser-network-execution-route'
 import {
   BrowserNetworkTunnelStreamFrameDecoder,
-  encodeBrowserNetworkTunnelStreamFrame
+  BrowserNetworkTunnelStreamFrameWriter
 } from '../../shared/browser-network-tunnel-stream-framing'
 import { resolveWslBrowserNetworkExecutionRoute } from './wsl-browser-network-execution-route'
 
@@ -39,7 +45,112 @@ class FakeDestination extends EventEmitter implements BrowserNetworkTunnelSocket
   }
 }
 
-function createRelayProcess(connect: (target: { host: string; port: number }) => FakeDestination) {
+class PacedDestination extends EventEmitter implements BrowserNetworkTunnelSocket {
+  destroyed = false
+  paused = true
+  emitted = 0
+
+  constructor(readonly payload: Buffer) {
+    super()
+  }
+
+  accept(): this {
+    setImmediate(() => this.emit('connect'))
+    return this
+  }
+
+  setNoDelay(): this {
+    return this
+  }
+  pause(): this {
+    this.paused = true
+    return this
+  }
+  resume(): this {
+    if (this.paused) {
+      this.paused = false
+      setImmediate(() => this.pump())
+    }
+    return this
+  }
+  write(_bytes: Uint8Array, callback?: () => void): boolean {
+    callback?.()
+    return true
+  }
+  end(): this {
+    return this
+  }
+  destroy(): this {
+    this.destroyed = true
+    return this
+  }
+
+  // One chunk per I/O turn, so the relay's frame writer drains as it would behind a real socket.
+  private pump(): void {
+    if (this.paused || this.destroyed || this.emitted >= this.payload.byteLength) {
+      return
+    }
+    const chunk = this.payload.subarray(this.emitted, this.emitted + 16 * 1024)
+    this.emitted += chunk.byteLength
+    this.emit('data', chunk)
+    setImmediate(() => this.pump())
+  }
+}
+
+function createPairedClientThroughRoute(route: BrowserNetworkExecutionRoute) {
+  let session: BrowserNetworkTunnelSession
+  const client = new BrowserNetworkTunnelClient({
+    tunnelGeneration: 3,
+    sendBinary: (frame) => {
+      setImmediate(() => session.handleBinary(frame))
+      return true
+    }
+  })
+  session = new BrowserNetworkTunnelSession({
+    tunnelGeneration: 3,
+    connect: (target) => route.connect(target),
+    sendBinary: (frame) => {
+      setImmediate(() => client.handleBinary(frame))
+      return true
+    }
+  })
+  return {
+    client,
+    close: () => {
+      client.close()
+      session.close()
+    }
+  }
+}
+
+function patternedPayload(bytes: number): Buffer {
+  const payload = Buffer.alloc(bytes)
+  for (let index = 0; index < bytes; index += 1) {
+    payload[index] = (index * 31) % 251
+  }
+  return payload
+}
+
+async function waitForQuiescence(destination: PacedDestination): Promise<void> {
+  const deadline = Date.now() + 5_000
+  let previous = -1
+  while (previous !== destination.emitted || !destination.paused) {
+    if (destination.emitted >= destination.payload.byteLength) {
+      throw new Error('destination emitted its whole payload without being paused')
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`destination never quiesced (emitted ${destination.emitted} bytes)`)
+    }
+    previous = destination.emitted
+    for (let tick = 0; tick < 20; tick += 1) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+  }
+}
+
+function createRelayProcess(
+  connect: (target: { host: string; port: number }) => BrowserNetworkTunnelSocket
+) {
   const child = new EventEmitter() as ChildProcessWithoutNullStreams
   const stdout = new PassThrough()
   const stderr = new PassThrough()
@@ -49,15 +160,22 @@ function createRelayProcess(connect: (target: { host: string; port: number }) =>
     () => session.close()
   )
   const stdin = new Writable({
+    // Async like a real pipe: the relay session must not see host frames re-entrantly.
     write(chunk: Buffer, _encoding, callback) {
-      input.feed(chunk)
-      callback()
+      setImmediate(() => {
+        input.feed(chunk)
+        callback()
+      })
     }
   })
+  const output = new BrowserNetworkTunnelStreamFrameWriter(
+    (bytes, callback) => stdout.write(bytes, callback),
+    () => session.close()
+  )
   session = new BrowserNetworkTunnelSession({
     tunnelGeneration: 1,
     connect,
-    sendBinary: (frame) => stdout.write(encodeBrowserNetworkTunnelStreamFrame(frame)),
+    sendBinary: (frame) => output.send(frame),
     onClose: () => stdout.end()
   })
   Object.assign(child, {
@@ -140,6 +258,57 @@ describe('WSL browser network execution route', () => {
     const socket = route.connect({ host: 'must-not-fallback.internal', port: 443 })
     socket.on('error', () => {})
     await vi.waitFor(() => expect(socket.destroyed).toBe(true))
+    await route.close()
+  })
+
+  it('delivers a response larger than the relay receive window', async () => {
+    const payload = patternedPayload(4 * BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES)
+    const destination = new PacedDestination(payload)
+    const route = await resolveWslBrowserNetworkExecutionRoute(
+      { executionHost, runtimeId: 'runtime-a', runtimeRevision: 7 },
+      { launchRelay: async () => createRelayProcess(() => destination.accept()) }
+    )
+
+    const socket = route.connect({ host: 'large.internal', port: 443 })
+    socket.on('error', () => {})
+    const received: Buffer[] = []
+    socket.on('data', (bytes) => received.push(Buffer.from(bytes)))
+
+    await vi.waitFor(() => expect(Buffer.concat(received).byteLength).toBe(payload.byteLength), {
+      timeout: 10_000
+    })
+    expect(Buffer.concat(received).equals(payload)).toBe(true)
+    await route.close()
+  })
+
+  it('holds the WSL destination behind a stalled paired-client reader, then completes', async () => {
+    const payload = patternedPayload(8 * BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES)
+    const destination = new PacedDestination(payload)
+    const route = await resolveWslBrowserNetworkExecutionRoute(
+      { executionHost, runtimeId: 'runtime-a', runtimeRevision: 7 },
+      { launchRelay: async () => createRelayProcess(() => destination.accept()) }
+    )
+    const paired = createPairedClientThroughRoute(route)
+    const duplex: BrowserNetworkTunnelDuplex = await paired.client.open({
+      host: 'large.internal',
+      port: 443
+    })
+    duplex.on('error', () => {})
+
+    await waitForQuiescence(destination)
+    expect(destination.emitted).toBeGreaterThan(0)
+    expect(destination.emitted).toBeLessThanOrEqual(3 * BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES)
+
+    const received: Buffer[] = []
+    duplex.on('data', (bytes: Buffer) => {
+      received.push(bytes)
+      duplex.settleRead(bytes.byteLength)
+    })
+    await vi.waitFor(() => expect(Buffer.concat(received).byteLength).toBe(payload.byteLength), {
+      timeout: 10_000
+    })
+    expect(Buffer.concat(received).equals(payload)).toBe(true)
+    paired.close()
     await route.close()
   })
 })

@@ -1,26 +1,22 @@
-import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
-import { surfaceSkillInvocationUserTurns } from '../../../../shared/native-chat-command-envelope'
-import { surfaceNativeChatCommandOutputs } from '../../../../shared/native-chat-command-output'
-import { normalizeImageTranscriptMessages } from '../../../../shared/native-chat-image-transcript-markers'
-import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
+import {
+  prepareNativeChatMessages,
+  surfaceNativeChatHarnessTurns
+} from '../../../../shared/native-chat/transcript/native-chat-message-preparation'
+import type { AgentType } from '../../../../shared/agent-status-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { assembleNativeChatSession } from './native-chat-session-assembler'
 
 export function prepareNativeChatLiveMessages(
   messages: NativeChatMessage[],
   agent: AgentType
 ): NativeChatMessage[] {
-  const commandNames = new Set(getVerifiedNativeChatCommands(agent).map((command) => command.name))
-  const surfaced = surfaceNativeChatCommandOutputs(
-    surfaceSkillInvocationUserTurns(messages, commandNames),
-    agent
-  )
-  const normalized = normalizeImageTranscriptMessages(surfaced)
-  if (!hasMixedSources(normalized)) {
-    return normalized
+  const prepared = prepareNativeChatMessages(messages, agent)
+  if (!hasMixedSources(prepared)) {
+    return prepared
   }
   // A second pass preserves legacy cross-source winners after sorting or presentation transforms.
   return assembleNativeChatSession({
-    sources: { transcript: surfaced },
+    sources: { transcript: surfaceNativeChatHarnessTurns(messages, agent) },
     sessionId: null,
     agent
   }).messages

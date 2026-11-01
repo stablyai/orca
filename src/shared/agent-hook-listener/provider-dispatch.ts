@@ -2,6 +2,8 @@ import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecy
 import { normalizeQoderEvent } from './providers/qoder-events'
 import type { AgentMainAgentStatus, ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
+import { readHostTurnSignals } from '../agent-hook-turn-end-timing'
+import type { AgentHookEventPayload } from './listener-event'
 import { readLastCommandCodeUserPromptEntryFromTranscript } from './command-code-transcript'
 import { readGrokHomeEnvelope } from './grok-result-discovery'
 import { readFirstString } from './interactive-tool'
@@ -13,7 +15,8 @@ import { readJcodeTurnPrompt } from './providers/jcode-turn-prompt'
 import { normalizeAntigravityEvent } from './providers/antigravity-events'
 import { normalizeAmpEvent } from './providers/amp-events'
 import { normalizeClaudeEvent } from './providers/claude-events'
-import { normalizeCodexEvent } from './providers/codex-events'
+import { codexHookEventForEndedTurn, normalizeCodexEvent } from './providers/codex-events'
+import { codexHookEventForEphemeralThread } from './providers/codex-ephemeral-threads'
 import { normalizeGeminiEvent } from './providers/gemini-events'
 import { normalizeOpenCodeFamilyEvent } from './providers/opencode-family-events'
 import { normalizeCursorEvent } from './providers/cursor-events'
@@ -36,6 +39,9 @@ export type ProviderDispatchResult = {
   resolvedPromptText: string
   promptInteractionKey?: string
   hasTranscriptPromptEvidence: boolean
+  /** The event the payload was normalized as, which a provider may restate (Codex ended turns). */
+  eventName: unknown
+  hostTurnSignals: Pick<AgentHookEventPayload, 'stopHookActive' | 'nativeTurnKey'>
 }
 
 /** Exhaustive provider routing with provider-specific transcript locality and attribution. */
@@ -50,8 +56,18 @@ export function normalizeProviderEvent(input: {
   extractedPrompt: ExtractedPromptText
   previousOpenCodeMainAgent?: AgentMainAgentStatus
 }): ProviderDispatchResult {
-  const { state, source, eventName, promptText, paneKey, hookPayload, envelope, extractedPrompt } =
-    input
+  const { state, source, promptText, paneKey, hookPayload, envelope, extractedPrompt } = input
+  // Ephemeral side chats share the pane but must not replace its recorded main turn.
+  const codexEventName =
+    source === 'codex'
+      ? codexHookEventForEphemeralThread(state, paneKey, input.eventName, hookPayload)
+      : undefined
+  const eventName =
+    source !== 'codex'
+      ? input.eventName
+      : codexEventName === undefined
+        ? undefined
+        : codexHookEventForEndedTurn(state, paneKey, codexEventName, hookPayload)
   let resolvedPromptText = promptText
   let promptInteractionKey: string | undefined
   let hasTranscriptPromptEvidence = false
@@ -213,5 +229,12 @@ export function normalizeProviderEvent(input: {
       payload = normalizeKiroEvent(state, eventName, promptText, paneKey, hookPayload)
   }
 
-  return { payload, resolvedPromptText, promptInteractionKey, hasTranscriptPromptEvidence }
+  return {
+    payload,
+    resolvedPromptText,
+    promptInteractionKey,
+    hasTranscriptPromptEvidence,
+    eventName,
+    hostTurnSignals: readHostTurnSignals(source, hookPayload, promptInteractionKey)
+  }
 }

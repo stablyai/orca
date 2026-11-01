@@ -166,8 +166,7 @@ describe('regular terminal focus ownership', () => {
   })
 
   it('reclaims the exact split helper that was released, not the first one in the container', () => {
-    // Why: a single TerminalPane hosts every split as siblings under one
-    // container, so a first-match querySelector would refocus the wrong split.
+    // Split helpers are siblings in one container; first-match lookup would reclaim the wrong pane.
     const pane = appendPane()
     const firstHelper = appendHelper(pane)
     const secondHelper = appendHelper(pane)
@@ -238,8 +237,7 @@ describe('regular terminal focus ownership', () => {
   })
 
   it('does not yank focus back into the terminal if the user clicked elsewhere during reactivation', () => {
-    // Why: the Linux reclaim path must honor the same "newer focus owner wins"
-    // guard the macOS path uses, so a click into the sidebar/dialog isn't stolen.
+    // Linux must honor the same newer-focus-owner guard as macOS during deferred reclaim.
     const pane = appendPane()
     const helper = appendHelper(pane)
     const outside = document.createElement('input')

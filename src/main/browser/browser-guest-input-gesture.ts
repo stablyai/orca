@@ -1,7 +1,6 @@
 import type { WebContents } from 'electron'
 
-// Why: Electron's window-open details carry no user-activation flag, so main keeps its own
-// browser-process input timeline instead of trusting anything the page can synthesize.
+// Window-open details lack user activation; track browser-process input instead of page events.
 const ACTIVATING_INPUT_TYPES: ReadonlySet<string> = new Set([
   'mouseDown',
   'mouseUp',
@@ -17,6 +16,10 @@ const ACTIVATING_INPUT_TYPES: ReadonlySet<string> = new Set([
 
 export const BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS = 1_000
 
+export function isActivatingBrowserGuestInput(input: Electron.InputEvent | undefined): boolean {
+  return typeof input?.type === 'string' && ACTIVATING_INPUT_TYPES.has(input.type)
+}
+
 export type BrowserGuestInputGesture = {
   /** Single-use: one observed click cannot be replayed into a second window or tab. */
   consume: () => boolean
@@ -29,7 +32,7 @@ export function trackBrowserGuestInputGesture(
 ): BrowserGuestInputGesture {
   let lastGestureAt: number | null = null
   const onInputEvent = (_event: Electron.Event, input: Electron.InputEvent): void => {
-    if (typeof input?.type === 'string' && ACTIVATING_INPUT_TYPES.has(input.type)) {
+    if (isActivatingBrowserGuestInput(input)) {
       lastGestureAt = now()
     }
   }
@@ -44,10 +47,12 @@ export function trackBrowserGuestInputGesture(
     consume: () => {
       const observedAt = lastGestureAt
       lastGestureAt = null
+      const elapsed = observedAt === null ? -1 : now() - observedAt
       return (
         attached &&
         observedAt !== null &&
-        now() - observedAt <= BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS
+        elapsed >= 0 &&
+        elapsed <= BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS
       )
     },
     dispose: () => {

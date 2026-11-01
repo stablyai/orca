@@ -22,7 +22,10 @@ function run(caches, remove = vi.fn().mockResolvedValue(undefined)) {
 }
 
 it('uses default-branch code without checking out a closed PR', () => {
-  expect(workflow.on).toEqual({ pull_request_target: { types: ['closed'] } })
+  expect(workflow.on).toEqual({ pull_request_target: { types: ['closed', 'synchronize'] } })
+  expect(workflow.jobs.clean.steps[1].if).toBe(
+    "${{ !cancelled() && github.event.action == 'closed' }}"
+  )
   expect(workflow.permissions).toEqual({ actions: 'write', 'pull-requests': 'read' })
   expect(workflow.jobs.clean.steps).toHaveLength(2)
   expect(workflow.jobs.clean.steps.every((step) => step.uses === 'actions/github-script@v8')).toBe(

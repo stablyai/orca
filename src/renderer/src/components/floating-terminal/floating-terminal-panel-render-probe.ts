@@ -20,8 +20,7 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
     return
   }
   cb(element)
-  // Why: WorkspaceTabDragLayer takes a render prop; walk its children with an inert drag state
-  // so the titlebar strip and body tree stay reachable without invoking dnd-kit.
+  // Invoke the render prop with inert drag state to inspect the strip/body without dnd-kit.
   const children = element.props.children
   if (typeof children === 'function') {
     visit(
@@ -53,22 +52,6 @@ export function findByTypeName(node: unknown, typeName: string): ReactElementLik
   if (!found) {
     throw new Error(`${typeName} not found`)
   }
-  return found
-}
-
-export function findAllByTypeName(node: unknown, typeName: string): ReactElementLike[] {
-  const found: ReactElementLike[] = []
-  visit(node, (entry) => {
-    const candidate =
-      typeof entry.type === 'function' || typeof entry.type === 'object'
-        ? ((entry.type as { displayName?: string; name?: string }).displayName ??
-          (entry.type as { displayName?: string; name?: string }).name ??
-          '')
-        : entry.type
-    if (candidate === typeName) {
-      found.push(entry)
-    }
-  })
   return found
 }
 

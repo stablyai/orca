@@ -1,8 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { Pressable, View } from 'react-native'
 
-/** A message body that opens the actions sheet on long press (Android, which has no inline
- *  selection). Keep the existing responder hierarchy on platforms with inline selection. */
+// Android uses a message-actions long press; other platforms keep native inline selection.
 export function MobileNativeChatLongPressContent({
   onLongPress,
   style,
@@ -13,7 +12,8 @@ export function MobileNativeChatLongPressContent({
   children: ReactNode
 }): React.JSX.Element {
   return onLongPress ? (
-    <Pressable onLongPress={onLongPress} style={style}>
+    // Not one accessible element: screen readers keep reaching the text and controls inside.
+    <Pressable onLongPress={onLongPress} accessible={false} style={style}>
       {children}
     </Pressable>
   ) : (

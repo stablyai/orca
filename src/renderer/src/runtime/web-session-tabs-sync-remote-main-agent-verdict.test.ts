@@ -1,9 +1,4 @@
-/**
- * A paired client mirrors a host's agent rows from `session.tabs`. A main agent that fails while
- * its subagents keep the row working changes nothing but `mainAgent`: the row's state, start and
- * (within one host frame) update time all stay put. The mirror must still take the new row and
- * invalidate the worktree rollup, which caches on the agent-status epoch.
- */
+// mainAgent can fail while subagents keep state/start/update time unchanged. Mirror that verdict and invalidate the epoch-cached worktree rollup.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { AgentMainAgentStatus } from '../../../shared/main-agent-status'
@@ -16,8 +11,7 @@ import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapsh
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { selectWorktreeAgentActivitySummary } from '../components/sidebar/worktree-agent-activity-summary'
 
-// Why: web-session-tabs-sync imports the app-level store singleton; this
-// harness drives a createTestStore instance instead, like its sibling suites.
+// Mirror imports app singleton; redirect it to this createTestStore harness.
 vi.mock('../store', () => ({
   useAppStore: {
     setState: vi.fn(),

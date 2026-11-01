@@ -62,6 +62,26 @@ describe('serveOrcaApp --supervise', () => {
     expect(process.listenerCount('SIGTERM')).toBe(0)
   }, 10_000)
 
+  it('starts the server from the app, not the copy, once relocated outside it', async () => {
+    const appRoot = join(root, 'Orca.app', 'Contents', 'Resources', 'app.asar.unpacked')
+    process.env.ORCA_SERVE_SUPERVISOR_APP_ROOT = appRoot
+    try {
+      const child = new FakeChildProcess()
+      child.kill.mockImplementation((signal: NodeJS.Signals) =>
+        queueMicrotask(() => child.emit('exit', null, signal))
+      )
+      spawnMock.mockImplementation(() => {
+        queueMicrotask(() => process.emit('SIGTERM', 'SIGTERM'))
+        return child
+      })
+      await expect(serveOrcaApp({ supervise: true })).resolves.toBe(0)
+      expect(spawnMock.mock.calls[0][2]).toMatchObject({ cwd: appRoot })
+      expect(spawnMock.mock.calls[0][2].env).not.toHaveProperty('ORCA_SERVE_SUPERVISOR_APP_ROOT')
+    } finally {
+      delete process.env.ORCA_SERVE_SUPERVISOR_APP_ROOT
+    }
+  })
+
   it('does not start again when stopped during the restart delay', async () => {
     const child = new FakeChildProcess()
     spawnMock.mockImplementation(() => {

@@ -1,18 +1,6 @@
-/**
- * Diagnostic-only measurement: how much of main's event loop does git
- * subprocess orchestration actually consume, and which phase dominates?
- *
- * Why a separate spec from terminal-multi-workspace-typing-latency: that bench
- * measures typing latency UNDER churn, so its numbers mix PTY relay, renderer
- * paint and git. This one runs git churn alone against a hidden window and
- * takes a V8 CPU profile OF THE MAIN PROCESS for each phase, which is the only
- * way to split spawn initiation from stdout drain from porcelain parsing — the
- * churn probe reports spawn initiation only.
- *
- * Run: ORCA_GIT_COST_BENCH=1 ORCA_BACKGROUND_LAUNCH=1 \
- *   npx playwright test tests/e2e/main-thread-git-cost.spec.ts \
- *   --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Profile main’s git churn separately from typing latency, which also includes PTY relay and renderer paint.
+// V8 CPU profiles separate spawn, stdout drain and parsing; churn reports measure spawn only (whole runs for synchronous calls).
+// Run with ORCA_GIT_COST_BENCH=1 ORCA_BACKGROUND_LAUNCH=1 and the electron-headless Playwright project.
 import { expect, test } from './helpers/orca-app'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

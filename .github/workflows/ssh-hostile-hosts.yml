@@ -1,21 +1,24 @@
 name: SSH hostile hosts
 
 # Hostile-host matrix: the real client-side managed orcad deploy against container SSH targets
-# (old glibc, musl, no libstdc++, noexec home, no egress) and against each macOS runner's own
+# (old glibc, musl, no libstdc++, noexec home, no egress on either side) and against each macOS runner's own
 # loopback sshd, asserting the runtime each host resolves and whether orcad activates there.
-# Heavy (three slot builds plus seven images), so it runs only when the deploy, the runtime store
+# Heavy (three slot builds plus eight images), so it runs only when the deploy, the runtime store
 # or the slot build changes, and on demand.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
-      # The managed deploy still runs on these relay-named install and runtime primitives.
-      - 'src/main/ssh/ssh-relay-*'
+      # The managed deploy runs on these remote install and runtime primitives.
+      - 'src/main/ssh/remote-*'
       - 'src/main/ssh/*runtime*'
       - 'src/main/ssh/orcad-*'
-      - 'src/main/ssh/remote-install-*'
+      - 'src/main/managed-server/**'
+      - 'src/main/orcad/orcad-artifact-materializer.ts'
+      - 'src/main/orcad/orcad-host-unavailable.ts'
+      - 'src/main/node-runtime/**'
       - 'src/main/ssh/ssh-remote-*'
-      - 'src/main/ssh/ssh-hostile-host-*'
+      - 'src/main/ssh/hostile-host-test-support/**'
       - 'src/main/ssh/sftp-*'
       - 'src/shared/node-runtime-pin.ts'
       - 'src/shared/orcad-artifacts.ts'
@@ -23,14 +26,19 @@ on:
       - 'config/scripts/orcad-prebuild-*.mjs'
       - 'config/scripts/verify-packaged-orcad-template.cjs'
       - 'config/patches/node-pty*'
+      # The deploy runs over this SSH transport.
+      - 'src/main/ssh/connection/**'
+      - 'src/main/ssh/ssh-reconnect-error-classification.ts'
+      - 'src/main/ssh/ssh-posix-command-wrapper.ts'
+      - 'src/shared/shell-argument-quoting.ts'
       - '!src/**/*.test.ts'
-      - 'src/main/ssh/ssh-hostile-hosts.docker.test.ts'
+      - 'src/main/ssh/hostile-host-test-support/ssh-hostile-hosts.docker.test.ts'
       - '.github/workflows/ssh-hostile-hosts.yml'
       - '.github/actions/restore-pnpm-verification/**'
   workflow_dispatch:
     inputs:
       cells:
-        description: Comma-separated Docker cell ids from src/main/ssh/ssh-hostile-host-cells.ts; empty runs all. macOS cells always run on their own runners.
+        description: Comma-separated Docker cell ids from src/main/ssh/hostile-host-test-support/ssh-hostile-host-cells.ts; empty runs all. macOS cells always run on their own runners.
         required: false
         default: ''
 
@@ -108,7 +116,7 @@ jobs:
             -e ORCA_BACKGROUND_LAUNCH=1 \
             -v "$VERIFICATION_CACHE_PATH:/root/.cache/pnpm/lockfile-verified.jsonl" \
             -v "$GITHUB_WORKSPACE:/work" -w /work \
-            node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 sh -s <<'MUSL_SLOT'
+            node:24.22.1-alpine@sha256:6a1c190e17215d844926b0677f4bf87273ff7d5e54db06d3b5b5863ab0b09a3d sh -s <<'MUSL_SLOT'
           set -eu
           apk add --no-cache bash git libstdc++ python3 make g++
           git config --global --add safe.directory /work
@@ -191,13 +199,14 @@ jobs:
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc,linux-x64-musl,linux-x64-glibc217
       # Only the x64 Linux slots exist here, so the template is built for those two, and
       # glibc217 is staged beside its base.
+      - uses: ./.github/actions/build-mobile-web-bundle
       - name: Build the orcad template
         run: node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc,linux-x64-musl
       - name: Run the hostile-host matrix
         env:
           ORCA_RUN_SSH_HOSTILE_HOSTS: '1'
           ORCA_SSH_HOSTILE_HOST_CELLS: ${{ github.event.inputs.cells || '' }}
-        run: pnpm test:node src/main/ssh/ssh-hostile-hosts.docker.test.ts
+        run: pnpm test:node src/main/ssh/hostile-host-test-support/ssh-hostile-hosts.docker.test.ts
 
   # macOS: the runner is the SSH host. A user-level sshd on a loopback port logs in
   # as the runner user with PATH cut to the toolchain shims and /usr/bin:/bin, so Homebrew's node
@@ -225,6 +234,7 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
+      - uses: ./.github/actions/build-mobile-web-bundle
       - name: Build and smoke this runner's slot and the orcad template
         run: |
           pnpm build:orcad-prebuilds
@@ -235,4 +245,4 @@ jobs:
         env:
           ORCA_RUN_SSH_HOSTILE_HOSTS: '1'
           ORCA_SSH_HOSTILE_HOST_CELLS: ${{ matrix.cell }}
-        run: pnpm test:node src/main/ssh/ssh-hostile-hosts.docker.test.ts
+        run: pnpm test:node src/main/ssh/hostile-host-test-support/ssh-hostile-hosts.docker.test.ts

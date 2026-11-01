@@ -9,6 +9,7 @@ import {
 import { getCmdJQuickActions } from './quick-actions'
 import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { createTestStore, makeUnifiedTab, makeWorktree } from '@/store/slices/store-test-helpers'
 
 type GroupState = Pick<AppState, 'activeGroupIdByWorktree' | 'groupsByWorktree'>
 
@@ -104,6 +105,7 @@ describe('Cmd+J quick action context', () => {
       activeWorktree: null,
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
@@ -138,6 +140,7 @@ describe('Cmd+J quick action context', () => {
       activeWorktree: null,
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
@@ -218,6 +221,7 @@ describe('Cmd+J quick action context', () => {
       state,
       activeGroupSnapshot: { worktreeId: 'wt-1', groupId: 'closed-group' },
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
@@ -244,6 +248,7 @@ describe('Cmd+J quick action context', () => {
       state,
       activeGroupSnapshot: null,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
@@ -255,18 +260,19 @@ describe('Cmd+J quick action context', () => {
   })
 
   it('exposes chat split actions only on the workspace surface', () => {
-    const worktree = {
+    const worktree = makeWorktree({
       id: 'wt-1',
       repoId: 'repo-1',
       path: '/repo/wt',
       displayName: 'Workspace',
       branch: 'main',
       createdAt: 0
-    } as Worktree
-    const state = {
+    })
+    const state: AppState = {
+      ...createTestStore().getState(),
       activeWorktreeId: 'wt-1',
       worktreesByRepo: { 'repo-1': [worktree] },
-      repos: [{ id: 'repo-1', path: '/repo', displayName: 'Repo', addedAt: 0 }],
+      repos: [{ id: 'repo-1', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 0 }],
       sshConnectionStates: new Map(),
       activeGroupIdByWorktree: { 'wt-1': 'group-1' },
       groupsByWorktree: {
@@ -281,24 +287,26 @@ describe('Cmd+J quick action context', () => {
       },
       unifiedTabsByWorktree: {
         'wt-1': [
-          {
+          makeUnifiedTab({
             id: 'chat-1',
             entityId: 'session-1',
             groupId: 'group-1',
             worktreeId: 'wt-1',
-            contentType: 'agent-session'
-          }
+            contentType: 'agent-session',
+            agentSessionAgent: 'codex'
+          })
         ]
       },
       activeView: 'settings',
       settings: null
-    } as unknown as AppState
+    }
 
     const buildContext = (activeView: AppState['activeView']) =>
       buildCmdJQuickActionContext({
         state: { ...state, activeView },
         activeGroupSnapshot: null,
         openNewBrowserTab: async () => {},
+        openBrowserUrl: async () => {},
         openNewMarkdownFile: async () => {},
         openNewTerminalTab: async () => {},
         openCreateWorkspace: () => {},
@@ -318,6 +326,7 @@ describe('Cmd+J quick action context', () => {
       activeWorktree: null,
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async (groupId: string) => {
         calls.push(groupId)
@@ -344,6 +353,9 @@ describe('Cmd+J quick action context', () => {
       managedBrowserCreationEnabled: false,
       openNewBrowserTab: async () => {
         calls.push('browser')
+      },
+      openBrowserUrl: async () => {
+        calls.push('browser-url')
       },
       openNewMarkdownFile: async () => {
         calls.push('markdown')
@@ -379,6 +391,7 @@ describe('Cmd+J quick action context', () => {
       activeWorktree: null,
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
@@ -400,6 +413,7 @@ describe('Cmd+J quick action context', () => {
       activeWorktree: null,
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},

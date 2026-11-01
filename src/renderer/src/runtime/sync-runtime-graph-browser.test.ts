@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import {
-  buildMobileSessionTabSnapshots,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual
-} from './sync-runtime-graph'
+} from './sync-runtime-graph/sync-key'
 import type { AppState } from '../store/types'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
@@ -48,6 +48,37 @@ function makeBrowserWorkspace(
 }
 
 describe('browser mobile session sync', () => {
+  it.each([{ sessionProfileId: 'isolated-login' }, { sessionPartition: 'persist:changed-login' }])(
+    'invalidates profile-only changes (%o)',
+    (profileChange) => {
+      const workspace = { ...makeBrowserWorkspace(), sessionProfileId: null }
+      const base = makeState({ browserTabsByWorktree: { 'wt-1': [workspace] } })
+      const initialKey = getRuntimeMobileSessionSyncKey(base)
+      const initialSnapshot = buildMobileSessionTabSnapshots(base)[0]
+      const changed = {
+        ...base,
+        browserTabsByWorktree: { 'wt-1': [{ ...workspace, ...profileChange }] }
+      }
+
+      expect(
+        runtimeMobileSessionSyncKeysEqual(
+          initialKey,
+          getRuntimeMobileSessionSyncKey(changed, base, initialKey)
+        )
+      ).toBe(false)
+      const updatedSnapshot = buildMobileSessionTabSnapshots(changed)[0]
+      if (profileChange.sessionProfileId) {
+        expect(updatedSnapshot).not.toBe(initialSnapshot)
+      } else {
+        expect(updatedSnapshot).toBe(initialSnapshot)
+      }
+      expect(updatedSnapshot?.tabs[0]).toMatchObject({
+        browserProfileId: profileChange.sessionProfileId ?? 'default'
+      })
+      expect(buildMobileSessionTabSnapshots(changed)[0]).toBe(updatedSnapshot)
+    }
+  )
+
   it('changes when browser tab page state changes', () => {
     const base = makeState({
       browserTabsByWorktree: {
@@ -66,6 +97,39 @@ describe('browser mobile session sync', () => {
     expect(runtimeMobileSessionSyncKeysEqual(getRuntimeMobileSessionSyncKey(base), changed)).toBe(
       false
     )
+  })
+
+  it('withdraws local profile authority when the active page becomes a remote mirror', () => {
+    const workspace = { ...makeBrowserWorkspace(), sessionProfileId: 'local-login' }
+    const page = {
+      ...workspace,
+      id: 'page-1',
+      workspaceId: workspace.id,
+      browserRuntimeEnvironmentId: null
+    }
+    const base = makeState({
+      browserTabsByWorktree: { 'wt-1': [workspace] },
+      browserPagesByWorkspace: { [workspace.id]: [page] }
+    })
+    const initialKey = getRuntimeMobileSessionSyncKey(base)
+    expect(buildMobileSessionTabSnapshots(base)[0]?.tabs[0]).toMatchObject({
+      browserProfileId: 'local-login'
+    })
+    const changed = {
+      ...base,
+      browserPagesByWorkspace: {
+        [workspace.id]: [{ ...page, browserRuntimeEnvironmentId: 'remote-host' }]
+      }
+    }
+
+    expect(
+      runtimeMobileSessionSyncKeysEqual(
+        initialKey,
+        getRuntimeMobileSessionSyncKey(changed, base, initialKey)
+      )
+    ).toBe(false)
+    const row = buildMobileSessionTabSnapshots(changed)[0]?.tabs[0]
+    expect(row?.type === 'browser' && row.browserProfileId).toBeUndefined()
   })
 
   it('publishes browser tabs with active page metadata', () => {

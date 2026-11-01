@@ -7,43 +7,134 @@ import {
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import { BrowserManagerDownloadLifecycle } from './browser-manager-download-lifecycle'
 import { sendGuestCdpCommand } from './guest-cdp-command'
-
-// Why no maxTouchPoints: Chromium rejects values outside 1..16 even when disabling, which left
-// touch emulation (and no-hover media features) on after leaving a mobile preset (#22749).
-const TOUCH_EMULATION_DISABLED = { enabled: false } as const
+import { touchEmulationParams } from './guest-touch-emulation'
+import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
 
 export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifecycle {
-  // Why: guests are isolated from Orca's preload bridge, so main owns the devtools escape hatch after a tab→guest lookup.
-  async openDevTools(browserTabId: string): Promise<boolean> {
+  async openDevTools(
+    browserTabId: string,
+    inspectAt?: { x: number; y: number },
+    options?: { detach?: boolean }
+  ): Promise<boolean> {
+    const guest = this.resolveDevToolsGuest(browserTabId)
+    if (!guest) {
+      return false
+    }
+    const renderer = this.resolveRendererForBrowserTab(browserTabId)
+    const operation = this.devToolsDock.beginOpen(
+      guest,
+      () =>
+        this.webContentsIdByTabId.get(browserTabId) === guest.id &&
+        !this.offscreenGuestIds.has(guest.id) &&
+        (!renderer ||
+          (this.resolveRendererForBrowserTab(browserTabId) === renderer && !renderer.isDestroyed()))
+    )
+    const notify = (docked: boolean): void => {
+      const currentGuestId = this.webContentsIdByTabId.get(browserTabId)
+      if (
+        renderer &&
+        !renderer.isDestroyed() &&
+        (currentGuestId === undefined ||
+          currentGuestId === guest.id ||
+          (!docked && !this.devToolsDock.isDocked(currentGuestId)))
+      ) {
+        renderer.send('browser:devToolsDockChanged', { browserPageId: browserTabId, docked })
+      }
+    }
+    try {
+      let docked = false
+      if (!options?.detach && renderer) {
+        docked = await this.devToolsDock.open(guest, () => notify(false), operation)
+        if (!operation.isCurrent()) {
+          return false
+        }
+      }
+      if (!docked && !(await this.devToolsDock.openDetached(guest, operation))) {
+        return false
+      }
+      if (!operation.isCurrent()) {
+        return false
+      }
+      if (docked) {
+        notify(true)
+      }
+      if (!operation.isCurrent()) {
+        return false
+      }
+      if (inspectAt) {
+        // Open first: inspectElement alone opens Electron's own DevTools and bypasses the dock.
+        guest.inspectElement(inspectAt.x, inspectAt.y)
+      }
+      return true
+    } finally {
+      operation.finish()
+    }
+  }
+
+  closeDevTools(browserTabId: string): void {
+    const guest = this.resolveDevToolsGuest(browserTabId)
+    if (guest) {
+      this.closeGuestDevTools(guest)
+    }
+  }
+
+  /** Toggles the page DevTools of `focused` (the page or its DevTools); false if it is neither. */
+  toggleDevToolsOfFocusedPage(focused: Electron.WebContents): boolean {
+    for (const [browserTabId, guestId] of this.webContentsIdByTabId) {
+      const guest = webContents.fromId(guestId)
+      if (!guest || guest.isDestroyed()) {
+        continue
+      }
+      if (guest !== focused && guest.devToolsWebContents !== focused) {
+        continue
+      }
+      if (
+        this.devToolsDock.isOpening(guest.id) ||
+        this.devToolsDock.isDocked(guest.id) ||
+        guest.isDevToolsOpened()
+      ) {
+        this.closeGuestDevTools(guest)
+      } else {
+        void this.openDevTools(browserTabId)
+      }
+      return true
+    }
+    return false
+  }
+
+  setDevToolsDockBounds(
+    browserTabId: string,
+    bounds: BrowserDevToolsDockBounds | null,
+    snapshot: boolean
+  ): Promise<string | null> {
+    const guestId = this.webContentsIdByTabId.get(browserTabId)
+    return guestId === undefined
+      ? Promise.resolve(null)
+      : this.devToolsDock.setBounds(guestId, bounds, snapshot)
+  }
+
+  private resolveDevToolsGuest(browserTabId: string): Electron.WebContents | null {
     const webContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (!webContentsId) {
-      return false
+      return null
     }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      // Why: a stale guest must clear every per-tab registry entry, not just the WebContents maps.
       this.unregisterGuest(browserTabId)
-      return false
+      return null
     }
-    // Offscreen guests have no visible window on this desktop; detaching DevTools would open it
-    // on the host display with no route back to the remote client.
-    if (this.offscreenGuestIds.has(webContentsId)) {
-      return false
-    }
-    guest.openDevTools({ mode: 'detach' })
-    return true
+    // Offscreen DevTools would open on the server desktop without a route back to the client.
+    return this.offscreenGuestIds.has(webContentsId) ? null : guest
   }
 
-  // Why: emulate viewport via CDP; never detach the debugger here or the agent bridge's per-guest state is cleared.
+  // Never detach here: other CDP clients, including the agent bridge, would lose their state.
   async setViewportOverride(
     browserTabId: string,
     override: BrowserViewportOverride | null
   ): Promise<boolean> {
-    // Why: chain per-tab so rapid toggles don't interleave CDP commands and the last-requested override wins.
     const expectedWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (expectedWebContentsId !== undefined) {
-      // Record the request before CDP runs so host panning follows it at once. What is applied only
-      // moves once Chromium accepts it. The guest id fence keeps both off a replacement guest.
+      // Record intent now for panning; update applied metrics only after CDP accepts them.
       const previous = this.viewportPresetByTabId.get(browserTabId)
       this.viewportPresetByTabId.set(browserTabId, {
         guestWebContentsId: expectedWebContentsId,
@@ -51,8 +142,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
         applied: previous?.guestWebContentsId === expectedWebContentsId ? previous.applied : null
       })
     }
-    // The renderer resizes the host before CDP completes; discard the old geometry until it
-    // reports the new pane bounds so a pending preset cannot route wheel input using stale limits.
+    // Host resize precedes CDP completion; discard stale wheel bounds until the renderer updates them.
     this.viewportScrollStateByTabId.delete(browserTabId)
     const prev = this.viewportOpsByTabId.get(browserTabId) ?? Promise.resolve()
     const next = prev
@@ -62,7 +152,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     try {
       return await next
     } finally {
-      // Why: only clear if we're still the tail; a later call may have replaced the entry, and deleting would break serialization.
+      // A later request may own the tail; deleting it would break serialization.
       if (this.viewportOpsByTabId.get(browserTabId) === next) {
         this.viewportOpsByTabId.delete(browserTabId)
       }
@@ -78,7 +168,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     const next = prev
       .catch(() => {})
       .then(() => {
-        // A newer document invalidation retires geometry still waiting in the queue.
+        // Document invalidation retires queued geometry.
         if (this.annotationViewportBridgeOpsByTabId.get(browserTabId) !== next) {
           return false
         }
@@ -94,27 +184,19 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     }
   }
 
-  // Why the caller resolves the guest: the same bridge serves browsing pages and workspace
-  // documents, which live in different halves of the page registry.
-  // Why a resolver and not the guest itself: this op may have waited behind another one, and a
-  // cross-process navigation meanwhile swaps the tab's contents without destroying the old one —
-  // injecting into the guest the request named would bridge a page nobody is looking at.
-  // Why no tab id: with teardown gone this reaches only the guest the resolver hands back, and
-  // taking an id it cannot act on would invite the next reader to act on it.
+  // Resolve after queueing: document and browsing guests may have changed while this op waited.
   protected async doSetAnnotationViewportBridgeImpl(
     options: BrowserAnnotationViewportBridgeOptions,
     resolveGuest: () => Electron.WebContents | null
   ): Promise<boolean> {
-    // Why no teardown here: the resolver already unregisters a page whose guest died, and the only
-    // case it uniquely leaves is an ownership mismatch on a healthy page — where tearing down would
-    // cancel that page's in-flight downloads and grabs over a request that was merely misaddressed.
+    // The resolver owns stale cleanup; a healthy guest with mismatched ownership must stay alive.
     const guest = resolveGuest()
     if (!guest || guest.isDestroyed()) {
       return false
     }
 
     try {
-      // Why: run the scroll bridge in an isolated world so page scripts can't read the per-tab token or tamper with it.
+      // Isolate the bridge token from page scripts.
       await guest.executeJavaScriptInIsolatedWorld(
         BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID,
         [{ code: buildBrowserAnnotationViewportBridgeScript(options) }],
@@ -137,7 +219,6 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      // Why: a stale guest must clear every per-tab registry entry, not just the WebContents maps.
       this.unregisterGuest(browserTabId)
       return false
     }
@@ -147,7 +228,6 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
         guest.debugger.attach('1.3')
       }
     } catch (err) {
-      // Why: attach throws if DevTools is open on the guest; log context so this failure mode is diagnosable.
       console.warn('[browser-manager] setViewportOverride: failed to attach debugger', {
         browserTabId,
         webContentsId,
@@ -170,22 +250,20 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
             })
           : dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
     )
-    // Why record before any further await: a debugger detach clears the metrics, and its handler
-    // must land after this write, not be overwritten by it.
+    // Record before awaiting again so a later detach cannot be overwritten by stale applied metrics.
     if (metricsApplied) {
       this.recordAppliedViewportOverride(browserTabId, webContentsId, override)
     }
     const touchApplied = await this.runViewportEmulationStep(browserTabId, 'touch emulation', () =>
       dbg.sendCommand(
         'Emulation.setTouchEmulationEnabled',
-        override?.mobile ? { enabled: true, maxTouchPoints: 5 } : TOUCH_EMULATION_DISABLED
+        touchEmulationParams(override?.mobile === true)
       )
     )
     if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
       return false
     }
-    // Why: identity follows the device metrics Chromium actually holds, not the request, so a failed
-    // metrics write never pairs a phone identity with a desktop viewport, or the reverse.
+    // Match identity to accepted device metrics even when the requested preset fails.
     const identityApplied = await this.runViewportEmulationStep(browserTabId, 'identity', () =>
       this.retargetTabIdentity(guest, this.resolveTabNavigationUrl(guest))
     )
@@ -203,7 +281,6 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     send: () => Promise<unknown>
   ): Promise<boolean> {
     try {
-      // A step that reports its own failure resolves false rather than throwing.
       return (await send()) !== false
     } catch (error) {
       console.warn(`[browser-manager] setViewportOverride: ${step} failed`, {

@@ -10,6 +10,7 @@ import { dismissTransientAnnouncement } from './helpers/ssh-config-host-picker'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
 import { folderWorkspaceKey } from '../../src/shared/workspace-scope'
 import { ORCAD_TEMPLATE, skipUnlessManagedDockerHost } from './helpers/orcad-managed-workspace'
+import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
 
 skipUnlessManagedDockerHost()
 
@@ -105,10 +106,10 @@ for (const selectedHost of ['A', 'B'] as const) {
       console.log('[adopt-existing-managed-host]', await reconnect(page, adoptedTargetId))
       const environments = await page.evaluate(() => window.api.runtimeEnvironments.list())
       const environmentA = environments.find(
-        (entry) => entry.orcadDeployment?.sshTargetId === seededA.targetId
+        (entry) => getOrcadSshDeployment(entry)?.sshTargetId === seededA.targetId
       )
       const environmentB = environments.find(
-        (entry) => entry.orcadDeployment?.sshTargetId === adoptedTargetId
+        (entry) => getOrcadSshDeployment(entry)?.sshTargetId === adoptedTargetId
       )
       if (!environmentA || !environmentB) {
         throw new Error('Missing converted host')

@@ -7,10 +7,8 @@ import { runProcess } from '@orca/process-host'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { getManagedCommand, CODEX_EVENTS } from './codex-hook-definition'
 import { getManagedScript } from './codex-hook-script'
-import {
-  createManagedCommandMatcher,
-  wrapWindowsCmdHookCommand
-} from '../agent-hooks/installer-utils'
+import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 
 vi.mock('electron', () => ({ app: { getPath: () => process.cwd() } }))
 afterEach(() => {
@@ -31,7 +29,7 @@ describe('Codex Windows hook command', () => {
         `D:\\Windows\\System32\\cmd.exe --% /d /v:off /c @"${path.replaceAll('\\', '/')}"`
       )
       expect(createManagedCommandMatcher('codex-hook.cmd')(command)).toBe(true)
-      expect(wrapWindowsCmdHookCommand(path)).toContain('-EncodedCommand')
+      expect(wrapWindowsBatchHookCommand(path)).toContain('-EncodedCommand')
     }
   )
 
@@ -131,7 +129,6 @@ describe.skipIf(process.platform !== 'win32')('Codex hook delivery through Power
           timedOut: false
         })
         rmSync(scriptPath)
-        // Why: like the bare path, the cmd spelling exits non-zero for a missing script.
         const missing = await invoke(getManagedCommand(scriptPath), payloads[0])
         expect(missing.timedOut).toBe(false)
         expect(missing.code).not.toBe(0)

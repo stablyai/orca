@@ -14,13 +14,15 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   attachHostSessionShadow,
-  contestedPartitionHosts,
   indexWorktreeHostClaims,
   normalizeWorkspaceSessionKeyToWorktreeId,
-  pickPrimaryHostForClaims,
   type HostSessionWriteMode,
   type WorktreeHostClaims
 } from './workspace-session-host-contention'
+import {
+  contestedPartitionHosts,
+  pickPrimaryHostForClaims
+} from '../../../shared/workspace-session-contested-primary-host'
 import {
   nonLocalHostSessionEntries,
   splitWorkspaceSessionByHost,
@@ -47,6 +49,7 @@ export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
   }[]
   worktreesByRepo: Record<string, readonly WorkspaceRuntimeOwnerProjection[]>
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
+  hydratedRuntimeSessionHostIds?: readonly ExecutionHostId[]
   /** Entries a co-claimant host lost to the primary of a contested workspace id; written straight
    *  back to their own partition so the primary's write cannot erase them. */
   contestedHostWorkspaceSessions?: HostSessionSlices
@@ -58,7 +61,6 @@ export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
 type SessionApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
   patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
-  setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
 }
 
 type DurableSessionApi = SessionApi & {
@@ -97,13 +99,10 @@ function getFolderWorkspacePartitionHostId(
     return parsed.id
   }
   if (workspace && group) {
-    // Why: once the folder and group catalogs are both known, a missing runtime
-    // owner is authoritative local/SSH persistence, not a startup gap.
+    // Once folder/group catalogs hydrate, absent runtime ownership means authoritative local/SSH, not a startup gap.
     return LOCAL_EXECUTION_HOST_ID
   }
-  // Why the read source outranks the runtime-only map here: a folder workspace's partition can be
-  // any kind now, and a boot that has not hydrated the folder catalog must not spill an ssh-owned
-  // row into 'local' on the first save.
+  // Read source outranks runtime-only maps: SSH folder rows must not spill local before catalog hydration.
   const restoredHostId =
     state.contestedPrimaryHostBySessionKey?.[key] ??
     getRestoredRuntimeHostId(state.restoredRuntimeHostIdByWorkspaceSessionKey, key)
@@ -122,8 +121,7 @@ function buildRepoHostById(
   for (const repo of repos) {
     const hostId = getRepoExecutionHostId(repo)
     const existing = repoHostById.get(repo.id)
-    // Why: repo ids can repeat across hosts; ambiguous repo-only ownership
-    // must not let a runtime placeholder steal local session state.
+    // Repo IDs can collide across hosts; ambiguous repo-only owners must not let runtime placeholders take local sessions.
     repoHostById.set(repo.id, existing === undefined ? hostId : existing === hostId ? hostId : null)
   }
   return repoHostById
@@ -140,14 +138,7 @@ function catalogReattributedAwayFrom(
   return Boolean(claimed) && !contestedPartitionHosts(claimed ?? []).includes(hostId)
 }
 
-/** Map a worktree to the host partition it persists under, plus the host claims behind it.
- *
- *  Why every non-local host and not just `runtime:*`: an SSH worktree's session is already
- *  read-modify-written into `ssh:<targetId>` by the main-process runtime, so answering 'local'
- *  here double-owned the data and left whichever half the readers skipped round-tripping as
- *  absence (#12721, #12723). The one exception is an id two hosts both publish: it gets a
- *  deterministic primary so the co-claimant's rows can be parked in the shadow instead of sharing
- *  one bucket with it. */
+/** Route all nonlocal hosts to their own partitions, matching main; local-only SSH writes created split ownership/read-as-absence (#12721/#12723). Contested IDs retain one primary plus parked co-claimants. */
 export function buildHostSessionRouting(state: HostPersistenceState): HostSessionRouting {
   const repoHostById = buildRepoHostById(state.repos)
   const claims = indexWorktreeHostClaims(state.worktreesByRepo, repoHostById)
@@ -170,14 +161,12 @@ export function buildHostSessionRouting(state: HostPersistenceState): HostSessio
       state.contestedPrimaryHostBySessionKey?.[worktreeId] ??
       restoredPrimaryByWorktreeId.get(rawWorktreeId)
     if (restoredPrimary && !catalogReattributedAwayFrom(claims, rawWorktreeId, restoredPrimary)) {
-      // Why first: the read already decided which partition each row came from. Re-deriving an
-      // owner here is what let a write copy one host's workspace into another host's partition.
+      // Honor the read source first; recomputing can move rows between hosts’ partitions.
       return restoredPrimary
     }
     const claimed = claims.get(rawWorktreeId)
     if (claimed && claimed.size > 1) {
-      // Why partitions, not claimants: 'local' and every ssh host share one blob, so a claimant set
-      // that collapses to a single partition is not separable and keeps its normal routing.
+      // Use separable storage partitions, not claimant count: collapsed claimants sharing local/SSH blob keep normal routing.
       const partitions = contestedPartitionHosts(claimed)
       if (partitions.length > 1) {
         return pickPrimaryHostForClaims(partitions)
@@ -213,21 +202,28 @@ function splitWorkspaceSessionForWrite(
   mode: HostSessionWriteMode
 ): HostSessionSlices {
   const routing = buildHostSessionRouting(state)
-  // Why the live catalogs: a debounced patch carries only the fields that changed, so a park
-  // capture's layouts-only patch names no tab rows. Routed by the payload alone, every tab-keyed
-  // row fell into 'local', where main pruned the scrollback it could not attribute to a remote
-  // worktree — the runtime partition never received the capture (#21295).
+  const catalogRuntimeHostIds = new Set(state.repos.map((repo) => getRepoExecutionHostId(repo)))
+  // A patch replaces fields fieldwise, so a host whose last entry went needs the emptied field. Only a
+  // partition this window loaded and still catalogs is one its state speaks for in full.
+  // The contested shadow restores only worktree-keyed rows, so a host holding parked rows keeps today's rule.
+  const emptyContainerHostIds =
+    mode === 'patch'
+      ? (state.hydratedRuntimeSessionHostIds ?? []).filter(
+          (hostId) =>
+            catalogRuntimeHostIds.has(hostId) && !state.contestedHostWorkspaceSessions?.[hostId]
+        )
+      : []
+  // Use live tab catalogs for layouts-only patches; payload-only routing loses remote park scrollback in local pruning (#21295).
   const worktreeIdByTabId = extendWorktreeIdByTabId(buildWorktreeIdByTabId(payload), state)
   const slices = splitWorkspaceSessionByHost(payload, routing.hostIdByWorktreeId, {
-    worktreeIdByTabId
+    worktreeIdByTabId,
+    emptyContainerHostIds
   })
   attachHostSessionShadow(slices, state.contestedHostWorkspaceSessions, routing.claims, mode)
   return slices
 }
 
-/** Patch path of the debounced session writer: split the partial patch by owner host and patch
- *  each partition. `localWrite` orders the SSH remote-workspace upload; `written` settles once
- *  every partition did and rejects if any failed, so the writer re-queues those fields. */
+/** Split patches by owner. localWrite orders SSH upload; written waits for all partitions and rejects failures so callers requeue fields. */
 export function patchWorkspaceSessionByHost(
   api: SessionApi,
   patch: WorkspaceSessionPatch,
@@ -254,9 +250,7 @@ export function patchWorkspaceSessionByHost(
   return { localWrite, written }
 }
 
-/** Persist a fresh full snapshot to every owning host partition, then force the
- * main store to disk. Used by request/reply lifecycle operations whose success
- * receipt is a durability boundary rather than a debounced UI update. */
+/** Write full snapshots to each owner and force main to disk; request/reply lifecycle receipts represent durability, unlike debounced UI updates. */
 export async function persistWorkspaceSessionByHost(
   api: DurableSessionApi,
   payload: WorkspaceSessionState,

@@ -1,6 +1,8 @@
 import type { ProviderCheckSummary } from '../../../src/shared/github/pull-request-types'
 import type { GitLabWorkItem } from './mobile-tasks-provider-detail-types'
 import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
+import { fetchJiraIssueDetail } from './mobile-jira-task-source'
+import { createJiraTask } from './mobile-tasks-item-mapping'
 import {
   type HostedReviewDecision,
   buildGitLabCheckSummary,
@@ -182,9 +184,44 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
         return
       }
 
-      // Interpretation is deferred past the group on purpose: this Promise.all rejects as soon as
-      // one leg's transport does, and interpreting only after both settled is what makes the issue
-      // error win over the comments error. startRpcOperation would wait for the slower peer.
+      if (actionItem.provider === 'jira') {
+        const { issue, comments } = await fetchJiraIssueDetail(client, {
+          key: actionItem.source.key,
+          siteId: actionItem.source.siteId
+        })
+        if (!stale) {
+          setDetailPayload({
+            provider: 'jira',
+            description: issue.description ?? '',
+            comments,
+            labels: issue.labels ?? [],
+            assignee: issue.assignee?.displayName,
+            projectName: issue.project.name || issue.project.key,
+            issueTypeName: issue.issueType.name,
+            priorityName: issue.priority?.name
+          })
+          setActionItem((current) => {
+            if (
+              current?.provider !== 'jira' ||
+              current.source.key !== issue.key ||
+              current.source.siteId !== issue.siteId
+            ) {
+              return current
+            }
+            // Keep identity stable so detail hydration cannot fetch itself again.
+            const alreadyHydrated =
+              current.title === issue.title &&
+              current.status === issue.status.name &&
+              current.source.description === issue.description &&
+              (current.source.labels ?? []).length === (issue.labels ?? []).length &&
+              current.source.assignee?.accountId === issue.assignee?.accountId
+            return alreadyHydrated ? current : createJiraTask(issue)
+          })
+        }
+        return
+      }
+
+      // Interpret after Promise.all to preserve fail-fast transport and issue-before-comment policy precedence; startRpcOperation would await slower peers.
       const [issueReply, commentsReply] = await Promise.all([
         linearIssueRead.request(
           client,

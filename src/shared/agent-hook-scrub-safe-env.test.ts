@@ -22,7 +22,6 @@ describe('applyScrubSafeAgentEnvAliases', () => {
   })
 
   it('picks alias names the scrub does not take', () => {
-    // The whole point: if an alias were itself scrubbed it would carry nothing.
     expect(isScrubbedName(ORCA_SCRUB_SAFE_PANE_ENV)).toBe(false)
     expect(isScrubbedName(ORCA_SCRUB_SAFE_LAUNCH_ENV)).toBe(false)
     expect(isScrubbedName('ORCA_PANE_KEY')).toBe(true)
@@ -37,8 +36,7 @@ describe('applyScrubSafeAgentEnvAliases', () => {
   })
 
   it('drops a stale alias when its source is gone', () => {
-    // Why this matters: an alias inherited from a parent pane would attribute this pane's
-    // hooks to the wrong row — worse than reporting no status at all.
+    // Inherited stale aliases would attribute hooks to the parent pane.
     const env: Record<string, string> = {
       [ORCA_SCRUB_SAFE_PANE_ENV]: 'inherited-pane',
       [ORCA_SCRUB_SAFE_LAUNCH_ENV]: 'inherited-launch'

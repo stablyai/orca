@@ -8,10 +8,8 @@ import {
 import { translate } from '@/i18n/i18n'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import {
-  runtimeTargetEnvironmentId,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { SettingsHostScope } from './settings-host-scope'
 
 const LOCAL_VALUE = 'local'
@@ -72,7 +70,7 @@ export function SettingsHostScopePicker({
             </SelectItem>
           ))}
           {scopeEnvironmentId && !scope.available ? (
-            // Why: a removed server stays selected and says so; it never turns into another host.
+            // Keep removed servers selected/unavailable instead of silently retargeting another host.
             <SelectItem value={value} disabled>
               {translate(
                 'auto.components.settings.SettingsHostScopePicker.unavailable',

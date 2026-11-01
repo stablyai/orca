@@ -19,7 +19,6 @@ const {
 vi.mock('./gh-utils', async (importOriginal) => ({
   ...(await importOriginal<typeof GhUtils>()),
   getOwnerRepo: getOwnerRepoMock,
-  // Why: origin resolution uses getOwnerRepoForRemote, not getOwnerRepo.
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock
 }))
 

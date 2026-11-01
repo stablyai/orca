@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ProcessHost from '@orca/process-host'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
   CLIPBOARD_IMAGE_MAX_PIXELS,
@@ -9,8 +11,7 @@ import {
 const {
   removeHandlerMock,
   handleMock,
-  spawnMock,
-  childStdinEndMock,
+  runProcessMock,
   resolveAuthorizedPathMock,
   fsAccessMock,
   fsLstatMock,
@@ -33,19 +34,7 @@ const {
 } = vi.hoisted(() => ({
   removeHandlerMock: vi.fn(),
   handleMock: vi.fn(),
-  childStdinEndMock: vi.fn(),
-  spawnMock: vi.fn(() => {
-    const child = {
-      stdin: { end: childStdinEndMock },
-      on: vi.fn((event: string, callback: (code?: number) => void) => {
-        if (event === 'exit') {
-          queueMicrotask(() => callback(0))
-        }
-        return child
-      })
-    }
-    return child
-  }),
+  runProcessMock: vi.fn<typeof ProcessHost.runProcess>(),
   resolveAuthorizedPathMock: vi.fn(),
   fsAccessMock: vi.fn(),
   fsLstatMock: vi.fn(),
@@ -67,8 +56,9 @@ const {
   callRuntimeEnvironmentMock: vi.fn()
 }))
 
-vi.mock('node:child_process', () => ({
-  spawn: spawnMock
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProcessHost>()),
+  runProcess: runProcessMock
 }))
 
 vi.mock('node:fs/promises', () => ({
@@ -84,7 +74,7 @@ vi.mock('node:fs/promises', () => ({
   default: { writeFile: fsWriteFileMock, mkdir: fsMkdirMock }
 }))
 
-vi.mock('../ipc/filesystem-auth', () => ({
+vi.mock('../ipc/filesystem/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE:
     'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.',
   resolveAuthorizedPath: resolveAuthorizedPathMock
@@ -96,6 +86,7 @@ vi.mock('node:crypto', () => ({
 
 vi.mock('electron', () => ({
   app: {
+    commandLine: { getSwitchValue: vi.fn(() => 'x11') },
     getPath: vi.fn(() => '/tmp')
   },
   clipboard: {
@@ -116,7 +107,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
@@ -135,6 +126,12 @@ function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
     handlers.set(channel, handler)
   }
   return handlers
+}
+
+function registerMockClipboardHandlers(): Map<string, (...args: unknown[]) => unknown> {
+  // SAFETY: Path authorization is mocked; these clipboard handlers do not read Store state.
+  registerClipboardHandlers({} as never)
+  return getRegisteredHandlers()
 }
 
 function makeClipboardEvent(senderOverrides: Record<string, unknown> = {}): {
@@ -176,8 +173,14 @@ describe('registerClipboardHandlers', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1760000000000)
     removeHandlerMock.mockReset()
     handleMock.mockReset()
-    spawnMock.mockClear()
-    childStdinEndMock.mockClear()
+    runProcessMock.mockReset()
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
     resolveAuthorizedPathMock.mockReset()
     resolveAuthorizedPathMock.mockImplementation(async (path: string) => path)
     fsLstatMock.mockReset()
@@ -190,7 +193,7 @@ describe('registerClipboardHandlers', () => {
     fsMkdirMock.mockReset()
     fsMkdirMock.mockResolvedValue(undefined)
     fsOpendirMock.mockReset()
-    // Why: handler registration kicks off the expired-staging sweep; an empty temp root keeps it inert.
+    // Registration starts expired-staging cleanup; an empty temp root keeps it inert.
     fsOpendirMock.mockImplementation(async () => ({
       async *[Symbol.asyncIterator]() {},
       close: vi.fn().mockResolvedValue(undefined)
@@ -213,7 +216,7 @@ describe('registerClipboardHandlers', () => {
     randomUUIDMock.mockReset()
     randomUUIDMock.mockReturnValue('00000000-0000-4000-8000-000000000000')
     callRuntimeEnvironmentMock.mockReset()
-    setTrustedClipboardRendererWebContentsId(null)
+    setTrustedClipboardRendererWebContentsId(17)
   })
 
   afterEach(() => {
@@ -253,6 +256,160 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardWriteTextMock).toHaveBeenCalledWith('primary text', 'selection')
   })
 
+  it.each(['clipboard:writeText', 'clipboard:writeTerminalText'])(
+    'keeps a newer image after %s yields without blocking primary selection',
+    async (channel) => {
+      vi.useFakeTimers()
+      const publications: string[] = []
+      let textValue = ''
+      clipboardReadTextMock.mockImplementation(() => textValue)
+      clipboardWriteTextMock.mockImplementation((text: string, selection?: string) => {
+        if (selection === 'selection') {
+          publications.push('selection')
+        } else {
+          textValue = text
+          publications.push('text')
+        }
+      })
+      nativeImageCreateFromBufferMock.mockReturnValue({
+        getSize: () => ({ width: 2, height: 2 }),
+        isEmpty: () => false
+      })
+      clipboardWriteImageMock.mockImplementation(() => publications.push('image'))
+      const handlers = registerMockClipboardHandlers()
+      const large = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS * 2)
+      const text = handlers.get(channel)?.(makeClipboardEvent(), large)
+      const image = handlers.get('clipboard:writeImage')?.(
+        makeClipboardEvent(),
+        'data:image/png;base64,AAAA'
+      )
+      await handlers.get('clipboard:writeSelectionText')?.(makeClipboardEvent(), 'primary')
+      const whileTextPending = [...publications]
+      const decodedWhileTextPending = nativeImageCreateFromBufferMock.mock.calls.length
+      await vi.runAllTimersAsync()
+      await Promise.all([text, image])
+      expect(whileTextPending).toEqual(['selection'])
+      expect(decodedWhileTextPending).toBe(0)
+      expect(publications).toEqual(['selection', 'text', 'image'])
+    }
+  )
+
+  it.each(['path resolution', 'helper publication'])(
+    'keeps newer text after an older file stalls at %s',
+    async (stage) => {
+      vi.useFakeTimers()
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+      let release: () => void = () => undefined
+      let onEntered: () => void = () => undefined
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const entered = new Promise<void>((resolve) => {
+        onEntered = resolve
+      })
+      const publications: string[] = []
+      if (stage === 'path resolution') {
+        resolveAuthorizedPathMock.mockImplementationOnce(async (path: string) => {
+          onEntered()
+          await gate
+          return path
+        })
+      }
+      runProcessMock.mockImplementationOnce(async () => {
+        if (stage === 'helper publication') {
+          onEntered()
+          await gate
+        }
+        publications.push('file')
+        return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
+      })
+      clipboardWriteTextMock.mockImplementation(() => publications.push('text'))
+      const handlers = registerMockClipboardHandlers()
+      const file = handlers.get('clipboard:writeFile')?.(
+        makeClipboardEvent(),
+        '/tmp/copied-file.txt'
+      )
+      await entered
+      const text = handlers.get('clipboard:writeText')?.(makeClipboardEvent(), 'newer')
+      await vi.advanceTimersByTimeAsync(1_000)
+      const whileFilePending = [...publications]
+      release()
+      await expect(file).resolves.toEqual({ ok: true })
+      await text
+      expect(whileFilePending).toEqual([])
+      expect(publications).toEqual(['file', 'text'])
+    }
+  )
+
+  it('keeps an older valid text copy when newer image and file requests are rejected', async () => {
+    vi.useFakeTimers()
+    nativeImageCreateFromBufferMock.mockReturnValue({ isEmpty: () => true })
+    resolveAuthorizedPathMock.mockRejectedValueOnce(
+      new Error(
+        'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
+      )
+    )
+    const handlers = registerMockClipboardHandlers()
+    const large = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS * 2)
+    const text = handlers.get('clipboard:writeText')?.(makeClipboardEvent(), large)
+    const image = handlers.get('clipboard:writeImage')?.(
+      makeClipboardEvent(),
+      'data:image/png;base64,AAAA'
+    )
+    const file = handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), '/tmp/denied.txt')
+    await vi.runAllTimersAsync()
+    await Promise.all([text, image])
+    await expect(file).resolves.toEqual({ ok: false, reason: 'access-denied' })
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith(large)
+    expect(clipboardWriteImageMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
+    await handlers.get('clipboard:writeText')?.(makeClipboardEvent(), 'after rejection')
+    expect(clipboardWriteTextMock).toHaveBeenLastCalledWith('after rejection')
+  })
+
+  it('rejects a full image/file queue before decoding or resolving another payload', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    let release: () => void = () => undefined
+    let onEntered: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const entered = new Promise<void>((resolve) => {
+      onEntered = resolve
+    })
+    resolveAuthorizedPathMock.mockImplementationOnce(async (path: string) => {
+      onEntered()
+      await gate
+      return path
+    })
+    nativeImageCreateFromBufferMock.mockReturnValue({
+      getSize: () => ({ width: 2, height: 2 }),
+      isEmpty: () => false
+    })
+    const handlers = registerMockClipboardHandlers()
+    const file = handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), '/tmp/copied-file.txt')
+    await entered
+    const images = Array.from({ length: 31 }, () =>
+      handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
+    )
+    await expect(
+      handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
+    ).rejects.toThrow('Too many pending clipboard writes')
+    await expect(
+      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), '/tmp/overflow.txt')
+    ).resolves.toEqual({ ok: false, reason: 'clipboard-busy' })
+    const decodedWhileBlocked = nativeImageCreateFromBufferMock.mock.calls.length
+    const resolvedWhileBlocked = resolveAuthorizedPathMock.mock.calls.length
+    release()
+    await expect(file).resolves.toEqual({ ok: true })
+    await Promise.all(images)
+    expect(decodedWhileBlocked).toBe(0)
+    expect(resolvedWhileBlocked).toBe(1)
+    expect(clipboardWriteImageMock).toHaveBeenCalledTimes(31)
+    await handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
+    expect(clipboardWriteImageMock).toHaveBeenCalledTimes(32)
+  })
+
   it('rejects clipboard IPC from senders outside the current main renderer', async () => {
     setTrustedClipboardRendererWebContentsId(17)
     registerClipboardHandlers({} as never)
@@ -285,7 +442,9 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
   })
 
-  it('writes local files through the trusted clipboard IPC handler', async () => {
+  it('writes local files through the trusted handler into process-host', async () => {
+    // Pinned so the process-host wiring runs on every CI host, macOS included.
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
@@ -295,14 +454,7 @@ describe('registerClipboardHandlers', () => {
 
     expect(fsStatMock).toHaveBeenCalledWith('/tmp/copied-file.txt')
     expect(resolveAuthorizedPathMock.mock.calls[0]?.[0]).toBe('/tmp/copied-file.txt')
-    if (process.platform === 'darwin') {
-      expect(clipboardWriteBufferMock).toHaveBeenCalledWith(
-        'public.file-url',
-        Buffer.from('file:///tmp/copied-file.txt', 'utf8')
-      )
-    } else {
-      expect(spawnMock).toHaveBeenCalled()
-    }
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
   })
 
   it('rejects unauthorized local files before touching the OS clipboard', async () => {
@@ -320,10 +472,10 @@ describe('registerClipboardHandlers', () => {
 
     expect(fsStatMock).not.toHaveBeenCalled()
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
-    expect(spawnMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
   })
 
-  it('rejects clipboard IPC from destroyed, browser, and mismatched dev-origin senders', async () => {
+  it('rejects clipboard IPC from unpinned file://, destroyed, browser, and mismatched dev-origin senders', async () => {
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
@@ -333,6 +485,12 @@ describe('registerClipboardHandlers', () => {
     await expect(
       handlers.get('clipboard:readText')?.(makeClipboardEvent({ getType: () => 'webview' }))
     ).rejects.toThrow('Unauthorized clipboard IPC sender')
+
+    setTrustedClipboardRendererWebContentsId(null)
+    vi.stubEnv('ELECTRON_RENDERER_URL', '')
+    await expect(handlers.get('clipboard:readText')?.(makeClipboardEvent())).rejects.toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
 
     vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
 
@@ -697,7 +855,7 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardWriteImageMock).not.toHaveBeenCalled()
   })
 
-  it('ignores clipboard write images with oversized decoded dimensions', () => {
+  it('ignores clipboard write images with oversized decoded dimensions', async () => {
     nativeImageCreateFromBufferMock.mockReturnValue({
       getSize: () => ({ height: 1, width: CLIPBOARD_IMAGE_MAX_PIXELS + 1 }),
       isEmpty: () => false
@@ -706,7 +864,7 @@ describe('registerClipboardHandlers', () => {
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
-    handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
+    await handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
 
     expect(nativeImageCreateFromBufferMock).toHaveBeenCalled()
     expect(clipboardWriteImageMock).not.toHaveBeenCalled()

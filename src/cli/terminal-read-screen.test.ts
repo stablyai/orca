@@ -100,8 +100,6 @@ describe('orca terminal read --screen', () => {
     expect(String(logSpy.mock.calls[0]?.[0])).toContain('source: screen')
   })
 
-  // Why: the whole defect is a stream being read as if it were the screen. A fallback has to
-  // announce itself rather than look like a successful screen read.
   it('warns when a screen was asked for but only the stream was available', async () => {
     queueFixtures(
       callMock,
@@ -116,8 +114,7 @@ describe('orca terminal read --screen', () => {
     expect(printed).toContain('stacked fragments')
   })
 
-  // Why: zod strips the unknown `screen` key on an older host, so it answers with an ordinary
-  // stream read. Handing that back would be the original defect wearing the new flag's name.
+  // Older hosts strip the unknown screen key and return a stream read.
   it("refuses to pass an older host's stream off as a screen read", async () => {
     queueFixtures(callMock, readFixture({ tail: ['cclclecleaclear'] }))
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

@@ -15,9 +15,7 @@ import type { MarkupShape } from './markup-drawing-model'
 
 export type MarkupModeState = 'idle' | 'capturing' | 'drawing' | 'composing'
 
-// Where to capture the base image from, plus the on-screen geometry used to
-// size and scale the composite. Resolved lazily at start() time by the owner
-// (BrowserPane) since it depends on which environment the pane is showing.
+// Resolve the environment-specific capture source and display geometry lazily when starting.
 export type MarkupCaptureContext = {
   source: MarkupCaptureSource
   cssWidth: number
@@ -51,8 +49,7 @@ export function useMarkupMode({
   const [state, setState] = useState<MarkupModeState>('idle')
   const [baseImage, setBaseImage] = useState<MarkupBaseImage | null>(null)
   const contextRef = useRef<MarkupCaptureContext | null>(null)
-  // Why: a token invalidates an in-flight capture if the user cancels before it
-  // resolves, so the stale promise can't flip state back to 'drawing'.
+  // Cancellation invalidates pending captures so stale completions cannot reopen drawing.
   const captureTokenRef = useRef(0)
 
   const reset = useCallback(() => {
@@ -89,8 +86,7 @@ export function useMarkupMode({
       if (captureTokenRef.current !== token) {
         return
       }
-      // Why: a capture failure has no overlay to fall back to, so return to idle
-      // (not a stuck 'active' state with no surface and an inert Escape).
+      // Return to idle on capture failure; no overlay exists to offer recovery.
       reportError(
         'auto.components.browser-pane.markup.errorCapture',
         'Could not capture the page to draw on.'
@@ -110,13 +106,10 @@ export function useMarkupMode({
         reset()
         return
       }
-      // Why: invalidate this completion if the user cancels or restarts while
-      // onDeliver is pending, so a stale callback can't reset/error the new session.
+      // Fence delivery completions so a cancelled/restarted session cannot be reset by stale callbacks.
       const token = captureTokenRef.current
       setState('composing')
-      // Why: yield a frame so the busy 'composing' UI (disabled buttons, progress
-      // cursor) paints before the synchronous composite raster runs — otherwise
-      // Copy freezes with no visible feedback. Skip the work if cancelled meanwhile.
+      // Yield a frame for busy feedback before raster work, then recheck cancellation.
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
       if (captureTokenRef.current !== token) {
         return
@@ -128,15 +121,11 @@ export function useMarkupMode({
           displayCssHeight: context.cssHeight,
           outputScale: context.outputScale,
           shapes,
-          // Why: target the clipboard handler's own ceilings — the byte limit
-          // (≈18 MB, well above a normal viewport PNG) and the pixel limit, which
-          // the handler otherwise enforces by silently dropping oversize images.
+          // Match the clipboard handler’s byte/pixel ceilings; oversize dimensions are silently rejected.
           maxBytes: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
           maxPixels: CLIPBOARD_IMAGE_MAX_PIXELS
         })
-        // Why: re-check before delivering — the async compose is a wide window in
-        // which the user can Escape/cancel, and onDeliver writes the clipboard
-        // irreversibly. Without this, a cancelled session still overwrites it.
+        // Recheck after async composition before the clipboard write; cancellation must preserve the user’s clipboard.
         if (captureTokenRef.current !== token) {
           return
         }
@@ -149,8 +138,7 @@ export function useMarkupMode({
         if (captureTokenRef.current !== token) {
           return
         }
-        // Why: the frozen backdrop is still valid, so return to drawing (not a
-        // dead-end error state) — the user can retry Copy or Cancel out.
+        // Keep the valid frozen backdrop so delivery failure can retry Copy or Cancel.
         reportError(
           'auto.components.browser-pane.markup.errorAttach',
           'Could not attach the markup screenshot.'

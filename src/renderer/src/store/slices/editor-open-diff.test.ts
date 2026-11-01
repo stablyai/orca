@@ -1,6 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore, createEditorTabsStore } from './editor-slice-test-harness'
 import type { AppState } from '../types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { makeLayout, makeTab } from './store-test-helpers'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
+import { withLayoutOwnerTabProps } from '@/components/tab-bar/tab-bar-layout-owner-props'
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -86,9 +101,7 @@ describe('createEditorSlice openDiff', () => {
 
   it('keeps a diff for an owner-less worktree off the focused global runtime', () => {
     const store = createEditorStore()
-    // A remote runtime is globally focused, but wt-1's repo names no explicit
-    // owner. The diff must stamp null (not undefined): null forces a LOCAL read
-    // (local), while undefined used to inherit 'focused-env'.
+    // Focused runtime must not own unstamped local diffs; stamp null to force local reads instead of undefined’s focus fallback.
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings']
     })
@@ -124,9 +137,7 @@ describe('createEditorSlice openDiff', () => {
 
   it('keeps an SSH-owned worktree diff off the focused runtime so it routes via its connection', () => {
     const store = createEditorStore()
-    // An SSH worktree is owned by its connection, not the focused runtime. Its
-    // diff stamps null (not the focused env), so the read targets local IPC and
-    // flows over connectionId rather than the focused runtime's RPC.
+    // SSH diffs stamp null so local IPC routes via connectionId, never focused-runtime RPC.
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings'],
       repos: [{ id: 'repo-ssh', connectionId: 'conn-1' }] as unknown as AppState['repos'],
@@ -433,9 +444,16 @@ describe('createEditorSlice openDiff', () => {
     )
   })
 
-  it('opens the visible diff tab in the requested split group', () => {
+  it('opens the visible diff tab in the requested split group', async () => {
     const store = createEditorTabsStore()
-    const sourceTab = store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })
+    // A terminal with its row, so main holds it and its group.
+    store.setState({
+      tabsByWorktree: { 'wt-1': [makeTab({ id: 'terminal-1', worktreeId: 'wt-1' })] },
+      terminalLayoutsByTabId: { 'terminal-1': makeLayout() }
+    })
+    store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })
+    const main = await drawTabsFromMain(store)
+    const sourceTab = store.getState().unifiedTabsByWorktree['wt-1']![0]!
     const targetGroupId = store.getState().createEmptySplitGroup('wt-1', sourceTab.groupId, 'right')
     if (!targetGroupId) {
       throw new Error('expected split group')
@@ -444,6 +462,7 @@ describe('createEditorSlice openDiff', () => {
     store
       .getState()
       .openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false, { targetGroupId })
+    await main.settle()
 
     const diffTab = store
       .getState()
@@ -454,10 +473,12 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().activeGroupIdByWorktree['wt-1']).toBe(targetGroupId)
   })
 
-  it('keeps a diff tab selectable after opening its target file tab', () => {
+  it('keeps a diff tab selectable after opening its target file tab', async () => {
     const store = createEditorTabsStore()
+    const main = await drawTabsFromMain(store)
 
     store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    await main.settle()
     const diffFileId = 'wt-1::diff::unstaged::file.ts'
     const diffTab = store
       .getState()
@@ -473,6 +494,7 @@ describe('createEditorSlice openDiff', () => {
       language: 'typescript',
       mode: 'edit'
     })
+    await main.settle()
 
     const stateAfterOpen = store.getState()
     const editFile = stateAfterOpen.openFiles.find((file) => file.mode === 'edit')
@@ -486,6 +508,7 @@ describe('createEditorSlice openDiff', () => {
     ).toBe('/repo/file.ts')
 
     store.getState().activateTab(diffTab.id)
+    await main.settle()
     store.getState().setActiveFile(diffFileId)
 
     const stateAfterReselect = store.getState()
@@ -494,8 +517,9 @@ describe('createEditorSlice openDiff', () => {
     expect(stateAfterReselect.openFiles.find((file) => file.id === diffFileId)?.mode).toBe('diff')
   })
 
-  it('reuses a preview editor tab when opening a preview diff', () => {
+  it('reuses a preview editor tab when opening a preview diff', async () => {
     const store = createEditorTabsStore()
+    const main = await drawTabsFromMain(store)
 
     store.getState().openFile(
       {
@@ -507,8 +531,10 @@ describe('createEditorSlice openDiff', () => {
       },
       { preview: true }
     )
+    await main.settle()
 
     store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, { preview: true })
+    await main.settle()
 
     expect(store.getState().openFiles).toEqual([
       expect.objectContaining({
@@ -527,8 +553,9 @@ describe('createEditorSlice openDiff', () => {
     ])
   })
 
-  it('keeps an existing preview replaceable when it is opened as preview again', () => {
+  it('keeps an existing preview replaceable when it is opened as preview again', async () => {
     const store = createEditorTabsStore()
+    const main = await drawTabsFromMain(store)
 
     const openPreviewFile = (): void => {
       store.getState().openFile(
@@ -544,7 +571,9 @@ describe('createEditorSlice openDiff', () => {
     }
 
     openPreviewFile()
+    await main.settle()
     openPreviewFile()
+    await main.settle()
 
     expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
       expect.objectContaining({
@@ -554,6 +583,7 @@ describe('createEditorSlice openDiff', () => {
     ])
 
     store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, { preview: true })
+    await main.settle()
 
     expect(store.getState().openFiles).toEqual([
       expect.objectContaining({
@@ -569,10 +599,12 @@ describe('createEditorSlice openDiff', () => {
     ])
   })
 
-  it('does not orphan another split group when replacing a shared preview diff', () => {
+  it('does not orphan another split group when replacing a shared preview diff', async () => {
     const store = createEditorTabsStore()
+    const main = await drawTabsFromMain(store)
 
     store.getState().openDiff('wt-1', '/repo/a.ts', 'a.ts', 'typescript', false, { preview: true })
+    await main.settle()
     const firstGroupId = store.getState().groupsByWorktree['wt-1'][0].id
     const secondGroupId = store.getState().createEmptySplitGroup('wt-1', firstGroupId, 'right')
 
@@ -582,10 +614,12 @@ describe('createEditorSlice openDiff', () => {
       preview: true,
       targetGroupId: secondGroupId ?? undefined
     })
+    await main.settle()
     store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, {
       preview: true,
       targetGroupId: secondGroupId ?? undefined
     })
+    await main.settle()
 
     const state = store.getState()
     expect(state.openFiles).toEqual([
@@ -614,8 +648,9 @@ describe('createEditorSlice openDiff', () => {
     )
   })
 
-  it('opens a new preview diff beside a pinned file tab', () => {
+  it('opens a new preview diff beside a pinned file tab', async () => {
     const store = createEditorTabsStore()
+    const main = await drawTabsFromMain(store)
 
     store.getState().openFile(
       {
@@ -627,9 +662,31 @@ describe('createEditorSlice openDiff', () => {
       },
       { preview: true }
     )
-    store.getState().pinFile('/repo/a.ts')
+    await main.settle()
+    // A layout-owner build pins through main first, as the tab bar does.
+    const tabId = store.getState().unifiedTabsByWorktree['wt-1']![0]!.id
+    const pin = (): void => store.getState().pinFile('/repo/a.ts')
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      withLayoutOwnerTabProps(
+        {
+          togglePinned: pin,
+          makePreviewFilePermanent: (fileId, tab) =>
+            store.getState().makePreviewFilePermanent(fileId, tab)
+        },
+        () => 'wt-1'
+      ).togglePinned({
+        unifiedTabId: tabId,
+        isPinned: false,
+        type: 'editor',
+        data: { id: '/repo/a.ts' }
+      })
+    } else {
+      pin()
+    }
+    await main.settle()
 
     store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, { preview: true })
+    await main.settle()
 
     expect(store.getState().openFiles).toEqual([
       expect.objectContaining({
@@ -644,18 +701,22 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
       expect.objectContaining({
         entityId: '/repo/a.ts',
-        isPinned: true,
-        isPreview: false
+        isPinned: true
       }),
       expect.objectContaining({
         entityId: 'wt-1::diff::unstaged::b.ts',
         isPreview: true
       })
     ])
+    // Not a preview: a switch-on build omits the flag rather than writing false.
+    expect(store.getState().unifiedTabsByWorktree['wt-1']?.[0]?.isPreview).toBe(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : false
+    )
   })
 
-  it('makes a preview file permanent without pinning the tab', () => {
+  it('makes a preview file permanent without pinning the tab', async () => {
     const store = createEditorTabsStore()
+    const main = await drawTabsFromMain(store)
 
     store.getState().openFile(
       {
@@ -667,7 +728,9 @@ describe('createEditorSlice openDiff', () => {
       },
       { preview: true }
     )
+    await main.settle()
     store.getState().makePreviewFilePermanent('/repo/a.ts')
+    await main.settle()
 
     expect(store.getState().openFiles).toEqual([
       expect.objectContaining({
@@ -676,16 +739,18 @@ describe('createEditorSlice openDiff', () => {
       })
     ])
     expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
-      expect.objectContaining({
-        entityId: '/repo/a.ts',
-        isPinned: undefined,
-        isPreview: false
-      })
+      expect.objectContaining({ entityId: '/repo/a.ts' })
     ])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']?.[0]?.isPinned).toBeUndefined()
+    // Not a preview: a switch-on build omits the flag rather than writing false.
+    expect(store.getState().unifiedTabsByWorktree['wt-1']?.[0]?.isPreview).toBe(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : false
+    )
   })
 
-  it('does not replace a dirty file that was opened as a preview', () => {
+  it('does not replace a dirty file that was opened as a preview', async () => {
     const store = createEditorTabsStore()
+    const main = await drawTabsFromMain(store)
 
     store.getState().openFile(
       {
@@ -697,9 +762,12 @@ describe('createEditorSlice openDiff', () => {
       },
       { preview: true }
     )
+    await main.settle()
     store.getState().markFileDirty('/repo/a.ts', true)
+    await main.settle()
 
     store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, { preview: true })
+    await main.settle()
 
     expect(store.getState().openFiles).toEqual([
       expect.objectContaining({
@@ -714,13 +782,16 @@ describe('createEditorSlice openDiff', () => {
     ])
     expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
       expect.objectContaining({
-        entityId: '/repo/a.ts',
-        isPreview: false
+        entityId: '/repo/a.ts'
       }),
       expect.objectContaining({
         entityId: 'wt-1::diff::unstaged::b.ts',
         isPreview: true
       })
     ])
+    // Not a preview: a switch-on build omits the flag rather than writing false.
+    expect(store.getState().unifiedTabsByWorktree['wt-1']?.[0]?.isPreview).toBe(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : false
+    )
   })
 })

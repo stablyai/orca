@@ -1,15 +1,10 @@
-import { HEADER_LENGTH, MAX_MESSAGE_SIZE } from './relay-protocol'
+import { HEADER_LENGTH, MAX_MESSAGE_SIZE } from '../../shared/relay-frame-decoder'
 import { SshMultiplexerWriterLaneScheduler } from './ssh-multiplexer-writer-lane-scheduler'
 import type { WriteAmbiguityReason, WriteRefusalReason } from '../../shared/pty-write-settlement'
 
-/** All the socket itself can prove: it took the buffer, or the attempt failed. */
 export type MultiplexerTransportWriteResult = { ok: true } | { ok: false; error: Error }
 
-/**
- * A `WriteSettlement` refined with the transport error the writer needs to fail the session.
- * Only this writer knows whether an entry was still queued or already handed to the
- * transport, so it is the boundary that mints `refused` versus `unverifiable`.
- */
+/** Only the writer knows queued versus transport-started: failure before send is refused; after send it may be unverifiable. */
 export type MultiplexerWriteSettlement =
   | { outcome: 'accepted' }
   | { outcome: 'refused'; reason: WriteRefusalReason; error: Error }

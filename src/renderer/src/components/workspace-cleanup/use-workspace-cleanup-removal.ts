@@ -7,7 +7,7 @@ import {
   getWorkspaceCleanupHostIdentity,
   resolveWorkspaceCleanupRemovalHostId
 } from '../../../../shared/workspace-cleanup-host-identity'
-import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { getWorktreeDeleteStateKey } from '@/store/slices/worktrees/teardown/worktree-delete-state'
 import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
 import {
   startWorkspaceCleanupBackgroundRemoval,
@@ -16,6 +16,10 @@ import {
 import { filterWorkspaceCleanupRemovalCandidates } from './workspace-cleanup-removal-candidates'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
 import { useWorkspaceCleanupUnverifiedRemoval } from './use-workspace-cleanup-unverified-removal'
+import {
+  useWorkspaceCleanupAgentStopGate,
+  type WorkspaceCleanupAgentStopRequest
+} from './use-workspace-cleanup-agent-stop-gate'
 
 export type WorkspaceCleanupRemovalController = {
   confirming: boolean
@@ -34,12 +38,11 @@ export type WorkspaceCleanupRemovalController = {
   confirmUnverifiedRemoval: (candidate: WorkspaceCleanupCandidate) => void
   cancelConfirmRemove: () => void
   backToList: () => void
+  agentStopRequest: WorkspaceCleanupAgentStopRequest | null
+  confirmStopAgents: () => void
+  cancelStopAgents: () => void
 }
 
-/**
- * Owns the destructive path: confirm gate, background batch, late settlement,
- * and the queued-delete overlay each row shows in the sidebar.
- */
 export function useWorkspaceCleanupRemoval({
   onDeselect,
   closeModal
@@ -57,38 +60,36 @@ export function useWorkspaceCleanupRemoval({
   const [removalProgress, setRemovalProgress] = useState<WorkspaceCleanupRemovalProgress | null>(
     null
   )
-  // Why: `removalProgress` only arrives once the batch reports, so rendering
-  // needs its own in-flight flag; removalInFlightRef stays the synchronous guard.
+  // Progress arrives after dispatch, so render an immediate in-flight flag while the ref guards repeat confirmation synchronously.
   const [removalInFlight, setRemovalInFlight] = useState(false)
   const [deletionPhaseByIdentity, setDeletionPhaseByIdentity] = useState<
     Record<string, 'queued' | 'deleting'>
   >({})
   const [rowFailures, setRowFailures] = useState<Record<string, WorkspaceCleanupFailure>>({})
   const removalInFlightRef = useRef(false)
-  // Why: the dialog stays mounted across cleanup runs, so late settlements from
-  // an earlier batch must not mutate a newer batch's row state.
+  // Fence late settlements by batch so an earlier run cannot mutate newer row state.
   const removalBatchIdRef = useRef(0)
 
   const resetRowFailures = useCallback(() => setRowFailures({}), [])
 
+  const agentStopGate = useWorkspaceCleanupAgentStopGate()
+  const clearAgentStopRequest = agentStopGate.clear
+
   const resetForReopen = useCallback(() => {
+    clearAgentStopRequest()
     if (removalInFlightRef.current) {
       return
     }
     setConfirming(false)
     setRowFailures({})
-  }, [])
+  }, [clearAgentStopRequest])
 
   const clearQueuedDeleteState = useCallback(
     (worktreeId: string, executionHostId?: WorkspaceCleanupFailure['executionHostId']) => {
-      const deleteStateByWorktreeId = useAppStore.getState().deleteStateByWorktreeId
-      const key = executionHostId
-        ? composeWorktreeHostIdentity(executionHostId, worktreeId)
-        : worktreeId
-      const deleteState = deleteStateByWorktreeId[key]
-      // Why: candidates that fail before removal starts would otherwise stay
-      // marked "Queued for deletion" in the sidebar; rows already in the
-      // 'deleting' phase or failed with an error keep their own state.
+      const state = useAppStore.getState()
+      const deleteState =
+        state.deleteStateByWorktreeId[getWorktreeDeleteStateKey(state, worktreeId, executionHostId)]
+      // Clear queued overlays for pre-dispatch failures; deleting/error rows keep their own state.
       if (deleteState?.isDeleting && deleteState.error === null && deleteState.phase === 'queued') {
         clearWorktreeDeleteState(worktreeId, executionHostId)
       }
@@ -96,7 +97,7 @@ export function useWorkspaceCleanupRemoval({
     [clearWorktreeDeleteState]
   )
 
-  const confirmUnverifiedRemoval = useWorkspaceCleanupUnverifiedRemoval({
+  const startUnverifiedRemoval = useWorkspaceCleanupUnverifiedRemoval({
     setRowFailures,
     setDeletionPhaseByIdentity,
     clearQueuedDeleteState,
@@ -115,23 +116,33 @@ export function useWorkspaceCleanupRemoval({
     setConfirming(true)
   }, [])
 
+  const approveAgentStops = agentStopGate.approve
+  const confirmUnverifiedRemoval = useCallback(
+    (candidate: WorkspaceCleanupCandidate) => {
+      const [approvedCandidate] = approveAgentStops([candidate], candidate) ?? []
+      if (approvedCandidate) {
+        startUnverifiedRemoval(approvedCandidate)
+      }
+    },
+    [approveAgentStops, startUnverifiedRemoval]
+  )
+
   const cancelConfirmRemove = useCallback(() => {
+    clearAgentStopRequest()
     if (removalProgress) {
       closeModal()
       return
     }
     setConfirming(false)
     setConfirmCandidates([])
-  }, [closeModal, removalProgress])
+  }, [clearAgentStopRequest, closeModal, removalProgress])
 
-  // Why: the header X reads as "leave this screen", not "abandon the dialog". The
-  // batch keeps running either way and the list shows each row's progress.
-  // Diverges from cancelConfirmRemove, which closes the dialog mid-batch: here
-  // removalProgress stays set until the batch settles, so re-entry stays blocked.
+  // Header X leaves progress running in the list while blocking re-entry; cancelConfirmRemove closes the dialog mid-batch instead.
   const backToList = useCallback(() => {
+    clearAgentStopRequest()
     setConfirming(false)
     setConfirmCandidates([])
-  }, [])
+  }, [clearAgentStopRequest])
 
   const settle = useCallback(() => {
     setRemovalProgress(null)
@@ -145,21 +156,25 @@ export function useWorkspaceCleanupRemoval({
     if (confirmCandidates.length === 0 || removalInFlightRef.current) {
       return
     }
-    const removableCandidates = filterWorkspaceCleanupRemovalCandidates(
+    const filteredCandidates = filterWorkspaceCleanupRemovalCandidates(
       confirmCandidates,
       useAppStore.getState().deleteStateByWorktreeId
     )
-    if (removableCandidates.length === 0) {
+    if (filteredCandidates.length === 0) {
+      clearAgentStopRequest()
       setConfirming(false)
       setConfirmCandidates([])
+      return
+    }
+    const removableCandidates = approveAgentStops(filteredCandidates, null)
+    if (!removableCandidates) {
       return
     }
     removalInFlightRef.current = true
     setRemovalInFlight(true)
     removalBatchIdRef.current += 1
     const removalBatchId = removalBatchIdRef.current
-    // Why: a hung late settlement retains these callbacks for the renderer's
-    // lifetime; capture only ids so it cannot pin the candidate objects.
+    // Hung settlements retain callbacks indefinitely; capture IDs rather than candidate objects.
     const removableDeleteStateTargets = removableCandidates.map((candidate) => {
       const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
       return hostId ? { id: candidate.worktreeId, hostId } : candidate.worktreeId
@@ -225,8 +240,7 @@ export function useWorkspaceCleanupRemoval({
         },
         onLateResult: (result) => {
           for (const failure of result.failures) {
-            // Why: a late failure can come from a hung preflight whose row never
-            // reached 'deleting'; clear its queued overlay like every other path.
+            // Late preflight failures may never reach deleting; clear their queued overlay too.
             clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
           }
           if (!mountedRef.current || removalBatchIdRef.current !== removalBatchId) {
@@ -250,6 +264,8 @@ export function useWorkspaceCleanupRemoval({
       handleRemovalError()
     }
   }, [
+    approveAgentStops,
+    clearAgentStopRequest,
     clearQueuedDeleteState,
     clearWorktreeDeleteState,
     confirmCandidates,
@@ -259,6 +275,15 @@ export function useWorkspaceCleanupRemoval({
     removeCandidates,
     settle
   ])
+
+  const agentStopRequest = agentStopGate.request
+  const confirmStopAgents = useCallback(() => {
+    if (agentStopRequest?.unverifiedCandidate) {
+      confirmUnverifiedRemoval(agentStopRequest.unverifiedCandidate)
+    } else {
+      confirmRemove()
+    }
+  }, [agentStopRequest, confirmRemove, confirmUnverifiedRemoval])
 
   return {
     confirming,
@@ -274,7 +299,10 @@ export function useWorkspaceCleanupRemoval({
     confirmRemove,
     confirmUnverifiedRemoval,
     cancelConfirmRemove,
-    backToList
+    backToList,
+    agentStopRequest,
+    confirmStopAgents,
+    cancelStopAgents: clearAgentStopRequest
   }
 }
 

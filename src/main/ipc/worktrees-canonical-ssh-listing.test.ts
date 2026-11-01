@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { hydrateRepo } from '../persistence/tracking-repos/repo-hydration'
 import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { getSshProviderAuthority, resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
+import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args?: unknown) => unknown>(),
@@ -41,10 +43,15 @@ import {
   listDetectedGitWorktrees,
   rememberLocalWorktreeRoots
 } from './worktrees/listing/detected-worktree-scan-cache'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 const path = '/remote/repository'
 const rows = [{ path, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }]
-const channels = ['legacyDetected', 'hostDetected', 'list', 'listAll', 'known'] as const
+const channels = ['legacyDetected', 'hostDetected', 'known'] as const
 function fixture(fields: Pick<Repo, 'connectionId' | 'executionHostId'>) {
   const repo = hydrateRepo(
     { id: 'repo', path, displayName: 'repo', badgeColor: '#000', addedAt: 0, ...fields },
@@ -62,7 +69,10 @@ function fixture(fields: Pick<Repo, 'connectionId' | 'executionHostId'>) {
     getAllWorktreeLineage: () => ({}),
     getAllWorkspaceLineage: () => ({}),
     removeWorktreeLineage: vi.fn(),
-    captureNativeLocalWorktreeMetadataScanExpectation: () => undefined
+    captureNativeLocalWorktreeMetadataScanExpectation: () => undefined,
+    getWorkspaceSessionHostIds: () => ['local'],
+    getWorkspaceSession: () => getDefaultWorkspaceSession(),
+    removeWorkspaceSessionStateForWorktree: vi.fn()
   }
   const context = {
     store,
@@ -93,10 +103,7 @@ function invoke(channel: (typeof channels)[number]) {
   if (channel === 'hostDetected') {
     return mocks.handlers.get('worktrees:listDetected')!(null, hostArgs)
   }
-  if (channel === 'known') {
-    return mocks.handlers.get('worktrees:listKnownForExecutionHost')!(null, hostArgs)
-  }
-  return mocks.handlers.get(`worktrees:${channel}`)!(null, { repoId: 'repo' })
+  return mocks.handlers.get('worktrees:listKnownForExecutionHost')!(null, hostArgs)
 }
 beforeEach(() => {
   vi.clearAllMocks()
@@ -111,7 +118,6 @@ describe.each([
   { hostEncoding: 'canonical', fields: { executionHostId: 'ssh:host-a' as const } },
   { hostEncoding: 'legacy', fields: { connectionId: 'host-a' } }
 ])('$hostEncoding SSH listing', ({ fields }) => {
-  // An `ssh:` host is not served here: every channel answers from persisted metadata.
   it.each(channels)('answers %s from metadata, never from this machine', async (channel) => {
     fixture(fields)
     const result = await invoke(channel)
@@ -122,10 +128,8 @@ describe.each([
       })
     } else if (channel === 'known') {
       expect(result).toMatchObject({ status: 'complete', result: { authoritative: false } })
-    } else if (channel === 'legacyDetected') {
-      expect(result).toMatchObject({ authoritative: false })
     } else {
-      expect(result).toEqual([])
+      expect(result).toMatchObject({ authoritative: false })
     }
     expect(mocks.git).not.toHaveBeenCalled()
     expect(mocks.roots).not.toHaveBeenCalled()
@@ -144,6 +148,90 @@ describe.each([
     expect(mocks.roots).not.toHaveBeenCalled()
   })
 })
+
+it.each(['git', 'folder'] as const)(
+  'projects exact known SSH %s endpoints without building foreign repos',
+  async (kind) => {
+    const { repo, store } = fixture({ connectionId: 'host-a' })
+    const parentInstance = '11111111-2222-3333-4444-555555555555'
+    const parentPath = `/remote/parent::workspace:${parentInstance}`
+    const parentRepo = hydrateRepo(
+      {
+        ...repo,
+        id: 'parent-repo',
+        kind,
+        path: kind === 'folder' ? '/remote/parent' : parentPath,
+        displayName: 'parent'
+      },
+      new Map()
+    )
+    const childId = 'repo::/remote/repository'
+    const parentId = `parent-repo::${parentPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [childId]: mergeWorktreeMetaForWrite(undefined, {
+        hostId: 'ssh:host-a',
+        instanceId: 'child-instance',
+        projectId: 'child-project'
+      }),
+      [parentId]: mergeWorktreeMetaForWrite(undefined, {
+        hostId: 'ssh:host-a',
+        instanceId: parentInstance,
+        projectId: 'parent-project'
+      })
+    }
+    if (kind === 'folder') {
+      metaById[parentId].instanceId = undefined
+    }
+    store.setWorktreeMeta.mockImplementation(
+      ({ id }: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => {
+        const meta = mergeWorktreeMetaForWrite(metaById[id], updates)
+        metaById[id] = meta
+        return meta
+      }
+    )
+    Object.assign(store, {
+      getRepos: () => [repo, parentRepo],
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (id: string) => metaById[id],
+      getAllWorktreeLineage: () => ({
+        [childId]: {
+          worktreeId: childId,
+          worktreeInstanceId: 'child-instance',
+          parentWorktreeId: parentId,
+          parentWorktreeInstanceId: parentInstance,
+          origin: 'cli',
+          capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+          createdAt: 1
+        }
+      })
+    })
+
+    const child = await invoke('known')
+    expect(child).toMatchObject({
+      status: 'complete',
+      result: { worktrees: [expect.objectContaining({ id: childId, parentWorktreeId: parentId })] }
+    })
+    expect(store.setWorktreeMeta).not.toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: parentId, hostId: 'local' }),
+      expect.anything()
+    )
+    const parent = mocks.handlers.get('worktrees:listKnownForExecutionHost')!(null, {
+      repoId: parentRepo.id,
+      executionHostId: 'ssh:host-a'
+    })
+    expect(parent).toMatchObject({
+      status: 'complete',
+      result: {
+        worktrees: [
+          ...(kind === 'folder'
+            ? [expect.objectContaining({ id: 'parent-repo::/remote/parent' })]
+            : []),
+          expect.objectContaining({ id: parentId, childWorktreeIds: [childId] })
+        ]
+      }
+    })
+  }
+)
 
 it.each([undefined, 'nested'])(
   'keeps runtime rows out of local cache and root registration: %s',

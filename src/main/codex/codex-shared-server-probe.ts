@@ -15,7 +15,7 @@ function errorCode(error: unknown): unknown {
   return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
 }
 
-// Why connect, not stat: a server that crashed leaves its socket file behind.
+// A crashed server can leave its socket file behind.
 function probeSocket(socketPath: string): Promise<CodexSharedServerState> {
   return new Promise((resolve) => {
     const socket = createConnection({ path: socketPath })
@@ -58,7 +58,7 @@ async function probeWindowsRecord(path: string): Promise<CodexSharedServerState>
   try {
     process.kill(record.pid, 0)
   } catch (error) {
-    // Why: only ESRCH proves the process is gone; EPERM means it exists.
+    // Only ESRCH proves absence; EPERM still permits a live process.
     return errorCode(error) === 'ESRCH' ? 'absent' : 'unknown'
   }
   const createdAtMs = readWindowsProcessCreationTime(record.pid)
@@ -73,15 +73,11 @@ async function probeWindowsRecord(path: string): Promise<CodexSharedServerState>
   const startedAtMs = Number(
     BigInt(record.processStartTime) / 10_000n - FILETIME_UNIX_EPOCH_OFFSET_MS
   )
-  // Why: a running pid with another creation time was reused after the server exited.
+  // A different creation time means the server PID was reused.
   return Math.abs(createdAtMs - startedAtMs) < 1_000 ? 'live' : 'absent'
 }
 
-/**
- * Node cannot open Codex's AF_UNIX socket on Windows (libuv only speaks named
- * pipes), so read the server's pid record instead and require the live process
- * with that pid to have the recorded creation time, which rules out pid reuse.
- */
+// Windows libuv cannot open Codex's AF_UNIX socket; verify PID creation times instead.
 async function probeWindowsRecords(codexHome: string): Promise<CodexSharedServerState> {
   const states = await Promise.all(
     ['daemon.pid', 'app-server.pid'].map((name) =>
@@ -91,7 +87,6 @@ async function probeWindowsRecords(codexHome: string): Promise<CodexSharedServer
   return states.includes('live') ? 'live' : states.includes('unknown') ? 'unknown' : 'absent'
 }
 
-/** Whether Codex's shared server for this CODEX_HOME is accepting clients right now. */
 export function probeCodexSharedServer(codexHome: string): Promise<CodexSharedServerState> {
   return process.platform === 'win32'
     ? probeWindowsRecords(codexHome)

@@ -1,8 +1,7 @@
 // Japanese and Chinese run on after a full-width terminator; any other sentence takes a space.
-const RUNS_ON_AFTER = /[。！？]$/
+const RUNS_ON_AFTER = /[\u3002\uFF01\uFF1F]$/
 
-/** Whole sentences as one passage. Each gap follows the sentence before it, not the UI language, so
- *  a sentence a language pack left in English keeps its space beside translated ones. */
+/** Use each preceding sentence’s language, not UI locale, so English fallback text keeps its space beside translations. */
 export function joinSentences(sentences: readonly string[]): string {
   return sentences
     .map((sentence, index) =>

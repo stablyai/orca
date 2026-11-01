@@ -43,8 +43,7 @@ export function createRuntimeRendererNotificationSender(args: {
         args.webContents.send(channel, ...values)
         return true
       } catch {
-        // Why: renderer notification is a side effect; a disposed frame must not
-        // fail the persistence or runtime operation that produced the event.
+        // Renderer notification is secondary; disposed frames must not fail the originating persistence/runtime operation.
         suspend('renderer-frame-unavailable')
         return false
       }

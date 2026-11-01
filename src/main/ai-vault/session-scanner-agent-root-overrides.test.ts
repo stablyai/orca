@@ -3,13 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultScanOptions } from './session-scanner-types'
 
-/**
- * The six env-derived scan roots must ignore a non-absolute value (#13082).
- *
- * These assert at the *call sites*, not on the shared helper: four of the roots are module-level
- * consts evaluated at import time, so a helper that exists but is no longer wired into one of them
- * is exactly the regression a helper-only test cannot see.
- */
+/** Exercise root consumers: module-time constants can bypass an otherwise correct override validator (#13082). */
 
 const NO_OPTIONS: AiVaultScanOptions = {}
 const NO_WSL: readonly string[] = []
@@ -30,7 +24,6 @@ async function rootDirsFor(
   return source.rootDirs(NO_OPTIONS, NO_WSL)
 }
 
-// Every shape a relative value can take, including the two Windows drive-relative ones.
 const RELATIVE_VALUES = ['.', '..', 'rel/path', '~/sessions', 'C:foo', 'C:'] as const
 
 const CASES = [
@@ -53,8 +46,6 @@ const CASES = [
     envVar: 'DEVIN_HOME',
     absolute: '/srv/devin',
     absoluteRoot: join('/srv/devin', 'transcripts'),
-    // Mirrors the platform-aware default in session-scanner-agent-sources.ts:
-    // %APPDATA%\devin\cli on Windows, $XDG_DATA_HOME/devin/cli elsewhere.
     defaultRoot: () =>
       join(
         process.platform === 'win32'
@@ -155,8 +146,6 @@ describe('agent scan roots from environment overrides', () => {
         expect(roots[0]).toBe(testCase.absoluteRoot)
       })
 
-      // A relative root is the actual #13082 failure: it resolves against whichever Orca process
-      // reads it, so the walk starts somewhere arbitrary and has no depth, entry or time cap.
       it.each(RELATIVE_VALUES)('falls back to the default root for %j', async (value) => {
         const roots = await rootDirsFor(testCase.agent, {
           [testCase.envVar]: value

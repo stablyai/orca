@@ -1,7 +1,7 @@
 import type { Editor } from '@tiptap/core'
 import { getConnectionId } from '@/lib/connection-context'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 
 export type RichMarkdownImageRuntimeContext = Omit<RuntimeFileOperationArgs, 'connectionId'> & {
   connectionId?: string | null
@@ -43,7 +43,6 @@ type RichMarkdownImageStorage = {
   }
 }
 
-/** The image node view's storage; its context is validated on read. */
 export type RichMarkdownImageNodeStorage = { runtimeContext?: unknown }
 
 /** The stored image context; `null` (unresolved owner) is kept so readers refuse instead of going local. */
@@ -120,8 +119,7 @@ export function setRichMarkdownImageResolverContext(
     return false
   }
 
-  // Why: nodeViews need a cheap change signal because the markdown src can
-  // remain identical while the file/runtime resolver context changes.
+  // Signal resolver changes to node views even when the Markdown image source stays identical.
   imageStorage.filePath = context.filePath
   imageStorage.imageUrls = context.imageUrls
   imageStorage.runtimeContext = context.runtimeContext

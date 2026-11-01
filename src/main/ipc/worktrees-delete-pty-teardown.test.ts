@@ -12,6 +12,7 @@ import {
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { mockKnownFeatureWorktree } from './worktrees-test-fixtures'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -35,9 +36,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -93,7 +91,6 @@ vi.mock('./pty/provider/state-cleanup', async () =>
   (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
 )
 
-// Why: every removal and listing reply now names the catalog it produced or scanned.
 const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
 
 describe('registerWorktreeHandlers', () => {
@@ -138,7 +135,7 @@ describe('registerWorktreeHandlers', () => {
     ])
     expect(store.removeWorktreeMeta).toHaveBeenCalledTimes(1)
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledTimes(1)
-    // One notice when the row starts showing as removing, one after it has left the table.
+    // Notices cover acceptance and completed removal.
     expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
     expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('worktrees:changed', {
       repoId: 'repo-1'
@@ -152,7 +149,7 @@ describe('registerWorktreeHandlers', () => {
     const started = new Promise<void>((resolve) => {
       removalStarted = resolve
     })
-    // Held in acceptance: once accepted, a repeat delete joins the background removal instead.
+    // Hold acceptance; later repeats would join the accepted background job.
     killAllProcessesForWorktreeMock.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -288,8 +285,6 @@ describe('registerWorktreeHandlers', () => {
     expect(callOrder).toEqual(['preflight', 'kill', 'git'])
   })
 
-  // Why: this process holds no SSH PTY provider, so an SSH delete must refuse rather than sweep
-  // the same-id local workspace's terminals.
   it('refuses an SSH worktree delete this process does not serve, never deleting here', async () => {
     const repo = {
       id: 'repo-ssh',
@@ -312,8 +307,6 @@ describe('registerWorktreeHandlers', () => {
     expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
   })
 
-  // The local counterpart still identifies itself by exact id so a selector that resolves
-  // two hosts can no longer decide which workspace loses its terminals.
   it('pins a local worktree delete PTY sweep to the exact worktree id', async () => {
     mockKnownFeatureWorktree()
     getEffectiveHooksMock.mockReturnValue(null)
@@ -331,8 +324,6 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  // Why (#11960): the PTY gate previously had no escape hatch at all, so a
-  // workspace with an unprovable PTY was unremovable forever.
   it('forwards an explicit Force Delete to the PTY gate', async () => {
     mockKnownFeatureWorktree()
     getEffectiveHooksMock.mockReturnValue(null)
@@ -349,9 +340,7 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  // Why (#11960): the ordinary Delete confirmation already sets force:true to skip
-  // the dirty-file prompt. Waiving PTY-stop proof off that signal would silently
-  // disable the gate on the primary delete path.
+  // Ordinary confirmation sets force too; only allowUnverifiedPtyStop may waive physical-stop proof.
   it('keeps the PTY gate strict for a confirmed delete that only sets force', async () => {
     mockKnownFeatureWorktree()
     getEffectiveHooksMock.mockReturnValue(null)
@@ -446,7 +435,9 @@ describe('registerWorktreeHandlers', () => {
     )
     expect(killAllProcessesForWorktreeMock).toHaveBeenCalledTimes(3)
     for (const item of approved) {
-      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(`repo-1::${item.path}`, 'local')
+      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: `repo-1::${item.path}`, hostId: 'local' })
+      )
     }
   })
 

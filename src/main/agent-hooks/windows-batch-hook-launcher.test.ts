@@ -5,7 +5,8 @@ import { delimiter, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { getWindowsManagedLifecycleHook } from '../claude/hook-settings'
-import { wrapWindowsCmdHookCommand, wrapWindowsHookCommand } from './installer-utils'
+import { wrapWindowsHookCommand } from './installer-utils'
+import { wrapWindowsBatchHookCommand } from './windows-direct-cmd-hook-command'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
 import {
   getWindowsPowerShellExecutablePath,
@@ -26,7 +27,7 @@ describe('batch hook policy setup', () => {
     (extension) => {
       const path = `C:\\Users\\测试用户\\.orca\\agent-hooks\\hook${extension}`
       const commands = [
-        wrapWindowsCmdHookCommand(path),
+        wrapWindowsBatchHookCommand(path),
         getWindowsManagedLifecycleHook(path).command
       ]
       for (const command of commands) {
@@ -79,7 +80,7 @@ describe.skipIf(process.platform !== 'win32')('guarded Windows batch hook comman
       }
       const input = JSON.stringify({ prompt: '한국어 日本語 😀 & %PATH% !'.repeat(4096) })
       const entries = [
-        { command: wrapWindowsCmdHookCommand(scriptPath), missingStdout: '' },
+        { command: wrapWindowsBatchHookCommand(scriptPath), missingStdout: '' },
         { command: getWindowsManagedLifecycleHook(scriptPath).command, missingStdout: '{}' }
       ]
       try {
@@ -152,7 +153,7 @@ describe.skipIf(process.platform !== 'win32')('guarded Windows batch hook comman
     const scriptPath = join(root, '测试-hook.ps1')
     try {
       writeFileSync(scriptPath, "Write-Output '{}'; exit 0")
-      const command = wrapWindowsCmdHookCommand(scriptPath)
+      const command = wrapWindowsBatchHookCommand(scriptPath)
       const [program, ...args] = command.split(' ')
       const result = await runProcess({
         program,
@@ -182,7 +183,7 @@ describe.skipIf(process.platform !== 'win32')('guarded Windows batch hook comman
         scriptPath,
         `@echo off\r\n"${getWindowsPowerShellExecutablePath()}" -NoProfile -File "%~dp0child.ps1"\r\nexit /b %ERRORLEVEL%\r\n`
       )
-      const [program, ...args] = wrapWindowsCmdHookCommand(scriptPath).split(' ')
+      const [program, ...args] = wrapWindowsBatchHookCommand(scriptPath).split(' ')
       const result = await runProcess({
         program,
         args,

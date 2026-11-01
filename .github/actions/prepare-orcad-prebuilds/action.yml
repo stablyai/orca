@@ -63,5 +63,5 @@ runs:
           fi
           pnpm build:orcad-prebuilds
         fi
-        pnpm build:orcad-prebuilds --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
-        pnpm build:orcad-prebuilds --smoke
+        node config/scripts/build-orcad-prebuilds.mjs --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
+        node config/scripts/build-orcad-prebuilds.mjs --smoke

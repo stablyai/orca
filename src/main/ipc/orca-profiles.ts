@@ -17,6 +17,7 @@ import type {
   TransferOrcaProfileProjectResult,
   ConnectCurrentOrcaProfileResult,
   OrcaProfileAuthStatus,
+  OrcaCloudSignInProgress,
   SelectOrcaProfileOrgArgs,
   SelectOrcaProfileOrgResult,
   SignOutCurrentOrcaProfileResult
@@ -27,10 +28,6 @@ import {
   seedNewOrcaProfileTelemetryConsent,
   setActiveOrcaProfile
 } from '../orca-profiles/profile-index-store'
-import {
-  cloudSessionIdentity,
-  recordCloudSessionIdentityMutation
-} from '../orca-profiles/profile-cloud-session-mutation'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { isMultiProfileUiEnabled } from '../orca-profiles/profile-ui-scope'
 import { transferOrcaProfileProject } from '../orca-profiles/profile-project-transfer'
@@ -51,24 +48,23 @@ import {
 } from '../orca-profiles/profile-cloud-service'
 import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members-handlers'
 import { onOrcaCloudSessionInvalidated } from '../orca-profiles/profile-cloud-session-invalidation'
-import { broadcastOrcaProfileAuthStatusChanged } from './orca-profile-auth-status-broadcast'
+import {
+  broadcastOrcaProfileAuthStatusChanged,
+  broadcastOrcaProfileSignInProgressChanged
+} from './orca-profile-auth-status-broadcast'
+import {
+  cancelOrcaCloudSignIn,
+  getOrcaCloudSignInProgress,
+  onOrcaCloudSignInProgressChanged
+} from '../orca-profiles/profile-cloud-sign-in-progress'
+import { profileIdFromArgs } from './orca-profile-id-arg'
 import { transferProjectArgsFromUnknown } from './orca-profile-project-transfer-args'
 
 type RegisterOrcaProfileHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
   onAuthMutation?: () => void
   onBeforeSignOut?: () => void
-}
-
-function profileIdFromArgs(args: unknown): string {
-  const profileId =
-    args && typeof args === 'object' && 'profileId' in args && typeof args.profileId === 'string'
-      ? args.profileId.trim()
-      : ''
-  if (!profileId) {
-    throw new Error('invalid_orca_profile_id')
-  }
-  return profileId
+  onAfterSignOut?: () => void
 }
 
 function findProjectsByPathArgsFromUnknown(args: unknown): FindOrcaProfileProjectsByPathArgs {
@@ -147,9 +143,7 @@ function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: WebConte
   }
   setTimeout(() => {
     relaunchApp(reason)
-    // Why: app.quit() (not app.exit) so before-quit/will-quit still run —
-    // renderer scrollback capture, PTY kill, stats flush, and daemon final
-    // checkpoints must not be skipped on a profile switch.
+    // Normal quit preserves renderer scrollback, PTY teardown, stats flush and final daemon checkpoints.
     quitProcess()
   }, 150)
 }
@@ -167,11 +161,9 @@ export function registerOrcaProfileHandlers(
     getCurrentOrcaProfileAuthStatus(getProfileUserDataPath())
   )
 
-  // Why: a background refresh can revoke the session with no renderer request in
-  // flight, so push the change instead of waiting for the next pane to ask.
-  // Why not options.onAuthMutation: that hook drives the relay coordinator, which
-  // is the caller that just failed the refresh — re-entering it here would be a loop.
+  // Push background invalidation; re-entering onAuthMutation would loop into the relay coordinator that just failed.
   onOrcaCloudSessionInvalidated(broadcastOrcaProfileAuthStatusChanged)
+  onOrcaCloudSignInProgressChanged(broadcastOrcaProfileSignInProgressChanged)
 
   ipcMain.handle(
     'orcaProfiles:createLocal',
@@ -191,20 +183,7 @@ export function registerOrcaProfileHandlers(
         return { status: 'already-active' }
       }
 
-      const activeProfile = current.profiles.find(
-        (profile) => profile.id === current.activeProfileId
-      )
-      if (activeProfile?.cloud) {
-        // Why: profile selection changes the expected identity synchronously;
-        // stale refresh saves must fail even before relaunch teardown finishes.
-        recordCloudSessionIdentityMutation(
-          cloudSessionIdentity(activeProfile.id, activeProfile.cloud),
-          getProfileUserDataPath()
-        )
-      }
-      // Why: the current profile must be persisted before the global index
-      // points startup at the target profile.
-      // Switching leaves source files intact; relaunch cleanup still needs its live writer.
+      // Flush the source profile before switching the startup index; keep its writer alive through relaunch cleanup.
       await flushActiveProfileBeforeRelaunch(store)
       setActiveOrcaProfile(profileId)
       await runBeforeProfileRelaunch(options.onBeforeRelaunch)
@@ -227,8 +206,7 @@ export function registerOrcaProfileHandlers(
         throw new Error('active_target_orca_profile_transfer_requires_relaunch')
       }
       if (args.mode === 'move' && args.sourceProfileId === current.activeProfileId) {
-        // Why: transfer before any relaunch side effect so a duplicate-target
-        // or validation failure cannot strand the app in a quitting state.
+        // Finish transfer before relaunch side effects so validation failure cannot strand the app quitting.
         const result = await transferActiveProfileProject(
           args,
           getProfileUserDataPath(),
@@ -283,6 +261,12 @@ export function registerOrcaProfileHandlers(
     }
   )
 
+  ipcMain.handle('orcaProfiles:signInProgress', (): OrcaCloudSignInProgress | null =>
+    getOrcaCloudSignInProgress()
+  )
+
+  ipcMain.handle('orcaProfiles:cancelSignIn', (): void => cancelOrcaCloudSignIn())
+
   ipcMain.handle(
     'orcaProfiles:createCloudLinked',
     async (
@@ -316,7 +300,7 @@ export function registerOrcaProfileHandlers(
     'orcaProfiles:signOutCurrent',
     async (): Promise<SignOutCurrentOrcaProfileResult> => {
       options.onBeforeSignOut?.()
-      return signOutCurrentOrcaProfile(getProfileUserDataPath())
+      return signOutCurrentOrcaProfile(getProfileUserDataPath()).finally(options.onAfterSignOut)
     }
   )
 

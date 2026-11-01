@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -23,9 +23,7 @@ export function AssigneesEditor({
   onChange: (add: string[], remove: string[]) => void | Promise<void>
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  // Why: stabilize the assignee seed identity. `selected` is a fresh array on
-  // every parent render — depending on it directly would refire the IPC for
-  // every unrelated re-render while the popover is open.
+  // Key by sorted assignee values so fresh parent arrays cannot trigger redundant IPC while the popover is open.
   const seedKey = useMemo(() => selected.slice().sort().join(','), [selected])
   const metadata = useRepoAssigneesBySlug(
     open ? owner : null,

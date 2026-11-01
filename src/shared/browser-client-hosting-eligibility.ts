@@ -3,7 +3,8 @@ import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+  BROWSER_SCREENCAST_RUNTIME_CAPABILITY
 } from './protocol-version'
 import type { BrowserClientHostPlacementPreference } from './browser-client-host-placement'
 
@@ -24,23 +25,17 @@ export function runtimeAdvertisesBrowserClientHosting(
   )
 }
 
-/**
- * Whether a browser page created against this runtime will be hosted by this client.
- *
- * Why it is shared: the main process decides this for real while preparing the placement, and the
- * renderer has to predict the same answer one round-trip earlier to mount the right pane in the
- * staged frame. Two copies drift silently — the renderer would stage a client-hosted pane that
- * never receives a placement, and the user would sit in front of a pane that stays connecting.
- * Conditions only one side can see (pairing, graph readiness, lease startup) stay on that side.
- */
+/** Share main placement and renderer staging prediction to avoid panes stuck connecting. Pairing/graph/lease conditions visible on one side stay there. */
 export function expectsBrowserClientHosting(input: {
   enabled: boolean
   preference: BrowserClientHostPlacementPreference | undefined
   deviceScope: string | null | undefined
   capabilities: readonly string[] | undefined
 }): boolean {
+  // Why: a server that cannot stream can't honor the server-render setting; its pages would become unregistered desktop tabs.
+  const serverCanStream = input.capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
   return (
-    input.enabled &&
+    (input.enabled || !serverCanStream) &&
     (input.preference ?? 'auto') !== 'server' &&
     input.deviceScope !== 'mobile' &&
     runtimeAdvertisesBrowserClientHosting(input.capabilities)

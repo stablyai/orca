@@ -64,7 +64,6 @@ describe('process gone diagnostics', () => {
   })
 
   it('keeps the first-enumerated process as Largest on an exact working-set tie', () => {
-    // Pins the > tie-break: >= would silently crown the last-enumerated tie.
     const details = collectProcessGoneMetricDetails([
       { pid: 10, type: 'Tab', memory: { workingSetSize: 1024 * 500 } },
       { pid: 11, type: 'GPU', memory: { workingSetSize: 1024 * 500 } }
@@ -74,8 +73,6 @@ describe('process gone diagnostics', () => {
   })
 
   it('flags a renderer-gone record whose live metrics carry only survivors', () => {
-    // Field repro (report caf677f2): render-process-gone fires after the OS
-    // process exits, so getAppMetrics() enumerates survivors only.
     appMetricsMock.mockReturnValue([
       { pid: 15384, type: 'Browser', memory: { workingSetSize: 1024 * 431 } },
       { pid: 15390, type: 'GPU', memory: { workingSetSize: 1024 * 150 } },
@@ -119,12 +116,10 @@ describe('process gone diagnostics', () => {
     ])
 
     expect(buildProcessGoneCrashDetails({ processType: 'renderer' }, 'renderer')).toMatchObject({
-      // Live buckets stay survivors-only, and say so.
       processMetricsRendererCount: 0,
       processMetricsRendererWorkingSetMB: 0,
       processMetricsCrashedProcessAbsent: true,
-      // A single-renderer snapshot happens to equal that renderer's values,
-      // but the contract remains snapshot-wide rather than per-crasher.
+      // A single-renderer sample still has the same snapshot-wide attribution contract.
       processMetricsPreGoneSampleAgeMs: 42_000,
       processMetricsPreGoneCrashedProcessAttributionAmbiguous: true,
       processMetricsPreGoneRendererCount: 1,
@@ -144,7 +139,6 @@ describe('process gone diagnostics', () => {
     startPreGoneCrashSampling(1_000)
     startPreGoneCrashSampling(1_000)
 
-    // A crash inside the first interval already has a sample to draw from.
     expect(buildProcessGoneCrashDetails({}, 'renderer')).toMatchObject({
       processMetricsPreGoneRendererWorkingSetMB: 100
     })
@@ -154,7 +148,6 @@ describe('process gone diagnostics', () => {
       { pid: 30, type: 'Tab', memory: { workingSetSize: 1024 * 900 } }
     ])
     vi.advanceTimersByTime(1_000)
-    // Exactly one sweep: the second start() must not have armed a second timer.
     expect(appMetricsMock).toHaveBeenCalledTimes(1)
     appMetricsMock.mockReturnValue([{ pid: 1, type: 'Browser', memory: { workingSetSize: 0 } }])
 
@@ -179,7 +172,6 @@ describe('process gone diagnostics', () => {
     samplePreGoneProcessMetrics()
     appMetricsMock.mockReturnValue([{ pid: 1, type: 'Browser', memory: { workingSetSize: 0 } }])
 
-    // Sample and its timestamp both survive the failed sweep.
     expect(buildProcessGoneCrashDetails({}, 'renderer')).toMatchObject({
       processMetricsPreGoneRendererWorkingSetMB: 1200,
       processMetricsPreGoneSampleAgeMs: 5_000
@@ -189,8 +181,7 @@ describe('process gone diagnostics', () => {
   it('reports the renderer lifetime peak and private bytes when the metrics carry them', () => {
     const details = collectProcessGoneMetricDetails([
       {
-        // Larger peak/private than any renderer: proves the fields are
-        // renderer-only aggregates, not app-wide maxima.
+        // Larger browser values must not win the renderer-only maxima.
         pid: 10,
         type: 'Browser',
         memory: {
@@ -199,8 +190,7 @@ describe('process gone diagnostics', () => {
           privateBytes: 1024 * 8000
         }
       },
-      // Max peak/private sit on the MIDDLE renderer: first-wins and last-wins
-      // aggregation bugs both fail here, only a true max passes.
+      // Put maxima in the middle to catch both first-value and last-value aggregation.
       {
         pid: 11,
         type: 'Tab',
@@ -230,8 +220,6 @@ describe('process gone diagnostics', () => {
       }
     ])
 
-    // Max across renderers, never the Browser's; a spike between interval
-    // samples survives in the lifetime peak.
     expect(details.processMetricsRendererPeakWorkingSetMB).toBe(4100)
     expect(details.processMetricsRendererPrivateMB).toBe(3900)
   })
@@ -256,8 +244,6 @@ describe('process gone diagnostics', () => {
   })
 
   it('keeps plain-prefix peak/private live-only while PreGone carries the cached values', () => {
-    // Era invariant: plain prefix = sampled at gone time (survivors), PreGone
-    // prefix = cached pre-death sample. Neither may leak into the other.
     appMetricsMock.mockReturnValue([
       {
         pid: 50,
@@ -376,7 +362,6 @@ describe('process gone diagnostics', () => {
   })
 
   it('proves absence when the OS recycles the sampled renderer pid into another bucket', () => {
-    // A bare pid set would mistake the replacement Utility for the sampled Tab.
     appMetricsMock.mockReturnValue([
       { pid: 100, type: 'Browser', memory: { workingSetSize: 1024 * 400 } },
       { pid: 101, type: 'Tab', memory: { workingSetSize: 1024 * 4380 } },
@@ -395,16 +380,13 @@ describe('process gone diagnostics', () => {
   })
 
   it('keeps reporting absence for every record of a crash loop', () => {
-    // Stateless proof: record #2 (the respawn dying before any sweep) makes
-    // the same true claim as record #1 — the crashed process is not in the
-    // live enumeration. No consume-once bookkeeping is involved.
     appMetricsMock.mockReturnValue([
       { pid: 200, type: 'Browser', memory: { workingSetSize: 1024 * 400 } },
       { pid: 201, type: 'Tab', memory: { workingSetSize: 1024 * 5000 } },
       { pid: 202, type: 'Tab', memory: { workingSetSize: 1024 * 300 } }
     ])
     samplePreGoneProcessMetrics()
-    // Guest 202 survives both crashes, so the bucket count never hits zero.
+    // Keep a renderer survivor so zero bucket count cannot prove absence.
     appMetricsMock.mockReturnValue([
       { pid: 200, type: 'Browser', memory: { workingSetSize: 1024 * 400 } },
       { pid: 202, type: 'Tab', memory: { workingSetSize: 1024 * 300 } }
@@ -429,9 +411,7 @@ describe('process gone diagnostics', () => {
 
     const details = buildProcessGoneCrashDetails({}, 'renderer')
     expect(details.processMetricsError).toBe('Error')
-    // Unreadable metrics prove nothing: no absence flag.
     expect(details.processMetricsCrashedProcessAbsent).toBeUndefined()
-    // The cached pre-gone sample still reaches the record.
     expect(details.processMetricsPreGoneRendererWorkingSetMB).toBe(900)
   })
 
@@ -456,8 +436,6 @@ describe('process gone diagnostics', () => {
       { pid: 110, type: 'Utility', memory: { workingSetSize: 1024 * 80 } }
     ])
     samplePreGoneProcessMetrics()
-    // The Utility vanished, but the crash under report is a renderer whose
-    // process is still enumerable — no absence claim.
     appMetricsMock.mockReturnValue([
       { pid: 100, type: 'Tab', memory: { workingSetSize: 1024 * 600 } }
     ])
@@ -468,10 +446,6 @@ describe('process gone diagnostics', () => {
   })
 
   it('degrades honestly in a crash loop when the sweep lands between death and respawn', () => {
-    // Crash-loop reality check: if a sweep fires while the renderer is dead,
-    // the next crash record cannot recover the first crasher's size — but it
-    // must say so (zero PreGone renderer fields), never report a stale value
-    // as if it were the second crasher's.
     vi.useFakeTimers()
     vi.setSystemTime(0)
     appMetricsMock.mockReturnValue([
@@ -480,7 +454,6 @@ describe('process gone diagnostics', () => {
     ])
     samplePreGoneProcessMetrics()
 
-    // Record #1 carries the snapshot that still included the first renderer.
     appMetricsMock.mockReturnValue([
       { pid: 200, type: 'Browser', memory: { workingSetSize: 1024 * 400 } }
     ])
@@ -489,11 +462,10 @@ describe('process gone diagnostics', () => {
       processMetricsCrashedProcessAbsent: true
     })
 
-    // Sweep lands while the renderer is dead, overwriting the sample.
+    // Sample between death and respawn to replace the previous renderer's metrics.
     vi.setSystemTime(60_000)
     samplePreGoneProcessMetrics()
 
-    // Second death (respawned pid 202 crashes before any further sweep).
     vi.setSystemTime(62_000)
     expect(buildProcessGoneCrashDetails({}, 'renderer')).toMatchObject({
       processMetricsCrashedProcessAbsent: true,
@@ -551,8 +523,6 @@ describe('process gone diagnostics', () => {
   })
 
   it('lets every metrics-owned key family win over colliding incoming details', () => {
-    // Precedence must hold per family — live buckets, system memory, PreGone
-    // mirrors, and the absence flag are all written after the incoming spread.
     appMetricsMock.mockReturnValue([
       { pid: 30, type: 'Tab', memory: { workingSetSize: 1024 * 100 } }
     ])
@@ -592,8 +562,7 @@ describe('process gone diagnostics', () => {
   })
 
   it('reports macOS-shaped system memory and omits the fields macOS lacks', () => {
-    // macOS getSystemMemoryInfo() has no swap fields; fileBacked/purgeable are
-    // its only reclaimability proxy. Verified on Electron 43.1.0.
+    // Electron macOS lacks swap fields; fileBacked and purgeable describe reclaimability.
     setSystemMemoryInfoReaderForTest(() => ({
       total: 1024 * 65_536,
       free: 1024 * 59,
@@ -613,8 +582,7 @@ describe('process gone diagnostics', () => {
   })
 
   it('reports Linux MemAvailable as its own field alongside MemFree', () => {
-    // MemFree alone hid the pressure on the SIGKILL-at-OOM reports; MemAvailable
-    // is the kernel's reclaim-aware estimate. Electron 43 exposes it on Linux.
+    // MemAvailable estimates reclaimable memory; MemFree alone omits it.
     setSystemMemoryInfoReaderForTest(() => ({
       total: 1024 * 14_551,
       free: 1024 * 1_292,

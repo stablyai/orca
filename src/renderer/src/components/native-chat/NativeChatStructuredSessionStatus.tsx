@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
-import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import {
   structuredSessionConfirmedStopsStillListed,
   structuredSessionListedTaskRun,
@@ -29,8 +29,7 @@ export function NativeChatStructuredSessionStatus(props: {
   stopBackgroundTask: (taskId?: string) => Promise<AgentSessionCancelResult | null>
 }): React.JSX.Element {
   const [stopping, setStopping] = useState<StoppingBackgroundTasks | null>(null)
-  // Stops the host confirmed, with the run each was pressed on: each row keeps its stopping button
-  // until that run leaves the strip.
+  // Keep confirmed Stop buttons pending until that specific run leaves the strip.
   const [confirmed, setConfirmed] = useState<ConfirmedStops | null>(null)
   const [expanded, setExpanded] = useState<{ sessionId: string; expanded: boolean } | null>(null)
   const activeStopping = stopping?.sessionId === props.sessionId ? stopping : null
@@ -106,7 +105,8 @@ export function NativeChatStructuredSessionStatus(props: {
             : {})}
           indicatorActive={props.backgroundTasks.isMonitoring}
           supportsTaskStop={props.backgroundTasks.supportsStop}
-          supportsStopAll={props.backgroundTasks.supportsStopAll}
+          offersStopAll={props.backgroundTasks.offersStopAll}
+          incomplete={props.backgroundTasks.incomplete}
           stoppingTaskIds={stoppingTaskIds}
           stoppingAll={activeStopping?.all ?? false}
           expanded={expanded?.sessionId === props.sessionId && expanded.expanded}
