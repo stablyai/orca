@@ -1,16 +1,18 @@
+import { createdStructuredSessionTabSnapshot } from './structured-session-tab-snapshot'
+import type { HostFoundingAttempt } from '../../agent-launch/host-founding-attempt'
+import { initialChatSelection } from '../../agent-launch/agent-launch-created-workspace'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from './session-tabs-change-publication'
-import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
+
 import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './structured-session-create-support'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type {
-  RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRepoSearchRefs
 } from '../../../shared/runtime-types'
-import { getHeadlessMobileSessionGroupId } from '../mobile-session-layout-projection'
+
 import { DEFAULT_REPO_SEARCH_REFS_LIMIT } from '../orca-runtime-postlude'
 import type { Repo } from '../../../shared/repo-types'
 import type { GitAdmissionTier } from '../../git/command-runner/git-exec-options'
@@ -99,6 +101,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     agent: StructuredAgentId
     activate: boolean
     notify?: boolean
+    foundingAttempt?: HostFoundingAttempt
     /** The host tab id a create reserved; a session that already has a tab keeps its own. */
     tabId?: string
     /** This machine's window made the create; its own open places the tab. */
@@ -107,6 +110,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     /** A ChatTabPlacement, typed in place: this file is at its line limit. */
     placement?: { groupId?: string; afterTabId?: string }
   }): Promise<void> {
+    input = initialChatSelection(this, input, this.mobileSessionTabsByWorktree)
     const host = getStructuredAgentSessionHost()
     if (typeof host?.setSessionTabVisibility === 'function') {
       // Restore-index failures (newer records/disk errors) are reported without preventing tab open.
@@ -134,12 +138,22 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     agent: StructuredAgentId
     activate: boolean
     notify?: boolean
+    foundingAttempt?: HostFoundingAttempt
   }): void {
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
     if (existing?.tabs.some((tab) => tab.id === id)) {
       // Background republish does not write/emit; healing missing client mirrors needs activate or explicit republish.
       if (!input.activate) {
+        if (
+          input.foundingAttempt?.adopted?.sessionId === input.sessionId &&
+          input.foundingAttempt.adopted.workspaceId === input.workspaceId
+        ) {
+          input.foundingAttempt.publication = {
+            workspaceId: input.workspaceId,
+            sessionId: input.sessionId
+          }
+        }
         return
       }
       const priorGroups = existing.tabGroups ?? []
@@ -160,59 +174,31 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         tabs: existing.tabs.map((tab) => ({ ...tab, isActive: tab.id === id }))
       }
       const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
+      if (
+        input.foundingAttempt?.adopted?.sessionId === input.sessionId &&
+        input.foundingAttempt.adopted.workspaceId === input.workspaceId
+      ) {
+        input.foundingAttempt.publication = {
+          workspaceId: input.workspaceId,
+          sessionId: input.sessionId
+        }
+      }
       if (input.notify !== false) {
         this.emitMobileSessionTabsSnapshot(stored)
       }
       return
     }
-    const tab: RuntimeMobileSessionAgentTab = {
-      type: 'agent-session',
-      id,
-      title: defaultAgentChatLabel(input.agent),
-      sessionId: input.sessionId,
-      agent: input.agent,
-      isActive: input.activate
-    }
-    const tabs = [...(existing?.tabs ?? [])].map((candidate) => ({
-      ...candidate,
-      isActive: input.activate ? false : candidate.isActive
-    }))
-    tabs.push(tab)
-    const priorGroups = existing?.tabGroups ?? [
-      {
-        id: getHeadlessMobileSessionGroupId(input.workspaceId),
-        activeTabId: existing?.activeTabId ?? null,
-        tabOrder: []
-      }
-    ]
-    // Why: the window can list the chat before main restores its row; keep the place it gave it.
-    const listingGroupId = priorGroups.find((group) => group.tabOrder.includes(id))?.id
-    const groupId =
-      listingGroupId ??
-      (priorGroups.some((group) => group.id === existing?.activeGroupId)
-        ? existing!.activeGroupId!
-        : priorGroups[0]!.id)
-    const tabGroups = priorGroups.map((group) =>
-      group.id === groupId
-        ? {
-            ...group,
-            activeTabId: input.activate ? id : group.activeTabId,
-            tabOrder: listingGroupId ? group.tabOrder : [...group.tabOrder, id]
-          }
-        : group
-    )
-    const snapshot: RuntimeMobileSessionTabsSnapshot = {
-      worktree: input.workspaceId,
-      publicationEpoch: existing?.publicationEpoch ?? `structured:${Date.now().toString(36)}`,
-      snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-      activeGroupId: input.activate ? groupId : (existing?.activeGroupId ?? groupId),
-      activeTabId: input.activate ? id : (existing?.activeTabId ?? null),
-      activeTabType: input.activate ? 'agent-session' : (existing?.activeTabType ?? null),
-      tabGroups,
-      ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
-      tabs
-    }
+    const snapshot = createdStructuredSessionTabSnapshot(input, existing, id)
     const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
+    if (
+      input.foundingAttempt?.adopted?.sessionId === input.sessionId &&
+      input.foundingAttempt.adopted.workspaceId === input.workspaceId
+    ) {
+      input.foundingAttempt.publication = {
+        workspaceId: input.workspaceId,
+        sessionId: input.sessionId
+      }
+    }
     if (input.notify !== false) {
       this.emitMobileSessionTabsSnapshot(stored)
     }
@@ -319,10 +305,9 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     agent: TuiAgent,
     scope?: TerminalWorkspaceLaunchScope
   ): ReturnType<typeof resolveStartupAgentLaunchRuntime> {
-    const store = this.requireStore()
     return resolveStartupAgentLaunchRuntime(
-      store,
-      scope ?? newWorktreeLaunchScope(repo, store.getSettings()),
+      this.requireStore(),
+      scope ?? newWorktreeLaunchScope(repo, this.requireStore().getSettings()),
       agent
     )
   }

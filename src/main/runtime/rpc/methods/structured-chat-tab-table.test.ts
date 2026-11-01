@@ -316,11 +316,40 @@ describe('a create that reserves its tab', () => {
     })
   })
 
-  it('leaves no tab behind when the create fails, so nothing is restored and the id is free', async () => {
+  it('retains a published chat after acquisition refuses, including its restorable reserved tab id', async () => {
     setAcquireFailure(true)
     expect(await createChat(HOST_TEST_SESSION, 'reserved-tab')).toMatchObject({ ok: false })
+    expect(store.getSessionTabId(HOST_TEST_SESSION)).toBe('reserved-tab')
+    expect(store.listVisibleSessionIds()).toEqual([HOST_TEST_SESSION])
+    expect((await snapshot()).tabs.map((tab) => tab.id)).toEqual([
+      `agent-session:${HOST_TEST_SESSION}`
+    ])
+    await host.flushAllStreamedEvents()
+    await openHost()
+    expect(host.getPersistedVisibleSessionTabIndex()).toEqual({
+      present: true,
+      sessionIds: [HOST_TEST_SESSION]
+    })
+    expect(store.getSessionTabId(HOST_TEST_SESSION)).toBe('reserved-tab')
+    setAcquireFailure(false)
+    expect(await createChat('session-bravo', 'reserved-tab')).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_conflict', details: { reason: 'tabIdTaken' } }
+    })
+    expect(store.getSessionTabId('session-bravo')).toBeNull()
+    expect(store.getSessionTabId(HOST_TEST_SESSION)).toBe('reserved-tab')
+    expect(store.listVisibleSessionIds()).toEqual([HOST_TEST_SESSION])
+  })
+
+  it('leaves no tab behind when a nonpublishing supplied-location acquired create fails, so nothing is restored and the id is free', async () => {
+    setAcquireFailure(true)
+    expect(await createChat(HOST_TEST_SESSION, 'reserved-tab', false)).toMatchObject({ ok: false })
     expect(store.getSessionTabId(HOST_TEST_SESSION)).toBeNull()
     expect(store.listVisibleSessionIds()).toEqual([])
+    await host.flushAllStreamedEvents()
+    await openHost()
+    expect(host.getPersistedVisibleSessionTabIndex().sessionIds).toEqual([])
+    expect(store.getSessionTabId(HOST_TEST_SESSION)).toBeNull()
 
     setAcquireFailure(false)
     expect(await createChat('session-bravo', 'reserved-tab')).toMatchObject({

@@ -1,4 +1,10 @@
-// Keep desktop-created simulator/browser tabs absent from paired-server frames in this desktop’s localStorage, keyed by server/workspace; published tabs follow server frames. Never serialize or send this record.
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspace-set'
+// Tabs this desktop created in a paired server's workspace that the server's layout never lists (a
+// simulator, a client-hosted browser tab), by tab-bar or entity id: that server's frame builds keep
+// them as drawn, inside the server's own groups (ledgers L273, L274). A tab the server published is
+// not one: it follows the server's frames. Kept in this desktop's localStorage, by server and
+// workspace, so a reload keeps the tabs its session restores; never a session field nor sent.
 
 import type { Tab } from '../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -161,4 +167,19 @@ export function _resetDesktopCreatedServerTabsForTests(): void {
   try {
     localStorage.removeItem(STORAGE_KEY)
   } catch {}
+}
+
+/** Before the server saves the chat, its frames would drop the tab and redraw it at the end. */
+export function holdFrameDrawnProvisionalChatTab(
+  target: RuntimeClientTarget | null,
+  worktreeId: string,
+  tabId: string
+): void {
+  const environmentId =
+    target?.kind === 'environment' && isFrameDrawnServerWorkspace(target.environmentId, worktreeId)
+      ? target.environmentId
+      : null
+  if (environmentId) {
+    noteDesktopCreatedServerTab(environmentId, worktreeId, tabId)
+  }
 }

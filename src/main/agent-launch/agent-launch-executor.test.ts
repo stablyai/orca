@@ -2,8 +2,12 @@ import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
-import type { AgentLaunchSurfaceFactory } from './agent-launch-surface-factories'
-import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-launch-intent'
+import type {
+  AgentLaunchIntent,
+  AgentLaunchPromptDisposal,
+  AgentLaunchResult
+} from '../../shared/agent-launch-intent'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { readCreatedWorkspaceLaunch } from './agent-launch-created-workspace'
 
@@ -65,20 +69,19 @@ function harness(options: {
     return options.createSupport ?? { supported: true }
   })
   const createStructuredSession = vi.fn(
-    async (args: Parameters<AgentLaunchSurfaceFactory['createStructuredSession']>[0]) => {
+    async (args: { firstMessage?: StructuredAgentSessionFirstMessage['body'] }) => {
       calls.push('createStructuredSession')
       options.onStructuredCreate?.()
       if (options.structuredCreateError) {
         throw options.structuredCreateError
       }
-      return {
-        sessionId: 'sess-1',
-        handle: 'handle_structured',
-        fence: 4,
-        ...(args.firstMessage && options.deliveredMessageId !== null
-          ? { firstMessage: { clientMessageId: 'msg-1' } }
-          : {})
-      }
+      const promptDisposal: AgentLaunchPromptDisposal | undefined =
+        args.firstMessage && options.deliveredMessageId !== null
+          ? { outcome: 'journaled', messageId: options.deliveredMessageId ?? 'msg-1' }
+          : args.firstMessage
+            ? undefined
+            : { outcome: 'not-delivered' }
+      return { sessionId: 'sess-1', handle: 'handle_structured', fence: 4, promptDisposal }
     }
   )
   const createTerminalAgent = vi.fn(async (args: { startupPrompt?: string }) => {
@@ -450,8 +453,9 @@ describe('the prompt receipt', () => {
     expect(h.createStructuredSession).toHaveBeenCalledWith(
       expect.objectContaining({
         firstMessage: {
-          clientMessageId: expect.any(String),
-          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: SUBMIT.text }] }
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: SUBMIT.text }]
         }
       })
     )
@@ -811,7 +815,7 @@ describe('the surface is published as the launch stands, before its prompt is de
     expect(launch.deliverTerminalPrompt).not.toHaveBeenCalled()
   })
 
-  it('publishes a chat with its first message receipt', async () => {
+  it('records a chat with the founding first-message proof', async () => {
     const { launch, published } = publishing({})
 
     const result = await launch.run(PROMPTED_EXISTING)

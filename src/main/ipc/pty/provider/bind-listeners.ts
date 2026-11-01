@@ -77,7 +77,8 @@ export function bindProviderListeners(session: PtyIpcSession): void {
             payload.data,
             Date.now(),
             rawLength,
-            payload.transformed
+            payload.transformed,
+            payload.seq
           )
       session.acceptPtyDataForRenderer(payload, outputSeq)
     })

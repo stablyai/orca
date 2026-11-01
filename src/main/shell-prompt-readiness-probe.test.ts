@@ -53,6 +53,7 @@ describe('shell prompt readiness probe', () => {
     await vi.advanceTimersByTimeAsync(10)
 
     expect(onPromptReady).toHaveBeenCalledOnce()
+    expect(onPromptReady).toHaveBeenCalledWith('/bin/zsh')
   })
 
   it('preserves an unset child PATH for executable resolution', async () => {
@@ -136,6 +137,7 @@ describe('shell prompt readiness probe', () => {
       await vi.advanceTimersByTimeAsync(10)
 
       expect(onPromptReady).toHaveBeenCalledTimes(expected ? 1 : 0)
+      expect(onPromptReady.mock.calls).toEqual(expected ? [['/bin/zsh']] : [])
     }
   )
 
@@ -166,6 +168,7 @@ describe('shell prompt readiness probe', () => {
       '/opt/homebrew/bin:/usr/bin:/bin'
     )
     expect(onPromptReady).toHaveBeenCalledOnce()
+    expect(onPromptReady).toHaveBeenCalledWith('/opt/homebrew/bin/bash')
   })
 
   it('rejects a replacement with the shell basename that the pane PATH cannot reach', async () => {

@@ -79,15 +79,17 @@ export function buildWslInteractiveLoginShellCommand(): string {
     // fish before 2.7 rejects -C and would fail the pane; it starts plain (no claude, no cwd hook).
     // fish 2.x prints --version to stderr, so both streams are read.
     '  fish)',
+    '    unset ORCA_SHELL_FEATURES',
     '    _orca_fish_version=$("$_orca_wsl_shell" --version 2>&1)',
     '    case "${_orca_fish_version##*version }" in',
     '      [01].*|2.[0-6]|2.[0-6].*) ;;',
-    `      *) exec "$_orca_wsl_shell" -l -C ${quotePosixShell(getWslFishInitCommand())} ;;`,
+    `      *) exec "$_orca_wsl_shell" -l -C ${quotePosixShell(`${getWslFishInitCommand()}\nfunction __orca_setup_prompt --on-event fish_prompt; functions -e __orca_setup_prompt; printf '\\033]777;orca-shell-ready:fish\\007'; end`)} ;;`,
     '    esac',
     '    ;;',
     '  zsh)',
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -d "${_orca_shell_ready_root}/zsh" ]; then',
     '      export ZDOTDIR="${_orca_shell_ready_root}/zsh"',
+    '      exec "$_orca_wsl_shell" -l',
     '    fi',
     '    ;;',
     // Why ENV: dash has no rcfile flag or prompt hook; an interactive sh reads $ENV after ~/.profile.
@@ -106,6 +108,7 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '    fi',
     '    ;;',
     'esac',
+    'unset ORCA_SHELL_FEATURES',
     'exec "$_orca_wsl_shell" -l'
   ].join('\n')
 }

@@ -1,7 +1,10 @@
 import * as dependencies from '../../orca-runtime-create-terminal-dependencies'
 import type { RuntimeNotifier } from '../../runtime-notifier-contract'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeTerminalPresentation
+} from '../../../../shared/runtime-types'
 
 export function revealCreatedTerminal(args: {
   notifier: Pick<RuntimeNotifier, 'revealTerminalSession' | 'rememberLaunchRecipe'> | null
@@ -16,6 +19,7 @@ export function revealCreatedTerminal(args: {
   adoptedStablePane: boolean
   presentation: RuntimeTerminalPresentation | undefined
   opts: dependencies.TerminalCreateOptions
+  currentTopology: () => RuntimeMobileSessionTabsResult
   tabId: string
   leafId: string
 }):
@@ -53,6 +57,9 @@ export function revealCreatedTerminal(args: {
       try {
         await reveal(workspace.id, {
           ptyId,
+          ...(opts.initializeWorkspaceTopology
+            ? { initialWorkspaceTopology: args.currentTopology() }
+            : {}),
           title: launchOpts.title ?? null,
           ...(cwd !== workspace.path ? { cwd } : {}),
           ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),

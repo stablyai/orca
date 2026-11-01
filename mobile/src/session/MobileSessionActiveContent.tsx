@@ -308,6 +308,8 @@ export function MobileSessionActiveContent({
         <MobileDictationMeterContext.Provider value={dictation.meter}>
           <MobileNativeChatOverlay
             controller={nativeChatController}
+            setupAgentStartHeld={controller.setupAgentStartHeld}
+            setupInputHeld={controller.setupInputHeld}
             imageSource={nativeChatImageSource}
             activeSessionTabId={controller.activeSessionTab?.id}
             onOpenFile={handleNativeChatFileTap}

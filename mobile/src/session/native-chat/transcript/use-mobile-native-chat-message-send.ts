@@ -43,6 +43,7 @@ export type MobileNativeChatMessageSend = {
 }
 
 export function useMobileNativeChatMessageSend(args: {
+  readSetupAgentStartHeld?: () => boolean
   client: RpcClient | null
   enabled: boolean
   handleRef: MutableRefObject<string | null>
@@ -87,7 +88,13 @@ export function useMobileNativeChatMessageSend(args: {
       sharedDeadline?: number,
       sentAt?: number
     ): Promise<MobileNativeChatSendOutcome> => {
-      // Trim only outgoing bytes to prevent rapid-send concatenation; restore the exact typed draft on rejection.
+      if (args.readSetupAgentStartHeld?.()) {
+        return 'rejected'
+      }
+      // The host writes trailing whitespace verbatim onto the agent's input line,
+      // where it can glue the next rapid send onto this one (#14262). Only the
+      // bytes that go out are trimmed: `draftText` is what the user typed, and a
+      // rejected send has to put back exactly that (#14819).
       const text = draftText.trimEnd()
       const handle = handleRef.current
       const origin = captureSendOrigin(text, sentAt)
@@ -110,6 +117,12 @@ export function useMobileNativeChatMessageSend(args: {
         onSendError('Message not sent')
         return 'rejected'
       }
+      if (args.readSetupAgentStartHeld?.()) {
+        return 'rejected'
+      }
+      // Why: empty the composer at send time, not on the ack — over relay the
+      // round trip is visible, and a lost ack must not strand the sent prompt
+      // in the box. Only a definite rejection puts the text back.
       // A picked skill leading the draft is chat, as on desktop; read it before the clear forgets it.
       const skillOrigin = readMobileNativeChatSkillOrigin(origin.draftKey)
       // Clear optimistically before slow/lost acknowledgements; only definite rejection restores the draft.
@@ -192,6 +205,7 @@ export function useMobileNativeChatMessageSend(args: {
       return 'accepted'
     },
     [
+      args.readSetupAgentStartHeld,
       acceptSend,
       agentRef,
       captureSendOrigin,

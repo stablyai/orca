@@ -132,6 +132,55 @@ describe("the phone's status stream", () => {
     connection('connected')
     expect(client.subscribe).toHaveBeenCalledTimes(2)
   })
+  it('activates without a session, preserves setup across ordinary frames and resets even an empty summary map', () => {
+    const feed = mobileStructuredSessionStatusFeed(client)
+    const listener = vi.fn()
+    feed.subscribe(listener)
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBeUndefined()
+    frames[0]?.({ type: 'snapshot', sessions: [], setupHeldWorkspaceIds: ['repo::C:\\Work'] })
+    expect(feed.isWorkspaceSetupHeld('repo::c:/Work')).toBe(true)
+    expect(feed.isWorkspaceSetupHeld('other-repo::c:/Work')).toBe(false)
+    expect(listener).toHaveBeenCalledTimes(1)
+    const other = mobileStructuredSessionStatusFeed(stubRpcClient())
+    expect(other.isWorkspaceSetupHeld('repo::C:/Work')).toBeUndefined()
+    frames[0]?.({ type: 'snapshot', sessions: [], namingActiveSessionIds: ['naming'] })
+    expect(listener).toHaveBeenCalledTimes(1)
+    frames[0]?.({ type: 'snapshot', sessions: [] })
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBe(true)
+    connection('reconnecting')
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBeUndefined()
+    expect(listener).toHaveBeenCalledTimes(3)
+    frames[0]?.({ type: 'snapshot', sessions: [] })
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBe(false)
+  })
+
+  it('bounds N/10N setup frame work independently of unrelated summary population', () => {
+    const feed = mobileStructuredSessionStatusFeed(client)
+    feed.subscribe(() => {})
+    for (const population of [2, 20]) {
+      frames[0]?.({
+        type: 'snapshot',
+        sessions: Array.from({ length: population }, (_, index) => ({
+          ...summary(false),
+          sessionId: `resting-${index}`
+        }))
+      })
+      const previous = feed.getSnapshot()
+      const iterate = vi.spyOn(previous, Symbol.iterator)
+      for (let index = 0; index < population; index++) {
+        frames[0]?.({
+          type: 'snapshot',
+          sessions: [],
+          setupHeldWorkspaceIds: index % 2 ? [] : ['workspace']
+        })
+        expect(feed.getSnapshot()).toBe(previous)
+      }
+      expect(iterate).not.toHaveBeenCalled()
+      iterate.mockRestore()
+    }
+    expect(client.subscribe).toHaveBeenCalledOnce()
+  })
 })
 
 // Match physical registry ordering: drop ended streams before delivering their last frame.

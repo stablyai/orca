@@ -13,6 +13,7 @@ export type UseNativeChatComposerAttachmentsArgs = {
   allowWithoutTarget?: boolean
   caret: number
   disabled: boolean
+  isEditingHeld?: () => boolean
   isComposing: () => boolean
   resolveTarget: () => NativeChatResolvedTarget | null
   textareaRef: RefObject<NativeChatComposerInput | null>

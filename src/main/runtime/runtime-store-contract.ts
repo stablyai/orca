@@ -30,6 +30,7 @@ export type RuntimeStore = {
   removeFolderWorkspace?: Store['removeFolderWorkspace']
   removeProjectForHost?: Store['removeProjectForHost']
   reorderRepos?: Store['reorderRepos']
+  hasWorktreeInstanceForHost?: Store['hasWorktreeInstanceForHost']
   getAllWorktreeMeta: Store['getAllWorktreeMeta']
   getAllWorktreeMetaForHost?: Store['getAllWorktreeMetaForHost']
   captureNativeLocalWorktreeMetadataScanExpectation?: Store['captureNativeLocalWorktreeMetadataScanExpectation']

@@ -26,6 +26,7 @@ const deliverTerminalPrompt = vi.hoisted(() => vi.fn(async () => true))
 vi.mock('./agent-launch-terminal-prompt', () => ({
   deliverTerminalAgentLaunchPrompt: deliverTerminalPrompt
 }))
+
 const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
 const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
 const AGENT_LAUNCH_REPLAY = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launchReplay')
@@ -68,7 +69,13 @@ beforeEach(() => {
   deliverTerminalPrompt.mockClear()
   createStructuredSession
     .mockReset()
-    .mockResolvedValue({ ok: true, value: { sessionId: 'sess-1' } })
+    .mockImplementation(async (args: { firstMessage?: { clientMessageId: string } }) => ({
+      ok: true,
+      value: {
+        sessionId: 'sess-1',
+        ...(args.firstMessage ? { firstMessage: args.firstMessage } : {})
+      }
+    }))
 })
 
 describe('a paired client launching into an existing workspace', () => {
@@ -98,10 +105,13 @@ describe('a paired client launching into an existing workspace', () => {
     )
   })
 
-  // Prompt delivery can take a minute; caller navigation must not wait.
-  it.each([['terminal', {}, deliverTerminalPrompt]] as const)(
-    'selects the new %s for the caller before its prompt is delivered',
-    async (_surface, settings, deliver) => {
+  // Why: a pasted prompt waits up to a minute for the agent; the caller's view must not wait with it.
+  it.each([
+    ['terminal', {}, deliverTerminalPrompt],
+    ['chat', STRUCTURED_PREFERENCE, createStructuredSession]
+  ] as const)(
+    'selects the new %s without waiting for terminal paste or structured provider startup',
+    async (surface, settings, deliver) => {
       const runtime = selectionRuntime({ settings, terminalPaneKey: PANE_KEY })
 
       await launch(
@@ -112,7 +122,18 @@ describe('a paired client launching into an existing workspace', () => {
       const selectedAt = runtime.selectCreatedMobileSessionTabForClient.mock.invocationCallOrder[0]
       const deliveredAt = deliver.mock.invocationCallOrder[0]
       expect(deliveredAt).toBeDefined()
-      expect(selectedAt).toBeLessThan(deliveredAt!)
+      if (surface === 'chat') {
+        expect(deliveredAt).toBeLessThan(selectedAt!)
+        expect(createStructuredSession).toHaveBeenCalledWith(
+          expect.objectContaining({
+            firstMessage: expect.objectContaining({
+              body: expect.objectContaining({ role: 'user' })
+            })
+          })
+        )
+      } else {
+        expect(selectedAt).toBeLessThan(deliveredAt!)
+      }
     }
   )
 

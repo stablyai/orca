@@ -1,6 +1,7 @@
 // Push phone attention from the execution host so headless sessions need no desktop relay. Desktop retains presentation and marks local delivery to avoid duplicate pushes.
 // Read labels synchronously at the raising commit so alerts cannot outlive prompts; edge ids dedupe delivery and address retirement.
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import {
   agentSessionAttentionKey,
   agentSessionAttentionNews,
@@ -129,4 +130,24 @@ export function createStructuredAttentionMobileDelivery(
     },
     reconcile: deps.reconcile
   }
+}
+
+export function subscribeStructuredAgentSessionAttention(
+  installed: Pick<StructuredAgentSessionHost, 'subscribeTurnCompletions' | 'readStatusSummary'>,
+  delivery: StructuredAttentionMobileDelivery
+): void {
+  // Lives exactly as long as the host: teardown drops the host and its subscribers together.
+  installed.subscribeTurnCompletions({
+    id: 'host-attention-delivery',
+    includePrompts: true,
+    emit: (event) => {
+      if (event.type === 'end') {
+        return
+      }
+      const sessionId =
+        event.type === 'prompt' ? event.prompt.sessionId : event.completion.sessionId
+      delivery.deliver(event, installed.readStatusSummary(sessionId))
+    },
+    onState: delivery.reconcile
+  })
 }

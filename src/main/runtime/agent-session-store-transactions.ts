@@ -194,7 +194,12 @@ export class AgentSessionStoreTransactions {
   /** Commit a receipt separately when its command made no journal write. */
   commitReceipt(receipt: JournalOperationReceipt): Promise<void> {
     const run = this.queue.then(() => {
-      this.journalDatabase.transaction((db) => receipt.write(db))
+      this.journalDatabase.transaction(
+        (db) => receipt.write(db),
+        false,
+        undefined,
+        receipt.transactionObservation
+      )
       receipt.committed()
     })
     this.queue = run.catch(() => {})
@@ -221,12 +226,14 @@ export class AgentSessionStoreTransactions {
     const result = apply(draft)
     attributeAgentSessionRuntime(published, draft)
     const writes = agentSessionStoreDraftRowWrites(published, draft)
+    if (writes) {
+      freezeRows(draft, writes)
+    }
     return {
       result,
       writes,
       adopt: () => {
         if (writes) {
-          freezeRows(draft, writes)
           this.published = draft
         }
       }

@@ -1,3 +1,4 @@
+import { readStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { useAppStore } from '@/store/index'
 import { retryStructuredAgentSessionLaunch } from '../../structured-agent-session-launch'
@@ -23,6 +24,7 @@ export function recheckUnconfirmedStructuredAgentLaunches(executionHostId: Execu
   }
   for (const { worktreeId, sessionId } of launches) {
     if (
+      readStructuredAgentLaunchRecord(sessionId)?.desktopCreate ||
       getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId) !== 'visibility-unknown' ||
       getStructuredAgentSessionLaunchOwner(sessionId) !== executionHostId
     ) {

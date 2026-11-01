@@ -1,3 +1,10 @@
+import {
+  appendNativeSetupCompletion,
+  type NativeSetupCompletionShell
+} from '../runtime/orchestration/setup-completion-signal'
+/**
+ * Writes a startup command into a local PTY once the shell reports readiness.
+ */
 import type * as pty from 'node-pty'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 
@@ -7,6 +14,7 @@ const POST_SHELL_READY_STARTUP_COMMAND_FALLBACK_MS = 200
 
 export type ShellReadySignal = {
   postMarkerBytesObserved: boolean
+  nativeSetupShell?: NativeSetupCompletionShell
 }
 
 export function writeStartupCommandWhenShellReady(
@@ -14,10 +22,11 @@ export function writeStartupCommandWhenShellReady(
   proc: pty.IPty,
   startupCommand: string,
   onExit: (cleanup: () => void) => void,
-  // Only shells with active bracketed paste accept its escape wrapper without echoing it.
-  options: { bracketedPasteSafe?: boolean } = {}
+  // Why: only shells with bracketed-paste active (see isBracketedPasteSafeShell) accept the wrapper; others use the raw path so ESC[200~ isn't echoed.
+  options: { bracketedPasteSafe?: boolean; nativeSetupToken?: string } = {}
 ): void {
   let sent = false
+  let nativeSetupShell: NativeSetupCompletionShell | undefined
   let postReadyTimer: ReturnType<typeof setTimeout> | null = null
   let postReadyDataDisposable: { dispose: () => void } | null = null
 
@@ -44,9 +53,12 @@ export function writeStartupCommandWhenShellReady(
     }
     // Keep the interactive shell alive after agent exit; write once past readiness to avoid incremental-paste drops.
     proc.write(
-      buildStartupCommandSubmission(startupCommand, {
-        bracketedPasteSafe: options.bracketedPasteSafe === true
-      })
+      buildStartupCommandSubmission(
+        appendNativeSetupCompletion(startupCommand, options.nativeSetupToken, nativeSetupShell),
+        {
+          bracketedPasteSafe: options.bracketedPasteSafe === true
+        }
+      )
     )
   }
 
@@ -55,6 +67,7 @@ export function writeStartupCommandWhenShellReady(
   }
 
   readyPromise.then((signal) => {
+    nativeSetupShell = signal?.nativeSetupShell
     if (sent) {
       return
     }

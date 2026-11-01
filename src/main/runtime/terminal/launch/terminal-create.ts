@@ -230,6 +230,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             tabId,
             leafId,
             terminalHandle: preAllocatedHandle,
+            setupCompletionToken: launchOpts.env?.ORCA_SETUP_COMPLETION_TOKEN,
             ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
           })
         }
@@ -263,6 +264,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           })
         }
         const reveal = revealCreatedTerminal({
+          currentTopology: () => this.getMobileSessionTabsForWorktree(workspace.id),
           notifier: this.notifier,
           workspace,
           ptyId: result.id,

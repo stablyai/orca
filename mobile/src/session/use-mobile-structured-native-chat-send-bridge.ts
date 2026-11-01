@@ -15,6 +15,7 @@ import {
 } from './native-chat/composer/mobile-native-chat-draft-store'
 
 export function useMobileStructuredNativeChatSendBridge(args: {
+  readSetupAgentStartHeld?: () => boolean
   agent: StructuredAgentId | undefined
   sessionCommands?: readonly AgentSessionSlashCommand[]
   sendStructured: (
@@ -58,6 +59,9 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       _sentAt?: number,
       intent?: MobileNativeChatSendIntent
     ): Promise<MobileNativeChatSendOutcome> => {
+      if (args.readSetupAgentStartHeld?.()) {
+        return 'rejected'
+      }
       const origin = captureSendOrigin(text.trimEnd())
       if (!origin) {
         onSendError('Message not sent (disconnected)')
@@ -77,6 +81,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       return outcome
     },
     [
+      args.readSetupAgentStartHeld,
       agent,
       captureSendOrigin,
       clearDraftForSend,

@@ -1,3 +1,4 @@
+import { PROTOCOL_VERSION, PREVIOUS_DAEMON_PROTOCOL_VERSIONS } from './daemon-protocol-version'
 import { describe, expect, it, vi } from 'vitest'
 import { createAdapter } from './daemon-pty-router-test-fixture'
 import { DaemonPtyRouter } from './daemon-pty-router'
@@ -119,6 +120,32 @@ describe('DaemonPtyRouter keeps live sessions on their older daemon', () => {
       await router.spawn({ ...SPAWN, sessionId: 'claude-session' })
 
       expect(current.spawn).toHaveBeenCalledOnce()
+    }
+  )
+  it.each([50, 51, 52, 53, 54])(
+    'keeps generation%s live ownership while generation55 receives new native setup',
+    async (previous) => {
+      expect(PROTOCOL_VERSION).toBe(55)
+      expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(previous)
+      const current = createAdapter('v55', [], undefined, 55)
+      const legacy = createAdapter(`v${previous}`, ['old-live'], undefined, previous)
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+      await router.discoverLegacySessions()
+      await router.spawn({ ...SPAWN, sessionId: 'old-live', attachOnly: true })
+      const request = {
+        ...SPAWN,
+        command: 'bash /actual/setup.sh',
+        env: { ORCA_SETUP_COMPLETION_TOKEN: 'native:upgrade' }
+      }
+      await router.spawn(request)
+      router.write('old-live', 'ordinary input')
+      expect(legacy.spawn).toHaveBeenCalledExactlyOnceWith({
+        ...SPAWN,
+        sessionId: 'old-live',
+        attachOnly: true
+      })
+      expect(current.spawn).toHaveBeenCalledExactlyOnceWith(request)
+      expect(legacy.write).toHaveBeenCalledWith('old-live', 'ordinary input')
     }
   )
 })

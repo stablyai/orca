@@ -150,6 +150,7 @@ import {
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
 import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
 import {
+  holdInFlightWorktreeCreate,
   openWorktreeCreatePathClaim,
   type WorktreeCreatePathClaim
 } from '../worktree-create-in-flight'
@@ -917,6 +918,7 @@ export function createLocalWorktree(
 ): Promise<CreateWorktreeResult> {
   // Always rearm consumed preparation, even if later copy, metadata or startup work fails.
   const rearm: PreparationRearmHolder = { fire: () => {} }
+  const preparation: PreparationRearmHolder = { fire: () => {} }
   const pathClaim = openWorktreeCreatePathClaim()
   return worktreeCreateGit
     .run(() =>
@@ -929,13 +931,15 @@ export function createLocalWorktree(
         timing,
         runtime,
         pathClaim,
-        onWorkspaceCreated
+        onWorkspaceCreated,
+        preparation
       )
     )
     .finally(() => {
       pathClaim.release()
       // Finish create timing before rearm so replacement preparation is not charged to this request.
       timing.finish()
+      preparation.fire()
       rearm.fire()
     })
 }
@@ -949,7 +953,8 @@ async function performLocalWorktreeCreate(
   timing: WorktreeCreateTimingRecorder,
   runtime: OrcaRuntimeService,
   pathClaim: WorktreeCreatePathClaim,
-  onWorkspaceCreated?: (worktreeId: string) => void
+  onWorkspaceCreated: ((worktreeId: string) => void) | undefined,
+  preparation: PreparationRearmHolder
 ): Promise<CreateWorktreeResult> {
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(
@@ -1366,6 +1371,11 @@ async function performLocalWorktreeCreate(
     )
   }
 
+  preparation.fire = await holdInFlightWorktreeCreate(
+    repo.id,
+    worktreePath,
+    localWorktreeGitOptions
+  )
   assertAttachableParentWorkspace(
     store,
     args.parentWorkspace,
@@ -1715,6 +1725,10 @@ async function performLocalWorktreeCreate(
     }
   })
 
+  if (setup?.waitForAgentStartup) {
+    runtime.workspaceSetupAgentStarts.hold(worktree.id)
+  }
+  preparation.fire()
   // Startup resolves the new id before lifecycle notifications invalidate runtime caches.
   runtime?.invalidateWorktreeCatalog?.(repo.id)
   const stagedStartup = await timing.time('spawn_startup_terminal', () =>
@@ -1732,19 +1746,26 @@ async function performLocalWorktreeCreate(
   // Automation terminals are host-provisioned, so return none for renderer launch.
   const provisionedByHost = Boolean(args.automationProvenance)
   if (provisionedByHost && (setup || defaultTabs?.tabs.length)) {
-    void runtime.provisionManagedWorktreeTerminals(
-      {
-        worktreeSelector: `id:${worktree.id}`,
-        worktreeId: worktree.id,
-        worktreePath: worktree.path,
-        ...(setup ? { setup } : {}),
-        ...(defaultTabs ? { defaultTabs } : {}),
-        hasStartupTerminal: false,
-        setupCommandPlatform: getSetupRunnerCommandPlatformForLaunch(setup, 'posix'),
-        surfaceOwner: false
-      },
-      worktree
-    )
+    void runtime
+      .provisionManagedWorktreeTerminals(
+        {
+          worktreeSelector: `id:${worktree.id}`,
+          worktreeId: worktree.id,
+          worktreePath: worktree.path,
+          ...(setup ? { setup } : {}),
+          ...(defaultTabs ? { defaultTabs } : {}),
+          hasStartupTerminal: false,
+          setupCommandPlatform: getSetupRunnerCommandPlatformForLaunch(setup, 'posix'),
+          surfaceOwner: false
+        },
+        worktree
+      )
+      .then((result) => {
+        if (!result.setupSpawned) {
+          runtime.workspaceSetupAgentStarts.observe(worktree.id, null)
+        }
+      })
+      .catch(() => runtime.workspaceSetupAgentStarts.observe(worktree.id, null))
   }
 
   notifyLineageRepos(

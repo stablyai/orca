@@ -7,6 +7,7 @@ import {
 } from './native-chat-pane-resolution'
 
 export type NativeChatSessionGateProps = NativeChatPaneResolutionInput & {
+  pending?: ReactNode
   children: (resolution: NativeChatPaneResolution) => ReactNode
 }
 
@@ -14,6 +15,7 @@ export type NativeChatSessionGateProps = NativeChatPaneResolutionInput & {
  *  conversation surface so unsupported panes fail before transcript IO starts. */
 export function NativeChatSessionGate({
   children,
+  pending,
   ...input
 }: NativeChatSessionGateProps): JSX.Element {
   const lastResolutionRef = useRef<NativeChatPaneResolution | null>(null)
@@ -45,7 +47,7 @@ export function NativeChatSessionGate({
     }
   }, [resolution])
   if (!resolution) {
-    return <NativeChatEmptyState kind="not-agent" />
+    return <>{pending ?? <NativeChatEmptyState kind="not-agent" />}</>
   }
   return <>{children(resolution)}</>
 }

@@ -6,7 +6,6 @@ import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
 const TRIGGER = '\x1b[?1049hTUI\x1b]133;D;137\x07'
 const MARK = '\x1b]133;D;137\x07'
 const HEAD = TRIGGER.slice(0, -MARK.length)
-const GROUNDED = `${MARK}${PROCESS_BOUNDARY_GROUND}`
 
 function passthrough(data: string, rawStartSeq = 0): PtyIngressEmission {
   return { data, rawStartSeq, rawEndSeq: rawStartSeq + data.length, transformed: false }
@@ -54,14 +53,20 @@ describe('TerminalShellRecoveryBarrier', () => {
     ])
 
     resolveConfirm?.(true)
-    await vi.waitFor(() => expect(released).toHaveLength(3))
+    await vi.waitFor(() => expect(released).toHaveLength(4))
     expect(released[1]).toEqual({
-      data: GROUNDED,
+      data: MARK,
       rawStartSeq: 100 + HEAD.length,
+      rawEndSeq: 100 + TRIGGER.length,
+      transformed: false
+    })
+    expect(released[2]).toEqual({
+      data: PROCESS_BOUNDARY_GROUND,
+      rawStartSeq: 100 + TRIGGER.length,
       rawEndSeq: 100 + TRIGGER.length,
       transformed: true
     })
-    expect(released[2]).toEqual({
+    expect(released[3]).toEqual({
       data: 'SHELL-PROMPT',
       rawStartSeq: 100 + TRIGGER.length,
       rawEndSeq: 100 + TRIGGER.length + 'SHELL-PROMPT'.length,
@@ -82,8 +87,14 @@ describe('TerminalShellRecoveryBarrier', () => {
     expect(released).toHaveLength(1)
 
     resolveConfirm?.(true)
-    await vi.waitFor(() => expect(released).toHaveLength(4))
-    expect(released.map((emission) => emission.data)).toEqual([HEAD, GROUNDED, 'late-1', 'late-2'])
+    await vi.waitFor(() => expect(released).toHaveLength(5))
+    expect(released.map((emission) => emission.data)).toEqual([
+      HEAD,
+      MARK,
+      PROCESS_BOUNDARY_GROUND,
+      'late-1',
+      'late-2'
+    ])
   })
 
   it('flushes unmodified with no injection when the proof is refuted', async () => {
@@ -164,10 +175,12 @@ describe('TerminalShellRecoveryBarrier', () => {
     await vi.waitFor(() =>
       expect(released.map((emission) => emission.data)).toEqual([
         HEAD,
-        GROUNDED,
+        MARK,
+        PROCESS_BOUNDARY_GROUND,
         'first-prompt',
         '\x1b[?1049hAGAIN',
-        `\x1b]133;D;9\x07${PROCESS_BOUNDARY_GROUND}`,
+        '\x1b]133;D;9\x07',
+        PROCESS_BOUNDARY_GROUND,
         'second-prompt'
       ])
     )
@@ -271,12 +284,19 @@ describe('TerminalShellRecoveryBarrier', () => {
     await vi.waitFor(() =>
       expect(released.map((emission) => emission.data)).toEqual([
         head,
-        `37\x07${PROCESS_BOUNDARY_GROUND}`,
+        '37\x07',
+        PROCESS_BOUNDARY_GROUND,
         'PROMPT'
       ])
     )
     expect(released[1]).toMatchObject({ rawStartSeq: head.length, rawEndSeq: head.length + 3 })
-    expect(released[2]).toMatchObject({
+    expect(released[2]).toEqual({
+      data: PROCESS_BOUNDARY_GROUND,
+      rawStartSeq: head.length + 3,
+      rawEndSeq: head.length + 3,
+      transformed: true
+    })
+    expect(released[3]).toMatchObject({
       rawStartSeq: head.length + 3,
       rawEndSeq: head.length + tail.length
     })
@@ -304,9 +324,33 @@ describe('TerminalShellRecoveryBarrier', () => {
 
     await settled
     await vi.waitFor(() =>
-      expect(released.map((emission) => emission.data)).toEqual([HEAD, GROUNDED, 'after-poison'])
+      expect(released.map((emission) => emission.data)).toEqual([
+        HEAD,
+        MARK,
+        PROCESS_BOUNDARY_GROUND,
+        'after-poison'
+      ])
     )
     await expect(barrier.idle()).resolves.toBeUndefined()
+  })
+
+  it('grounds the scanner even when the marker consumer throws', async () => {
+    const confirm = vi.fn(async () => true)
+    const barrier = new TerminalShellRecoveryBarrier({
+      confirmShellForeground: confirm,
+      release: (emission) => {
+        if (emission.data === MARK) {
+          throw new Error('marker consumer failed')
+        }
+      },
+      isAlive: () => true
+    })
+    barrier.accept(passthrough(TRIGGER))
+    await barrier.idle()
+    expect(barrier.getOwner()).toBe('shell')
+    barrier.accept(passthrough('\x1b]133;C\x07ls\x1b]133;D;0\x07', TRIGGER.length))
+    await barrier.idle()
+    expect(confirm).toHaveBeenCalledTimes(1)
   })
 
   it('asks at every D of a live TUI and releases every byte, in order, unmodified', async () => {
@@ -342,7 +386,11 @@ describe('TerminalShellRecoveryBarrier', () => {
     barrier.accept(passthrough('\x1b]133;D;137\x07prompt'))
 
     await vi.waitFor(() => expect(barrier.getOwner()).toBe('shell'))
-    expect(released.slice(-2).map((emission) => emission.data)).toEqual([GROUNDED, 'prompt'])
+    expect(released.slice(-3).map((emission) => emission.data)).toEqual([
+      MARK,
+      PROCESS_BOUNDARY_GROUND,
+      'prompt'
+    ])
     barrier.accept(passthrough('\x1b]133;C\x07ls\x1b]133;D;0\x07'))
     expect(confirm).toHaveBeenCalledTimes(6)
   })
@@ -365,7 +413,8 @@ describe('TerminalShellRecoveryBarrier', () => {
       leak.slice(0, -'\x1b]133;D;0\x07'.length),
       '\x1b]133;D;0\x07',
       'frame',
-      GROUNDED,
+      MARK,
+      PROCESS_BOUNDARY_GROUND,
       'prompt'
     ])
   })
@@ -405,7 +454,11 @@ describe('TerminalShellRecoveryBarrier', () => {
     resolveConfirm?.(true)
 
     await vi.waitFor(() =>
-      expect(released.map((emission) => emission.data)).toEqual([GROUNDED, 'SHELL-PROMPT'])
+      expect(released.map((emission) => emission.data)).toEqual([
+        MARK,
+        PROCESS_BOUNDARY_GROUND,
+        'SHELL-PROMPT'
+      ])
     )
     expect(barrier.getOwner()).toBe('shell')
   })
@@ -442,8 +495,14 @@ describe('TerminalShellRecoveryBarrier', () => {
     expect(released).toEqual([
       passthrough(head, 0),
       {
-        data: `\\${PROCESS_BOUNDARY_GROUND}`,
+        data: '\\',
         rawStartSeq: head.length,
+        rawEndSeq: head.length + 1,
+        transformed: false
+      },
+      {
+        data: PROCESS_BOUNDARY_GROUND,
+        rawStartSeq: head.length + 1,
         rawEndSeq: head.length + 1,
         transformed: true
       },
@@ -455,22 +514,33 @@ describe('TerminalShellRecoveryBarrier', () => {
     ['confirmed', async () => true],
     ['refuted', async () => false],
     ['timed out', () => new Promise<boolean>(() => {})]
-  ])('covers at least one raw unit with every emission when %s', async (_, confirm) => {
-    const { barrier, released } = createBarrier({ confirm, maxPendingMs: 20 })
-    const stream = [`${TRIGGER}p1`, '\x1b[?1049h\x1b]133;D;1\x1b', '\\p2', `${TRIGGER}`, 'p3']
-    let seq = 0
-    for (const data of stream) {
-      barrier.accept(passthrough(data, seq))
-      seq += data.length
-    }
-    await vi.waitFor(() => expect(released.at(-1)?.rawEndSeq).toBe(seq))
+  ])(
+    'covers every raw unit once and charges inserted resets zero raw units when %s',
+    async (_, confirm) => {
+      const { barrier, released } = createBarrier({ confirm, maxPendingMs: 20 })
+      const stream = [`${TRIGGER}p1`, '\x1b[?1049h\x1b]133;D;1\x1b', '\\p2', `${TRIGGER}`, 'p3']
+      let seq = 0
+      for (const data of stream) {
+        barrier.accept(passthrough(data, seq))
+        seq += data.length
+      }
+      await vi.waitFor(() => expect(released.at(-1)?.rawEndSeq).toBe(seq))
 
-    expect(released.every((emission) => emission.rawEndSeq > emission.rawStartSeq)).toBe(true)
-    const raw = released.map((emission) =>
-      emission.transformed
-        ? emission.data.slice(0, emission.rawEndSeq - emission.rawStartSeq)
-        : emission.data
-    )
-    expect(raw.join('')).toBe(stream.join(''))
-  })
+      let cursor = 0
+      let raw = ''
+      for (const emission of released) {
+        expect(emission.rawStartSeq).toBe(cursor)
+        if (emission.transformed) {
+          expect(emission.data).toBe(PROCESS_BOUNDARY_GROUND)
+          expect(emission.rawEndSeq).toBe(cursor)
+        } else {
+          expect(emission.rawEndSeq - cursor).toBe(emission.data.length)
+          raw += emission.data
+          cursor = emission.rawEndSeq
+        }
+      }
+      expect(cursor).toBe(seq)
+      expect(raw).toBe(stream.join(''))
+    }
+  )
 })

@@ -128,7 +128,9 @@ describe('structured agent-session create intent', () => {
         fastMode: String(fastMode)
       })
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preparation only carries this host through before attachment; no host methods run.
-      const host = { deps: {} } as unknown as StructuredAgentSessionHost
+      const host = {
+        deps: { store: { getOperationRow: () => null } }
+      } as unknown as StructuredAgentSessionHost
       const explicit = await prepareStructuredAgentSessionCreateForWorktree({
         runtime,
         ensureHost: async () => host,

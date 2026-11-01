@@ -1,3 +1,4 @@
+import { WorkspaceSetupAgentStartHolds } from '../../workspace-setup-agent-start-holds'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -125,7 +126,7 @@ it.each([
   }
 )
 
-it('the old client retains acquired create and waits for acquisition before publishing', async () => {
+it('the old client retains its acquired result while the chat publishes before acquisition', async () => {
   const acquired = rig.adapter.acquire.getMockImplementation()
   if (!acquired) {
     throw new Error('test acquire missing')
@@ -145,7 +146,7 @@ it('the old client retains acquired create and waits for acquisition before publ
   await vi.waitFor(() => expect(rig.adapter.acquire).toHaveBeenCalledOnce())
   await entered.promise
   expect(answered).toBe(false)
-  expect(runtimeCalls.publishStructuredAgentSessionTab).not.toHaveBeenCalled()
+  expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledOnce()
   release.resolve()
   expect(await creating).toMatchObject({ ok: true, result: { ok: true } })
   expect(rig.adapter.acquire).toHaveBeenCalledOnce()
@@ -360,4 +361,69 @@ it('answers an old client whose start failed before spawning in plain words', as
     }
   })
   expect(JSON.stringify(answer)).not.toContain(raw)
+})
+
+it.each([false, true])(
+  'a fresh legacy create during setup returns the same at-rest chat immediately; opening message=%s',
+  async (withMessage) => {
+    const setup = Promise.withResolvers<void>()
+    let held = true
+    rig.host.deps.setupHold = () => (held ? setup.promise : null)
+    const input = params(undefined, withMessage)
+    try {
+      expect(await call('agentSession.create', input, legacy)).toMatchObject({
+        ok: true,
+        result: { ok: true, replayed: false }
+      })
+      rig.clock.now += 45_000
+      expect(await call('agentSession.create', input, legacy)).toMatchObject({
+        ok: true,
+        result: { ok: true, replayed: true, value: { sessionId: SESSION } }
+      })
+      expect(rig.store.listRecords()).toHaveLength(1)
+      expect(rig.adapter.acquire).not.toHaveBeenCalled()
+      held = false
+      setup.resolve()
+      if (withMessage) {
+        await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
+        expect(rig.adapter.acquire).toHaveBeenCalledOnce()
+      } else {
+        expect(rig.adapter.acquire).not.toHaveBeenCalled()
+      }
+    } finally {
+      held = false
+      setup.resolve()
+    }
+  }
+)
+
+it('Stop withdraws an admitted Create prompt while the actual workspace hold remains installed', async () => {
+  const holds = new WorkspaceSetupAgentStartHolds()
+  const complete = holds.hold('workspace-1')
+  rig.host.deps.setupHold = (id) => holds.pending(id)
+  const input = params(undefined, true)
+  try {
+    expect(await call('agentSession.create', input, capable)).toMatchObject({
+      ok: true,
+      result: { ok: true, value: { firstMessage: { dispatchState: 'pending' } } }
+    })
+    expect(rig.adapter.acquire).not.toHaveBeenCalled()
+    await stopCreatedChat(rig.host)
+    expect(holds.pending('workspace-1')).not.toBeNull()
+    expect(await call('agentSession.create', input, capable)).toMatchObject({
+      ok: true,
+      result: {
+        ok: true,
+        replayed: true,
+        value: { firstMessage: { dispatchState: 'rejected', rejection: { kind: 'cancelled' } } }
+      }
+    })
+    const pending = holds.pending('workspace-1')
+    complete(null)
+    await pending
+    expect(rig.adapter.acquire).not.toHaveBeenCalled()
+    expect(rig.adapter.dispatch).not.toHaveBeenCalled()
+  } finally {
+    complete(null)
+  }
 })

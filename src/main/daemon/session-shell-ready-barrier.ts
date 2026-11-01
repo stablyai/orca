@@ -1,3 +1,10 @@
+import type { NativeSetupWrite } from './session-options'
+import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
+import {
+  appendNativeSetupCompletion,
+  nativeSetupCompletionShell,
+  type NativeSetupCompletionShell
+} from '../runtime/orchestration/setup-completion-signal'
 import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import {
   installDeviceAttributesResponder,
@@ -10,6 +17,11 @@ import {
   scanShellStartupOutput,
   type ShellStartupOutputScanState
 } from '../shell-startup-output-scanner'
+import {
+  createShellPromptReadinessProbe,
+  readMatchingPromptShellExecutable,
+  type ShellPromptReadinessProbe
+} from '../shell-prompt-readiness-probe'
 import type { HeadlessEmulator } from './headless-emulator'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { basename } from 'node:path'
@@ -21,11 +33,12 @@ export type SessionShellReadyBarrierDeps = {
   sessionId: string
   subprocess: SubprocessHandle
   responderParser: HeadlessEmulator['responderParser']
+  nativeSetupToken?: string
   shellReadySupported: boolean
   shellReadyTimeoutMs: number | undefined
   installDeviceAttributesFilter(): void
   releaseDeviceAttributesFilter(): void
-  acceptStartupIngress(data: string): void
+  acceptStartupIngress(data: string, removed?: boolean): void
   /** Use an injected file-log sink because detached daemon stdio is ignored. */
   reportReadinessEvent?(event: string, details: Record<string, unknown>): void
 }
@@ -34,9 +47,15 @@ export type SessionShellReadyBarrierDeps = {
 export class SessionShellReadyBarrier {
   private _state: ShellReadyState
   private scanState: ShellStartupOutputScanState | null = null
+  private shellStartupPid: number | null = null
+  private promptReadinessProbe: ShellPromptReadinessProbe | null = null
   private readyTimer: ReturnType<typeof setTimeout> | null = null
   private releaseDeviceAttributesResponder: (() => void) | null = null
-  private preReadyStdinQueue: string[] = []
+  private nativeSetupShell: NativeSetupCompletionShell | undefined
+  private preReadyStdinQueue: {
+    data: string
+    startup?: { command: string; token: string; bracketedPasteSafe: boolean }
+  }[] = []
   private readonly postReadyFlushGate: PostReadyFlushGate
 
   constructor(private readonly deps: SessionShellReadyBarrierDeps) {
@@ -72,29 +91,113 @@ export class SessionShellReadyBarrier {
     return this._state === 'pending' || this.postReadyFlushGate.isPending
   }
 
+  /** Start after startup ingress exists, because probe callbacks may emit immediately. */
+  startPromptReadinessProbe(): void {
+    if (this._state !== 'pending') {
+      return
+    }
+    this.promptReadinessProbe = createShellPromptReadinessProbe({
+      slavePath: this.deps.subprocess.slavePath,
+      shellPath: this.deps.subprocess.shellPath,
+      shellCwd: this.deps.subprocess.shellCwd,
+      shellPathEnv: this.deps.subprocess.shellPathEnv,
+      getShellPid: () => this.shellStartupPid,
+      onPromptReady: (executable) => {
+        this.nativeSetupShell = nativeSetupCompletionShell(executable)
+        this.onShellPromptReady()
+      }
+    })
+  }
+
   /** Queues `data` when the gate is closed; false means the caller must write it through. */
-  tryEnqueue(data: string): boolean {
+  tryEnqueue(data: string, setup?: NativeSetupWrite): boolean {
+    if (setup) {
+      this.writeStartupCommand(setup.command, setup.token, setup.bracketedPasteSafe)
+      return true
+    }
     if (!this.isGatingWrites) {
       return false
     }
-    this.preReadyStdinQueue.push(data)
+    this.preReadyStdinQueue.push({ data })
     return true
+  }
+
+  writeStartupCommand(command: string, token: string, bracketedPasteSafe: boolean): void {
+    const data = buildStartupCommandSubmission(command, { bracketedPasteSafe })
+    if (this.isGatingWrites) {
+      this.preReadyStdinQueue.push({ data, startup: { command, token, bracketedPasteSafe } })
+    } else {
+      const shell = nativeSetupCompletionShell(this.deps.subprocess.shellPath ?? '')
+      this.deps.subprocess.write(
+        buildStartupCommandSubmission(
+          appendNativeSetupCompletion(
+            command,
+            token,
+            this.nativeSetupShell ??
+              (process.platform === 'win32' && (shell === 'cmd' || shell === 'powershell')
+                ? shell
+                : undefined)
+          ),
+          { bracketedPasteSafe }
+        )
+      )
+    }
   }
 
   ingestSubprocessData(data: string): void {
     let releaseStartupDeviceAttributes = false
+    let emitted = false
     if (this._state === 'pending' && this.scanState) {
-      const scanned = scanShellStartupOutput(this.scanState, data)
+      const scanned = scanShellStartupOutput(this.scanState, data, (part, removed) => {
+        emitted = true
+        this.deps.acceptStartupIngress(part, removed)
+      })
       data = scanned.output
+      if (scanned.shellPid) {
+        this.shellStartupPid = scanned.shellPid
+      }
       if (scanned.ready) {
-        this.transitionToReady(scanned.postMarkerBytesObserved)
+        if (this.deps.nativeSetupToken && this.shellStartupPid && process.platform !== 'win32') {
+          void readMatchingPromptShellExecutable({
+            shellPid: this.shellStartupPid,
+            shellPath: this.deps.subprocess.shellPath,
+            shellCwd: this.deps.subprocess.shellCwd ?? process.cwd(),
+            shellPathEnv: this.deps.subprocess.shellPathEnv
+          }).then(
+            (executable) => {
+              if (this._state !== 'pending' || !this.scanState) {
+                return
+              }
+              this.nativeSetupShell = executable
+                ? nativeSetupCompletionShell(executable)
+                : undefined
+              this.transitionToReady(scanned.postMarkerBytesObserved)
+              this.releaseDeviceAttributes()
+            },
+            () => {
+              if (this._state === 'pending' && this.scanState) {
+                this.transitionToReady(scanned.postMarkerBytesObserved)
+                this.releaseDeviceAttributes()
+              }
+            }
+          )
+        } else {
+          this.nativeSetupShell =
+            process.platform === 'win32' ? scanned.nativeSetupShell : undefined
+          this.transitionToReady(scanned.postMarkerBytesObserved)
+        }
         releaseStartupDeviceAttributes = true
       }
     } else {
       this.postReadyFlushGate.notifyData()
     }
 
-    this.deps.acceptStartupIngress(data)
+    if (!emitted) {
+      this.deps.acceptStartupIngress(data)
+    }
+    if (this._state === 'pending' && data.length > 0) {
+      this.promptReadinessProbe?.notifyOutput(data)
+    }
     if (releaseStartupDeviceAttributes) {
       this.releaseDeviceAttributes()
     }
@@ -118,6 +221,11 @@ export class SessionShellReadyBarrier {
     this.deps.releaseDeviceAttributesFilter()
   }
 
+  disposePromptReadinessProbe(): void {
+    this.promptReadinessProbe?.dispose()
+    this.promptReadinessProbe = null
+  }
+
   clearReadyTimer(): void {
     if (this.readyTimer) {
       clearTimeout(this.readyTimer)
@@ -136,12 +244,14 @@ export class SessionShellReadyBarrier {
 
   dispose(): void {
     this.clearReadyTimer()
+    this.disposePromptReadinessProbe()
     this.scanState = null
     this.clearPendingWrites()
   }
 
   private transitionToReady(postMarkerBytesObserved = false): void {
     this._state = 'ready'
+    this.disposePromptReadinessProbe()
     this.scanState = null
     this.clearReadyTimer()
     if (this.preReadyStdinQueue.length === 0) {
@@ -173,16 +283,38 @@ export class SessionShellReadyBarrier {
       timeoutMs: this.deps.shellReadyTimeoutMs ?? SHELL_READY_TIMEOUT_MS
     })
     this._state = 'timed_out'
+    this.disposePromptReadinessProbe()
     this.releaseDeviceAttributes()
     this.releaseHeldBytes()
     this.flushPreReadyQueue()
+  }
+
+  private onShellPromptReady(): void {
+    if (this._state !== 'pending') {
+      return
+    }
+    this.reportReadiness('shell-ready-wrapper-replaced', {})
+    this.releaseHeldBytes()
+    this.transitionToReady(true)
+    this.releaseDeviceAttributes()
   }
 
   private flushPreReadyQueue(): void {
     const queued = this.preReadyStdinQueue
     this.preReadyStdinQueue = []
     for (const data of queued) {
-      this.deps.subprocess.write(data)
+      this.deps.subprocess.write(
+        data.startup
+          ? buildStartupCommandSubmission(
+              appendNativeSetupCompletion(
+                data.startup.command,
+                data.startup.token,
+                this.nativeSetupShell
+              ),
+              { bracketedPasteSafe: data.startup.bracketedPasteSafe }
+            )
+          : data.data
+      )
     }
   }
 }

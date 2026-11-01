@@ -1,3 +1,4 @@
+import type { HostFoundingAttempt } from './host-founding-attempt'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 /**
  * The factories `executeAgentLaunch` is handed: how a surface and a workspace are BUILT once the
@@ -8,11 +9,14 @@ import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create
 import type {
   AgentLaunchIntent,
   AgentLaunchPrompt,
-  AgentLaunchMode
+  AgentLaunchMode,
+  AgentLaunchPromptDisposal,
+  AgentLaunchResult
 } from '../../shared/agent-launch-intent'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
-import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
+import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../shared/agent-launch-preferences'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
@@ -28,13 +32,14 @@ export type AgentLaunchSurfaceFactory = {
     sessionId?: string
     /** Caller-reserved tab ID; omit to use the ID clients derive. */
     tabId?: string
-    /** Keep chat idle until the caller submits its first message. */
+    hostFoundingAttempt?: HostFoundingAttempt
+    firstMessage?: StructuredAgentSessionFirstMessage['body']
     withoutPrompt?: true
-    firstMessage?: StructuredAgentSessionFirstMessage
     signal?: AbortSignal
   }): Promise<AgentLaunchStructuredSurface>
   createTerminalAgent(args: {
     worktreeId: string
+    sequenceTerminalCommand?: AgentLaunchTerminalSequence
     agent: TuiAgent
     options?: Readonly<Record<string, unknown>>
     /** Offer on argv; promptRodeLaunchCommand confirms whether the typed line carried it. */
@@ -77,6 +82,7 @@ export type AgentLaunchStructuredSurface = {
   firstMessage?: { clientMessageId: string }
   /** Older hosts may omit the host-owned tab ID. */
   tabId?: string
+  promptDisposal?: AgentLaunchPromptDisposal
 }
 
 /** Proves no session was committed, permitting terminal fallback. */
@@ -90,13 +96,40 @@ export class AgentLaunchStructuredSessionRefusedError extends Error {
   }
 }
 
+export type AgentLaunchTerminalSequence = (command: string) => {
+  command: string
+  env?: Record<string, string>
+}
+
+export type AgentLaunchWorkspace = {
+  sequenceTerminalCommand?: AgentLaunchTerminalSequence
+  worktreeId: string
+  workspacePath?: string
+  connectionId?: string | null
+  startupTerminalHandle: string | undefined
+  startupTerminalCreation?: RuntimeTerminalCreate
+  startupTerminalPaneKey?: string
+  warning?: string
+  promptRodeLaunchCommand?: boolean
+  created?: CreateWorktreeResult
+}
+
+export type AgentLaunchInitialSurfaceStage = (
+  workspace: AgentLaunchWorkspace
+) => Promise<Pick<AgentLaunchResult, 'outcome'> | void>
+
+/** Creating the workspace, when the intent asks for one. Injected so orchestration keeps recording
+ *  its own worktree stages and residual-resource effects around the same call. */
 export type AgentLaunchWorkspaceFactory = {
   createWorktree(args: {
     create: Readonly<Record<string, unknown>>
     /** Register before announcing the workspace. */
     onWorkspaceCreated?: (worktreeId: string) => void
     promisedAgentChat?: boolean
-    /** Terminal startup runs behind setup; structured launches must await setup explicitly. */
+    initializeSurface?: AgentLaunchInitialSurfaceStage
+    /** Set only when the settled mode is a terminal agent: agent-first creation sequences the
+     *  agent's startup command behind the setup runner, which is how a PTY launch gets its
+     *  wait-for-setup gate. Chats are committed independently of setup. */
     startupAgent: TuiAgent | undefined
     /** The startup command builder measures whether this argv prompt fits. */
     startupPrompt?: string
@@ -109,18 +142,8 @@ export type AgentLaunchWorkspaceFactory = {
     options?: Readonly<Record<string, unknown>>
     /** Account routing overrides merged over the startup agent environment. */
     accountEnv?: Readonly<Record<string, string>>
-  }): Promise<{
-    worktreeId: string
-    /** Host-resolved root, available only after creation. */
-    workspacePath?: string
-    /** Null means local; absent means unresolved. */
-    connectionId?: string | null
-    startupTerminalHandle: string | undefined
-    startupTerminalCreation?: RuntimeTerminalCreate
-    startupTerminalPaneKey?: string
-    warning?: string
-    promptRodeLaunchCommand?: boolean
-  }>
+  }): Promise<AgentLaunchWorkspace>
+
   /** Leave a usable workspace when chat creation has an indeterminate outcome. */
   createRecoveryShell?: (worktreeId: string) => Promise<void>
   /** Folders have no startup terminal; the executor launches their agent after creation. */

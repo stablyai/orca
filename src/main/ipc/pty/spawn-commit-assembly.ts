@@ -90,6 +90,7 @@ export type PtySpawnCommitInput = {
     store: Store | undefined
     worktreeId: string | null | undefined
     shellOverride: string | undefined
+    setupCompletionToken?: string
     rendererLaunchAuthority: { launchToken: string; launchAgent: TuiAgent } | null
     /** The agent a fresh spawn's launch command starts; null for reattaches, adoptions and shells. */
     launchedAgent: TuiAgent | null
@@ -156,6 +157,7 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
         ? {
             tabId,
             leafId: state.metadataLeafId,
+            setupCompletionToken: registration.setupCompletionToken,
             ...(input.preAllocatedHandle ? { terminalHandle: input.preAllocatedHandle } : {}),
             ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
             ...(registration.rendererLaunchAuthority

@@ -10,6 +10,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
 import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
 import type * as RuntimeRpcClientModule from './runtime-rpc-client'
+import { AGENT_LAUNCH_DESKTOP_CREATE_RUNTIME_CAPABILITY } from '../../../shared/agent-launch-runtime-capability'
 
 const mocks = vi.hoisted(() => ({
   createTerminal: vi.fn(),
@@ -35,7 +36,13 @@ vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
 
 vi.mock('./runtime-rpc-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeRpcClientModule>()
-  return { ...actual, runtimeEnvironmentSupportsCapability: mocks.hostAnswersEmptyWorktree }
+  return {
+    ...actual,
+    runtimeEnvironmentSupportsCapability: (_environmentId: string, capability: string) =>
+      capability === AGENT_LAUNCH_DESKTOP_CREATE_RUNTIME_CAPABILITY
+        ? Promise.resolve(false)
+        : mocks.hostAnswersEmptyWorktree()
+  }
 })
 
 vi.mock('./web-session-terminal-orphan-recovery', () => ({
@@ -228,7 +235,24 @@ describe('useWebSessionTabsSync initial-terminal bootstrap across an effect re-r
     resetStaleDocumentVisibilityForTesting()
   })
 
-  // Effect reinstall during workspace switch must not rearm initial-terminal creation while its predecessor is pending (STA-6173).
+  it('does not seed from an empty snapshot while the host owns initial agent creation', async () => {
+    const hook = renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+    await publish(findActiveSubscription(0), {
+      type: 'snapshot',
+      ...emptyActiveSnapshot(1),
+      initialSurfaceLaunch: { launchId: 'launch-1', agent: 'claude' }
+    })
+    expect(mocks.createTerminal).not.toHaveBeenCalled()
+    hook.unmount()
+  })
+
+  // STA-6173, second defect. Returning to an emptied runtime-owned workspace re-runs the active
+  // session-tabs effect (its environment / connection-generation / pairing / session-ready deps all
+  // settle during a switch), installing a fresh subscription closure. The old per-closure
+  // `requestedInitialTerminal` flag reset to false in the new closure, so a second empty frame
+  // seeded a second terminal while the first create was still in flight. The module-scoped latch
+  // outlives the closures, so exactly one create is issued.
   it('does not seed a second terminal when the effect re-runs before the first create settles', async () => {
     const pendingCreate = createDeferred<unknown>()
     mocks.createTerminal.mockReturnValue(pendingCreate.promise)

@@ -140,4 +140,95 @@ describe('structured status feed execution authority lifecycle', () => {
     subscription(1).emit({ type: 'snapshot', sessions: [owned] })
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBe(true)
   })
+
+  it('does not notify or reallocate already unowned historical rows on teardown', async () => {
+    const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
+    const deactivate = feed.activate()
+    await vi.advanceTimersByTimeAsync(0)
+    subscription().emit({ type: 'snapshot', sessions: [done] })
+    const previous = feed.getSnapshot()
+    const listener = vi.fn()
+    feed.subscribe(listener)
+    deactivate()
+    expect(feed.getSnapshot()).toBe(previous)
+    expect(listener).not.toHaveBeenCalled()
+  })
+  it('keeps setup independent of naming/Sleep, folds aliases only within its source and resets empty sources', async () => {
+    const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
+    const other = getStructuredAgentSessionStatusFeed({
+      kind: 'environment',
+      environmentId: 'other'
+    })
+    const deactivate = feed.activate()
+    await vi.advanceTimersByTimeAsync(0)
+    const listener = vi.fn()
+    feed.subscribe(listener)
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBeUndefined()
+    subscription().emit({
+      type: 'snapshot',
+      sessions: [],
+      setupHeldWorkspaceIds: ['repo::C:\\Work']
+    })
+    expect(feed.getSessionSleepState('not-yet-restored')).toBeUndefined()
+    expect(feed.getNamingActive('running')).toBeNull()
+    expect(feed.isWorkspaceSetupHeld('repo::c:/Work')).toBe(true)
+    expect(feed.isWorkspaceSetupHeld('other-repo::c:/Work')).toBe(false)
+    expect(other.isWorkspaceSetupHeld('repo::c:/Work')).toBeUndefined()
+    subscription().emit({
+      type: 'snapshot',
+      sessions: [],
+      namingActiveSessionIds: ['running'],
+      setupHeldWorkspaceIds: ['repo::C:/Work']
+    })
+    expect(feed.getSessionSleepState('not-yet-restored')).toBeUndefined()
+    subscription().emit({ type: 'snapshot', sessions: [] })
+    expect(feed.getSessionSleepState('not-yet-restored')).toBeNull()
+    expect(feed.getNamingActive('running')).toBe(true)
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBe(true)
+    subscription().emit({ type: 'snapshot', sessions: [], setupHeldWorkspaceIds: [] })
+    expect(feed.getNamingActive('running')).toBe(true)
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBe(false)
+    subscription().emit({
+      type: 'snapshot',
+      sessions: [],
+      setupHeldWorkspaceIds: ['repo::C:/Work']
+    })
+    subscription().emit({ type: 'end' })
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBeUndefined()
+    expect(listener).toHaveBeenCalled()
+    subscription().emit({
+      type: 'snapshot',
+      sessions: [],
+      setupHeldWorkspaceIds: ['repo::C:/Work']
+    })
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBeUndefined()
+    deactivate()
+  })
+
+  it('does not copy or enumerate unrelated session summaries for N/10N setup frames', async () => {
+    const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
+    feed.activate()
+    await vi.advanceTimersByTimeAsync(0)
+    for (const population of [2, 20]) {
+      subscription().emit({
+        type: 'snapshot',
+        sessions: Array.from({ length: population }, (_, index) => ({
+          ...done,
+          sessionId: `resting-${index}`
+        }))
+      })
+      const previous = feed.getSnapshot()
+      const iterate = vi.spyOn(previous, Symbol.iterator)
+      for (let index = 0; index < population; index++) {
+        subscription().emit({
+          type: 'snapshot',
+          sessions: [],
+          setupHeldWorkspaceIds: index % 2 ? [] : ['workspace']
+        })
+        expect(feed.getSnapshot()).toBe(previous)
+      }
+      expect(iterate).not.toHaveBeenCalled()
+      iterate.mockRestore()
+    }
+  })
 })

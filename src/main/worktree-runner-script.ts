@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync, chmodSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { shouldWaitForSetupBeforeAgentStartup } from '../shared/setup-agent-startup-policy'
@@ -130,6 +131,10 @@ async function createWorktreeRunnerScript(args: {
         envVars[key] = nativeWindowsPathToPosixShellPath(value)
       }
     }
+  }
+
+  if (runnerBaseName === 'setup-runner') {
+    envVars.ORCA_SETUP_COMPLETION_TOKEN = `native:${randomUUID()}`
   }
 
   return {

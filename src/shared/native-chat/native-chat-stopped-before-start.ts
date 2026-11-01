@@ -16,7 +16,7 @@ import type { NativeChatBlock, NativeChatMessage } from '../native-chat-types'
 /** Presentation key for the notice after a send stopped before execution. */
 export const NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION = 'stopped-before-start'
 /** Its words where a client has no catalog of its own (the phone). */
-export const NATIVE_CHAT_STOPPED_BEFORE_START_TEXT = 'Stopped manually'
+export const NATIVE_CHAT_STOPPED_BEFORE_START_TEXT = 'Interrupted'
 
 /** That row: it outlives any turn it sits in, as the send it follows does. */
 export function isStoppedBeforeStartBlock(block: NativeChatBlock): boolean {

@@ -22,6 +22,7 @@ export function appendDaemonStreamData(
     last?.sessionId === sessionId &&
     !last.control &&
     !last.transformed &&
+    (last.sequenceChars === 0) === (options.rawLength === 0) &&
     options.transformed !== true
   ) {
     last.data += data

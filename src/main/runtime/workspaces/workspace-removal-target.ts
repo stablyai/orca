@@ -1,6 +1,5 @@
-import { applyRemoteViewerLaunchEnv } from '../remote-viewer-launch-env'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
+import { OrcaRuntimeWithTerminalLaunchOptions } from './workspace-terminal-launch-options'
 import type {
   RemoveManagedWorktreeOptions,
   RuntimeWorktreeRemovalTarget
@@ -26,8 +25,6 @@ import type {
   RuntimeTerminalRename,
   RuntimeTerminalSetPaneTitle
 } from '../../../shared/runtime-types'
-import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
-import type { TerminalCreateOptions } from '../runtime-terminal-contracts'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -43,13 +40,9 @@ import { interruptedLocalWorktreeRemovalJob } from '../runtime-interrupted-local
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { retryFailedRemovalUnlessRegistered } from '../../worktree-removal-leftover'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import {
-  resolveAgentTerminalCreateOptions,
-  withHostAccountLaunchEnv
-} from '../runtime-agent-terminal-startup'
 import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
 
-export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
+export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithTerminalLaunchOptions {
   protected abstract resolveExplicitWorktreeIdScoped(
     worktreeId: string,
     requiredHostId?: ExecutionHostId
@@ -303,26 +296,5 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
       throw new Error('runtime_unavailable')
     }
     return { handle, tabId: leaf.tabId, leafId: leaf.leafId, title: normalizedTitle }
-  }
-
-  async resolveAgentTerminalCreateOptions(
-    workspace: TerminalWorkspaceLaunchScope,
-    opts: TerminalCreateOptions
-  ): Promise<TerminalCreateOptions> {
-    const resolvedLaunch = await resolveAgentTerminalCreateOptions(workspace, opts, {
-      store: this.store,
-      hostIdentity: this.runtimeId,
-      toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
-    })
-    const launch = applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
-    // An SSH workspace's shell runs on that machine, where this distro's account paths mean nothing.
-    if (workspace.connectionId) {
-      return launch
-    }
-    if (launch.launchAgent) {
-      await this.accounts.prepareHostAgentLaunch(launch.launchAgent)
-    }
-    const hostLaunchEnv = this.accounts.hostLaunchEnvFor(launch.launchAgent)
-    return withHostAccountLaunchEnv(opts, launch, hostLaunchEnv)
   }
 }

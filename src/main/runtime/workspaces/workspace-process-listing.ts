@@ -1,3 +1,4 @@
+import { pendingWorkspaceSetupAgentStart } from '../workspace-setup-agent-start-holds'
 import { structuredNativeWorkReaders } from '../structured-native-work-readers'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
@@ -58,7 +59,6 @@ import {
   runtimeVisibleRepos,
   withoutHiddenHosts
 } from '../runtime-visible-catalog'
-import { isWorkspaceNotificationMuted } from '../workspace-notification-mute'
 import { WorkerAutoReleaseActivity } from '../orchestration/worker-auto-release-activity'
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktreePsDependencies {
@@ -197,17 +197,6 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     })
   }
 
-  isWorkspaceNotificationMuted(workspaceId: string): boolean {
-    const store = this.store
-    return (
-      !!store &&
-      isWorkspaceNotificationMuted(
-        { store, resolvedWorktrees: this.resolvedWorktrees.peek()?.worktrees ?? null },
-        workspaceId
-      )
-    )
-  }
-
   /** Admission needs only the ledger; a later chat host must reuse this store. */
   async openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> {
     const { store } = await openAgentSessionRecordStoreOnce({
@@ -310,7 +299,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       ...structuredNativeWorkReaders(
         () => this.getOrchestrationDbIfAvailable?.() ?? null,
         () => this.getExistingOrchestrationDb()
-      )
+      ),
+      setupHold: (workspaceId) =>
+        pendingWorkspaceSetupAgentStart(workspaceId, () =>
+          this.workspaceSetupAgentStarts.pending(workspaceId)
+        )
     })
   }
 }

@@ -1,8 +1,10 @@
+import type { createSetupCompletionObservation } from '../orchestration/setup-completion-signal'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/structured-mailbox-pointer-delivery'
 
 import { createStructuredMailboxPointerHost } from '../orchestration/structured-mailbox-pointer-host'
 import { localOrchestrationCliCommand } from '../orchestration/cli-command'
 import { RuntimeOrchestrationSenderNames } from '../runtime-orchestration-sender-names'
+import { WorkspaceSetupAgentStartHolds } from '../workspace-setup-agent-start-holds'
 import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address'
 import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
@@ -45,9 +47,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { TUI_IDLE_QUIESCENCE_MS } from '../orca-runtime-postlude'
 import { screenClearsBlockedTail } from '../blocked-tail-screen-clear'
-import { conversationRecordReader } from '../orchestration/structured-session-lineage'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { peekOpenedAgentSessionRecordStore } from '../agent-session-record-store-slot'
+import { openedConversationRecordReader } from '../orchestration/structured-session-lineage'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
   protected readonly stopRequestedPtyIds = new Set<string>()
@@ -129,11 +129,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
     getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
     getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
-    getSessionRecords: () => {
-      const store =
-        getStructuredAgentSessionHost()?.deps.store ?? peekOpenedAgentSessionRecordStore()
-      return store ? conversationRecordReader(store) : null
-    }
+    getSessionRecords: openedConversationRecordReader
   })
 
   protected readonly terminalList = new RuntimeTerminalList({
@@ -341,5 +337,10 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   // A fresh launch's pending composer watch; submits await it, and it is dropped once settled.
   protected launchComposerReadyByPtyId = new Map<string, Promise<boolean>>()
 
-  protected setupCompletionTokenByPtyId = new Map<string, string>()
+  protected setupCompletionTokenByPtyId = new Map<
+    string,
+    ReturnType<typeof createSetupCompletionObservation>
+  >()
+
+  readonly workspaceSetupAgentStarts = new WorkspaceSetupAgentStartHolds()
 }

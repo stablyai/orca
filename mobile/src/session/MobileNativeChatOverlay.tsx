@@ -22,6 +22,8 @@ import { MobileNativeChatNoticeContext } from './mobile-native-chat-notice-conte
 import type { MobileNativeChatImageSource } from './native-chat/visual/mobile-native-chat-image-preview'
 
 type Props = {
+  setupAgentStartHeld?: boolean
+  setupInputHeld?: boolean
   controller: MobileNativeChatController
   imageSource?: MobileNativeChatImageSource
   activeSessionTabId?: string | null
@@ -50,6 +52,8 @@ type Props = {
 // Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
 export function MobileNativeChatOverlay({
   controller,
+  setupAgentStartHeld = false,
+  setupInputHeld = setupAgentStartHeld,
   imageSource,
   activeSessionTabId,
   onOpenFile,
@@ -183,6 +187,8 @@ export function MobileNativeChatOverlay({
               <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
                 <MobileNativeChatNoticeContext.Provider value={noticeNames}>
                   <MobileNativeChatView
+                    setupAgentStartHeld={setupAgentStartHeld}
+                    setupInputHeld={setupInputHeld}
                     messages={session.messages}
                     folded={folded}
                     status={session.status}

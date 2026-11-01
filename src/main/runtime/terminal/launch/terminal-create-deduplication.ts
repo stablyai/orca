@@ -1,3 +1,4 @@
+import type { AgentLaunchTerminalSequence } from '../../../agent-launch/agent-launch-surface-factories'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -180,6 +181,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       prompt: string
       title?: string
       extraAgentArgs?: string
+      sequenceTerminalCommand?: AgentLaunchTerminalSequence
       suppressStartupUpdatePrompt?: boolean
       /** Run now is the user's act; a scheduled run is background and a stopped WSL distro holds it. */
       wslUserAct?: true
@@ -214,6 +216,9 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     const terminal = await this.createTerminal(
       `id:${worktree.id}`,
       {
+        ...(opts.sequenceTerminalCommand
+          ? { sequenceTerminalCommand: opts.sequenceTerminalCommand }
+          : {}),
         command: startup.startup.command,
         env: startup.startup.env,
         ...(startup.startup.launchConfig ? { launchConfig: startup.startup.launchConfig } : {}),

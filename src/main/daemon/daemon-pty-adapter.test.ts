@@ -138,7 +138,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         seq: query.length,
         transformed: true
       })
-      expect(onData).toHaveBeenCalledWith({ id, data: 'prompt' })
+      expect(onData).toHaveBeenCalledWith({ id, data: 'prompt', sequenceChars: 6, seq: 13 })
       await expect(adapter.getBufferSnapshot(id)).resolves.toMatchObject({
         data: expect.not.stringContaining(']10;rgb')
       })
@@ -665,7 +665,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateData('hello')
 
       await waitFor(() => dataPayloads.length > 0)
-      expect(dataPayloads[0]).toEqual({ id, data: 'hello' })
+      expect(dataPayloads[0]).toEqual({ id, data: 'hello', sequenceChars: 5, seq: 5 })
     })
 
     it('coalesces burst data events before serializing daemon stream output', async () => {
@@ -678,7 +678,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateData('c')
 
       await waitFor(() => dataPayloads.length > 0)
-      expect(dataPayloads).toEqual([{ id, data: 'abc' }])
+      expect(dataPayloads).toEqual([{ id, data: 'abc', sequenceChars: 3, seq: 3 }])
     })
   })
 

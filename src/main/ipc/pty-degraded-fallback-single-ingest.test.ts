@@ -114,8 +114,8 @@ describe('degraded daemon with in-process fallback', () => {
       await vi.advanceTimersByTimeAsync(50)
 
       expect(onPtyData.mock.calls).toEqual([
-        [id, 'frame', expect.any(Number), 5, undefined],
-        ['daemon-pty', 'daemon', expect.any(Number), 6, undefined]
+        [id, 'frame', expect.any(Number), 5, false, 5],
+        ['daemon-pty', 'daemon', expect.any(Number), 6, undefined, undefined]
       ])
       expect(runtime.getPtyOutputSequence(id)).toBe(5)
       expect(runtime.getPtyOutputSequence('daemon-pty')).toBe(6)

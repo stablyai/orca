@@ -3,7 +3,6 @@ import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-p
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { DispatchContextRow, RunRow, TaskRow } from '../../../../orchestration/types'
 import type {
@@ -21,6 +20,7 @@ import { assertOrchestrationWorktreeCreationSupported } from './folder-worktree-
 import { resolveWorkerWorktreeCreationTarget } from './worker-worktree-creation'
 import type { WorkerStartInput } from './worker-start-schema'
 import {
+  describeWorkerReadinessFailure,
   persistGatedSetupSpawnFailure,
   persistWorkerReadinessStage,
   persistWorkerSetupWaitOutcome
@@ -161,6 +161,7 @@ export async function startLocalWorker(args: {
   }
   let terminalHandle = params.terminal
   let placed: Awaited<ReturnType<typeof placeWorkerAgent>> | undefined
+  let createdSetupReceipt: NonNullable<typeof placed>['setupReceipt'] | undefined
   let failedStage = 'terminal_create'
   const onStage = (stage: string) => {
     failedStage = stage
@@ -180,6 +181,9 @@ export async function startLocalWorker(args: {
       agent,
       launchPreferences: launch.preferences,
       effects,
+      onSetupReceipt: (receipt) => {
+        createdSetupReceipt = receipt
+      },
       onStage,
       followUp: args.followUp
     })
@@ -230,13 +234,7 @@ export async function startLocalWorker(args: {
         if (setupReceipt.state === 'failed') {
           failedStage = 'setup_wait'
         }
-        throw new Error(
-          wait.blockedReason
-            ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
-            : structuredSession
-              ? `Setup did not finish before the structured worker started (${wait.status}).`
-              : `Agent did not become ready (${wait.status}).`
-        )
+        throw new Error(describeWorkerReadinessFailure(wait, !!structuredSession))
       }
     }
     const terminalAuthority = authority ?? requireWorkerAuthority(runtime, terminalHandle)
@@ -286,7 +284,7 @@ export async function startLocalWorker(args: {
       dispatchId: started.dispatch.id,
       failedStage,
       error,
-      setup: placed?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
+      setup: placed?.setupReceipt ?? createdSetupReceipt ?? EXISTING_WORKTREE_SETUP,
       launch: launch.receipt,
       mode
     })

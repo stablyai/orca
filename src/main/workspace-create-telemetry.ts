@@ -101,7 +101,11 @@ export type RuntimeWorkspaceCreateEvents = {
 
 /** Settle concurrency counts before returning, so subsequent preparation work is excluded. */
 export async function trackRuntimeWorkspaceCreate<T>(
-  request: { telemetrySource?: unknown; baseBranch?: string },
+  request: {
+    telemetrySource?: unknown
+    baseBranch?: string
+    telemetryEntryPoint?: WorkspaceCreateEntryPoint
+  },
   perform: (events: RuntimeWorkspaceCreateEvents) => Promise<T>
 ): Promise<T> {
   const session: { current?: WorkspaceCreateTelemetry } = {}
@@ -110,7 +114,7 @@ export async function trackRuntimeWorkspaceCreate<T>(
       begin(repoPath) {
         session.current = beginWorkspaceCreateTelemetry({
           source: request.telemetrySource,
-          entryPoint: 'runtime',
+          entryPoint: request.telemetryEntryPoint ?? 'runtime',
           repoPath,
           fromExistingBranch:
             typeof request.baseBranch === 'string' && request.baseBranch.length > 0,

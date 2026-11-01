@@ -74,3 +74,8 @@ export async function resolveManagedWorktreeCreateStartup(
     effectiveDraftPaste
   }
 }
+
+// A create someone asked for starts its terminals as theirs; an automation's stay background.
+export function wslUserAct(args: RuntimeManagedWorktreeCreateArgs): { wslUserAct?: true } {
+  return args.wslUserAct ? { wslUserAct: true } : {}
+}

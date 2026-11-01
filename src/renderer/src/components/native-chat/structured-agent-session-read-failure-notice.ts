@@ -1,4 +1,7 @@
-// Render history refusals through the notice table, never raw host messages or codes.
+import type { useStructuredAgentSession } from './use-structured-agent-session'
+import type { useNativeChatHostOutage } from './use-native-chat-host-outage'
+// What the structured chat says when reading its history failed: the notice table's words for the
+// refusal the read met, never the host's message or code.
 
 import {
   agentSessionReadHistoryRefusalParts,
@@ -28,4 +31,13 @@ export function structuredAgentSessionReadFailureNotice(
     named: refusal?.details?.reason !== undefined,
     final: isFinalAgentSessionReadRefusal(refusal)
   }
+}
+
+export function structuredSessionReadFailure(
+  controller: Pick<ReturnType<typeof useStructuredAgentSession>, 'status' | 'readRefusal'>,
+  hostOutage: ReturnType<typeof useNativeChatHostOutage>
+): StructuredAgentSessionReadFailureNotice | null {
+  return controller.status === 'error' && !(hostOutage && !controller.readRefusal)
+    ? structuredAgentSessionReadFailureNotice(controller.readRefusal)
+    : null
 }

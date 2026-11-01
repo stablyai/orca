@@ -1,9 +1,22 @@
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { RuntimeTerminalWaitBlockedReason } from '../../../../../../shared/runtime-terminal-contracts'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import {
   applyWaitForSetupOutcome,
   type WorkerEffect,
   type WorkerSetupReceipt
 } from './worker-topology'
+
+export function describeWorkerReadinessFailure(
+  wait: { status: string; blockedReason?: RuntimeTerminalWaitBlockedReason },
+  structuredSession: boolean
+): string {
+  return wait.blockedReason
+    ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
+    : structuredSession
+      ? `Setup did not finish before the structured worker started (${wait.status}).`
+      : `Agent did not become ready (${wait.status}).`
+}
 
 function residualWorkerEffects(effects: WorkerEffect[]): WorkerEffect[] {
   // 'reused_agent_terminal' is the retired verb agent-first creation used for its own agent

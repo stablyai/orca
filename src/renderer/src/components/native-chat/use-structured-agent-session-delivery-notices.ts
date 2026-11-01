@@ -1,3 +1,5 @@
+import type { useStructuredAgentSession } from './use-structured-agent-session'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { useEffect, useMemo, useRef } from 'react'
 import type {
   AgentJournalRenderItem,
@@ -94,4 +96,31 @@ function sameNoticesKept(
     kept.set(id, same ? before : notice)
   }
   return allKept ? previous : kept
+}
+
+export function useStructuredAgentSessionPaneDelivery(
+  controller: Pick<
+    ReturnType<typeof useStructuredAgentSession>,
+    'submissions' | 'journalItems' | 'pending' | 'queuedMessages'
+  >,
+  agent: AgentType,
+  agentLabel: string
+) {
+  const needsFailureFacts =
+    controller.queuedMessages.cards.some((card) => card.state === 'returned') ||
+    controller.submissions.some(
+      (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
+    )
+  const startFailures = useStructuredAgentSessionStartFailureFacts(
+    controller.journalItems,
+    needsFailureFacts || agent === 'claude'
+  )
+  const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
+    pending: controller.pending,
+    submissions: controller.submissions,
+    journalItems: controller.journalItems,
+    startFailures,
+    agentName: agentLabel
+  })
+  return { startFailures, deliveryNotices }
 }

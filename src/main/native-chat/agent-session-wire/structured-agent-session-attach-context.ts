@@ -71,4 +71,5 @@ export type StructuredAgentSessionAttachOptions = {
   startupAttemptId?: string
   /** The attach made its child the session's. */
   onPublished?: () => void
+  publishTab?: () => Promise<void>
 }

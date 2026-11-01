@@ -484,15 +484,18 @@ describe('OrcaRuntimeService', () => {
       ]
     })
 
+    const scanEntered = Promise.withResolvers<void>()
     let releaseListWorktrees = () => {}
     vi.mocked(listWorktrees).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           releaseListWorktrees = () => resolve(MOCK_GIT_WORKTREES)
+          scanEntered.resolve()
         })
     )
 
     const listPromise = runtime.listTerminals('branch:feature/foo')
+    await scanEntered.promise
     runtime.markRendererReloading(1)
     releaseListWorktrees()
 
@@ -533,15 +536,18 @@ describe('OrcaRuntimeService', () => {
       ]
     })
 
+    const scanEntered = Promise.withResolvers<void>()
     let releaseListWorktrees = () => {}
     vi.mocked(listWorktrees).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           releaseListWorktrees = () => resolve(MOCK_GIT_WORKTREES)
+          scanEntered.resolve()
         })
     )
 
     const stopPromise = runtime.stopTerminalsForWorktree('branch:feature/foo')
+    await scanEntered.promise
     runtime.markRendererReloading(1)
     releaseListWorktrees()
 

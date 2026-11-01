@@ -1,5 +1,6 @@
 // Share one read-only host status stream per target. Retain latest summaries across disconnect and merge fresh snapshots; tab maps own visibility, so this feed never retracts summaries.
 
+import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-workspace-sleep'
 import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
 import {
@@ -26,6 +27,7 @@ export type StructuredAgentSessionStatusFeedOwner = {
   getAssociationRevision: () => number
   getSessionSleepState: (sessionId: string) => number | null | undefined
   getNamingActive: (sessionId: string) => boolean | null
+  isWorkspaceSetupHeld: (workspaceId: string) => boolean | undefined
   getSessionObservation: (sessionId: string) => 'live' | 'unverifiable'
   subscribe: (listener: () => void) => () => void
 }
@@ -46,6 +48,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   let names: AgentSessionConversationNames = new Map()
   const associations = new AgentSessionAssociationObservation()
   let namingActiveSessionIds: Set<string> | null = null
+  let setupHeldWorkspaceIds: Set<string> | null = null
   const confirmedSessions = new Set<string>()
   // Disconnect revokes live execution, but each chat's last Sleep answer still holds.
   const knownSleep = new Map<string, number | null>()
@@ -68,8 +71,12 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   }
   const applyEvent = (event: AgentSessionStatusEvent): void => {
     if (event.type === 'snapshot') {
+      if (event.setupHeldWorkspaceIds !== undefined || setupHeldWorkspaceIds === null) {
+        setupHeldWorkspaceIds = new Set(event.setupHeldWorkspaceIds?.map(worktreeIdentityKey))
+      }
       // Naming metadata precedes the full status snapshot and says nothing about Sleep.
-      sleepResolved ||= event.namingActiveSessionIds === undefined
+      sleepResolved ||=
+        event.namingActiveSessionIds === undefined && event.setupHeldWorkspaceIds === undefined
       reconnectAttempt = 0
       if (event.namingActiveSessionIds !== undefined) {
         namingActiveSessionIds = new Set(event.namingActiveSessionIds)
@@ -92,6 +99,14 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     }
     associations.observe(event)
     names = foldAgentSessionConversationNames(names, event)
+    if (
+      event.type === 'snapshot' &&
+      event.setupHeldWorkspaceIds !== undefined &&
+      event.sessions.length === 0
+    ) {
+      emit()
+      return
+    }
     setSnapshot(foldAgentSessionStatusEvent(snapshot, event))
   }
   const active = (candidate: number): boolean => activations.size > 0 && candidate === generation
@@ -132,6 +147,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     }
     generation += 1
     namingActiveSessionIds = null
+    setupHeldWorkspaceIds = null
     confirmedSessions.clear()
     revokeSnapshotOwnership()
     emit()
@@ -195,6 +211,9 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
         if (!active(candidate)) {
           return
         }
+        if (!supported) {
+          setupHeldWorkspaceIds = new Set()
+        }
         if (!marksSleep || !supported) {
           sleepResolved = true
           emit()
@@ -216,6 +235,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     reconnectAttempt = 0
     // Teardown has no active readers; next subscription owns re-confirmation.
     namingActiveSessionIds = null
+    setupHeldWorkspaceIds = null
     confirmedSessions.clear()
   }
 
@@ -241,6 +261,8 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       return known !== undefined ? known : sleepResolved ? null : undefined
     },
     getNamingActive: (sessionId) => namingActiveSessionIds?.has(sessionId) ?? null,
+    isWorkspaceSetupHeld: (workspaceId) =>
+      setupHeldWorkspaceIds?.has(worktreeIdentityKey(workspaceId)),
     getSessionObservation: (sessionId) =>
       confirmedSessions.has(sessionId) ? 'live' : 'unverifiable',
     subscribe: (listener) => {

@@ -1,4 +1,5 @@
 import path from 'node:path'
+import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { Worktree } from '../../../shared/worktree/types'
@@ -12,6 +13,10 @@ import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bri
 import { loadWebRuntimeSessionTabsApplyModulesForTests } from '@/runtime/web-runtime-session-snapshot'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcClient>()),
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => false)
+}))
 
 const initialAppStoreState = useAppStore.getState()
 const WORKTREE_PATH = path.join('workspace', 'feature')

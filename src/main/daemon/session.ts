@@ -1,27 +1,28 @@
+import { SessionSnapshots } from './session-snapshots'
 import { createSessionInitialOutput } from './session-initial-output'
 import { isValidPtySize } from './daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
-import { createSessionOutputPipeline, createSessionShellReady } from './session-output-pipeline'
+import {
+  createSessionOutputPipeline,
+  createSessionShellReady,
+  createSessionStartupIngress
+} from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
 import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
 import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
-import type { SessionOptions } from './session-options'
+import type { SessionOptions, NativeSetupWrite } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
-import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 
-import type {
-  SessionState,
-  ShellReadyState,
-  TakePendingOutputResult,
-  TerminalSnapshot
-} from './types'
+import type { SessionState, ShellReadyState, TakePendingOutputResult } from './types'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
-export class Session {
+export class Session extends SessionSnapshots {
+  readonly initialAttachToken: symbol | undefined
   readonly sessionId: string
   readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
@@ -36,7 +37,7 @@ export class Session {
   private _disposed = false
   private subprocess: SubprocessHandle
   private readonly onSessionExit?: (code: number) => void
-  private readonly output: SessionOutputPlane
+  protected readonly output: SessionOutputPlane
   private readonly producerPause: SessionProducerPause
   private readonly shellReady: SessionShellReadyBarrier
   private readonly termination: SessionTerminationController
@@ -44,6 +45,7 @@ export class Session {
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
 
   constructor(opts: SessionOptions) {
+    super()
     this.initialOutput = createSessionInitialOutput(opts)
     this.sessionId = opts.sessionId
     this.terminalHandle = opts.terminalHandle ?? null
@@ -56,6 +58,9 @@ export class Session {
     const isAlive = () => !this._disposed && this._state !== 'exited'
     const pipeline = createSessionOutputPipeline(opts, isAlive)
     this.output = pipeline.output
+    this.initialAttachToken = opts.initialClient
+      ? this.output.attachClient(opts.initialClient)
+      : undefined
     this.recoveryBarrier = pipeline.recoveryBarrier
     this.producerPause = new SessionProducerPause(this.subprocess)
     this.termination = new SessionTerminationController({
@@ -65,16 +70,12 @@ export class Session {
       releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
     })
 
-    this.shellReady = createSessionShellReady(opts, this.output, (data) =>
-      this.startupIngress.accept(data)
+    this.shellReady = createSessionShellReady(opts, this.output, (data, removed) =>
+      removed ? this.startupIngress.interruptPaintedText() : this.startupIngress.accept(data)
     )
 
-    this.startupIngress = new PtyStartupIngress({
-      ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
-      ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
-      write: (data) => this.subprocess.write(data),
-      onEmission: (emission) => this.recoveryBarrier.accept(emission)
-    })
+    this.startupIngress = createSessionStartupIngress(opts, this.subprocess, this.recoveryBarrier)
+    this.shellReady.startPromptReadinessProbe()
     try {
       this.subprocess.onData((data) => {
         if (!this._disposed) {
@@ -145,8 +146,8 @@ export class Session {
   }
 
   /** Orca's own startup command: held by the shell-ready barrier until the shell can read it. */
-  writeStartupCommand(data: string): void {
-    if (this._state !== 'exited' && !this._disposed && !this.shellReady.tryEnqueue(data)) {
+  writeStartupCommand(data: string, setup?: NativeSetupWrite): void {
+    if (this._state !== 'exited' && !this._disposed && !this.shellReady.tryEnqueue(data, setup)) {
       this.subprocess.write(data)
     }
   }
@@ -204,19 +205,6 @@ export class Session {
   detachAllClients(): void {
     this.output.clearClients()
     this.producerPause.release({ resume: true })
-  }
-
-  getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
-    this.startupIngress.snapshotBarrier()
-    return this.output.getSnapshot(opts)
-  }
-
-  getPartialEscapeTailAnsi(): string {
-    return this.output.getPartialEscapeTailAnsi()
-  }
-
-  getAppliedSize(): { cols: number; rows: number } | null {
-    return this.output.getAppliedSize()
   }
 
   takePendingOutput(

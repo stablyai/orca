@@ -30,8 +30,9 @@ type SendRuntime = {
   activity: ReturnType<ReturnType<typeof getStructuredAgentSessionReadOwner>['trackSend']>
   target: RuntimeClientTarget
   abort: AbortController
-  deadline: ReturnType<typeof setTimeout>
+  deadline: ReturnType<typeof setTimeout> | null
   resolve: (outcome: StructuredAgentSessionSendOutcome) => void
+  beforeFinish?: (outcome: StructuredAgentSessionSendOutcome) => void
 }
 
 export const runtimes = new Map<string, SendRuntime>()
@@ -44,9 +45,22 @@ export function finish(
   const runtime = runtimes.get(entry.clientMessageId)
   if (runtime) {
     runtime.activity.settle(outcome === 'unconfirmed')
-    clearTimeout(runtime.deadline)
+    if (runtime.deadline !== null) {
+      clearTimeout(runtime.deadline)
+    }
     runtimes.delete(entry.clientMessageId)
+    try {
+      runtime.beforeFinish?.(outcome)
+    } catch (error) {
+      console.error('[native-chat-send] settlement observer failed', error)
+    }
     runtime.resolve(outcome)
+    if (
+      runtime.beforeFinish &&
+      !findStructuredAgentSessionPendingSend(entry.sessionId, entry.clientMessageId)
+    ) {
+      return
+    }
   }
   updateStructuredAgentSessionPendingSend(entry.sessionId, entry.clientMessageId, keep ?? null)
 }
@@ -139,10 +153,12 @@ export type StructuredAgentSessionSent = {
   outcome: Promise<StructuredAgentSessionSendOutcome>
 }
 
+/** Holds the send's runtime; deferred creates start their budget only at an actual target. */
 export function beginSend(
   entry: StructuredAgentSessionPendingSend,
   target: RuntimeClientTarget,
-  budgetMs = STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS
+  budgetMs: number | null = STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS,
+  beforeFinish?: SendRuntime['beforeFinish']
 ): StructuredAgentSessionSent {
   const { clientMessageId, sessionId } = entry
   const outcome = new Promise<StructuredAgentSessionSendOutcome>((resolve) => {
@@ -150,9 +166,24 @@ export function beginSend(
       activity: getStructuredAgentSessionReadOwner(sessionId, target).trackSend(clientMessageId),
       target,
       abort: new AbortController(),
-      deadline: setTimeout(() => onDeadline(sessionId, clientMessageId), budgetMs),
-      resolve
+      deadline:
+        budgetMs === null
+          ? null
+          : setTimeout(() => onDeadline(sessionId, clientMessageId), budgetMs),
+      resolve,
+      beforeFinish
     })
   })
   return { clientMessageId, outcome }
+}
+
+/** The caller has proved the actual target; start its ordinary budget at most once. */
+export function activateSend(entry: StructuredAgentSessionPendingSend): void {
+  const runtime = runtimes.get(entry.clientMessageId)
+  if (runtime && runtime.deadline === null) {
+    runtime.deadline = setTimeout(
+      () => onDeadline(entry.sessionId, entry.clientMessageId),
+      STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS
+    )
+  }
 }

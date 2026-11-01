@@ -87,7 +87,7 @@ export function dropOldestQueuedForSession(
       }
       continue
     }
-    if (entry.data.length <= toDrop) {
+    if (entry.transformed || entry.data.length <= toDrop) {
       toDrop -= entry.data.length
       droppedSequenceChars += entry.sequenceChars ?? entry.data.length
       salvageIntoCap(entry.data)

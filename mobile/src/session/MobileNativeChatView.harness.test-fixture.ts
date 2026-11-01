@@ -28,6 +28,8 @@ export type Overrides = {
   sendErrorMessage?: string | null
   onClearSendError?: () => void
   inputLockReason?: 'disconnected' | 'waiting' | null
+  setupAgentStartHeld?: boolean
+  setupInputHeld?: boolean
   composerText?: string
   onSend?: (text: string) => Promise<boolean>
   pending?: Parameters<typeof MobileNativeChatView>[0]['pending']

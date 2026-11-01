@@ -254,25 +254,21 @@ export type AgentSessionStatusSummary = {
 }
 
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
-export type AgentSessionNamingError = {
-  message: string
-  failedAt: number
-  /** Names Orca-authored copy; `message` stays English for older clients. */
-  messageCode?: string
-}
+export type {
+  AgentSessionNamingError,
+  AgentSessionConversationName
+} from './agent-session-conversation-name-wire'
+import type {
+  AgentSessionNamingError,
+  AgentSessionConversationName
+} from './agent-session-conversation-name-wire'
 
-export type AgentSessionConversationName = {
-  sessionId: string
-  conversationName: string | null
-  namingError?: AgentSessionNamingError
-}
-
-/** Retain projections after child eviction; idle remains idle. Tabs decide list membership, never this feed. */
 export type AgentSessionStatusEvent =
   | {
       type: 'snapshot'
       sessions: AgentSessionStatusSummary[]
       namingActiveSessionIds?: string[]
+      setupHeldWorkspaceIds?: string[]
       conversationNames?: AgentSessionConversationName[]
     }
   | { type: 'status'; session: AgentSessionStatusSummary }

@@ -1,3 +1,4 @@
+import { nativeSetupCompletionToken } from '../../runtime/orchestration/setup-completion-signal'
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 import { ptyIncarnationById } from './provider/ownership-state'
 import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-hook-relay-reattach'
@@ -62,7 +63,13 @@ export async function executePtySpawn(
     }
     const expectedPtyId = ctx.effectiveSessionAppId ?? facts.sessionId
     if (expectedPtyId) {
-      ctx.pendingRegistrationClaim = ctx.deps.runtime?.beginPtyRegistration?.(expectedPtyId)
+      ctx.pendingRegistrationClaim = ctx.deps.runtime?.beginPtyRegistration?.(
+        expectedPtyId,
+        undefined,
+        ctx.isDaemonHostSpawn && ctx.ownsNewIncarnation
+          ? nativeSetupCompletionToken(ctx.spawnOptions.env)
+          : undefined
+      )
       ctx.pendingRegistrationPtyId = expectedPtyId
     }
     if (ctx.isDaemonHostSpawn && expectedPtyId) {
@@ -219,7 +226,8 @@ export async function executePtySpawn(
       !ctx.deps.runtime?.narrowPtyRegistration(
         ctx.result.id,
         ctx.pendingRegistrationClaim,
-        ctx.result.incarnationId
+        ctx.result.incarnationId,
+        ctx.result.isReattach === true || ctx.result.agentSessionEnsure?.disposition === 'adopted'
       )
     ) {
       throw new PaneOwnerContentionError()

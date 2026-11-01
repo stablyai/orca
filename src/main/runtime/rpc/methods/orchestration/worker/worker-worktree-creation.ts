@@ -1,3 +1,12 @@
+import type { AgentLaunchInitialSurfaceStage } from '../../../../../agent-launch/agent-launch-surface-factories'
+/**
+ * Creating the worktree a `--worktree new-child` / `new-top-level` dispatch asks for.
+ *
+ * `withAgentTerminal` is the whole difference between the two worker modes: a PTY worker's
+ * worktree is created agent-first, so the startup terminal IS the worker, while a structured
+ * worker's worktree is created with no agent at all and its session is created for the worktree
+ * afterwards. Setup, default tabs and lineage are identical either way.
+ */
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 /** Create PTY worktrees agent-first; structured workers create sessions afterwards without startup agents. Setup/default tabs/lineage stay identical. */
 
@@ -93,6 +102,8 @@ export async function createWorkerWorktree(args: {
   withAgentTerminal: boolean
   promisedAgentChat?: boolean
   onWorkspaceCreated?: (worktreeId: string) => void
+  initializeSurface?: AgentLaunchInitialSurfaceStage
+  onSetupReceipt?: (receipt: WorkerSetupReceipt) => void
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<{
@@ -103,7 +114,9 @@ export async function createWorkerWorktree(args: {
 }> {
   const { runtime, db, dispatchId, requestedWorktree, target, params, effects } = args
   const setupDecision = params.setup ?? 'run'
+  let surfaceFailure: { error: unknown } | undefined
   let terminalCreation: RuntimeTerminalCreate | undefined
+  let worktreeEffect: WorkerEffect | undefined
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
     onStartupTerminalCreated: (terminal) => {
@@ -122,7 +135,34 @@ export async function createWorkerWorktree(args: {
     observeSetupCompletion: true,
     createdWithAgent: args.agent,
     ...(args.promisedAgentChat ? { promisedAgentChat: true } : {}),
-    ...(args.onWorkspaceCreated ? { onWorkspaceCreated: args.onWorkspaceCreated } : {}),
+    onWorkspaceCreated: (worktreeId) => {
+      worktreeEffect = {
+        kind: 'worktree',
+        action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
+        id: worktreeId
+      }
+      effects.push(worktreeEffect)
+      db.recordWorkerStage({
+        dispatchId,
+        stage: 'worktree_created',
+        worktreeId,
+        effects,
+        residualResources: effects
+      })
+      args.onWorkspaceCreated?.(worktreeId)
+    },
+    ...(args.initializeSurface
+      ? {
+          initializeSurface: async (workspace: Parameters<AgentLaunchInitialSurfaceStage>[0]) => {
+            try {
+              return await args.initializeSurface?.(workspace)
+            } catch (error) {
+              // Keep the original refusal until Setup and its actual resources are recorded.
+              surfaceFailure = { error }
+            }
+          }
+        }
+      : {}),
     ...(args.withAgentTerminal
       ? {
           startupAgent: args.agent,
@@ -138,21 +178,11 @@ export async function createWorkerWorktree(args: {
       callerTerminalHandle: params.from
     }
   })
+  if (worktreeEffect) {
+    worktreeEffect.name = created.worktree.displayName
+  }
   const terminalHandle = created.startupTerminal?.handle
-  effects.push({
-    kind: 'worktree',
-    action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
-    id: created.worktree.id,
-    name: created.worktree.displayName
-  })
-  db.recordWorkerStage({
-    dispatchId,
-    stage: 'worktree_created',
-    worktreeId: created.worktree.id,
-    effects,
-    residualResources: effects
-  })
-  const setupReceipt = {
+  const setupReceipt: WorkerSetupReceipt = {
     requested: setupDecision,
     effective: setupDecision,
     source: params.setup ? 'explicit_request' : 'orchestration_default',
@@ -197,6 +227,18 @@ export async function createWorkerWorktree(args: {
     state: setupReceipt.state,
     terminalId: setupTerminalHandle ?? setupTerminal?.id
   })
+  args.onSetupReceipt?.(setupReceipt)
+  if (surfaceFailure) {
+    db.recordWorkerStage({
+      dispatchId,
+      stage: 'terminal_creating',
+      worktreeId: created.worktree.id,
+      setupState: setupReceipt.state,
+      effects,
+      residualResources: effects
+    })
+    throw surfaceFailure.error
+  }
   return {
     worktree: created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
     terminalHandle,

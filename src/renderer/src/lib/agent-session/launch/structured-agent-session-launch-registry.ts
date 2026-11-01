@@ -1,7 +1,6 @@
 import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
 export { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
 import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
-import { useSyncExternalStore } from 'react'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import type { StructuredLaunchFailure } from '../../structured-agent-session-launch-failure'
 import type { StructuredAgentSessionResumeSource } from '../../../../../shared/structured-agent-session-create'
@@ -61,12 +60,18 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
   resetStructuredAgentLocalLaunchCancelsForTests()
 }
 
-export function notifyStructuredLaunchListeners(): void {
-  for (const state of structuredLaunchesBySessionId.values()) {
-    persistStructuredLaunchState(state)
+export function notifyStructuredLaunchListeners(persist = true): void {
+  if (persist) {
+    for (const state of structuredLaunchesBySessionId.values()) {
+      persistStructuredLaunchState(state)
+    }
   }
   for (const listener of structuredLaunchListeners) {
-    listener()
+    try {
+      listener()
+    } catch (error) {
+      console.warn('[structured-agent-launch] observer failed', error)
+    }
   }
 }
 
@@ -141,7 +146,11 @@ export function getStructuredAgentSessionLaunchLifecycle(
   if (state?.intent.worktreeId === worktreeId) {
     return launchStateLifecycle(state)
   }
-  return getPersistedStructuredAgentLaunchRecord(sessionId)?.lifecycle ?? null
+  const record = getPersistedStructuredAgentLaunchRecord(sessionId)
+  if (record?.desktopCreate && record.desktopCreate.worktreeId !== worktreeId) {
+    return null
+  }
+  return record?.lifecycle ?? null
 }
 
 /** The host a launch still owed an outcome was sent to, in memory or persisted across a reload. */
@@ -171,28 +180,6 @@ export function getStructuredAgentSessionLaunchFailure(
   return state && state.intent.worktreeId === worktreeId && launchStateLifecycle(state) === 'failed'
     ? (state.failure ?? null)
     : null
-}
-
-export function useStructuredAgentSessionLaunchFailure(
-  worktreeId: string,
-  sessionId: string
-): StructuredLaunchFailure | null {
-  return useSyncExternalStore(
-    subscribeStructuredAgentLaunchStatus,
-    () => getStructuredAgentSessionLaunchFailure(worktreeId, sessionId),
-    () => null
-  )
-}
-
-export function useStructuredAgentSessionLaunchLifecycle(
-  worktreeId: string,
-  sessionId: string
-): StructuredAgentSessionLaunchLifecycle | null {
-  return useSyncExternalStore(
-    subscribeStructuredAgentLaunchStatus,
-    () => getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId),
-    () => null
-  )
 }
 
 export function shouldRetainStructuredAgentSessionLaunchTab(

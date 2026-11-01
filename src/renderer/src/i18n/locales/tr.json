@@ -19285,7 +19285,7 @@
         "historyItemTooLarge": "Sohbetin bu bölümü gösterilemeyecek kadar büyüktü.",
         "continuedOutside": "Bu sohbetin dışında devam edildi.",
         "continuedOutsideRewound": "Bu sohbetin dışında devam edildi. Yukarıdaki önceki yanıtlar artık bu sohbetin geçmişinde yer almıyor.",
-        "stoppedBeforeStart": "Elle durduruldu",
+        "stoppedBeforeStart": "Kesildi",
         "dismiss": "Kapat",
         "copyError": "Hatayı kopyala",
         "orcaStopUpdate": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca bir güncelleme için yeniden başlatıldı.",

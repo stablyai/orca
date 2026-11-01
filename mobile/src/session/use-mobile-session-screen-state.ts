@@ -1,3 +1,4 @@
+import { useMobileWorkspaceSetupHold } from './use-mobile-workspace-setup-hold'
 import { useState, useRef, useMemo } from 'react'
 import { useTerminalSplitLayout } from './use-terminal-split-layout'
 import { Animated, type ScrollView } from 'react-native'
@@ -33,6 +34,12 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const terminalSplitLayout = useTerminalSplitLayout()
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
+  const setupHold = useMobileWorkspaceSetupHold(
+    scope.hostId,
+    scope.worktreeId,
+    scope.connState === 'connected',
+    scope.client
+  )
   const [sessionTabs, setSessionTabs] = useState<MobileSessionTab[]>([])
   const sessionTabsRef = useRef<MobileSessionTab[]>([])
   const appliedSnapshotMarkerRef = useRef<AppliedSnapshotMarker>({ epoch: null, version: -1 })
@@ -134,6 +141,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     terminals,
     setTerminals,
     terminalsRef,
+    ...setupHold,
     sessionTabs,
     setSessionTabs,
     sessionTabsRef,

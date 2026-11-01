@@ -1,3 +1,5 @@
+import { retryDesktopCreateLaunch } from './structured-agent-session-desktop-create'
+import { readStructuredAgentLaunchRecord } from './agent-session/launch/structured-agent-session-launch-persistence'
 import { useAppStore } from '@/store'
 import { reserveStructuredLaunchSlot } from './structured-agent-session-launch-surface'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -37,8 +39,8 @@ import {
 import { restorePersistedStructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-reload'
 import { getJoinableStructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-holders'
 import {
-  prepareStructuredLaunchCreateMessage,
-  publishStructuredLaunchCreateOptions
+  publishWithHeldOptions,
+  adoptPairedHostSeed
 } from './structured-agent-session-launch-create-message'
 import {
   maybeCleanupLaunchState,
@@ -64,8 +66,6 @@ export {
   retireStructuredAgentSessionLaunchCancellationTombstone,
   shouldRetainStructuredAgentSessionLaunchTab,
   subscribeStructuredAgentLaunchStatus,
-  useStructuredAgentSessionLaunchFailure,
-  useStructuredAgentSessionLaunchLifecycle,
   type StructuredAgentLaunchStatus,
   type StructuredAgentSessionLaunchLifecycle
 } from './agent-session/launch/structured-agent-session-launch-registry'
@@ -101,38 +101,6 @@ function joinLaunchDelivery(
   const mode = established ?? options.promptDelivery
   const { promptDelivery: _joinerMode, ...rest } = options
   return mode ? { ...rest, promptDelivery: mode } : rest
-}
-
-/** Every sender waits on the launch promise, so picks held during launch reach the host first. */
-function publishWithHeldOptions(
-  state: StructuredLaunchState,
-  created: Promise<StructuredAgentLaunchReceipt>
-): Promise<StructuredAgentLaunchReceipt> {
-  state.intent.prepareCreate = (hostTakesExplicitOptions) =>
-    prepareStructuredLaunchCreateMessage(state, hostTakesExplicitOptions)
-  return created.then((receipt) => publishStructuredLaunchCreateOptions(state, receipt))
-}
-
-/** Each attempt's probe names the seed the paired server's create will use; the picker shows it. */
-function adoptPairedHostSeed(
-  state: StructuredLaunchState,
-  seedOptions: StructuredLaunchState['selection']['seed']
-): void {
-  // The support answer is a fresh seed; continuation baseline belongs to actual host create.
-  if (state.intent.params.resumeFrom) {
-    seedOptions = undefined
-  }
-  const { seedPending, ...selection } = state.selection
-  if (!seedPending && JSON.stringify(seedOptions) === JSON.stringify(state.intent.seedOptions)) {
-    return
-  }
-  if (seedOptions) {
-    state.intent.seedOptions = seedOptions
-  } else {
-    delete state.intent.seedOptions
-  }
-  state.selection = { ...selection, seed: seedOptions }
-  notifyStructuredLaunchListeners()
 }
 
 function resetStructuredLaunchCallers(state: StructuredLaunchState): void {
@@ -302,6 +270,9 @@ export function startStructuredAgentLaunch(
 }
 
 export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId: string): boolean {
+  if (readStructuredAgentLaunchRecord(sessionId)?.desktopCreate) {
+    return retryDesktopCreateLaunch(worktreeId, sessionId)
+  }
   const state =
     getStructuredLaunchStateBySessionId(sessionId) ??
     restorePersistedStructuredLaunchState(worktreeId, sessionId)

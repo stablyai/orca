@@ -6,6 +6,8 @@ export type NativeChatLaunchPrompt = {
   text: string
   createdAt: number
   failed?: boolean
+  unconfirmed?: true
+  paneKey?: string
 }
 
 /** Keep unsent launch context as a composer draft so TUI-prefilled linked context remains visible in chat. */

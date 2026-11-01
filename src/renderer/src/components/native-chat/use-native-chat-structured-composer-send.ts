@@ -34,6 +34,7 @@ import {
 
 export type UseNativeChatStructuredComposerSendArgs = {
   agent: AgentType
+  isEditingHeld?: () => boolean
   draftScopeKey: string
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   structuredTransport?: NativeChatStructuredComposerTransport
@@ -52,6 +53,7 @@ export type NativeChatStructuredComposerSend = (
 /** Clear submitted composer content only after structured transport acceptance. */
 export function useNativeChatStructuredComposerSend({
   agent,
+  isEditingHeld,
   draftScopeKey,
   imageAttachments,
   structuredTransport,
@@ -62,6 +64,9 @@ export function useNativeChatStructuredComposerSend({
 }: UseNativeChatStructuredComposerSendArgs): NativeChatStructuredComposerSend {
   return useCallback<NativeChatStructuredComposerSend>(
     async (text, attachments = imageAttachments, intent): Promise<void> => {
+      if (isEditingHeld?.()) {
+        return
+      }
       // Picked commands must also wait for pending attachments to acquire paths.
       if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
         return
@@ -184,6 +189,7 @@ export function useNativeChatStructuredComposerSend({
         .finally(stopObservingAppend)
     },
     [
+      isEditingHeld,
       agent,
       clearSkillOrigin,
       draftScopeKey,

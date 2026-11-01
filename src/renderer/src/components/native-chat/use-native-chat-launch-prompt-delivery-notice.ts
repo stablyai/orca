@@ -7,18 +7,24 @@ import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 /** Show refused launch prompts only while their row is visible; recovery belongs in the terminal, so offer no Retry. */
 export function useNativeChatLaunchPromptDeliveryNotice(
   failedMessageId: string | null | undefined,
-  messages: readonly NativeChatMessage[]
+  messages: readonly NativeChatMessage[],
+  unconfirmed = false
 ): ReadonlyMap<string, NativeChatDeliveryNotice> | undefined {
   const languageRevision = useUiLanguageRevision()
   return useMemo(() => {
     if (!failedMessageId || !messages.some((message) => message.id === failedMessageId)) {
       return undefined
     }
-    const text = translate(
-      'components.native-chat.launchPromptNotDelivered',
-      'Not delivered — check the terminal'
-    )
+    const text = unconfirmed
+      ? translate(
+          'components.native-chat.deliveryUnconfirmed',
+          'Delivery unconfirmed — check chat before retrying'
+        )
+      : translate(
+          'components.native-chat.launchPromptNotDelivered',
+          'Not delivered — check the terminal'
+        )
     return new Map([[failedMessageId, { text }]])
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [failedMessageId, messages, languageRevision])
+  }, [failedMessageId, messages, unconfirmed, languageRevision])
 }

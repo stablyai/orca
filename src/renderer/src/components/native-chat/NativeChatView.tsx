@@ -1,3 +1,5 @@
+import { NativeChatSetupNotice } from './NativeChatSetupNotice'
+import { useNativeChatSetupHold } from './use-native-chat-setup-hold'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { NativeChatResolvedView } from './NativeChatResolvedView'
@@ -50,12 +52,25 @@ function NativeChatBridgeView({
   readTerminalScreen,
   contextMenuActions
 }: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
+  const {
+    held: setupHeld,
+    worktreeId: setupWorktreeId,
+    executionHostId: setupExecutionHostId
+  } = useNativeChatSetupHold(terminalTabId)
   const { entry: agentStatusEntry, paneKey } = useNativeChatStatusEntry(
     terminalTabId,
     preferredPaneKey
   )
   return (
     <NativeChatSessionGate
+      pending={
+        setupHeld ? (
+          <NativeChatSetupNotice
+            worktreeId={setupWorktreeId}
+            executionHostId={setupExecutionHostId}
+          />
+        ) : undefined
+      }
       paneKey={paneKey}
       launchAgent={launchAgent}
       resolvedAgent={resolvedAgent}

@@ -35,7 +35,10 @@ export function markStructuredAgentSessionLaunchPublished(
     if (persisted?.executionHostId !== executionHostId) {
       return false
     }
-    if (persisted.explicitLaunchOptions && persisted.createMessageSupport !== true) {
+    if (
+      persisted.desktopCreate ||
+      (persisted.explicitLaunchOptions && persisted.createMessageSupport !== true)
+    ) {
       return false
     }
     if (persisted.firstMessage) {

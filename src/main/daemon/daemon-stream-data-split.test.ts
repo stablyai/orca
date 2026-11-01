@@ -54,7 +54,8 @@ function previousWrites(
   let consumed = 0
   return chunks.map((chunk) => {
     consumed += chunk.length
-    const chunkEndSeq = seq === undefined ? undefined : seq - (data.length - consumed)
+    const chunkEndSeq =
+      seq === undefined ? undefined : seq - (explicitRawLength === 0 ? 0 : data.length - consumed)
     const chunkRawLength = explicitRawLength === 0 ? 0 : carriesMetadata ? chunk.length : undefined
     return encodeStreamDataEvent(sessionId, chunk, chunkRawLength, chunkEndSeq)
   })
@@ -170,4 +171,13 @@ describe('writeStreamDataEvents wire parity', () => {
       expect(chunks.join('')).toBe(data)
     }
   })
+})
+
+it('retains the constant source end across zero-raw NDJSON splits', () => {
+  const frames = write('copied query'.repeat(100), 220, 0, 87).map((line) => JSON.parse(line))
+  expect(frames.length).toBeGreaterThan(1)
+  expect(frames.every((frame) => frame.payload.seq === 87 && frame.payload.rawLength === 0)).toBe(
+    true
+  )
+  expect(frames.map((frame) => frame.payload.data).join('')).toBe('copied query'.repeat(100))
 })

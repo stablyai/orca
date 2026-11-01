@@ -36,8 +36,6 @@ export function registerStructuredAgentSessionStart(
   const { startFlights: flights, startupAttempts: attempts, acquireAborts } = context.runtimeState
   const acquire = acquireAborts.begin(sessionId)
   let attemptId = randomUUID()
-  let handle = attempts.begin(sessionId, attemptId)
-  const registeredAt = handle.registeredAt
   const children: NonNullable<ReturnType<typeof flights.get>>['children'] = []
   const register = () =>
     flights.register(sessionId, {
@@ -50,6 +48,14 @@ export function registerStructuredAgentSessionStart(
   const outcome = context.tasks.trackAttach(
     Promise.resolve()
       .then(async (): Promise<StructuredAgentSessionResumeOutcome> => {
+        const record = context.deps.store.getRecord(sessionId)
+        const setup = record && context.deps.setupHold?.(record.location.workspaceId)
+        if (setup) {
+          await waitForPromiseWithSignal(setup, acquire.signal)
+        }
+        throwIfSignalAborted(acquire.signal)
+        let handle = attempts.begin(sessionId, attemptId)
+        const registeredAt = handle.registeredAt
         let result: StructuredAgentSessionResumeOutcome = failedStructuredAgentSessionStart()
         for (let number = 0; number < 5; number++) {
           throwIfSignalAborted(acquire.signal)

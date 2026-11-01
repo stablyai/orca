@@ -3,7 +3,7 @@ import { basename, dirname, resolve } from 'node:path'
 import { toWindowsWslPath } from '../shared/wsl-paths'
 import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 
-type InFlightWorktreeCreate = { repoId: string; paths: string[] }
+type InFlightWorktreeCreate = { repoId: string; paths: string[]; prepared: Promise<void> }
 
 const inFlightCreates = new Set<InFlightWorktreeCreate>()
 const claimedCreatePaths = new Set<string>()
@@ -68,7 +68,7 @@ async function resolveCreatePathAlias(worktreePath: string): Promise<string> {
   }
 }
 
-/** Hide untagged checkouts until metadata makes sidebar filters reliable. */
+/** Hide checkouts until setup policy is prepared. */
 export async function holdInFlightWorktreeCreate(
   repoId: string,
   worktreePath: string,
@@ -78,13 +78,19 @@ export async function holdInFlightWorktreeCreate(
     process.platform === 'win32' && options.wslDistro && worktreePath.startsWith('/')
       ? toWindowsWslPath(worktreePath, options.wslDistro)
       : worktreePath
+  let release = () => {}
+  const prepared = new Promise<void>((resolve) => {
+    release = resolve
+  })
   const entry: InFlightWorktreeCreate = {
+    prepared,
     repoId,
     paths: [worktreePath, hostPath, await resolveCreatePathAlias(hostPath)]
   }
   inFlightCreates.add(entry)
   return () => {
     inFlightCreates.delete(entry)
+    release()
   }
 }
 
@@ -103,4 +109,16 @@ export function withoutInFlightWorktreeCreates<T extends { path: string }>(
     (row) =>
       !held.some((entry) => entry.paths.some((path) => areWorktreePathsEqual(row.path, path)))
   )
+}
+
+export function waitForInFlightWorktreeCreate(
+  worktreePath: string,
+  repoId?: string
+): Promise<void> | null {
+  const pending = [...inFlightCreates].filter(
+    (entry) =>
+      (!repoId || entry.repoId === repoId) &&
+      entry.paths.some((path) => areWorktreePathsEqual(worktreePath, path))
+  )
+  return pending.length ? Promise.all(pending.map((entry) => entry.prepared)).then(() => {}) : null
 }

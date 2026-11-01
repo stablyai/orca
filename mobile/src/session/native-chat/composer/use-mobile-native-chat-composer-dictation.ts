@@ -18,11 +18,13 @@ export function useMobileNativeChatComposerDictation({
   draftScopeKey,
   value,
   insertDictation,
+  isEditingHeld,
   placeCaret
 }: {
   draftScopeKey: string | null | undefined
   value: string
   insertDictation: ((insert: (draft: string) => string) => boolean | void) | undefined
+  isEditingHeld?: () => boolean
   placeCaret: (at: number) => void
 }) {
   // Dictation lands on the selection the field had when it started, so taps elsewhere while talking don't move it.
@@ -48,7 +50,7 @@ export function useMobileNativeChatComposerDictation({
         anchor,
         insert: (text) => {
           // A retired tab's late dictation must not revive its draft.
-          if (!destination.active) {
+          if (!destination.active || isEditingHeld?.()) {
             return false
           }
           const landed = { caret: 0, text: '' }
@@ -67,7 +69,7 @@ export function useMobileNativeChatComposerDictation({
         }
       }
     })
-  }, [draftScopeKey, insertDictation, placeCaret])
+  }, [draftScopeKey, insertDictation, isEditingHeld, placeCaret])
   const heard = useContext(MobileNativeChatDictationPreviewContext)
   const preview =
     heard && heard.scope === (draftScopeKey ?? null)

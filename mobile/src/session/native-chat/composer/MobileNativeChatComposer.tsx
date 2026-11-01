@@ -1,5 +1,4 @@
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat-follow-up-behavior'
 import {
   recordMobileNativeChatSkillPick,
   useMobileNativeChatDraft
@@ -9,7 +8,6 @@ import {
   focusMobileNativeChatTextDestination,
   pruneMobileNativeChatDraftSkills
 } from './mobile-native-chat-draft-inputs'
-import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, type TextInput, Text, View } from 'react-native'
 import { Plus } from 'lucide-react-native'
@@ -24,11 +22,9 @@ import { ActionSheetModal } from '../../../components/ActionSheetModal'
 import { mobileNativeChatAttachActions } from '../../mobile-native-chat-attach-actions'
 import {
   MobileNativeChatSessionOptionPickers,
-  type MobileNativeChatPickerPresentation,
-  type MobileNativeChatSessionOptionPickersProps
+  type MobileNativeChatPickerPresentation
 } from '../input/MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
 import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
@@ -36,65 +32,17 @@ import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-c
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatSendButton } from './MobileNativeChatSendButton'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
-import {
-  MobileNativeChatComposerMic,
-  type MobileNativeChatMicProps
-} from './MobileNativeChatComposerMic'
+import { MobileNativeChatComposerMic } from './MobileNativeChatComposerMic'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 const NO_FILES: PendingNativeChatFile[] = []
 
-export type MobileNativeChatStructuredComposer = {
-  catalog: MobileComposerStructuredCatalog
-  onSlashMenuOpen: () => void
-  onSlashMenuDemand?: (open: boolean) => void
-  onAttachFiles?: () => void
-  // An uploading attachment must hold Send.
-  files: readonly PendingNativeChatFile[]
-  onRemoveFile: (id: string) => void
-}
-
-type Props = MobileNativeChatMicProps & {
-  // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
-  insertDictation?: (insert: (draft: string) => string) => boolean | void
-  draftScopeKey?: string | null
-  editSession?: { cancel: () => void; refuseCommand: (text: string) => boolean; locked: boolean }
-  onPickSkill?: (skill: { name: string; path: string }) => void
-  inputRef?: React.RefObject<TextInput | null>
-  // Terminal-backed chats keep curated commands and image-only attachment actions.
-  structured?: MobileNativeChatStructuredComposer | null
-  value: string
-  onChangeText: (text: string) => void
-  onSend: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
-  /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
-  sendFollowUp?: NativeChatSendFollowUp | null
-  /** Changes whenever the route focuses a different chat composer surface. */
-  sendSurfaceId: string
-  /** Reads the retained route's focus generation without forcing a screen render. */
-  getSendCompletionGeneration: () => number
-  getComposerEditGeneration: () => number
-  agent?: string | null
-  sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
-  onAttachImage?: () => void
-  attachments?: PendingNativeChatImage[]
-  onRemoveAttachment?: (id: string) => void
-  isAttaching?: boolean
-  disabled?: boolean
-  /** Only Send is unavailable; typing, dictation and attachments still edit the draft. */
-  sendDisabled?: boolean
-  placeholder?: string
-  filePaths?: string[]
-  onNeedFiles?: (query: string) => void
-  /** The host's disk-scanned skills, loaded once a skill trigger opens. */
-  skillDiscovery?: NativeChatSkillDiscoverySnapshot
-  onNeedSkills?: () => void
-  /** Set while the agent can be stopped; Stop takes Send's slot when Send can't deliver. */
-  stop?: { onStop?: () => void; held: boolean } | null
-}
-
-/** What a chat's composer sends through, which the chat view hands down from its route. */
-export type MobileNativeChatSendProps = Pick<Props, 'onSend' | 'sendFollowUp'>
+import type { Props } from './mobile-native-chat-composer-props'
+export type {
+  MobileNativeChatStructuredComposer,
+  MobileNativeChatSendProps
+} from './mobile-native-chat-composer-props'
 
 export function MobileNativeChatComposer({
   inputRef,
@@ -122,6 +70,8 @@ export function MobileNativeChatComposer({
   dictationMode,
   onMicPressIn,
   onMicPressOut,
+  setupAgentStartHeld = false,
+  setupInputHeld = setupAgentStartHeld,
   disabled = false,
   sendDisabled = false,
   placeholder,
@@ -146,9 +96,23 @@ export function MobileNativeChatComposer({
     setPicker({ page: request.id, refocus: false })
   }
   const files = structured?.files ?? NO_FILES
+  const setupHeldRef = useRef(setupInputHeld)
+  useLayoutEffect(() => {
+    setupHeldRef.current = setupInputHeld
+  }, [setupInputHeld])
+  const editing =
+    <TArgs extends unknown[]>(action: ((...args: TArgs) => void) | undefined) =>
+    (...args: TArgs): void => {
+      if (!setupHeldRef.current) {
+        action?.(...args)
+      }
+    }
   const menu = useMobileNativeChatComposerMenu({
     value,
     onChangeText: (text) => {
+      if (setupHeldRef.current) {
+        return
+      }
       if (editSession && draftScopeKey) {
         pruneMobileNativeChatDraftSkills(
           draftScopeKey,
@@ -159,6 +123,9 @@ export function MobileNativeChatComposer({
       onChangeText(text)
     },
     onPickSkill: (skill) => {
+      if (setupHeldRef.current) {
+        return
+      }
       if (onPickSkill && skill.path) {
         onPickSkill({ name: skill.token.slice(1), path: skill.path })
       }
@@ -182,6 +149,7 @@ export function MobileNativeChatComposer({
     draftScopeKey,
     value,
     insertDictation,
+    isEditingHeld: () => setupHeldRef.current,
     placeCaret: menu.placeCaret
   })
   const sendingRef = useRef(false)
@@ -201,20 +169,23 @@ export function MobileNativeChatComposer({
   // An attachment alone is a valid send (desktop parity), so it rides even with no text.
   const canSend =
     (value.trim().length > 0 || attachmentCount > 0) &&
+    !setupInputHeld &&
     !disabled &&
     !sendDisabled &&
     !sending &&
     !isAttaching &&
     !filesUploading &&
     !sessionOptionDispatching
-  const showsStop = mobileNativeChatComposerShowsStop({
-    canStop: stop !== null,
-    sendBlocked: sendDisabled,
-    canSend,
-    editing: isAttaching || filesUploading || micActive,
-    draft: value,
-    attachmentCount
-  })
+  const showsStop =
+    (setupInputHeld && stop !== null) ||
+    mobileNativeChatComposerShowsStop({
+      canStop: stop !== null,
+      sendBlocked: sendDisabled,
+      canSend,
+      editing: isAttaching || filesUploading || micActive,
+      draft: value,
+      attachmentCount
+    })
 
   useEffect(() => {
     mountedRef.current = true
@@ -225,7 +196,7 @@ export function MobileNativeChatComposer({
   }, [])
 
   const handleSend = async (intent?: MobileNativeChatSendIntent): Promise<void> => {
-    if (!canSend || sendingRef.current) {
+    if (setupHeldRef.current || !canSend || sendingRef.current) {
       return
     }
     sendingRef.current = true
@@ -265,7 +236,7 @@ export function MobileNativeChatComposer({
 
   return (
     <View>
-      {menu.rows.length > 0 ? (
+      {!setupInputHeld && menu.rows.length > 0 ? (
         <MobileNativeChatComposerMenu
           rows={menu.rows}
           onPick={menu.pick}
@@ -277,14 +248,14 @@ export function MobileNativeChatComposer({
           <MobileNativeChatComposerAttachments
             images={attachments}
             files={files}
-            onRemoveImage={editSession?.locked ? undefined : onRemoveAttachment}
-            onRemoveFile={editSession?.locked ? undefined : structured?.onRemoveFile}
+            onRemoveImage={editSession?.locked ? undefined : editing(onRemoveAttachment)}
+            onRemoveFile={editSession?.locked ? undefined : editing(structured?.onRemoveFile)}
           />
           <MobileNativeChatComposerField
             ref={fieldRef}
             value={value}
             skillToken={menu.skillToken}
-            onChangeText={menu.onFieldChange}
+            onChangeText={editing(menu.onFieldChange)}
             onFocus={() => {
               setFocused(true)
               if (draftScopeKey) {
@@ -306,7 +277,7 @@ export function MobileNativeChatComposer({
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accentBlue}
             multiline
-            editable={!editSession?.locked}
+            editable={!setupInputHeld && !editSession?.locked}
             // Why: never revoke `editable` — iOS resigns first responder on a focused
             // field, so a transient lock would yank the keyboard mid-typing (#10681).
             // The lock gates sending; the draft survives and rides the next send.
@@ -317,8 +288,8 @@ export function MobileNativeChatComposer({
               <Pressable
                 accessibilityLabel={attachLabel}
                 style={({ pressed }) => [inputStyles.controlButton, pressed && inputStyles.pressed]}
-                onPress={attachPress}
-                disabled={isAttaching || disabled}
+                onPress={editing(attachPress)}
+                disabled={setupInputHeld || isAttaching || disabled}
               >
                 {isAttaching ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -327,7 +298,7 @@ export function MobileNativeChatComposer({
                 )}
               </Pressable>
             ) : null}
-            {sessionOptions ? (
+            {sessionOptions && !setupInputHeld ? (
               <MobileNativeChatSessionOptionPickers
                 {...sessionOptions}
                 sendInFlight={sending || isAttaching}
@@ -345,14 +316,14 @@ export function MobileNativeChatComposer({
             <View style={inputStyles.actionSpacer} />
             {onMicPress ? (
               <MobileNativeChatComposerMic
-                onMicPress={onMicPress}
+                onMicPress={editing(onMicPress)}
                 micActive={micActive}
                 micStarting={micStarting}
                 micProcessing={micProcessing}
                 dictationMode={dictationMode}
-                onMicPressIn={onMicPressIn}
+                onMicPressIn={editing(onMicPressIn)}
                 onMicPressOut={onMicPressOut}
-                disabled={disabled}
+                disabled={setupInputHeld || disabled}
               />
             ) : null}
             {editSession ? (
@@ -395,14 +366,14 @@ export function MobileNativeChatComposer({
       </View>
       {structured ? (
         <ActionSheetModal
-          visible={attachOpen}
+          visible={attachOpen && !setupInputHeld}
           onClose={() => setAttachOpen(false)}
           actions={mobileNativeChatAttachActions({
-            onPhotos: onAttachImage,
-            onFiles: structured.onAttachFiles,
-            onWorkspaceFile: menu.openFileMenu,
-            onSkills: () => menu.openSlashMenu('skill'),
-            onCommands: () => menu.openSlashMenu('command'),
+            onPhotos: editing(onAttachImage),
+            onFiles: editing(structured.onAttachFiles),
+            onWorkspaceFile: editing(menu.openFileMenu),
+            onSkills: editing(() => menu.openSlashMenu('skill')),
+            onCommands: editing(() => menu.openSlashMenu('command')),
             skillCount: menu.skillCount
           })}
         />

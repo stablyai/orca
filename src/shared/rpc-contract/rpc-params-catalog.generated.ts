@@ -62,7 +62,7 @@ import {
   SelectDataAccountParams
 } from './accounts-params'
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
-import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
+import { AgentLaunch, AgentLaunchCancel, AgentLaunchReplay } from './agent-launch-params'
 import { AgentLaunchSettingsMutation } from './agent-launch-settings-params'
 import {
   AttachmentReadParams,
@@ -753,6 +753,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.zcodePlanCredentialsStatus': null,
   'accounts.zcodePlanSaveApiKey': UsageCredentialApiKeyParams,
   'agent.launch': AgentLaunch,
+  'agent.launchCancel': AgentLaunchCancel,
   'agent.launchReplay': AgentLaunchReplay,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,

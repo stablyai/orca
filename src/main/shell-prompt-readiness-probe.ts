@@ -25,7 +25,7 @@ export function createShellPromptReadinessProbe(options: {
   shellPath: string | undefined
   shellCwd?: string
   shellPathEnv?: string
-  onPromptReady: () => void
+  onPromptReady: (executablePath: string) => void
   settleMs?: number
 }): ShellPromptReadinessProbe | null {
   const lineEditorProbe = createPtySlaveLineEditorProbe(options.slavePath)
@@ -67,14 +67,14 @@ export function createShellPromptReadinessProbe(options: {
   }
 
   // A pty relay exec'd over the shell (kiro-cli-term, #25586) runs it as a child on an inner pty.
-  const isRelayedShellAtPrompt = async (
+  const readRelayedPromptShellExecutable = async (
     relayPid: number,
     scheduledGeneration: number
-  ): Promise<boolean> => {
+  ): Promise<string | null> => {
     for (const childPid of await listChildProcessIds(relayPid)) {
       const child = await readShellProcessReadiness(childPid).catch(() => null)
       if (isStale(scheduledGeneration)) {
-        return false
+        return null
       }
       if (
         !child?.foreground ||
@@ -85,10 +85,10 @@ export function createShellPromptReadinessProbe(options: {
         continue
       }
       if ((await createPtySlaveLineEditorProbe(child.ttyPath)?.()) === 'line-editor') {
-        return true
+        return child.executablePath
       }
     }
-    return false
+    return null
   }
 
   const probe = async (scheduledGeneration: number): Promise<void> => {
@@ -107,14 +107,16 @@ export function createShellPromptReadinessProbe(options: {
     if (isStale(scheduledGeneration) || !shell?.foreground) {
       return
     }
-    const ready = (await isExpectedShell(shell.executablePath))
+    const executablePath = (await isExpectedShell(shell.executablePath))
       ? outerState === 'line-editor'
-      : await isRelayedShellAtPrompt(shellPid, scheduledGeneration)
-    if (!ready || isStale(scheduledGeneration)) {
+        ? shell.executablePath
+        : null
+      : await readRelayedPromptShellExecutable(shellPid, scheduledGeneration)
+    if (!executablePath || isStale(scheduledGeneration)) {
       return
     }
     disposed = true
-    options.onPromptReady()
+    options.onPromptReady(executablePath)
   }
 
   return {
@@ -146,4 +148,39 @@ export function createShellPromptReadinessProbe(options: {
       }
     }
   }
+}
+
+export async function readMatchingPromptShellExecutable(options: {
+  shellPid: number
+  shellPath: string | undefined
+  shellCwd: string
+  shellPathEnv?: string
+}): Promise<string | null> {
+  const expectedShellName = options.shellPath ? basename(options.shellPath).toLowerCase() : null
+  const [shell, expectedPath] = await Promise.all([
+    readShellProcessReadiness(options.shellPid),
+    options.shellPath
+      ? resolveShellExecutablePath(options.shellPath, options.shellCwd, options.shellPathEnv)
+      : Promise.resolve(null)
+  ])
+  if (
+    !shell?.foreground ||
+    !expectedShellName ||
+    !expectedPath ||
+    basename(shell.executablePath).toLowerCase() !== expectedShellName
+  ) {
+    return null
+  }
+  if (shell.executablePath !== expectedPath) {
+    // Why: profile exec may replace the binary with another installed copy of the same shell.
+    const installedPaths = await resolveInstalledShellExecutablePaths(
+      expectedShellName,
+      options.shellCwd,
+      options.shellPathEnv
+    )
+    if (!installedPaths.includes(shell.executablePath)) {
+      return null
+    }
+  }
+  return shell.executablePath
 }

@@ -240,8 +240,8 @@ describePosix('daemon shell-ready bash wrapper', () => {
 
     const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
 
-    const marker = output.indexOf('\x1b]777;orca-shell-ready\x07')
-    expect(output.split('\x1b]777;orca-shell-ready\x07')).toHaveLength(2)
+    const marker = output.indexOf('\x1b]777;orca-shell-ready:posix\x07')
+    expect(output.split('\x1b]777;orca-shell-ready:posix\x07')).toHaveLength(2)
     expect(marker).toBeGreaterThan(output.indexOf('DECODER_ATTACHED'))
     expect(marker).toBeLessThan(output.indexOf('\x1b]133;D;'))
   })
@@ -256,8 +256,8 @@ describePosix('daemon shell-ready bash wrapper', () => {
       userDataPath
     )
 
-    const marker = output.indexOf('\x1b]777;orca-shell-ready\x07')
-    expect(output.split('\x1b]777;orca-shell-ready\x07')).toHaveLength(2)
+    const marker = output.indexOf('\x1b]777;orca-shell-ready:posix\x07')
+    expect(output.split('\x1b]777;orca-shell-ready:posix\x07')).toHaveLength(2)
     expect(marker).toBeLessThan(output.indexOf('\x1b]133;D;'))
   })
 
@@ -275,8 +275,8 @@ describePosix('daemon shell-ready bash wrapper', () => {
       'BASH_FUNC_ble-attach%%': '() { :; }'
     })
 
-    expect(output).not.toContain('\x1b]777;orca-shell-ready\x07')
-    expect(output).toContain('\\e]777;orca-shell-ready\\a')
+    expect(output).not.toContain('\x1b]777;orca-shell-ready:posix\x07')
+    expect(output).toContain('\\e]777;orca-shell-ready:posix\\a')
   })
 
   itWithBash('normalizes array PROMPT_COMMAND hooks so bash 3.2 still runs cleanup', async () => {

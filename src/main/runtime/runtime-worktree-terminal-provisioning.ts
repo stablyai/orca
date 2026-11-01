@@ -37,8 +37,6 @@ export type WorktreeTerminalProvisioningHost = {
     worktreeId: string,
     tabs: DefaultTerminalTab[]
   ) => Promise<readonly { tabId: string }[] | null>
-  getPtyId: (handle: string) => string | undefined
-  recordSetupCompletionToken: (ptyId: string, token: string) => void
 }
 
 // What every terminal of this create shares: who surfaces it, and whether the create was the user's act (E9).
@@ -223,7 +221,11 @@ export async function provisionWorktreeTerminals(
     }
     if (args.setup) {
       const completionToken =
-        args.observeSetupCompletion && !args.wrappedSetupCommand ? randomUUID() : null
+        args.observeSetupCompletion &&
+        !args.setup.envVars.ORCA_SETUP_COMPLETION_TOKEN &&
+        !args.wrappedSetupCommand
+          ? randomUUID()
+          : null
       const observed = completionToken
         ? buildObservedSetupCommand(
             args.setup.runnerScriptPath,
@@ -240,7 +242,11 @@ export async function provisionWorktreeTerminals(
           args.setupCommandPlatform,
           args.setup.shell
         )
-      const env = { ...args.setup.envVars, ...observed?.env }
+      const env = {
+        ...args.setup.envVars,
+        ...observed?.env,
+        ...(completionToken ? { ORCA_SETUP_COMPLETION_TOKEN: completionToken } : {})
+      }
       const setupTerminal = await host.createTerminal(args.worktreeSelector, {
         title: host.getSetupTerminalTitle?.() ?? 'Setup',
         command,
@@ -251,10 +257,6 @@ export async function provisionWorktreeTerminals(
       })
       setupTerminalHandle = setupTerminal.handle
       setupSpawned = true
-      const ptyId = host.getPtyId(setupTerminal.handle)
-      if (completionToken && ptyId) {
-        host.recordSetupCompletionToken(ptyId, completionToken)
-      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

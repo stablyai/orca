@@ -1,3 +1,4 @@
+import type { RigSendOptions } from './structured-agent-session-queued-rig-send.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +10,6 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
@@ -39,12 +39,6 @@ import {
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
 export const QUEUED_RIG_CALLER = { callerKey: 'client-1' }
-type RigSendOptions = {
-  internal?: true
-  from?: AgentMessageSource
-  carried?: Readonly<Record<string, string>>
-}
-
 export function eventually(assertion: () => void | Promise<void>): Promise<void> {
   return vi.waitFor(assertion, { timeout: 10_000 })
 }
@@ -62,6 +56,7 @@ export async function createQueuedMessageTestRig(
     location?: AgentSessionExecutionLocation
     /** Defaults to indeterminate. */
     probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
+    setupHold?: StructuredAgentSessionHostDeps['setupHold']
   } = {}
 ) {
   const SESSION = options.sessionId ?? DEFAULT_SESSION
@@ -81,6 +76,7 @@ export async function createQueuedMessageTestRig(
       mintSpawnToken: () => 'spawn-1',
       now: options.now ?? (() => NOW),
       ...(options.probeOwner ? { probeOwner: options.probeOwner } : {}),
+      ...(options.setupHold ? { setupHold: options.setupHold } : {}),
       ...(options.idleSweep ? { idleSweep: options.idleSweep } : {}),
       ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})
     })

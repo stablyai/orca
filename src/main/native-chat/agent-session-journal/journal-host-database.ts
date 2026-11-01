@@ -6,6 +6,7 @@ import type Database from '../../sqlite/sync-database'
 import {
   openJournalDatabase,
   runJournalTransaction,
+  type JournalTransactionObservation,
   type OpenJournalDatabase
 } from './journal-database'
 import { journalOpenRefusalError } from './journal-open-failure'
@@ -63,13 +64,19 @@ export class JournalHostDatabase {
   transaction<T>(
     run: (db: Database.Database) => T,
     streamed = false,
-    committed?: (result: T) => void
+    committed?: (result: T) => void,
+    observation?: JournalTransactionObservation
   ): T {
     const db = this.db
     if (!streamed) {
-      const result = runJournalTransaction(db, run, () => {
-        this.stranded = true
-      })
+      const result = runJournalTransaction(
+        db,
+        run,
+        () => {
+          this.stranded = true
+        },
+        observation
+      )
       committed?.(result)
       this.checkpoint?.afterCommit()
       return result
@@ -78,9 +85,14 @@ export class JournalHostDatabase {
     db.pragma('synchronous = NORMAL')
     let result: T
     try {
-      result = runJournalTransaction(db, run, () => {
-        this.stranded = true
-      })
+      result = runJournalTransaction(
+        db,
+        run,
+        () => {
+          this.stranded = true
+        },
+        observation
+      )
       committed?.(result)
     } finally {
       if (!db.isTransaction) {

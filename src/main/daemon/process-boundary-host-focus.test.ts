@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  buildProcessBoundaryGround,
+  PROCESS_BOUNDARY_GROUND
+} from '../../shared/terminal-mode-reset-profiles'
+import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { PtyShellOwnershipMirror } from '../runtime/pty-shell-ownership-mirror'
 import { HeadlessEmulator } from './headless-emulator'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
@@ -19,24 +24,45 @@ afterEach(() => {
   }
 })
 
-async function recover(data: string) {
+async function recover(data: string, expectedGround = PROCESS_BOUNDARY_GROUND) {
   const live = new HeadlessEmulator({ cols: 80, rows: 24, scrollback: 100 })
   emulators.push(live)
   const mirror = new PtyShellOwnershipMirror(async () => true)
-  const released: string[] = []
+  const released: PtyIngressEmission[] = []
   const barrier = new TerminalShellRecoveryBarrier({
     confirmShellForeground: async () => true,
     release: (emission) => {
-      released.push(emission.data)
+      released.push(emission)
       live.writeSync(emission.data)
       mirror.scan(emission.data)
     },
     isAlive: () => true
   })
   barrier.accept({ data, rawStartSeq: 0, rawEndSeq: data.length, transformed: false })
-  await vi.waitFor(() => expect(released).toHaveLength(3))
+  await vi.waitFor(() => expect(released).toHaveLength(4))
+  const markerStart = data.indexOf(COMMAND_DONE)
+  const markerEnd = markerStart + COMMAND_DONE.length
+  expect(released).toEqual([
+    {
+      data: data.slice(0, markerStart),
+      rawStartSeq: 0,
+      rawEndSeq: markerStart,
+      transformed: false
+    },
+    { data: COMMAND_DONE, rawStartSeq: markerStart, rawEndSeq: markerEnd, transformed: false },
+    { data: expectedGround, rawStartSeq: markerEnd, rawEndSeq: markerEnd, transformed: true },
+    {
+      data: data.slice(markerEnd),
+      rawStartSeq: markerEnd,
+      rawEndSeq: data.length,
+      transformed: false
+    }
+  ])
+  expect(released.map((emission) => emission.data).join('')).toBe(
+    `${data.slice(0, markerEnd)}${expectedGround}${data.slice(markerEnd)}`
+  )
   await mirror.settle()
-  const ground = released[1]!
+  const ground = released[2]!.data
   const enabled = [...ground.matchAll(PRIVATE_MODE_ENABLE)].map((match) => match[1])
   return { ground, enabled, live: live.getSnapshot(), barrier, mirror }
 }
@@ -54,7 +80,8 @@ describe('process boundary ground at a proven crash', () => {
 
   it("keeps ConPTY's focus reporting without injecting an enable a mirror would read as a new owner", async () => {
     const { ground, enabled, live, barrier, mirror } = await recover(
-      `\x1b[?1004h${PROMPT}${COMMAND_START}\x1b[?1003hRUN\r\n${COMMAND_DONE}$ `
+      `\x1b[?1004h${PROMPT}${COMMAND_START}\x1b[?1003hRUN\r\n${COMMAND_DONE}$ `,
+      buildProcessBoundaryGround({ keepFocusReporting: true })
     )
 
     expect(ground).not.toContain('\x1b[?1004l')

@@ -1,3 +1,4 @@
+import { queueAcceptedWebSessionTerminalSnapshot } from './web-session-terminal-handle-events'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
@@ -60,6 +61,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     }
     afterCurrentInFlight?: boolean
     errorMode?: 'warn' | 'throw'
+    onCurrentSnapshot?: (snapshot: RuntimeMobileSessionTabsResult) => void
   } = {}
 ): Promise<void> {
   // Await up front; list application and its receipt must not yield between them.
@@ -143,17 +145,24 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     )
     if (
       !recovered ||
-      getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
+      getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision ||
+      getRuntimeEnvironmentConnectionGeneration(environmentId) !==
+        expectedEnvironmentConnectionGeneration ||
+      trackingLifecycle.getWebSessionTabsTrackingGeneration(environmentId) !==
+        expectedTrackingGeneration
     ) {
       return
     }
-    // Only the frame decision proves this host answer was accepted; discarded workspaces supply no evidence.
-    const decision = shouldApplyRecoveredWebSessionTabsSnapshot(
+    // Why: this list is the host answering, but only the frame's own decision
+    // says whether that answer is evidence — a workspace the mirror never
+    // writes is discarded with nothing accepted behind it.
+    const current = shouldApplyRecoveredWebSessionTabsSnapshot(
       environmentId,
       recovered,
       receivedFrame,
       runtimeId
     )
+    const decision = current
       ? decideWebSessionTabsSnapshot(recovered, environmentId)
       : WEB_SESSION_TABS_FRAME_OUTRANKED
     const settleMirror = applyWebSessionTabsStorePatch(
@@ -187,6 +196,12 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       recovered
     )
     settleMirror()
+    if (current) {
+      if (!decision.apply) {
+        queueAcceptedWebSessionTerminalSnapshot(recovered, environmentId)
+      }
+      options.onCurrentSnapshot?.(recovered)
+    }
   } catch (error) {
     if (options.errorMode === 'throw') {
       throw error

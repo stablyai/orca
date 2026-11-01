@@ -1,3 +1,4 @@
+import { nativeSetupCompletionToken } from '../runtime/orchestration/setup-completion-signal'
 import { createGitBashConsoleCapacityDetector } from '../../shared/git-bash-console-capacity'
 import { withInitialOutputDiagnostic } from '../../shared/terminal-start-failure'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
@@ -80,15 +81,15 @@ export function activateLocalPtySession(args: {
   )
   ptyLoadGeneration.set(id, getLoadGeneration())
   ptyIncarnations.set(id, incarnationId)
-  getOptions().onSpawned?.(id, incarnationId)
+  getOptions().onSpawned?.(id, incarnationId, nativeSetupCompletionToken(spawn.env))
 
   const emitIngressData = (emission: PtyIngressEmission): void => {
     const sequenceChars = emission.rawEndSeq - emission.rawStartSeq
     const { onData } = getOptions()
     if (emission.transformed || sequenceChars !== emission.data.length) {
-      onData?.(id, emission.data, Date.now(), sequenceChars, true)
+      onData?.(id, emission.data, Date.now(), sequenceChars, true, emission.rawEndSeq)
     } else {
-      onData?.(id, emission.data, Date.now())
+      onData?.(id, emission.data, Date.now(), sequenceChars, false, emission.rawEndSeq)
     }
     const runtimeFed = onData ? true : undefined
     for (const cb of dataListeners) {
@@ -220,7 +221,8 @@ export function activateLocalPtySession(args: {
         readiness.setStartupCommandCleanup(cleanup)
       },
       {
-        bracketedPasteSafe
+        bracketedPasteSafe,
+        nativeSetupToken: nativeSetupCompletionToken(spawn.env)
       }
     )
   }

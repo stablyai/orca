@@ -17,6 +17,7 @@ import type {
 
 export function useNativeChatComposerEditSession({
   editSession,
+  isEditingHeld,
   root,
   handle,
   draftScopeKey,
@@ -31,6 +32,7 @@ export function useNativeChatComposerEditSession({
   completeItem
 }: {
   editSession: NativeChatComposerProps['editSession']
+  isEditingHeld?: () => boolean
   root: RefObject<HTMLDivElement | null>
   handle: RefObject<NativeChatComposerHandle | null>
   draftScopeKey: string
@@ -65,12 +67,12 @@ export function useNativeChatComposerEditSession({
       return
     }
     return registerDictationComposerTarget(element, (text) => {
-      if (!destination.active) {
+      if (isEditingHeld?.() || !destination.active) {
         return
       }
       insertNativeChatComposerDraftText(destination.scopeKey, text)
     })
-  }, [draftScopeKey, root, handle])
+  }, [draftScopeKey, root, handle, isEditingHeld])
 
   const refuseEditCommand = useCallback(
     (text: string): boolean => {
@@ -89,6 +91,9 @@ export function useNativeChatComposerEditSession({
   )
   const send = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
+      if (isEditingHeld?.()) {
+        return
+      }
       if (!editSession) {
         sendMessage(intent)
         return
@@ -97,16 +102,19 @@ export function useNativeChatComposerEditSession({
         editSession.save()
       }
     },
-    [disabled, editSession, sendHeld, sendMessage]
+    [disabled, editSession, sendHeld, sendMessage, isEditingHeld]
   )
   const chooseEditItem = useCallback(
     (item: Parameters<typeof completeItem>[0]) => {
+      if (isEditingHeld?.()) {
+        return
+      }
       if (item.kind === 'command' && refuseEditCommand(`/${item.name}`)) {
         return
       }
       completeItem(item)
     },
-    [completeItem, refuseEditCommand]
+    [completeItem, refuseEditCommand, isEditingHeld]
   )
 
   const dispatchPtyPickerCommand = useNativeChatPickerCommandDispatch(ptyCommandRouting)

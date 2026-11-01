@@ -1,9 +1,8 @@
+import { useMobileNativeChatDictationFailure } from './use-mobile-native-chat-dictation-failure'
 import { useEffect, useCallback, useRef } from 'react'
 import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
-import { triggerError } from '../platform/haptics'
-import { useClipboardWriter } from '../platform/clipboard'
 import { routeDictationTranscript } from '../terminal/terminal-live-dictation-routing'
 import { insertDictationText } from '../dictation/mobile-dictation-text-insertion'
 import {
@@ -12,11 +11,9 @@ import {
   useMobileDictationPreviews
 } from './use-mobile-dictation-destination'
 import {
-  dictationFailureMessage,
   dictationMicHidden,
   dictationNeedsSetup,
-  fetchDictationSetup,
-  isDictationSetupRequiredError
+  fetchDictationSetup
 } from '../dictation/mobile-dictation-setup'
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileDictationLeaveHold } from './mobile-dictation-leave-hold'
@@ -81,6 +78,7 @@ export function useMobileSessionNativeChatDictation(
   })
   const nativeChatController = useMobileNativeChatController({
     client,
+    readSetupAgentStartHeld: scope.readSetupAgentStartHeld,
     hostId,
     worktreeId,
     activeSessionTab,
@@ -112,40 +110,23 @@ export function useMobileSessionNativeChatDictation(
     surfaceKey: JSON.stringify([routeKey, activeHandle, showNativeChat, liveInputEnabled])
   })
 
-  // Share dictation error handling for start rejection and live errors so disabled host setup always opens the setup sheet.
-  const reportDictationFailure = useCallback(
-    (err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err)
-      if (isDictationSetupRequiredError(message)) {
-        setShowDictationSetup(true)
-        return
-      }
-      triggerError()
-      showToast(dictationFailureMessage(message))
-    },
-    [setShowDictationSetup, showToast]
-  )
-
-  const clipboard = useClipboardWriter()
-  // A transcript its target refused must not vanish: keep it on the clipboard and say so.
-  const keepUndeliveredDictation = (text: string) => {
-    triggerError()
-    void clipboard.writeText(text).then(
-      () => showToast(nativeChatDictationCopy.insertFailedCopied()),
-      () => showToast(nativeChatDictationCopy.insertFailed())
-    )
-  }
+  const { reportDictationFailure, keepUndeliveredDictation } = useMobileNativeChatDictationFailure({
+    setShowDictationSetup,
+    showToast
+  })
 
   const destination = useMobileDictationDestination(nativeChatController)
   // Starting needs the host, but a reconnect must not end a recording: the host keeps the session through it.
-  const dictationCanStart = showNativeChat ? connState === 'connected' : canSend
+  const dictationCanStart = showNativeChat
+    ? connState === 'connected' && !scope.setupInputHeld
+    : canSend
   const dictation = useMobileDictation({
     client,
     enabled: (showNativeChat || canCompose) && dictationEnabled,
     onTranscript: (text) => {
       // Chat dictation is inserted locally; terminal mode retains live-input routing.
       if (destination.landsInChat(showNativeChatRef.current)) {
-        if (!destination.insertInChat(text)) {
+        if (scope.readSetupAgentStartHeld() || !destination.insertInChat(text)) {
           keepUndeliveredDictation(text)
         }
         return

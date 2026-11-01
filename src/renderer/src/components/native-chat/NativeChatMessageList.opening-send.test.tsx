@@ -3,6 +3,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { cleanup, screen } from '@testing-library/react'
+import { i18n } from '@/i18n/i18n'
 import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -223,7 +224,7 @@ describe('a message sent while the turn ahead is still opening', () => {
       ...agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
     })
     view.rerender(frame(queued, [...submissions, withdrawn], [], true))
-    const stopRow = screen.getByText('Stopped manually')
+    const stopRow = screen.getByText('Interrupted')
     expect(follows(screen.getByText('B'), liveStatus())).toBe(true)
     expect(follows(stopRow, screen.getByText('B'))).toBe(true)
     expect(follows(liveActivity(), stopRow)).toBe(true)
@@ -333,7 +334,7 @@ describe('a send a Stop took back before the agent started it', () => {
   afterAll(() => restoreViewport())
   afterEach(cleanup)
 
-  const STOP_ROW = 'Stopped manually'
+  const STOP_ROW = 'Interrupted'
   const THREAD: AgentJournalTurnScope = { kind: 'thread' }
   let sequence = 0
 
@@ -452,6 +453,18 @@ describe('a send a Stop took back before the agent started it', () => {
     expect(follows(row, message)).toBe(true)
     expect(screen.getAllByText(/^(Worked|Working) for/)).toHaveLength(1)
     expect(screen.getByText('Worked for 3s')).toBeInTheDocument()
+  })
+
+  it('renders a withdrawn opening as Interrupted in the selected German catalog', async () => {
+    try {
+      await i18n.changeLanguage('de')
+      renderJournal([sent('never-ran', 'look around')], [stopped('never-ran')])
+      expect(screen.getByText('Unterbrochen')).toBeInTheDocument()
+      expect(screen.queryByText('Manuell gestoppt')).not.toBeInTheDocument()
+    } finally {
+      cleanup()
+      await i18n.changeLanguage('en')
+    }
   })
 
   it('keeps no clock it showed while the send waited on its turn', () => {

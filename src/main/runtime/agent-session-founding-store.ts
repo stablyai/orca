@@ -10,6 +10,15 @@ export function createAgentSessionFoundingStore(
   transactions: AgentSessionStoreTransactions,
   firstRecordListeners: ReadonlySet<() => void>
 ) {
+  const notifyFirstRecord = () => {
+    for (const listener of firstRecordListeners) {
+      try {
+        listener()
+      } catch (error) {
+        console.warn('[agent-session-founding] first-record observer failed', error)
+      }
+    }
+  }
   return {
     prepare: (request: AgentSessionReserveRequest) =>
       commitAgentSessionFounding(
@@ -24,7 +33,7 @@ export function createAgentSessionFoundingStore(
         return commitAgentSessionFounding(draft, request, transactions.legacySessionTabIds)
       })
       if (!heldBefore) {
-        firstRecordListeners.forEach((listener) => listener())
+        notifyFirstRecord()
       }
       return result
     },
@@ -40,11 +49,11 @@ export function createAgentSessionFoundingStore(
         }
       })
       return {
-        write: receipt.write,
+        ...receipt,
         committed: () => {
           receipt.committed()
           if (!heldBefore) {
-            firstRecordListeners.forEach((listener) => listener())
+            notifyFirstRecord()
           }
         }
       }

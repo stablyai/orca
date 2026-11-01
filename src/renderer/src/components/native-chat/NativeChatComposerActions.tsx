@@ -27,6 +27,7 @@ export type NativeChatComposerActionsProps = {
   /** Storage refused this draft; it is held in memory only. */
   draftNotSaved?: boolean
   isWorking: boolean
+  setupInputHeld?: boolean
   /** The draft holds text or images: while the agent works, Send takes Stop's place. */
   hasDraft?: boolean
   /** While the agent works: what Cmd/Ctrl+Enter would do instead of a plain send, when it differs. */
@@ -62,6 +63,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   sendBlockedReason,
   draftNotSaved,
   isWorking,
+  setupInputHeld = false,
   hasDraft = false,
   alternateSend,
   isStopping = false,
@@ -83,7 +85,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
 }: NativeChatComposerActionsProps): React.JSX.Element {
   useUiLanguageRevision()
   // Like Enter, a typed draft sends while the agent works; Esc still stops.
-  const stops = isWorking && !hasDraft
+  const stops = isWorking && (!hasDraft || setupInputHeld)
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
     // Ignore a double-click’s second press after Send becomes Stop so it cannot cancel the newly started turn.
     if (event.detail > 1) {

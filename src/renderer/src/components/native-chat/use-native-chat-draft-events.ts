@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 
 export function useNativeChatDraftEvents({
+  isEditingHeld,
   setDraft,
   setCaret,
   setActiveSuggestion,
@@ -11,6 +12,7 @@ export function useNativeChatDraftEvents({
   draft
 }: {
   draft: string
+  isEditingHeld?: () => boolean
   setDraft: (text: string) => void
   setCaret: (caret: number) => void
   setActiveSuggestion: (index: number) => void
@@ -20,13 +22,16 @@ export function useNativeChatDraftEvents({
 }) {
   const onDraftChange = useCallback(
     (value: string, element: NativeChatComposerInput) => {
+      if (isEditingHeld?.()) {
+        return
+      }
       const caret = element.selectionStart ?? value.length
       setDraft(value)
       setCaret(caret)
       handleDraftOrCaretChange(value, caret)
       setActiveSuggestion(0)
     },
-    [setDraft, setCaret, handleDraftOrCaretChange, setActiveSuggestion]
+    [isEditingHeld, setDraft, setCaret, handleDraftOrCaretChange, setActiveSuggestion]
   )
   return {
     onDraftChange,

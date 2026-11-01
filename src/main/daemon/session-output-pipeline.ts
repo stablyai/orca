@@ -1,3 +1,6 @@
+import type { SubprocessHandle } from './session-subprocess-handle'
+import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import { SessionOutputPlane } from './session-output-plane'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
@@ -30,16 +33,30 @@ export function createSessionOutputPipeline(
   return { output, recoveryBarrier }
 }
 
+export function createSessionStartupIngress(
+  opts: Pick<SessionOptions, 'startupIngress' | 'ownerBackend'>,
+  subprocess: SubprocessHandle,
+  recoveryBarrier: TerminalShellRecoveryBarrier
+): PtyStartupIngress {
+  return new PtyStartupIngress({
+    ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
+    ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
+    write: (data) => subprocess.write(data),
+    onEmission: (emission) => recoveryBarrier.accept(emission)
+  })
+}
+
 export function createSessionShellReady(
   opts: SessionOptions,
   output: SessionOutputPlane,
-  acceptStartupIngress: (data: string) => void
+  acceptStartupIngress: (data: string, removed?: boolean) => void
 ): SessionShellReadyBarrier {
   return new SessionShellReadyBarrier({
     sessionId: opts.sessionId,
     subprocess: opts.subprocess,
     responderParser: output.responderParser,
     shellReadySupported: opts.shellReadySupported,
+    nativeSetupToken: opts.nativeSetupToken,
     ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
     shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
     installDeviceAttributesFilter: () => output.installDeviceAttributesFilter(),

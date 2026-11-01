@@ -44,6 +44,7 @@ export function useNativeChatComposerAttachments({
   allowWithoutTarget = false,
   caret,
   disabled,
+  isEditingHeld,
   isComposing,
   resolveTarget,
   textareaRef,
@@ -294,6 +295,9 @@ export function useNativeChatComposerAttachments({
     },
     flushPendingAttachments,
     removeImageAttachment: (id) => {
+      if (isEditingHeld?.()) {
+        return
+      }
       releasePreview(id)
       removeImageWithReferences(attachmentScopeKey, scopeEditor(), id)
     },

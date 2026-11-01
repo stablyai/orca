@@ -1,3 +1,4 @@
+import { makeWorktreeCreationRequest as makeRequest } from './worktree-creation-request.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   PendingWorktreeCreation,
@@ -109,21 +110,6 @@ beforeEach(() => {
   store.unifiedTabsByWorktree = {}
   vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
 })
-
-function makeRequest(overrides: Partial<WorktreeCreationRequest> = {}): WorktreeCreationRequest {
-  return {
-    repoId: 'repo-1',
-    name: 'feature',
-    setupDecision: 'inherit',
-    agent: null,
-    pendingFirstAgentMessageRename: false,
-    note: '',
-    startupPlan: null,
-    quickPrompt: '',
-    quickTelemetry: null,
-    ...overrides
-  }
-}
 
 function makePendingCreation(request: WorktreeCreationRequest): PendingWorktreeCreation {
   return {
@@ -268,7 +254,8 @@ describe('runBackgroundWorktreeCreation', () => {
     })
     expect(store.refreshRuntimeEnvironmentStatus).toHaveBeenCalledWith('env-1')
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+      cleanupVm: false,
+      reason: 'completed'
     })
   })
 
@@ -541,7 +528,8 @@ describe('staged background worktree creation', () => {
     )
     expect(queueWorkspaceActivationTerminalFocus).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+      cleanupVm: false,
+      reason: 'completed'
     })
   })
 

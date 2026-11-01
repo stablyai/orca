@@ -16,6 +16,8 @@ import {
 export type StructuredAgentSessionSendInput = {
   sessionId: string
   text: string
+  /** Internal founding correlation; ordinary sends allocate their own identity. */
+  clientMessageId?: string
   attachments?: readonly StructuredAgentSessionAttachment[]
   /** Asks the host to hold it as a card while the agent works; decided once, at the send. */
   delivery?: 'queue-if-active'
@@ -50,7 +52,8 @@ export function takeStructuredAgentSessionSendSlot(
   }
   const attachments = input.attachments ?? []
   const entry: StructuredAgentSessionPendingSend = {
-    clientMessageId: createStructuredAgentSessionOperationId(createBrowserUuid),
+    clientMessageId:
+      input.clientMessageId ?? createStructuredAgentSessionOperationId(createBrowserUuid),
     sessionId: input.sessionId,
     body: structuredAgentSessionSendBody(input.text, attachments, input.skills),
     previewUris: attachments.map((attachment) => attachment.previewUri),

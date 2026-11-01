@@ -1,5 +1,6 @@
 /** Create selects only its caller; shared selection stays put and no tap-style PTY respawn runs. */
 import { expect, it, vi } from 'vitest'
+import { beginCreatedWorkspaceLaunch } from '../agent-launch/agent-launch-created-workspace'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 
@@ -107,4 +108,64 @@ it('never materializes a pane that is not ready, as a tap would', async () => {
   // Respawn crosses several awaits; an immediate absence assertion would be premature.
   await new Promise((resolve) => setTimeout(resolve, 200))
   expect(spawn).not.toHaveBeenCalled()
+})
+
+it.each(['chat', 'terminal'] as const)(
+  'initializes an unpicked background %s before ancillary terminals for every unpicked viewer',
+  async (surface) => {
+    const { runtime } = pairedRuntime()
+    const launch = beginCreatedWorkspaceLaunch(runtime, 'claude')
+    launch.onWorkspaceCreated(WT)
+    let selected: string
+    if (surface === 'chat') {
+      await runtime.publishStructuredAgentSessionTab({
+        workspaceId: WT,
+        sessionId: 'initial',
+        agent: 'claude',
+        activate: false
+      })
+      selected = 'agent-session:initial'
+    } else {
+      const created = await runtime.createTerminal(`id:${WT}`, {
+        command: 'claude',
+        launchAgent: 'claude',
+        presentation: 'background'
+      })
+      const pane = parsePaneKey(created.paneKey ?? '')
+      if (!pane) {
+        throw new Error('Missing initial pane')
+      }
+      selected = `${pane.tabId}::${pane.leafId}`
+    }
+    launch.release()
+    await createPane(runtime)
+    for (const device of [undefined, 'device-caller', 'device-bystander']) {
+      const snapshot = await runtime.listMobileSessionTabs(`id:${WT}`, device)
+      expect(snapshot.activeTabId).toBe(selected)
+      expect(snapshot.tabs.find((tab) => tab.id === selected)?.isActive).toBe(true)
+      const row = snapshot.tabs.find((tab) => tab.id === selected)
+      const groupSelection = row?.type === 'terminal' ? row.parentTabId : selected
+      expect(snapshot.tabGroups?.some((group) => group.activeTabId === groupSelection)).toBe(true)
+    }
+  }
+)
+
+it('preserves a surface selected while initialization is pending', async () => {
+  const { runtime } = pairedRuntime()
+  const launch = beginCreatedWorkspaceLaunch(runtime, 'claude')
+  launch.onWorkspaceCreated(WT)
+  const picked = await createPane(runtime)
+  await runtime.publishStructuredAgentSessionTab({
+    workspaceId: WT,
+    sessionId: 'late-initial',
+    agent: 'claude',
+    activate: true
+  })
+  await runtime.createTerminal(`id:${WT}`, {
+    command: 'claude',
+    launchAgent: 'claude',
+    presentation: 'background'
+  })
+  launch.release()
+  expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(picked.id)
 })

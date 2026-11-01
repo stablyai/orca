@@ -85,4 +85,4 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** See `StructuredAgentSessionHostDeps.launchAccountHome`. */
   launchAccountHome?: StructuredAgentSessionHostDeps['launchAccountHome']
   parentAccountWork?: StructuredAgentSessionHostDeps['parentAccountWork']
-} & Pick<StructuredAgentSessionHostDeps, 'onRequestFailure' | 'statusSink'>
+} & Pick<StructuredAgentSessionHostDeps, 'setupHold' | 'onRequestFailure' | 'statusSink'>

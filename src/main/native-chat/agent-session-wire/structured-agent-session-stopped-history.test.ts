@@ -110,7 +110,7 @@ describe('a Stop withdraws what the agent never got, and the next send delivers 
     expect(await transcript()).toEqual([
       'first (stopped)',
       'second (stopped)',
-      'Stopped manually',
+      'Interrupted',
       'Cancellation requested.',
       'what did I send?',
       'after'

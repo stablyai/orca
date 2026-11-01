@@ -27,13 +27,14 @@ export type LocalPtyProviderOptions = {
   getDefaultShell?: () => string | undefined
   getWindowsPowerShellImplementation?: () => 'auto' | 'powershell.exe' | 'pwsh.exe' | undefined
   pwshAvailable?: () => boolean | Promise<boolean>
-  onSpawned?: (id: string, incarnationId: string) => void
+  onSpawned?: (id: string, incarnationId: string, setupToken?: string) => void
   onExit?: (id: string, code: number, incarnationId: string, cause?: TerminalExitCause) => void
   onData?: (
     id: string,
     data: string,
     timestamp: number,
     sequenceChars?: number,
-    transformed?: boolean
+    transformed?: boolean,
+    seq?: number
   ) => void
 }

@@ -76,3 +76,130 @@ function isUnfinishedEscape(rest: string): boolean {
     (STRING_START_RE.test(rest) && !STRING_END_RE.test(rest))
   )
 }
+
+/** Strict painted-text mode; every control interrupts a receipt, including a torn introducer. */
+export function createStrictTerminalEscapeScanner(observer: {
+  onText: (text: string) => void
+  onControl: (control: string, ground: boolean) => void
+}): { observe: (data: string) => void } {
+  type Mode =
+    | 'ground'
+    | 'escape'
+    | 'escapeIntermediate'
+    | 'csi'
+    | 'csiIgnore'
+    | 'csiIntermediate'
+    | 'dcs'
+    | 'dcsIgnore'
+    | 'dcsIntermediate'
+    | 'dcsBody'
+    | 'osc'
+    | 'string'
+    | 'apc'
+    | 'apcBody'
+  let mode: Mode = 'ground'
+  let parameter = false
+  return {
+    observe(data): void {
+      for (const ch of data) {
+        const code = ch.codePointAt(0)!
+        const ground = mode === 'ground'
+        if (ground && code >= 0x20 && code !== 0x7f && !(code >= 0x80 && code <= 0x9f)) {
+          observer.onText(ch)
+          continue
+        }
+        observer.onControl(ch, ground)
+        // The engine's anywhere transitions precede each state's local table.
+        if (code === 0x1b) {
+          mode = 'escape'
+          parameter = false
+          continue
+        }
+        if (code === 0x9b || code === 0x90) {
+          mode = code === 0x9b ? 'csi' : 'dcs'
+          parameter = false
+          continue
+        }
+        if (code === 0x9d) {
+          mode = 'osc'
+          continue
+        }
+        if (code === 0x98 || code === 0x9e || code === 0x9f) {
+          mode = code === 0x9f ? 'apc' : 'string'
+          continue
+        }
+        if (code === 0x18 || code === 0x1a || (code >= 0x80 && code <= 0x9f)) {
+          mode = 'ground'
+          continue
+        }
+        if (mode === 'osc') {
+          if (code === 7) {
+            mode = 'ground'
+          }
+          continue
+        }
+        if (mode === 'string') {
+          if (code >= 0xa0) {
+            mode = 'ground'
+          }
+          continue
+        }
+        if (mode === 'dcsBody' || mode === 'dcsIgnore' || mode === 'apcBody') {
+          continue
+        }
+        if (mode === 'apc') {
+          if (code >= 0xa0) {
+            mode = 'ground'
+          } else if (code >= 0x30 && code <= 0x7e) {
+            mode = 'apcBody'
+          }
+          continue
+        }
+        if (code < 0x20 || code === 0x7f) {
+          continue
+        }
+        if (mode === 'escape') {
+          if (ch === ']') {
+            mode = 'osc'
+          } else if (ch === '[' || ch === 'P') {
+            mode = ch === '[' ? 'csi' : 'dcs'
+          } else if (ch === 'X' || ch === '^' || ch === '_') {
+            mode = ch === '_' ? 'apc' : 'string'
+          } else {
+            mode = code <= 0x2f ? 'escapeIntermediate' : 'ground'
+          }
+          continue
+        }
+        if (mode === 'escapeIntermediate') {
+          if (code >= 0x30) {
+            mode = 'ground'
+          }
+          continue
+        }
+        if (mode === 'ground') {
+          continue
+        }
+        const dcs = mode === 'dcs' || mode === 'dcsIntermediate'
+        if (code >= 0x40 && code <= 0x7e) {
+          mode = dcs ? 'dcsBody' : 'ground'
+        } else if (code >= 0xa0) {
+          if (mode !== 'csiIgnore') {
+            mode = 'ground'
+          }
+        } else if (code <= 0x2f) {
+          if (mode !== 'csiIgnore') {
+            mode = dcs ? 'dcsIntermediate' : 'csiIntermediate'
+          }
+        } else if (
+          mode === 'csiIntermediate' ||
+          mode === 'dcsIntermediate' ||
+          (parameter && code >= 0x3c)
+        ) {
+          mode = dcs ? 'dcsIgnore' : 'csiIgnore'
+        } else {
+          parameter = true
+        }
+      }
+    }
+  }
+}

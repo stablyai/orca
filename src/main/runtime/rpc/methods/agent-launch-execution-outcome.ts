@@ -6,12 +6,15 @@ import type { RpcContext } from '../core'
 import { readsAgentLaunchTabClosed, type AgentLaunchRefusal } from './agent-launch-replay'
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
 import { agentLaunchFailureCode } from './agent-launch-failure-code'
+import { WorktreeCreateSetupChoiceRefusedError } from '../../worktree-create-setup-choice-refusal'
 
 export class AgentLaunchExecutionError extends Error {
   constructor(
     cause: unknown,
-    /** Decided by the executing launch: a recorded code proves no effects; later readers cannot re-derive that proof. */
-    readonly failureCode: string | null
+    /** The recorded code when the launch provably ran nothing, else null. Decided once, by the
+     *  launch that ran; a later reader cannot re-derive it from the error. */
+    readonly failureCode: string | null,
+    readonly createdWorktreeId?: string
   ) {
     super('agent_session_operation_unknown', { cause })
   }
@@ -23,6 +26,10 @@ export class AgentLaunchExecutionError extends Error {
 
 /** A replayed refusal, in the words it was refused with when its record kept them. */
 export function agentLaunchRefusalError(refusal: AgentLaunchRefusal): Error {
+  // Older launch rows stored this producer's explanation as their failure code.
+  if (refusal.code === 'Setup decision required for this repository') {
+    return new WorktreeCreateSetupChoiceRefusedError(refusal.said ?? refusal.code)
+  }
   return Object.assign(new Error(refusal.said ?? refusal.code), { code: refusal.code })
 }
 
@@ -68,4 +75,14 @@ export async function settleLaunchWhoseTabWasClosed(
   }
   await settleQuietly(admission.fail(AGENT_LAUNCH_TAB_CLOSED_CODE))
   throw new AgentLaunchExecutionError(new AgentLaunchTabClosedError(), AGENT_LAUNCH_TAB_CLOSED_CODE)
+}
+
+/** Capability-scoped actual workspace fact; the base RPC error keeps its existing vocabulary. */
+export class AgentLaunchDesktopCreateError extends Error {
+  constructor(
+    readonly base: Error,
+    readonly worktreeId: string
+  ) {
+    super(base.message, { cause: base })
+  }
 }

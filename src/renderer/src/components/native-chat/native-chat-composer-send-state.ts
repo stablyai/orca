@@ -25,6 +25,7 @@ export function nativeChatComposerSendState(input: {
   structuredTransport: NativeChatStructuredComposerTransport | undefined
   editSession: { canSave: boolean } | undefined
   isWorking: boolean
+  setupInputHeld?: boolean
   canStop: boolean
 }): NativeChatComposerSendState {
   const { structuredTransport: transport } = input
@@ -36,10 +37,10 @@ export function nativeChatComposerSendState(input: {
     imageBlock.holdsSend ||
     transport?.sendBlockedReason !== undefined
   const hasDraft = input.draft.trim() !== '' || input.imageAttachments.length > 0
-  // Like Enter, a typed draft sends while the agent works; only an empty one offers Stop.
+  // Setup holds Send without taking Stop away from a retained draft.
   const sendButtonDisabled = input.editSession
     ? sendHeld || !input.editSession.canSave
-    : input.isWorking && !hasDraft
+    : input.isWorking && (!hasDraft || input.setupInputHeld)
       ? !input.canStop
       : sendHeld || !hasDraft
   // The send's own resolver, so the hint withdraws wherever Cmd/Ctrl+Enter would send no differently.

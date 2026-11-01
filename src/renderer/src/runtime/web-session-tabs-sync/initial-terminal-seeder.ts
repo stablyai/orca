@@ -2,6 +2,7 @@ import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
 import { isWebRuntimeInitialTerminalBootstrapInFlight } from '../web-runtime-initial-terminal-bootstrap'
+import { shouldSkipWebRuntimeWakeTerminalRespawn } from '../web-runtime-wake-terminal-respawn'
 import { dispatchWebRuntimeInitialTerminalBootstrap } from '../web-runtime-initial-terminal-bootstrap-dispatch'
 import { shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'
 import { shouldBootstrapInitialWebRuntimeTerminal } from './tracking-decisions'
@@ -49,6 +50,7 @@ export function createInitialTerminalSeeder(
       // Closure guard prevents reseeding after its successful create; failed creates leave it retryable. Shared latch survives effect reinstall so fresh closures cannot duplicate pending creates (STA-6173).
       requestedInitialTerminal:
         requestedInitialTerminal ||
+        shouldSkipWebRuntimeWakeTerminalRespawn(worktreeId) ||
         isWebRuntimeInitialTerminalBootstrapInFlight(environmentId, worktreeId),
       snapshotIsFresh: true,
       localTerminalCount: (state.tabsByWorktree[worktreeId] ?? []).length,

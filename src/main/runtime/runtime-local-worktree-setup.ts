@@ -1,3 +1,4 @@
+import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
 import type { CreateWorktreeResult, SetupDecision } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
 import { getEffectiveHooks, loadHooks, runHook } from '../hooks'
@@ -29,6 +30,8 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   hookFound: boolean
   shouldRunSetup: boolean
   didStartInProcessSetupHook: boolean
+  inProcessCompletion?: Promise<unknown>
+  waitForSetup: boolean
 }> {
   const { request, repo, worktreePath, settings } = args
   let warning = args.warning
@@ -53,6 +56,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
       // A new branch may introduce an unapproved hook; worktree already exists, so skip/warn below rather than fail the create.
     }
   }
+  let inProcessCompletion: Promise<unknown> | undefined
   let didStartInProcessSetupHook = false
   if (shouldRunSetup && hooks?.scripts.setup) {
     if (args.shouldUseSetupRunner) {
@@ -70,7 +74,13 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
       }
     } else {
       didStartInProcessSetupHook = true
-      void runHook('setup', worktreePath, repo, worktreePath, args.runtimeTarget).then((result) => {
+      inProcessCompletion = runHook(
+        'setup',
+        worktreePath,
+        repo,
+        worktreePath,
+        args.runtimeTarget
+      ).then((result) => {
         if (!result.success) {
           console.error(`[hooks] setup hook failed for ${worktreePath}:`, result.output)
         }
@@ -88,6 +98,13 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     effectiveDecision,
     hookFound: Boolean(hooks?.scripts.setup),
     shouldRunSetup,
-    didStartInProcessSetupHook
+    didStartInProcessSetupHook,
+    inProcessCompletion,
+    waitForSetup:
+      shouldRunSetup &&
+      shouldWaitForSetupBeforeAgentStartup(
+        repo.hookSettings?.setupAgentStartupPolicy,
+        yamlHooks?.setupAgentStartupPolicy
+      )
   }
 }

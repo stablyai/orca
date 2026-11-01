@@ -1,3 +1,5 @@
+import { noteHostCreatedLaunchRead } from '@/lib/structured-agent-session-launch-prompt'
+import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
 import type {
   StructuredAgentSessionSendControl,
   StructuredAgentSessionAttachment
@@ -87,7 +89,10 @@ export function useStructuredAgentSessionSends(args: {
 
   useEffect(() => {
     settleStructuredAgentSessionSendsFromJournal(sessionId, submissions, queuedMessageIds, cursor)
-  }, [cursor, pending, queuedMessageIds, sessionId, submissions])
+    if (historyLoaded && fence !== null) {
+      noteHostCreatedLaunchRead(sessionId, executionHostIdForStructuredTarget(target))
+    }
+  }, [cursor, pending, queuedMessageIds, sessionId, submissions, historyLoaded, fence, target])
 
   const recoverLegacy = historyLoaded && fence !== null
   // Why an event: once per open, from the first loaded history; later batches add nothing it needs.

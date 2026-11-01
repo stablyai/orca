@@ -116,11 +116,11 @@ __orca_osc133_epilogue() {
     if [[ -n "\${_ble_attached-}" ]]; then
       # Its first render runs this before the key decoder attaches; wait for a later prompt.
       if [[ "\${_ble_decode_bind_state:-none}" != none ]]; then
-        printf "\\033]777;orca-shell-ready\\007"
+        printf "\\033]777;orca-shell-ready:posix\\007"
         __orca_ready_marker=""
       fi
     else
-      PS1="\${PS1-}"'\\[\\e]777;orca-shell-ready\\a\\]'
+      PS1="\${PS1-}"'\\[\\e]777;orca-shell-ready:posix\\a\\]'
       __orca_ready_marker=""
     fi
   fi

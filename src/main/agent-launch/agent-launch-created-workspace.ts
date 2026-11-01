@@ -1,22 +1,19 @@
 import { randomUUID } from 'node:crypto'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
-import type { AgentLaunchExecution } from './agent-launch-execution'
 import type { AgentLaunchWorkspaceFactory } from './agent-launch-surface-factories'
+import type { readAgentLaunchModeSettings } from './agent-launch-mode'
 
 export type InitialSurfaceLaunch = NonNullable<
   RuntimeMobileSessionTabsResult['initialSurfaceLaunch']
 >
 
-type AgentLaunchRuntimeOwner = Pick<
-  AgentLaunchExecution['runtime'],
-  'getStructuredAgentSessionCreateSupport'
->
+type CreatedWorkspaceLaunchOwner = Parameters<typeof readAgentLaunchModeSettings>[0]
 
-const liveLaunches = new WeakMap<AgentLaunchRuntimeOwner, Map<string, InitialSurfaceLaunch>>()
+const liveLaunches = new WeakMap<CreatedWorkspaceLaunchOwner, Map<string, InitialSurfaceLaunch>>()
 
 export function beginCreatedWorkspaceLaunch(
-  runtime: AgentLaunchRuntimeOwner,
+  runtime: CreatedWorkspaceLaunchOwner,
   agent: TuiAgent
 ): {
   onWorkspaceCreated: (worktreeId: string) => void
@@ -53,7 +50,7 @@ export function beginCreatedWorkspaceLaunch(
 }
 
 export function readCreatedWorkspaceLaunch(
-  runtime: AgentLaunchRuntimeOwner,
+  runtime: CreatedWorkspaceLaunchOwner,
   worktreeId: string
 ): InitialSurfaceLaunch | undefined {
   return liveLaunches.get(runtime)?.get(worktreeId)
@@ -68,4 +65,15 @@ export async function recoverCreatedWorkspace(
   } catch (error) {
     console.warn('[agent-launch] Failed to create a recovery shell:', error)
   }
+}
+
+export function initialChatSelection<T extends { workspaceId: string; activate: boolean }>(
+  runtime: CreatedWorkspaceLaunchOwner,
+  input: T,
+  snapshots: ReadonlyMap<string, { tabs: readonly { id: string }[]; activeTabId: string | null }>
+): T {
+  const snapshot = snapshots.get(input.workspaceId)
+  return readCreatedWorkspaceLaunch(runtime, input.workspaceId)
+    ? { ...input, activate: !snapshot?.tabs.some((tab) => tab.id === snapshot.activeTabId) }
+    : input
 }

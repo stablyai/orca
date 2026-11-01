@@ -225,7 +225,8 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
         )
       }
       expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-        cleanupVm: false
+        cleanupVm: false,
+        reason: 'completed'
       })
     }
   )
@@ -255,7 +256,8 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
       { worktreeCreationId: 'creation-1' }
     )
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+      cleanupVm: false,
+      reason: 'completed'
     })
     expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
     expect(store.activePendingCreationId).toBeNull()
@@ -274,7 +276,8 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
 
     expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+      cleanupVm: false,
+      reason: 'completed'
     })
   })
 
@@ -333,7 +336,8 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
       expect.any(Error)
     )
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+      cleanupVm: false,
+      reason: 'completed'
     })
     expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
     expect(store.activePendingCreationId).toBeNull()
@@ -381,7 +385,8 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
     await executeWorktreeCreation('creation-1', request)
 
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+      cleanupVm: false,
+      reason: 'completed'
     })
     expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
     expect(store.activePendingCreationId).toBeNull()

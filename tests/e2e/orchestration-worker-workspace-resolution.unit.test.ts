@@ -39,6 +39,11 @@ import type { WorktreeMeta } from '../../src/shared/worktree/meta-types'
 import type { RuntimeStore } from '../../src/main/runtime/runtime-store-contract'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { HostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
+import { mockWorkerCreatedWorktree } from '../../src/main/runtime/rpc/methods/orchestration/worker/worker-created-worktree.test-fixture'
+import {
+  formatWorkerStart,
+  type WorkerStartReceipt
+} from '../../src/cli/handlers/orchestration/worker-output'
 
 const REPO_ID = 'repo-1'
 const REPO_PATH = '/repo'
@@ -141,6 +146,103 @@ describe('orchestration worker workspace resolution', () => {
 
   afterEach(async () => {
     await Promise.all(tempPaths.splice(0).map((path) => rm(path, { recursive: true, force: true })))
+  })
+
+  it('prints the created workspace name from the registered worker method receipt', async () => {
+    const runtime = new OrcaRuntimeService(makeStore())
+    const db = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(db)
+    const paneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const run = db.createRun({
+      objective: 'named worker workspace',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: paneKey
+    })
+    const terminal = {
+      handle: 'term_worker',
+      ptyId: 'pty_worker',
+      worktreeId: 'repo::created',
+      worktreePath: '/repo/created',
+      branch: 'created',
+      tabId: 'tab_worker',
+      leafId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      title: 'Codex',
+      connected: true,
+      writable: true,
+      lastOutputAt: null,
+      preview: '',
+      paneRuntimeId: 1,
+      rendererGraphEpoch: 1
+    }
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_coord' ? paneKey : `${terminal.tabId}:${terminal.leafId}`
+    )
+    vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('runtime_test:term_worker:1')
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      ...terminal,
+      handle: 'term_coord',
+      worktreeId: WORKTREE_ID
+    })
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    vi.spyOn(runtime, 'createTerminal')
+    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
+      terminals: [terminal],
+      totalCount: 1,
+      truncated: false
+    })
+    vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
+      handle: terminal.handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running',
+      exitCode: null
+    })
+    vi.spyOn(runtime, 'waitForSetupTerminalCompletion').mockReturnValue(new Promise(() => {}))
+    vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+      handle: terminal.handle,
+      accepted: true,
+      bytesWritten: 1
+    })
+    mockWorkerCreatedWorktree(runtime, { displayName: 'Release audit' })
+    try {
+      const task = db.createTask({ spec: 'named worker task', runId: run.id })
+      const method = ORCHESTRATION_METHODS.find(
+        (candidate) => candidate.name === 'orchestration.workerStart'
+      )
+      if (!method) {
+        throw new Error('workerStart method is not registered')
+      }
+      const params = method.params!.parse({
+        task: task.id,
+        from: 'term_coord',
+        worktree: 'new-top-level',
+        name: 'new-worker',
+        agent: 'codex'
+      })
+      const result = await method.handler(params, { runtime })
+      expect(result).toMatchObject({
+        state: 'ready',
+        taskId: task.id,
+        dispatchId: expect.any(String),
+        effects: expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'worktree',
+            action: 'created_top_level',
+            id: 'repo::created',
+            name: 'Release audit'
+          }),
+          expect.objectContaining({ kind: 'terminal', role: 'agent', id: terminal.handle })
+        ])
+      })
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+      // SAFETY: The real method's receipt fields and named worktree effect are asserted above.
+      expect(formatWorkerStart(result as WorkerStartReceipt).split('\n')).toContain(
+        'Created workspace: Release audit'
+      )
+    } finally {
+      db.close()
+    }
   })
 
   it.each([

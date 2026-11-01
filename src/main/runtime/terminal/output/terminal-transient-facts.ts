@@ -52,6 +52,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
 
   /** Output gaps reset every cross-chunk parser carry and the headless mirror; rebuild from delivered suffix or snapshot instead of parsing discontinuous escapes. */
   notePtyDataGap(ptyId: string, droppedChars = 0): void {
+    this.setupCompletionTokenByPtyId.get(ptyId)?.noteGap()
     if (droppedChars > 0) {
       // Why: the daemon snapshot's seq counts bytes its monitoring stream
       // dropped. Advancing without parsing preserves that absolute domain so

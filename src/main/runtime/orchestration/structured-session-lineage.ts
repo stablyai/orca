@@ -1,3 +1,4 @@
+import { peekOpenedAgentSessionRecordStore } from '../agent-session-record-store-slot'
 /** Resolve /clear successors from committed durable pointers on each read; clearing rewrites no callers. */
 
 import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
@@ -153,4 +154,9 @@ export function createCanonicalSessionPaneResolver(
     const id = destination ?? sessionId
     return structuredAgentSessionPaneKey(structuredAgentSessionTabId(id), id)
   }
+}
+
+export function openedConversationRecordReader() {
+  const store = getStructuredAgentSessionHost()?.deps.store ?? peekOpenedAgentSessionRecordStore()
+  return store ? conversationRecordReader(store) : null
 }

@@ -1,11 +1,16 @@
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
+import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../../shared/worktree/meta-persisted-defaults'
 /** Use one runtime stub for RPC and replay tests so they exercise the same host surface. */
 
 import { vi } from 'vitest'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import type { WorktreeLineageWarning } from '../../../../shared/worktree/lineage-types'
+import type { CreateWorktreeProgressEvent } from '../../../../shared/worktree/create-types'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch-pane-already-live'
 import type { RpcContext } from '../core'
+import type { RuntimeManagedWorktreeCreateArgs } from '../../runtime-managed-worktree-create-types'
+import { WorkspaceSetupAgentStartHolds } from '../../workspace-setup-agent-start-holds'
 import { resolveRpcCallerIdentity } from '../rpc-caller-identity'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
@@ -104,7 +109,7 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     ),
     showRepo: vi.fn(async () => ({ id: 'repo-1' })),
     createFolderWorkspace: vi.fn(async (_input: Record<string, unknown>) => ({ id: 'fw-new' })),
-    createManagedWorktree: vi.fn(async (args: Record<string, unknown>) => {
+    createManagedWorktree: vi.fn(async (args: RuntimeManagedWorktreeCreateArgs) => {
       reportPromptCarry(options, args.onStartupPromptCarry, args.startupPrompt)
       if (args.startupAgent && options.startupTerminalPaneKey) {
         handlesByPaneKey.set(options.startupTerminalPaneKey, 'term_agent_first')
@@ -164,6 +169,8 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       return launchRecordStore
     }),
     waitForSetupTerminalCompletion,
+    workspaceSetupAgentStarts: new WorkspaceSetupAgentStartHolds(),
+    notifyWorktreeCreationProgress: vi.fn((_event: CreateWorktreeProgressEvent) => {}),
     canPublishAgentLaunchTab: vi.fn(() => options.publishAgentLaunchTab !== undefined),
     publishAgentLaunchTab: vi.fn(
       (request: Omit<AgentLaunchTabPublishRequest, 'requestId'>) =>
@@ -206,5 +213,20 @@ export function rpcContext(
 export const CAPABLE_CLIENT: Partial<RpcContext> = {
   clientKind: 'mobile',
   pairedDeviceId: 'device-1',
-  clientCapabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY]
+  clientCapabilities: [
+    AGENT_LAUNCH_RUNTIME_CAPABILITY,
+    AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
+  ]
+}
+
+export function metadataRow(instanceId: string) {
+  return {
+    ...WORKTREE_META_PERSISTED_DEFAULTS,
+    instanceId,
+    displayName: '',
+    comment: '',
+    isUnread: false,
+    sortOrder: 0,
+    lastActivityAt: 0
+  }
 }

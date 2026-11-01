@@ -1,17 +1,12 @@
-import {
-  classifyTerminalCreationFailure,
-  terminalExitError
-} from '../../../../shared/terminal-start-failure'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
-import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './pty-handle-invalidation'
-import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import { createSetupCompletionObservation } from '../../orchestration/setup-completion-signal'
+import { OrcaRuntimeWithPtyRegistrationClaims } from './pty-registration-claims'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
 import type {
-  PtyRegistrationClaim,
+  RuntimePtyRegistrationBinding,
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
@@ -20,7 +15,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { mainTerminalRegistered } from '../surface/main-terminal-surfaces'
 import { assertPaneBoundAtRegistration, isRuntimeHostedWorkspace } from './bind-first-registration'
 
-export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHandlesForPty {
+export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithPtyRegistrationClaims {
   protected abstract ensurePtyBackedMobileSurfaceForRendererTab(
     worktreeId: string,
     tabId: string
@@ -36,20 +31,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
     ptyId: string,
     worktreeId: string,
     connectionId: string | null = null,
-    binding?: {
-      tabId: string
-      leafId: string
-      incarnationId?: PtyIncarnationId
-      /** Handle allocated for the replacement incarnation, when one is known. */
-      terminalHandle?: string
-      agentLaunchAuthority?: { launchToken: string; launchAgent: TuiAgent }
-      /** The agent a fresh spawn's launch command starts, whose submits wait for its composer. */
-      launchedAgent?: TuiAgent
-      providerReattachLaunchIdentity?: {
-        incarnationId: PtyIncarnationId
-        launchAgent: TuiAgent
-      }
-    },
+    binding?: RuntimePtyRegistrationBinding,
     isWsl?: boolean
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
@@ -76,8 +58,17 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       binding?.incarnationId !== undefined &&
       existingPty.incarnationId !== null &&
       existingPty.incarnationId !== binding.incarnationId
+    const claim = this.pendingPtyRegistrationIncarnations.get(ptyId)
+    const preserveEarly =
+      claim?.setupObservation !== undefined && claim.incarnationId === binding?.incarnationId
     if (incarnationChanged || pendingReplacementMatches) {
-      // Replacement reconnects can precede handle inventory; drop predecessor aliases unless the caller proves a preallocated handle belongs to the replacement.
+      if (!preserveEarly) {
+        this.setupCompletionTokenByPtyId.get(ptyId)?.fail(new Error('terminal_handle_stale'))
+        this.setupCompletionTokenByPtyId.delete(ptyId)
+      }
+      // A reconnect can register a replacement before inventory reports its exported handle.
+      // Drop every alias for the predecessor; a newly preallocated handle is retained only when
+      // the caller can prove it is the replacement's handle.
       const directHandle = this.handleByPtyId.get(ptyId)
       const canPreserveReplacementHandle =
         replacementHandle !== undefined &&
@@ -96,6 +87,9 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
           pendingReplacementMatches
         )
       }
+    }
+    if (preserveEarly) {
+      claim.previousSetupObservation?.fail(new Error('terminal_handle_stale'))
     }
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
     this.mainDaemonAttachments.markSpawnPublished(ptyId)
@@ -128,6 +122,19 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       !isRuntimeHostedWorkspace(this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId))
     ) {
       assertPaneBoundAtRegistration(ptyId, paneKey, this.paneOfPty(pty).paneKey)
+    }
+    if (binding?.setupCompletionToken) {
+      let observed = this.setupCompletionTokenByPtyId.get(ptyId)
+      if (!observed) {
+        observed = createSetupCompletionObservation(binding.setupCompletionToken)
+        this.setupCompletionTokenByPtyId.set(ptyId, observed)
+        if (!binding.setupCompletionToken.startsWith('native:')) {
+          observed.scan(this.recentPtyOutputById.get(ptyId)?.read() ?? '')
+        }
+      }
+      observed.publish()
+      const completion = observed.completion
+      this.workspaceSetupAgentStarts.observe(worktreeId, () => completion)
     }
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
     if (paneKey && binding?.incarnationId && hostScope) {
@@ -197,100 +204,6 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
         this.registerPreAllocatedHandleForPty(ptyId, replacementHandle)
       }
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
-    }
-  }
-
-  assertPtyRegistrationAllowed(ptyId: string, incarnationId?: PtyIncarnationId): void {
-    // Why: the controller must reject an early exit before persisting bindings or handles.
-    this.assertPtyDidNotExitBeforeRegistration(ptyId, incarnationId)
-  }
-
-  protected assertCreatedPtyRegistrationAllowed(result: PtySpawnResult): void {
-    const { id: ptyId, incarnationId } = result
-    try {
-      this.assertPtyDidNotExitBeforeRegistration(ptyId, incarnationId)
-    } catch (error) {
-      if (error instanceof Error && error.message === 'agent_session_exited_during_start') {
-        this.releaseRejectedPtyRegistrationFence(ptyId, incarnationId)
-      }
-      throw classifyTerminalCreationFailure(error, result)
-    }
-  }
-
-  releaseRejectedPtyRegistrationFence(
-    ptyId: string,
-    candidateIncarnation?: PtyIncarnationId
-  ): void {
-    const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
-    if (pending?.exitedIncarnations.size) {
-      this.cancelPendingPtyRegistration(ptyId, candidateIncarnation, pending)
-    }
-  }
-
-  beginPtyRegistration(ptyId: string, incarnationId?: PtyIncarnationId) {
-    const claim: PtyRegistrationClaim = {
-      incarnationId: incarnationId ?? null,
-      exitedIncarnations: new Set()
-    }
-    this.pendingPtyRegistrationIncarnations.set(ptyId, claim)
-    return claim
-  }
-
-  narrowPtyRegistration(
-    ptyId: string,
-    claim: PtyRegistrationClaim,
-    incarnationId?: PtyIncarnationId
-  ): boolean {
-    if (this.pendingPtyRegistrationIncarnations.get(ptyId) !== claim) {
-      return false
-    }
-    claim.incarnationId = incarnationId ?? null
-    return true
-  }
-
-  acceptPtyIncarnationForExit(ptyId: string, incarnationId: PtyIncarnationId): void {
-    const pty = this.ptysById.get(ptyId)
-    if (pty) {
-      // Why: a reconnect attach reply can prove the exit generation after stale local proof was cleared.
-      pty.incarnationId = incarnationId
-    }
-  }
-
-  cancelPendingPtyRegistration(
-    ptyId: string,
-    incarnationId?: PtyIncarnationId,
-    claim?: PtyRegistrationClaim
-  ): void {
-    const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
-    if (
-      !pending ||
-      (claim !== undefined && pending !== claim) ||
-      (pending.incarnationId !== null &&
-        incarnationId !== undefined &&
-        pending.incarnationId !== incarnationId)
-    ) {
-      return
-    }
-    this.pendingPtyRegistrationIncarnations.delete(ptyId)
-  }
-
-  protected assertPtyDidNotExitBeforeRegistration(
-    ptyId: string,
-    candidateIncarnation?: PtyIncarnationId
-  ): void {
-    const exits = this.pendingPtyRegistrationIncarnations.get(ptyId)?.exitedIncarnations
-    if (
-      exits?.size &&
-      (candidateIncarnation === undefined || exits.has(null) || exits.has(candidateIncarnation))
-    ) {
-      const verdict = this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict
-      const cause =
-        candidateIncarnation !== undefined &&
-        verdict?.status === 'exited' &&
-        verdict.incarnationId === candidateIncarnation
-          ? verdict.cause
-          : undefined
-      throw terminalExitError('agent_session_exited_during_start', cause, candidateIncarnation)
     }
   }
 }

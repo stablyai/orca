@@ -166,6 +166,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.resizeListeners.delete(ptyId)
       this.lastRendererSizes.delete(ptyId)
       this.recentPtyOutputById.delete(ptyId)
+      this.setupCompletionTokenByPtyId.get(ptyId)?.finish(exitCode)
       this.launchComposerReadyByPtyId.delete(ptyId)
       this.setupCompletionTokenByPtyId.delete(ptyId)
       this.clearWaitBlockedCheckState(ptyId)

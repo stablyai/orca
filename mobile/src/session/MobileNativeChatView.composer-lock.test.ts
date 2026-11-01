@@ -249,6 +249,45 @@ describe('MobileNativeChatView: composer lock and prompt cards', () => {
   })
 })
 
+describe('setup screen content', () => {
+  installChatViewHooks()
+  it.each([true, false])(
+    'shows exact text without a settings link and retains draft for structured=%s',
+    async (structuredActivityUi) => {
+      await render({
+        setupAgentStartHeld: true,
+        composerText: 'retained draft',
+        structuredActivityUi,
+        canStop: true
+      })
+      expect(
+        root().findAll(
+          (node) =>
+            hostType(node) === 'Text' &&
+            node.props.children === 'Waiting for setup script to complete'
+        )
+      ).toHaveLength(1)
+      expect(root().findAll((node) => node.props.children === 'Change in settings')).toHaveLength(0)
+      expect(composer().props.setupAgentStartHeld).toBe(true)
+      expect(composer().props.value).toBe('retained draft')
+      expect(composer().props.stop).not.toBeNull()
+      await update({
+        setupAgentStartHeld: false,
+        composerText: 'retained draft',
+        structuredActivityUi
+      })
+      expect(
+        root().findAll(
+          (node) =>
+            hostType(node) === 'Text' &&
+            node.props.children === 'Waiting for setup script to complete'
+        )
+      ).toHaveLength(0)
+      expect(composer().props.setupAgentStartHeld).toBe(false)
+      expect(composer().props.value).toBe('retained draft')
+    }
+  )
+})
 vi.mock('./MobileQueuedMessageComposer', () => ({
   MobileQueuedMessageComposer: 'QueuedMessageComposer'
 }))

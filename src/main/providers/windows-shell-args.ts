@@ -1,3 +1,7 @@
+import {
+  appendNativeSetupCompletion,
+  nativeSetupCompletionShell
+} from '../runtime/orchestration/setup-completion-signal'
 import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
@@ -80,7 +84,8 @@ function getPowerShellRestoreCwdCommand(cwd: string): string {
 
 function getPowerShellEncodedCommand(
   cwd: string,
-  startupCommand?: string
+  startupCommand?: string,
+  nativeSetupToken?: string
 ): {
   encodedCommand: string
   startupCommandDeliveredInShellArgs?: boolean
@@ -90,7 +95,7 @@ function getPowerShellEncodedCommand(
     return { encodedCommand: encodePowerShellCommand(bootstrap) }
   }
 
-  const command = `${bootstrap}\n${getPowerShellOsc133StartupCommandMark()}\n${startupCommand}`
+  const command = `${bootstrap}\n${getPowerShellOsc133StartupCommandMark()}\n${appendNativeSetupCompletion(startupCommand, nativeSetupToken, 'powershell')}`
   const encodedCommand = encodePowerShellCommand(command)
   // UTF-16/base64 expands payloads; leave margin under CreateProcess 32,767-character limit.
   if (encodedCommand.length > POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS) {
@@ -133,13 +138,22 @@ export function resolveWindowsShellLaunchArgs(
   defaultCwd: string,
   wslContext?: WindowsShellWslContext,
   startupCommand?: string,
-  codexLaunchPreflightCommand?: string
+  codexLaunchPreflightCommand?: string,
+  nativeSetupToken?: string
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
   const nativeCwd = normalizeWindowsTerminalCwd(cwd)
 
   if (shellBasename === 'cmd.exe') {
-    const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
+    const shellArgStartupCommand = getCmdShellArgStartupCommand(
+      startupCommand
+        ? appendNativeSetupCompletion(
+            startupCommand,
+            nativeSetupToken,
+            nativeSetupCompletionShell(shellPath)
+          )
+        : undefined
+    )
     const startupCommands = [
       CMD_UTF8_SETUP_COMMAND,
       ...(codexLaunchPreflightCommand ? [CMD_CODEX_LAUNCH_PREFLIGHT] : []),
@@ -154,8 +168,14 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-    const powerShellCommand = getPowerShellEncodedCommand(nativeCwd, startupCommand)
-    // Windows status requires OSC 133 prompt/readline hooks after profiles; encoded delivery follows powershell-osc133-bootstrap.ts MDE review.
+    const powerShellCommand = getPowerShellEncodedCommand(
+      nativeCwd,
+      startupCommand,
+      nativeSetupToken
+    )
+    // Why: foreground-process status on Windows depends on OSC 133 C/D, and
+    // PowerShell needs a prompt/readline bootstrap after profiles finish.
+    // Why base64 and not -Command: see powershell-osc133-bootstrap.ts (MDE review).
     return {
       shellArgs: ['-NoLogo', '-NoExit', '-EncodedCommand', powerShellCommand.encodedCommand],
       ...(powerShellCommand.startupCommandDeliveredInShellArgs

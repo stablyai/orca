@@ -1,5 +1,6 @@
 // Share one status stream per client lifetime because mobile cannot end individual host subscriptions; reconnect snapshots replace revoked liveness.
 
+import { worktreeIdentityKey } from '../../../src/shared/worktree/id'
 import {
   AgentSessionAssociationObservation,
   foldAgentSessionStatusEvent,
@@ -17,6 +18,7 @@ import type { RpcClient } from '../transport/rpc-client'
 export type MobileStructuredSessionStatusFeed = {
   subscribe: (listener: () => void) => () => void
   getSnapshot: () => AgentSessionStatusSnapshot
+  isWorkspaceSetupHeld: (workspaceId: string) => boolean | undefined
   getNamingSnapshot: () => AgentSessionConversationNames
   getAssociationRevision: () => number
 }
@@ -52,6 +54,7 @@ function streamRefusal(value: unknown): { code?: string; message?: string } | nu
 
 function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
   let snapshot: AgentSessionStatusSnapshot = new Map()
+  let setupHeldWorkspaceIds: Set<string> | null = null
   let names: AgentSessionConversationNames = new Map()
   const associations = new AgentSessionAssociationObservation()
   // `unavailable`: the host refused the method to phones; asked again only on a new connection.
@@ -78,7 +81,16 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
       listener()
     }
   }
-  const revokeLive = (): void => setSnapshot(revokeAgentSessionStatusLive(snapshot))
+  const notify = (): void => {
+    for (const listener of listeners) {
+      listener()
+    }
+  }
+  const revokeLive = (): void => {
+    setupHeldWorkspaceIds = null
+    setSnapshot(revokeAgentSessionStatusLive(snapshot))
+    notify()
+  }
   const onFrame = (raw: unknown): void => {
     if (isStatusEvent(raw)) {
       if (raw.type === 'end') {
@@ -87,6 +99,22 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
         revokeLive()
         return
       }
+      if (
+        raw.type === 'snapshot' &&
+        (raw.setupHeldWorkspaceIds !== undefined || setupHeldWorkspaceIds === null)
+      ) {
+        setupHeldWorkspaceIds = new Set(raw.setupHeldWorkspaceIds?.map(worktreeIdentityKey))
+      }
+      if (
+        raw.type === 'snapshot' &&
+        raw.setupHeldWorkspaceIds !== undefined &&
+        raw.sessions.length === 0
+      ) {
+        names = foldAgentSessionConversationNames(names, raw)
+        notify()
+        return
+      }
+
       const associationChanged = associations.observe(raw)
       setSnapshot(
         foldAgentSessionStatusEvent(snapshot, raw),
@@ -103,6 +131,10 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
         ? 'unavailable'
         : 'closed'
       revokeLive()
+      if (stream === 'unavailable') {
+        setupHeldWorkspaceIds = new Set()
+        notify()
+      }
     }
   }
   const open = (): void => {
@@ -140,6 +172,8 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
       }
     },
     getSnapshot: () => snapshot,
+    isWorkspaceSetupHeld: (workspaceId) =>
+      setupHeldWorkspaceIds?.has(worktreeIdentityKey(workspaceId)),
     getNamingSnapshot: () => names,
     getAssociationRevision: () => associations.revision
   }

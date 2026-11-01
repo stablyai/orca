@@ -1,13 +1,23 @@
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
+import {
+  AgentLaunchFoundingIncompleteError,
+  assertHostFoundingNotCancelled,
+  type HostFoundingAttempt
+} from '../../../agent-launch/host-founding-attempt'
+import { AgentLaunchCancelledError } from '../../../../shared/agent-launch-cancellation'
 import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 /** Use ordinary user-facing terminal/chat creation; worker factories add redrive, mailbox and background-tab behavior.
  * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
 
 import { randomUUID } from 'node:crypto'
+import { deriveAgentLaunchChildOperationId } from '../../../../shared/agent-launch-child-operation'
+import type { AgentLaunchPromptDisposal } from '../../../../shared/agent-launch-intent'
 import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import {
   AgentLaunchStructuredSessionRefusedError,
+  type AgentLaunchStructuredSurface,
   type AgentLaunchSurfaceFactory
 } from '../../../agent-launch/agent-launch-surface-factories'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -19,7 +29,6 @@ import { createStructuredAgentSessionForWorktree } from './structured-agent-sess
 import { structuredAgentRuntimeMetadata } from '../../structured-agent-runtime-metadata'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import { createStructuredAgentSessionId } from '../../../../shared/structured-agent-session-create'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import { paneIdentity } from '../../runtime-terminal-pane-identity'
@@ -42,8 +51,10 @@ export function agentLaunchSurfaceFactory(
   // True when the launch shows its surface to the paired caller itself rather than to everyone.
   callerPresentsSurface = false,
   terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch(),
-  // Read the early pane at spawn: publication and user close can finish after admission.
-  view: AgentLaunchView = { early: null, presentation: undefined }
+  // The tab shown before the launch ran; asked at spawn, since the window's answer and the user's
+  // close can both land after admission.
+  view: AgentLaunchView = { early: null, presentation: undefined },
+  attempt: HostFoundingAttempt = {}
 ): AgentLaunchSurfaceFactory {
   const movesHostWindow = agentLaunchMovesHostWindow(context)
   const { early: earlyTab, presentation } = view
@@ -56,8 +67,9 @@ export function agentLaunchSurfaceFactory(
       sessionId: requested,
       tabId,
       withoutPrompt,
+      signal,
       firstMessage,
-      signal
+      hostFoundingAttempt = {}
     }) => {
       const sessionId = requested ?? createStructuredAgentSessionId(agent, randomUUID)
       const definition = structuredAgentRuntimeMetadata(agent)?.definition
@@ -67,43 +79,92 @@ export function agentLaunchSurfaceFactory(
         )
       )
       const seeded = chatOptions ?? (Object.keys(supported).length > 0 ? supported : undefined)
-      // A client that creates chats without starting them starts this one on its first message.
       const atRest =
         firstMessage !== undefined ||
         (withoutPrompt === true &&
           context.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) ===
             true)
-      const created = await createStructuredAgentSessionForWorktree({
-        runtime: context.runtime,
-        ensureHost: async () => {
-          await context.runtime.ensureStructuredAgentSessionHost()
-          return requireInstalledHost()
-        },
-        caller: operationCallerKey
-          ? { callerKey: operationCallerKey }
-          : structuredCallerFor(context),
-        envelope: {
-          sessionId,
-          clientOperationId:
-            attachOperationId ?? createStructuredAgentSessionOperationId(randomUUID),
-          expectedRuntimeFence: null,
-          // prepare supplies the host fingerprint; this id was host-minted, so no client create-intent conflict needs checking.
-          payloadFingerprint: ''
-        },
-        worktree: `id:${worktreeId}`,
-        agent,
-        ...(chatOptions?.model ? { optionsMode: 'replace-model-selection' as const } : {}),
-        ...(seeded ? { options: seeded } : {}),
-        ...(tabId ? { tabId } : {}),
-        ...(atRest ? { atRest: true as const } : {}),
-        ...(firstMessage ? { firstMessage } : {}),
-        ...(signal ? { signal } : {}),
-        activate:
-          !callerPresentsSurface &&
-          (presentation === undefined || (presentation === 'focused' && movesHostWindow))
-      })
+      const operationId = attachOperationId ?? createStructuredAgentSessionOperationId(randomUUID)
+      const clientMessageId = deriveAgentLaunchChildOperationId(operationId)
+      if (!clientMessageId) {
+        throw new Error('agent_launch_operation_invalid')
+      }
+      const savedSurface = (): AgentLaunchStructuredSurface | undefined => {
+        const saved = hostFoundingAttempt.adopted
+        if (!saved) {
+          return undefined
+        }
+        const opening = hostFoundingAttempt.opening
+        const promptDisposal: AgentLaunchPromptDisposal =
+          opening?.transaction.disposition === 'committed' && opening.row
+            ? { outcome: 'journaled', messageId: opening.row.clientMessageId }
+            : hostFoundingAttempt.blank?.disposition === 'committed'
+              ? { outcome: 'not-delivered' }
+              : { outcome: 'unconfirmed' }
+        return {
+          sessionId: saved.sessionId,
+          handle: structuredAgentSessionTabId(saved.sessionId),
+          fence: saved.fence,
+          ...(saved.tabId ? { tabId: saved.tabId } : {}),
+          promptDisposal
+        }
+      }
+      let created: Awaited<ReturnType<typeof createStructuredAgentSessionForWorktree>>
+      try {
+        created = await createStructuredAgentSessionForWorktree({
+          runtime: context.runtime,
+          ensureHost: async () => {
+            await context.runtime.ensureStructuredAgentSessionHost()
+            return requireInstalledHost()
+          },
+          caller: operationCallerKey
+            ? { callerKey: operationCallerKey }
+            : structuredCallerFor(context),
+          envelope: {
+            sessionId,
+            clientOperationId: operationId,
+            expectedRuntimeFence: null,
+            // Overwritten by `prepare` with the host's own attach fingerprint. The create-intent
+            // conflict check it would otherwise feed guards a replayed client operation id, and this
+            // id was minted here rather than accepted from one.
+            payloadFingerprint: ''
+          },
+          worktree: `id:${worktreeId}`,
+          agent,
+          ...(seeded ? { options: seeded } : {}),
+          ...(tabId ? { tabId } : {}),
+          ...(firstMessage ? { firstMessage: { clientMessageId, body: firstMessage } } : {}),
+          hostFoundingAttempt,
+          ...(atRest ? { atRest: true as const } : {}),
+          ...(chatOptions?.model ? { optionsMode: 'replace-model-selection' as const } : {}),
+          ...(signal ? { signal } : {}),
+          activate:
+            !callerPresentsSurface &&
+            (presentation === undefined || (presentation === 'focused' && movesHostWindow))
+        })
+      } catch (error) {
+        if (error instanceof AgentLaunchCancelledError) {
+          throw error
+        }
+        if (hostFoundingAttempt.disposition) {
+          throw new AgentLaunchFoundingIncompleteError(error, savedSurface())
+        }
+        throw error
+      }
       if (!created.ok) {
-        // A caller-named session conflict must surface to that caller, never downgrade to terminal.
+        if (hostFoundingAttempt.disposition) {
+          const saved = savedSurface()
+          if (
+            saved &&
+            hostFoundingAttempt.publication &&
+            created.refusal.details?.reason !== 'tabUnconfirmed'
+          ) {
+            return saved
+          }
+          throw new AgentLaunchFoundingIncompleteError(created.refusal, saved)
+        }
+        // The caller named this session, so a taken id is its answer, not an opaque refusal; and not
+        // a definitive one, so the launch does not fall back to a terminal over it.
         if (requested && created.refusal.code === 'agent_session_conflict') {
           throw new AgentLaunchSessionAlreadyExistsError()
         }
@@ -112,18 +173,31 @@ export function agentLaunchSurfaceFactory(
           created.refusal.message
         )
       }
-      return {
+      const surface: AgentLaunchStructuredSurface = {
         sessionId: created.value.sessionId,
         handle: structuredAgentSessionTabId(created.value.sessionId),
         fence: created.value.fence,
+        promptDisposal: created.value.firstMessage
+          ? { outcome: 'journaled', messageId: created.value.firstMessage.clientMessageId }
+          : !firstMessage
+            ? { outcome: 'not-delivered' }
+            : (savedSurface()?.promptDisposal ?? { outcome: 'unconfirmed' }),
         ...(created.value.firstMessage ? { firstMessage: created.value.firstMessage } : {}),
         ...(created.value.tabId ? { tabId: created.value.tabId } : {})
       }
+      if (hostFoundingAttempt.disposition && !hostFoundingAttempt.publication) {
+        throw new AgentLaunchFoundingIncompleteError(
+          new Error('created_chat_tab_not_published'),
+          surface
+        )
+      }
+      return surface
     },
     createTerminalAgent: async ({
       worktreeId,
       agent,
       startupPrompt,
+      sequenceTerminalCommand,
       agentArgs,
       cwd,
       launchSource,
@@ -140,10 +214,14 @@ export function agentLaunchSurfaceFactory(
         terminalSpawn.rethrow(new AgentLaunchTabClosedError())
       }
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
+        ...(attempt.cancellation ? { signal: attempt.cancellation.controller.signal } : {}),
+        // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
+        // `cursor-agent` — so the runtime builds the configured launcher.
         // An agent launch the caller asked for (CLI, window or paired client) is the user's act.
         wslUserAct: true,
         // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).
         startupAgent: agent,
+        ...(sequenceTerminalCommand ? { sequenceTerminalCommand } : {}),
         terminalImageViewerSupported: terminalImageViewerSupported(context),
         // The runtime reports typed-line prompt carry; paste only when the command did not carry it.
         ...(startupPrompt
@@ -175,9 +253,14 @@ export function agentLaunchSurfaceFactory(
                   : agentLaunchTabViewerRule(context, presentation)
             }
           : {}),
-        onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
+        onPtySpawnDispatched: () => {
+          assertHostFoundingNotCancelled(attempt)
+          attempt.terminalDispatched = true
+          terminalSpawn.onPtySpawnDispatched()
+        }
       })
       const terminal = await created.catch(terminalSpawn.rethrow)
+      attempt.terminalAdmitted = true
       if (earlyTab?.closedByUser()) {
         // Close a terminal created after its tab was closed before pasting; command-line prompts may already have reached it.
         await context.runtime.closeTerminal(terminal.handle).catch(() => {})

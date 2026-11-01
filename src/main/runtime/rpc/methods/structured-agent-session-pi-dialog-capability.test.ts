@@ -287,7 +287,11 @@ describe('Pi dialog-shape client capability', () => {
       const serialized = JSON.stringify(replies)
       expect(serialized).toContain('codex-session')
       expect(serialized.includes(SESSION)).toBe(seesPi)
-      expect(replies).toHaveLength(seesPi ? 4 : 3)
+      expect(replies[0]).toMatchObject({
+        ok: true,
+        result: { type: 'snapshot', sessions: [], setupHeldWorkspaceIds: [] }
+      })
+      expect(replies).toHaveLength(seesPi ? 5 : 4)
     }
   })
 

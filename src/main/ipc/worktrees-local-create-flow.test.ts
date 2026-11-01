@@ -1,10 +1,11 @@
+import './worktrees-local-create-module-mocks.test-fixture'
+import { withoutInFlightWorktreeCreates } from '../worktree-create-in-flight'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
 import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../shared/setup-agent-sequencing'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { computeWorkspaceRootAsync } from './worktree-logic'
-import type * as WorktreeLogic from './worktree-logic'
 import {
   listWorktreesMock,
   describeCreatedWorktreeMock,
@@ -27,85 +28,6 @@ import {
   hostWorktreeTarget,
   type HostWorktreeTarget
 } from '../../shared/worktree/host-qualified-identity'
-
-vi.mock('electron', async () =>
-  (await import('./worktrees-test-module-mocks')).electronModuleMock()
-)
-vi.mock('../git/worktree', async () =>
-  (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
-)
-vi.mock('../git/runner', async () =>
-  (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
-)
-vi.mock('../git/repo', async () =>
-  (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
-)
-vi.mock('../git/git-username', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
-    .resolveLocalGitUsernameMock
-}))
-vi.mock('../github/client', async () =>
-  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
-)
-vi.mock('../source-control/hosted-review', async () =>
-  (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('./worktree-symlinks', async () =>
-  (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
-vi.mock('../setup-runner-script-text', async (importOriginal) =>
-  (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
-    (await importOriginal()) as Record<string, unknown>
-  )
-)
-vi.mock('../worktree-runner-script', async (importOriginal) =>
-  (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
-    (await importOriginal()) as Record<string, unknown>
-  )
-)
-vi.mock('../effective-hook-config', async (importOriginal) =>
-  (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
-    (await importOriginal()) as Record<string, unknown>
-  )
-)
-vi.mock('../setup-hook-env-vars', async (importOriginal) =>
-  (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
-    (await importOriginal()) as Record<string, unknown>
-  )
-)
-vi.mock('./worktree-logic', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeLogic>()
-  return {
-    ...(await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(actual),
-    computeWorkspaceRootAsync: vi.fn(actual.computeWorkspaceRootAsync)
-  }
-})
-vi.mock('../terminal-history-deletion', async () =>
-  (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
-)
-vi.mock('../ports/advertised-url-watcher', async () =>
-  (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
-)
-vi.mock('../workspace-cleanup-scan-snapshot', async () =>
-  (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
-)
-vi.mock('../workspace-space-analysis-snapshot', async () =>
-  (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
-)
-vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
-  (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
-)
-vi.mock('../runtime/worktree-teardown', async () =>
-  (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
-)
-vi.mock('./pty/provider/registry', async () =>
-  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
-)
-vi.mock('./pty/provider/state-cleanup', async () =>
-  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
-)
 
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
@@ -758,14 +680,19 @@ describe('registerWorktreeHandlers', () => {
     getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     shouldRunSetupForCreateMock.mockReturnValue(true)
-    createSetupRunnerScriptMock.mockResolvedValueOnce({
-      runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
-      shell: { family: 'posix', executable: 'wsl.exe' },
-      envVars: {
-        ORCA_ROOT_PATH: 'C:\\workspace\\repo',
-        ORCA_WORKTREE_PATH: 'C:\\workspace\\improve-dashboard'
-      },
-      waitForAgentStartup: true
+    createSetupRunnerScriptMock.mockImplementationOnce(async () => {
+      expect(
+        withoutInFlightWorktreeCreates('repo-1', [{ path: '/workspace/improve-dashboard' }])
+      ).toEqual([])
+      return {
+        runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
+        shell: { family: 'posix', executable: 'wsl.exe' },
+        envVars: {
+          ORCA_ROOT_PATH: 'C:\\workspace\\repo',
+          ORCA_WORKTREE_PATH: 'C:\\workspace\\improve-dashboard'
+        },
+        waitForAgentStartup: true
+      }
     })
     runtimeStub.createTerminal
       .mockResolvedValueOnce({ handle: 'term-startup', surface: 'visible' })
@@ -792,6 +719,9 @@ describe('registerWorktreeHandlers', () => {
         command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`
       })
     )
+    expect(result.setup?.envVars[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain('printf')
+    const holds = runtimeStub.workspaceSetupAgentStarts
+    expect(holds.pending('repo-1::/workspace/improve-dashboard')).not.toBeNull()
     expect(result.setup?.envVars[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain(
       'bash /mnt/c/workspace/repo/.git/orca/setup-runner.sh'
     )

@@ -42,6 +42,7 @@ export function useNativeChatComposerSubmit(args: {
   draft: string
   caret: number
   imageAttachments: readonly NativeChatComposerImageAttachment[]
+  isEditingHeld?: () => boolean
   disabled: boolean
   sendPty: () => void
   sendStructured: (
@@ -60,7 +61,7 @@ export function useNativeChatComposerSubmit(args: {
   messageDelivery: boolean
 } {
   const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
-  const { consumeOrcaCommand, setCaret, setDraft, structuredTransport } = args
+  const { consumeOrcaCommand, isEditingHeld, setCaret, setDraft, structuredTransport } = args
   const threadGoal = structuredTransport?.threadGoal
   const [entered, setEntered] = useState(false)
   const active = entered && threadGoal !== undefined
@@ -68,6 +69,9 @@ export function useNativeChatComposerSubmit(args: {
   const interceptPick = useCallback(
     <TItem extends NativeChatPickerItem>(pick: (item: TItem) => void) =>
       (item: TItem) => {
+        if (isEditingHeld?.()) {
+          return
+        }
         if (!threadGoal || item.kind !== 'command' || item.name !== GOAL_COMMAND) {
           pick(item)
           return
@@ -79,7 +83,7 @@ export function useNativeChatComposerSubmit(args: {
         setCaret(tokenStart)
         setEntered(true)
       },
-    [caret, draft, setCaret, setDraft, threadGoal]
+    [isEditingHeld, caret, draft, setCaret, setDraft, threadGoal]
   )
 
   // Clear only the submitted draft after host acceptance; the goal controller refuses concurrent submissions.
@@ -119,6 +123,9 @@ export function useNativeChatComposerSubmit(args: {
 
   const send = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
+      if (isEditingHeld?.()) {
+        return
+      }
       // Before goal mode too: a navigation command must never become an objective.
       if (consumeOrcaCommand?.(draft)) {
         return
@@ -152,6 +159,7 @@ export function useNativeChatComposerSubmit(args: {
       }
     },
     [
+      isEditingHeld,
       active,
       consumeOrcaCommand,
       disabled,

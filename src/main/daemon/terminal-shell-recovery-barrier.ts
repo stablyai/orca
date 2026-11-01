@@ -286,17 +286,17 @@ export class TerminalShellRecoveryBarrier {
   }
 
   private releaseMark(mark: PtyIngressEmission, grounded: boolean): void {
+    const ground = grounded ? this.scanner.groundProcessBoundary() : ''
     try {
-      this.releaseDownstream(
-        grounded
-          ? {
-              ...mark,
-              // Ground the scanner before downstream consumers see the reset.
-              data: mark.data + this.scanner.groundProcessBoundary(),
-              transformed: true
-            }
-          : mark
-      )
+      this.releaseDownstream(mark)
+      if (grounded) {
+        this.releaseDownstream({
+          data: ground,
+          rawStartSeq: mark.rawEndSeq,
+          rawEndSeq: mark.rawEndSeq,
+          transformed: true
+        })
+      }
     } catch {
       // A downstream failure must not strand the remaining prompt bytes.
     }

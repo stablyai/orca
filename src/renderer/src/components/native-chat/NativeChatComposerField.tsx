@@ -49,6 +49,7 @@ export type NativeChatComposerFieldProps = {
   activeSuggestion: number
   notices: readonly NativeChatComposerNotice[]
   imageAttachments: readonly NativeChatComposerImageAttachment[]
+  imageRemovalDisabled?: boolean
   /** A structured chat numbers its images, as its chips in the prompt read. */
   numberImages?: boolean
   /** The paired server a structured chat runs on, which reads back files stored there. */
@@ -57,6 +58,7 @@ export type NativeChatComposerFieldProps = {
   /** Why the send button is disabled, when the user can do something about it. */
   sendBlockedReason?: string | null
   isWorking: boolean
+  setupInputHeld?: boolean
   /** The draft holds text or images, so Send takes Stop's place while the agent works. */
   hasDraft?: boolean
   /** While the agent works: what Cmd/Ctrl+Enter would do instead of a plain send, when it differs. */
@@ -141,11 +143,13 @@ export function NativeChatComposerField({
   activeSuggestion,
   notices,
   imageAttachments,
+  imageRemovalDisabled = false,
   numberImages = false,
   attachmentEnvironmentId,
   sendButtonDisabled,
   sendBlockedReason,
   isWorking,
+  setupInputHeld = false,
   hasDraft = false,
   alternateSend,
   isStopping = false,
@@ -320,6 +324,7 @@ export function NativeChatComposerField({
                     hostEnvironmentId={attachmentEnvironmentId}
                     number={numberImages ? index + 1 : undefined}
                     onRemove={onRemoveImageAttachment}
+                    removeDisabled={imageRemovalDisabled}
                   />
                 ))}
               </div>
@@ -374,6 +379,7 @@ export function NativeChatComposerField({
                 sendBlockedReason={sendBlockedReason}
                 draftNotSaved={draftNotSaved}
                 isWorking={isWorking}
+                setupInputHeld={setupInputHeld}
                 hasDraft={hasDraft}
                 alternateSend={alternateSend}
                 isStopping={isStopping}

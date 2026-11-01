@@ -7,8 +7,8 @@ const { join, relative } = require('node:path')
 const { setTimeout: delay } = require('node:timers/promises')
 const { macTerminalHostPaths } = require('./macos-terminal-host-bundle.cjs')
 const {
-  daemonProtocolVersion
-} = require('../../src/shared/local-build-compatibility-contract.json')
+  PROTOCOL_VERSION: daemonProtocolVersion
+} = require('../../src/main/daemon/daemon-protocol-version.ts')
 
 // Require exact asar-unpacked daemon entry on every platform; missing path indicates layout regression and must not silently skip.
 function assertPackagedDaemonEntryExists(resourcesDir) {

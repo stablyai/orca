@@ -19877,7 +19877,7 @@
         "historyItemTooLarge": "Эта часть чата слишком велика для отображения.",
         "continuedOutside": "Разговор продолжен вне этого чата.",
         "continuedOutsideRewound": "Разговор продолжен вне этого чата. Предыдущие ответы выше больше не входят в его историю.",
-        "stoppedBeforeStart": "Остановлено вручную",
+        "stoppedBeforeStart": "Прервано",
         "dismiss": "Скрыть",
         "copyError": "Копировать ошибку",
         "orcaStopUpdate": "Во время ответа Orca на {{machine}} перезапустилась для обновления.",

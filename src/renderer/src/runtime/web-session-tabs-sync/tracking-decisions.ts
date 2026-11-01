@@ -143,6 +143,7 @@ export function shouldBootstrapInitialWebRuntimeTerminal(args: {
     (args.event.type === 'snapshot' || (args.event.type === 'updated' && args.firstHostAnswer)) &&
     // Synthesized unpublished means ask later; seeding can duplicate panes a restarting host will republish.
     hostSnapshotAffirmsWorktreeContents(args.event) &&
+    !args.event.initialSurfaceLaunch &&
     args.event.tabs.length === 0 &&
     // Use local seeder semantics remotely too: missing means never initialized, explicit empty means user-closed-last-terminal (STA-6173).
     shouldAutoCreateInitialTerminal(args.localTerminalCount, args.hasPersistedTerminalState) &&
@@ -171,6 +172,9 @@ export function shouldRespawnWebRuntimeTerminalAfterWake(args: {
     return false
   }
   if (args.activeWorktreeId !== args.event.worktree) {
+    return false
+  }
+  if (args.event.initialSurfaceLaunch) {
     return false
   }
   const hostTerminalTabCount = args.event.tabs.filter((tab) => tab.type === 'terminal').length

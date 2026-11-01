@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import type { JournalTransactionObservation } from './journal-database'
 import { insertJournalRow } from './journal-row-table'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
@@ -8,6 +9,7 @@ import type { JournalWriteBody } from './journal-write-queue'
 
 /** Write receipts in the row transaction; notify synchronously after COMMIT, never rollback. */
 export type JournalOperationReceipt = {
+  transactionObservation?: JournalTransactionObservation
   write: (db: Database.Database, row?: JournalRow) => void
   committed: () => void
 }
@@ -77,9 +79,12 @@ export class JournalRowWriter {
           return adopt
         },
         streamed,
-        (adopt) => adopt?.()
+        (adopt) => {
+          receipt?.committed()
+          adopt?.()
+        },
+        receipt?.transactionObservation
       )
-      receipt?.committed()
       this.deps.commit([row], savedAt)
       return row
     })
@@ -124,9 +129,12 @@ export class JournalRowWriter {
         return adopt
       },
       streamed,
-      (adopt) => adopt?.()
+      (adopt) => {
+        receipt?.committed()
+        adopt?.()
+      },
+      receipt?.transactionObservation
     )
-    receipt?.committed()
     this.deps.commit(rows, ts)
     return rows
   }

@@ -3,9 +3,14 @@
 // Session lists read turn state from here instead of replaying transcripts: one stream per client
 // covers every session, and unlike a transcript subscription it retains none of them.
 
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../../structured-agent-session-host-refusal'
+import {
+  getStructuredAgentSessionHost,
+  onStructuredAgentSessionsHeldChanged
+} from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { defineStreamingMethod, type RpcContext } from '../core'
-import { requireStructuredHost as requireHost } from './structured-agent-session-gate'
+import { requireStructuredAgentAudience } from './structured-agent-session-gate'
 import { structuredAgentSessionStatusSubscriptionId } from './structured-agent-session-subscription-id'
 import { clientReadsStructuredSessionAgent } from './structured-agent-session-policy'
 
@@ -15,7 +20,7 @@ export function bindStructuredAgentSessionStream(
   ctx: RpcContext,
   subscriptionId: string,
   onClose: () => void
-): { isClosed: () => boolean } {
+): { isClosed: () => boolean; close: () => void } {
   let closed = false
   let releaseTransportSubscription = (): void => {}
   const onTransportAbort = (): void => releaseTransportSubscription()
@@ -40,7 +45,7 @@ export function bindStructuredAgentSessionStream(
   if (ctx.signal?.aborted) {
     onTransportAbort()
   }
-  return { isClosed: () => closed }
+  return { isClosed: () => closed, close: () => releaseTransportSubscription() }
 }
 
 export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
@@ -49,53 +54,109 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
     permission: 'workspace',
     params: null,
     handler: async (_params, ctx, emit) => {
-      const restoration = prepareStructuredTabsIfSupported(ctx)
-      if (restoration) {
-        await restoration
-      }
-      const host = requireHost(ctx)
+      requireStructuredAgentAudience(ctx, '')
       const subscriptionId = structuredAgentSessionStatusSubscriptionId(ctx)
       let dispose = (): void => {}
-      const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => dispose())
+      let stopMetadata = (): void => {}
+      let stopHost = (): void => {}
+      const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => {
+        stopMetadata()
+        stopHost()
+        dispose()
+      })
       if (stream.isClosed()) {
         return
       }
-      dispose = host.subscribeStatus({
-        id: subscriptionId,
-        emit: (event) => {
-          if (event.type === 'snapshot') {
-            emit({
-              ...event,
-              ...(event.conversationNames
-                ? {
-                    conversationNames: event.conversationNames.filter((note) => {
-                      const record = host.deps.store.getConversation(note.sessionId)
-                      return record && clientReadsStructuredSessionAgent(ctx, record.provider)
-                    })
-                  }
-                : {}),
-              ...(event.namingActiveSessionIds
-                ? {
-                    namingActiveSessionIds: event.namingActiveSessionIds.filter((sessionId) => {
-                      const record = host.deps.store.getConversation(sessionId)
-                      return record && clientReadsStructuredSessionAgent(ctx, record.provider)
-                    })
-                  }
-                : {}),
-              sessions: event.sessions.filter((session) =>
-                clientReadsStructuredSessionAgent(ctx, session.agent)
-              )
-            })
-          } else if (
-            event.type !== 'status' ||
-            clientReadsStructuredSessionAgent(ctx, event.session.agent)
-          ) {
-            emit(event)
-          }
+      const holds = ctx.runtime.workspaceSetupAgentStarts
+      const metadata = (): void => {
+        const host = getStructuredAgentSessionHost()
+        const naming = host?.deps.conversationNaming?.activeSessionIds() ?? []
+        emit({
+          type: 'snapshot',
+          sessions: [],
+          namingActiveSessionIds: naming.filter((sessionId) => {
+            const record = host?.deps.store.getConversation(sessionId)
+            return record && clientReadsStructuredSessionAgent(ctx, record.provider)
+          }),
+          setupHeldWorkspaceIds: holds.currentWorkspaceIds()
+        })
+      }
+      let observedHost: ReturnType<typeof getStructuredAgentSessionHost> = null
+      const attachHost = (): void => {
+        if (stream.isClosed()) {
+          return
         }
-      })
-      if (stream.isClosed()) {
+        const host = getStructuredAgentSessionHost()
+        if (host === observedHost) {
+          return
+        }
+        observedHost = host
         dispose()
+        dispose = () => {}
+        if (!host) {
+          return
+        }
+        dispose = host.subscribeStatus({
+          id: subscriptionId,
+          emit: (event) => {
+            if (event.type === 'snapshot') {
+              emit({
+                ...event,
+                ...(event.conversationNames
+                  ? {
+                      conversationNames: event.conversationNames.filter((note) => {
+                        const record = host.deps.store.getConversation(note.sessionId)
+                        return record && clientReadsStructuredSessionAgent(ctx, record.provider)
+                      })
+                    }
+                  : {}),
+                ...(event.namingActiveSessionIds !== undefined
+                  ? { setupHeldWorkspaceIds: holds.currentWorkspaceIds() }
+                  : {}),
+                ...(event.namingActiveSessionIds
+                  ? {
+                      namingActiveSessionIds: event.namingActiveSessionIds.filter((sessionId) => {
+                        const record = host.deps.store.getConversation(sessionId)
+                        return record && clientReadsStructuredSessionAgent(ctx, record.provider)
+                      })
+                    }
+                  : {}),
+                sessions: event.sessions.filter((session) =>
+                  clientReadsStructuredSessionAgent(ctx, session.agent)
+                )
+              })
+            } else if (
+              event.type !== 'status' ||
+              clientReadsStructuredSessionAgent(ctx, event.session.agent)
+            ) {
+              emit(event)
+            }
+          }
+        })
+        if (stream.isClosed()) {
+          dispose()
+        }
+      }
+      try {
+        stopMetadata = holds.subscribe(() => {
+          try {
+            metadata()
+          } catch {
+            stream.close()
+          }
+        })
+        metadata()
+        await ensureStructuredAgentSessionHostUnlessRefused(async () => {
+          await prepareStructuredTabsIfSupported(ctx)
+        })
+        if (stream.isClosed()) {
+          return
+        }
+        stopHost = onStructuredAgentSessionsHeldChanged(attachHost)
+        attachHost()
+      } catch (error) {
+        stream.close()
+        throw error
       }
     }
   })

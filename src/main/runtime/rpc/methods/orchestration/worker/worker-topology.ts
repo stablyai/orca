@@ -1,3 +1,4 @@
+import type { AgentLaunchTerminalSequence } from '../../../../../agent-launch/agent-launch-surface-factories'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat/input/native-chat-session-option-defaults'
@@ -64,12 +65,16 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   worktreeId: string
   agent: TuiAgent
   launchPreferences?: AgentLaunchPreferences
+  sequenceTerminalCommand?: AgentLaunchTerminalSequence
   taskId: string
   effects: WorkerEffect[]
 }): Promise<RuntimeTerminalCreate> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
     // Resolve ids through agent config; cursor alone opens the desktop app, its CLI is cursor-agent.
     startupAgent: args.agent,
+    ...(args.sequenceTerminalCommand
+      ? { sequenceTerminalCommand: args.sequenceTerminalCommand }
+      : {}),
     launchSource: 'orchestration',
     suppressStartupUpdatePrompt: true,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),

@@ -1,15 +1,8 @@
 import { agentSessionRecordLineage } from './agent-session-record-lineage'
 import type Database from '../sqlite/sync-database'
 import { createAgentSessionOwnerProof } from './agent-session-owner-proof'
-import { backfillAgentSessionPermissionModes } from './agent-session/ownership/agent-session-permission-backfill'
-import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
-import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
 import {
-  agentSessionOperationKey,
-  type AgentSessionOperationDecision,
-  type AgentSessionOperationRow
-} from '../../shared/agent-session-operation-ledger'
-import {
+  cancelAgentLaunchOperationInto,
   admitAgentSessionGlobalOperationInto,
   admitAgentSessionMutationOperation,
   evaluateAgentSessionMutationOperation,
@@ -21,6 +14,18 @@ import {
   type AgentSessionMutationOperationAdmission,
   type AgentSessionOperationAdmission
 } from './agent-session/ownership/agent-session-operation-admission'
+/** Durable single-writer session records and their operation ledger, as rows in the host's chat
+ *  journal database. */
+
+import { backfillAgentSessionPermissionModes } from './agent-session/ownership/agent-session-permission-backfill'
+import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
+import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
+import {
+  agentSessionOperationKey,
+  type AgentSessionOperationDecision,
+  type AgentSessionOperationOutcome,
+  type AgentSessionOperationRow
+} from '../../shared/agent-session-operation-ledger'
 import {
   isAgentSessionClaimKeyVerifiable,
   retireAgentSessionClaimKey
@@ -277,7 +282,12 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     args: Parameters<typeof settleAgentSessionOperationInto>[1]
   ): Promise<void> => this.transact((draft) => settleAgentSessionOperationInto(draft, args))
 
-  /** Commit settlement with the journal write; new submissions also clear Sleep in that draft. */
+  cancelLaunchOperation = (
+    args: AgentSessionOperationAdmission & { livePrevention: boolean; code: string }
+  ): Promise<AgentSessionOperationOutcome> =>
+    this.transact((draft) => cancelAgentLaunchOperationInto(draft, args))
+
+  /** Settlement committed with its journal write; a new submission also clears Sleep in that draft. */
   operationOutcomeReceipt = (args: Parameters<typeof agentSessionOperationOutcomeReceipt>[1]) =>
     agentSessionOperationOutcomeReceipt(this.transactions, args)
 

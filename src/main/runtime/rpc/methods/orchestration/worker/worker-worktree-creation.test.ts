@@ -7,6 +7,7 @@ import {
 } from '../../../../../../shared/worktree/retired-name-registry'
 import { createWorkerWorktree, resolveWorkerWorktreeName } from './worker-worktree-creation'
 import type { WorkerEffect } from './worker-topology'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
 const pool = MARINE_CREATURES.map((name) => name.toLowerCase())
 
@@ -58,18 +59,26 @@ describe('resolveWorkerWorktreeName', () => {
 })
 
 describe('createWorkerWorktree naming', () => {
-  async function create(name: string | undefined) {
-    const createManagedWorktree = vi.fn(async (_args: Record<string, unknown>) => ({
-      worktree: { id: 'repo::/worktrees/repo/otter', repoId: 'repo', displayName: 'otter' },
-      startupTerminal: { handle: 'term_worker' }
-    }))
+  async function create(name: string | undefined, failAfterWorkspace = false) {
+    const createManagedWorktree = vi.fn(
+      async (args: Parameters<OrcaRuntimeService['createManagedWorktree']>[0]) => {
+        args.onWorkspaceCreated?.('repo::/worktrees/repo/otter')
+        if (failAfterWorkspace) {
+          throw new Error('fixture create failed after workspace')
+        }
+        return {
+          worktree: { id: 'repo::/worktrees/repo/otter', repoId: 'repo', displayName: 'otter' },
+          startupTerminal: { handle: 'term_worker' }
+        }
+      }
+    )
     const runtime = {
       ...namingRuntime([]),
       createManagedWorktree,
       listTerminals: vi.fn(async () => ({ terminals: [] }))
     }
     const effects: WorkerEffect[] = []
-    await createWorkerWorktree({
+    const creation = createWorkerWorktree({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: createWorkerWorktree reaches only the runtime methods faked above.
       runtime: runtime as never,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: createWorkerWorktree only records stages on the db.
@@ -82,6 +91,9 @@ describe('createWorkerWorktree naming', () => {
       withAgentTerminal: true,
       effects
     })
+    await (failAfterWorkspace
+      ? expect(creation).rejects.toThrow('fixture create failed after workspace')
+      : creation)
     return { request: createManagedWorktree.mock.calls[0][0], effects }
   }
 
@@ -95,6 +107,13 @@ describe('createWorkerWorktree naming', () => {
       id: 'repo::/worktrees/repo/otter',
       name: 'otter'
     })
+  })
+
+  it('retains one truthful early workspace effect if creation later fails', async () => {
+    const { effects } = await create(undefined, true)
+    expect(effects).toEqual([
+      { kind: 'worktree', action: 'created_child', id: 'repo::/worktrees/repo/otter' }
+    ])
   })
 
   it('passes an explicit --name through as a user name', async () => {

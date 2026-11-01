@@ -1,3 +1,4 @@
+import type { CreateWorktreeResult } from './worktree/create-types'
 /** One launch intent for desktop/mobile/CLI/orchestration; the host resolves settings and per-launch feasibility once and reports the created surface. */
 
 import type { TuiAgent } from './tui-agent'
@@ -35,6 +36,7 @@ export type AgentLaunchTarget =
 export type AgentLaunchReusedTerminal = { handle: string }
 
 export type AgentLaunchIntent = {
+  createIdentity?: { instanceId: string }
   agent: TuiAgent
   target: AgentLaunchTarget
   prompt?: AgentLaunchPrompt
@@ -107,6 +109,7 @@ export type AgentLaunchPromptReceipt = {
 } & AgentLaunchPromptDisposal
 
 export type AgentLaunchResult = {
+  created?: CreateWorktreeResult
   outcome: AgentLaunchOutcome
   /** The workspace the agent runs in, resolved or created. */
   worktreeId: string

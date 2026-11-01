@@ -1,3 +1,5 @@
+import * as promptReadiness from '../shell-prompt-readiness-probe'
+import { appendNativeSetupCompletion } from '../runtime/orchestration/setup-completion-signal'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { basename, join } from 'node:path'
@@ -142,4 +144,55 @@ describe('DaemonPtyAdapter startup delivery', () => {
       vi.unstubAllEnvs()
     }
   })
+  itOnPosix(
+    'native setup uses post-profile proof once, missing proof keeps C, and close drops pending delivery',
+    async () => {
+      const read = vi.spyOn(promptReadiness, 'readMatchingPromptShellExecutable')
+      try {
+        const command = 'bash /actual/setup-runner.sh'
+        nextShellPath = '/bin/bash'
+        read.mockResolvedValue('/bin/bash')
+        await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          command,
+          env: { SHELL: '/bin/bash', ORCA_SETUP_COMPLETION_TOKEN: 'native:actual' }
+        })
+        lastSubprocess._simulateData(
+          '\x1b]777;orca-shell-start:42\x07\x1b]777;orca-shell-ready:posix\x07prompt'
+        )
+        await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
+        expect(lastSubprocess.write).toHaveBeenCalledExactlyOnceWith(
+          `${appendNativeSetupCompletion(command, 'native:actual', 'posix')}\r`
+        )
+        lastSubprocess._simulateData('\x1b]777;orca-shell-ready:posix\x07late')
+        await Promise.resolve()
+        expect(lastSubprocess.write).toHaveBeenCalledTimes(1)
+
+        await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          command,
+          env: { SHELL: '/bin/bash', ORCA_SETUP_COMPLETION_TOKEN: 'native:missing' }
+        })
+        lastSubprocess._simulateData('\x1b]777;orca-shell-ready:posix\x07prompt')
+        await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
+        expect(lastSubprocess.write).toHaveBeenCalledExactlyOnceWith(`${command}\r`)
+
+        await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          command,
+          env: { SHELL: '/bin/bash', ORCA_SETUP_COMPLETION_TOKEN: 'native:closed' }
+        })
+        const closed = lastSubprocess
+        closed._simulateExit(0)
+        closed._simulateData('\x1b]777;orca-shell-ready:posix\x07late')
+        await Promise.resolve()
+        expect(closed.write).not.toHaveBeenCalled()
+      } finally {
+        read.mockRestore()
+      }
+    }
+  )
 })

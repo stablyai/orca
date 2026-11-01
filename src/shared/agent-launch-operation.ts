@@ -1,11 +1,12 @@
 /** Lost replies are retried, including mobile workspace creation: claim an operation ID durably before side effects, then replay its recorded answer. Unknown outcomes stay refused; this ledger neither adopts nor recovers orphaned surfaces. */
 
 import { canonicalAgentSessionDigest } from './agent-session-mutation-envelope'
-import { parseAgentSessionOperationTimestamp } from './agent-session-host-authority'
+export { deriveAgentLaunchChildOperationId } from './agent-launch-child-operation'
 
 /** Digest launch behavior, excluding its operation ID and mutable host settings; changed defaults must not conflict with an honest retry. */
 export type AgentLaunchFingerprintInput = {
   agent: string
+  createIdentity?: { instanceId: string }
   target:
     | { kind: 'existing'; worktree: string }
     | { kind: 'create-worktree'; create: Readonly<Record<string, unknown>> }
@@ -32,6 +33,7 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
   return canonicalAgentSessionDigest({
     method: 'agent.launch',
     agent: input.agent,
+    createIdentity: input.createIdentity,
     target: input.target,
     prompt: input.prompt,
     sessionOptions: input.sessionOptions,
@@ -44,19 +46,4 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     sessionId: input.sessionId,
     surface: input.surface
   })
-}
-
-const OPERATION_ID_ENTROPY_LENGTH = 32
-
-/** Derive a stable child attach ID distinct from its parent: the ledger keys callerKey+operationId without method, so reusing the parent conflicts. Keep its timestamp for equal expiry. */
-export function deriveAgentLaunchChildOperationId(operationId: string): string | null {
-  const timestamp = parseAgentSessionOperationTimestamp(operationId)
-  if (timestamp === null) {
-    return null
-  }
-  const entropy = canonicalAgentSessionDigest({
-    child: 'agent.launch:attach',
-    operationId
-  }).slice(0, OPERATION_ID_ENTROPY_LENGTH)
-  return `${timestamp}-${entropy}`
 }

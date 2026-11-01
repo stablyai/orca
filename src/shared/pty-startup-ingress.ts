@@ -1,3 +1,4 @@
+import { PtyStartupIngressEmission } from './pty-startup-ingress-emission'
 import { nextQueryCandidate, parsePtyStartupQuery } from './pty-startup-query'
 import { PtyOwnerColorQueryReplies } from './pty-owner-color-query-replies'
 import { TerminalKittyKeyboardModeTracker } from './terminal-kitty-keyboard-mode-tracker'
@@ -29,17 +30,17 @@ const DEFAULT_STARTUP_WINDOW_MS = 5_000
 /** Serialize source classification after shell-ready preprocessing; emit each accepted range once. Own all lifetime OSC 10/11
  * queries here and strip them so viewers cannot answer twice; a launcher-pinned PTY's OSC 4/12 and ?996n too. Only Kitty
  * authority expires with startup. */
-export class PtyStartupIngress {
-  private readonly colorQueries: PtyOwnerColorQueryReplies
+export class PtyStartupIngress extends PtyStartupIngressEmission {
+  protected readonly colorQueries: PtyOwnerColorQueryReplies
   private readonly ownerBackend: PtyOwnerBackend
   private readonly delivery: PtyStartupReplyDelivery
-  private readonly onEmission: (emission: PtyIngressEmission) => void
+  protected readonly onEmission: (emission: PtyIngressEmission) => void
   private readonly operations: PtyStartupIngressOperation[] = []
   private processing = false
   private closed = false
   /** Kitty authority closes with startup; a launcher-pinned PTY's appearance queries stay owned for life. */
-  private readonly scope: { kitty: boolean; appearance: boolean }
-  private readonly kittyModes = new TerminalKittyKeyboardModeTracker()
+  protected readonly scope: { kitty: boolean; appearance: boolean }
+  protected readonly kittyModes = new TerminalKittyKeyboardModeTracker()
   private rawHighWater = 0
   private queryPending: PtyIngressSourceSpan | null = null
   private echoPending: PtyIngressSourceSpan | null = null
@@ -48,6 +49,7 @@ export class PtyStartupIngress {
   private deadlineTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(options: PtyStartupIngressOptions) {
+    super()
     this.colorQueries = new PtyOwnerColorQueryReplies(options.intent, options.resolveHostColors)
     this.ownerBackend = options.ownerBackend ?? 'posix-pty'
     this.delivery = new PtyStartupReplyDelivery(
@@ -83,6 +85,10 @@ export class PtyStartupIngress {
       kind: 'data',
       chunk: { data, rawStartSeq, rawEndSeq: this.rawHighWater }
     })
+  }
+
+  interruptPaintedText(): void {
+    this.enqueue({ kind: 'boundary' })
   }
 
   closeQueryAuthority(): number {
@@ -129,6 +135,10 @@ export class PtyStartupIngress {
     switch (operation.kind) {
       case 'data':
         this.processEchoSpan(operation.chunk)
+        return
+      case 'boundary':
+        this.releasePendingInSourceOrder(true)
+        this.emit({ data: '', rawStartSeq: this.rawHighWater, rawEndSeq: this.rawHighWater }, true)
         return
       case 'close-query':
         // Only Kitty authority closes; lifetime color replies and already-written echoes remain owner responsibilities.
@@ -328,17 +338,6 @@ export class PtyStartupIngress {
   private clearQueryHold(): void {
     clearTimeout(this.queryHoldTimer ?? undefined)
     this.queryHoldTimer = null
-  }
-
-  /** `seen`: the owner already recorded these bytes' colour SETs while answering them in order. */
-  private emit(span: PtyIngressSourceSpan, transformed: boolean, data = span.data, seen = false) {
-    if (this.scope.kitty) {
-      this.kittyModes.scan(data)
-    }
-    if (!seen) {
-      this.colorQueries.observe(data)
-    }
-    this.onEmission({ data, rawStartSeq: span.rawStartSeq, rawEndSeq: span.rawEndSeq, transformed })
   }
 
   private clearDeadline(): void {

@@ -11,6 +11,16 @@ const install = vi.hoisted((): { observation: ManagedRuntimeInstallObservation }
   observation: { kind: 'inactive' }
 }))
 
+vi.mock('./use-native-chat-setup-hold', () => ({
+  useNativeChatSetupHold: () => ({
+    held: false,
+    inputHeld: false,
+    readHeld: () => false,
+    worktreeId: 'wt-1',
+    executionHostId: 'local'
+  })
+}))
+
 vi.mock('@/lib/structured-agent-session-launch', () =>
   moduleFactories.structuredAgentSessionLaunch()
 )

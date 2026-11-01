@@ -1,3 +1,4 @@
+import type { CreateWorktreeProgressEvent } from '../../../../shared/worktree/create-types'
 import type { RuntimeRemoteFetchController } from '../../runtime-remote-fetch-controller'
 import type { TerminalSplitOptions } from '../../terminal/launch/terminal-split-surface'
 import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-contracts'
@@ -17,6 +18,10 @@ import {
 } from '../../../../shared/runtime-navigation'
 
 export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRuntimeWithActivateManagedWorktree {
+  notifyWorktreeCreationProgress(event: CreateWorktreeProgressEvent): void {
+    this.notifier?.worktreeCreationProgress?.(event)
+  }
+
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
 
   abstract splitTerminal(
@@ -54,7 +59,11 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
     return {
       canSpawn: () => Boolean(this.ptyController?.spawn),
       createTerminal: (selector, options) =>
-        this.createTerminal(selector, options, createdWorktree),
+        this.createTerminal(
+          selector,
+          { ...options, initializeWorkspaceTopology: true },
+          createdWorktree
+        ),
       setTabTitle: async (handle, title) => {
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         // renameTerminal stamps a persistent pane title that would mask all later agent titles/status.
@@ -70,11 +79,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
       setTabColor: async (handle, color) => {
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         await this.setMobileSessionTabProps(`id:${worktreeId}`, { tabId, color })
-      },
-      getSetupTerminalTitle: () => this.getSetupTerminalTitle(),
-      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
-      recordSetupCompletionToken: (ptyId, token) =>
-        this.setupCompletionTokenByPtyId.set(ptyId, token)
+      }
     }
   }
 
@@ -90,7 +95,11 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
     return {
       canSpawn: () => Boolean(this.ptyController?.spawn),
       createTerminal: (selector, options) =>
-        this.createTerminal(selector, options, createdWorktree),
+        this.createTerminal(
+          selector,
+          { ...options, initializeWorkspaceTopology: true },
+          createdWorktree
+        ),
       setTabTitle: async (handle, title) => {
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         const ok = applied(
@@ -132,10 +141,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
           tabs
         })
         return applied(reply) && reply.ok ? (reply.result.createdTabs ?? []) : null
-      },
-      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
-      recordSetupCompletionToken: (ptyId, token) =>
-        this.setupCompletionTokenByPtyId.set(ptyId, token)
+      }
     }
   }
 

@@ -618,7 +618,8 @@ describe('MobileNativeChatComposer', () => {
       )
     })
     expect(mic().props.onPress).toBeUndefined()
-    expect(mic().props.onPressIn).toBe(onMicPressIn)
+    act(() => mic().props.onPressIn())
+    expect(onMicPressIn).toHaveBeenCalledOnce()
     expect(mic().props.onPressOut).toBe(onMicPressOut)
 
     await act(async () => {
@@ -636,7 +637,8 @@ describe('MobileNativeChatComposer', () => {
         })
       )
     })
-    expect(mic().props.onPress).toBe(onMicPress)
+    act(() => mic().props.onPress())
+    expect(onMicPress).toHaveBeenCalledOnce()
     expect(mic().props.onPressIn).toBeUndefined()
     expect(mic().props.onPressOut).toBeUndefined()
   })
