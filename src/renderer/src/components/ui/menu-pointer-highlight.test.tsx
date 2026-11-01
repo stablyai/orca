@@ -130,6 +130,58 @@ it('uses the current cursor position when it moves during wheel scrolling', () =
   expect(document.activeElement).toBe(b)
 })
 
+it('preserves prevented pointer movement across further wheel events and queued frames', () => {
+  const { menu, a, b } = render()
+  a.focus()
+  wheelAt(menu, 10, 40)
+  act(() => menu.dispatchEvent(new Event('scroll')))
+  const preventMove = (event: Event) => event.preventDefault()
+  b.addEventListener('pointermove', preventMove)
+  act(() => {
+    b.dispatchEvent(
+      new PointerEvent('pointermove', {
+        bubbles: true,
+        cancelable: true,
+        pointerType: 'mouse',
+        clientX: 20,
+        clientY: 60
+      })
+    )
+  })
+  hit = b
+  scroll(menu)
+  expect(document.activeElement).toBe(a)
+
+  wheelAt(menu, 20, 60)
+  scroll(menu)
+  act(() => {
+    b.dispatchEvent(
+      new PointerEvent('pointerover', {
+        bubbles: true,
+        pointerType: 'mouse',
+        clientX: 20,
+        clientY: 60
+      })
+    )
+  })
+  expect(document.activeElement).toBe(a)
+
+  b.removeEventListener('pointermove', preventMove)
+  act(() => {
+    b.dispatchEvent(
+      new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerType: 'mouse',
+        clientX: 10,
+        clientY: 60
+      })
+    )
+  })
+  wheelAt(menu, 10, 60)
+  scroll(menu)
+  expect(document.activeElement).toBe(b)
+})
+
 it('leaves moving-pointer boundary events to Radix after wheel scrolling', () => {
   const { menu, a, b } = render()
   a.focus()

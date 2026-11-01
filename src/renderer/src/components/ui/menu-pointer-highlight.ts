@@ -10,6 +10,7 @@ type Point = { x: number; y: number }
 type MenuPointerHighlightState = {
   /** Tracked from wheel until keyboard navigation or pointer exit. */
   pointer: Point | null
+  pointerMovePrevented: boolean
   frame: number
 }
 
@@ -73,6 +74,7 @@ type Handlers = {
 function resetPointerTracking(state: MenuPointerHighlightState): void {
   cancelAnimationFrame(state.frame)
   state.pointer = null
+  state.pointerMovePrevented = false
   state.frame = 0
 }
 
@@ -82,6 +84,7 @@ export function useMenuPointerHighlight(
 ): Required<Handlers> & { ref: React.RefCallback<HTMLDivElement> } {
   const stateRef = React.useRef<MenuPointerHighlightState>({
     pointer: null,
+    pointerMovePrevented: false,
     frame: 0
   })
   const trackContent = React.useCallback((content: HTMLDivElement | null) => {
@@ -109,7 +112,12 @@ export function useMenuPointerHighlight(
     onPointerMove: (event) => {
       props.onPointerMove?.(event)
       const state = stateRef.current
-      if (event.pointerType !== 'mouse' || !state.pointer) {
+      if (event.pointerType !== 'mouse') {
+        return
+      }
+      // Keep Radix's submenu grace decision across wheel events and deferred scroll frames.
+      state.pointerMovePrevented = event.defaultPrevented
+      if (!state.pointer || state.pointerMovePrevented) {
         return
       }
       state.pointer = { x: event.clientX, y: event.clientY }
@@ -117,8 +125,9 @@ export function useMenuPointerHighlight(
     // Re-sync scroll's deferred boundary events; actual pointer movement belongs to Radix.
     onPointerOver: (event) => {
       props.onPointerOver?.(event)
-      const pointer = stateRef.current.pointer
+      const { pointer, pointerMovePrevented } = stateRef.current
       if (
+        !pointerMovePrevented &&
         event.pointerType === 'mouse' &&
         pointer?.x === event.clientX &&
         pointer.y === event.clientY
@@ -139,13 +148,13 @@ export function useMenuPointerHighlight(
     onScrollCapture: (event) => {
       props.onScrollCapture?.(event)
       const state = stateRef.current
-      if (!state.pointer || state.frame) {
+      if (!state.pointer || state.pointerMovePrevented || state.frame) {
         return
       }
       const content = event.currentTarget
       state.frame = requestAnimationFrame(() => {
         state.frame = 0
-        if (state.pointer) {
+        if (state.pointer && !state.pointerMovePrevented) {
           syncMenuHighlightAtPoint(content, state.pointer.x, state.pointer.y)
         }
       })
