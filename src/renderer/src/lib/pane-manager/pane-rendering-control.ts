@@ -7,6 +7,7 @@ import { safeFit } from './pane-tree-ops'
 import {
   attachWebgl,
   clearTerminalWebglAttachBackoff,
+  clearTerminalWebglRendererSuggestion,
   disposeWebgl,
   isPaneWebglContextLost,
   markComplexScriptOutput,
@@ -89,6 +90,11 @@ export function resumePaneRendering(
   if (retentionOwner) {
     releaseHiddenWebglRetention(retentionOwner)
   }
+  // Why before the loop: the app-wide "auto" DOM suggestion outranks every
+  // per-pane latch, so leaving it set would make the retries below no-ops. One
+  // pane's attach still re-sets it for the rest of this resume, keeping a host
+  // that genuinely cannot do WebGL to a single probe per boundary.
+  clearTerminalWebglRendererSuggestion()
   for (const pane of panes) {
     clearTerminalWebglAttachBackoff(pane)
     // Restore blink before constructing WebGL so its first frame samples the right option.
