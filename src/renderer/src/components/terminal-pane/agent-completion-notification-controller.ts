@@ -158,6 +158,8 @@ export function createAgentCompletionNotificationController({
       completionIdentity?: LastCompletionIdentity | null
       /** Announce only. The pane is still genuinely `working` (Claude background inventory), so the synthetic `done` must not run pane lifecycle. */
       notifyWithoutLifecycle?: boolean
+      /** False adopts cached state: same bookkeeping and lifecycle, no banner. */
+      announce?: boolean
     } = {}
   ): boolean {
     if (source !== 'hook' && state.pendingHookDoneTimer !== null) {
@@ -199,6 +201,9 @@ export function createAgentCompletionNotificationController({
     ) {
       options.dispatchHookLifecycle?.(optionsOverride.agentStatus)
     }
+    if (optionsOverride.announce === false) {
+      return true
+    }
     if (optionsOverride.quietedHookDone === true || source === 'process-exit') {
       // Why: confirmed process death is independent completion evidence; keep its provenance so stale hook rows can't veto it later.
       options.dispatchCompletion(title, {
@@ -224,7 +229,7 @@ export function createAgentCompletionNotificationController({
     return true
   }
 
-  function dispatchAttention(payload: AgentCompletionStatusSnapshot): void {
+  function dispatchAttention(payload: AgentCompletionStatusSnapshot, announce = true): void {
     if (!options.dispatchAttention || !options.isLive() || !processState.hasAgentRunEvidence) {
       return
     }
@@ -235,6 +240,9 @@ export function createAgentCompletionNotificationController({
     state.lastAttentionToken = token
     // Why: the visual "needs input" row is driven by the lifecycle hook, the OS banner by the dispatch below.
     options.dispatchHookLifecycle?.(payload)
+    if (!announce) {
+      return
+    }
     options.dispatchAttention(payload.agentType ?? options.paneKey, {
       source: 'hook',
       agentStatus: payload

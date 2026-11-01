@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 
 const dispatchTerminalNotification = vi.fn()
 const dispatchAgentHookTerminalLifecycle = vi.fn()
@@ -383,6 +384,72 @@ describe('agent hook completion notifications', () => {
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+  })
+
+  // Why: startup snapshot and reconnect replays seed `seedOnly`. Settings are already hydrated
+  // here, so the lane's "need a fresh working edge" guard is off — seeding alone must stay silent.
+  it('does not announce a seeded done row', async () => {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      seedOnly: true,
+      payload: { ...hookStatus('done'), agentType: 'claude', stateStartedAt: 1_700_000_000_000 }
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey: makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222'),
+      worktreeId: 'wt-1',
+      seedOnly: true,
+      payload: { ...hookStatus('done'), agentType: 'pi', stateStartedAt: 1_700_000_000_000 }
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+  })
+
+  it('announces the next real turn after a seeded done row', async () => {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      seedOnly: true,
+      payload: { ...hookStatus('done'), agentType: 'claude', stateStartedAt: 1_700_000_000_000 }
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: { ...hookStatus('working'), agentType: 'claude', stateStartedAt: 1_700_000_010_000 }
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: { ...hookStatus('done'), agentType: 'claude', stateStartedAt: 1_700_000_020_000 }
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not raise a seeded needs-input row', async () => {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      seedOnly: true,
+      payload: {
+        ...hookStatus('blocked'),
+        toolName: 'exec_command',
+        toolInput: 'git status'
+      }
+    })
+
+    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
   })
 
   it('prunes retained coordinators when pane liveness is removed from the store', async () => {

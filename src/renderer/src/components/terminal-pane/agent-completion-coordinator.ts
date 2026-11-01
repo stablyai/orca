@@ -105,8 +105,8 @@ export function createAgentCompletionCoordinator(
     return notification.dispatchCompletion(source, title, override)
   }
 
-  function dispatchAttention(payload: AgentCompletionStatusSnapshot): void {
-    notification.dispatchAttention(payload)
+  function dispatchAttention(payload: AgentCompletionStatusSnapshot, announce = true): void {
+    notification.dispatchAttention(payload, announce)
   }
 
   const completionIdentityFor = (state: string, agentType: string | undefined, timestamp: number) =>
