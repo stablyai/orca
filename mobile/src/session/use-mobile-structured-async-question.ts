@@ -16,7 +16,7 @@ export type MobileStructuredAskSession = Pick<
   queued?: { cards: readonly Pick<QueuedMessageCard, 'text'>[] }
 }
 
-// Keep nonblocking structured questions pending until the next user message; answer by ordinary send without touching the draft.
+// Card answers reach the current turn without touching the composer draft.
 export function useMobileStructuredAsyncQuestion(args: {
   structured: MobileStructuredAskSession | null
   pendingAsk: AskPrompt | null

@@ -152,18 +152,18 @@ describe('ChatBehaviorSetting shell environment', () => {
 describe('ChatBehaviorSetting follow-up behavior', () => {
   const FOLLOW_UP_SWITCH = '[role="switch"][aria-label="Queue follow-ups"]'
 
-  it('hides the choice until the host answers, then shows it', async () => {
+  it('keeps the choice disabled until the host confirms queue support', async () => {
     setLocalRuntimeCapabilitiesForTests(null)
     let answer: (status: { capabilities: string[] }) => void = () => {}
     vi.stubGlobal('api', {
       runtime: { getStatus: () => new Promise((resolve) => (answer = resolve)) }
     })
     const { container } = renderSetting({})
-    expect(container.querySelector(FOLLOW_UP_SWITCH)).toBeNull()
+    expect(container.querySelector(FOLLOW_UP_SWITCH)?.hasAttribute('disabled')).toBe(true)
     await act(async () =>
       answer({ capabilities: [AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY] })
     )
-    expect(container.querySelector(FOLLOW_UP_SWITCH)).not.toBeNull()
+    expect(container.querySelector(FOLLOW_UP_SWITCH)?.hasAttribute('disabled')).toBe(false)
   })
 
   it.each([true, false, undefined])(

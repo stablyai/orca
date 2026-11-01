@@ -162,6 +162,7 @@ function mutateWith(reply: MutateCall): {
 }
 
 type RenderProps = {
+  isWorking?: boolean
   sessionId?: string
   transportEnabled: boolean
   fence: number | null
@@ -200,6 +201,7 @@ function renderOptions(initial: RenderProps, mutate: StructuredAgentSessionMutat
         sessionId: props.sessionId ?? 'session-1',
         target: props.paired ? PAIRED_TARGET : LOCAL_TARGET,
         transportEnabled: props.transportEnabled,
+        isWorking: props.isWorking,
         isVisible: !props.hidden,
         providerVisible: props.transportEnabled && !props.hidden,
         ...(props.providerStarting ? { providerStarting: true } : {}),

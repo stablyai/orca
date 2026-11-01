@@ -15,10 +15,14 @@ export function useStructuredAgentSessionSendOptions(
   source: Pick<
     ReturnType<typeof useStructuredAgentSessionOptionState>,
     'optionStateRef' | 'optionView' | 'takesSendOptions' | 'takesSelection'
-  >
-): () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'> {
-  const { optionStateRef, optionView, takesSendOptions, takesSelection } = source
+  > &
+    Partial<Pick<ReturnType<typeof useStructuredAgentSessionOptionState>, 'controller'>>
+): () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'> | undefined {
+  const { optionStateRef, optionView, controller, takesSendOptions, takesSelection } = source
   return useCallback(() => {
+    if (!takesSelection && controller?.isPending('model')) {
+      return undefined
+    }
     if (!takesSendOptions && !takesSelection) {
       return {}
     }
@@ -33,5 +37,5 @@ export function useStructuredAgentSessionSendOptions(
     return takesSelection
       ? { selection: structuredAgentSessionMessageSelection(view) }
       : { options: structuredAgentSessionSendSelection(view) }
-  }, [launch, optionStateRef, optionView, sessionId, takesSendOptions, takesSelection])
+  }, [controller, launch, optionStateRef, optionView, sessionId, takesSendOptions, takesSelection])
 }

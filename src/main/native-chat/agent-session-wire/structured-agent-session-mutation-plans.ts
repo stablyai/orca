@@ -152,6 +152,7 @@ export function sendPlan(
         origin: params.userSend ? 'client' : 'host',
         ...(source ? { source } : {}),
         clientMessageId,
+        ...(params.steer ? { steer: params.steer } : {}),
         ...(params.options ? { options: params.options } : {}),
         ...(params.selection !== undefined ? { selection: params.selection } : {}),
         // Body-only, so the reducer's echo aliasing never sees control fields or the sender.

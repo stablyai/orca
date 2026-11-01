@@ -1,9 +1,9 @@
-import { AgentSessionSelectionSchema } from '../agent-session/options/agent-session-execution-options'
 import {
   SendBody,
   MAX_OPTION_LABEL,
   AgentSessionOptions
 } from './structured-agent-session-message-params'
+import { AgentSessionSelectionSchema } from '../agent-session/options/agent-session-execution-options'
 import { TerminalClose } from './terminal-unary-params'
 import {
   Identifier,
@@ -118,25 +118,7 @@ export const CreateSupportParams = z
   })
   .strict()
 
-export const SendParams = z
-  .object({
-    envelope: MutationEnvelope,
-    retryUnknown: z.literal(true).optional(),
-    /** Host-held draft while active; gate strict payloads on agent-session.queued-messages.v2.
-     * Operation fingerprint only, never body fingerprint. */
-    delivery: z.literal('queue-if-active').optional(),
-    /** Preserve composer options until dispatch; requires agent-session.send-options.v1. Operation fingerprint only. */
-    options: AgentSessionOptions.optional(),
-    selection: AgentSessionSelectionSchema.optional(),
-    // Strict payload: only hosts advertising the bound usage-limit send capability accept this.
-    usageLimitContinuationOfTurnItemId: Identifier('Invalid source turn item id').optional(),
-    body: SendBody
-  })
-  .strict()
-  .refine(
-    (value) => value.options === undefined || value.selection === undefined,
-    'Choose options or selection'
-  )
+export { SendParams } from './structured-agent-session-message-params'
 
 export const CreateIntentParams = z
   .object({

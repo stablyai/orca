@@ -44,6 +44,7 @@ export const AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY =
 // Hand-offs link via submission.queuedMessageId, never equal draft/submission IDs. queuePause
 // holds every card until queuedMessagesResume or a later turn starts. nextQueuedMessageId names
 // the next eligible card; null/missing means none. Per-card holds: send_failed conversion or kept.
+export const AGENT_SESSION_STEER_DRAFT_RUNTIME_CAPABILITY = 'agent-session.steer-draft.v1' as const
 export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
   'agent-session.queued-messages.v2' as const
 // Advertise in-place update/edit holds separately from mid-turn queueing: kept/mail cards remain editable while queueing is off. Never fall back to copy/delete.
@@ -114,6 +115,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = [
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
+  AGENT_SESSION_STEER_DRAFT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,

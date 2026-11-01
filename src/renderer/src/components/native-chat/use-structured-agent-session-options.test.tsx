@@ -823,7 +823,13 @@ describe('Pi catalog refresh completion', () => {
       })
       return {
         snapshot: () => harness.result.current.optionSnapshot,
-        capture: () => harness.result.current.capture().selection,
+        capture: () => {
+          const captured = harness.result.current.capture()
+          if (!captured) {
+            throw new Error('Expected a settled selection before sending')
+          }
+          return captured.selection
+        },
         demand: () => harness.result.current.optionSurface.demandModelCatalog?.(),
         pick: (value) => harness.result.current.setStructuredOption('effort', value),
         replace: async (fence, otherHost) => {

@@ -40,6 +40,7 @@ function harness(options: {
   imageAttachments?: NativeChatComposerImageAttachment[]
   lane?: 'pty'
   capturePresentation?: NativeChatStructuredComposerTransport['capturePresentation']
+  queue?: NativeChatStructuredComposerTransport['queue']
 }) {
   const onError = vi.fn()
   const onSubmitted = vi.fn()
@@ -48,6 +49,7 @@ function harness(options: {
     capturePresentation: options.capturePresentation ?? (() => () => true),
     onError,
     onSubmitted,
+    queue: options.queue,
     ...(options.threadGoal ? { threadGoal: options.threadGoal } : {})
   } as unknown as NativeChatStructuredComposerTransport
   const calls = {
@@ -76,6 +78,33 @@ function harness(options: {
   }
   return { hook, calls, onError, onSubmitted, type }
 }
+
+it.each([true, false])(
+  'reverses the configured Enter delivery for the alternate shortcut (queue=%s)',
+  (enabled) => {
+    const attachment = { id: 'draft-image', path: '/host/image.png' }
+    const { hook, calls } = harness({
+      draft: 'Check the screenshot',
+      imageAttachments: [attachment],
+      queue: {
+        capability: 'supported',
+        followUpsQueue: enabled,
+        isWorking: true,
+        stopping: false,
+        session: { queuedMessages: [] },
+        prompts: []
+      }
+    })
+    act(() => hook.result.current.send({ alternate: true }))
+    expect(calls.sendStructured).toHaveBeenCalledExactlyOnceWith(
+      'Check the screenshot',
+      [attachment],
+      {
+        alternate: true
+      }
+    )
+  }
+)
 
 describe('composer goal mode', () => {
   it.each([false, true])(
