@@ -161,6 +161,8 @@ export function renderTabBarSurface({
               .join(' ')}
           >
             <TabTitleWidthProvider
+              key={worktreeId}
+              tabIds={[...sortableIds, ...clientHostedBrowserRows.map((row) => row.browserPageId)]}
               worktreeId={worktreeId}
               shown={props.stripShown}
               stripRef={tabStripRef}

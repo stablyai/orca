@@ -50,9 +50,11 @@ export function TabTitleWidthProvider({
   worktreeId,
   shown,
   stripRef,
+  tabIds,
   children
 }: {
   worktreeId: string
+  tabIds: readonly string[]
   /** Strips outside the worktree switcher (floating panel) report their own visibility. */
   shown?: boolean
   stripRef: RefObject<HTMLElement | null>
@@ -69,6 +71,14 @@ export function TabTitleWidthProvider({
   const held = pointerInside && isShown
   const [settleCount, setSettleCount] = useState(0)
   const [settledByTabId] = useState(() => new Map<string, SettledTabTitle>())
+  useEffect(() => {
+    const openTabIds = new Set(tabIds)
+    for (const tabId of settledByTabId.keys()) {
+      if (!openTabIds.has(tabId)) {
+        settledByTabId.delete(tabId)
+      }
+    }
+  }, [tabIds, settledByTabId])
   const quietRef = useRef<{
     pending: boolean
     held: boolean
@@ -133,6 +143,7 @@ export type TabTitleRename = { count: number; title: string | null }
 function useSettledTabTitle(
   tabId: string,
   title: string,
+  liveTitle: string,
   leadingSlots: number,
   rename: TabTitleRename | undefined
 ): { settledTitle: string; settledSlots: number } {
@@ -157,12 +168,20 @@ function useSettledTabTitle(
     settledSlots = next.leadingSlots
   }
   const noteTitleChange = strip?.noteTitleChange
-  const pending = settledTitle !== title || settledSlots !== leadingSlots
+  const lastLive = useRef({ title, liveTitle, leadingSlots })
   useEffect(() => {
-    if (pending) {
+    const previous = lastLive.current
+    lastLive.current = { title, liveTitle, leadingSlots }
+    if (
+      settledTitle !== title ||
+      settledSlots !== leadingSlots ||
+      previous.title !== title ||
+      previous.liveTitle !== liveTitle ||
+      previous.leadingSlots !== leadingSlots
+    ) {
       noteTitleChange?.()
     }
-  }, [pending, title, leadingSlots, noteTitleChange])
+  }, [title, liveTitle, leadingSlots, settledTitle, settledSlots, noteTitleChange])
   return { settledTitle, settledSlots }
 }
 
@@ -205,30 +224,53 @@ function nextSettledTabTitle(
 export function TabTitleLabel({
   tabId,
   title,
+  liveTitle = title,
   leadingSlots = 1,
   rename,
-  className
+  className,
+  style,
+  onDoubleClick
 }: {
   tabId: string
   title: string
+  /** Live terminal title, even when a custom name supplies the displayed text. */
+  liveTitle?: string
   /** Glyphs in the tab's leading icon; the label absorbs changes until the strip settles. */
   leadingSlots?: number
   /** The user's latest inline rename; its result may arrive after a host round trip. */
   rename?: TabTitleRename
   className?: string
+  style?: React.CSSProperties
+  onDoubleClick?: React.MouseEventHandler<HTMLSpanElement>
 }): React.JSX.Element {
-  const { settledTitle, settledSlots } = useSettledTabTitle(tabId, title, leadingSlots, rename)
+  const { settledTitle, settledSlots } = useSettledTabTitle(
+    tabId,
+    title,
+    liveTitle,
+    leadingSlots,
+    rename
+  )
   const slotShift = settledSlots - leadingSlots
   if (settledTitle === title && slotShift === 0) {
-    return <span className={cn(TAB_LABEL_WIDTH_CLASSES, 'mr-1', className)}>{title}</span>
+    return (
+      <span
+        className={cn(TAB_LABEL_WIDTH_CLASSES, 'mr-1', className)}
+        style={style}
+        onDoubleClick={onDoubleClick}
+      >
+        {title}
+      </span>
+    )
   }
   return (
     // The hidden pseudo-element sizes the tab from the settled title without duplicating text content;
     // its margin gives back (or takes) the width the leading icon gained (or lost) since the strip settled.
     <span
+      onDoubleClick={onDoubleClick}
       data-settled-title={settledTitle}
       style={
         {
+          ...style,
           '--tab-slot-shift': `calc(${slotShift} * ${TAB_LEADING_SLOT_WIDTH})`
         } as React.CSSProperties
       }

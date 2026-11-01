@@ -29,7 +29,7 @@ import {
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
-import { TAB_LABEL_WIDTH_CLASSES, TAB_ROOT_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_ROOT_WIDTH_CLASSES, TabTitleLabel } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
@@ -321,8 +321,10 @@ export default function EditorFileTab({
             onBlur={commitRename}
           />
         ) : (
-          <span
-            className={`${TAB_LABEL_WIDTH_CLASSES}${isPreviewTab ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
+          <TabTitleLabel
+            tabId={file.tabId ?? file.id}
+            title={tabLabel}
+            className={`mr-0${isPreviewTab ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
             style={tabStatusColor ? { color: tabStatusColor } : undefined}
             onDoubleClick={(e) => {
               if (isPreviewTab && onMakePermanent) {
@@ -337,9 +339,7 @@ export default function EditorFileTab({
               e.stopPropagation()
               openRenameInput()
             }}
-          >
-            {tabLabel}
-          </span>
+          />
         )}
         {isMissingFileMutation && !isRenaming && (
           <span className="shrink-0 text-[10px] leading-none font-semibold tracking-wide text-muted-foreground">

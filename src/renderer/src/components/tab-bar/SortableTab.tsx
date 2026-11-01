@@ -128,8 +128,8 @@ export default function SortableTab({
   const shellForIcon = tab.shellOverride
 
   // Why: with a provider icon shown, strip the agent's own leading glyph so the tab doesn't show two icons for one agent.
-  const displayTitle =
-    tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
+  const liveTitle = tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title
+  const displayTitle = tab.customTitle ?? liveTitle
 
   const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
@@ -273,6 +273,7 @@ export default function SortableTab({
         <TabTitleLabel
           tabId={tab.id}
           title={displayTitle}
+          liveTitle={liveTitle}
           leadingSlots={terminalTabLeadingIconSlots({
             hasAgent: tabAgent !== null,
             activityStatus,
