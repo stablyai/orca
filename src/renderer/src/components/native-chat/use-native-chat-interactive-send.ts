@@ -2,13 +2,13 @@ import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
-import type { AgentType } from '../../../../shared/native-chat-types'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   nativeChatAskRequiresTerminal,
   nativeChatStopSendsSecondEscape,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
-} from '../../../../shared/native-chat-agent-support'
+} from '../../../../shared/native-chat/native-chat-agent-support'
 import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,

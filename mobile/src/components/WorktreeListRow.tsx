@@ -3,7 +3,7 @@ import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'luci
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
 import { triggerMediumImpact } from '../platform/haptics'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -20,6 +20,7 @@ import { HostKindIcon } from './HostKindIcon'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
+import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
 
 // Match desktop formatBranchName by hiding refs/heads/ prefix.
 function displayBranch(branch: string): string {
@@ -86,7 +87,7 @@ function WorktreeListRowComponent({
         styles.worktreeRow,
         indent > 0 && { paddingLeft: spacing.lg + indent },
         item.isActive && styles.worktreeRowActive,
-        pressed && styles.worktreeRowPressed
+        pressed && (item.isActive ? styles.worktreeRowActivePressed : styles.worktreeRowPressed)
       ]}
       disabled={isReadOnly}
       onPress={() => onPress(item)}
@@ -159,6 +160,9 @@ function WorktreeListRowComponent({
             </View>
           )}
           <WorktreeMetaGlyphs presence={getWorktreeMetaGlyphPresence(item, cardDetails)} />
+          {item.liveTerminalCount > 0 ? (
+            <Text style={styles.terminalCount}>{item.liveTerminalCount}</Text>
+          ) : null}
         </View>
         {cardDetails.metaRow && (
           <View style={styles.worktreeMetaRow}>
@@ -219,7 +223,8 @@ function WorktreeListRowComponent({
         ) : null}
         {count > 0 && onToggleLineage ? (
           <Pressable
-            style={styles.lineageToggle}
+            style={({ pressed }) => [styles.lineageToggle, pressed && styles.lineageTogglePressed]}
+            hitSlop={LINEAGE_TOGGLE_HIT_SLOP}
             onPress={(event) => {
               event.stopPropagation()
               onToggleLineage(item)
@@ -239,29 +244,32 @@ function WorktreeListRowComponent({
           </Pressable>
         ) : null}
       </View>
-
-      {item.liveTerminalCount > 0 && (
-        <Text style={styles.terminalCount}>{item.liveTerminalCount}</Text>
-      )}
     </Pressable>
   )
 }
 
 export const WorktreeListRow = memo(WorktreeListRowComponent, areStructurallyEqual)
 
+// Grows the 20 pt pill to a 44 pt target without pushing the row apart.
+const LINEAGE_TOGGLE_HIT_SLOP = { top: 12, bottom: 12, left: 8, right: 8 } as const
+
 const styles = themedStyleSheet(() => ({
   worktreeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.md,
     paddingLeft: spacing.lg,
     paddingRight: spacing.lg,
     // Reserve the active accent bar width so active/inactive rows align.
-    borderLeftWidth: 2,
+    borderLeftWidth: WORKTREE_ROW_LAYOUT.accentWidth,
     borderLeftColor: 'transparent'
   },
   worktreeRowPressed: {
     backgroundColor: colors.bgRaised
+  },
+  // The active row already wears bgPanel, so its press needs a wash that reads over it.
+  worktreeRowActivePressed: {
+    backgroundColor: colors.translucentFill
   },
   // Match desktop focused-worktree card with raised fill and left accent.
   worktreeRowActive: {
@@ -270,7 +278,7 @@ const styles = themedStyleSheet(() => ({
     borderLeftColor: colors.textSecondary
   },
   indicatorCol: {
-    width: 20,
+    width: WORKTREE_ROW_LAYOUT.indicatorWidth,
     alignItems: 'center',
     paddingTop: 6,
     marginRight: spacing.sm,
@@ -280,8 +288,7 @@ const styles = themedStyleSheet(() => ({
     marginTop: 2
   },
   worktreeMain: {
-    flex: 1,
-    marginRight: spacing.sm
+    flex: 1
   },
   worktreeNameRow: {
     flexDirection: 'row',
@@ -380,12 +387,15 @@ const styles = themedStyleSheet(() => ({
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     marginTop: spacing.xs,
     backgroundColor: colors.bgRaised,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: radii.control
+  },
+  lineageTogglePressed: {
+    opacity: feedback.pressedOpacity
   },
   lineageToggleText: {
     fontSize: 11,
@@ -393,10 +403,8 @@ const styles = themedStyleSheet(() => ({
     fontWeight: '600'
   },
   terminalCount: {
+    marginLeft: 'auto',
     fontSize: typography.metaSize,
-    color: colors.textMuted,
-    minWidth: 16,
-    textAlign: 'right',
-    paddingTop: 3
+    color: colors.textMuted
   }
 }))

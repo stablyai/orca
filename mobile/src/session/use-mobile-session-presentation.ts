@@ -3,6 +3,7 @@ import {
   isConnectionOutage,
   verdictDisplayLabel
 } from '../transport/connection-health'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
 import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
@@ -12,6 +13,7 @@ import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-
 import { useCalmConnectionState } from '../transport/calm-connection-state'
 
 export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
+  const t = useMobileTranslation()
   const {
     created,
     worktreeId,
@@ -67,15 +69,21 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
 
   // Delay reconnect header changes so brief self-healing drops cannot flicker the label.
   const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
+  // A cold session with nothing to draw says it is offline instead of showing an empty frame.
+  const showOfflineState = presentedConnState !== 'connected' && visibleTabs.length === 0
   const terminalSummary =
     presentedConnState === 'connected'
       ? showLoadingState
-        ? 'Loading tabs'
+        ? t('session.presentation.loadingTabs', 'Loading tabs')
         : visibleTabs.length === 1
-          ? '1 tab'
-          : `${visibleTabs.length} tabs`
+          ? t('session.presentation.oneTab', '1 tab')
+          : t('session.presentation.tabCount', '{{tabCount}} tabs', {
+              tabCount: visibleTabs.length
+            })
       : showConnectionRetry
-        ? `${verdictDisplayLabel(connectionVerdict)} — tap to retry`
+        ? t('session.presentation.tapToRetry', '{{status}} — tap to retry', {
+            status: verdictDisplayLabel(connectionVerdict)
+          })
         : connectionEscalated
           ? verdictDisplayLabel(connectionVerdict)
           : MOBILE_SESSION_STATUS_LABELS[presentedConnState]
@@ -112,6 +120,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     presentedConnState,
     showLoadingState,
     showEmptyState,
+    showOfflineState,
     connectionVerdict,
     showConnectionRetry,
     connectionEscalated,

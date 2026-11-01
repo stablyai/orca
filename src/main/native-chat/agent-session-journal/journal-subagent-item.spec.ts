@@ -8,7 +8,10 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { isSubagentBlock, type NativeChatSubagentBlock } from '../../../shared/native-chat-types'
+import {
+  isSubagentBlock,
+  type NativeChatSubagentBlock
+} from '../../../shared/native-chat/native-chat-types'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'

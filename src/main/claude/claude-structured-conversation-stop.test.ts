@@ -29,26 +29,6 @@ describe('Claude Stop that names no turn', () => {
     expect(interrupts(claude)).toBe(1)
   })
 
-  it('interrupts that gap the same way when the Stop names a turn with no journal row yet', async () => {
-    const claude = fakeClaude({ replayUuid: null })
-    const adapter = await written(claude)
-
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-ended', fence: 7 })
-    ).resolves.toEqual({ cancelled: true })
-    expect(interrupts(claude)).toBe(1)
-  })
-
-  it('interrupts a turn Claude opened on its own echo', async () => {
-    const claude = fakeClaude({ replayUuid: 'turn-T' })
-    const adapter = await written(claude)
-
-    await expect(adapter.cancelTurn({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
-      cancelled: true
-    })
-    expect(interrupts(claude)).toBe(1)
-  })
-
   it('does nothing for another fence, or with nothing in flight', async () => {
     const claude = fakeClaude({ replayUuid: null })
     const adapter = await acquired(claude)

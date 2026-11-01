@@ -1,3 +1,4 @@
+import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import { useCallback, useEffect, useRef } from 'react'
 import { AppState } from 'react-native'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
@@ -21,6 +22,7 @@ import { relaysToServers } from '../transport/execution-host-scoped-rpc-client'
 import {
   applyServerWorkspaces,
   fetchServerWorkspaces,
+  ServerRowSnapshots,
   NO_SERVER_WORKSPACES
 } from '../worktree/server-workspaces'
 
@@ -63,6 +65,7 @@ export function useHostWorktreeCatalog(args: {
   } = state
   // Keyed by client: a fetch still running on a replaced client must not skip the new one's.
   const serverFetchInFlightRef = useRef<RpcClient | null>(null)
+  const serverRowSnapshotsRef = useRef<ServerRowSnapshots | null>(null)
 
   // Fetch server rows separately so a slow server cannot delay desktop rows.
   const fetchServerRows = useCallback(
@@ -77,7 +80,13 @@ export function useHostWorktreeCatalog(args: {
       }
       serverFetchInFlightRef.current = requestClient
       try {
-        const fetched = await fetchServerWorkspaces(requestClient)
+        // Only a desktop advertising server-row deltas accepts the snapshot fields; its params are strict.
+        const snapshots = hostCapabilities.includes(
+          MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY
+        )
+          ? (serverRowSnapshotsRef.current ??= new ServerRowSnapshots())
+          : null
+        const fetched = await fetchServerWorkspaces(requestClient, snapshots)
         if (fetched && clientRef.current === requestClient) {
           setServerWorkspaces((previous) => applyServerWorkspaces(previous, fetched))
         }

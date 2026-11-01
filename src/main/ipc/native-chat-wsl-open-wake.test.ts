@@ -118,22 +118,12 @@ afterEach(async () => {
   await rm(mocks.home, { recursive: true, force: true })
 })
 
-// verify-18 review: opening a chat whose transcript is in a stopped distro is a user act.
-describe('a user-opened chat on a stopped WSL distro', () => {
-  it('starts the distro and shows its history', async () => {
-    const result = await mocks.handlers.get('nativeChat:readSession')!(
-      {},
-      { agent: 'claude', sessionId: 'sess-wsl', transcriptPath: TRANSCRIPT }
-    )
-
-    expect(mocks.fsCalls[0]).toBe(ROOT)
-    expect(result).toMatchObject({ messages: [expect.objectContaining({ role: 'user' })] })
-  })
-
-  it('starts the distro when a chat pane subscribes, and paints its history', async () => {
-    const events = new EventEmitter()
-    const send = vi.fn<(channel: string, payload: unknown) => void>()
-    const sender = {
+function makeSender() {
+  const events = new EventEmitter()
+  const send = vi.fn<(channel: string, payload: unknown) => void>()
+  return {
+    send,
+    sender: {
       id: 1,
       isDestroyed: () => false,
       on: (event: string, callback: () => void) => void events.on(event, callback),
@@ -141,13 +131,31 @@ describe('a user-opened chat on a stopped WSL distro', () => {
         void events.removeListener(event, callback),
       send
     }
+  }
+}
+
+// verify-18 review: opening a chat whose transcript is in a stopped distro is a user act.
+describe('a user-opened chat on a stopped WSL distro', () => {
+  it('starts the distro and shows its history', async () => {
+    const result = await mocks.handlers.get('nativeChat:readSession')!(
+      {},
+      { agent: 'claude', sessionId: 'sess-wsl', transcriptPath: TRANSCRIPT, wakeWslDistro: true }
+    )
+
+    expect(mocks.fsCalls[0]).toBe(ROOT)
+    expect(result).toMatchObject({ messages: [expect.objectContaining({ role: 'user' })] })
+  })
+
+  it('starts the distro when the opened pane subscribes, and paints its history', async () => {
+    const { send, sender } = makeSender()
     mocks.listeners.get('nativeChat:subscribe')!(
       { sender },
       {
         subscriptionId: 'pane-1',
         agent: 'claude',
         sessionId: 'sess-wsl',
-        transcriptPath: TRANSCRIPT
+        transcriptPath: TRANSCRIPT,
+        wakeWslDistro: true
       }
     )
 
@@ -176,5 +184,46 @@ describe('a user-opened chat on a stopped WSL distro', () => {
     expect(mocks.fsCalls).toEqual([])
     expect(mocks.running).toBe(false)
     expect(result).not.toHaveProperty('messages')
+  })
+})
+
+// stack audit E9-2: a launch restore or remount mounts the pane without the user opening it.
+describe('a restored chat pane on a stopped WSL distro', () => {
+  it('reads without starting the distro and reports it stopped', async () => {
+    const result = await mocks.handlers.get('nativeChat:readSession')!(
+      {},
+      { agent: 'claude', sessionId: 'sess-wsl', transcriptPath: TRANSCRIPT }
+    )
+
+    expect(mocks.fsCalls).toEqual([])
+    expect(mocks.running).toBe(false)
+    expect(result).toMatchObject({ error: expect.stringContaining("'Ubuntu' is not running") })
+  })
+
+  it('subscribes without starting the distro and shows the stopped copy', async () => {
+    const { send, sender } = makeSender()
+    mocks.listeners.get('nativeChat:subscribe')!(
+      { sender },
+      {
+        subscriptionId: 'pane-2',
+        agent: 'claude',
+        sessionId: 'sess-wsl',
+        transcriptPath: TRANSCRIPT
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenCalledWith(
+        'nativeChat:appended',
+        expect.objectContaining({
+          frame: expect.objectContaining({
+            type: 'snapshot',
+            error: expect.stringContaining("'Ubuntu' is not running")
+          })
+        })
+      )
+    )
+    expect(mocks.fsCalls).toEqual([])
+    expect(mocks.running).toBe(false)
   })
 })

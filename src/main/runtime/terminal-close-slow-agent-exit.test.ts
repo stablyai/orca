@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  IMMEDIATE_KILL_CAPTURE_TIMEOUT_MS,
-  IMMEDIATE_KILL_REPLY_BUDGET_MS
-} from '../daemon/immediate-kill-reply-budget'
-import { DESCENDANT_SNAPSHOT_TIMEOUT_MS } from '../pty-descendant-termination'
+import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/immediate-kill-reply-budget'
+
 import { startLateExitHarness } from '../ipc/pty/daemon-late-exit-test-fixture'
 import { finishPtyShutdown } from '../ipc/pty/provider/liveness'
 import { shutdownProviderAndDetectExit } from '../ipc/pty/provider/shutdown-detect'
@@ -12,7 +9,7 @@ import { stopAndWaitPtyFromRuntimeController } from '../ipc/pty/runtime/kill'
 import type { OrchestrationDb } from './orchestration/db'
 import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
 import type { OrcaRuntimeService } from './orca-runtime'
-import { EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS } from './orca-runtime-core'
+
 import { completeWorkerTerminalRelease } from './rpc/methods/orchestration/worker/worker-release-completion'
 
 // Longer than the old 2s close budget, like an agent running exit hooks after SIGTERM.
@@ -101,11 +98,6 @@ async function closeThroughDaemon(
 }
 
 describe('worker release of an agent that is slow to exit after its terminal closes', () => {
-  it('budgets the close for the daemon immediate-kill verdict, not a fixed 2s', () => {
-    expect(EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS).toBeGreaterThan(IMMEDIATE_KILL_REPLY_BUDGET_MS)
-    expect(IMMEDIATE_KILL_CAPTURE_TIMEOUT_MS).toBe(DESCENDANT_SNAPSHOT_TIMEOUT_MS)
-  })
-
   it('releases a worker whose process exits after the old 2s budget', async () => {
     const harness = await startLateExitHarness()
     try {

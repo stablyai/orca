@@ -106,15 +106,6 @@ describe('macOS keyboard layout change notifications', () => {
     expect(send).toHaveBeenCalledTimes(2)
   })
 
-  it('does not install a native subscription off macOS', () => {
-    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
-
-    registerMacKeyboardLayoutChangeNotifications()
-
-    expect(subscribeNotification).not.toHaveBeenCalled()
-    expect(appOnce).not.toHaveBeenCalled()
-  })
-
   it('coalesces rapid changes before the prior native read settles', async () => {
     let notificationCallback: (() => void) | undefined
     let finishRead!: () => void

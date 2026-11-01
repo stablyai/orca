@@ -1,4 +1,4 @@
-import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat-follow-up-behavior'
 import {
   recordMobileNativeChatSkillPick,
@@ -33,7 +33,10 @@ import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-compos
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
-import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
+import {
+  COMPOSER_CONTROL_HIT_SLOP,
+  composerInputStyles as inputStyles
+} from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatSendButton } from './MobileNativeChatSendButton'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 import {
@@ -319,6 +322,7 @@ export function MobileNativeChatComposer({
                 style={({ pressed }) => [inputStyles.controlButton, pressed && inputStyles.pressed]}
                 onPress={attachPress}
                 disabled={isAttaching || disabled}
+                hitSlop={COMPOSER_CONTROL_HIT_SLOP}
               >
                 {isAttaching ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -359,8 +363,9 @@ export function MobileNativeChatComposer({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('chat.composer.cancelEditing', 'Cancel editing')}
-                style={inputStyles.ghostButton}
+                style={({ pressed }) => [inputStyles.ghostButton, pressed && inputStyles.pressed]}
                 onPress={editSession.cancel}
+                hitSlop={COMPOSER_CONTROL_HIT_SLOP}
               >
                 <Text style={{ color: colors.textSecondary }}>{t('common.cancel', 'Cancel')}</Text>
               </Pressable>
@@ -378,6 +383,7 @@ export function MobileNativeChatComposer({
                 ]}
                 onPress={() => void handleSend()}
                 disabled={!canSend}
+                hitSlop={COMPOSER_CONTROL_HIT_SLOP}
               >
                 <Text style={{ color: canSend ? colors.bgBase : colors.textMuted }}>
                   {t('common.save', 'Save')}

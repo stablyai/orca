@@ -1,11 +1,11 @@
 import { readOpenCodeNativeChatTranscriptTail } from './transcript-opencode'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import type { AgentType } from '../../shared/agent-status-types'
 import type {
-  AgentType,
   NativeChatMessage,
   NativeChatTurnLifecycle
-} from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+} from '../../shared/native-chat/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
   decodeClaudeTranscriptLine,

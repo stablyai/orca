@@ -34,7 +34,7 @@ import type {
   AgentJournalTurnScope
 } from '../../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
+import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'

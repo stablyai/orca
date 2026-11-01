@@ -4,6 +4,7 @@ import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { getHostRuntimeLabel } from './accounts-pane-runtime'
 import { WSL_DEFAULT_DISTRO_KEY } from './provider-account-visibility'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 
 export function renderAccountsLocationSection(
@@ -12,11 +13,17 @@ export function renderAccountsLocationSection(
   const {
     accountRuntime,
     updateSettings,
+    onAccountLocationChange,
     wslAvailable,
     wslCapabilitiesLoading,
     wslDistros,
     wslSupportedPlatform
   } = model
+  const updateAccountLocation = async (updates: Partial<GlobalSettings>): Promise<void> => {
+    // Keep the current view until the existing settings write publishes the user's choice.
+    await updateSettings(updates)
+    onAccountLocationChange?.()
+  }
   const accountRuntimeControls = wslSupportedPlatform ? (
     <SearchableSetting
       title={translate('auto.components.settings.AccountsPane.f54b4fbd71', 'Account Location')}
@@ -49,7 +56,7 @@ export function renderAccountsLocationSection(
                 'Account location'
               )}
               value={accountRuntime.runtime}
-              onChange={(value) => updateSettings({ localAccountRuntime: value })}
+              onChange={(value) => void updateAccountLocation({ localAccountRuntime: value })}
               equalWidth
               options={[
                 { value: 'host', label: getHostRuntimeLabel() },
@@ -68,7 +75,7 @@ export function renderAccountsLocationSection(
               <Select
                 value={accountRuntime.wslDistro ?? WSL_DEFAULT_DISTRO_KEY}
                 onValueChange={(value) =>
-                  updateSettings({
+                  void updateAccountLocation({
                     localAccountRuntime: 'wsl',
                     localAccountWslDistro: value === WSL_DEFAULT_DISTRO_KEY ? null : value
                   })

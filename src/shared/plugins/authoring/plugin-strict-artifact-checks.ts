@@ -46,6 +46,19 @@ function iconSvgErrors(read: PluginArtifactTextReader, themeText: string | null)
   })
 }
 
+// Why: Orca skips a missing background image silently at runtime, so authors hear about it here.
+function themeBackgroundErrors(read: PluginArtifactTextReader, themeText: string | null): string[] {
+  if (themeText === null) {
+    return []
+  }
+  try {
+    const path = parsePluginAppThemeArtifact(themeText, 'strict').background?.path
+    return path !== undefined && read(path) === null ? [`${path}: file not found`] : []
+  } catch {
+    return []
+  }
+}
+
 function detail(error: unknown, text: string | null): string {
   if (error instanceof z.ZodError) {
     let input: unknown = null
@@ -122,5 +135,10 @@ export function strictPluginArtifactErrors(
       (error) => `contributes.iconThemes "${theme.id}" (${theme.path}): ${error}`
     )
   )
-  return [...themeErrors, ...svgErrors, ...packErrors, ...syntaxErrors]
+  const backgroundErrors = c.themes.flatMap((theme) =>
+    themeBackgroundErrors(read, read(theme.path)).map(
+      (error) => `contributes.themes "${theme.id}" (${theme.path}): ${error}`
+    )
+  )
+  return [...themeErrors, ...svgErrors, ...backgroundErrors, ...packErrors, ...syntaxErrors]
 }

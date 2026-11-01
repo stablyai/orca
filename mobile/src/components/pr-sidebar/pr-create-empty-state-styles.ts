@@ -15,7 +15,7 @@ export const prCreateEmptyStateStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
@@ -66,7 +66,8 @@ export const prCreateEmptyStateStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised
   },
   body: {
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     gap: spacing.sm
   },
   bodyTitle: {
@@ -83,7 +84,8 @@ export const prCreateEmptyStateStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
-    padding: spacing.md
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg
   },
   // Secondary link-an-existing-PR affordance, set apart from the body copy.
   linkButton: {

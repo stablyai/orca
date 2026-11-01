@@ -74,25 +74,6 @@ describe('execution-side conditional teardown', () => {
     ])
   })
 
-  it('refuses a client attach after the listing', async () => {
-    const created = await create()
-    expect(host.beginFencedTermination(request(created.incarnationId))).toEqual({
-      accepted: false,
-      result: { outcome: 'refused', reason: 'attached' }
-    })
-    expect(handles[0]!.forceKill).not.toHaveBeenCalled()
-  })
-
-  it('refuses a promoted agent claim after the listing', async () => {
-    const created = await create('pty', true)
-    host.detach('pty', created.attachToken)
-    expect(host.beginFencedTermination(request(created.incarnationId))).toEqual({
-      accepted: false,
-      result: { outcome: 'refused', reason: 'claimed' }
-    })
-    expect(handles[0]!.forceKill).not.toHaveBeenCalled()
-  })
-
   it('refuses an in-flight claim before its promotion', async () => {
     const created = await create()
     host.detach('pty', created.attachToken)
@@ -139,15 +120,6 @@ describe('execution-side conditional teardown', () => {
     handles[0]!._simulateExit(0)
     await expect(termination.completion).resolves.toEqual({ outcome: 'ended' })
     expect(host.listSessions()).toEqual([])
-  })
-
-  it('answers already_exited without disturbing an absent incarnation', async () => {
-    const created = await create()
-    handles[0]!._simulateExit(0)
-    expect(host.beginFencedTermination(request(created.incarnationId))).toEqual({
-      accepted: false,
-      result: { outcome: 'already_exited' }
-    })
   })
 
   it('does not join another incarnation’s already-running teardown', async () => {

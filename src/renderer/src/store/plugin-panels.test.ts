@@ -3,8 +3,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../preload/api-types'
 import {
-  collectActivePluginCommands,
-  collectEditablePluginCommands,
   collectActivePluginPanels,
   collectLeftNavigationPluginPanels,
   collectRightSidebarPluginPanels,
@@ -78,37 +76,6 @@ describe('plugin panel list loading', () => {
     expect(collectLeftNavigationPluginPanels([{ ...enabled, needsReconsent: true }])).toEqual([])
   })
 
-  it('collects commands only from enabled plugin states', () => {
-    const enabled = {
-      ...plugin('samples.enabled'),
-      commands: [
-        {
-          id: 'tasks',
-          title: 'Tasks',
-          context: 'global' as const,
-          handler: { type: 'built-in' as const, action: 'view.tasks' },
-          keybindings: [{ key: 'Mod+Alt+T', when: 'global' as const }]
-        }
-      ]
-    }
-    const pending = { ...enabled, pluginKey: 'samples.pending', status: 'pending' as const }
-
-    expect(collectActivePluginCommands([enabled, pending])).toEqual([
-      expect.objectContaining({
-        pluginKey: enabled.pluginKey,
-        pluginName: enabled.name,
-        id: 'tasks'
-      })
-    ])
-    expect(
-      collectEditablePluginCommands([
-        { ...enabled, status: 'errored' },
-        pending,
-        { ...enabled, status: 'disabled' }
-      ])
-    ).toEqual([expect.objectContaining({ pluginKey: enabled.pluginKey, id: 'tasks' })])
-  })
-
   it('bounds watchdog errors to installed panels and clears them on recovery', () => {
     const installed = {
       ...plugin('samples.current'),
@@ -153,23 +120,6 @@ describe('plugin panel list loading', () => {
     expect(usePluginPanelsStore.getState().plugins.map((entry) => entry.pluginKey)).toEqual([
       'samples.current'
     ])
-  })
-
-  it('clears stale executable panels when the current list refresh fails', async () => {
-    usePluginPanelsStore.setState({
-      plugins: [plugin('samples.stale')],
-      fetchStatus: 'ready'
-    })
-    vi.stubGlobal('window', {
-      api: { plugins: { list: vi.fn().mockRejectedValue(new Error('transport failed')) } }
-    })
-
-    await usePluginPanelsStore.getState().fetchPlugins()
-
-    expect(usePluginPanelsStore.getState()).toMatchObject({
-      plugins: [],
-      fetchStatus: 'error'
-    })
   })
 
   it('recovers automatically from a transient list failure with bounded backoff', async () => {

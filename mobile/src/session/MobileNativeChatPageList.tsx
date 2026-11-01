@@ -17,7 +17,7 @@ import type {
   StyleProp,
   ViewStyle
 } from 'react-native'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatRowKeys } from './native-chat/transcript/mobile-native-chat-row-keys'
 import { MobileNativeChatPageScroll } from './MobileNativeChatPageScroll'
 import {

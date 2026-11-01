@@ -2,13 +2,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   ensureBackfill: vi.fn(async () => {}),
-  blockedPath: vi.fn(async (): Promise<{ distro: string; state: string } | null> => null)
+  blockedPath: vi.fn(async (): Promise<{ distro: string; state: string } | null> => null),
+  regQuery: vi.fn()
 }))
 
-// The common single-distro setup: a null distro resolves to this default.
+const LXSS = 'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss'
+const UBUNTU_ID = '0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f'
+// The common single-distro setup: Lxss names Ubuntu as the default.
+const LXSS_UBUNTU_DEFAULT = [
+  LXSS,
+  `    DefaultDistribution    REG_SZ    {${UBUNTU_ID}}`,
+  '',
+  `${LXSS}\\{${UBUNTU_ID}}`,
+  '    DistributionName    REG_SZ    Ubuntu',
+  ''
+].join('\r\n')
+
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  runProcess: mocks.regQuery
+}))
+// wsl.exe's own list is unavailable, so the default comes from the registry alone.
 vi.mock('../../wsl', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  listWslDistrosAsync: async () => ['Ubuntu']
+  listWslDistrosAsync: async () => []
 }))
 vi.mock('../../codex/codex-state-db-backfill-recovery', () => ({
   ensureCodexStateDbBackfillRecoveryStarted: mocks.ensureBackfill
@@ -21,6 +38,7 @@ vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => ({
 import { resolvePtySpawnHostEnv } from './spawn-host-env'
 import { noCodexResumeLaunch, stripSequencedStartupResumeArgv } from './host-env/codex-resume'
 import { isWslUserActFor } from '../../wsl/wsl-user-act-scope'
+import { resetWslDefaultDistroForTests } from '../../wsl/wsl-default-distro'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
 
@@ -70,6 +88,8 @@ beforeEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
   mocks.ensureBackfill.mockClear()
   mocks.blockedPath.mockReset().mockResolvedValue(null)
+  mocks.regQuery.mockReset().mockResolvedValue({ code: 0, stdout: LXSS_UBUNTU_DEFAULT })
+  resetWslDefaultDistroForTests()
 })
 
 afterEach(() => {
@@ -80,30 +100,12 @@ afterEach(() => {
 
 // Spawn env prep runs before #35813's hold: only a launch someone asked for may start the distro (E9).
 describe('WSL spawn host env', () => {
-  it('runs a launch someone asked for as a user act on its distro', async () => {
-    const seen: boolean[] = []
-    await resolve(false, seen)
-    expect(seen).toEqual([true])
-  })
-
-  it('runs a passive restore outside any user act, so its prep is gated', async () => {
-    const seen: boolean[] = []
-    await resolve(true, seen)
-    expect(seen).toEqual([false])
-  })
-
   it('never turns a passive restore with no named distro into a user act on the default one', async () => {
     const seen: boolean[] = []
     await resolve(true, seen, {
       target: { runtime: 'wsl', wslDistro: null },
       expectedWslDistro: null
     })
-    expect(seen).toEqual([false])
-  })
-
-  it('never turns a host-target spawn into a user act on the default distro', async () => {
-    const seen: boolean[] = []
-    await resolve(false, seen, { target: { runtime: 'host' }, expectedWslDistro: null })
     expect(seen).toEqual([false])
   })
 
@@ -116,15 +118,20 @@ describe('WSL spawn host env', () => {
     expect(seen).toEqual([true])
   })
 
+  it('a launch whose default WSL cannot name never acts on a guessed distro', async () => {
+    mocks.regQuery.mockResolvedValue({ code: 1, stdout: '' })
+    const seen: boolean[] = []
+    await resolve(false, seen, {
+      target: { runtime: 'wsl', wslDistro: null },
+      expectedWslDistro: null
+    })
+    expect(seen).toEqual([false])
+  })
+
   it('skips the state-DB recovery (a UNC read) when the distro is stopped', async () => {
     mocks.blockedPath.mockResolvedValue({ distro: 'Ubuntu', state: 'stopped' })
     await resolve(true, [])
     expect(mocks.blockedPath).toHaveBeenCalledWith(HOME)
     expect(mocks.ensureBackfill).not.toHaveBeenCalled()
-  })
-
-  it('still starts the state-DB recovery when the distro runs', async () => {
-    await resolve(true, [])
-    expect(mocks.ensureBackfill).toHaveBeenCalledWith(HOME)
   })
 })

@@ -3,7 +3,7 @@
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
-} from './agent-session-background-task-wire'
+} from './agent-session/agent-session-background-task-wire'
 import type { BackgroundTaskSay } from './background-task-copy'
 import {
   backgroundTaskCountedState,
