@@ -76,22 +76,61 @@ describeOnWindows('Windows barrier with a taskkill slower than its caller', () =
   it('kills the grandchild when taskkill finishes after the caller stopped waiting', async ({
     signal
   }) => {
-    _setWindowsTaskkillLauncherForTests((rootPid) =>
-      spawnProcess({
-        program: process.execPath,
-        args: [
-          '-e',
-          `setTimeout(function () {
-              var r = require('node:child_process').spawnSync(process.argv[1], ['/pid', process.argv[2], '/t', '/f'], { stdio: 'ignore', windowsHide: true });
-              process.exit(r.status === null ? 1 : r.status);
-            }, ${TASKKILL_START_DELAY_MS});`,
-          windowsSystem32Binary('taskkill.exe'),
-          String(rootPid)
-        ],
-        stdio: 'ignore'
+    const ready = join(dir, 'delayed-taskkill.ready')
+    const trace = join(dir, 'delayed-taskkill.json')
+    const delayedTaskkill = spawnProcess({
+      program: process.execPath,
+      args: [
+        '-e',
+        `const fs = require('node:fs');
+         const spawnSync = require('node:child_process').spawnSync;
+         let rootPid = '';
+         process.stdin.setEncoding('utf8');
+         process.stdin.on('data', chunk => { rootPid += chunk });
+         process.stdin.once('end', () => {
+           setTimeout(() => {
+             const startedAt = Date.now();
+             fs.writeFileSync(process.argv[3], JSON.stringify({ startedAt, rootPid }));
+             const result = spawnSync(process.argv[1], ['/pid', rootPid, '/t', '/f'], { stdio: 'ignore', windowsHide: true });
+             fs.writeFileSync(process.argv[3], JSON.stringify({ startedAt, finishedAt: Date.now(), code: result.status, signal: result.signal }));
+             process.exit(result.status === null ? 1 : result.status);
+           }, ${TASKKILL_START_DELAY_MS});
+         });
+         fs.writeFileSync(process.argv[2], 'ready');`,
+        windowsSystem32Binary('taskkill.exe'),
+        ready,
+        trace
+      ],
+      stdio: ['pipe', 'ignore', 'ignore']
+    })
+    let launched = false
+    try {
+      // Boot the fixture before saturation; taskkill itself still starts under load.
+      await expect.poll(() => existsSync(ready), { timeout: 30_000 }).toBe(true)
+      const input = delayedTaskkill.stdin
+      if (!input) {
+        throw new Error('delayed taskkill has no input pipe')
+      }
+      _setWindowsTaskkillLauncherForTests((rootPid) => {
+        launched = true
+        input.end(String(rootPid))
+        return delayedTaskkill
       })
-    )
-    await expectBarrierKillsGrandchild(signal)
+      await expectBarrierKillsGrandchild(signal)
+    } finally {
+      if (delayedTaskkill.exitCode === null && delayedTaskkill.signalCode === null) {
+        const closed = new Promise<void>((resolve) =>
+          delayedTaskkill.once('close', () => resolve())
+        )
+        if (!launched) {
+          delayedTaskkill.kill()
+        }
+        await closed
+      }
+      console.log(
+        `[late-taskkill] delayed killer: ${existsSync(trace) ? readFileSync(trace, 'utf8') : 'never started'}`
+      )
+    }
   }, 90_000)
 
   it.skipIf(!underLoad)(
