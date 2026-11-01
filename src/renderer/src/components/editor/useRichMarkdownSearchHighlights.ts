@@ -84,19 +84,17 @@ export function useRichMarkdownSearchHighlights({
     // The editor's scrollIntoView does not reliably reach the outer flex viewport.
     const container = scrollContainerRef.current
     if (activeMatch && container) {
-      const coords = editor.view.coordsAtPos(activeMatch.from)
-      const containerRect = container.getBoundingClientRect()
-      const relativeTop = coords.top - containerRect.top
-      const targetScroll = container.scrollTop + relativeTop - containerRect.height / 2
-      container.scrollTo({ top: targetScroll, behavior: 'instant' })
+      const centerActiveMatch = (): void => {
+        const coords = editor.view.coordsAtPos(activeMatch.from)
+        const containerRect = container.getBoundingClientRect()
+        const relativeTop = coords.top - containerRect.top
+        const targetScroll = container.scrollTop + relativeTop - containerRect.height / 2
+        container.scrollTo({ top: targetScroll, behavior: 'instant' })
+      }
+      centerActiveMatch()
       return settleMermaidNavigation(container, () => {
         if (!editor.isDestroyed && editor.state.doc === tr.doc) {
-          const settledCoords = editor.view.coordsAtPos(activeMatch.from)
-          const settledRect = container.getBoundingClientRect()
-          container.scrollTo({
-            top: container.scrollTop + settledCoords.top - settledRect.top - settledRect.height / 2,
-            behavior: 'instant'
-          })
+          centerActiveMatch()
         }
       })
     }

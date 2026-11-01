@@ -30,6 +30,19 @@ afterEach(() => {
 })
 
 describe('MermaidBlock rendering', () => {
+  it('honors an explicit null loading fallback', async () => {
+    const pending = Promise.withResolvers<{ svg: string }>()
+    mermaid.render.mockReturnValueOnce(pending.promise)
+    const { container } = render(
+      <MermaidBlock content={complete} isDark={false} pendingContent={null} />
+    )
+    try {
+      expect(container).toBeEmptyDOMElement()
+    } finally {
+      await act(async () => pending.resolve({ svg: diagram }))
+    }
+  })
+
   it('defers an offscreen document diagram, then keeps its SVG after leaving and re-entering', async () => {
     let notify: ((isIntersecting: boolean) => void) | undefined
     vi.stubGlobal(
@@ -84,6 +97,13 @@ describe('MermaidBlock rendering', () => {
       )
       const viewport = container.querySelector<HTMLElement>('.overflow-auto')!
       const editor = container.querySelector<HTMLElement>('.ProseMirror')!
+      const block = container.querySelector<HTMLElement>('[data-mermaid-lazy]')!
+      const bounds = new DOMRect(0, 0, 800, 200)
+      vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue(bounds)
+      vi.spyOn(block, 'getBoundingClientRect').mockReturnValue(bounds)
+      vi.spyOn(block, 'getClientRects').mockReturnValue(
+        Object.assign([bounds], { item: (index: number) => (index === 0 ? bounds : null) })
+      )
       act(() => {
         settleMermaidNavigation(viewport, () => {
           viewport.scrollTop = 100

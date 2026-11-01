@@ -64,7 +64,12 @@ export default function MermaidBlock({
   } | null>(null)
   const viewport = useMermaidViewport(lazy, rendered?.content === content)
   const shouldRender = renderEnabled && viewport.renderEnabled
-  const fallback = pendingContent ?? (lazy ? <div className="mermaid-block min-h-48" /> : undefined)
+  const fallback =
+    pendingContent !== undefined ? (
+      pendingContent
+    ) : lazy ? (
+      <div className="mermaid-block min-h-48" />
+    ) : undefined
   const result =
     !lazy && pendingContent !== undefined && rendered?.content !== content
       ? null

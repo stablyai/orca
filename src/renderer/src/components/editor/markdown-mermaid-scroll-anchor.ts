@@ -59,7 +59,11 @@ export function recordMarkdownMermaidScrollAnchor(
     }
     path.push(index)
     target = child
-    if (!child.matches('blockquote, ol, ul, li, [data-callout], .markdown-annotation-block')) {
+    if (
+      !child.matches(
+        'blockquote, ol, ul, li, details, [data-type="details"], [data-type="details"] > div, [data-type="detailsContent"], [data-callout], .markdown-annotation-block'
+      )
+    ) {
       break
     }
     parent = child
@@ -93,11 +97,21 @@ export function restoreMarkdownMermaidScrollAnchor(
     cancelled = true
     window.cancelAnimationFrame(frameId)
     stopListening()
+    unregister()
   }
   const stopListening = listenMarkdownPreviewScrollInput(container, cancel, {
     cancelEditableInput: true
   })
-  registerMermaidNavigation(container, cancel)
+  const unregister = registerMermaidNavigation(container, cancel)
+  const retryRestore = (): void => {
+    attempts += 1
+    if (attempts < 30) {
+      frameId = window.requestAnimationFrame(tryRestore)
+    } else {
+      cancelMermaidNavigation(container)
+      container.scrollTop = scrollTop
+    }
+  }
   const tryRestore = (): void => {
     if (cancelled) {
       return
@@ -105,13 +119,7 @@ export function restoreMarkdownMermaidScrollAnchor(
     const body = container.querySelector('.ProseMirror, .markdown-body')
     // Tiptap mounts React code-block views after the document DOM is already reachable.
     if (!body || body.querySelectorAll('[data-mermaid-lazy]').length < anchor.diagramCount) {
-      attempts += 1
-      if (attempts < 30) {
-        frameId = window.requestAnimationFrame(tryRestore)
-      } else {
-        cancelMermaidNavigation(container)
-        container.scrollTop = scrollTop
-      }
+      retryRestore()
       return
     }
     let target: Element | null = body
@@ -126,6 +134,10 @@ export function restoreMarkdownMermaidScrollAnchor(
     if (target.tagName !== anchor.tagName) {
       cancelMermaidNavigation(container)
       container.scrollTop = scrollTop
+      return
+    }
+    if (target.getClientRects().length === 0) {
+      retryRestore()
       return
     }
     const element = target

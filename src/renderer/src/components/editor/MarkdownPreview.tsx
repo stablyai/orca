@@ -12,7 +12,7 @@ import { useMarkdownPreviewDocument } from './use-markdown-preview-document'
 import { useMarkdownPreviewDocumentSearch } from './use-markdown-preview-document-search'
 import type { VirtualMarkdownPreviewNavigation } from './VirtualMarkdownPreviewBody'
 import { useMarkdownPreviewViewport } from './use-markdown-preview-viewport'
-import { registerMarkdownExportRevision } from './markdown-export-revision'
+import { registerMarkdownDocumentRevision } from './markdown-document-revision'
 
 export {
   decodeMarkdownPreviewAnchor,
@@ -58,7 +58,7 @@ export default function MarkdownPreview({
   useLayoutEffect(() => {
     const body = foundation.bodyRef.current
     if (body) {
-      return registerMarkdownExportRevision(body, () => content)
+      return registerMarkdownDocumentRevision(body, () => content)
     }
     return undefined
   }, [foundation.bodyRef, content, foundation.renderedContent])

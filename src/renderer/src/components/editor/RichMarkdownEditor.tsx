@@ -32,7 +32,7 @@ import {
   getSelectedHtmlSuperscriptLinkStatus
 } from './rich-markdown-selected-link-actions'
 import type { RichMarkdownEditorProps } from './rich-markdown-editor-props'
-import { registerMarkdownExportRevision } from './markdown-export-revision'
+import { registerMarkdownDocumentRevision } from './markdown-document-revision'
 
 export default function RichMarkdownEditor({
   fileId,
@@ -222,7 +222,7 @@ export default function RichMarkdownEditor({
     if (!editor || editor.isDestroyed) {
       return
     }
-    return registerMarkdownExportRevision(editor.view.dom, () =>
+    return registerMarkdownDocumentRevision(editor.view.dom, () =>
       editor.isDestroyed ? null : editor.state.doc
     )
   }, [editor, fileId])

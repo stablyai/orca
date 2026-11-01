@@ -87,8 +87,8 @@ export function MarkdownPreviewSurface({
       >
         {isSearchOpen ? (
           <MarkdownPreviewSearchBar
-            searchFailed={documentSearch.failed}
-            searchPending={documentSearch.pending}
+            searchFailed={documentSearch.failed || viewport.domSearch.failed}
+            searchPending={documentSearch.pending || viewport.domSearch.pending}
             searchTruncated={documentSearch.truncated}
             foundation={foundation}
             viewport={viewport}

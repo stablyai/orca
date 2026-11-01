@@ -1,8 +1,8 @@
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { buildMarkdownExportHtml } from './markdown-export-html'
-import { renderMermaidDiagramsForExport } from './use-mermaid-viewport'
-import { captureMarkdownExportRevision } from './markdown-export-revision'
+import { renderMermaidDiagrams } from './use-mermaid-viewport'
+import { captureMarkdownDocumentRevision } from './markdown-document-revision'
 
 export type MarkdownExportPayload = {
   title: string
@@ -57,8 +57,8 @@ export async function getActiveMarkdownExportPayload({
   if (!subtree || subtree.hasAttribute('data-markdown-preview-incomplete')) {
     return null
   }
-  const isCurrentRevision = captureMarkdownExportRevision(subtree)
-  await renderMermaidDiagramsForExport(subtree)
+  const isCurrentRevision = captureMarkdownDocumentRevision(subtree)
+  await renderMermaidDiagrams(subtree)
   const currentFile = useAppStore.getState().openFiles.find((file) => file.id === fileId)
   if (
     !isCurrentRevision() ||

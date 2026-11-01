@@ -186,7 +186,7 @@ export function useMarkdownPreviewViewport({
     [scrollToAnchor]
   )
 
-  useMarkdownPreviewDomSearch(foundation, largePreview)
+  const domSearch = useMarkdownPreviewDomSearch(foundation, largePreview)
 
   useLayoutEffect(() => {
     if (!initialAnchor || initialAnchor === lastAppliedInitialAnchorRef.current) {
@@ -287,6 +287,7 @@ export function useMarkdownPreviewViewport({
   ])
 
   return {
+    domSearch,
     moveToMatch,
     closeSearch,
     clearReviewNotesCopiedResetTimer,

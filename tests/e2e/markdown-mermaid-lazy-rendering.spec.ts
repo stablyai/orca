@@ -1,8 +1,4 @@
-import { readdir } from 'node:fs/promises'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
-import type { Page } from '@stablyai/playwright-test'
-import type mermaid from 'mermaid'
 import { test, expect } from './helpers/orca-app'
 import {
   cleanupMarkdownFixture,
@@ -11,6 +7,7 @@ import {
   openMarkdownFixture
 } from './helpers/markdown-editor-fixture'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { holdMermaidRendering } from './helpers/mermaid-render-gate'
 
 const diagram = `\`\`\`mermaid\nflowchart TD\n${Array.from(
   { length: 12 },
@@ -60,9 +57,9 @@ for (const surface of ['rich', 'preview'] as const) {
         const document = orcaPage.locator(surface === 'rich' ? '.ProseMirror' : '.markdown-body')
         const diagrams = document.locator('[data-mermaid-lazy]')
         await expect(diagrams).toHaveCount(3)
-        await expect(diagrams.first().locator('svg')).toBeVisible()
-        await expect(diagrams.nth(1).locator('svg')).toHaveCount(0)
-        await expect(diagrams.nth(2).locator('svg')).toHaveCount(0)
+        await expect(diagrams.first().locator('.mermaid-block svg')).toBeVisible()
+        await expect(diagrams.nth(1).locator('.mermaid-block svg')).toHaveCount(0)
+        await expect(diagrams.nth(2).locator('.mermaid-block svg')).toHaveCount(0)
 
         if (navigation === 'TOC') {
           await orcaPage.getByRole('button', { name: 'Table of Contents', exact: true }).click()
@@ -79,7 +76,6 @@ for (const surface of ['rich', 'preview'] as const) {
             await expect(orcaPage.locator('.markdown-preview-search-status')).toHaveText(
               'No results'
             )
-            await expect(diagrams.nth(1).locator('svg')).toHaveCount(0)
           }
           await search.fill('Navigation target.')
         } else {
@@ -88,13 +84,16 @@ for (const surface of ['rich', 'preview'] as const) {
               surface === 'rich' ? [process.platform === 'darwin' ? 'Meta' : 'Control'] : []
           })
         }
-        await expect(diagrams.nth(1).locator('svg')).toHaveCount(1)
+        await expect(diagrams.nth(1).locator('.mermaid-block svg')).toHaveCount(1)
         const target =
           navigation === 'Find'
             ? document.getByText('Navigation target.', { exact: true })
             : document.getByRole('heading', { name: 'Destination', exact: true })
         await expect(target).toBeInViewport()
-        await expect(diagrams.nth(2).locator('svg')).toHaveCount(0)
+        const preparesAllDiagrams = surface === 'preview' && navigation === 'Find'
+        await expect(diagrams.nth(2).locator('.mermaid-block svg')).toHaveCount(
+          preparesAllDiagrams ? 1 : 0
+        )
 
         if (navigation === 'Find') {
           await orcaPage.getByRole('button', { name: 'Close search', exact: true }).click()
@@ -103,9 +102,11 @@ for (const surface of ['rich', 'preview'] as const) {
           await orcaPage.getByRole('button', { name: 'Table of Contents', exact: true }).click()
         }
         await orcaPage.getByRole('button', { name: 'Lazy diagrams', exact: true }).click()
-        await expect(diagrams.first().locator('svg')).toBeInViewport()
-        await expect(diagrams.nth(1).locator('svg')).toHaveCount(1)
-        await expect(diagrams.nth(2).locator('svg')).toHaveCount(0)
+        await expect(diagrams.first().locator('.mermaid-block svg')).toBeInViewport()
+        await expect(diagrams.nth(1).locator('.mermaid-block svg')).toHaveCount(1)
+        await expect(diagrams.nth(2).locator('.mermaid-block svg')).toHaveCount(
+          preparesAllDiagrams ? 1 : 0
+        )
         await orcaPage.screenshot({ path: testInfo.outputPath(`${surface}-lazy-diagrams.png`) })
       } finally {
         await cleanupMarkdownFixture(filePath)
@@ -133,7 +134,7 @@ test('rich preserves the reading position when a skipped diagram renders above t
     const block = document.locator('[data-mermaid-lazy]')
     const target = document.getByRole('heading', { name: 'Reader', exact: true })
     await expect(block).toHaveCount(1)
-    await expect(block.locator('svg')).toHaveCount(0)
+    await expect(block.locator('.mermaid-block svg')).toHaveCount(0)
     const initial = await target.evaluate((heading) => {
       const viewport = heading.closest<HTMLElement>('.rich-markdown-editor-shell .overflow-auto')
       const diagram = viewport?.querySelector('[data-mermaid-lazy]')
@@ -149,7 +150,7 @@ test('rich preserves the reading position when a skipped diagram renders above t
       }
     })
     expect(initial.diagramBottom).toBeLessThanOrEqual(initial.viewportTop)
-    await expect(block.locator('svg')).toHaveCount(1)
+    await expect(block.locator('.mermaid-block svg')).toHaveCount(1)
     expect(
       await block.evaluate((element) => element.getBoundingClientRect().height)
     ).toBeGreaterThan(initial.diagramHeight + 100)
@@ -254,51 +255,6 @@ test('preview Find still searches visible Mermaid error fallback source', async 
   }
 })
 
-async function holdMermaidRendering(page: Page) {
-  const assets = path.join(process.cwd(), 'out', 'renderer', 'assets')
-  const entry = (await readdir(assets)).find((name) =>
-    /^mermaid\.core-[A-Za-z0-9_-]+\.js$/.test(name)
-  )
-  if (!entry) {
-    throw new Error('The built renderer has no Mermaid core entry')
-  }
-  return page.evaluateHandle(
-    async (url) => {
-      // The hashed browser chunk must be selected at runtime to share the renderer's real API.
-      const module = await import(url)
-      const api = Object.values(module).find(
-        (value): value is Pick<typeof mermaid, 'render' | 'initialize'> =>
-          value !== null &&
-          typeof value === 'object' &&
-          'render' in value &&
-          typeof value.render === 'function' &&
-          'initialize' in value &&
-          typeof value.initialize === 'function'
-      )
-      if (!api) {
-        throw new Error('The Mermaid core entry does not expose the real rendering API')
-      }
-      const original = api.render
-      const barrier = Promise.withResolvers<void>()
-      let calls = 0
-      api.render = async (...args: Parameters<typeof original>) => {
-        calls += 1
-        await barrier.promise
-        return original.apply(api, args)
-      }
-      return {
-        calls: () => calls,
-        release: () => barrier.resolve(),
-        restore: () => {
-          api.render = original
-          barrier.resolve()
-        }
-      }
-    },
-    pathToFileURL(path.join(assets, entry)).href
-  )
-}
-
 for (const navigation of ['TOC', 'Enter anchor'] as const) {
   test(`preview ${navigation} supersedes a pending Find reveal after real Mermaid rendering completes`, async ({
     orcaPage
@@ -348,7 +304,10 @@ for (const navigation of ['TOC', 'Enter anchor'] as const) {
           exact: true
         })
         await search.fill('Find this unique sentence.')
-        await expect(orcaPage.locator('.markdown-preview-search-status')).toHaveText('1/1')
+        await expect(preview.locator('.markdown-preview-search')).toHaveAttribute(
+          'aria-busy',
+          'true'
+        )
         await expect.poll(() => renderGate.evaluate((gate) => gate.calls())).toBeGreaterThan(0)
         await expect(svg).toHaveCount(0)
 

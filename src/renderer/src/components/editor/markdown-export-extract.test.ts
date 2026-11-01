@@ -9,7 +9,7 @@ import {
   type MarkdownExportPayload
 } from './markdown-export-extract'
 import MermaidBlock from './MermaidBlock'
-import { registerMarkdownExportRevision } from './markdown-export-revision'
+import { registerMarkdownDocumentRevision } from './markdown-document-revision'
 
 const mermaid = vi.hoisted(() => ({
   initialize: vi.fn(),
@@ -172,7 +172,7 @@ describe('getActiveMarkdownExportPayload', () => {
         throw new Error('Missing rendered document')
       }
       let revision = 'original'
-      const unregister = registerMarkdownExportRevision(subtree, () => revision)
+      const unregister = registerMarkdownDocumentRevision(subtree, () => revision)
       try {
         let exporting = Promise.resolve<MarkdownExportPayload | null>(null)
         act(() => {

@@ -5,7 +5,7 @@ const MERMAID_PRELOAD_MARGIN_PX = 600
 const diagramRenderers = new WeakMap<Element, () => Promise<void>>()
 const pendingNavigations = new WeakMap<HTMLElement, () => void>()
 
-export async function renderMermaidDiagramsForExport(root: Element): Promise<void> {
+export function renderMermaidDiagrams(root: Element): Promise<void> | undefined {
   const pending: Promise<void>[] = []
   for (const element of root.querySelectorAll('[data-mermaid-lazy]')) {
     const render = diagramRenderers.get(element)
@@ -13,7 +13,7 @@ export async function renderMermaidDiagramsForExport(root: Element): Promise<voi
       pending.push(render())
     }
   }
-  await Promise.all(pending)
+  return pending.length > 0 ? Promise.all(pending).then(() => {}) : undefined
 }
 
 export function cancelMermaidNavigation(root: HTMLElement): void {
@@ -22,8 +22,13 @@ export function cancelMermaidNavigation(root: HTMLElement): void {
   cancel?.()
 }
 
-export function registerMermaidNavigation(root: HTMLElement, cancel: () => void): void {
+export function registerMermaidNavigation(root: HTMLElement, cancel: () => void): () => void {
   pendingNavigations.set(root, cancel)
+  return () => {
+    if (pendingNavigations.get(root) === cancel) {
+      pendingNavigations.delete(root)
+    }
+  }
 }
 
 export function settleMermaidNavigation(
@@ -37,7 +42,12 @@ export function settleMermaidNavigation(
   const pending: Promise<void>[] = []
   for (const element of root.querySelectorAll('[data-mermaid-lazy]')) {
     const render = diagramRenderers.get(element)
-    if (!render) {
+    // Chromium can retain layout boxes inside closed <details>.
+    if (
+      !render ||
+      element.getClientRects().length === 0 ||
+      (typeof element.checkVisibility === 'function' && !element.checkVisibility())
+    ) {
       continue
     }
     const bounds = element.getBoundingClientRect()
@@ -55,11 +65,12 @@ export function settleMermaidNavigation(
   const cancel = (): void => {
     cancelled = true
     stopListening()
+    unregister()
   }
   const stopListening = listenMarkdownPreviewScrollInput(root, cancel, {
     cancelEditableInput: root.closest('.rich-markdown-editor-shell') !== null
   })
-  registerMermaidNavigation(root, cancel)
+  const unregister = registerMermaidNavigation(root, cancel)
   void Promise.all(pending)
     .then(() => {
       if (!cancelled && root.isConnected) {
@@ -68,9 +79,7 @@ export function settleMermaidNavigation(
     })
     .finally(() => {
       stopListening()
-      if (pendingNavigations.get(root) === cancel) {
-        pendingNavigations.delete(root)
-      }
+      unregister()
     })
   return cancel
 }

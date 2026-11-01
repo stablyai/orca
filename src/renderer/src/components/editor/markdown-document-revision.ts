@@ -1,6 +1,6 @@
 const documentRevisions = new WeakMap<Element, () => unknown>()
 
-export function registerMarkdownExportRevision(
+export function registerMarkdownDocumentRevision(
   root: Element,
   readRevision: () => unknown
 ): () => void {
@@ -12,7 +12,7 @@ export function registerMarkdownExportRevision(
   }
 }
 
-export function captureMarkdownExportRevision(root: Element): () => boolean {
+export function captureMarkdownDocumentRevision(root: Element): () => boolean {
   const readRevision = documentRevisions.get(root)
   const revision = readRevision?.()
   return () =>

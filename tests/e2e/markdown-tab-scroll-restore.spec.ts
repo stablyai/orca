@@ -101,8 +101,15 @@ test('restores the Markdown viewport when an image gains height after a tab swit
     .toBeCloseTo(originalTop, 1)
 })
 
-for (const variant of ['rich', 'preview', 'preview callout', 'rich edited'] as const) {
-  const surface = variant === 'rich' || variant === 'rich edited' ? 'rich' : 'preview'
+for (const variant of [
+  'rich',
+  'preview',
+  'preview callout',
+  'rich edited',
+  'rich details',
+  'preview details'
+] as const) {
+  const surface = variant.startsWith('rich') ? 'rich' : 'preview'
   const title =
     variant === 'rich edited'
       ? 'rich preserves the cached pixel offset after an external structural edit'
@@ -129,12 +136,14 @@ for (const variant of ['rich', 'preview', 'preview callout', 'rich edited'] as c
       'orca-e2e-markdown-scroll',
       `${surface}-mermaid`,
       testInfo.workerIndex,
-      surface === 'preview'
-        ? `${variant === 'preview callout' ? '[!NOTE]\n\n' : ''}${markdown}`
-            .split('\n')
-            .map((line) => `> ${line}`)
-            .join('\n')
-        : markdown
+      variant.endsWith('details')
+        ? `<details open>\n<summary>Reading details</summary>\n\n${markdown}\n\n</details>`
+        : surface === 'preview'
+          ? `${variant === 'preview callout' ? '[!NOTE]\n\n' : ''}${markdown}`
+              .split('\n')
+              .map((line) => `> ${line}`)
+              .join('\n')
+          : markdown
     )
     const otherPath = await createMarkdownFixture(
       context,
@@ -171,16 +180,16 @@ for (const variant of ['rich', 'preview', 'preview callout', 'rich edited'] as c
     )
     const diagrams = document.locator('[data-mermaid-lazy]')
     await expect(diagrams).toHaveCount(variant === 'preview callout' ? 3 : 2)
-    await expect(diagrams.first().locator('svg')).toHaveCount(1)
+    await expect(diagrams.first().locator('.mermaid-block svg')).toHaveCount(1)
     const diagramHeight = await diagrams
       .first()
-      .locator('svg')
+      .locator('.mermaid-block svg')
       .evaluate((svg) => svg.getBoundingClientRect().height)
     expect(diagramHeight).toBeGreaterThan(800)
-    await expect(diagrams.last().locator('svg')).toHaveCount(0)
+    await expect(diagrams.last().locator('.mermaid-block svg')).toHaveCount(0)
     if (variant === 'preview callout') {
       await diagrams.nth(1).scrollIntoViewIfNeeded()
-      await expect(diagrams.nth(1).locator('svg')).toHaveCount(1)
+      await expect(diagrams.nth(1).locator('.mermaid-block svg')).toHaveCount(1)
     }
     const heading = document.getByRole('heading', { name: 'Section 80', exact: true })
     let originalPosition: number
@@ -249,7 +258,7 @@ for (const variant of ['rich', 'preview', 'preview callout', 'rich edited'] as c
       })
       .toBeLessThan(2)
     if (variant !== 'rich edited') {
-      await expect(diagrams.locator('svg')).toHaveCount(0)
+      await expect(diagrams.locator('.mermaid-block svg')).toHaveCount(0)
     }
     await orcaPage.screenshot({ path: testInfo.outputPath(`${surface}-mermaid-tab-return.png`) })
   })
