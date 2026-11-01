@@ -20,13 +20,7 @@ import { getUnstageablePaths } from './mobile-git-status'
 
 type RowState = Pick<
   MobileSourceControlState,
-  | 'busyAction'
-  | 'openingPath'
-  | 'openingBranchPath'
-  | 'openFile'
-  | 'resolveConflict'
-  | 'runGitAction'
-  | 'setDiscardTarget'
+  'busyAction' | 'openDiffForFile' | 'resolveConflict' | 'runGitAction' | 'setDiscardTarget'
 >
 
 function conflictKindLabel(kind: GitConflictKind | undefined, t: Translate): string {
@@ -51,25 +45,15 @@ function conflictKindLabel(kind: GitConflictKind | undefined, t: Translate): str
 }
 
 export function makeRenderFileRow(state: RowState, t: Translate) {
-  const {
-    busyAction,
-    openingPath,
-    openingBranchPath,
-    openFile,
-    resolveConflict,
-    runGitAction,
-    setDiscardTarget
-  } = state
+  const { busyAction, openDiffForFile, resolveConflict, runGitAction, setDiscardTarget } = state
   return function renderFileRow({ item }: { item: MobileGitStatusEntryView }) {
     const rowBusy =
       busyAction === item.stageActionId ||
       busyAction === item.unstageActionId ||
       busyAction === item.discardActionId ||
-      busyAction === item.resolveActionId ||
-      openingPath === item.path
-    const rowDisabled =
-      !item.canOpen || busyAction !== null || openingPath !== null || openingBranchPath !== null
-    const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+      busyAction === item.resolveActionId
+    const rowDisabled = !item.canOpen || busyAction !== null
+    const ioBusy = busyAction !== null
     const hasConflictActions = item.conflictResolutions.length > 0
     return (
       <Pressable
@@ -80,7 +64,11 @@ export function makeRenderFileRow(state: RowState, t: Translate) {
           rowDisabled && !hasConflictActions && styles.fileRowDisabled,
           !item.canOpen && !hasConflictActions && styles.fileRowUnavailable
         ]}
-        onPress={() => void openFile(item)}
+        onPress={() => {
+          if (item.area !== undefined) {
+            openDiffForFile({ kind: 'changes', filePath: item.path, area: item.area })
+          }
+        }}
         disabled={rowDisabled}
         // An accessible row hides nested buttons from iOS VoiceOver; conflict rows cannot open anyway.
         accessible={!hasConflictActions}
@@ -227,9 +215,7 @@ type BranchState = Pick<
   | 'branchCompareState'
   | 'branchCompareResult'
   | 'busyAction'
-  | 'openBranchDiff'
-  | 'openingBranchPath'
-  | 'openingPath'
+  | 'openDiffForFile'
 >
 
 export function BranchCompareHeader({ state }: { state: BranchState }) {
@@ -291,10 +277,8 @@ export function BranchFileRow({
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { busyAction, openBranchDiff, openingBranchPath, openingPath } = state
-  const rowBusy = openingBranchPath === entry.path
-  const rowDisabled =
-    !entry.canOpen || busyAction !== null || openingPath !== null || openingBranchPath !== null
+  const { busyAction, openDiffForFile } = state
+  const rowDisabled = !entry.canOpen || busyAction !== null
   const meta = formatMobileBranchEntryMeta(entry)
   return (
     <Pressable
@@ -304,7 +288,7 @@ export function BranchFileRow({
         rowDisabled && styles.fileRowDisabled,
         !entry.canOpen && styles.fileRowUnavailable
       ]}
-      onPress={() => void openBranchDiff(entry)}
+      onPress={() => openDiffForFile({ kind: 'changes', filePath: entry.path, area: 'branch' })}
       disabled={rowDisabled}
       accessibilityLabel={t(
         'sourceControl.fileRows.openCommittedChange',
@@ -337,11 +321,7 @@ export function BranchFileRow({
           </Text>
         ) : null}
       </View>
-      {rowBusy ? (
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      ) : entry.canOpen ? (
-        <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.1} />
-      ) : null}
+      {entry.canOpen ? <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.1} /> : null}
     </Pressable>
   )
 }

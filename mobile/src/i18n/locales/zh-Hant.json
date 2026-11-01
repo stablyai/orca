@@ -2844,12 +2844,6 @@
       "baseBranchUnavailable": "無法判定用於比較的基礎分支。",
       "loadFailed": "無法載入已提交的變更"
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "關閉已提交的差異預覽",
-      "committedOnBranch": "已在分支上提交",
-      "loadFailed": "無法載入差異",
-      "truncated": "行動版預覽的差異內容已截斷。"
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "推送提交前請先檢出分支",
       "checkOutBranchToSync": "同步提交前請先檢出分支",
@@ -3064,11 +3058,6 @@
       "openPrWithWarning": "要在瀏覽器中開啟嗎？\n\n{{warning}}",
       "prCreatedTitle": "已建立 PR",
       "switchBranchTitle": "切換分支"
-    },
-    "openers": {
-      "openDiffFailed": "無法開啟差異",
-      "tabNotReady": "檔案已開啟，但分頁尚未就緒。請再試一次。",
-      "waitingForDesktop": "等待電腦…"
     },
     "panel": {
       "unavailableTitle": "無法使用原始碼控制"

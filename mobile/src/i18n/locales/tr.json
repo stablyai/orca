@@ -2848,12 +2848,6 @@
       "baseBranchUnavailable": "Karşılaştırma için temel branch belirlenemedi.",
       "loadFailed": "Commit'lenen değişiklikler yüklenemedi"
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Commit'lenmiş diff önizlemesini kapat",
-      "committedOnBranch": "Branch'e commit'lendi",
-      "loadFailed": "Diff Yüklenemedi",
-      "truncated": "Diff, mobil önizleme için kısaltıldı."
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "Commit'leri push etmeden önce bir branch'i checkout edin",
       "checkOutBranchToSync": "Commit'leri senkronize etmeden önce bir branch'i checkout edin",
@@ -3068,11 +3062,6 @@
       "openPrWithWarning": "Tarayıcınızda açılsın mı?\n\n{{warning}}",
       "prCreatedTitle": "Pull Request Oluşturuldu",
       "switchBranchTitle": "Branch Değiştir"
-    },
-    "openers": {
-      "openDiffFailed": "Diff açılamadı",
-      "tabNotReady": "Dosya açıldı ancak sekmesi henüz hazır değil. Yeniden deneyin.",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
     },
     "panel": {
       "unavailableTitle": "Kaynak Kontrolü Kullanılamıyor"

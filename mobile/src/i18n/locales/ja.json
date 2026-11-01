@@ -2844,12 +2844,6 @@
       "baseBranchUnavailable": "比較用のベースブランチを特定できませんでした。",
       "loadFailed": "コミット済みの変更を読み込めませんでした。"
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "コミット済みの差分プレビューを閉じる",
-      "committedOnBranch": "ブランチでコミット済み",
-      "loadFailed": "差分を読み込めません",
-      "truncated": "モバイルでのプレビュー用に差分を一部省略しています。"
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "コミットをプッシュする前にブランチをチェックアウトしてください",
       "checkOutBranchToSync": "コミットを同期する前にブランチをチェックアウトしてください",
@@ -3064,11 +3058,6 @@
       "openPrWithWarning": "ブラウザで開きますか？\n\n{{warning}}",
       "prCreatedTitle": "PR を作成しました",
       "switchBranchTitle": "ブランチを切り替え"
-    },
-    "openers": {
-      "openDiffFailed": "差分を開けませんでした。",
-      "tabNotReady": "ファイルは開きましたが、タブの準備がまだできていません。再試行してください。",
-      "waitingForDesktop": "デスクトップへの接続を待機中…"
     },
     "panel": {
       "unavailableTitle": "ソース管理を利用できません"

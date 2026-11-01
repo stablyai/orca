@@ -41,24 +41,18 @@ export type MobileSourceControlPanelProps = {
   hostId: string
   worktreeId: string
   name?: string
-  origin?: string
   embedded?: boolean
   initialTab?: SourceControlHubTab
   onRequestClose?: () => void
-  onFileOpenStart?: () => void
-  onOpenedFileDiff?: (relativePath: string) => void
 }
 
 export function MobileSourceControlPanel({
   hostId,
   worktreeId,
   name = '',
-  origin = '',
   embedded = false,
   initialTab = 'changes',
-  onRequestClose,
-  onFileOpenStart,
-  onOpenedFileDiff
+  onRequestClose
 }: MobileSourceControlPanelProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -99,11 +93,6 @@ export function MobileSourceControlPanel({
     hostId,
     worktreeId,
     name,
-    origin,
-    embedded,
-    onRequestClose,
-    onFileOpenStart,
-    onOpenedFileDiff,
     onOpenHistory: openHistoryTab
   })
   const {
@@ -116,8 +105,6 @@ export function MobileSourceControlPanel({
     worktreeLabel,
     screenState,
     busyAction,
-    openingPath,
-    openingBranchPath,
     loadStatus,
     status,
     branchCompareResult,
@@ -129,7 +116,7 @@ export function MobileSourceControlPanel({
     abortConflictOperation,
     completeMerge
   } = state
-  const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+  const ioBusy = busyAction !== null
   const ready = screenState.kind === 'ready'
 
   // Retain branch/head through status unloads so the PR controller does not reset to a cold start.

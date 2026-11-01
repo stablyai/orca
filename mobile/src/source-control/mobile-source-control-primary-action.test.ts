@@ -35,8 +35,6 @@ function args(overrides: Partial<MobileSourceControlPrimaryActionArgs> = {}) {
     unstagedCount: 0,
     commitMessage: '',
     busyAction: null,
-    openingPath: null,
-    openingBranchPath: null,
     branchCompareResult: null,
     handlers: handlers(),
     ...overrides

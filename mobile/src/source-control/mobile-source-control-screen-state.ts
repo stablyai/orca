@@ -13,13 +13,10 @@ import {
 } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import type { MobileSourceControlActionIcon } from './mobile-source-control-actions'
-import type { MobileDiffLine } from '../session/mobile-diff-lines'
-import type { MobileHighlightedDiffLine } from '../session/mobile-file-syntax'
 import type {
   MobileGitBranchChangeEntry,
   MobileGitBranchCompareReply
 } from './git-compare-reply-schema'
-import type { MobileGitBranchCompareSummary } from './mobile-branch-compare'
 import type { MobileGitStatusHostPayload } from './git-status-reply-schema'
 import type { ConflictResolution } from '../../../src/shared/source-control-entry-actions'
 import {
@@ -92,23 +89,6 @@ export type MobileBranchCompareState =
 
 export type MobileBranchEntryView = MobileGitBranchChangeEntry & {
   canOpen: boolean
-}
-
-export type MobileBranchDiffPreviewState =
-  | { kind: 'loading'; entry: MobileGitBranchChangeEntry }
-  | {
-      kind: 'ready'
-      entry: MobileGitBranchChangeEntry
-      summary: MobileGitBranchCompareSummary
-      lines: MobileHighlightedDiffLine<MobileDiffLine>[]
-      truncated: boolean
-    }
-  | { kind: 'error'; entry: MobileGitBranchChangeEntry; message: string }
-
-export type GitDiffTextResult = {
-  kind: 'text'
-  originalContent: string
-  modifiedContent: string
 }
 
 export const KEYBOARD_COMMIT_BAR_CLEARANCE = 10

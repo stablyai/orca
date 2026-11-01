@@ -2931,12 +2931,6 @@
       "baseBranchUnavailable": "Não foi possível determinar a branch base para comparação.",
       "loadFailed": "Não foi possível carregar as alterações commitadas"
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Fechar prévia do diff commitado",
-      "committedOnBranch": "Commitado na branch",
-      "loadFailed": "Não foi possível carregar o diff",
-      "truncated": "Diff truncado para prévia no celular."
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "Faça checkout de uma branch antes de fazer push de commits",
       "checkOutBranchToSync": "Faça checkout de uma branch antes de sincronizar commits",
@@ -3163,11 +3157,6 @@
       "openPrWithWarning": "Abrir no seu navegador?\n\n{{warning}}",
       "prCreatedTitle": "Pull Request Criado",
       "switchBranchTitle": "Trocar Branch"
-    },
-    "openers": {
-      "openDiffFailed": "Não foi possível abrir o diff",
-      "tabNotReady": "O arquivo foi aberto, mas a aba ainda não está pronta. Tente novamente.",
-      "waitingForDesktop": "Aguardando o desktop…"
     },
     "panel": {
       "unavailableTitle": "Controle de Código-Fonte Indisponível"

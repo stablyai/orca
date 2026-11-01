@@ -3173,12 +3173,6 @@
       "sync": "Sync",
       "publishBranch": "Publish Branch"
     },
-    "branchDiffPreviewDrawer": {
-      "committedOnBranch": "Committed on branch",
-      "closePreview": "Close committed diff preview",
-      "loadFailed": "Unable to Load Diff",
-      "truncated": "Diff truncated for mobile preview."
-    },
     "commitFailurePanel": {
       "title": "Commit failed",
       "summary": "Commit failed.",
@@ -3395,11 +3389,6 @@
       "waitingForDesktop": "Waiting for desktop...",
       "updateDesktop": "Update Orca desktop to use Source Control on mobile.",
       "loadFailed": "Unable to load source control"
-    },
-    "openers": {
-      "waitingForDesktop": "Waiting for desktop...",
-      "openDiffFailed": "Unable to open diff",
-      "tabNotReady": "The file opened, but its tab isn't ready yet. Try again."
     },
     "runners": {
       "actionFailed": "Source control action failed"

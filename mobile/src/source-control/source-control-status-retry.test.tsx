@@ -53,8 +53,6 @@ vi.mock('./use-mobile-source-control-state', () => ({
     worktreeLabel: 'wt',
     screenState: { kind: 'error', message: 'Waiting for desktop...' },
     busyAction: null,
-    openingPath: null,
-    openingBranchPath: null,
     loadStatus: doubles.loadStatus,
     status: null,
     branchCompareResult: null,
@@ -74,8 +72,6 @@ vi.mock('./use-mobile-source-control-state', () => ({
       unstagedCount: 0,
       commitMessage: '',
       busyAction: null,
-      openingPath: null,
-      openingBranchPath: null,
       branchCompareResult: null,
       handlers: {}
     }

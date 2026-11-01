@@ -40,8 +40,6 @@ export type MobileSourceControlActionArgs = {
   conflictOperation?: GitConflictOperation
   rebaseBaseRef: string | null
   busyAction: string | null
-  openingPath: string | null
-  openingBranchPath: string | null
   prAvailable: boolean
   prHint?: string
   forcePushBlockedReason?: string
@@ -80,8 +78,7 @@ export function buildMobileSourceControlActions(
   )
   const { push, forcePush, pull, fastForward, sync, rebase, fetch, publish } =
     buildRemoteDropdownItems(ctx, mobileRemoteDropdownCopy(t))
-  const busy =
-    args.busyAction !== null || args.openingPath !== null || args.openingBranchPath !== null
+  const busy = args.busyAction !== null
   const blockForce = (item: DropdownItem): DropdownItem =>
     args.forcePushBlockedReason
       ? { ...item, disabled: true, title: args.forcePushBlockedReason }

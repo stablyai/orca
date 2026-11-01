@@ -2844,12 +2844,6 @@
       "baseBranchUnavailable": "无法解析用于比较的基础分支。",
       "loadFailed": "无法加载已提交的更改"
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "关闭已提交更改的差异预览",
-      "committedOnBranch": "已提交到分支",
-      "loadFailed": "无法加载差异",
-      "truncated": "移动端预览中的差异已截断。"
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "请先检出分支再推送提交",
       "checkOutBranchToSync": "同步提交前请先检出分支",
@@ -3064,11 +3058,6 @@
       "openPrWithWarning": "在浏览器中打开？\n\n{{warning}}",
       "prCreatedTitle": "PR 已创建",
       "switchBranchTitle": "切换分支"
-    },
-    "openers": {
-      "openDiffFailed": "无法打开差异",
-      "tabNotReady": "文件已打开，但标签页尚未就绪。请重试。",
-      "waitingForDesktop": "正在等待桌面…"
     },
     "panel": {
       "unavailableTitle": "源代码控制不可用"

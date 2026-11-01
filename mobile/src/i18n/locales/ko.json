@@ -2844,12 +2844,6 @@
       "baseBranchUnavailable": "비교할 기본 브랜치를 확인할 수 없습니다.",
       "loadFailed": "커밋된 변경 사항을 로드할 수 없습니다."
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "커밋된 차이점 미리보기 닫기",
-      "committedOnBranch": "브랜치에 커밋됨",
-      "loadFailed": "차이점을 불러올 수 없음",
-      "truncated": "모바일 미리보기용으로 차이점의 일부가 생략되었습니다."
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "커밋을 푸시하기 전에 브랜치를 체크아웃하세요",
       "checkOutBranchToSync": "커밋을 동기화하기 전에 브랜치를 체크아웃하세요",
@@ -3064,11 +3058,6 @@
       "openPrWithWarning": "브라우저에서 여시겠습니까?\n\n{{warning}}",
       "prCreatedTitle": "PR 생성 완료",
       "switchBranchTitle": "브랜치 전환"
-    },
-    "openers": {
-      "openDiffFailed": "차이점을 열 수 없습니다.",
-      "tabNotReady": "파일은 열렸지만 탭이 아직 준비되지 않았습니다. 다시 시도하세요.",
-      "waitingForDesktop": "데스크톱 연결 대기 중…"
     },
     "panel": {
       "unavailableTitle": "소스 제어 사용 불가"

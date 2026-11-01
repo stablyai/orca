@@ -3014,12 +3014,6 @@
       "baseBranchUnavailable": "Не удалось определить базовую ветку для сравнения.",
       "loadFailed": "Не удалось загрузить закоммиченные изменения"
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Закрыть предпросмотр закоммиченных изменений",
-      "committedOnBranch": "Закоммичено в ветке",
-      "loadFailed": "Не удалось загрузить различия",
-      "truncated": "В мобильном предпросмотре показана часть различий."
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "Переключитесь на ветку перед отправкой коммитов",
       "checkOutBranchToSync": "Переключитесь на ветку перед синхронизацией коммитов",
@@ -3258,11 +3252,6 @@
       "openPrWithWarning": "Открыть в браузере?\n\n{{warning}}",
       "prCreatedTitle": "Пул-реквест создан",
       "switchBranchTitle": "Переключиться на ветку"
-    },
-    "openers": {
-      "openDiffFailed": "Не удалось открыть сравнение",
-      "tabNotReady": "Файл открыт, но его вкладка ещё не готова. Повторите попытку.",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
     },
     "panel": {
       "unavailableTitle": "Управление версиями недоступно"

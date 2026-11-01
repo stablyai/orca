@@ -80,8 +80,6 @@ export type MobileSourceControlPrimaryActionArgs = {
   unstagedCount: number
   commitMessage: string
   busyAction: string | null
-  openingPath: string | null
-  openingBranchPath: string | null
   branchCompareResult: MobileGitBranchCompareResult | null
   review?: MobileSourceControlReviewInputs
   handlers: MobileSourceControlPrimaryActionHandlers
@@ -130,8 +128,7 @@ export function buildMobileSourceControlPrimaryAction(
   const decision = resolveSourceControlCommitAreaPrimaryActionDecision(
     buildMobileSourceControlDecisionInputs(args)
   )
-  const ioBusy =
-    args.busyAction !== null || args.openingPath !== null || args.openingBranchPath !== null
+  const ioBusy = args.busyAction !== null
   const forcePushBlockedReason = decision.requiresForceWithLease
     ? getMobileForcePushBlockedReason(args.review)
     : undefined

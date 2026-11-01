@@ -2931,12 +2931,6 @@
       "baseBranchUnavailable": "Impossible de déterminer la branche de base pour la comparaison.",
       "loadFailed": "Impossible de charger les modifications committées"
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Fermer l'aperçu du diff committé",
-      "committedOnBranch": "Committé sur la branche",
-      "loadFailed": "Impossible de charger le diff",
-      "truncated": "Diff tronqué pour l'aperçu mobile."
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "Effectuez un checkout d'une branche avant de pousser des commits",
       "checkOutBranchToSync": "Effectuez un checkout d'une branche avant de synchroniser des commits",
@@ -3163,11 +3157,6 @@
       "openPrWithWarning": "L'ouvrir dans votre navigateur ?\n\n{{warning}}",
       "prCreatedTitle": "Pull request créée",
       "switchBranchTitle": "Changer de branche"
-    },
-    "openers": {
-      "openDiffFailed": "Impossible d'ouvrir le diff",
-      "tabNotReady": "Le fichier est ouvert, mais son onglet n'est pas encore prêt. Réessayez.",
-      "waitingForDesktop": "En attente de l'ordinateur…"
     },
     "panel": {
       "unavailableTitle": "Contrôle de code source indisponible"

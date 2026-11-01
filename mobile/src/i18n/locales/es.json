@@ -2931,12 +2931,6 @@
       "baseBranchUnavailable": "No se pudo determinar la rama base para la comparación.",
       "loadFailed": "No se pudieron cargar los cambios confirmados"
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Cerrar vista previa del diff de los commits",
-      "committedOnBranch": "Commits en la rama",
-      "loadFailed": "No se pudo cargar el diff",
-      "truncated": "Diff truncado para la vista previa móvil."
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "Haz checkout de una rama antes de hacer push de commits",
       "checkOutBranchToSync": "Haz checkout de una rama antes de sincronizar commits",
@@ -3163,11 +3157,6 @@
       "openPrWithWarning": "¿Abrirla en tu navegador?\n\n{{warning}}",
       "prCreatedTitle": "Solicitud de extracción creada",
       "switchBranchTitle": "Cambiar de rama"
-    },
-    "openers": {
-      "openDiffFailed": "No se pudo abrir el diff",
-      "tabNotReady": "El archivo se abrió, pero su pestaña aún no está lista. Vuelve a intentarlo.",
-      "waitingForDesktop": "Esperando al escritorio…"
     },
     "panel": {
       "unavailableTitle": "Control de código fuente no disponible"

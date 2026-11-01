@@ -2848,12 +2848,6 @@
       "baseBranchUnavailable": "Basis-Branch für den Vergleich konnte nicht ermittelt werden.",
       "loadFailed": "Committete Änderungen konnten nicht geladen werden."
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Diff-Vorschau der committeten Änderungen schließen",
-      "committedOnBranch": "Auf Branch committet",
-      "loadFailed": "Laden des Diffs fehlgeschlagen",
-      "truncated": "Diff für die mobile Vorschau gekürzt."
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "Vor dem Pushen von Commits einen Branch auschecken",
       "checkOutBranchToSync": "Vor dem Synchronisieren von Commits einen Branch auschecken",
@@ -3068,11 +3062,6 @@
       "openPrWithWarning": "Im Browser öffnen?\n\n{{warning}}",
       "prCreatedTitle": "Pull Request erstellt",
       "switchBranchTitle": "Branch wechseln"
-    },
-    "openers": {
-      "openDiffFailed": "Diff konnte nicht geöffnet werden.",
-      "tabNotReady": "Die Datei wurde geöffnet, aber ihr Tab ist noch nicht bereit. Erneut versuchen.",
-      "waitingForDesktop": "Warten auf den Desktop…"
     },
     "panel": {
       "unavailableTitle": "Quellcodeverwaltung nicht verfügbar"
