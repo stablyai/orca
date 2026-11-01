@@ -1,7 +1,7 @@
-import { mkdtempSync, statSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { encodePairingOffer } from '../../shared/pairing'
 import {
   addEnvironmentFromPairingCode,
@@ -10,6 +10,20 @@ import {
   removeEnvironment,
   resolveEnvironmentPairingOffer
 } from './environments'
+
+const roots: string[] = []
+
+afterEach(() => {
+  for (const root of roots.splice(0)) {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+function temporaryProfile(): string {
+  const root = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+  roots.push(root)
+  return root
+}
 
 function pairingCode(endpoint = 'ws://127.0.0.1:6768', keyFill = 1): string {
   return encodePairingOffer({
@@ -24,7 +38,7 @@ describe('CLI runtime environments', () => {
   const posixModeIt = process.platform === 'win32' ? it.skip : it
 
   it('saves, resolves, and removes a paired environment', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+    const userDataPath = temporaryProfile()
     const saved = addEnvironmentFromPairingCode(userDataPath, {
       name: 'workstation',
       pairingCode: pairingCode(),
@@ -47,7 +61,7 @@ describe('CLI runtime environments', () => {
   })
 
   posixModeIt('stores paired environments with owner-only POSIX permissions', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+    const userDataPath = temporaryProfile()
 
     addEnvironmentFromPairingCode(userDataPath, {
       name: 'workstation',
@@ -55,13 +69,12 @@ describe('CLI runtime environments', () => {
       now: 100
     })
 
-    // Why: NTFS mode bits do not prove Windows ACL hardening; shared secure-file
-    // tests cover that path, while POSIX hosts must keep the token store at 0600.
+    // POSIX mode bits cannot prove Windows ACL hardening; secure-file tests cover it.
     expect((statSync(getEnvironmentStorePath(userDataPath)).mode & 0o777).toString(8)).toBe('600')
   })
 
   it('rejects an environment with the same name', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+    const userDataPath = temporaryProfile()
     const first = addEnvironmentFromPairingCode(userDataPath, {
       name: 'workstation',
       pairingCode: pairingCode('ws://127.0.0.1:1111'),
@@ -83,7 +96,7 @@ describe('CLI runtime environments', () => {
   })
 
   it('refuses saving the same server twice and points at Settings, which can switch its connection', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+    const userDataPath = temporaryProfile()
     addEnvironmentFromPairingCode(userDataPath, {
       name: 'workstation',
       pairingCode: pairingCode('ws://192.0.2.10:6768'),

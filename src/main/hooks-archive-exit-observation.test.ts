@@ -10,10 +10,7 @@ vi.mock('./effective-hook-config', () => ({
 
 const REPO: Repo = { id: 'r', path: '/repo', displayName: 'r', badgeColor: '#000', addedAt: 0 }
 
-/**
- * A real EventEmitter, so an `error` with no listener throws exactly as Node's would — which is the
- * whole point of the stream-error row below. Replays its chunks to whoever subscribes to `data`.
- */
+/** EventEmitter preserves Node’s fatal unhandled-error behavior while replaying chunks. */
 class FakeStream extends EventEmitter {
   constructor(private readonly chunks: string[]) {
     super()
@@ -30,7 +27,6 @@ class FakeStream extends EventEmitter {
   }
 }
 
-/** Minimal ChildProcess stand-in: runHook reads the streams and waits for close/error. */
 function fakeChild(
   outcome: { code?: number | null; signal?: NodeJS.Signals | null } | Error,
   stdoutChunks: string[] = [],
@@ -79,10 +75,7 @@ async function runArchiveWith(
   return result
 }
 
-// Why (#19334): an ABSENT exitCode is what the removal gate reads as `unverifiable`. Every row here
-// is a way a hook can fail to deliver one. The timeout and termination arms of the same contract
-// are covered against REAL processes in hook-termination-real-process.test.ts — deliberately not
-// here, because a mocked child cannot show whether a process group exists.
+// Real-process timeout/group tests live in hook-termination-real-process.test.ts (#19334).
 describe('archive hook exit observation', () => {
   it('passes a clean run through without an exit code', async () => {
     await expect(runArchiveWith({ code: 0 })).resolves.toEqual({ success: true, output: '' })
@@ -99,8 +92,6 @@ describe('archive hook exit observation', () => {
   })
 
   it('caps what it retains from a hook that floods stdout', async () => {
-    // `exec`'s 1 MiB maxBuffer is gone with `spawn`; without a cap a flooding hook grows the main
-    // process's heap for the whole 120 s deadline.
     const megabyte = 'x'.repeat(1024 * 1024)
     const result = await runArchiveWith(
       { code: 0 },
@@ -111,8 +102,6 @@ describe('archive hook exit observation', () => {
   })
 
   it('survives an error on the output stream', async () => {
-    // An `error` with no listener is an uncaught exception, and in the main process that is the
-    // app. `exec` never covered this either — its only `error` listener is on the child.
     await expect(
       runArchiveWith({ code: 0 }, ['partial'], new Error('EIO: read failed'))
     ).resolves.toMatchObject({ success: true })
@@ -125,8 +114,7 @@ describe('archive hook exit observation', () => {
 
   it.each([
     ['was killed by a signal', { code: null, signal: 'SIGKILL' as const }],
-    // A real spawn failure carries a STRING code; the guard under test is `typeof code ===
-    // 'number'`, so a bare Error would pass even if that guard regressed.
+    // Spawn errors carry string codes; a bare Error would not exercise the numeric-code guard.
     ['never started', Object.assign(new Error('spawn /bin/bash ENOENT'), { code: 'ENOENT' })]
   ])('withholds the exit code when the hook %s', async (_label, outcome) => {
     const result = await runArchiveWith(outcome)

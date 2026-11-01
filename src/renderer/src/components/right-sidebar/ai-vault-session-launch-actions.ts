@@ -19,7 +19,7 @@ import { launchAiVaultSessionAndReveal } from '@/lib/launch-ai-vault-session-and
 import { useAppStore } from '@/store'
 import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
-  dropDeletedSshResumeCwd,
+  dropDeletedRemoteResumeCwd,
   prepareAiVaultSessionForFork,
   prepareAiVaultSessionForResume,
   prepareAiVaultSessionForTerminalResume
@@ -136,7 +136,7 @@ export function useAiVaultSessionLaunchActions({
         targetWorktreeId,
         (worktreeId) =>
           prepareAiVaultSessionForTerminalResume(session)
-            .then(dropDeletedSshResumeCwd)
+            .then(dropDeletedRemoteResumeCwd)
             .then((preparedSession) => buildResumeStartup(preparedSession, worktreeId)),
         (message) => describeAiVaultResumeFailure(new Error(message), session.agent)
       )
@@ -155,7 +155,7 @@ export function useAiVaultSessionLaunchActions({
           commandOverride: agentCmdOverrides?.[session.agent]
         })
         const prepared = await prepareAiVaultSessionForFork(session)
-        const target = await dropDeletedSshResumeCwd(prepared.session)
+        const target = await dropDeletedRemoteResumeCwd(prepared.session)
         // A copy the chat's host already made is the terminal's own conversation: a plain resume.
         const startup = prepared.copied
           ? buildAiVaultCopiedSessionStartupForWorktree(

@@ -11,15 +11,29 @@ import { isWslUncPath } from '../../shared/wsl-paths'
 import { needsWslHostResolution } from './host-readable-transcript-path'
 import { parseSshTranscriptPath } from './ssh-transcript-path'
 
-export type StructuredAgentCliSourceEvidence =
+type CliSource = NonNullable<StructuredAgentSessionResumeSource['cliSource']>
+export type StructuredAgentCliSourceRoute = 'native-local' | 'unsupported' | 'unknown'
+export type StructuredAgentCliSourceLocator =
+  | { kind: 'none' }
+  | { kind: 'matched'; transcriptPath?: string }
+  | { kind: 'absent' }
+
+export type StructuredAgentCliSourceEvidence = (
   | { readonly rows: readonly Readonly<AgentStatusIpcPayload>[] }
   | { readonly error: unknown }
+) & {
+  readonly sourceRoute?: Readonly<CliSource & { route: StructuredAgentCliSourceRoute }>
+  readonly routeError?: unknown
+}
 
 export function captureStructuredAgentCliSource(
-  readRows: () => readonly AgentStatusIpcPayload[]
+  readRows: () => readonly AgentStatusIpcPayload[],
+  source?: CliSource,
+  readRoute?: (source: CliSource) => StructuredAgentCliSourceRoute
 ): StructuredAgentCliSourceEvidence {
+  let rows: StructuredAgentCliSourceEvidence
   try {
-    return Object.freeze({
+    rows = {
       rows: Object.freeze(
         readRows().map((row) =>
           Object.freeze({
@@ -30,39 +44,60 @@ export function captureStructuredAgentCliSource(
           })
         )
       )
-    })
+    }
   } catch (error) {
-    // Capture cannot override an existing owner or committed replay.
-    return Object.freeze({ error })
+    rows = { error }
+  }
+  if (!source || !readRoute) {
+    return Object.freeze(rows)
+  }
+  try {
+    return Object.freeze({
+      ...rows,
+      sourceRoute: Object.freeze({ ...source, route: readRoute(source) })
+    })
+  } catch (routeError) {
+    return Object.freeze({ ...rows, routeError })
   }
 }
 
-export function structuredAgentCliSourcePathFromEvidence(input: {
+export function structuredAgentCliSourceFromEvidence(input: {
   agent: StructuredAgentId
   resumeFrom: StructuredAgentSessionResumeSource
   workspaceId: string
   evidence?: StructuredAgentCliSourceEvidence
-}): string | undefined {
+}): StructuredAgentCliSourceLocator {
   const evidence = input.evidence
   if (input.resumeFrom.cliSource && evidence && 'error' in evidence) {
     throw evidence.error
   }
-  return structuredAgentCliSourcePath({
+  return resolveSource({
     ...input,
     rows: evidence && 'rows' in evidence ? evidence.rows : []
   })
 }
 
-/** A client names a pane; only this host supplies its provider path. */
+/** Derive provider paths from host evidence; clients may name only panes. */
 export function structuredAgentCliSourcePath(input: {
   agent: StructuredAgentId
   resumeFrom: StructuredAgentSessionResumeSource
   workspaceId: string
   rows: readonly AgentStatusIpcPayload[]
 }): string | undefined {
+  const source = resolveSource(input)
+  return source.kind === 'matched' ? source.transcriptPath : undefined
+}
+
+function resolveSource(input: {
+  agent: StructuredAgentId
+  resumeFrom: StructuredAgentSessionResumeSource
+  workspaceId: string
+  rows: readonly AgentStatusIpcPayload[]
+  evidence?: StructuredAgentCliSourceEvidence
+}): StructuredAgentCliSourceLocator {
   const source = input.resumeFrom.cliSource
   if (!source) {
-    return undefined
+    return { kind: 'none' }
   }
   const row = input.rows.find(
     (candidate) =>
@@ -72,13 +107,33 @@ export function structuredAgentCliSourcePath(input: {
       !candidate.connectionId &&
       !candidate.structuredHost &&
       adoptsCliConversations(candidate.agentType) &&
-      // A 2.x pane started as `opencode` reports `opencode`; the OpenCode 2 chat opens its conversation.
+      // OpenCode 2 may report the legacy opencode name for the same conversation.
       CLI_CONVERSATION_ADOPTING_AGENTS[candidate.agentType].some((agent) =>
         chatAgentsShareConversations(agent, input.agent)
       ) &&
       candidate.providerSession?.id === input.resumeFrom.providerSessionId
   )
   if (!row) {
+    if (
+      source.workspaceId === input.workspaceId &&
+      !input.rows.some((candidate) => candidate.paneKey === source.paneKey)
+    ) {
+      const evidence = input.evidence
+      if (evidence && 'routeError' in evidence) {
+        throw evidence.routeError
+      }
+      const route = evidence?.sourceRoute
+      if (route?.workspaceId === source.workspaceId && route.paneKey === source.paneKey) {
+        if (route.route === 'native-local') {
+          return { kind: 'absent' }
+        }
+        if (route.route === 'unsupported') {
+          throw agentSessionRefusalError('structured_agent_session_unsupported', {
+            reason: 'hostUnsupported'
+          })
+        }
+      }
+    }
     throw agentSessionRefusalError(
       'agent_session_identity_required',
       { reason: 'transcriptUnreadable' },
@@ -94,5 +149,5 @@ export function structuredAgentCliSourcePath(input: {
       reason: 'hostUnsupported'
     })
   }
-  return path || undefined
+  return { kind: 'matched', ...(path ? { transcriptPath: path } : {}) }
 }

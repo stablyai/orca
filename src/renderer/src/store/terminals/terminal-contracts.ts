@@ -3,6 +3,16 @@ import type { AgentProviderSessionMetadata } from '../../../../shared/agent-sess
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
 import type { HostSessionSlices } from '@/lib/workspace-session-host-split'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+
+export type TerminalCreationExecutionFacts = {
+  hostId: ExecutionHostId
+  connectionId: string | null
+  platform: NodeJS.Platform
+  isRemote: boolean
+  isWsl: boolean
+  projectRuntime?: ProjectExecutionRuntimeResolution
+}
 
 /** In-memory recovery claim consumed only after the resumed terminal hook becomes live. */
 export type AutomaticAgentResumeClaim = {
@@ -32,4 +42,6 @@ export type HydrateWorkspaceSessionOptions = {
   contestedHostWorkspaceSessions?: HostSessionSlices
   /** Partition each restored session key was read from; omitted leaves the store's copy. */
   contestedPrimaryHostBySessionKey?: Record<string, ExecutionHostId>
+  /** Runtime partitions the cold read loaded; omitted leaves the store's copy. */
+  hydratedRuntimeSessionHostIds?: ExecutionHostId[]
 } & WorkspaceSessionHydrationOptions

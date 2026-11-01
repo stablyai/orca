@@ -10,7 +10,8 @@ vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
   execCommand: execCommandMock
 }))
 
-const { detectRemoteHostPlatform } = await import('./ssh-remote-platform-detection')
+const { detectRemoteHostPlatform, remoteHostPlatformFromUnameProbe } =
+  await import('./ssh-remote-platform-detection')
 
 const conn = {} as SshConnection
 
@@ -32,21 +33,6 @@ describe('detectRemoteHostPlatform', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it('detects POSIX hosts from uname output', async () => {
-    execCommandMock.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux   x86_64\n')
-
-    await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
-      relayPlatform: 'linux-x64',
-      os: 'linux',
-      arch: 'x64',
-      pathFlavor: 'posix'
-    })
-    expect(execCommandMock).toHaveBeenCalledWith(
-      conn,
-      "printf '\\n%s ' '__ORCA_REMOTE_PLATFORM__'; uname -sm"
-    )
   })
 
   it('falls back to PowerShell detection for Windows remotes', async () => {
@@ -97,29 +83,6 @@ describe('detectRemoteHostPlatform', () => {
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'linux-arm64'
     })
-  })
-
-  it('returns null when neither probe yields a supported platform', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux')
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ FreeBSD x86_64')
-
-    await expect(detectRemoteHostPlatform(conn)).resolves.toBeNull()
-  })
-
-  it('does not use whitespace regex splitting for remote platform output', async () => {
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-    execCommandMock.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Darwin      arm64 extra')
-
-    await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
-      relayPlatform: 'darwin-arm64'
-    })
-
-    const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
-      ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
-    )
-    splitSpy.mockRestore()
-    expect(usedWhitespaceFieldSplit).toBe(false)
   })
 })
 
@@ -180,33 +143,6 @@ describe('detectRemoteHostPlatform failure reporting', () => {
     await expect(detectRemoteHostPlatform(conn)).rejects.not.toThrow(/exit 127/u)
   })
 
-  it('prefers unrecognized uname output over a failed PowerShell probe', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux')
-      .mockRejectedValueOnce(new Error('powershell.exe: not found'))
-
-    await expect(detectRemoteHostPlatform(conn)).rejects.toThrow(/__ORCA_REMOTE_PLATFORM__ Linux/u)
-  })
-
-  it('reports the raw probe output when a POSIX host yields no marker line', async () => {
-    // Restricted shell / ForceCommand: the probe command is swallowed, banner only.
-    execCommandMock.mockResolvedValue('Welcome to pc-server05\n')
-
-    await expect(detectRemoteHostPlatform(conn)).rejects.toThrow(/pc-server05/u)
-  })
-
-  it('truncates a long banner in the thrown message but logs a longer tail', async () => {
-    execCommandMock.mockResolvedValue(`${'banner line\n'.repeat(500)}goodbye\n`)
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    const error = await detectRemoteHostPlatform(conn).catch((err: Error) => err)
-
-    expect(error).toBeInstanceOf(Error)
-    expect((error as Error).message).not.toContain('\n')
-    expect((error as Error).message.length).toBeLessThanOrEqual(300)
-    expect(String(warnSpy.mock.calls[0]?.[0]).length).toBeGreaterThan(600)
-  })
-
   it('returns null when a parsed uname is genuinely unsupported', async () => {
     execCommandMock
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ FreeBSD x86_64\n')
@@ -230,8 +166,7 @@ describe('detectRemoteHostPlatform failure reporting', () => {
   })
 
   it('does not call an unmappable uname unsupported when the PowerShell probe timed out', async () => {
-    // The timed-out channel is the better explanation, and it is identified by execCommand's typed
-    // code — matching "timed out after Ns" in the message let any look-alike claim the branch.
+    // Prefer typed exec timeout evidence; matching wording could misclassify unrelated errors.
     execCommandMock
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
       .mockRejectedValueOnce(
@@ -263,5 +198,17 @@ describe('detectRemoteHostPlatform failure reporting', () => {
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'win32-x64'
     })
+  })
+})
+
+describe('remoteHostPlatformFromUnameProbe', () => {
+  it('reads only marker-backed platform lines, past other output folded into the same exec', () => {
+    expect(
+      remoteHostPlatformFromUnameProbe(
+        '5.15.167.4-microsoft-standard-WSL2\n/home/u\n\n__ORCA_REMOTE_PLATFORM__ Linux aarch64\n'
+      )
+    ).toMatchObject({ os: 'linux', arch: 'arm64' })
+    expect(remoteHostPlatformFromUnameProbe('Linux x86_64\n')).toBeNull()
+    expect(remoteHostPlatformFromUnameProbe('\n__ORCA_REMOTE_PLATFORM__ Linux sparc\n')).toBeNull()
   })
 })

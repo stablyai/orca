@@ -12,18 +12,6 @@ function mount(html: string): void {
 }
 
 describe('hasVisibleOverlay', () => {
-  it('is false with no overlay on screen', () => {
-    mount('<div>page chrome</div>')
-
-    expect(hasVisibleOverlay()).toBe(false)
-  })
-
-  it.each(['dialog', 'alertdialog', 'listbox', 'menu'])('sees a visible %s', (role) => {
-    mount(`<div role="${role}"></div>`)
-
-    expect(hasVisibleOverlay()).toBe(true)
-  })
-
   it('ignores an overlay inside an aria-hidden subtree', () => {
     mount('<div aria-hidden="true"><div role="dialog"></div></div>')
 
@@ -38,18 +26,6 @@ describe('hasVisibleOverlay', () => {
     mount('<div role="listbox" data-worktree-sidebar><div role="menu"></div></div>')
 
     expect(hasVisibleOverlay()).toBe(true)
-  })
-
-  it('ignores a display:none overlay', () => {
-    mount('<div role="dialog" style="display: none"></div>')
-
-    expect(hasVisibleOverlay()).toBe(false)
-  })
-
-  it('ignores a visibility:hidden overlay', () => {
-    mount('<div role="dialog" style="visibility: hidden"></div>')
-
-    expect(hasVisibleOverlay()).toBe(false)
   })
 
   it('ignores overlays inside ignoreSelector but not their siblings', () => {

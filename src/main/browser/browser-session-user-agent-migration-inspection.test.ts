@@ -16,7 +16,6 @@ function profileWithMode(mode: unknown): Record<string, unknown> {
   }
 }
 
-/** Fails `isValidPersistedBrowserSessionProfile` on its id, for reasons unrelated to identity. */
 function unhydratableProfile(extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: 'not-a-uuid',
@@ -39,9 +38,6 @@ describe('retired browser profile identity inspection', () => {
     expect(profile.userAgentMode).toBe('native')
   })
 
-  // "I refuse to hydrate this" is not "a retired identity choice was found". hydrateFromPersisted
-  // skips these entries silently, and the notice text claims an old choice could not be inspected —
-  // which would be a lie about a profile that never carried one, repeated on every launch.
   it.each([
     { scenario: 'null', entry: null },
     { scenario: 'a number', entry: 42 },

@@ -21,7 +21,7 @@ function installRecordProvider(provider: string | null): void {
   hostRef.current = {
     deps: {
       store: {
-        getRecord: () =>
+        getConversation: () =>
           provider ? { provider, location: { executionHostId: 'local', wslDistro: null } } : null
       }
     }

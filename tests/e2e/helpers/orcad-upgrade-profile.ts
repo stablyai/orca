@@ -1,9 +1,5 @@
-/**
- * The profile a relay-era build (v1.4.218, the last before auto-conversion) leaves behind for an
- * SSH host: the target without a fence, its repository and remote folder workspace, and an editor
- * tab (optionally beside a terminal tab) in the host's session partition. Seeded into a stopped profile, so the next launch is the
- * user's first on a converting build.
- */
+// Seed a stopped v1.4.218 relay-era profile with unfenced SSH target, repo/folder workspaces and saved editor/terminal state.
+// The next launch then exercises first-time automatic conversion.
 import type { FolderWorkspace } from '../../../src/shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../src/shared/project-group-types'
 import type { Repo } from '../../../src/shared/repo-types'
@@ -94,6 +90,8 @@ export function seedRelayEraProfile(
     relayPtyId?: string
     /** An unsaved buffer on the editor tab, as hot exit persists it. */
     draftContent?: string
+    /** The sidebar shows only this host, which a server's own all-hosts default once refused. */
+    sidebarScopedToHost?: boolean
   } = {}
 ): RelayEraProfile {
   const now = Date.now()
@@ -279,6 +277,10 @@ export function seedRelayEraProfile(
         updatedAt: now,
         lastDetachedAt: now
       })
+    }
+    if (options.sidebarScopedToHost) {
+      const ui = state.ui
+      state.ui = { ...(ui && typeof ui === 'object' ? ui : {}), workspaceHostScope: hostId }
     }
     const partitions = state.workspaceSessionsByHostId
     state.workspaceSessionsByHostId = {

@@ -1,7 +1,4 @@
-// Regenerate the electron-updater `.blockmap` for a (re-signed) Windows installer.
-// electron-builder 26 dropped the app-builder-bin Go binary; blockmap generation
-// now lives in app-builder-lib's pure-JS `buildBlockMap`. Mirrors createBlockmap's
-// "gzip" format for the standalone NSIS installer blockmap.
+// Regenerate re-signed NSIS installer blockmap in gzip format via app-builder-lib’s JS buildBlockMap; electron-builder 26 removed app-builder-bin’s Go binary.
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)

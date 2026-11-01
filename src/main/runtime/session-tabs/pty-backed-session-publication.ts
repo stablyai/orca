@@ -3,6 +3,7 @@ import { OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding } from '../s
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../shared/agent-title-owner'
 import { getLatestPtyTitle } from '../runtime-worktree-status-projection'
+import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../terminal/query/pty-terminal-summary'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
@@ -19,6 +20,9 @@ import {
 
 export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding {
   protected abstract markPaneLiveTitlesDirty(): void
+  protected abstract getPtyManualTitle(
+    ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
+  ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
   protected abstract isMobileSessionSurfaceMembershipAllowed(
     ...args: Parameters<
       TouchMobileSessionTabsForWorktreeMethods['isMobileSessionSurfaceMembershipAllowed']
@@ -68,8 +72,7 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
         candidate.parentTabId === args.tabId &&
         candidate.leafId === args.leafId
     )
-    // Why: a split inserts into the parent tab's layout, which lives on the
-    // sibling surface, not this new leaf's (empty) existing surface.
+    // Splits inherit parent layout from a sibling surface, not this new leaf's empty surface.
     const baseLayout = args.split
       ? (existing?.tabs.find(
           (candidate): candidate is RuntimeMobileSessionTerminalTab =>
@@ -84,8 +87,7 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       baseLayout,
       args.split
     )
-    // Why: a main-side PTY rescue or split publication must not erase the
-    // host's explicit tab mode before the renderer graph catches up.
+    // Rescue/split publication must preserve explicit tab mode before renderer graph catch-up.
     const viewMode =
       args.viewMode ??
       existingTab?.viewMode ??
@@ -95,8 +97,8 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
           candidate.parentTabId === args.tabId &&
           candidate.viewMode !== undefined
       )?.viewMode
-    // Why: republishing a surface must not drop the tab's manual name; a new split leaf inherits it.
-    const customTitle = (
+    // Republished tabs retain manual names, null included; new split leaves inherit them.
+    const rowCustomTitle = (
       existingTab ??
       existing?.tabs.find(
         (candidate): candidate is RuntimeMobileSessionTerminalTab =>
@@ -105,6 +107,11 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
           candidate.customTitle !== undefined
       )
     )?.customTitle
+    // A restart has no earlier row, so the name comes from the saved tab.
+    const customTitle =
+      rowCustomTitle !== undefined
+        ? rowCustomTitle
+        : this.getPtyManualTitle(pty, false) || undefined
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${args.tabId}::${args.leafId}`,
@@ -132,10 +139,7 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
     const tabs = mergeMobileSessionSnapshotTabs(
       existingTabs.map((candidate) => ({
         ...candidate,
-        // Why: the client picks one sibling's parentLayout to render the whole
-        // tab; a split must update every sibling surface to the new tree, or a
-        // stale single-leaf sibling makes the client fall back to a default
-        // direction ("Split Right" renders as down).
+        // Update every sibling's parentLayout; clients pick one sibling to render, so stale trees can reverse split direction.
         ...(args.split && candidate.type === 'terminal' && candidate.parentTabId === args.tabId
           ? { parentLayout }
           : {}),
@@ -148,9 +152,6 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       tabs.find((candidate) => candidate.isActive) ??
       (args.selectIfNoActiveTab !== false ? tabs[0] : null) ??
       null
-    const terminalTabs = tabs.filter(
-      (candidate): candidate is RuntimeMobileSessionTerminalTab => candidate.type === 'terminal'
-    )
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
       publicationEpoch:
@@ -163,7 +164,7 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
         mergeMobileSessionTabGroups(
           worktreeId,
           existing?.tabGroups ?? [],
-          terminalTabs,
+          tabs,
           activeTab?.type === 'terminal' ? activeTab : null
         ),
         existing?.tabGroups ?? [],
@@ -183,8 +184,7 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
     ptyId: string,
     options: { immediate?: boolean } = {}
   ): void {
-    // Why here: every change to what a PTY shows (a title past the spinner gate or the foreground
-    // probe's hold, a bind) lands here, so live pane titles follow the phones' title rules.
+    // All visible title/foreground/bind updates pass here; apply phone pane-title rules consistently.
     this.markPaneLiveTitlesDirty()
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       const hasPtyBackedTab = snapshot.tabs.some(

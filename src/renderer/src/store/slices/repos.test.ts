@@ -5,6 +5,8 @@ import { workItemsCacheKey } from '../github/cache-identity'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { toast } from 'sonner'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import { createFallbackProxy } from '../../web/preload-api/web-fallback-api'
 import {
   installReposRuntimeRoutingHarness,
   localRepo,
@@ -59,8 +61,7 @@ describe('repo slice runtime routing', () => {
   })
 
   it('keeps the repos array identity across a refetch that changes nothing', async () => {
-    // Why: main rebuilds nested records (hookSettings et al) per list and IPC clones them, so a
-    // production-shaped repo — not a scalar-only fixture — is what proves reconciliation works.
+    // IPC clones nested records; scalar-only fixtures cannot prove production reconciliation.
     const hydrated = (): Repo => ({
       ...localRepo,
       kind: 'git',
@@ -80,7 +81,7 @@ describe('repo slice runtime routing', () => {
 
     await store.getState().fetchRepos({ runtimeEnvironmentId: null })
 
-    // Why: identity-keyed renderer memos (repo lookup index, selectors) rebuild on a new array.
+    // New array identity rebuilds repo lookup memos and selectors.
     expect(store.getState().repos).toBe(reposRef)
     expect(store.getState().repos[0]).toBe(reposRef[0])
   })
@@ -306,6 +307,82 @@ describe('repo slice runtime routing', () => {
     })
   })
 
+  const SERVER_SSH_REFUSAL =
+    "This Orca server can't add projects on its SSH hosts. Add the SSH host on your computer to open its projects."
+
+  it.each([
+    ['folder', null],
+    ['git', null],
+    ['folder', 'env-1'],
+    ['git', 'env-1']
+  ] as const)(
+    'refuses SSH %s setup on a web client with focused runtime %s before calling a local API',
+    async (kind, activeRuntimeEnvironmentId) => {
+      const store = createTestStore()
+      store.setState({ settings: createGlobalSettingsFixture({ activeRuntimeEnvironmentId }) })
+      Object.assign(window, { __ORCA_WEB_CLIENT__: true })
+      window.api.projects = createFallbackProxy(['projects'])
+      const before = store.getState()
+
+      await expect(
+        store.getState().setupProjectExistingFolder({
+          projectId: 'project-1',
+          hostId: 'ssh:ssh-1',
+          path: '/srv/project',
+          kind
+        })
+      ).resolves.toBeNull()
+
+      expect(projectsSetupExistingFolder).not.toHaveBeenCalled()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(store.getState().repos).toBe(before.repos)
+      expect(store.getState().projects).toBe(before.projects)
+      expect(store.getState().projectHostSetups).toBe(before.projectHostSetups)
+      expect(toast.error).toHaveBeenCalledWith('Failed to add project', {
+        description: SERVER_SSH_REFUSAL,
+        duration: expect.any(Number)
+      })
+    }
+  )
+
+  it.each([
+    ["a paired server's", 'server', SERVER_SSH_REFUSAL],
+    ["this desktop's own", 'desktop', 'SSH connection "ssh-1" not found or not connected']
+  ] as const)('names why %s SSH host cannot take a project', async (_case, owner, message) => {
+    const store = createTestStore()
+    const labels = new Map([['ssh-1', 'Recipe VM']])
+    store.setState({
+      sshTargetLabels: owner === 'desktop' ? labels : new Map(),
+      sshStateByEnvironment: new Map([
+        [
+          'env-1',
+          {
+            connectionStates: new Map(),
+            targetLabels: owner === 'server' ? labels : new Map(),
+            targetGenerations: new Map(),
+            removedTargetLabels: new Map(),
+            targetsHydrated: true
+          }
+        ]
+      ])
+    })
+
+    await expect(
+      store.getState().setupProjectExistingFolder({
+        projectId: 'project-1',
+        hostId: 'ssh:ssh-1',
+        path: '/srv/project',
+        kind: 'git'
+      })
+    ).resolves.toBeNull()
+
+    expect(projectsSetupExistingFolder).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledWith('Failed to add project', {
+      description: message,
+      duration: expect.any(Number)
+    })
+  })
+
   it('sets up a project on the active runtime host through runtime RPC', async () => {
     const project: Project = {
       id: 'project-1',
@@ -366,58 +443,6 @@ describe('repo slice runtime routing', () => {
       },
       timeoutMs: 15_000
     })
-  })
-
-  it('sets up an SSH host through local IPC even when a runtime is focused', async () => {
-    const project: Project = {
-      id: 'project-1',
-      displayName: 'Project',
-      badgeColor: '#000',
-      sourceRepoIds: ['ssh-repo'],
-      createdAt: 1,
-      updatedAt: 1
-    }
-    const setup: ProjectHostSetup = {
-      id: 'ssh-repo',
-      projectId: project.id,
-      hostId: 'ssh:openclaw%202',
-      repoId: 'ssh-repo',
-      path: '/srv/project',
-      displayName: 'Remote',
-      connectionId: 'openclaw 2',
-      setupState: 'ready',
-      setupMethod: 'imported-existing-folder',
-      createdAt: 1,
-      updatedAt: 1
-    }
-    projectsSetupExistingFolder.mockResolvedValue({
-      project,
-      setup,
-      repo: { ...remoteRepo, connectionId: 'openclaw 2' }
-    })
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-    await expect(
-      store.getState().setupProjectExistingFolder({
-        projectId: project.id,
-        hostId: 'ssh:openclaw%202',
-        path: '/srv/project',
-        kind: 'git'
-      })
-    ).resolves.toEqual({
-      project,
-      setup,
-      repo: { ...remoteRepo, connectionId: 'openclaw 2', executionHostId: 'ssh:openclaw%202' }
-    })
-
-    expect(projectsSetupExistingFolder).toHaveBeenCalledWith({
-      projectId: project.id,
-      hostId: 'ssh:openclaw%202',
-      path: '/srv/project',
-      kind: 'git'
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('clones a project locally before aligning it as a host setup', async () => {

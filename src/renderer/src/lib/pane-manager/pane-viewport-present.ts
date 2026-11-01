@@ -1,17 +1,11 @@
 import type { ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import { isManagedPaneDisplayNone } from './pane-display-visibility'
-import {
-  forceFullViewportPresent,
-  requestFullViewportPresent
-} from './terminal-render-pause-release'
+import { requestFullViewportPresent } from './terminal-render-pause-release'
 
-// Presenting a pane's viewport is a distinct concern from owning the WebGL
-// addon's lifecycle: it runs for DOM-rendered panes too, and its retry loop is
-// about DOM visibility, not about the renderer.
+/** Viewport presentation also serves DOM panes; keep visibility retries separate from WebGL lifecycle. */
 
 const DISPLAYED_PRESENT_RETRY_FRAMES = 16
-type ViewportPresentMode = 'preserve-synchronized-output' | 'force-current-buffer'
-type DisplayedPresentRetry = { frames: number; mode: ViewportPresentMode }
+type DisplayedPresentRetry = { frames: number }
 const pendingDisplayedPresentRetries = new WeakMap<ManagedPaneInternal, DisplayedPresentRetry>()
 // Public pane views are recreated; terminal teardown must cancel every view's retry.
 const presentRetryCancellations = new WeakMap<ManagedPane['terminal'], Set<() => void>>()
@@ -22,21 +16,14 @@ export function cancelPendingTerminalViewportPresents(terminal: ManagedPane['ter
   }
 }
 
-function schedulePresentWhenDisplayed(pane: ManagedPaneInternal, mode: ViewportPresentMode): void {
+function schedulePresentWhenDisplayed(pane: ManagedPaneInternal): void {
   if (typeof globalThis.requestAnimationFrame !== 'function') {
     return
   }
-  const pending = pendingDisplayedPresentRetries.get(pane)
-  if (pending) {
-    if (mode === 'force-current-buffer') {
-      pending.mode = mode
-    }
+  if (pendingDisplayedPresentRetries.has(pane)) {
     return
   }
-  pendingDisplayedPresentRetries.set(pane, {
-    frames: DISPLAYED_PRESENT_RETRY_FRAMES,
-    mode
-  })
+  pendingDisplayedPresentRetries.set(pane, { frames: DISPLAYED_PRESENT_RETRY_FRAMES })
   const terminal = pane.terminal
   const cancellations = presentRetryCancellations.get(terminal) ?? new Set<() => void>()
   presentRetryCancellations.set(terminal, cancellations)
@@ -78,61 +65,30 @@ function schedulePresentWhenDisplayed(pane: ManagedPaneInternal, mode: ViewportP
       return
     }
     finish()
-    presentPaneViewportWithMode(pane, retry.mode)
+    presentPaneViewport(pane)
   }
   frameId = globalThis.requestAnimationFrame(tick)
 }
 
-function presentPaneViewportWithMode(pane: ManagedPane, mode: ViewportPresentMode): void {
+/** Retain the coherent canvas during DEC 2026: mid-frame forced painting exposes erase/repaint flashes (#32198). Reveal/atlas recovery waits, bounded by xterm’s synchronized-output safety timeout. */
+export function presentPaneViewport(pane: ManagedPane): void {
   const internal = pane as ManagedPaneInternal
   if (internal.webglDisabledAfterContextLoss) {
     return
   }
   try {
-    // Why: on reveal xterm's IntersectionObserver can still report the pane as
-    // not intersecting, so a plain refresh() is swallowed by RenderService's
-    // paused-render gate and the pending model never repaints (stale bottom rows
-    // until a drag-select forces a redraw). Request one synchronous full present
-    // even if the observer already unpaused; only fall back to refresh() when
-    // internals are unavailable.
-    //
-    // Why the display check: that release is only right for a pane that is
-    // DOM-visible. A pane with no box at all (collapsed sibling of an expanded
-    // pane, a restore that stays display:none for its whole reattach) is
-    // legitimately paused, and releasing it paints into nothing and then leaves
-    // the service unpaused for good — the observer only
-    // fires on a change, so it never re-pauses. Clearing _needsFullRefresh with
-    // it also drops the full repaint the observer owes the pane on reveal, and
-    // the deferred _pausedResizeTask that flushes alongside it. Latching is what
-    // xterm's own gate does, and the reveal repaints from the latch.
+    // Visible reveal can beat IntersectionObserver unpause; force a full present (refresh fallback if internals are absent). No-box panes must remain paused with full-refresh/resize latches intact: the observer may never re-pause, and clearing them loses reveal’s owed repaint.
     if (isManagedPaneDisplayNone(pane)) {
       pane.terminal.refresh(0, pane.terminal.rows - 1)
-      // Why: light tab reveal runs while the overlay is still display:none
-      // (field trace: paused=true needFull=true at click). A plain refresh only
-      // latches _needsFullRefresh; if IntersectionObserver never fires, the
-      // canvas keeps pre-hide pixels until a user resize. Retry once the box
-      // exists so the full present actually runs.
-      schedulePresentWhenDisplayed(internal, mode)
+      // Reveal can run before the overlay has a box; retry when measurable or missed IntersectionObserver events leave stale pixels until resize.
+      schedulePresentWhenDisplayed(internal)
       return
     }
-    const presented =
-      mode === 'force-current-buffer'
-        ? forceFullViewportPresent(pane.terminal)
-        : requestFullViewportPresent(pane.terminal)
-    if (!presented) {
-      // Why: refresh even without a WebGL addon so recovery never silently
-      // no-ops — a DOM-rendered pane can hold stale pixels after reveal too.
+    if (!requestFullViewportPresent(pane.terminal)) {
+      // DOM panes can retain stale pixels too; refresh without requiring WebGL.
       pane.terminal.refresh(0, pane.terminal.rows - 1)
     }
   } catch {
     /* ignore — pane may have been disposed in the meantime */
   }
-}
-
-export function presentPaneViewport(pane: ManagedPane): void {
-  presentPaneViewportWithMode(pane, 'force-current-buffer')
-}
-
-export function presentPaneViewportPreservingSynchronizedOutput(pane: ManagedPane): void {
-  presentPaneViewportWithMode(pane, 'preserve-synchronized-output')
 }

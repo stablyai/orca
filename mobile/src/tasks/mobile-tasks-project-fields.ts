@@ -81,8 +81,7 @@ export function projectFieldVisibilityKey(table: GitHubProjectTable | null): str
   if (!table) {
     return null
   }
-  // Why: desktop scopes column visibility to project + view; matching that
-  // avoids hiding fields across unrelated Project views with colliding IDs.
+  // Scope visibility by project and view so colliding field ids cannot hide unrelated views.
   return `${table.project.id}:${table.selectedView.id}`
 }
 

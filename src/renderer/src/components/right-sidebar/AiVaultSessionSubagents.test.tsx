@@ -4,6 +4,8 @@ import type { ComponentProps, JSX } from 'react'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SubagentExpansionProvider } from './ai-vault-subagent-expansion'
+import { useAppStore } from '@/store'
+import { createEditorStore } from '@/store/slices/editor-slice-test-harness'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AiVaultSession, AiVaultSubagentListResult } from '../../../../shared/ai-vault-types'
 import { SessionSubagentsSection as ProductionSessionSubagentsSection } from './AiVaultSessionSubagents'
@@ -31,6 +33,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
 })
 
 function makeSession(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
@@ -70,6 +73,27 @@ function makeSubagent(title: string): AiVaultSession {
 }
 
 describe('SessionSubagentsSection', () => {
+  it('opens the selected child through its View Log button', async () => {
+    const child = { ...makeSubagent('Worker'), agent: 'omp' as const }
+    const store = createEditorStore()
+    vi.spyOn(useAppStore, 'getState').mockImplementation(store.getState)
+    listSubagentSessions.mockResolvedValueOnce({ sessions: [child], issues: [] })
+    const view = render(<SessionSubagentsSection session={makeSession({ agent: 'omp' })} />)
+    await act(async () => {})
+
+    fireEvent.click(view.getByTitle('View Log'))
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: child.filePath,
+        relativePath: child.filePath,
+        readOnly: true,
+        liveTail: true,
+        runtimeEnvironmentId: null
+      })
+    ])
+  })
+
   it('keeps the loaded list visible while a rescan-triggered refetch is in flight', async () => {
     listSubagentSessions.mockResolvedValueOnce({
       sessions: [makeSubagent('First pass')],
@@ -79,8 +103,7 @@ describe('SessionSubagentsSection', () => {
     await act(async () => {})
     expect(queryByText('First pass')).not.toBeNull()
 
-    // Second fetch stays pending: the previous rows must remain visible
-    // instead of flickering back to the hidden loading state.
+    // Hold the replacement read pending to verify retained rows do not flicker away.
     let resolveSecond: (result: AiVaultSubagentListResult) => void = () => {}
     listSubagentSessions.mockImplementationOnce(
       () => new Promise((resolve) => (resolveSecond = resolve))

@@ -1,7 +1,4 @@
-// Why: every director instance boots from the same rollout, so its periodic
-// sweeps land on the same wall-clock second across instances and pile onto the
-// one global cell-inventory lock together. A per-process offset spreads the
-// arrivals; the sweeps are idempotent, so a slightly longer period is free.
+// Same-rollout directors otherwise contend on inventory locks together; longer idempotent sweep periods spread arrivals without increasing load.
 export const SWEEP_JITTER_FRACTION = 0.2
 
 export function jitteredSweepIntervalMs(

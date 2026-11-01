@@ -51,8 +51,6 @@ describe('orcadActivationFenceRefusal', () => {
     expect(mocks.takeover).not.toHaveBeenCalled()
   })
 
-  // BUG-21: a wake cut short left a bare stale fence; every update said "Recover it first" while
-  // Recover answered "none".
   it('clears a stale fence no journal backs, so the attempt can run again', async () => {
     mocks.stale.mockResolvedValue(true)
     await expect(orcadActivationFenceRefusal(options, 'update')).resolves.toMatchObject({

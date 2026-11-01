@@ -6,6 +6,7 @@ import {
   Loader2,
   Pencil,
   Plug,
+  Play,
   PlugZap,
   RefreshCw,
   Settings2,
@@ -28,7 +29,10 @@ import { translate } from '@/i18n/i18n'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { runtimePairingRepairRoute } from '../../../../shared/runtime-environments'
-import { describeRuntimeCompatBlock } from '../../../../shared/protocol-compat'
+
+import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
+import { selectStoppedWslDistro } from '@/lib/wsl-host-stopped-status'
+import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
 import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-rpc-client'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
@@ -51,8 +55,7 @@ function blockedTitle(reason: 'client-too-old' | 'server-too-old'): string {
       )
 }
 
-// Why: SSH and paired runtime hosts share the sidebar model, but Settings keeps
-// their management pages separate so each connection type can explain itself.
+// Shared sidebar host rows route to connection-specific management pages in Settings.
 function openManageHost(row: HostHeaderRow): void {
   const state = useAppStore.getState()
   if (row.kind === 'runtime') {
@@ -92,13 +95,19 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
     return environment ? runtimePairingRepairRoute(environment) : 'access-link'
   })
   const repairableWithAccessLink = repairRoute === 'access-link'
+  const stoppedWslDistro = useAppStore((s) =>
+    s.settings?.experimentalWslHosts === true
+      ? selectStoppedWslDistro(s, runtimeEnvironmentId)
+      : null
+  )
   const model = buildHostHeaderMenuModel({
     kind: row.kind,
     health: row.health,
     sshConnected: sshStatus === 'connected',
     compatibility: row.compatibility,
     blockedReason: row.blockedReason,
-    repairableWithAccessLink
+    repairableWithAccessLink,
+    wslDistroStopped: stoppedWslDistro !== null
   })
   const removalTarget = resolveHostRemoval(row.hostId)
 
@@ -144,10 +153,9 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
       return
     }
     setBusy(true)
-    // Why: drop any cached "compatible" verdict so the re-probe re-evaluates
-    // version skew instead of trusting the prior pass.
+    // Discard cached compatibility so this check re-evaluates version skew.
     clearRuntimeCompatibilityCache(parsed.environmentId)
-    // Why connect: a refusal Orca can answer over SSH is retried, not just read back.
+    // Managed SSH can repair revoked pairing; connect retries it rather than rereading refusal.
     const retryPairing = row.blockedReason === 'access-revoked' && repairRoute === 'ssh'
     try {
       const response = await (
@@ -156,12 +164,11 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
           : window.api.runtimeEnvironments.getStatus
       )({
         selector: parsed.environmentId,
-        // Why longer when pairing again: SSH, the readiness read and two handshakes all fit in it.
+        // Re-pairing needs time for SSH, readiness and two handshakes.
         timeoutMs: retryPairing ? 45_000 : 10_000
       })
       unwrapRuntimeRpcResult<RuntimeStatus>(response)
-      // Why: feed the probe result into the shared store so the host header and
-      // other host pickers reflect this check without a separate fetch.
+      // Publish refreshed host status to other pickers through the shared store.
       await useAppStore.getState().readRuntimeHostStatusSnapshots()
       toast.success(
         translate(
@@ -173,8 +180,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         )
       )
     } catch (err) {
-      // Why: record the failed probe so the host registry can drop a previously
-      // healthy verdict instead of showing stale "compatible" state.
+      // Publish failed probes so the registry cannot retain stale compatibility.
       await useAppStore.getState().readRuntimeHostStatusSnapshots()
       toast.error(
         err instanceof Error
@@ -206,8 +212,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
                 'Host actions for {{value0}}',
                 { value0: row.label }
               )}
-              // Why: the host header row itself toggles collapse on click;
-              // opening the menu must not also fold the section.
+              // Opening the menu must not bubble into host-section collapse.
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
             >
@@ -232,6 +237,19 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
             >
               <Link2 className="size-3.5" />
               {translate('auto.components.sidebar.HostSectionHeaderMenu.repair', 'Re-pair…')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {model.actions.includes('wsl-start') && runtimeEnvironmentId && (
+          <>
+            <DropdownMenuItem
+              onSelect={() => void startWslHostAndReloadProjects(runtimeEnvironmentId)}
+            >
+              <Play className="size-3.5" />
+              {translate('components.native-chat.hostOutage.startDistro', 'Start {{distro}}', {
+                distro: stoppedWslDistro
+              })}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>

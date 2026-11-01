@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { Text, TextInput, View } from 'react-native'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { textOffsetForLineColumn } from './mobile-file-preview-line-column'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
   title: string
@@ -19,13 +21,15 @@ export function MobileFilePreviewEditableSource({
   saveError,
   onDraftChange
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const selectionTargetKey = lineColumn
     ? `${title}:${lineColumn.line}:${lineColumn.column ?? ''}`
     : ''
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null)
   const [revealedTargetKey, setRevealedTargetKey] = useState('')
 
-  // Why: line/column opens should reveal once, then user cursor movement owns selection.
+  // Reveal the requested position once; subsequent cursor movement owns selection.
   useEffect(() => {
     if (!lineColumn || !selectionTargetKey || revealedTargetKey === selectionTargetKey) {
       return
@@ -49,7 +53,9 @@ export function MobileFilePreviewEditableSource({
         autoCorrect={false}
         selection={selection ?? undefined}
         onSelectionChange={() => setSelection(null)}
-        accessibilityLabel={`${title} editor`}
+        accessibilityLabel={t('files.filePreviewEditableSource.editorLabel', '{{title}} editor', {
+          title
+        })}
       />
     </View>
   )

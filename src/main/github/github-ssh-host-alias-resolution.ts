@@ -164,7 +164,6 @@ export async function classifyGitHubOwnerRepoFromRemoteUrl(
     : { kind: 'not-github', cacheWithGitConfigSignature: false }
 }
 
-/** Convenience wrapper for callers that only need owner/repo or null. */
 export async function resolveGitHubOwnerRepoFromRemoteUrl(
   remoteUrl: string,
   context: SshConfigResolutionContext = { repoPath: '' }

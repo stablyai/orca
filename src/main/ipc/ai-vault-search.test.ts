@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { clearSearch, handlers, sshSearch, sshHostInfos, runtimeSearch } = vi.hoisted(() => ({
@@ -239,8 +240,16 @@ describe('local search hits owned by a native chat', () => {
     record.providerHandleChain = [
       { ...record.providerHandleChain[0]!, handle: codexProviderHandle('host-session') }
     ]
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection only reads this record-list member.
-    setStructuredAgentSessionHost({ deps: { store: { listRecords: () => [record] } } } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection reads only `listConversations`, `getRecord` and `hostId`.
+    setStructuredAgentSessionHost({
+      deps: {
+        store: {
+          hostId: 'local',
+          getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null),
+          listConversations: () => [agentSessionConversationView(record)]
+        }
+      }
+    } as never)
     return { sessionId: record.sessionId, workspaceId: record.location.workspaceId }
   }
 

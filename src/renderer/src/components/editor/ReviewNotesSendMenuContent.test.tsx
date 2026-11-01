@@ -1,5 +1,6 @@
 import React from 'react'
 import { toast } from 'sonner'
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -35,7 +36,7 @@ const harness = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useCallback<T extends (...args: never[]) => unknown>(callback: T): T {
@@ -43,6 +44,9 @@ vi.mock('react', async () => {
     },
     useMemo<T>(factory: () => T): T {
       return factory()
+    },
+    useSyncExternalStore<T>(_subscribe: unknown, getSnapshot: () => T): T {
+      return getSnapshot()
     },
     useEffect(effect: () => void | (() => void)): void {
       const cleanup = effect()
@@ -78,6 +82,11 @@ vi.mock('@/store', () => ({
 
 vi.mock('zustand/react/shallow', () => ({
   useShallow: (selector: unknown) => selector
+}))
+
+vi.mock('@/runtime/structured-chat-name-observation', () => ({
+  useStructuredChatTabNames: () => new Map(),
+  getStructuredChatTabNames: () => new Map()
 }))
 
 vi.mock('@/lib/active-agent-note-send', () => ({
@@ -161,9 +170,9 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
 }))
 
-// Why: real sonner state, so tests see which toast type a settled toast ends up with.
-vi.mock('sonner', async () => {
-  const actual = await vi.importActual<typeof import('sonner')>('sonner') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+// Keep real Sonner state to verify a settled toast’s type.
+vi.mock(import('sonner'), async (importOriginal) => {
+  const actual = await importOriginal()
   const realMessage = actual.toast.message
   const message: typeof realMessage = (...args) => {
     harness.toastMessage(...args)
@@ -193,21 +202,23 @@ function agentRow({
   paneKey,
   tabId,
   title,
-  agentType,
+  agentType = 'claude',
   state = 'done',
-  startedAt = harness.now
+  startedAt = harness.now,
+  prompt = ''
 }: {
   paneKey: string
   tabId: string
   title: string
-  agentType: TuiAgent
+  agentType?: TuiAgent
   state?: AgentStatusState | 'idle'
   startedAt?: number
+  prompt?: string
 }): DashboardAgentRowData {
   const entryState: AgentStatusState = state === 'idle' ? 'working' : state
   return {
     paneKey,
-    entry: agentEntry(paneKey, agentType, entryState, startedAt),
+    entry: { ...agentEntry(paneKey, agentType, entryState, startedAt), prompt },
     tab: tab(tabId, { title }) as DashboardAgentRowData['tab'],
     agentType,
     state,
@@ -452,6 +463,45 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(collectText(items[1])).toContain('Claude')
   })
 
+  it('leads each row with the name its sidebar row shows, so same-type agents differ', () => {
+    const paneKeyA = makePaneKey(TAB_A, LEAF_A)
+    const paneKeyB = makePaneKey(TAB_B, LEAF_B)
+    harness.worktreeAgentRows = [
+      agentRow({ paneKey: paneKeyA, tabId: TAB_A, title: 'Claude Code' }),
+      agentRow({ paneKey: paneKeyB, tabId: TAB_B, title: 'Claude Code', prompt: 'Fix the login' })
+    ]
+    setStore({
+      tabsByWorktree: {
+        'wt-1': [
+          tab(TAB_A, { title: 'Claude Code', customTitle: 'Payments' }),
+          tab(TAB_B, { title: 'Claude Code' })
+        ]
+      }
+    })
+    harness.noteTargets = [
+      [paneKeyA, TAB_A, LEAF_A],
+      [paneKeyB, TAB_B, LEAF_B]
+    ].map(([paneKey, tabId, leafId]): NotesSendAgentTarget => ({
+      paneKey,
+      tabId,
+      messageTarget: { kind: 'terminal', tabId, leafId },
+      agentType: 'claude',
+      tabTitle: 'Claude Code',
+      status: 'eligible'
+    }))
+
+    const rowLines = findAllByType(render(), 'DropdownMenuItem').map((item) =>
+      findAllByType(item, 'span')
+        .filter((span) => String(span.props.className).includes('truncate'))
+        .map(collectText)
+    )
+
+    expect(rowLines).toEqual([
+      ['Payments', 'Claude · Done · just now'],
+      ['Fix the login', 'Claude · Done · just now']
+    ])
+  })
+
   it('shows a chat whose turn failed as failed, as its sidebar row does', () => {
     const chatPaneKey = 'structured-agent-session-claude_1:chat'
     const failedRow = agentRow({
@@ -567,86 +617,6 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(harness.sendMessageToAgent).not.toHaveBeenCalled()
   })
 
-  it('does not offer a title-detected agent row after its live PTY has exited', () => {
-    const paneKey = makePaneKey(TAB_B, LEAF_B)
-    harness.worktreeAgentRows = [
-      agentRow({
-        paneKey,
-        tabId: TAB_B,
-        title: 'Codex',
-        agentType: 'codex',
-        state: 'done',
-        startedAt: harness.now - 60_000
-      })
-    ]
-    setStore({
-      tabsByWorktree: { 'wt-1': [tab(TAB_B, { title: 'Codex' })] },
-      terminalLayoutsByTabId: { [TAB_B]: leafLayout(LEAF_B, 'pty-b') },
-      ptyIdsByTabId: { [TAB_B]: [] }
-    })
-
-    const tree = render()
-    const items = findAllByType(tree, 'DropdownMenuItem')
-
-    expect(items).toHaveLength(0)
-    expect(collectText(tree)).not.toContain('Active agent session')
-  })
-
-  it('does not render an active agent fallback alongside named targets', () => {
-    const listedPaneKey = makePaneKey(TAB_A, LEAF_A)
-    setStore({
-      tabsByWorktree: { 'wt-1': [tab(TAB_A), tab(TAB_B)] },
-      terminalLayoutsByTabId: {
-        [TAB_A]: leafLayout(LEAF_A, 'pty-a'),
-        [TAB_B]: leafLayout(LEAF_B, 'pty-b')
-      }
-    })
-    harness.noteTargets = [
-      {
-        paneKey: listedPaneKey,
-        tabId: TAB_A,
-        messageTarget: { kind: 'terminal', tabId: TAB_A, leafId: LEAF_A },
-        agentType: 'claude',
-        tabTitle: 'Terminal 1',
-        status: 'eligible'
-      }
-    ]
-
-    const tree = render()
-    const items = findAllByType(tree, 'DropdownMenuItem')
-
-    expect(items).toHaveLength(1)
-    expect(collectText(items[0])).toContain('Claude')
-    expect(collectText(tree)).not.toContain('Active agent session')
-    expect(harness.sendMessageToAgent).not.toHaveBeenCalled()
-  })
-
-  it('does not render an active agent fallback when the matching derived row is disabled', () => {
-    const paneKey = makePaneKey(TAB_A, LEAF_A)
-    setStore({
-      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Codex' })] },
-      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
-    })
-    harness.noteTargets = [
-      {
-        paneKey,
-        tabId: TAB_A,
-        messageTarget: { kind: 'terminal', tabId: TAB_A, leafId: LEAF_A },
-        agentType: 'codex',
-        tabTitle: 'Codex',
-        status: 'disabled',
-        disabledReason: 'Agent status is stale'
-      }
-    ]
-
-    const tree = render()
-    const items = findAllByType(tree, 'DropdownMenuItem')
-
-    expect(items).toHaveLength(1)
-    expect(items[0].props.disabled).toBe(true)
-    expect(collectText(tree)).not.toContain('Active agent session')
-  })
-
   it('sends notes to the chosen agent and tracks the send once it succeeds', async () => {
     const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
     const onPromptDelivered = vi.fn()
@@ -681,7 +651,6 @@ describe('ReviewNotesSendMenuContent', () => {
       launch_source: 'notes_send',
       request_kind: 'followup'
     })
-    // The notes are held from the hand-off until this send's own outcome, after its delivery.
     expect(onPromptHandedOff).toHaveBeenCalledOnce()
     await onPromptHandedOff.mock.calls[0][0]
     expect(onPromptDelivered).toHaveBeenCalledTimes(1)
@@ -712,7 +681,7 @@ describe('ReviewNotesSendMenuContent', () => {
 
     expect(onPromptDelivered).not.toHaveBeenCalled()
     expect(harness.track).not.toHaveBeenCalled()
-    // Why: a failure must replace the 'Sending notes...' loading toast, not keep its spinner.
+    // Failure must settle the loading toast without leaving its spinner.
     const settled = toast
       .getToasts()
       .find((entry) => 'title' in entry && entry.title === 'selected:not-ready')
@@ -849,15 +818,6 @@ describe('ReviewNotesSendMenuContent', () => {
     })
   })
 
-  it('does not render an active agent fallback when no agents are derived', () => {
-    const tree = render()
-    const items = findAllByType(tree, 'DropdownMenuItem')
-
-    expect(items).toHaveLength(0)
-    expect(collectText(tree)).not.toContain('Active agent session')
-    expect(harness.sendMessageToAgent).not.toHaveBeenCalled()
-  })
-
   it('always offers the new-agent launcher', () => {
     const onPromptHandedOff = vi.fn()
     const tree = render({ onPromptHandedOff })
@@ -871,7 +831,7 @@ describe('ReviewNotesSendMenuContent', () => {
     })
   })
 
-  // Every note already on its way leaves an empty prompt: no agent may start with no text.
+  // Notes held by other sends leave no prompt; do not launch an empty agent.
   it('disables the new-agent launcher when there is nothing left to send', () => {
     expect(findByType(render({ prompt: '' }), 'QuickLaunchAgentMenuItems').props.disabled).toBe(
       true

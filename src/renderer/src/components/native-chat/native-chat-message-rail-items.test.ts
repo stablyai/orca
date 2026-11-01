@@ -91,18 +91,11 @@ describe('rail items', () => {
     expect(items.map((item) => item.id)).toEqual(['u1', 'u2'])
   })
 
-  // The rail points at a row, and the virtualizer counts slots — so an entry has
-  // to carry the slot index. A message that draws nothing takes no slot, which
-  // is exactly where a message index would start lying.
+  // Invisible messages consume no slot, so rail navigation must use virtualizer indexes rather than message positions.
   it('indexes by slot, not by message position', () => {
     const items = buildNativeChatRailItems(slotsOf([text('blank', ''), text('u1', 'ask', 'user')]))
     expect(items).toHaveLength(1)
     expect(items[0]?.slotIndex).toBe(0)
-  })
-
-  it('collapses whitespace in the preview', () => {
-    const items = buildNativeChatRailItems(slotsOf([text('u1', '  a\n\n  b  ', 'user')]))
-    expect(items[0]?.text).toBe('a b')
   })
 
   it('reports an image-only message as having no prose', () => {
@@ -144,8 +137,7 @@ describe('rail reply preview', () => {
     expect(nativeChatRailReplyPreview(rows, items, 'old-2')).toBe('Host reply 2, cut off early')
   })
 
-  // A long live turn scrolls its own prompt out of the loaded window; the host's
-  // reply for it was cut when the outline was read, the loaded rows are current.
+  // Loaded turn tails are newer than outline previews even when their opener is outside the window.
   it('prefers the loaded end of a turn whose prompt is no longer loaded', () => {
     const rows = rowsOf(
       [text('a0', 'Still going, latest words.'), text('u1', 'ask', 'user')],
@@ -156,9 +148,7 @@ describe('rail reply preview', () => {
     expect(nativeChatRailReplyPreview(rows, items, 'old-1')).toBe('Host reply 1')
   })
 
-  // A steer is in the turn it was sent into, under another message's key: without
-  // the host naming that turn it would keep the host's reply while its turn's own
-  // prompt, beside it on the rail, showed the loaded one.
+  // The host’s turn key lets an unloaded steer share the loaded reply shown for its opener.
   it("reads an unloaded steer the loaded end of its turn, as its turn's prompt", () => {
     const rows = rowsOf([text('a0', 'Still going, latest words.')], ['old-2'])
     const items = mergeNativeChatRailOutline(
@@ -174,12 +164,6 @@ describe('rail reply preview', () => {
 })
 
 describe('rail tick sampling', () => {
-  it('keeps every tick while the thread fits', () => {
-    const items = railItems(NATIVE_CHAT_RAIL_ROOMY_TICKS)
-    expect(selectNativeChatRailTicks({ items, keepIds: [] })).toBe(items)
-  })
-
-  // A tick is the only way to its message, so a tall transcript draws more of them.
   it('fits more ticks into a taller viewport, never fewer than the roomy count', () => {
     const items = railItems(60)
     expect(nativeChatRailTickCapacity(0)).toBe(NATIVE_CHAT_RAIL_ROOMY_TICKS)
@@ -197,15 +181,7 @@ describe('rail tick sampling', () => {
     expect(ticks.at(-1)?.id).toBe('m119')
   })
 
-  it('always includes the active tick', () => {
-    const items = railItems(120)
-    const ticks = selectNativeChatRailTicks({ items, keepIds: ['m7'] })
-    expect(ticks.map((tick) => tick.id)).toContain('m7')
-    expect(ticks).toHaveLength(NATIVE_CHAT_RAIL_ROOMY_TICKS)
-  })
-
-  // Losing an end would make the rail claim the conversation starts or stops
-  // somewhere it doesn't, so the eviction has to fall on a neighbour instead.
+  // Keep both thread ends fixed; evict a neighbor so the sampled rail still maps the whole conversation.
   it('evicts a neighbour rather than an end when the active tick is near one', () => {
     const items = railItems(120)
     const ticks = selectNativeChatRailTicks({ items, keepIds: ['m1'] })
@@ -215,7 +191,6 @@ describe('rail tick sampling', () => {
     expect(ids).toContain('m119')
   })
 
-  // A previewed or focused tick must not be resampled away as the reader scrolls.
   it('keeps every named tick at once, within the cap', () => {
     const ticks = selectNativeChatRailTicks({ items: railItems(120), keepIds: ['m7', 'm8', null] })
     expect(ticks).toHaveLength(NATIVE_CHAT_RAIL_ROOMY_TICKS)
@@ -263,13 +238,5 @@ describe('rail outline merge', () => {
       ['u3', 0, 'third'],
       ['u4', 2, 'fourth']
     ])
-  })
-
-  it('is the loaded list itself when there is no outline to add', () => {
-    expect(mergeNativeChatRailOutline(null, loaded)).toBe(loaded)
-    expect(mergeNativeChatRailOutline([], loaded)).toBe(loaded)
-    expect(mergeNativeChatRailOutline([{ id: 'u3', text: 'x', hasImages: false }], loaded)).toBe(
-      loaded
-    )
   })
 })

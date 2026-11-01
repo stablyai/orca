@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,7 +49,7 @@ async function captureFailure(
 
 describe('checkout progress from a real `git worktree add`', () => {
   it('reports rising progress through 100% and then the end of the checkout', async () => {
-    // Why: without it git waits ~1 s before its first record, longer than this checkout.
+    // Emit progress before this small checkout finishes, bypassing Git's initial delay.
     vi.stubEnv('GIT_PROGRESS_DELAY', '0')
     const reports: (WorktreeCheckoutProgress | null)[] = []
 
@@ -68,6 +68,30 @@ describe('checkout progress from a real `git worktree add`', () => {
     expect(new Set(percents).size).toBe(percents.length)
   })
 
+  it('checks out with one worker per core unless checkout.workers is configured', async () => {
+    const trace = join(root, 'trace2.jsonl')
+    vi.stubEnv('GIT_CONFIG_GLOBAL', join(root, 'empty-global-config'))
+    vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1')
+    vi.stubEnv('GIT_TRACE2_CONFIG_PARAMS', 'checkout.workers')
+    vi.stubEnv('GIT_TRACE2_EVENT', trace)
+    const checkoutWorkersSeenByAdd = async (branch: string): Promise<string | undefined> => {
+      await rm(trace, { force: true })
+      await addWorktree(repo, join(root, branch), branch, 'main', false, false)
+      const events: { event?: string; name?: string; sid?: string; value?: string }[] = (
+        await readFile(trace, 'utf8')
+      )
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+      const addSid = events.find((e) => e.event === 'cmd_name' && e.name === 'worktree')?.sid
+      return events.find((e) => e.event === 'def_param' && e.sid === addSid)?.value
+    }
+
+    expect(await checkoutWorkersSeenByAdd('parallel')).toBe('0')
+    await gitExecFileAsync(['config', 'checkout.workers', '2'], { cwd: repo })
+    expect(await checkoutWorkersSeenByAdd('configured')).toBe('2')
+  })
+
   it('fails with the same error and stderr whether or not progress is observed', async () => {
     vi.stubEnv('GIT_PROGRESS_DELAY', '0')
     const occupied = join(root, 'occupied')
@@ -78,7 +102,6 @@ describe('checkout progress from a real `git worktree add`', () => {
     const unobserved = await captureFailure(() =>
       addWorktree(repo, occupied, 'blocked', 'main', false, false)
     )
-    // Same branch name both times, so the texts are comparable byte for byte.
     await gitExecFileAsync(['branch', '-D', 'blocked'], { cwd: repo }).catch(() => {})
     const observed = await captureFailure(() =>
       addWorktree(repo, occupied, 'blocked', 'main', false, false, { onCheckoutProgress })
@@ -101,7 +124,6 @@ describe('checkout progress from a real `git worktree add`', () => {
       onCheckoutProgress
     })
 
-    // The first throw detaches the observer; git's checkout is unaffected.
     expect(onCheckoutProgress).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledWith(
       'git stderr observer failed; detaching it',

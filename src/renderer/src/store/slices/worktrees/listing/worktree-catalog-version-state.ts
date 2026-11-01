@@ -7,14 +7,7 @@ import {
 } from '../../../../../../shared/worktree/catalog-version'
 import type { AppState } from '../../../types'
 
-/**
- * The client's side of catalog ordering: the newest version it has applied per repo and host.
- *
- * A listing is a snapshot from when its scan began. Anything that delays it past a create or
- * remove reply -- host post-scan work, a coalesced joiner, the pre-merge terminal teardown -- would
- * otherwise let it undo that reply. Comparing versions at apply time is what makes the order the
- * publications arrived in irrelevant.
- */
+/** Keep newest applied version per repo/host; delayed pre-create/remove listings must not undo replies, regardless of arrival order. */
 
 export type WorktreeCatalogVersionState = Pick<AppState, 'worktreeCatalogVersionByRepoHost'>
 

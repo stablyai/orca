@@ -32,7 +32,7 @@ function accountDatabase(
 
 export const OPENCODE_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
   readableContext: { kind: 'container' },
-  // The account's store is its exact database, which is the only one its chat can load from.
+  // Restrict imports to the exact database the selected account’s chat can load.
   conversationStore: ({ accountHome, launchEnv }) => accountDatabase(accountHome, launchEnv),
   admitTranscriptPath: async ({ store: dbPath, transcriptPath }) => {
     const [expected, actual] = await Promise.all([
@@ -41,7 +41,6 @@ export const OPENCODE_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
     ])
     return expected && actual && expected.path === actual.path ? actual.path : null
   },
-  // The selected account, then the unmanaged environment this chat would launch with.
   accountHomeCandidates: ({ selectedAccountHome }) => [
     selectedAccountHome,
     { kind: 'opencode', locator: { kind: 'unmanaged' } }

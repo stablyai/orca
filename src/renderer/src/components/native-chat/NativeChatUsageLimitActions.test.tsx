@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type * as OriginalModule0 from '@/runtime/runtime-provider-accounts-client'
 import { useContext } from 'react'
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -12,6 +13,7 @@ import {
 } from './native-chat-orca-stop-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
+import { buildAgentSessionContinuationPrompt } from '@/lib/agent-session-continuation'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -47,7 +49,8 @@ vi.mock('@/lib/windows-terminal-capabilities', () => ({
   getWindowsTerminalCapabilityOwnerKey: () => 'local',
   useWindowsTerminalCapabilities: () => ({ wslDistros: [] })
 }))
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/runtime-provider-accounts-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof OriginalModule0>()),
   fetchProviderAccountsSnapshot: mocks.snapshot,
   watchProviderAccounts: mocks.watch,
   selectClaudeProviderAccount: mocks.select,
@@ -96,12 +99,14 @@ function Row({
   target,
   offered,
   agent,
-  messages
+  messages,
+  recovery
 }: {
   target: RuntimeClientTarget
   offered: boolean
   agent: AgentType
   messages: readonly NativeChatMessage[]
+  recovery: Parameters<typeof NativeChatUsageLimitActionsProvider>[0]['recovery']
 }) {
   const pane = {
     tabId: 'tab',
@@ -134,7 +139,7 @@ function Row({
   return (
     <TooltipProvider>
       <NativeChatUsageLimitActionsProvider
-        recovery={{ readCurrent: true, canSwitchAccount: mocks.follows }}
+        recovery={recovery}
         view={view}
         pane={pane}
         handOffState={handOff}
@@ -159,9 +164,30 @@ function row(
   target: RuntimeClientTarget = { kind: 'local' },
   offered = true,
   agent: AgentType = 'claude',
-  messages: readonly NativeChatMessage[] = []
+  messages: readonly NativeChatMessage[] = [],
+  recovery: Parameters<typeof NativeChatUsageLimitActionsProvider>[0]['recovery'] = {
+    readCurrent: true,
+    canSwitchAccount: mocks.follows
+  }
 ) {
-  return <Row target={target} offered={offered} agent={agent} messages={messages} />
+  return (
+    <Row target={target} offered={offered} agent={agent} messages={messages} recovery={recovery} />
+  )
+}
+function expectInlineActions(accountName: string | null) {
+  const leadIn = screen.getByText('Continue this chat without waiting:')
+  const actions = leadIn.parentElement
+  const handOff = screen.getByRole('button', { name: 'Hand Off to Another Agent' })
+  const account = accountName ? screen.getByRole('button', { name: accountName }) : null
+  expect(actions).toHaveClass('flex', 'flex-wrap', 'items-center')
+  expect(Array.from(actions?.children ?? [])).toEqual([
+    leadIn,
+    ...(account ? [account.parentElement] : []),
+    handOff
+  ])
+  if (account) {
+    expect(account.parentElement).toHaveClass('w-32', 'shrink-0')
+  }
 }
 function snapshot(count: number) {
   return {
@@ -187,11 +213,18 @@ it('offers host-owned recovery actions for the current usage-limit cut', async (
   const openSettingsTarget = vi.fn()
   useAppStore.setState({ openSettingsTarget, openSettingsPage: vi.fn() })
   try {
-    const view = render(row(target))
+    const view = render(
+      row(target, true, 'claude', [], { readCurrent: false, canSwitchAccount: undefined })
+    )
+    expectInlineActions('Switch Account')
+    expect(screen.getByRole('button', { name: 'Switch Account' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Hand Off to Another Agent' })).toBeDisabled()
+    view.rerender(row(target))
     expect(screen.getByRole('button', { name: 'Switch Account' })).toBeDisabled()
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Switch Account' })).toBeEnabled()
     )
+    expectInlineActions('Switch Account')
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Switch Account' }), {
       button: 0,
       ctrlKey: false,
@@ -220,11 +253,15 @@ it('offers host-owned recovery actions for the current usage-limit cut', async (
     mocks.snapshot.mockResolvedValue(snapshot(1))
     render(row(target))
     await waitFor(() => expect(screen.queryByRole('button', { name: /Account/ })).toBeNull())
+    expect(
+      screen.getByText('Continue this chat without waiting:').parentElement?.querySelector('.w-32')
+    ).toHaveClass('empty:hidden')
     const watcher = mocks.watch.mock.lastCall?.[1]
     watcher.onSnapshot(snapshot(2))
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Switch Account' })).toBeEnabled()
     )
+    expectInlineActions('Switch Account')
     cleanup()
     const local: RuntimeClientTarget = { kind: 'local' }
     render(row(local))
@@ -241,6 +278,7 @@ it('offers host-owned recovery actions for the current usage-limit cut', async (
     render(row(target, true, 'codex'))
     expect(screen.getByRole('button', { name: 'Hand Off to Another Agent' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: /Account/ })).toBeNull()
+    expectInlineActions(null)
   } finally {
     useAppStore.setState({
       openSettingsPage: original.openSettingsPage,
@@ -312,4 +350,9 @@ it('hands off database-backed chats using labelled recent messages when no nativ
   const source = mocks.dialog.mock.lastCall?.[0].request.source
   expect(mocks.dialog.mock.lastCall?.[0].request.avoidSourceAgent).toBe(true)
   expect(source).toMatchObject({ sourceAgent: 'opencode', transcriptPath: undefined })
+  expect(source.capturedText).toContain('user: Keep the recent task context')
+  expect(buildAgentSessionContinuationPrompt(source, 'focused')).toContain(
+    'A saved session transcript was unavailable, so use these recent chat messages:'
+  )
+  expect(buildAgentSessionContinuationPrompt(source, 'full')).toBeNull()
 })

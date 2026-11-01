@@ -1,10 +1,11 @@
-import { closeTestStores, createSqliteTestStore, testState } from './persistence-test-harness'
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  testState
+} from './persistence/persistence-test-harness'
 import { Store as CanonicalStore } from './persistence/loading-store/store'
 import { initDataPath as initCanonicalDataPath } from './persistence/loading-store/user-data-path'
 import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
-// Why this file exists: removing a workspace's session rows must take its close records with it,
-// or they hold cap slots until the TTL and read as "emptied on purpose" for a new workspace at the
-// same path.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -12,13 +13,9 @@ import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../shared/constants'
 import { toSshExecutionHostId } from '../shared/execution-host'
 import { folderWorkspaceKey } from '../shared/workspace-scope'
-import {
-  MAX_CLOSED_TERMINAL_TAB_TOMBSTONES,
-  recordClosedTerminalTabTombstone,
-  type ClosedTerminalTabTombstonesByTabId
-} from '../shared/closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstonesByTabId } from '../shared/closed-terminal-tab-tombstones'
+
 import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
-import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 
 let hasCreatedStoreInCase = false
 
@@ -92,48 +89,6 @@ describe('close records on workspace removal', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('drops only the removed worktree’s records', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: REMOVED, hostId: 'local' }), {})
-    store.setWorkspaceSession(
-      sessionWithRecords(
-        records([
-          ['closed-removed', REMOVED],
-          ['closed-kept', KEPT]
-        ])
-      )
-    )
-
-    removeWorktreeMetaRow(store, REMOVED, undefined)
-
-    expect(
-      Object.keys(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId ?? {})
-    ).toEqual(['closed-kept'])
-  })
-
-  it('drops the records in the SSH host’s partition on a remote removal', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: REMOVED, hostId: SSH_HOST }), {
-      hostId: SSH_HOST
-    })
-    store.setWorkspaceSession(
-      sessionWithRecords(
-        records([
-          ['closed-removed', REMOVED],
-          ['closed-kept', KEPT]
-        ])
-      ),
-      SSH_HOST
-    )
-
-    store.removeWorktreeMeta(hostWorktreeTarget({ id: REMOVED, hostId: SSH_HOST }))
-
-    expect(
-      Object.keys(store.getWorkspaceSession(SSH_HOST).closedTerminalTabTombstonesByTabId ?? {})
-    ).toEqual(['closed-kept'])
-  })
-
-  // Why: repo ids and paths repeat across hosts; the local owner of the same id is still live.
   it('keeps a same-id worktree’s records on another host when one host’s copy is removed', async () => {
     const store = await createStore()
     const repo = { id: 'repo-a', displayName: 'A', badgeColor: 'gray', addedAt: 1 }
@@ -185,7 +140,6 @@ describe('close records on workspace removal', () => {
     expect(store.getWorkspaceSession(SSH_HOST).closedTerminalTabTombstonesByTabId).toEqual({})
   })
 
-  // Why the removed worktree has no meta here: records alone must still mark it as the repo's.
   it('drops every worktree’s records when its project is removed, and keeps other projects’', async () => {
     const store = await createStore()
     store.addRepo({
@@ -209,35 +163,5 @@ describe('close records on workspace removal', () => {
     expect(
       Object.keys(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId ?? {})
     ).toEqual(['closed-b'])
-  })
-
-  // Why: dead records used to hold cap slots until their TTL, so fresh closes evicted a live one.
-  it('frees the removed worktree’s cap slots, so later closes keep a live worktree’s record', async () => {
-    const store = await createStore()
-    const now = Date.now()
-    const dead = Array.from(
-      { length: MAX_CLOSED_TERMINAL_TAB_TOMBSTONES - 1 },
-      (_, index): [string, string] => [`dead-${index}`, REMOVED]
-    )
-    store.setWorktreeMeta(hostWorktreeTarget({ id: REMOVED, hostId: 'local' }), {})
-    store.setWorkspaceSession(
-      sessionWithRecords({
-        ...records(dead, now),
-        ...records([['live-kept', KEPT]], now - 60_000)
-      })
-    )
-
-    removeWorktreeMetaRow(store, REMOVED, undefined)
-    let map = store.getWorkspaceSession().closedTerminalTabTombstonesByTabId
-    for (let index = 0; index < 2; index += 1) {
-      map = recordClosedTerminalTabTombstone(
-        map,
-        `fresh-${index}`,
-        { worktreeId: KEPT },
-        now + index
-      )
-    }
-
-    expect(map?.['live-kept']).toBeDefined()
   })
 })

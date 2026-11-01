@@ -1,7 +1,4 @@
-// A Stop accepts through its own command receipt BEFORE it acts: the receipt, and for the chat's
-// Stop its event and every send it settles, commit first, and only then does it interrupt or end
-// anything. A Stop whose acceptance cannot be saved acts on nothing and says so. A retry of its id
-// is answered from the receipt and never resolves a target again.
+// Commit Stop receipt/effects before interrupting; failed acceptance acts on nothing and retries never retarget.
 
 import { agentSessionFailureSentence } from '../../../shared/agent-session-failure-words'
 import { refuse, type AgentSessionCancelResult } from '../../../shared/agent-session-wire'
@@ -29,9 +26,7 @@ import type {
   AgentSessionTurnContext
 } from './structured-agent-session-turns'
 
-/** The receipt a Stop accepts with: the row it wrote (its Stop event, or a card's dismissal), else
- *  that it was accepted. A Stop that acted on nothing records the no-op it answered. Once committed
- *  it is never rewritten: a failure after it is answered from it. */
+/** Preserve the first committed result, including no-op; later failures answer from that receipt. */
 export const STOP_COMMAND_RECEIPT: MutationCommandReceipt<AgentSessionCancelResult> = {
   result: (row) => (row ? journalRowReceiptResult(row, 'tombstone', 'item') : { kind: 'stop' }),
   unwritten: (value) => ({
@@ -44,7 +39,6 @@ export const STOP_COMMAND_RECEIPT: MutationCommandReceipt<AgentSessionCancelResu
   })
 }
 
-/** What a Stop that could not be saved answers: plain words naming the agent, and to try again. */
 export function stopFailedRefusal(
   ctx: Pick<AgentSessionTurnContext, 'agent'>
 ): AgentSessionWireRefusal {
@@ -63,7 +57,7 @@ export function stopFailedRefusal(
 
 type Accepted<T> = { ok: true; value: T } | { ok: false; refusal: AgentSessionWireRefusal }
 
-/** Commits the receipt alone, before a Stop that writes no row of its own acts. */
+/** Save standalone acceptance before effects that write no row. */
 export async function acceptStopTarget(ctx: AgentSessionTurnContext): Promise<Accepted<null>> {
   const receipt = stopReceipt(ctx)
   const committedBefore = receipt.isCommitted()
@@ -77,12 +71,11 @@ export async function acceptStopTarget(ctx: AgentSessionTurnContext): Promise<Ac
   return { ok: true, value: null }
 }
 
-/** Commits the chat's Stop: the sends it withdraws, its event and its receipt, in one transaction.
- *  `turnId`: the turn its event names, null when that went unread. */
+/** Atomically commit withdrawals, event and receipt; null turnId means the turn could not be read. */
 export async function acceptChatStop(
   ctx: AgentSessionTurnContext,
   input: Omit<JournalStopAcceptanceInput, 'liveTurnId'>
-): Promise<Accepted<{ turnId: string | null }>> {
+): Promise<Accepted<{ turnId: string | null; withdrawn?: string[] }>> {
   const receipt = stopReceipt(ctx)
   const committedBefore = receipt.isCommitted()
   try {
@@ -90,7 +83,7 @@ export async function acceptChatStop(
       { ...input, liveTurnId: () => contextStructuredAgentSessionCurrentWork(ctx).activeTurnId() },
       committedBefore ? undefined : receipt
     )
-    return { ok: true, value: { turnId: accepted.turnId } }
+    return { ok: true, value: { turnId: accepted.turnId, withdrawn: accepted.withdrawn } }
   } catch (error) {
     return savedAnyway(ctx, receipt, committedBefore, error)
       ? { ok: true, value: { turnId: null } }
@@ -98,8 +91,7 @@ export async function acceptChatStop(
   }
 }
 
-/** A throw once this write committed the receipt (the fold after COMMIT) leaves the Stop accepted:
- *  it acts on what it saved, and is never answered as not saved. */
+/** Post-COMMIT fold failure cannot undo acceptance; act on the saved capture. */
 function savedAnyway(
   ctx: AgentSessionTurnContext,
   receipt: AgentSessionOperationReceipt,
@@ -117,7 +109,6 @@ function savedAnyway(
   return true
 }
 
-/** Every Stop accepts through its command receipt; one without it is a plan wired wrong. */
 function stopReceipt(ctx: AgentSessionTurnContext): AgentSessionOperationReceipt {
   if (!ctx.operationReceipt) {
     throw new Error('a Stop is accepted only through its command receipt')
@@ -125,7 +116,6 @@ function stopReceipt(ctx: AgentSessionTurnContext): AgentSessionOperationReceipt
   return ctx.operationReceipt
 }
 
-/** What a card's Cancel whose dismissal could not be saved answers: words about the card. */
 export function cardCancelNotSavedRefusal(): AgentSessionWireRefusal {
   return refuse(
     'agent_session_operation_invalid',
@@ -134,8 +124,7 @@ export function cardCancelNotSavedRefusal(): AgentSessionWireRefusal {
   )
 }
 
-/** Nothing was saved, so nothing is interrupted: the agent keeps running and the person is told
- *  to try again. A receipt another call committed first answers this one instead. */
+/** Failed save interrupts nothing; an earlier committed receipt answers competing retries. */
 export function stopNotSaved(
   ctx: Pick<AgentSessionTurnContext, 'agent' | 'logger' | 'sessionId'>,
   error: unknown,
@@ -152,7 +141,7 @@ export function stopNotSaved(
     sessionId: ctx.sessionId,
     error
   })
-  // Damage SQLite proves, a newer Orca's chat or a refusal the journal classified: as an open says.
+  // Match journal-open refusals for corruption, newer data and typed journal errors.
   if (
     isAgentSessionRefusalError(error) ||
     classifyJournalOpenFailure(error) === 'journalCorrupt' ||

@@ -74,22 +74,22 @@ export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath
   )
 }
 
-/**
- * An install is complete when its directory exists and every named artifact is a regular
- * file inside it. A partial install must read as MISSING, so the caller passes the whole list.
- */
+/** Require the directory and every declared regular-file artifact; incomplete installs must report missing. */
 export function probeRemoteInstallCompleteCommand(
   host: RemoteHostPlatform,
   remoteInstallDir: string,
   requiredFilenames: readonly string[]
 ): string {
+  if (!isWindowsRemoteHost(host)) {
+    // Use relative artifacts inside a subshell to fit gateway exec budgets without leaking cd (#30491).
+    const fileTests = requiredFilenames
+      .map((filename) => `&& test -f ${quotePosixShell(filename)} `)
+      .join('')
+    return `(cd ${quotePosixShell(remoteInstallDir)} 2>/dev/null ${fileTests}) && echo OK || echo MISSING`
+  }
   const required = requiredFilenames.map((filename) =>
     joinRemotePath(host, remoteInstallDir, filename)
   )
-  if (!isWindowsRemoteHost(host)) {
-    const fileTests = required.map((path) => `&& test -f ${quotePosixShell(path)} `).join('')
-    return `test -d ${quotePosixShell(remoteInstallDir)} ${fileTests}&& echo OK || echo MISSING`
-  }
   return powerShellCommand(
     [
       `$dir = ${powerShellLiteral(remoteInstallDir)}`,
@@ -103,13 +103,7 @@ export function probeRemoteInstallCompleteCommand(
 
 export const MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES = 64
 
-/**
- * List one model's version dirs (and its own tombstones) under `~/.orca-remote/`.
- *
- * The model scopes BOTH the `find`/`Get-ChildItem` glob and the validating regex. That
- * double filter is the on-the-wire half of the GC ownership rule: an orcad GC pass never
- * even receives a relay directory name, so it cannot delete one through a later bug.
- */
+/** Scope both listing glob and validation regex by install model so orcad GC never even receives legacy relay directory names. */
 export function listRemoteInstallBaseDirsCommand(
   host: RemoteHostPlatform,
   baseDir: string,
@@ -129,8 +123,7 @@ export function listRemoteInstallBaseDirsCommand(
       "$ErrorActionPreference = 'Stop'",
       `$base = ${powerShellLiteral(baseDir)}`,
       'if (Test-Path -LiteralPath $base -PathType Container) {',
-      // Why the pattern goes in verbatim: a single-quoted PowerShell string is already
-      // literal, so `\.` reaches `-match` as the regex escape it is meant to be.
+      // PowerShell single-quoted strings already preserve regex backslashes.
       `Get-ChildItem -LiteralPath $base -Directory -Filter '${model.dirPrefix}-*' -ErrorAction Stop | Where-Object { $_.Name -match '${namePattern}' } | Select-Object -First ` +
         `${MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES} | ForEach-Object { $_.Name }`,
       '}'

@@ -11,13 +11,7 @@ type DebouncedSettingsTextInputProps = Omit<
   onEdit?: () => void
 }
 
-/**
- * Text input for a free-text setting, committed on a debounce instead of per keystroke.
- *
- * Why a component and not a hook at the call site: the account sections are render functions the
- * settings search calls conditionally, so hooks cannot live in them. Rendering this as JSX gives
- * the draft its own component to mount and unmount with.
- */
+/** Own debounced drafts in a component because Settings search conditionally calls account render functions that cannot own hooks. */
 export function DebouncedSettingsTextInput({
   value,
   commit,

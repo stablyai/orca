@@ -1,23 +1,25 @@
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
-/**
- * A terminal launch that fails before its spawn is requested — no launch command, runtime
- * unavailable — created nothing, so a named operation settles as failed with its real cause.
- * Once the request has left, a failure proves nothing and the outcome stays unknown.
- */
+/** Pre-dispatch failures prove no effects and record the real cause; a lost reply after dispatch remains unknown. Explicitly unsupported chat is refused before creation. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
+import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../../shared/agent-launch-surface'
+import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
+import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
 import {
+  CAPABLE_CLIENT,
   methodNamed,
   runtimeStub,
   setAgentLaunchRecordStore,
+  STRUCTURED_PREFERENCE,
   type AgentLaunchRuntimeStub
 } from './agent-launch.test-fixture'
 
@@ -41,7 +43,11 @@ type Launch = {
   agent: string
   target: { kind: string; worktree?: string; create?: Readonly<Record<string, unknown>> }
   sessionOptions?: Readonly<Record<string, unknown>>
+  chatOptions?: Readonly<Record<string, string>>
   reuseTerminal?: { handle: string }
+  cwd?: string
+  surface?: string
+  nativeChatDefault?: boolean
 }
 
 /** The create throws; `afterDispatch` says whether the spawn request had already left. */
@@ -72,6 +78,7 @@ describe('a launch whose terminal fails', () => {
 
   afterEach(async () => {
     setAgentLaunchRecordStore(null)
+    await closeTestJournalHostDatabases()
     await rm(directory, { recursive: true, force: true })
   })
 
@@ -82,19 +89,23 @@ describe('a launch whose terminal fails', () => {
   async function replay(
     runtime: AgentLaunchRuntimeStub,
     launch: Launch,
-    operationId: string = OPERATION_ID
+    operationId: string = OPERATION_ID,
+    options?: RpcDispatchStreamingOptions
   ) {
     const dispatcher = new RpcDispatcher({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements every runtime method reached by agent.launch and dispatcher metadata.
       runtime: { ...runtime, getRuntimeId: () => 'runtime-1' } as unknown as OrcaRuntimeService,
       methods: AGENT_LAUNCH_METHODS
     })
-    return dispatcher.dispatch({
-      id: 'request-1',
-      authToken: 'token',
-      method: 'agent.launchReplay',
-      params: AGENT_LAUNCH_REPLAY.params.parse({ ...launch, operationId })
-    })
+    return dispatcher.dispatch(
+      {
+        id: 'request-1',
+        authToken: 'token',
+        method: 'agent.launchReplay',
+        params: AGENT_LAUNCH_REPLAY.params.parse({ ...launch, operationId })
+      },
+      options
+    )
   }
 
   it('reports a failure before the spawn request with its real cause and records it', async () => {
@@ -188,8 +199,58 @@ describe('a launch whose terminal fails', () => {
     expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
     expect(runtime.createTerminal).toHaveBeenCalledTimes(2)
   })
+  it.each(['cwd', 'wsl', 'remote'] as const)(
+    'refuses conclusive %s before effects and replays it',
+    async (reason) => {
+      const runtime = runtimeStub({
+        settings: {},
+        ...(reason === 'cwd' ? {} : { createSupport: { supported: false, reason } })
+      })
+      const subfolderChat = {
+        ...EXISTING_LAUNCH,
+        ...(reason === 'cwd' ? { cwd: 'packages/app' } : {}),
+        surface: 'chat'
+      }
+
+      const response = await replay(runtime, subfolderChat)
+
+      expect(response).toMatchObject({
+        ok: false,
+        error: {
+          code: AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
+          message: expect.stringContaining("Claude can't open as a chat here")
+        }
+      })
+      expect(outcomeOf(OPERATION_ID)).toMatchObject({
+        status: 'failed',
+        code: AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE
+      })
+      expect(await replay(runtime, subfolderChat)).toMatchObject(response)
+      expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+    }
+  )
+
+  it('starts the CLI for an explicit terminal even when chats are the default', async () => {
+    const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
+
+    const response = await replay(runtime, { ...EXISTING_LAUNCH, surface: 'terminal' })
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { outcome: { kind: 'terminal' }, receipt: { reason: 'requested' } }
+    })
+  })
+
   it.each([
     { ...CREATE_LAUNCH, agent: 'opencode', sessionOptions: { model: 'private-proof/model-b' } },
+    // A saved chat choice is what an explicit terminal starts with, so it is refused the same way.
+    {
+      ...CREATE_LAUNCH,
+      agent: 'opencode',
+      surface: 'terminal',
+      chatOptions: { model: 'private-proof/model-b' }
+    },
     {
       ...EXISTING_LAUNCH,
       agent: 'opencode',
@@ -217,6 +278,66 @@ describe('a launch whose terminal fails', () => {
     expect(retry.showTerminalWorkspaceLaunchScope).not.toHaveBeenCalled()
     expect(retry.createManagedWorktree).not.toHaveBeenCalled()
   })
+
+  it.each([false, true])(
+    'settles an automatic terminal model refusal (caller downgrade %s)',
+    async (callerDowngrade) => {
+      const launch = {
+        ...CREATE_LAUNCH,
+        agent: 'opencode',
+        chatOptions: { model: 'anthropic/claude-sonnet-4-6' },
+        ...(callerDowngrade ? {} : { nativeChatDefault: false }),
+        prompt: { text: 'Reply with OK', delivery: 'submit' }
+      }
+      const first = runtimeStub({ settings: STRUCTURED_PREFERENCE })
+      first.createManagedWorktree.mockImplementation(async (args) => {
+        expect(args).toMatchObject({
+          startupAgent: 'opencode',
+          startupLaunchPreferences: { model: launch.chatOptions.model }
+        })
+        assertOpenCodeModelLaunchPreferencesAbsent('opencode', launch.chatOptions)
+        return { worktree: { id: 'wt-new' }, startupTerminal: undefined }
+      })
+
+      const caller = callerDowngrade ? CAPABLE_CLIENT : undefined
+      expect(await replay(first, launch, OPERATION_ID, caller)).toMatchObject({
+        ok: false,
+        error: { code: 'capability_unsupported' }
+      })
+      expect(outcomeOf(OPERATION_ID)).toMatchObject({ status: 'failed' })
+      expect(first.createManagedWorktree).not.toHaveBeenCalled()
+      expect(first.createTerminal).not.toHaveBeenCalled()
+      const retry = runtimeStub({ settings: {} })
+      expect(await replay(retry, launch, OPERATION_ID, caller)).toMatchObject({
+        ok: false,
+        error: { code: 'capability_unsupported' }
+      })
+      expect(retry.createManagedWorktree).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([undefined, 'chat'] as const)(
+    'keeps an OpenCode model create on its chat route %s',
+    async (surface) => {
+      const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
+      const launch = {
+        ...CREATE_LAUNCH,
+        agent: 'opencode',
+        chatOptions: { model: 'anthropic/claude-sonnet-4-6' },
+        ...(surface ? { surface } : {})
+      }
+      expect(await replay(runtime, launch)).toMatchObject({
+        ok: true,
+        result: { outcome: { kind: 'structured' } }
+      })
+      expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
+      expect(runtime.createManagedWorktree.mock.calls[0]?.[0]).not.toHaveProperty('startupAgent')
+      expect(runtime.createManagedWorktree.mock.calls[0]?.[0]).not.toHaveProperty(
+        'startupLaunchPreferences'
+      )
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+    }
+  )
 
   it('preserves a successful recorded model launch even when its placement is now refused', async () => {
     const launch = AGENT_LAUNCH_REPLAY.params.parse({

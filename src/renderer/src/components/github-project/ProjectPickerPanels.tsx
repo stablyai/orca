@@ -1,6 +1,7 @@
 import React from 'react'
 import { AlertTriangle, Loader, Pin } from 'lucide-react'
 import { GhAuthErrorHelp } from './GhAuthErrorHelp'
+import { projectViewErrorMessage } from './project-view-error-copy'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { isRenderableProjectViewLayout } from '../../../../shared/github/project-types'
@@ -164,10 +165,19 @@ export function ProjectPickerPartialFailures({
 }): React.JSX.Element {
   const summary =
     failures.length === 1 && failures[0].owner !== '*'
-      ? `Couldn't load projects from ${failures[0].owner}.`
-      : `Some organizations didn't load (${failures.length}).`
+      ? translate('projectViews.picker.ownerLoadFailed', "Couldn't load projects from {{owner}}.", {
+          owner: failures[0].owner
+        })
+      : translate(
+          'projectViews.picker.organizationsLoadFailed',
+          "Some organizations didn't load ({{failureCount}}).",
+          { failureCount: failures.length }
+        )
   const detail = failures
-    .map((failure) => `${failure.owner === '*' ? 'orgs' : failure.owner}: ${failure.message}`)
+    .map(
+      (failure) =>
+        `${failure.owner === '*' ? translate('projectViews.picker.organizations', 'Organizations') : failure.owner}: ${failure.message}`
+    )
     .join('\n')
   return (
     <div
@@ -208,7 +218,7 @@ export function ProjectPickerError({
   }
   return (
     <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-      <div>{error.message}</div>
+      <div>{projectViewErrorMessage(error, { host })}</div>
     </div>
   )
 }

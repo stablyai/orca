@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// A message sent while the chat reads Stopping, through the chat's own send and its real sender:
-// where the host does not queue sends, it goes out plain, for the host to hold until the stop lands,
-// and is marked as sent while stopping, so it draws after the Stopping line.
+// Without host queue support, sends during Stopping go out plain and render after the Stop line while the host holds delivery.
 
 import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -16,6 +14,7 @@ let items: AgentJournalRenderItem[] = []
 const submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionPromptCancel: vi.fn(async () => false)
 }))
@@ -52,9 +51,9 @@ beforeEach(() => {
   localStorage.clear()
   clearNativeChatDraftCacheForTests()
   items = [RUNNING_TURN]
-  // A host that does not queue sends, as every shipped host does not yet.
+  // Model a host without queued-message support.
   setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY])
-  // The host has not answered yet: the send is still on its way, as while a Stop holds the lane.
+  // Hold send replies while Stop occupies the host lane.
   mocks.call.mockImplementation(() => new Promise(() => {}))
 })
 
@@ -94,7 +93,6 @@ it('sends plain where the host does not queue sends, marked as sent while stoppi
   ).toMatchObject({ role: 'user', sentWhileStopping: true })
 })
 
-// Sent before the Stop, the host steers it into the turn: it is not one held behind the Stop.
 it('does not mark a send made before the chat read Stopping', async () => {
   const { result, rerender } = renderHook(
     ({ hostStopping }: { hostStopping: boolean }) =>

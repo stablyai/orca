@@ -1,12 +1,10 @@
-// A restored chat whose open fails keeps its tab, so a phone on a headless host still lists it and
-// its read says why, instead of the chat disappearing: damaged, or saved by a newer Orca.
-
 import { cp, rm } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
 import {
+  closeTestJournalHostDatabases,
   liveTestJournalRows,
   openTestJournalHostDatabase,
   updateTestJournalRowJson
@@ -36,12 +34,12 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  await closeTestJournalHostDatabases()
   await Promise.all(
     relaunchedRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
   )
 })
 
-/** A restarted process over the chat's files, its epoch row rewritten by `edit`. */
 async function relaunchWith(
   edit: (db: Database.Database) => void
 ): Promise<StructuredAgentSessionHost> {
@@ -51,13 +49,15 @@ async function relaunchWith(
   await before.store.renewLeases([])
   const relaunched = `${before.root}-relaunched`
   relaunchedRoots.push(relaunched)
-  // A dead process holds no lock.
+  // Simulate process death without copying its live lock.
   await cp(before.root, relaunched, {
     recursive: true,
     filter: (source) => !source.includes('.lock')
   })
   edit(openTestJournalHostDatabase(relaunched).db)
-  const store = await openTestAgentSessionRecordStore(relaunched)
+  const store = await openTestAgentSessionRecordStore(relaunched, {
+    legacySessionTabIds: [SESSION]
+  })
   const host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
@@ -75,7 +75,7 @@ async function relaunchWith(
 const damaged = (db: Database.Database) => updateTestJournalRowJson(db, SESSION, 1, '}{')
 const savedByNewerOrca = (db: Database.Database) => {
   const epochRow = liveTestJournalRows(db, SESSION).find((row) => row.seq === 1)!
-  const newer = { ...JSON.parse(epochRow.rowJson), v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION + 1 }
+  const newer = { ...JSON.parse(epochRow.rowJson), v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION + 2 }
   updateTestJournalRowJson(db, SESSION, 1, JSON.stringify(newer))
 }
 
@@ -89,13 +89,12 @@ it.each([
     const workspaceId = hostTestState().store.getRecord(SESSION)?.location.workspaceId
     const refusal = { code: 'agent_session_journal_unreadable', details: { reason } }
 
-    await host.restoreReadableSessions([SESSION])
+    await host.seedSessionTabs([SESSION])
 
     expect(host.hasSession(SESSION)).toBe(false)
     expect(host.listSessionTabs()).toEqual([
       { sessionId: SESSION, workspaceId, agent: expect.any(String) }
     ])
-    // Every read is refused with why, and the host logs it once for the chat.
     for (let read = 0; read < 3; read += 1) {
       await expect(host.history({ sessionId: SESSION, direction: 'tail' })).rejects.toMatchObject({
         refusal

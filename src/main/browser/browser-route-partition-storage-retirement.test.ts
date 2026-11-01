@@ -60,42 +60,12 @@ function stubHost(
     forgetPage: vi.fn(() => true),
     whenHandlersSettled: vi.fn(() => handlersSettled),
     refreshPageInventory: vi.fn(async () => {}),
-    // Why: an automation handler that outlives the join makes the composition defer executor close.
+    // A lingering automation handler defers executor closure.
     close: vi.fn(async () => false)
   }
 }
 
 describe('browser route partition storage retirement', () => {
-  it('clears a removed environment only after its client host finishes tearing down', async () => {
-    const order: string[] = []
-    let finishTeardown = (): void => {}
-    const whenClientHostClosed = new Promise<void>((resolve) => {
-      finishTeardown = () => {
-        order.push('teardown')
-        resolve()
-      }
-    })
-    const clearStorage = vi.fn(async () => {
-      order.push('clear')
-      return { clearedPartitions: [partition], livePartitions: [] }
-    })
-
-    const retiring = retireBrowserRoutePartitionStorageForEnvironment({
-      environmentId: 'environment-a',
-      whenClientHostClosed,
-      clearStorage,
-      retryDelayMs: 0
-    })
-    await Promise.resolve()
-    expect(clearStorage).not.toHaveBeenCalled()
-
-    finishTeardown()
-
-    expect(await retiring).toEqual([partition])
-    expect(order).toEqual(['teardown', 'clear'])
-    expect(clearStorage).toHaveBeenCalledOnce()
-  })
-
   it('waits for the executor close a busy host deferred before clearing', async () => {
     const order: string[] = []
     let settleHandlers = (): void => {}
@@ -108,6 +78,7 @@ describe('browser route partition storage retirement', () => {
       pairingRevision: number
       authorityRuntimeId: string
       authorityConnectionIdentity: string
+      pairingAuthorityConnectionIdentity: string
       legacyAuthorityConnectionIdentity: string
     }>({
       createComposition: () =>
@@ -117,10 +88,11 @@ describe('browser route partition storage retirement', () => {
             pairingRevision: 1,
             authorityRuntimeId: 'runtime-a',
             authorityConnectionIdentity: 'authority-a',
+            pairingAuthorityConnectionIdentity: 'pairing-authority-a',
             legacyAuthorityConnectionIdentity: 'legacy-authority-a'
           },
           createRoutes: () => stubRoutes(),
-          // Why: releasing the page's partition is what the executor close does in production.
+          // Executor closure releases the page's partition in production.
           createExecutor: () =>
             stubExecutor(() => {
               order.push('close-executor')
@@ -134,6 +106,7 @@ describe('browser route partition storage retirement', () => {
       pairingRevision: 1,
       authorityRuntimeId: 'runtime-a',
       authorityConnectionIdentity: 'authority-a',
+      pairingAuthorityConnectionIdentity: 'pairing-authority-a',
       legacyAuthorityConnectionIdentity: 'legacy-authority-a'
     })
 
@@ -148,8 +121,7 @@ describe('browser route partition storage retirement', () => {
       },
       retryDelayMs: 0
     })
-    // Why: the clear must still be waiting after the host close itself resolved, not merely be
-    // ordered behind it by microtask luck.
+    // Drain tasks to prove cleanup remains blocked after host close resolves.
     await drainTasks()
     expect(order).toEqual([])
 

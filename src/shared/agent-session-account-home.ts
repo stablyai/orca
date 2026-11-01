@@ -1,6 +1,6 @@
 /** Durable account binding: existing single-directory records or OpenCode's data context. */
 
-import type { AgentSessionStoredAgent } from './agent-session-stored-agent'
+import type { AgentSessionStoredAgent } from './agent-session/lifecycle/agent-session-stored-agent'
 
 /** Account root the chat was created or adopted under, where its history was first written. An agent
  *  whose launch follows the selection starts under the account selected now instead. */
@@ -29,6 +29,10 @@ export function isLegacyAgentSessionAccountHome(
   home: AgentSessionAccountHome
 ): home is LegacyAgentSessionAccountHome {
   return !('kind' in home)
+}
+
+export function agentSessionAccountHomePath(home: AgentSessionAccountHome | null): string | null {
+  return home && isLegacyAgentSessionAccountHome(home) ? home.path : null
 }
 
 export function requireLegacyAgentSessionAccountHome(

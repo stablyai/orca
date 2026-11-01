@@ -1,13 +1,7 @@
-// `agentSession.reveal` — republishing the tab for a chat that still exists on disk.
-//
-// A surface can hold nothing but a session id: an Agent Session History row names a chat this
-// process may never have published, because `close` keeps the record and the journal but not the
-// tab, and a client drops every unpublished `agent-session` tab on each session-tabs sync. Without
-// this the row is unreachable, and the client's "retry in a moment" is advice that never comes true.
-//
-// Distinct from `agentSession.ensure`, which attaches a location the CLIENT supplies. Here the host
-// reads its own record and answers with that record's workspace and provider, so a client knowing
-// only a session id cannot aim the publication somewhere else.
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { StructuredWorkspaceUnavailable } from '../../session-tabs/structured-workspace-authority'
+// Republish an existing host-owned record's tab for history entries holding only session id; unpublished tabs disappear on sync.
+// Unlike ensure, read workspace/provider from host state so callers cannot redirect publication.
 
 import {
   agentSessionRefusalFromReference,
@@ -23,24 +17,32 @@ import {
   requireStructuredAgentAudience,
   requireStructuredHost
 } from './structured-agent-session-gate'
-import { OptionsParams } from './structured-agent-session-schemas'
+import {
+  structuredSessionSurfaceIsCurrent,
+  type StructuredSessionSurface
+} from '../../agent-session/structured-agent-session-close'
+import { RevealParams } from './structured-agent-session-schemas'
 
 export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
   defineMethod({
     name: 'agentSession.reveal',
     permission: 'workspace',
-    params: OptionsParams,
+    params: RevealParams,
     handler: async (params, ctx) => {
+      const caller = params.navigation === 'caller' ? ctx.caller : undefined
+      if (params.navigation === 'caller' && caller?.kind !== 'paired-device') {
+        throw new Error('forbidden')
+      }
       requireStructuredCapability(ctx)
       await ensureStructuredHostInstalled(ctx)
+      let publication: StructuredSessionSurface | null = null
       let revealed: StructuredAgentSessionReveal
       try {
         const host = requireStructuredHost(ctx)
         requireStructuredAgentAudience(ctx, host.sessionAgent(params.sessionId) ?? '')
         revealed = await host.revealSession(params.sessionId)
       } catch (error) {
-        // The host raises its refusal as the code itself; anything else is a genuine fault and
-        // must not be laundered into a tidy "no such chat".
+        // Translate only typed host refusal codes; genuine faults must not masquerade as missing chats.
         const code = error instanceof Error ? error.message : ''
         if (!isAgentSessionWireRefusalCode(code)) {
           throw error
@@ -54,15 +56,104 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           )
         )
       }
-      await ctx.runtime.publishStructuredAgentSessionTab({
-        workspaceId: revealed.workspaceId,
-        sessionId: revealed.sessionId,
-        agent: revealed.agent,
-        activate: true
-      })
-      // Named fields only: the host's reasons a journal did not open stay on the host.
-      const { sessionId, workspaceId, agent, readable } = revealed
-      return { ok: true as const, sessionId, workspaceId, agent, readable }
+      let workspace:
+        | Awaited<ReturnType<typeof ctx.runtime.prepareStructuredAgentSessionRevealWorkspace>>
+        | undefined
+      let effects = false
+      let saving = Promise.resolve()
+      try {
+        const host = requireStructuredHost(ctx)
+        const record = host.deps.store.getConversation(revealed.sessionId)
+        if (
+          !record ||
+          record.location.workspaceId !== revealed.workspaceId ||
+          record.provider !== revealed.agent
+        ) {
+          throw new StructuredWorkspaceUnavailable('obsolete')
+        }
+        workspace = await ctx.runtime.prepareStructuredAgentSessionRevealWorkspace(record.location)
+        const location = JSON.stringify(record.location)
+        const current = () => {
+          const now = host.deps.store.getConversation(revealed.sessionId)
+          return (
+            workspace!.current() &&
+            getStructuredAgentSessionHost() === host &&
+            now?.provider === record.provider &&
+            JSON.stringify(now?.location) === location
+          )
+        }
+        const check = () => {
+          workspace!.check()
+          if (!current()) {
+            throw new StructuredWorkspaceUnavailable('obsolete')
+          }
+        }
+        await ctx.runtime.publishStructuredAgentSessionTab({
+          workspaceAuthority: {
+            check,
+            current,
+            committed: () => {
+              effects = true
+            },
+            saving: (work) => {
+              saving = work
+            }
+          },
+          workspaceId: revealed.workspaceId,
+          sessionId: revealed.sessionId,
+          agent: revealed.agent,
+          capture: (surface) => {
+            publication = surface
+          },
+          activate: params.navigation !== 'caller',
+          ...(params.navigation ? { navigation: params.navigation } : {})
+        })
+        check()
+        if (
+          !structuredSessionSurfaceIsCurrent(
+            requireStructuredHost(ctx),
+            revealed.sessionId,
+            publication,
+            ctx.runtime
+          )
+        ) {
+          throw new Error('Chat tab publication was superseded')
+        }
+        if (
+          caller?.kind === 'paired-device' &&
+          !ctx.runtime.reopenMobileSessionTabForClient(
+            revealed.workspaceId,
+            revealed.sessionId,
+            caller.deviceId
+          )
+        ) {
+          throw new Error('Could not publish the chat to its caller.')
+        }
+        check()
+        // Return named fields only; private journal-open reasons stay on the host.
+        const { sessionId, workspaceId, agent, readable } = revealed
+        return { ok: true as const, sessionId, workspaceId, agent, readable }
+      } catch (error) {
+        if (!(error instanceof StructuredWorkspaceUnavailable)) {
+          throw error
+        }
+        return {
+          ok: false as const,
+          refusal: {
+            code:
+              error.reason === 'removed' && !effects
+                ? 'agent_session_workspace_removed'
+                : 'agent_session_operation_unknown',
+            message:
+              error.reason === 'removed'
+                ? 'This workspace is no longer available.'
+                : 'The structured agent session is not available yet. Retry in a moment.'
+          }
+        }
+      } finally {
+        const owned = workspace
+        void saving.finally(() => owned?.release())
+      }
     }
   })
 ]

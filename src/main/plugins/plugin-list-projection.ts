@@ -1,108 +1,89 @@
+import { PLUGIN_CAPABILITY_DESCRIPTIONS } from '../../shared/plugins/capabilities/plugin-capabilities'
+import { needsReconsent } from '../../shared/plugins/approval/plugin-consent-state'
+import { pluginPanelTabKey } from '../../shared/plugins/manifest/plugin-manifest'
+import type { PluginLockfile } from '../../shared/plugins/installation/plugin-install-lockfile'
+import { isInvalidDiscoveredPlugin, type DiscoveredPlugin } from './plugin-discovery'
 import {
-  PLUGIN_CAPABILITY_DESCRIPTIONS,
-  type PluginCapabilityKind
-} from '../../shared/plugins/plugin-capabilities'
-import { needsReconsent } from '../../shared/plugins/plugin-consent-state'
-import { pluginPanelTabKey } from '../../shared/plugins/plugin-manifest'
-import type { PluginLockfile } from '../../shared/plugins/plugin-install-lockfile'
-import { isInvalidDiscoveredPlugin } from './plugin-discovery'
+  pluginInstalledImageUrl,
+  type PluginHostImages
+} from '../../shared/plugins/images/plugin-image-url'
+import { pluginInstalledHostImages } from './plugin-manifest-images'
 import type { PluginService } from './plugin-service'
-import { listPluginVmRecipeCommands } from '../../shared/plugins/plugin-vm-recipe-artifact'
-import type { PluginCommandAliasActionId } from '../../shared/plugins/plugin-command-actions'
+import { listPluginVmRecipeCommands } from '../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
 import {
   isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
-  isOfficialPluginIdentity
-} from '../../shared/plugins/plugin-marketplace'
+  pluginSourceLabel,
+  splitQualifiedPluginKey
+} from '../../shared/plugins/catalog/plugin-marketplace'
+import { pluginCatalogTypes } from '../../shared/plugins/catalog/plugin-catalog-types'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import type { PluginHostListEntry, PluginHostStatus } from '../../shared/plugins/plugin-list-entry'
+import { customEditorContentKind } from '../../shared/plugins/contributions/plugin-custom-editor-contribution'
+import { pluginExecutionProfile } from '../../shared/plugins/contributions/plugin-execution-profile'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
 
-/**
- * Wire projection of installed plugins for the renderer and serve RPC.
- * `invalid` = unreadable/failed manifest; `pending` = awaiting (re-)consent;
- * `idle` = enabled with no worker running (lazy); `restarting` = waiting for
- * supervised backoff; `errored` = crashed past the budget or failed to activate.
- */
+type PluginLockEntry = PluginLockfile['plugins'][string]
 
-export type PluginListPanelEntry = {
-  id: string
-  title: string
-  icon?: string
-  tabKey: `plugin:${string}`
-}
-
-export type PluginListStatus =
-  | 'running'
-  | 'restarting'
-  | 'idle'
-  | 'pending'
-  | 'disabled'
-  | 'errored'
-  | 'invalid'
-
-export type PluginListEntry = {
-  pluginKey: string
-  /** Opaque identity of the exact capabilities and worker tier shown for review. */
-  consentFingerprint: string | null
-  name: string
-  version: string
-  publisher: string
-  description?: string
-  status: PluginListStatus
-  needsReconsent: boolean
-  error?: string
-  isDev: boolean
-  official: boolean
-  bundled: boolean
-  capabilities: { kind: PluginCapabilityKind; description: string }[]
-  panels: PluginListPanelEntry[]
-  commands: {
-    id: string
-    title: string
-    context: 'global' | 'worktree'
-    handler: { type: 'built-in'; action: PluginCommandAliasActionId } | { type: 'worker' }
-    keybindings: { key: string; when: 'global' | 'worktree' }[]
-  }[]
-  hasWorker: boolean
-  vmRecipes: {
-    id: string
-    name: string
-    description?: string
-    commands: { phase: 'create' | 'suspend' | 'resume' | 'destroy'; command: string }[]
-  }[]
-  restarts: number
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
-  source?: {
-    kind: 'local-path' | 'git' | 'marketplace' | 'bundled'
-    reference: string
-    resolvedCommit: string | null
-    contentHash: string
-    marketplace?: { reference: string; resolvedCommit: string }
+function lockEntrySource(
+  lockEntry: PluginLockEntry | undefined
+): Pick<PluginHostListEntry, 'source'> {
+  if (!lockEntry) {
+    return {}
+  }
+  return {
+    source: {
+      kind: lockEntry.source.kind,
+      reference:
+        lockEntry.source.kind === 'local-path'
+          ? lockEntry.source.path
+          : lockEntry.source.kind === 'git'
+            ? lockEntry.source.url
+            : lockEntry.source.kind === 'marketplace'
+              ? pluginSourceLabel(lockEntry.source.plugin)
+              : `bundled:${lockEntry.source.bundleId}`,
+      resolvedCommit: lockEntry.resolvedCommit,
+      contentHash: lockEntry.contentHash,
+      ...(lockEntry.source.kind === 'marketplace'
+        ? {
+            marketplace: {
+              reference: lockEntry.source.marketplace.url,
+              ref: lockEntry.source.marketplace.ref,
+              resolvedCommit: lockEntry.source.marketplace.resolvedCommit
+            }
+          }
+        : {})
+    }
   }
 }
 
+const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
+
 export async function buildPluginList(
   service: PluginService,
-  lock: PluginLockfile
-): Promise<PluginListEntry[]> {
+  lock: PluginLockfile,
+  discovered: readonly DiscoveredPlugin[] = service.getDiscovered()
+): Promise<PluginHostListEntry[]> {
   const consents = {
     pluginConsents: service.options.getPluginConsents(),
     disabledPlugins: service.options.getDisabledPlugins()
   }
   return mapWithConcurrency(
-    service.getDiscovered(),
+    discovered,
     PLUGIN_LIST_PROJECTION_CONCURRENCY,
-    async (plugin, index): Promise<PluginListEntry> => {
+    async (plugin, index): Promise<PluginHostListEntry> => {
       if (isInvalidDiscoveredPlugin(plugin)) {
-        // Why: invalid dev paths can contain private absolute desktop paths;
-        // never project those as identity over desktop/serve transports.
+        // Invalid dev paths may expose private absolute paths; use opaque identities for clients.
         const fallbackKey = plugin.pluginKey ?? `invalid-development-plugin-${index + 1}`
+        // Why the lock entry: it says which catalog installed it, so the list can offer an update.
+        const lockEntry =
+          !plugin.isDev && plugin.pluginKey ? lock.plugins[plugin.pluginKey] : undefined
         return {
           pluginKey: fallbackKey,
           consentFingerprint: null,
           name: fallbackKey,
-          version: '0.0.0',
+          version: lockEntry?.version ?? '0.0.0',
           publisher: '',
           status: 'invalid' as const,
           needsReconsent: false,
@@ -112,17 +93,20 @@ export async function buildPluginList(
           bundled: false,
           capabilities: [],
           panels: [],
+          customEditors: [],
+          newFiles: [],
           commands: [],
           hasWorker: false,
           vmRecipes: [],
-          restarts: 0
+          restarts: 0,
+          ...lockEntrySource(lockEntry)
         }
       }
       const activation = service.activationState(plugin)
       const worker = service.workerState(plugin.pluginKey)
       const activationError = service.activationError(plugin.pluginKey)
       const killListEntry = service.options.getPluginKillListEntry?.(plugin.pluginKey) ?? null
-      let status: PluginListStatus
+      let status: PluginHostStatus
       if (activation === 'disabled') {
         status = 'disabled'
       } else if (activation === 'pending') {
@@ -135,9 +119,7 @@ export async function buildPluginList(
         status = worker.state === 'running' ? 'running' : 'idle'
       }
       const candidateLockEntry = lock.plugins[plugin.pluginKey]
-      // Why: never show provenance for bytes other than the current executable
-      // identity. Dev overrides execute outside the immutable installed tree and
-      // must never inherit the shadowed install's pinned-source attribution.
+      // Show provenance only for current immutable bytes; dev overrides cannot inherit installed attribution.
       const lockEntry =
         candidateLockEntry &&
         !plugin.isDev &&
@@ -145,11 +127,15 @@ export async function buildPluginList(
         candidateLockEntry.contentHash === plugin.contentHash
           ? candidateLockEntry
           : undefined
+      // Why format 2 only: the image protocol serves no format 1 image, so a URL would 404.
+      const contributionIcon = (slot: string, path: string | undefined) =>
+        path !== undefined && plugin.manifest.manifestVersion === 2
+          ? { icon: pluginInstalledImageUrl(plugin.pluginKey, plugin.contentHash ?? 'dev', slot) }
+          : {}
       const bundled = lockEntry?.source.kind === 'bundled'
       const official =
         bundled ||
         (lockEntry?.source.kind === 'marketplace' &&
-          isOfficialPluginIdentity(plugin.pluginKey) &&
           isOfficialMarketplaceGitSource(lockEntry.source.marketplace.url) &&
           isOfficialOrganizationGitSource(lockEntry.source.plugin.url))
       return {
@@ -157,8 +143,16 @@ export async function buildPluginList(
         consentFingerprint: plugin.consentFingerprint,
         name: plugin.manifest.name,
         version: plugin.manifest.version,
-        publisher: plugin.manifest.publisher,
+        publisher: splitQualifiedPluginKey(plugin.pluginKey)?.publisher ?? '',
         ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
+        execution: pluginExecutionProfile(plugin.manifest),
+        types: pluginCatalogTypes(plugin.manifest),
+        ...withImages(
+          pluginInstalledHostImages(plugin.pluginKey, plugin.contentHash, plugin.manifest)
+        ),
+        ...(plugin.manifest.license ? { license: plugin.manifest.license } : {}),
+        ...(plugin.manifest.homepage ? { homepage: plugin.manifest.homepage } : {}),
+        ...(plugin.manifest.repository ? { repository: plugin.manifest.repository } : {}),
         status,
         needsReconsent: needsReconsent(plugin.pluginKey, plugin.consentFingerprint, consents),
         ...(status === 'errored'
@@ -176,6 +170,21 @@ export async function buildPluginList(
           title: panel.title,
           ...(panel.icon ? { icon: panel.icon } : {}),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
+        })),
+        customEditors: plugin.manifest.contributes.customEditors.map((editor, index) => ({
+          id: editor.id,
+          title: editor.title,
+          extensions: editor.extensions,
+          filenames: editor.filenames,
+          priority: editor.priority ?? 'default',
+          contentKind: customEditorContentKind(editor),
+          ...contributionIcon(`editor-${index}`, editor.icon)
+        })),
+        newFiles: plugin.manifest.contributes.newFiles.map((newFile, index) => ({
+          id: newFile.id,
+          title: newFile.title,
+          extension: newFile.extension,
+          ...contributionIcon(`new-file-${index}`, newFile.icon)
         })),
         commands: service.contentPacks.commands.preview(plugin.pluginKey).map((command) => ({
           id: command.id,
@@ -200,31 +209,7 @@ export async function buildPluginList(
               }
             }
           : {}),
-        ...(lockEntry
-          ? {
-              source: {
-                kind: lockEntry.source.kind,
-                reference:
-                  lockEntry.source.kind === 'local-path'
-                    ? lockEntry.source.path
-                    : lockEntry.source.kind === 'git'
-                      ? lockEntry.source.url
-                      : lockEntry.source.kind === 'marketplace'
-                        ? lockEntry.source.plugin.url
-                        : `bundled:${lockEntry.source.bundleId}`,
-                resolvedCommit: lockEntry.resolvedCommit,
-                contentHash: lockEntry.contentHash,
-                ...(lockEntry.source.kind === 'marketplace'
-                  ? {
-                      marketplace: {
-                        reference: lockEntry.source.marketplace.url,
-                        resolvedCommit: lockEntry.source.marketplace.resolvedCommit
-                      }
-                    }
-                  : {})
-              }
-            }
-          : {})
+        ...lockEntrySource(lockEntry)
       }
     }
   )

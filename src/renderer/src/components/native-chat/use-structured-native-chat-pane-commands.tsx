@@ -5,6 +5,7 @@ import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { isOrcaSessionId } from '../../../../shared/orca-session-address'
 import { resolveStructuredSessionOrcaSessionId } from '../../runtime/structured-session-orca-session-id'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
+import type { NativeChatHandOff } from './use-native-chat-hand-off'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import {
@@ -14,11 +15,11 @@ import {
 } from './use-native-chat-context-menu'
 import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
-import type { NativeChatHandOff } from './use-native-chat-hand-off'
 
 export function useStructuredNativeChatPaneCommands({
   pane,
   handOff,
+  ownerWorktreeId,
   rootRef,
   composerRef,
   questionAnswerInputRef,
@@ -26,6 +27,7 @@ export function useStructuredNativeChatPaneCommands({
 }: {
   pane: Omit<NativeChatStructuredViewProps, 'mode'>
   handOff: NativeChatHandOff
+  ownerWorktreeId: string | null
   rootRef: RefObject<HTMLDivElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
   questionAnswerInputRef: RefObject<HTMLInputElement | null>
@@ -64,16 +66,9 @@ export function useStructuredNativeChatPaneCommands({
       right: formatShortcutLabel('terminal.splitRight', keybindings),
       down: formatShortcutLabel('terminal.splitDown', keybindings)
     },
-    workspaceLayout:
-      groupId && terminalPaneActions === undefined
-        ? {
-            unifiedTabId: tabId,
-            groupId,
-            shortcutLabels: {
-              right: formatShortcutLabel('terminal.splitRight', keybindings),
-              down: formatShortcutLabel('terminal.splitDown', keybindings)
-            }
-          }
+    chatPane:
+      ownerWorktreeId && groupId && terminalPaneActions === undefined
+        ? { tabId, worktreeId: ownerWorktreeId, groupId }
         : undefined
   })
   const onKeyDownCapture = useCallback<KeyboardEventHandler<HTMLDivElement>>(

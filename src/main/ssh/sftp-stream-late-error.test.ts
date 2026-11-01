@@ -6,11 +6,10 @@ import { PassThrough } from 'node:stream'
 import type { SFTPWrapper } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { uploadBuffer, uploadFile, writeStringViaSftp } from './sftp-upload'
-import { writeRelayFile } from '../managed-server/install/remote-install-transfers'
+import { writeRemoteInstallFile } from '../managed-server/install/remote-install-transfers'
 import type { SshConnection } from './connection/ssh-connection'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
-/** The exact error ssh2 builds from a STATUS reply of SSH_FX_NO_SUCH_FILE. */
 function sftpNoSuchFileError(): Error {
   return Object.assign(new Error('file does not exist'), { code: 2 })
 }
@@ -35,10 +34,7 @@ function sftpDoubleReturning(stream: PassThrough): SFTPWrapper {
 }
 
 describe('late SFTP stream errors', () => {
-  // ssh2 emits the OPEN failure from inside the protocol parser. If no listener is left,
-  // Node throws it synchronously up through Socket.emit('data') and the main process dies
-  // (#15479) — uncaught exceptions are re-thrown by installUncaughtPipeErrorGuard, unlike
-  // rejections, which are only logged.
+  // Late OPEN errors throw synchronously from ssh2's parser without a surviving listener, killing main (#15479).
   it('does not throw when a write stream fails after uploadFile settles', async () => {
     const stream = new PassThrough()
     stream.resume()
@@ -84,14 +80,12 @@ describe('late SFTP stream errors', () => {
 
 describe('sandboxed SFTP subsystem diagnosis', () => {
   it('leaves a permission refusal as itself rather than blaming a chroot', async () => {
-    // SSH_FX_PERMISSION_DENIED is a mode/ownership refusal on a path the subsystem can
-    // see -- a read-only home, a root-owned parent, a quota. Rewriting it into "your
-    // bastion chroots SFTP" sends the user to fix ProxyJump for a chmod.
+    // Permission denial names visible paths; mislabeling it as sandboxing sends users to fix ProxyJump for chmod.
     const conn = {
       writeFile: () => Promise.reject(Object.assign(new Error('permission denied'), { code: 3 }))
     } as unknown as SshConnection
 
-    const failure: unknown = await writeRelayFile(
+    const failure: unknown = await writeRemoteInstallFile(
       conn,
       getRemoteHostPlatform('linux-x64'),
       '/home/user/.orca-remote/relay-1/.version',
@@ -112,7 +106,7 @@ describe('sandboxed SFTP subsystem diagnosis', () => {
 
     // Windows hosts have no exec-stdin fallback; POSIX hosts stream instead (exec-fallback tests).
     await expect(
-      writeRelayFile(
+      writeRemoteInstallFile(
         conn,
         getRemoteHostPlatform('win32-x64'),
         'C:/Users/user/.orca-remote/relay-1/.version',
@@ -127,7 +121,7 @@ describe('sandboxed SFTP subsystem diagnosis', () => {
     } as unknown as SshConnection
 
     await expect(
-      writeRelayFile(conn, getRemoteHostPlatform('linux-x64'), '/home/user/x', 'v1')
+      writeRemoteInstallFile(conn, getRemoteHostPlatform('linux-x64'), '/home/user/x', 'v1')
     ).rejects.toThrow('Connection lost')
   })
 })

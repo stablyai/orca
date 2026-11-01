@@ -6,10 +6,22 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK, openAcpAdapterRig } from './acp-structured-adapter.test-support'
 
-afterEach(() => closeProviderTimelineRigs())
+const ownedDirectories = new Set<string>()
+
+afterEach(async () => {
+  try {
+    await closeProviderTimelineRigs()
+  } finally {
+    await Promise.all(
+      [...ownedDirectories].map((directory) => rm(directory, { recursive: true, force: true }))
+    )
+    ownedDirectories.clear()
+  }
+})
 
 it('gives each process its own temp folder, removed at exit, and clears an earlier run at the first start', async () => {
   const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-acp-temp-'))
+  ownedDirectories.add(dataDirectory)
   const root = join(dataDirectory, 'acp-temp', 'grok')
   const leftover = join(root, 'run-earlier-host', 'bundle')
   await mkdir(leftover, { recursive: true })
@@ -25,5 +37,4 @@ it('gives each process its own temp folder, removed at exit, and clears an earli
   expect(existsSync(env?.TMPDIR ?? '')).toBe(true)
   rig.child().exit()
   await vi.waitFor(() => expect(existsSync(env?.TMPDIR ?? '')).toBe(false))
-  await rm(dataDirectory, { recursive: true, force: true })
 })

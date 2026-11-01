@@ -101,8 +101,7 @@ function classifyParsedCronSchedule(rule: ParsedCron): AutomationCronScheduleCla
   const unrestrictedMonth = setContainsRange(rule.months, 1, 12)
   const everyDayOfMonth = setContainsRange(rule.daysOfMonth, 1, 31)
   const everyDayOfWeek = setContainsRange(rule.daysOfWeek, 0, 6)
-  // Labels describe the days the rule actually fires on, so they need coverage of the
-  // matched set, not the lexical restriction flags that pick OR over AND.
+  // Describe matched days, not lexical flags selecting AND/OR.
   const matchesEitherDayField = rule.dayOfMonthRestricted && rule.dayOfWeekRestricted
   const everyDay = matchesEitherDayField
     ? everyDayOfMonth || everyDayOfWeek
@@ -172,10 +171,7 @@ function toScheduleDescriptor(
   return descriptor
 }
 
-/**
- * Parse a cron or RRULE expression into its locale-free shape so callers can render their own
- * copy. Same single parse path as `formatAutomationSchedule`, minus the English label.
- */
+/** Share cron/RRULE parsing with formatAutomationSchedule, returning locale-free shape for caller-owned copy. */
 export function describeAutomationSchedule(
   scheduleExpression: string
 ): AutomationScheduleDescriptor {

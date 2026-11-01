@@ -1,5 +1,5 @@
 import type { ParsedTaskQuery } from '../../../../shared/task-query'
-// Why: issue numbers follow creation order, so this sort aligns gh's PR rows with numbered Search API issue pages.
+// Creation order aligns rich PR rows with numbered Search API issue pages.
 export const WORK_ITEM_NUMBER_SORT_QUALIFIER = 'sort:created-desc'
 
 export function buildSearchQueryString(
@@ -15,7 +15,7 @@ export function buildSearchQueryString(
   if (query.state === 'open') {
     parts.push('is:open')
   } else if (query.state === 'closed') {
-    // Why: GitHub search treats merged PRs as closed; exclude merged so "Closed" means closed-without-merge.
+    // GitHub considers merged PRs closed; exclude them from the closed-without-merge view.
     parts.push('is:closed')
     if (query.scope !== 'issue') {
       parts.push('-is:merged')

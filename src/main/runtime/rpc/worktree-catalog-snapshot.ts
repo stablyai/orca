@@ -1,50 +1,79 @@
 import { createHash } from 'node:crypto'
-import { isDeepStrictEqual } from 'node:util'
 import type {
   RuntimeWorktreePsConditionalResult,
   RuntimeWorktreePsResult
 } from '../../../shared/runtime-types'
 
-// Why: 192 bits of a sha256 over the serialized catalog. Accidental collision is
-// impossible at any realistic poll rate, and this is not an auth boundary.
+// Use 192 SHA-256 bits for practical collision resistance; this is catalog identity, not authentication.
 const SNAPSHOT_ID_LENGTH = 32
+// Why: home, the host screen and other phones each poll their own base; a dozen covers them without holding rows.
+const RECENT_SNAPSHOT_LIMIT = 16
 
-type MemoizedCatalogId = {
-  result: RuntimeWorktreePsResult
+// Row hashes only, never row content: eviction costs one full reply, never correctness.
+const recentRowHashes = new Map<string, readonly string[]>()
+
+function digest(value: string): string {
+  return createHash('sha256').update(value).digest('base64url').slice(0, SNAPSHOT_ID_LENGTH)
+}
+
+function identify(result: RuntimeWorktreePsResult): {
   snapshotId: string
+  rowHashes: string[]
+} {
+  const rowHashes = result.worktrees.map((row) => digest(JSON.stringify(row)))
+  const snapshotId = digest(JSON.stringify({ ...result, worktrees: rowHashes }))
+  return { snapshotId, rowHashes }
 }
 
-// Why: a pure memo over the most recent catalog. Because ids are derived from content
-// rather than from cache state, dropping or thrashing this slot costs CPU and nothing
-// else — it can never produce a wrong answer, so it needs no scoping, eviction policy,
-// or per-caller isolation. Serializing every poll instead would cost ~3x the compare.
-let memoizedId: MemoizedCatalogId | null = null
-
-function worktreeCatalogSnapshotId(result: RuntimeWorktreePsResult): string {
-  if (memoizedId && isDeepStrictEqual(memoizedId.result, result)) {
-    return memoizedId.snapshotId
+function remember(snapshotId: string, rowHashes: readonly string[]): void {
+  // Delete before set so the entry moves to the newest LRU position.
+  recentRowHashes.delete(snapshotId)
+  recentRowHashes.set(snapshotId, rowHashes)
+  if (recentRowHashes.size > RECENT_SNAPSHOT_LIMIT) {
+    const oldest = recentRowHashes.keys().next().value
+    if (oldest !== undefined) {
+      recentRowHashes.delete(oldest)
+    }
   }
-  const serialized = JSON.stringify(result)
-  const snapshotId = createHash('sha256')
-    .update(serialized)
-    .digest('base64url')
-    .slice(0, SNAPSHOT_ID_LENGTH)
-  // Why: caller-owned mutation must not let an old id label new catalog content.
-  memoizedId = { result: JSON.parse(serialized) as RuntimeWorktreePsResult, snapshotId }
-  return snapshotId
 }
 
-// Why: content-addressed like an HTTP ETag, so snapshot ownership lives entirely in the
-// id. Any number of concurrent clients, any `limit`, and any runtime restart stay correct
-// by construction: ids match only when the catalogs are byte-identical, which is exactly
-// when `unchanged` is the right answer.
+function rowsFromBase(
+  result: RuntimeWorktreePsResult,
+  rowHashes: readonly string[],
+  baseRowHashes: readonly string[]
+): (number | RuntimeWorktreePsResult['worktrees'][number])[] {
+  const baseIndexByHash = new Map<string, number>()
+  baseRowHashes.forEach((hash, index) => {
+    if (!baseIndexByHash.has(hash)) {
+      baseIndexByHash.set(hash, index)
+    }
+  })
+  return result.worktrees.map((row, index) => baseIndexByHash.get(rowHashes[index]!) ?? row)
+}
+
+// ETag-style content identity survives concurrency, limits and restarts; unchanged is valid exactly when serialized catalogs match.
 export function resolveWorktreeCatalogSnapshot(
   result: RuntimeWorktreePsResult,
-  afterSnapshotId: string | null
+  afterSnapshotId: string | null,
+  options?: { acceptRowDelta?: boolean }
 ): RuntimeWorktreePsConditionalResult {
-  const snapshotId = worktreeCatalogSnapshotId(result)
+  const { snapshotId, rowHashes } = identify(result)
+  const baseRowHashes =
+    options?.acceptRowDelta === true && afterSnapshotId !== null
+      ? recentRowHashes.get(afterSnapshotId)
+      : undefined
+  remember(snapshotId, rowHashes)
   if (afterSnapshotId === snapshotId) {
     return { unchanged: true, snapshotId }
+  }
+  if (afterSnapshotId !== null && baseRowHashes) {
+    const { worktrees: _worktrees, ...envelope } = result
+    return {
+      ...envelope,
+      snapshotId,
+      baseSnapshotId: afterSnapshotId,
+      rowsFromBase: rowsFromBase(result, rowHashes, baseRowHashes)
+    }
   }
   return { ...result, snapshotId }
 }

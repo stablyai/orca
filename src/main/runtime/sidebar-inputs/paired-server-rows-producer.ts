@@ -17,11 +17,12 @@ import {
 } from '../mobile-desktop-relay/mobile-relay-host-descriptions'
 import type { ServerWorktreeRows } from '../mobile-desktop-relay/mobile-relay-host-catalog'
 import {
-  SERVER_FETCH_TIMEOUT_MS,
   SERVER_WORKTREE_LIMIT,
   WorktreePsReplySchema,
   stampServerWorktreeRows
 } from '../mobile-desktop-relay/server-worktree-fetch'
+import type { PairedServerCatalog } from '../../../shared/sidebar-list/sidebar-project-catalog'
+import { fetchPairedServerCatalog } from '../../../shared/sidebar-list/paired-server-catalog'
 
 // Owner-approved fallback for changes a server announces no event for (status-only, older servers).
 export const FALLBACK_REFRESH_MS = 30_000
@@ -31,22 +32,22 @@ type ServerEntry = {
   fence: string
   identity: Pick<MobileDesktopRelayHostListing, 'pairingRevision' | 'runtimeId'>
   inContact: boolean
+  /** Moves on every contact change, so an answer can tell it predates a gap. */
+  contactGeneration: number
   /** Null until a fetch under this pairing answered. */
   rows: MobileRelayServerWorktreeRow[] | null
   /** The rows are the server's answer since it last came into contact; else unverifiable. */
   confirmed: boolean
+  /** Its repos and project groups as last fetched under this pairing; null until one answered. */
+  catalog: PairedServerCatalog | null
+  /** A catalog change may have gone unread: set on contact and on a catalog change event. */
+  catalogStale: boolean
   watch: MobileDesktopRelayHostWatch | null
   refreshing: Promise<void> | null
   refreshAgain: boolean
 }
 
-/**
- * The desktop's one live set of paired-server workspace rows, needing no window. A server is
- * refetched when it comes into contact, on each of its change events, when a reader asks, and
- * every 30 s while the list is showing. A server's last rows read unverifiable once it loses
- * contact, until a fetch answers again. Only removing or re-pairing a server drops them; a fetch
- * that answers replaces them, deletions included.
- */
+/** Cache paired-server rows without a window; refresh on contact/events/reads and every 30s while visible. Contact gaps make rows unverifiable until a post-gap fetch; only removal/re-pair drops them. */
 export class PairedServerRowsProducer implements ServerWorktreeRows {
   private readonly servers = new Map<string, ServerEntry>()
   private hosts: MobileDesktopRelayHosts | null = null
@@ -112,8 +113,11 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
           fence: relayHostFence(host.identity),
           identity: host.identity,
           inContact: false,
+          contactGeneration: 0,
           rows: null,
           confirmed: false,
+          catalog: null,
+          catalogStale: true,
           watch: null,
           refreshing: null,
           refreshAgain: false
@@ -125,7 +129,9 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
       const inContact = shown.get(entry.environmentId)?.health === 'available'
       if (inContact !== entry.inContact) {
         entry.inContact = inContact
+        entry.contactGeneration += 1
         entry.confirmed = false
+        entry.catalogStale ||= inContact
         this.revision.bump()
       }
       // Why current(): a replaced transport can end the stream without telling it.
@@ -187,14 +193,20 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     }
   }
 
+  /** Each server's catalog as last fetched, kept like its rows while it is out of contact. */
+  catalogs(): PairedServerCatalog[] {
+    return [...this.servers.values()].flatMap((entry) => entry.catalog ?? [])
+  }
+
   private watch(hosts: MobileDesktopRelayHosts, entry: ServerEntry): void {
     const current = (): boolean => this.servers.get(entry.environmentId) === entry
     // Ready fires on every (re)connect, so contact and a missed-event replay both count as changes.
     const watch = hosts.watchChanges({ environmentId: entry.environmentId }, entry.identity, {
-      onChange: () => {
+      onChange: ({ catalog }) => {
         if (current()) {
           // A fetch already in flight may predate this change, so one more runs after it.
           entry.refreshAgain ||= entry.refreshing !== null
+          entry.catalogStale ||= catalog
           void this.refresh(entry.environmentId)
         }
       },
@@ -222,21 +234,33 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
   }
 
   private async fetch(hosts: MobileDesktopRelayHosts, entry: ServerEntry): Promise<void> {
-    let response: Awaited<ReturnType<MobileDesktopRelayHosts['call']>> | null = null
-    try {
-      response = await hosts.call(
-        { environmentId: entry.environmentId },
-        'worktree.ps',
-        { limit: SERVER_WORKTREE_LIMIT, supportsWorktreeVisibilitySourceDefaults: true },
-        // Why the transport bound too: it ends the hung call, so the next request fetches afresh.
-        { timeoutMs: SERVER_FETCH_TIMEOUT_MS, expected: entry.identity }
-      )
-    } catch {
-      // An unreachable server keeps its last rows.
-    }
-    // Why: an answer that lands after a re-pair or removal belongs to the old pairing.
+    const { contactGeneration } = entry
+    const call = async (method: string, params?: unknown) =>
+      hosts.call({ environmentId: entry.environmentId }, method, params, {
+        // Readers consume cached rows, so use the normal transport deadline to accept slow answers while bounding hung calls.
+        expected: entry.identity
+      })
+    // Only on contact, ready, a replay or reposChanged, which every catalog write announces.
+    const readCatalog = entry.catalogStale
+    entry.catalogStale = false
+    const [response, catalog] = await Promise.all([
+      call('worktree.ps', {
+        limit: SERVER_WORKTREE_LIMIT,
+        supportsWorktreeVisibilitySourceDefaults: true
+      }).catch(() => null), // An unreachable server keeps its last rows.
+      readCatalog
+        ? fetchPairedServerCatalog(entry.environmentId, call, entry.catalog).catch(() => null)
+        : null
+    ])
+    // Discard replies from pairings replaced or removed while fetching.
     if (this.servers.get(entry.environmentId) !== entry) {
       return
+    }
+    if (catalog) {
+      entry.catalog = catalog
+      this.revision.bump()
+    } else if (readCatalog) {
+      entry.catalogStale = true
     }
     const reply = response?.ok ? WorktreePsReplySchema.safeParse(response.result) : null
     if (!reply?.success) {
@@ -244,7 +268,8 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
       return
     }
     entry.rows = stampServerWorktreeRows(entry.environmentId, reply.data.worktrees)
-    entry.confirmed = entry.inContact
+    // An answer from before a contact gap may keep its rows, but cannot vouch for them now.
+    entry.confirmed = entry.inContact && entry.contactGeneration === contactGeneration
     // Every answer moves the revision: rows carry activity that changes without a catalog event.
     this.revision.bump()
   }

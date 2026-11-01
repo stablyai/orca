@@ -1,19 +1,11 @@
-/**
- * Which activation fence this run holds, so every remote step it issues can prove it still does.
- *
- * Age only says a holder went quiet, not that it cannot act: a desktop suspended past the stale
- * window resumes believing it owns the fence a successor has since taken (Astra pass 8). Each
- * holder writes a generation token into the lock it creates, and each of its commands checks that
- * token on the host, in the same command as the step, so a superseded holder aborts instead of
- * launching, mutating state, or deleting the successor's fence and journal.
- */
+// Resumed stale holders must prove their generation on-host before every step, preventing writes or release under a successor's fence.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { isSshCommandExitError } from '../../ssh/remote-exec/remote-exec-command'
 
 export const ORCAD_FENCE_OWNER_FILENAME = '.orca-fence-owner'
 export const ORCAD_FENCE_LOST_MARKER = '__ORCAD_FENCE_LOST__'
-/** EX_TEMPFAIL: the step did not run, and retrying under this fence never will. */
+/** EX_TEMPFAIL: this superseded generation cannot retry its step. */
 export const ORCAD_FENCE_LOST_EXIT = 75
 
 export type OrcadFence = { lockDir: string; token: string }
@@ -37,7 +29,6 @@ export class OrcadFenceLostError extends Error {
   }
 }
 
-/** A POSIX test that succeeds only while the lock still carries this run's token. */
 export function posixOrcadFenceOwnedTest(fence: OrcadFence): string {
   const owner = quotePosixShell(
     `${fence.lockDir.replace(/\/+$/u, '')}/${ORCAD_FENCE_OWNER_FILENAME}`
@@ -49,10 +40,7 @@ export function posixOrcadFenceGuard(fence: OrcadFence): string {
   return `${posixOrcadFenceOwnedTest(fence)} || { echo ${ORCAD_FENCE_LOST_MARKER}; exit ${ORCAD_FENCE_LOST_EXIT}; };`
 }
 
-/**
- * Classified from the exit status and the step's own stdout, never the message: the message
- * quotes the command, and every fenced command carries the guard's marker text.
- */
+/** Use exit status and stdout; error messages quote commands containing the marker even when no guard failed. */
 export function isOrcadFenceLost(error: unknown): boolean {
   if (!isSshCommandExitError(error)) {
     return false

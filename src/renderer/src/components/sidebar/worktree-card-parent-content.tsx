@@ -9,6 +9,7 @@ import { WorktreeCardPortsDetails } from './WorktreeCardPorts'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import { WorktreeCardSecondaryRows } from './worktree-card-secondary-rows'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
+import { useWslHostOffForRepo } from './use-wsl-host-off-review'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
 export function WorktreeCardParentContent({
@@ -20,6 +21,7 @@ export function WorktreeCardParentContent({
 }): React.JSX.Element {
   const {
     worktree,
+    repo,
     affiliateListMode,
     newCardStyle,
     showStatus,
@@ -66,6 +68,7 @@ export function WorktreeCardParentContent({
     hoverBranchName,
     hoverWorkspaceTitle
   } = presentation
+  const reviewStale = useWslHostOffForRepo(repo)
 
   const identityContent = (
     <div
@@ -110,13 +113,17 @@ export function WorktreeCardParentContent({
           hoverIssue && 'url' in hoverIssue && hoverIssue.url ? handleOpenIssueInBrowser : undefined
         }
         onOpenLinearIssueInOrca={linearIssue?.url ? handleOpenLinearIssueInOrca : undefined}
-        onOpenReviewInOrca={
-          hoverReview?.url && hoverReview.provider === 'github' ? handleOpenReviewInOrca : undefined
-        }
+        onOpenReviewInOrca={repo ? handleOpenReviewInOrca : undefined}
         onOpenReviewInBrowser={hoverReview?.url ? handleOpenReviewInBrowser : undefined}
         onOpenAutomation={affiliateListMode ? undefined : handleOpenAutomation}
         onOpenAutomationRun={affiliateListMode ? undefined : handleOpenAutomationRun}
-        onUnlinkReview={!affiliateListMode && canUnlinkReview ? handleUnlinkReview : undefined}
+        onUnlinkReview={
+          !affiliateListMode &&
+          (canUnlinkReview ||
+            getWorkspaceAttachments(worktree).some((item) => item.type !== 'issue'))
+            ? handleUnlinkReview
+            : undefined
+        }
       >
         {identityContent}
       </WorktreeCardDetailsHover>
@@ -156,11 +163,11 @@ export function WorktreeCardParentContent({
             reviewChecks={reviewChecks.total > 0 ? reviewChecks : undefined}
             newCardStyle={newCardStyle}
             hasBranchIdentity={Boolean(branchIdentityDisplay)}
+            reviewStale={reviewStale}
           />
         </div>
       ) : null}
 
-      {/* Content area */}
       <div
         className={cn(
           'flex min-w-0 flex-1 flex-col gap-1.5',

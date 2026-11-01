@@ -1,7 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-// A chat at rest in a repo whose own config may pick its model: a client that takes an answer naming
-// no model gets the folder's answer, while one that needs a model keeps the account default and
-// every other part of the read, never a refusal.
+// At-rest repo config can determine model: clients accepting omission get repo defaults; others keep account model and the remaining catalog, never refusal.
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -62,7 +60,11 @@ async function readOptions(client: typeof OLDER_CLIENT | typeof CURRENT_CLIENT) 
 
 /** A Codex chat with no pick, at rest in a repo; `configured` gives the repo a `.codex/config.toml`
  *  that sets the effort. */
-async function chatAtRest(repoConfig: { configured: boolean }): Promise<void> {
+async function chatAtRest(repoConfig: {
+  configured: boolean
+  unreadableAccount?: boolean
+  complete?: boolean
+}): Promise<ReturnType<typeof createAgentModelCatalogService>> {
   await foundRestTestChat(rig)
   // The chat never picked: its next start runs whatever its config resolves.
   await rig.store.replaceSessionOptions({
@@ -78,7 +80,7 @@ async function chatAtRest(repoConfig: { configured: boolean }): Promise<void> {
     await writeFile(join(repo, '.codex', 'config.toml'), 'model_reasoning_effort = "high"\n')
   }
   const store = new AgentModelCatalogStore()
-  // Not inline: this base's listing still requires the tier map that main has since dropped.
+  // Keep this base's required tier map until its listing contract changes.
   const listing = {
     models: [
       {
@@ -103,28 +105,52 @@ async function chatAtRest(repoConfig: { configured: boolean }): Promise<void> {
   )
   const modelCatalog = createAgentModelCatalogService({
     store,
+    getConversation: (sessionId) => rig.store.getConversation(sessionId) ?? undefined,
     getRecord: (sessionId) => rig.store.getRecord(sessionId) ?? undefined,
     drivesRecord: () => true,
     resolveAccountHome: async () => rig.store.getRecord(SESSION)!.accountHome,
+    ...(repoConfig.complete
+      ? {
+          probes: {
+            codex: async () => ({
+              ...listing,
+              complete: true,
+              configured: { model: 'gpt-5.5', effort: repoConfig.configured ? 'high' : 'medium' }
+            })
+          }
+        }
+      : {}),
     listingNamesConfiguredModel: new Set(['codex']),
     recordWorkspacePath: async () => repo,
     agentReadsProjectModelConfig,
     workspaceMayOverrideDefaultModel
   })
-  await rig.restart({ modelCatalog })
+  await rig.restart({
+    modelCatalog,
+    launchAccountHome: repoConfig.unreadableAccount
+      ? () => {
+          throw new Error('account unreadable')
+        }
+      : undefined
+  })
+  if (repoConfig.complete) {
+    await modelCatalog.read({
+      agent: 'codex',
+      sessionId: SESSION,
+      inSessionWorkspace: true,
+      waitForListing: true
+    })
+  }
   setStructuredAgentSessionHost(rig.host)
   rig.adapter.acquire.mockClear()
+  return modelCatalog
 }
 
 beforeEach(async () => {
   rig = await createRestTestRig({ idleSweep: { intervalMs: 3_600_000 } })
   setStructuredAgentSessionHost(rig.host)
   const runtime = new OrcaRuntimeService()
-  vi.spyOn(runtime, 'getClientSettings').mockImplementation(
-    () =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the RPC gate reads only this one setting.
-      ({ experimentalNativeChat: true }) as ReturnType<OrcaRuntimeService['getClientSettings']>
-  )
+
   dispatcher = new RpcDispatcher({ runtime, methods: STRUCTURED_AGENT_SESSION_METHODS })
 })
 
@@ -160,12 +186,59 @@ describe('options at rest in a repo whose config may pick the model', () => {
 })
 
 describe('options at rest in a repo with no config of its own', () => {
+  it('keeps saved aliases and effort on unknown identity, including for older clients', async () => {
+    await chatAtRest({ configured: false, unreadableAccount: true })
+    const current = await readOptions(CURRENT_CLIENT)
+    expect(current).toMatchObject({ ok: true, result: { current: {} } })
+    expect(current).not.toHaveProperty('result.current.model')
+    expect(await readOptions(OLDER_CLIENT)).toMatchObject({
+      ok: true,
+      result: {
+        current: { model: '' },
+        models: [{ id: '', label: 'Model not reported', isDefault: false, efforts: [] }],
+        conversationCommands: ['clear']
+      }
+    })
+    const options = { model: 'opus[1m]', effort: 'max' }
+    await rig.store.replaceSessionOptions({
+      sessionId: SESSION,
+      fence: rig.store.getRecord(SESSION)!.lease.runtimeFence,
+      options,
+      now: rig.clock.now
+    })
+    for (const client of [CURRENT_CLIENT, OLDER_CLIENT]) {
+      expect(await readOptions(client)).toMatchObject({ ok: true, result: { current: options } })
+    }
+    expect(rig.store.getRecord(SESSION)?.options).toEqual(options)
+    expect(rig.adapter.acquire).not.toHaveBeenCalled()
+  })
+
   it('names the default model and its effort for a client that needs a model', async () => {
-    await chatAtRest({ configured: false })
+    const catalog = await chatAtRest({ configured: false })
 
     expect(await readOptions(OLDER_CLIENT)).toMatchObject({
       ok: true,
       result: { current: { model: 'gpt-5.5', effort: 'medium' } }
     })
+    const current = await readOptions(CURRENT_CLIENT)
+    expect(current).toMatchObject({ ok: true })
+    expect(current).not.toHaveProperty('result.current.model')
+    expect(current).not.toHaveProperty('result.current.effort')
+    expect(await catalog.read({ agent: 'codex', savedOnly: true })).toEqual({ origin: 'unknown' })
+    expect(rig.store.getRecord(SESSION)!.options).toEqual({})
   })
+})
+
+describe('completed discovery in the exact project scope', () => {
+  it.each([OLDER_CLIENT, CURRENT_CLIENT])(
+    'shows what the project actually runs to $clientId',
+    async (client) => {
+      await chatAtRest({ configured: true, complete: true })
+      expect(await readOptions(client)).toMatchObject({
+        ok: true,
+        result: { current: { model: 'gpt-5.5', effort: 'high' } }
+      })
+      expect(rig.adapter.acquire).not.toHaveBeenCalled()
+    }
+  )
 })

@@ -453,8 +453,7 @@ describe('ChecksList expanded check details', () => {
     expect(container.textContent).not.toContain('Log tail available in full details')
   })
 
-  // Regression for #7732: manual/created GitLab jobs carry no web_url and no GitHub
-  // handles, so the panel used to short-circuit before ever asking for their log.
+  // Manual/created GitLab jobs lack web_url and GitHub handles but still have fetchable logs (#7732).
   it('loads details for a GitLab job that only carries a job id', async () => {
     const gitLabCheck: PRCheckDetail = {
       name: 'deploy: production',
@@ -481,9 +480,7 @@ describe('ChecksList expanded check details', () => {
     expect(container.querySelector('.sticky.top-0')?.textContent).toContain('View full details')
   })
 
-  // GitLab trace fetches fail for reasons GitHub's never do (auth, 404, self-hosted
-  // host resolution) and the panel has no retry button, so a transient failure must
-  // not pin its error on the row for the rest of the session.
+  // No retry button exists; state changes must rearm transient GitLab trace failures.
   it('retries a failed detail load once the check state moves on', async () => {
     const runningCheck: PRCheckDetail = {
       name: 'test: unit',
@@ -522,8 +519,7 @@ describe('ChecksList expanded check details', () => {
     expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
   })
 
-  // A running GitLab job has no trace yet, so the first load legitimately resolves to
-  // null — without re-arming, the row stays "no inline details" after the job finishes.
+  // Running jobs may return null before a trace exists; rearm when state changes.
   it('retries a detail load that resolved to null once the check state moves on', async () => {
     const runningCheck: PRCheckDetail = {
       name: 'test: unit',

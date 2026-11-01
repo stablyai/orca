@@ -57,6 +57,7 @@ on:
       - 'tests/e2e/helpers/compiled-orca-cli.ts'
       - 'tests/e2e/helpers/windows-host-orcad-processes.ts'
       - 'config/ci/windows-ssh-provider/**'
+      - 'config/ci/windows-lifecycle-receipt.ps1'
       - '.github/workflows/ssh-windows-hosts.yml'
       - '.github/actions/prepare-orcad-prebuilds/**'
       - '.github/actions/restore-pnpm-verification/**'
@@ -87,9 +88,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  mobile_web_bundle:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ format('ssh-windows-mobile-web-{0}', github.sha) }}
+          path: out/mobile-web/
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: true
+
   hosts:
-    # A draft carries no verdict; readiness re-triggers this workflow.
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft != true }}
+    needs: mobile_web_bundle
+    if: >-
+      ${{ !cancelled() && needs.mobile_web_bundle.result == 'success' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     strategy:
       fail-fast: false
       matrix:
@@ -166,7 +187,18 @@ jobs:
       - uses: ./.github/actions/prepare-windows-cli-launcher
         with:
           arches: ${{ matrix.arch }}
+      - uses: actions/download-artifact@v8
+        id: mobile-bundle
+        continue-on-error: true
+        with:
+          name: ${{ format('ssh-windows-mobile-web-{0}', github.sha) }}
+          path: out/mobile-web/
+      # A failed-only retry may outlive the producer artifact's retention.
       - uses: ./.github/actions/build-mobile-web-bundle
+        if: steps.mobile-bundle.outcome != 'success'
+      - name: Verify the mobile bundle before staging it
+        shell: bash
+        run: node -e "require('./config/scripts/verify-packaged-mobile-web-bundle.cjs').assertMobileWebBundleBuilt()"
       - name: Build the win32 template
         shell: bash
         env:

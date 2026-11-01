@@ -1,7 +1,3 @@
-// A start that fails can be written up twice: by the exit settlement, for a message the starting
-// child was handed, and by the delivery loop, for a message the exit found still queued. The chat
-// gets one row for that start, in the words the message was rejected with.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -22,19 +18,21 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'Claude Code is not signed in. Sign in with the Claude CLI'
-// The exit's reason is Orca's log text; the row says only that the start stopped.
+// Internal exit diagnostics must not reach the failure row.
 const EXIT_TEXT = 'Codex stopped before it finished starting. Send your message to try again.'
-// The first child (generation-1) is lost at setup; the send starts generation-2.
 const START_ROW = agentJournalItemKey({
   provider: 'orca',
-  clientMessageId: 'start-failure:generation-2'
+  clientMessageId: 'start-failure:generation-6'
 })
 
 function eventually(assertion: () => void | Promise<void>): Promise<void> {
@@ -45,7 +43,6 @@ let root: string
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let generation = 0
-/** The next start's child exits as its start step returns, before the handover step. */
 let exitOnStart = false
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let frames: AgentSessionSubscribeEvent[] = []
@@ -87,7 +84,6 @@ async function submission(clientMessageId: string) {
   )
 }
 
-/** Every text the subscriber was sent for the start's row, in order. */
 function publishedStartRows(): string[] {
   return frames.flatMap((frame) =>
     frame.type === 'batch'
@@ -136,7 +132,7 @@ beforeEach(async () => {
           acquisitionGeneration: `generation-${++generation}`
         }
         if (exitOnStart) {
-          // Asked for on the lane while the start step runs, so it lands before the handover.
+          // Enqueue exit within startup so it precedes handover.
           void host.handleAdapterEvent({
             type: 'ended',
             sessionId: SESSION,
@@ -169,6 +165,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -179,7 +176,15 @@ describe('a start that fails before it proves itself', () => {
       expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
     )
 
-    await exitBeforeProof()
+    for (let attempt = 2; attempt <= 6; attempt++) {
+      await eventually(() => expect(generation).toBe(attempt))
+      await eventually(() =>
+        expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
+      )
+      expect(await startRows()).toEqual([])
+      expect(await submission(sent)).toMatchObject({ dispatchState: 'pending' })
+      await exitBeforeProof()
+    }
     await eventually(async () =>
       expect(await submission(sent)).toMatchObject({ dispatchState: 'rejected', reason: EXIT_TEXT })
     )
@@ -187,10 +192,11 @@ describe('a start that fails before it proves itself', () => {
 
     expect(await startRows()).toEqual([EXIT_TEXT])
     expect(publishedStartRows()).toEqual([EXIT_TEXT])
+    expect(generation).toBe(6)
     expect(dispatch).not.toHaveBeenCalled()
   })
 
-  it('leaves the row to the loop when the exit lands while the message still waits', async () => {
+  it('writes one final row when all five attempts exit while the message waits', async () => {
     exitOnStart = true
     const queued = await send('hello')
 
@@ -199,9 +205,9 @@ describe('a start that fails before it proves itself', () => {
     )
     await host.flushStreamedEvents(SESSION)
 
+    expect(generation).toBe(6)
     expect(dispatch).not.toHaveBeenCalled()
     expect(await startRows()).toEqual([EXIT_TEXT])
-    // Written once, after the message was settled, not first by the exit and again by the loop.
     expect(publishedStartRows()).toEqual([EXIT_TEXT])
   })
 })

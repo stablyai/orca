@@ -87,8 +87,7 @@ export function handleRichMarkdownTerminalPathPaste(
   }
 
   event.preventDefault()
-  // Why: terminal link metadata can point at a synthetic basename URL; the
-  // clipboard plain text is the only source that keeps the Windows path intact.
+  // Use clipboard plain text because synthetic terminal basename URLs lose Windows path information.
   editor.view.dispatch(editor.state.tr.insertText(plainText))
   return true
 }

@@ -19,10 +19,7 @@ function stubDirectSshModules(args: { storeState: StoreLike }): void {
   }))
 }
 
-// Why: end-to-end exercise of startup agent-status restoration through
-// useIpcEvents itself. The main process owns the durable cache; the renderer
-// pulls a snapshot only after workspace tabs are ready so startup pushes
-// cannot be lost while local state is still empty.
+// Pull main’s durable status snapshot through the real hook only after tabs are ready, recovering startup pushes received before local state.
 describe('useIpcEvents agent status snapshot integration', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -280,6 +277,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         sshConnectionStates.set(nextTargetId, state)
       },
       setPortForwards,
+      setUnrestoredPortForwards: vi.fn(),
       setDetectedPorts,
       setSshTargetsMetadata: vi.fn(),
       setRemovedSshTargetLabels: vi.fn(),
@@ -320,6 +318,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
             )
           },
           listPortForwards,
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts,
           onPortForwardsChanged: (
             listener: (data: { targetId: string; forwards: (typeof liveForward)[] }) => void

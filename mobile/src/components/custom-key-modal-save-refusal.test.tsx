@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const store = vi.hoisted(() => {
   // Annotated rather than asserted: the literal alone narrows `raw` to `null`.
@@ -34,11 +34,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     }
   }
 }))
-/**
- * Function components rather than host strings, so a case can match a node by identity: the
- * renderer types `node.type` as an `ElementType`, which a string literal is not, and the tests
- * ratchet checks this file.
- */
+// Use function-component identity instead of host strings rejected by renderer ElementType; preserve test typecheck.
 const hosts = vi.hoisted(() => {
   const make = (name: string) => {
     const Host = (props: { children?: ReactNode }): ReactNode => props.children ?? null
@@ -59,18 +55,21 @@ vi.mock('react-native', () => ({
   Text: hosts.Text,
   Pressable: hosts.Pressable,
   TextInput: hosts.TextInput,
-  Switch: hosts.Switch,
   StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} },
   Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios }
 }))
+vi.mock('./MobileSwitch', () => ({ MobileSwitch: hosts.Switch }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: hosts.View }))
 vi.mock('./BottomDrawer', () => ({ BottomDrawer: hosts.View }))
 
 import { CustomKeyModal } from './CustomKeyModal'
 import { loadCustomKeys, removeCustomKey, saveCustomKeys } from '../terminal/terminal-custom-keys'
-import { readMirroredStorage } from '../storage/mirrored-storage-keys'
+import { readMirroredStorage, retainMirroredStorage } from '../storage/mirrored-storage-keys'
 
 const CUSTOM_KEYS = 'orca:custom-accessory-keys'
+let releaseStorage = () => {}
+
+afterEach(() => releaseStorage())
 
 /** What a later `init` would carry for this key, which is the map and not the store. */
 function mirrored(): string | undefined {
@@ -123,6 +122,7 @@ function addAShortcut(renderer: ReturnType<typeof create>): void {
 }
 
 beforeEach(() => {
+  releaseStorage = retainMirroredStorage([CUSTOM_KEYS])
   store.raw = null
   store.refuse = false
   store.failRead = false
@@ -130,16 +130,7 @@ beforeEach(() => {
   store.holdWrites = null
 })
 
-/**
- * The page refuses a write the app would have taken, and the modal is one of its callers.
- *
- * `orca:custom-accessory-keys` is in the session route's page allowlist, and on the page a write
- * over `PAGE_STORAGE_MAX_VALUE_CHARS` rejects rather than dropping — that is the size contract of
- * ruling 33.4, and ruling 33.6 adds the key `init` could not carry at all. Every other allowlisted
- * writer in this closure catches its save; this one awaited it inside a `void` call, so the
- * rejection had nowhere to go but the page's unhandled-rejection handler, which reports a page
- * fault and drops the generation.
- */
+// Page allowlisted custom keys reject over-size/unseeded writes (rulings 33.4/33.6). Modal must catch void-call rejection or page faults and drops generation.
 describe('adding a custom key when the store refuses the write', () => {
   it('does not let the refusal escape as an unhandled rejection', async () => {
     store.refuse = true
@@ -163,13 +154,10 @@ describe('adding a custom key when the store refuses the write', () => {
     })
     process.off('unhandledRejection', unhandled)
     expect(unhandled).not.toHaveBeenCalled()
-    // And the modal does not report a key it failed to store: a row that looks added and is not
-    // is the failure the allowlist exists to avoid.
+    // Do not report unstored key as added to accessory row.
     expect(onKeysChanged).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
-    // And the mirror is back where it started. `saveCustomKeys` notes the write before it
-    // persists, because a reader is answered from the map; a refused write that left the note
-    // standing would put the key the store rejected into the next `init`.
+    // Restore mirror after refused save: saveCustomKeys notes map before persistence, and next init must not include rejected value.
     expect(mirrored()).toBe(before)
   })
 
@@ -190,6 +178,7 @@ describe('adding a custom key when the store refuses the write', () => {
     })
     expect(onKeysChanged).toHaveBeenCalledTimes(1)
     expect(onClose).toHaveBeenCalledTimes(1)
+    expect(mirrored()).toBe(store.raw)
   })
 })
 

@@ -31,7 +31,6 @@ function renderUrlSync(guestUrl: () => string): {
       webviewRef: { current: webview },
       chromeHeaderRef: { current: null },
       lastKnownWebviewUrlRef: { current: 'https://example.test/slow' },
-      trackNextLoadingEventRef: { current: false },
       keepAddressBarFocusRef: { current: false },
       addressBarInputRef: { current: null },
       browserTabUrlRef: { current: 'https://example.test/slow' },

@@ -13,8 +13,7 @@ export async function readPairedRetentionSample(
 ): Promise<PairedRetentionSample> {
   // Why no catch: without CDP there is no exact heap figure; the budget check must not skip.
   const session = await page.context().newCDPSession(page)
-  // Why twice: right after parking, one pass leaves the disposed terminals' garbage (~20 MB)
-  // for the next; the second frees it.
+  // GC twice after parking because one pass leaves about 20MB of disposed terminal garbage.
   await session.send('HeapProfiler.collectGarbage')
   await session.send('HeapProfiler.collectGarbage')
   // Why not performance.memory: it is a cached, rounded figure that can predate the GC above.

@@ -3,18 +3,19 @@
  */
 import React, { createRef, useContext, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as I18n from '@/i18n/i18n'
 import type { AppState } from '@/store'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
+import { nativeChatPaneHeader } from './NativeChatPaneHeader'
+import { emptyNativeChatContextMenuActions } from './use-native-chat-context-menu'
 import {
   NativeChatUsageLimitActions,
   NativeChatUsageLimitActionsProvider
 } from './NativeChatUsageLimitActions'
 import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
-import { emptyNativeChatContextMenuActions } from './use-native-chat-context-menu'
 import { useNativeChatHandOff } from './use-native-chat-hand-off'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 
@@ -28,6 +29,18 @@ const handOff = vi.hoisted(() => ({
   dialog: vi.fn(),
   focus: vi.fn(),
   error: vi.fn()
+}))
+
+const paneActions = vi.hoisted(() => ({
+  onSplitRight: vi.fn(() => true),
+  onSplitDown: vi.fn(() => true),
+  canClosePane: true,
+  closeLabel: 'Close Pane',
+  onClosePane: vi.fn()
+}))
+const store = vi.hoisted(() => ({
+  keybindings: {},
+  groupsByWorktree: { 'worktree-1': [{ id: 'group-1' }] }
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => {
@@ -63,10 +76,14 @@ vi.mock('@/components/tab-bar/TabWorkspaceLayoutMenuSection', () => ({
 vi.mock('@/components/tab-bar/tab-move-to-pane-column', () => ({
   canMoveTabToNewPaneColumn: () => false
 }))
+vi.mock('./use-structured-chat-pane-actions', () => ({
+  useStructuredChatPaneActions: () => paneActions
+}))
+vi.mock('./NativeChatResumeInCliButton', () => ({ NativeChatResumeInCliButton: () => null }))
 vi.mock('@/store', () => ({
   useAppStore: (
     select: (state: Pick<AppState, 'keybindings' | 'unifiedTabsByWorktree'>) => unknown
-  ) => select({ keybindings: {}, unifiedTabsByWorktree: {} })
+  ) => select({ ...store, unifiedTabsByWorktree: {} })
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: handOff.options,
@@ -104,24 +121,23 @@ function childrenText(children: ReactNode): string {
     .join('')
 }
 
-function ContinueNow(): ReactNode {
-  const view = useContext(NativeChatOrcaStopContext)
-  return <button onClick={() => view?.continueUsageLimit()}>Continue Now</button>
-}
 function StructuredChatTab({
   inWorkspace = false,
   epoch = 'epoch',
   visible = true,
   fallback = false,
-  terminalPane = false
+  terminalPane = false,
+  owner = 'worktree-1',
+  usageLimit = false
 }: {
   inWorkspace?: boolean
   epoch?: string
   visible?: boolean
   fallback?: boolean
   terminalPane?: boolean
+  owner?: string | null
+  usageLimit?: boolean
 }): ReactNode {
-  const stopView = useContext(NativeChatOrcaStopContext)
   const pane = {
     tabId: 'chat-tab',
     groupId: 'group-1',
@@ -139,7 +155,7 @@ function StructuredChatTab({
         }
       : {})
   }
-  const owner = useNativeChatHandOff({
+  const handOffState = useNativeChatHandOff({
     pane,
     directory: inWorkspace
       ? { worktreeId: 'wt-1', worktreePath: '/work/repo', runtimeEnvironmentId: 'env_1' }
@@ -152,6 +168,21 @@ function StructuredChatTab({
             timestamp: 1,
             source: 'transcript',
             blocks: [{ type: 'text', text: 'Keep the task context' }]
+          },
+          {
+            id: 'start',
+            role: 'system',
+            timestamp: 2,
+            source: 'transcript',
+            agentStart: true,
+            blocks: [{ type: 'text', text: 'Do not export this worker assignment' }]
+          },
+          {
+            id: 'answer',
+            role: 'assistant',
+            timestamp: 3,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: 'Keep the answer' }]
           }
         ]
       : [],
@@ -160,7 +191,8 @@ function StructuredChatTab({
   })
   const { menu } = useStructuredNativeChatPaneCommands({
     pane,
-    handOff: owner,
+    handOff: handOffState,
+    ownerWorktreeId: owner,
     rootRef: createRef<HTMLDivElement>(),
     composerRef: createRef<NativeChatComposerHandle>(),
     questionAnswerInputRef: createRef<HTMLInputElement>(),
@@ -175,35 +207,73 @@ function StructuredChatTab({
       : {})
   })
   return (
-    <>
-      <NativeChatUsageLimitActionsProvider
-        pane={pane}
-        handOffState={owner}
-        recovery={{ readCurrent: true, canSwitchAccount: false, epoch: 'epoch' }}
-        view={{
-          ...stopView,
-          remoteHost: true,
-          usageLimitTurnItemId: 'cut'
-        }}
-      >
-        {menu}
-        <NativeChatUsageLimitActions />
-        <ContinueNow />
-      </NativeChatUsageLimitActionsProvider>
-      {owner.dialog}
-    </>
+    <NativeChatUsageLimitActionsProvider
+      pane={pane}
+      handOffState={handOffState}
+      recovery={{ readCurrent: true, canSwitchAccount: false, epoch }}
+      view={{
+        hostLabel: null,
+        remoteHost: true,
+        continueAvailable: false,
+        offeredTurnItemId: null,
+        continueNow: () => {},
+        usageLimitTurnItemId: usageLimit ? 'cut' : null,
+        continueUsageLimit: () => {}
+      }}
+    >
+      {nativeChatPaneHeader(pane, owner, 'dark', handOffState)}
+      {menu}
+      {usageLimit ? <NativeChatUsageLimitActions /> : null}
+      <ContinueCut />
+      {handOffState.dialog}
+    </NativeChatUsageLimitActionsProvider>
   )
+}
+
+function ContinueCut() {
+  const view = useContext(NativeChatOrcaStopContext)
+  return <button onClick={() => view?.continueUsageLimit()}>Continue cut</button>
 }
 
 describe('a structured chat tab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    store.groupsByWorktree['worktree-1'] = [{ id: 'group-1' }]
     handOff.capability.mockResolvedValue(true)
     items.list = []
     callRuntimeRpc.mockReset().mockResolvedValue({ orcaSessionId: `orca_session_id:${SESSION}` })
     Object.assign(window, {
       api: { ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) } }
     })
+  })
+
+  it.each([false, true])('uses the header commands with split panes: %s', (split) => {
+    if (split) {
+      store.groupsByWorktree['worktree-1'].push({ id: 'group-2' })
+    }
+    const markup = renderToStaticMarkup(<StructuredChatTab />)
+    expect(markup).not.toContain('Move Tab to Split')
+    expect(markup).not.toContain('Resume in New CLI')
+    expect(markup).not.toContain('Continue with Terminal Agent')
+    for (const [label, command] of [
+      ['Split Chat Right', paneActions.onSplitRight],
+      ['Split Chat Down', paneActions.onSplitDown]
+    ] as const) {
+      const item = items.list.find((entry) => childrenText(entry.children).startsWith(label))
+      expect(item).toBeDefined()
+      item?.onSelect?.()
+      expect(command).toHaveBeenCalledOnce()
+    }
+    const close = items.list.find((entry) => childrenText(entry.children) === 'Close Pane')
+    expect(Boolean(close)).toBe(split)
+    close?.onSelect?.()
+    expect(paneActions.onClosePane).toHaveBeenCalledTimes(split ? 1 : 0)
+  })
+
+  it.each([null, ''])('keeps the session-ID fallback without a known owner: %s', (owner) => {
+    const markup = renderToStaticMarkup(<StructuredChatTab owner={owner} />)
+    expect(markup).not.toContain('Split Chat')
+    expect(markup).toContain('Copy Orca Session ID')
   })
 
   it("offers Copy Orca Session ID, asking the tab's host for this session's Orca session ID", async () => {
@@ -222,40 +292,115 @@ describe('a structured chat tab', () => {
     )
   })
 
-  it("hands the conversation to another agent with the chat's saved transcript", async () => {
-    handOff.options.mockResolvedValue({
-      status: 'current',
-      capturedText: 'Saved chat context',
-      transcriptPath: '/work/codex.jsonl'
-    })
-    render(<StructuredChatTab inWorkspace />)
-
-    const item = items.list.findLast(
-      (candidate) => childrenText(candidate.children) === 'Hand Off to Another Agent'
-    )
-    await act(async () => item?.onSelect?.())
-
-    expect(handOff.options).toHaveBeenCalledWith(TARGET, 'agentSession.continuationContext', {
-      sessionId: SESSION,
-      workspaceId: 'wt-1',
-      expectedCursor: { epoch: 'epoch', sequence: 0 }
-    })
-    await waitFor(() =>
-      expect(handOff.dialog).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          request: expect.objectContaining({
-            source: expect.objectContaining({
-              sourceAgent: 'codex',
-              sourceTitle: 'Fix the login bug',
-              transcriptPath: '/work/codex.jsonl'
-            }),
-            worktreeId: 'wt-1',
-            launchSource: 'native_chat'
-          })
+  it('keeps header and menu hand-off requests, disabled states and empty-source failures identical', async () => {
+    const requests: AgentSessionContinuationRequest[] = []
+    const label = 'Hand Off to Another Agent'
+    const menuItem = () =>
+      items.list.findLast((candidate) => childrenText(candidate.children) === label)
+    const expectDisabled = (disabled: boolean) => {
+      expect(screen.getByRole('button', { name: label }).hasAttribute('disabled')).toBe(disabled)
+      expect(menuItem()?.disabled).toBe(disabled)
+    }
+    for (const entry of ['header', 'menu'] as const) {
+      vi.clearAllMocks()
+      items.list = []
+      const saved = Promise.withResolvers<{
+        status: 'current'
+        capturedText: string
+        transcriptPath: string
+      }>()
+      handOff.options.mockReturnValue(saved.promise)
+      const view = render(<StructuredChatTab fallback />)
+      expect(screen.queryByRole('button', { name: label })).toBeNull()
+      expect(menuItem()).toBeUndefined()
+      view.rerender(<StructuredChatTab inWorkspace fallback />)
+      expectDisabled(false)
+      const open = () =>
+        entry === 'header'
+          ? fireEvent.click(screen.getByRole('button', { name: label }))
+          : openMenuHandOff()
+      await act(async () => open())
+      expect(handOff.options).toHaveBeenCalledExactlyOnceWith(
+        TARGET,
+        'agentSession.continuationContext',
+        {
+          sessionId: SESSION,
+          workspaceId: 'wt-1',
+          expectedCursor: { epoch: 'epoch', sequence: 0 }
+        }
+      )
+      expect(handOff.dialog.mock.lastCall?.[0].request).toBeNull()
+      expectDisabled(true)
+      await act(async () =>
+        saved.resolve({
+          status: 'current',
+          capturedText: 'Saved chat context',
+          transcriptPath: '/work/codex.jsonl'
         })
       )
+      requests.push(handOff.dialog.mock.lastCall?.[0].request)
+      expectDisabled(true)
+      fireEvent.click(screen.getByText('Close hand-off'))
+      expectDisabled(false)
+      handOff.options.mockResolvedValue({ status: 'current', capturedText: '' })
+      await act(async () => open())
+      expect(screen.queryByText('Close hand-off')).toBeNull()
+      expect(handOff.error).toHaveBeenCalledExactlyOnceWith(
+        'No session context is available to continue in a new session.'
+      )
+      expect(handOff.focus).toHaveBeenCalledOnce()
+      expectDisabled(false)
+      view.unmount()
+    }
+    expect(requests[0]).toEqual({
+      source: {
+        sourceKind: 'chat',
+        sourceAgent: 'codex',
+        sourceTitle: 'Fix the login bug',
+        sourceWorkingDirectory: '/work/repo',
+        capturedText: 'Saved chat context',
+        transcriptPath: '/work/codex.jsonl'
+      },
+      worktreeId: 'wt-1',
+      workspacePath: '/work/repo',
+      initialCwd: '/work/repo',
+      groupId: 'group-1',
+      launchSource: 'native_chat'
+    })
+    expect(requests[1]).toEqual(requests[0])
+  })
+
+  it('shares usage-limit and menu preparation, resets on Continue and keeps the entry policy', async () => {
+    const saved = Promise.withResolvers<{
+      status: 'current'
+      capturedText: string
+      transcriptPath: string
+    }>()
+    handOff.options.mockReturnValue(saved.promise)
+    render(<StructuredChatTab inWorkspace usageLimit />)
+    const usageAction = () =>
+      screen.getAllByRole('button', { name: 'Hand Off to Another Agent' })[1]
+    await act(async () => {
+      fireEvent.click(usageAction())
+      openMenuHandOff()
+    })
+    expect(handOff.options).toHaveBeenCalledOnce()
+    expect(usageAction().hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByText('Continue cut'))
+    await act(async () =>
+      saved.resolve({
+        status: 'current',
+        capturedText: 'Saved context',
+        transcriptPath: '/work/saved.txt'
+      })
     )
-    expect(handOff.dialog.mock.lastCall?.[0].request).not.toHaveProperty('avoidSourceAgent')
+    expect(screen.queryByText('Close hand-off')).toBeNull()
+    handOff.options.mockResolvedValue({ status: 'current', capturedText: 'Saved context' })
+    await act(async () => fireEvent.click(usageAction()))
+    expect(handOff.dialog.mock.lastCall?.[0].request.avoidSourceAgent).toBe(true)
+    fireEvent.click(screen.getByText('Close hand-off'))
+    await act(async () => openMenuHandOff())
+    expect(handOff.dialog.mock.lastCall?.[0].request.avoidSourceAgent).toBeUndefined()
   })
 
   it('keeps exactly the terminal pane hand-off row when chat shares that pane', () => {
@@ -278,7 +423,7 @@ describe('a structured chat tab', () => {
     expect(item).toBeDefined()
     item?.onSelect?.()
   }
-  it('shares menu preparation with Continue Now and incoming source changes, retaining entry policy', async () => {
+  it('retires menu preparation on dismiss and incoming source changes', async () => {
     const delayed = Promise.withResolvers<{
       status: 'current'
       capturedText: string
@@ -287,7 +432,7 @@ describe('a structured chat tab', () => {
     handOff.options.mockReturnValue(delayed.promise)
     const view = render(<StructuredChatTab inWorkspace />)
     await act(async () => openMenuHandOff())
-    fireEvent.click(screen.getByRole('button', { name: 'Continue Now' }))
+    fireEvent.click(screen.getByText('Close hand-off'))
     await act(async () =>
       delayed.resolve({
         status: 'current',
@@ -342,13 +487,8 @@ describe('a structured chat tab', () => {
       capturedText: 'Saved chat context',
       transcriptPath: '/current.jsonl'
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Hand Off to Another Agent' }))
-    await screen.findByText('Close hand-off')
-    expect(handOff.dialog.mock.lastCall?.[0].request.avoidSourceAgent).toBe(true)
-    view.rerender(<StructuredChatTab inWorkspace epoch="replacement" />)
-    expect(screen.queryByText('Close hand-off')).toBeNull()
     await act(async () => openMenuHandOff())
-    expect(handOff.dialog.mock.lastCall?.[0].request.avoidSourceAgent).toBeUndefined()
+    await screen.findByText('Close hand-off')
     view.rerender(<StructuredChatTab inWorkspace visible={false} />)
     view.rerender(<StructuredChatTab inWorkspace />)
     expect(screen.queryByText('Close hand-off')).toBeNull()
@@ -372,7 +512,7 @@ describe('a structured chat tab', () => {
     view.rerender(<StructuredChatTab inWorkspace fallback />)
     await act(async () => openMenuHandOff())
     expect(handOff.dialog.mock.lastCall?.[0].request.source).toMatchObject({
-      capturedText: 'user: Keep the task context',
+      capturedText: 'user: Keep the task context\n\nassistant: Keep the answer',
       transcriptPath: undefined
     })
     fireEvent.click(screen.getByText('Close hand-off'))
@@ -380,7 +520,7 @@ describe('a structured chat tab', () => {
     handOff.options.mockResolvedValue({ status: 'current', transcriptPath: '/native.jsonl' })
     await act(async () => openMenuHandOff())
     expect(handOff.dialog.mock.lastCall?.[0].request.source).toMatchObject({
-      capturedText: 'user: Keep the task context',
+      capturedText: 'user: Keep the task context\n\nassistant: Keep the answer',
       transcriptPath: undefined
     })
     fireEvent.click(screen.getByText('Close hand-off'))
@@ -410,6 +550,12 @@ describe('a structured chat tab', () => {
       if (fallback) {
         expect(handOff.dialog.mock.lastCall?.[0].request.source.capturedText).toContain(
           'Keep the task context'
+        )
+        expect(handOff.dialog.mock.lastCall?.[0].request.source.capturedText).toContain(
+          'Keep the answer'
+        )
+        expect(handOff.dialog.mock.lastCall?.[0].request.source.capturedText).not.toContain(
+          'worker assignment'
         )
         fireEvent.click(screen.getByText('Close hand-off'))
       } else {

@@ -336,7 +336,6 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  // Why (agent-status-over-SSH §3): ingestRemote must run the same warn-once diagnostics as the local HTTP path so stale remote hooks signal locally.
   it('runs warn-once env/version diagnostics on relay-forwarded events', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -394,7 +393,6 @@ describe('AgentHookServer listener replay', () => {
         'conn-1'
       )
       expect(warn.mock.calls.length).toBe(warnsAfterFirst)
-      // Why: assert fanout still fires on the second event too, else a refactor that drops it would pass on warn-count alone.
       expect(listener).toHaveBeenCalledTimes(2)
     } finally {
       server.stop()

@@ -216,8 +216,6 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
   })
 
   it('bridges from a custom source home override instead of ~/.codex', () => {
-    // Why: users with a custom CODEX_HOME point history discovery at that
-    // folder; the default ~/.codex must be ignored when an override is given.
     const customSourceHome = join(fakeHomeDir, 'custom-codex')
     const customSessionPath = join(
       customSourceHome,
@@ -230,7 +228,6 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     mkdirSync(dirname(customSessionPath), { recursive: true })
     writeFileSync(customSessionPath, '{"id":"custom"}\n', 'utf-8')
 
-    // A session under the default ~/.codex should NOT be bridged when overridden.
     const defaultSessionPath = join(
       getSystemCodexHomePath(),
       'sessions',

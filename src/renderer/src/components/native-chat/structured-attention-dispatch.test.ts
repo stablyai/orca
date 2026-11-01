@@ -1,10 +1,4 @@
-// The acceptance test for A1: a SETTLED structured native chat lights the unread indicators and
-// raises one OS notification, whatever the turn's outcome was.
-//
-// Assertions read the real store slices the sidebar and tab strip render from, not spies on the
-// sinks, so a rewiring that stops reaching those slices fails here rather than passing on a call
-// count. The store is the real one (`createTestStore`), so the markers go through the same
-// reducers production uses, and the acknowledgement round trip runs through the real reducer too.
+// Use real unread/acknowledgment reducers so broken wiring cannot pass on mocked sink call counts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
@@ -26,13 +20,10 @@ import type { StructuredTab } from './structured-agent-session-tabs'
 import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
-// The user is present unless a test says otherwise.
 beforeEach(() => setPresenceGated(false))
 afterEach(() => setPresenceGated(true))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store.getState() } }))
-// The two client-side follow-ups of a delivery are leaf side effects with their own tests; this
-// file is about the request that reaches main and the markers left behind.
 vi.mock('@/lib/desktop-notification-sound', () => ({
   playDesktopNotificationSound: vi.fn(async () => false)
 }))
@@ -55,7 +46,6 @@ const CHAT_TAB = 'chat-tab'
 const SESSION = 'session-1'
 
 function settingsWith(groupAttention: boolean): GlobalSettings {
-  // The dispatcher reads only these settings fields and GlobalSettings has no test factory.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only fields read.
   return {
     experimentalTerminalAttention: groupAttention,
@@ -68,9 +58,7 @@ function completion(overrides?: Partial<AgentSessionTurnCompletion>): AgentSessi
     scope: {
       executionHostId: 'local',
       wslDistro: null,
-      // Deliberately NOT the renderer's workspace id: the scope names the workspace on the
-      // EXECUTION HOST, which over SSH is not the id this store addresses tabs and markers by.
-      // Nothing here may key off it.
+      // Use a distinct host-side workspace id; renderer unread markers must use the tab’s workspace id.
       workspaceId: 'host-side-workspace',
       workspaceKind: 'git-worktree'
     },
@@ -124,7 +112,6 @@ function seed(overrides?: {
     },
     activeGroupIdByWorktree: { [workspaceId]: GROUP },
     activeView: 'terminal',
-    // Default: the user is looking somewhere else, which is when unread is owed.
     activeWorktreeId:
       overrides?.activeWorktreeId === undefined ? 'other-workspace' : overrides.activeWorktreeId,
     unreadTerminalTabs: {},
@@ -137,7 +124,6 @@ function seed(overrides?: {
   })
 }
 
-/** The one dispatch this turn produced; fails loudly rather than returning a stale earlier one. */
 function onlyDispatch(): NotificationDispatchRequest {
   expect(dispatched).toHaveLength(1)
   return dispatched[0]!
@@ -204,7 +190,6 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       environmentId: 'env-1'
     })
     expect(dispatched.map((request) => request.mobileDeliveredByHost)).toEqual([true, undefined])
-    // A phone opens the server's workspace on that server, and a local one on the desktop.
     expect(dispatched.map((request) => request.executionHost)).toEqual([undefined, 'runtime:env-1'])
     expect(dispatched.map((request) => request.attentionKey)).toEqual([
       agentSessionAttentionKey({ type: 'completion', completion: completion() }),
@@ -260,8 +245,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
 
   it('lights nothing when the outcome is absent, because absent is UNKNOWN and never a verdict', () => {
     const withoutOutcome = completion()
-    // The host does not publish one of these. If an older one did, absence must not be read as
-    // success OR as interrupted — nobody gave a verdict, so nothing may be announced.
+    // Older hosts may omit outcomes; absence proves neither success nor interruption.
     Reflect.deleteProperty(withoutOutcome, 'outcome')
     dispatchStructuredTurnCompletionAttention(structuredTab(), withoutOutcome)
     expect(indicators()).toEqual(NOTHING_LIT)
@@ -269,8 +253,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
   })
 
   it('earns no unread while the user is looking at that chat, but still asks main to deliver', () => {
-    // Suppressing a banner the user does not need is main's `suppressWhenFocused` decision, and
-    // desktop focus must not silence the paired phone. This lane adds no second suppression.
+    // Main owns focus suppression; renderer focus must not suppress delivery to paired phones.
     seed({ activeWorktreeId: WORKSPACE })
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
     expect(indicators()).toEqual(NOTHING_LIT)
@@ -284,7 +267,6 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
   })
 
   it('earns no unread for a floating chat selected in the open floating panel', () => {
-    // The main window is on another workspace; the floating panel is what the user is reading.
     seed({ workspaceId: FLOATING_TERMINAL_WORKTREE_ID, floatingPanelOpen: true })
     dispatchStructuredTurnCompletionAttention(
       structuredTab(FLOATING_TERMINAL_WORKTREE_ID),
@@ -312,8 +294,6 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
 
   it('hands main the host verdict, which picks finished, failed or stopped', () => {
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    // 'done' is the host's report that the turn settled, not a reading of the status row: main
-    // words a 'working' state as "working", which would announce a finished turn as unfinished.
     expect(onlyDispatch()).toMatchObject({
       source: 'agent-task-complete',
       surface: 'agent-session',
@@ -342,7 +322,6 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
   })
 
   it('asks for input when the host settled a request while a prompt waits on the user', () => {
-    // e.g. a subagent's approval is unanswered.
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ awaitingUser: true }))
     expect(indicators().paneDot).toBe('agent-completion')
     expect(onlyDispatch()).toMatchObject({ agentState: 'blocked', agentTurnOutcome: 'success' })
@@ -354,9 +333,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
   })
 
   it('says done even while the status row still reads working, because the host settled the turn', () => {
-    // The completion can outrun the status re-projection. Sending the row's own state would make
-    // main word a finished turn as "working" (notification-options.ts), which is the whole reason
-    // the state is taken from the host's report instead.
+    // Completion can outrun status projection; row state would wrongly announce settled work as still working.
     const paneKey = structuredAgentSessionPaneKey(CHAT_TAB, SESSION)
     store.setState({
       agentStatusByPaneKey: {
@@ -399,7 +376,6 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     )
 
     store.getState().acknowledgeAgents([paneKey])
-    // Main keeps the ids it announced per pane; the subject is what retires this one.
     expect(dismissed.flatMap((call) => call.paneKeys ?? [])).toContain(paneKey)
   })
 
@@ -426,7 +402,6 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
   })
 
   it('withholds only the tab dot when group attention is off, keeping the pane dot', () => {
-    // Same presentation gate the PTY lane reads, from the same setting rather than a second one.
     seed({ groupAttention: false })
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
     expect(indicators()).toEqual({

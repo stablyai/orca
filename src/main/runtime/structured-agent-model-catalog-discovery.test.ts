@@ -18,8 +18,9 @@ vi.mock('../provider-process/managed-provider-process', () => ({
     throw new Error('no spawn in this test')
   }
 }))
-vi.mock('../agent-cli-version-probe', () => ({
-  probeAgentCliVersion: async (input: { program: string }) => {
+vi.mock('../agent-cli-version-probe', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  checkAgentCliVersion: async (input: { program: string }) => {
     spawned.commands.push(input.program)
     throw new Error('no spawn in this test')
   }
@@ -30,12 +31,20 @@ function context(): StructuredAgentModelCatalogContext {
     throw new Error('building a probe resolves nothing')
   }
   return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: building a probe only captures resolvers; none of these deps is read until a probe runs.
-    deps: { stateDirectory: '/state' } as StructuredAgentModelCatalogContext['deps'],
+    deps: {
+      stateDirectory: '/state',
+      hostId: 'local',
+      claimKeyId: 'catalog-test',
+      resolveWorkspacePath: unused,
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'system' }),
+      logger: { warn: vi.fn(), error: vi.fn() }
+    },
     environment: {
       resolveBaseEnvironment: unused,
       resolveAgentEnvironment: unused,
-      refreshAfterMissingProgram: unused
+      refreshAfterMissingProgram: unused,
+      bindCatalogSources: () => () => {}
     }
   }
 }
@@ -118,18 +127,20 @@ describe('the model catalog contract on every registration', () => {
     }
     const env = async () => ({ PATH: '/usr/bin' })
     const { probes } = registeredModelCatalogDiscovery(STRUCTURED_AGENT_RUNTIME_REGISTRATIONS, {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a probe reads only the command, env and auth resolvers given here.
       deps: {
+        ...context().deps,
         stateDirectory: '/state',
+        resolveLaunchArgs: () => [],
         resolveClaudeCommand: () => resolveStructuredAgentCommand('claude', settings),
         resolveCodexCommand: (options) => resolveStructuredAgentCommand('codex', settings, options),
         resolveClaudeAuthPolicy: () => ({ account: 'system' as const }),
         resolveAgentCommandSettings: () => settings
-      } as StructuredAgentModelCatalogContext['deps'],
+      },
       environment: {
         resolveBaseEnvironment: env,
         resolveAgentEnvironment: env,
-        refreshAfterMissingProgram: async () => {}
+        refreshAfterMissingProgram: async () => {},
+        bindCatalogSources: () => () => {}
       }
     })
     const variables = { claude: 'CLAUDE_CONFIG_DIR', codex: 'CODEX_HOME', grok: 'GROK_HOME' }
@@ -164,18 +175,26 @@ describe('the model catalog contract on every registration', () => {
       })
       const settings = { agentCmdOverrides: { grok: installed('grok'), pi: installed('pi') } }
       const { probes } = registeredModelCatalogDiscovery(STRUCTURED_AGENT_RUNTIME_REGISTRATIONS, {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a probe reads only the command, env and auth resolvers given here.
         deps: {
+          ...context().deps,
           stateDirectory: '/state',
-          resolveClaudeCommand: (options) => resolveCliCommand(installed('claude'), options),
-          resolveCodexCommand: (options) => resolveCliCommand(installed('codex'), options),
+          resolveLaunchArgs: () => [],
+          resolveClaudeCommand: (options) => ({
+            command: resolveCliCommand(installed('claude'), options),
+            prefixArgs: []
+          }),
+          resolveCodexCommand: (options) => ({
+            command: resolveCliCommand(installed('codex'), options),
+            prefixArgs: []
+          }),
           resolveClaudeAuthPolicy: () => ({ account: 'system' as const }),
           resolveAgentCommandSettings: () => settings
-        } as StructuredAgentModelCatalogContext['deps'],
+        },
         environment: {
           resolveBaseEnvironment: env,
           resolveAgentEnvironment: env,
-          refreshAfterMissingProgram: refresh
+          refreshAfterMissingProgram: refresh,
+          bindCatalogSources: () => () => {}
         }
       })
       for (const [agent, variable] of Object.entries(agents)) {

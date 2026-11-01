@@ -1,0 +1,1178 @@
+[
+  [
+    "items",
+    "\"item-0\"",
+    {
+      "itemId": "item-0",
+      "revision": 1,
+      "body": {
+        "kind": "message",
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "Stopped",
+            "presentation": "status",
+            "tone": "warning",
+            "providerFrame": {
+              "provider": "codex",
+              "kind": "event",
+              "payload": {
+                "head": "{}",
+                "byteLength": 2,
+                "digest": "d",
+                "truncated": false
+              }
+            },
+            "contextClear": {
+              "operationId": "clear-1",
+              "afterFence": 1,
+              "clearedAt": 4
+            },
+            "failure": {
+              "kind": "startFailed",
+              "account": "managed",
+              "detail": {
+                "text": "model not found",
+                "audience": "log"
+              },
+              "refusal": {
+                "code": "agent_session_operation_invalid",
+                "details": {
+                  "reason": "providerStartFailed",
+                  "ownerVerdict": "exited",
+                  "rewindReason": "turnActive",
+                  "account": "system",
+                  "argumentProblem": {
+                    "agent": "Codex",
+                    "option": "--model",
+                    "problem": "missingValue"
+                  },
+                  "agent": "codex",
+                  "agentInstallation": {
+                    "agent": "codex",
+                    "installedVersion": "0.1.0",
+                    "minimumVersion": "0.2.0"
+                  },
+                  "codexInstallation": {
+                    "installedVersion": null,
+                    "minimumVersion": "0.2.0"
+                  },
+                  "currentFence": 3,
+                  "currentRevision": 2,
+                  "resolution": {
+                    "state": "approved",
+                    "selectedOptionId": "yes",
+                    "answers": [
+                      {
+                        "questionId": "q",
+                        "optionIds": ["a"],
+                        "other": "x"
+                      }
+                    ],
+                    "resolvedBy": "client",
+                    "resolvedAt": 5
+                  },
+                  "owner": {
+                    "sessionId": "session-2",
+                    "workspaceId": "ws-2"
+                  }
+                }
+              },
+              "attachment": {
+                "reason": "tooLarge",
+                "limit": 10
+              },
+              "retry": {
+                "error": "overloaded",
+                "status": 529,
+                "cause": "busy",
+                "attempt": 1,
+                "maxRetries": 3
+              },
+              "usageLimit": {
+                "window": "fiveHour",
+                "resetsAt": 1000
+              },
+              "argumentProblem": {
+                "agent": "Claude",
+                "option": "-p",
+                "problem": "positionalPrompt"
+              },
+              "neverReachedAgent": true,
+              "backgroundStop": "all",
+              "requestTimeout": {
+                "method": "thread/start",
+                "timeoutMs": 30000
+              }
+            },
+            "orcaStop": {
+              "cause": "user",
+              "turnItemId": "turn-item"
+            },
+            "usageLimitTurnItemId": "turn-item"
+          },
+          {
+            "type": "tool-call",
+            "name": "shell",
+            "input": {
+              "command": ["ls"]
+            },
+            "callId": "call-1",
+            "state": "completed",
+            "endedAs": "completed",
+            "mcpIdentity": {
+              "server": "s",
+              "tool": "t"
+            },
+            "exitCode": 0,
+            "durationMs": 5,
+            "webSearchResults": [
+              {
+                "title": "t",
+                "url": "https://example.com"
+              }
+            ]
+          },
+          {
+            "type": "tool-result",
+            "output": "ok",
+            "isError": false,
+            "callId": "call-1",
+            "fullOutputItemId": "full-1",
+            "editPatch": {
+              "filePath": "a.ts",
+              "hunks": [
+                {
+                  "oldStart": 1,
+                  "oldLines": 1,
+                  "newStart": 1,
+                  "newLines": 2,
+                  "lines": ["-a", "+a", "+b"]
+                }
+              ]
+            }
+          },
+          {
+            "type": "image-ref",
+            "path": "/tmp/a.png",
+            "alt": "a"
+          },
+          {
+            "type": "subagent-group",
+            "groupId": "g",
+            "agents": [
+              {
+                "id": "c",
+                "label": "child",
+                "state": "working",
+                "tokens": 1,
+                "startedAt": 1,
+                "settledAt": 2
+              }
+            ]
+          },
+          {
+            "type": "subagent",
+            "id": "c",
+            "label": "child",
+            "state": "completed",
+            "groupId": "g",
+            "parentId": "p",
+            "run": "r",
+            "outcomeBasis": "stop-acknowledged",
+            "background": true
+          },
+          {
+            "type": "background-task",
+            "taskId": "t",
+            "kind": "command",
+            "label": "build",
+            "state": "running",
+            "parentToolUseId": "call-1",
+            "summary": "s",
+            "error": "e",
+            "outputFile": "/tmp/o",
+            "tokens": 1,
+            "startedAt": 1,
+            "settledAt": 2
+          }
+        ],
+        "sentAs": "steer",
+        "command": {
+          "name": "compact"
+        },
+        "skills": [
+          {
+            "name": "s",
+            "path": "/s"
+          }
+        ],
+        "state": "completed",
+        "completedAt": 3,
+        "from": {
+          "kind": "agent",
+          "senders": [
+            {
+              "party": {
+                "address": "term_worker",
+                "terminalHandle": "term_worker",
+                "orcaSessionId": null
+              },
+              "name": "Worker",
+              "relation": "worker"
+            }
+          ],
+          "orchestration": {
+            "message": "mail-notice",
+            "mailbox": "m",
+            "dispatchId": null,
+            "messages": [
+              {
+                "messageId": "m1",
+                "runId": "r1",
+                "from": "term_worker"
+              }
+            ]
+          }
+        }
+      },
+      "sequence": 3,
+      "sequenceIndex": 1,
+      "observedAt": 3,
+      "recovered": true,
+      "recoveredAt": 4,
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "turn-item"
+      },
+      "shortened": true,
+      "agentId": "a",
+      "parentAgentId": "p",
+      "providerParentRef": "r",
+      "producerKind": "agent",
+      "attempt": 2
+    }
+  ],
+  [
+    "items",
+    "\"item-1\"",
+    {
+      "itemId": "item-1",
+      "revision": 1,
+      "body": {
+        "kind": "agent-start",
+        "dispatchId": "d",
+        "task": "do it",
+        "worker": {
+          "party": {
+            "address": "term_worker",
+            "terminalHandle": "term_worker",
+            "orcaSessionId": null
+          },
+          "name": "Worker",
+          "relation": "worker"
+        }
+      },
+      "sequence": 3,
+      "sequenceIndex": 1,
+      "observedAt": 3,
+      "recovered": true,
+      "recoveredAt": 4,
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "turn-item"
+      },
+      "shortened": true,
+      "agentId": "a",
+      "parentAgentId": "p",
+      "providerParentRef": "r",
+      "producerKind": "agent",
+      "attempt": 2
+    }
+  ],
+  [
+    "items",
+    "\"item-2\"",
+    {
+      "itemId": "item-2",
+      "revision": 1,
+      "body": {
+        "kind": "tool-call",
+        "name": "shell",
+        "input": {},
+        "callId": "call-2",
+        "state": "running",
+        "endedAs": "interrupted",
+        "output": {
+          "head": "{}",
+          "byteLength": 2,
+          "digest": "d",
+          "truncated": false
+        },
+        "mcpIdentity": {
+          "server": "s",
+          "tool": "t"
+        },
+        "exitCode": 1,
+        "durationMs": 2,
+        "webSearchResults": []
+      },
+      "sequence": 3,
+      "sequenceIndex": 1,
+      "observedAt": 3,
+      "recovered": true,
+      "recoveredAt": 4,
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "turn-item"
+      },
+      "shortened": true,
+      "agentId": "a",
+      "parentAgentId": "p",
+      "providerParentRef": "r",
+      "producerKind": "agent",
+      "attempt": 2
+    }
+  ],
+  [
+    "items",
+    "\"item-3\"",
+    {
+      "itemId": "item-3",
+      "revision": 1,
+      "body": {
+        "kind": "diff",
+        "path": "a.ts",
+        "patch": {
+          "head": "{}",
+          "byteLength": 2,
+          "digest": "d",
+          "truncated": false
+        }
+      },
+      "sequence": 3,
+      "sequenceIndex": 1,
+      "observedAt": 3,
+      "recovered": true,
+      "recoveredAt": 4,
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "turn-item"
+      },
+      "shortened": true,
+      "agentId": "a",
+      "parentAgentId": "p",
+      "providerParentRef": "r",
+      "producerKind": "agent",
+      "attempt": 2
+    }
+  ],
+  [
+    "items",
+    "\"item-4\"",
+    {
+      "itemId": "item-4",
+      "revision": 1,
+      "body": {
+        "kind": "approval",
+        "title": "Approve?",
+        "displayName": "Shell",
+        "description": "d",
+        "decisionReason": "r",
+        "blockedPath": "/b",
+        "matchedAskRule": {
+          "source": "settings",
+          "toolName": "Bash",
+          "ruleContent": "ls"
+        },
+        "subject": {
+          "kind": "plan",
+          "text": "Plan",
+          "filePath": "/p"
+        },
+        "detail": null,
+        "options": [
+          {
+            "id": "yes",
+            "label": "Yes",
+            "description": "d"
+          }
+        ],
+        "resolution": {
+          "state": "answered",
+          "selectedOptionId": null,
+          "answers": [
+            {
+              "questionId": "q1",
+              "optionIds": ["a"],
+              "other": "x"
+            }
+          ],
+          "resolvedBy": "client",
+          "resolvedAt": 5
+        }
+      },
+      "sequence": 3,
+      "sequenceIndex": 1,
+      "observedAt": 3,
+      "recovered": true,
+      "recoveredAt": 4,
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "turn-item"
+      },
+      "shortened": true,
+      "agentId": "a",
+      "parentAgentId": "p",
+      "providerParentRef": "r",
+      "producerKind": "agent",
+      "attempt": 2
+    }
+  ],
+  [
+    "items",
+    "\"item-5\"",
+    {
+      "itemId": "item-5",
+      "revision": 1,
+      "body": {
+        "kind": "question",
+        "question": "Which?",
+        "options": [
+          {
+            "id": "a",
+            "label": "A"
+          }
+        ],
+        "questions": [
+          {
+            "id": "q1",
+            "question": "Which?",
+            "header": "H",
+            "multiSelect": false,
+            "options": [
+              {
+                "id": "a",
+                "label": "A"
+              }
+            ],
+            "freeTextQuestionId": "f",
+            "freeTextInput": {
+              "allowEmpty": true,
+              "multiline": true,
+              "initialValue": "",
+              "placeholder": "p"
+            }
+          }
+        ],
+        "freeTextQuestionId": "f",
+        "freeTextInput": {
+          "multiline": false
+        },
+        "resolution": {
+          "state": "answered",
+          "selectedOptionId": null,
+          "answers": [
+            {
+              "questionId": "q1",
+              "optionIds": ["a"],
+              "other": "x"
+            }
+          ],
+          "resolvedBy": "client",
+          "resolvedAt": 5
+        }
+      },
+      "sequence": 3,
+      "sequenceIndex": 1,
+      "observedAt": 3,
+      "recovered": true,
+      "recoveredAt": 4,
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "turn-item"
+      },
+      "shortened": true,
+      "agentId": "a",
+      "parentAgentId": "p",
+      "providerParentRef": "r",
+      "producerKind": "agent",
+      "attempt": 2
+    }
+  ],
+  [
+    "items",
+    "\"item-6\"",
+    {
+      "itemId": "item-6",
+      "revision": 1,
+      "body": {
+        "kind": "status",
+        "text": "The agent could not start.",
+        "presentation": "notice",
+        "tone": "error",
+        "contextClear": {
+          "operationId": "clear-1",
+          "afterFence": 1,
+          "clearedAt": 4
+        },
+        "turnLifecycle": {
+          "turnId": "turn-1",
+          "state": "completed",
+          "outcome": "success",
+          "userItemId": "orca:send-1",
+          "startedAt": 2,
+          "requestedAt": 1,
+          "completedAt": 3,
+          "durationMs": 1,
+          "contextUsage": {
+            "window": {
+              "tokens": 200000,
+              "capturedAt": 7
+            },
+            "used": {
+              "kind": "report",
+              "model": "gpt",
+              "usedTokens": 10,
+              "windowTokens": 200000,
+              "percentage": 1,
+              "autoCompactAtTokens": 180000,
+              "categories": [
+                {
+                  "name": "Messages",
+                  "tokens": 10,
+                  "deferred": true
+                }
+              ],
+              "capturedAt": 7
+            }
+          },
+          "providerTurnId": "provider-turn-1"
+        },
+        "providerFrame": {
+          "provider": "codex",
+          "kind": "event",
+          "payload": {
+            "head": "{}",
+            "byteLength": 2,
+            "digest": "d",
+            "truncated": false
+          }
+        },
+        "threadGoal": {
+          "state": "set",
+          "goal": {
+            "objective": "o",
+            "status": "active",
+            "tokenBudget": null,
+            "tokensUsed": 1,
+            "timeUsedSeconds": 2,
+            "createdAt": 1,
+            "updatedAt": 2
+          }
+        },
+        "failure": {
+          "kind": "startFailed",
+          "account": "managed",
+          "detail": {
+            "text": "model not found",
+            "audience": "log"
+          },
+          "refusal": {
+            "code": "agent_session_operation_invalid",
+            "details": {
+              "reason": "providerStartFailed",
+              "ownerVerdict": "exited",
+              "rewindReason": "turnActive",
+              "account": "system",
+              "argumentProblem": {
+                "agent": "Codex",
+                "option": "--model",
+                "problem": "missingValue"
+              },
+              "agent": "codex",
+              "agentInstallation": {
+                "agent": "codex",
+                "installedVersion": "0.1.0",
+                "minimumVersion": "0.2.0"
+              },
+              "codexInstallation": {
+                "installedVersion": null,
+                "minimumVersion": "0.2.0"
+              },
+              "currentFence": 3,
+              "currentRevision": 2,
+              "resolution": {
+                "state": "approved",
+                "selectedOptionId": "yes",
+                "answers": [
+                  {
+                    "questionId": "q",
+                    "optionIds": ["a"],
+                    "other": "x"
+                  }
+                ],
+                "resolvedBy": "client",
+                "resolvedAt": 5
+              },
+              "owner": {
+                "sessionId": "session-2",
+                "workspaceId": "ws-2"
+              }
+            }
+          },
+          "attachment": {
+            "reason": "tooLarge",
+            "limit": 10
+          },
+          "retry": {
+            "error": "overloaded",
+            "status": 529,
+            "cause": "busy",
+            "attempt": 1,
+            "maxRetries": 3
+          },
+          "usageLimit": {
+            "window": "fiveHour",
+            "resetsAt": 1000
+          },
+          "argumentProblem": {
+            "agent": "Claude",
+            "option": "-p",
+            "problem": "positionalPrompt"
+          },
+          "neverReachedAgent": true,
+          "backgroundStop": "all",
+          "requestTimeout": {
+            "method": "thread/start",
+            "timeoutMs": 30000
+          }
+        },
+        "orcaStop": {
+          "cause": "user"
+        }
+      },
+      "sequence": 3,
+      "sequenceIndex": 1,
+      "observedAt": 3,
+      "recovered": true,
+      "recoveredAt": 4,
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "turn-item"
+      },
+      "shortened": true,
+      "agentId": "a",
+      "parentAgentId": "p",
+      "providerParentRef": "r",
+      "producerKind": "agent",
+      "attempt": 2
+    }
+  ],
+  [
+    "items",
+    "\"item-7\"",
+    {
+      "itemId": "item-7",
+      "revision": 1,
+      "body": {
+        "kind": "turn",
+        "turnId": "turn-1",
+        "state": "completed",
+        "outcome": "success",
+        "userItemId": "orca:send-1",
+        "startedAt": 2,
+        "requestedAt": 1,
+        "completedAt": 3,
+        "durationMs": 1,
+        "contextUsage": {
+          "window": {
+            "tokens": 200000,
+            "capturedAt": 7
+          },
+          "used": {
+            "kind": "report",
+            "model": "gpt",
+            "usedTokens": 10,
+            "windowTokens": 200000,
+            "percentage": 1,
+            "autoCompactAtTokens": 180000,
+            "categories": [
+              {
+                "name": "Messages",
+                "tokens": 10,
+                "deferred": true
+              }
+            ],
+            "capturedAt": 7
+          }
+        },
+        "providerTurnId": "provider-turn-1"
+      },
+      "sequence": 3,
+      "sequenceIndex": 1,
+      "observedAt": 3,
+      "recovered": true,
+      "recoveredAt": 4,
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "turn-item"
+      },
+      "shortened": true,
+      "agentId": "a",
+      "parentAgentId": "p",
+      "providerParentRef": "r",
+      "producerKind": "agent",
+      "attempt": 2
+    }
+  ],
+  [
+    "submissions",
+    "\"send-1\"",
+    [
+      "send-1",
+      {
+        "clientMessageId": "send-1",
+        "fence": 1,
+        "payloadFingerprint": "f",
+        "dispatchState": "rejected",
+        "providerItemId": null,
+        "reason": "refused",
+        "rejection": {
+          "kind": "startFailed",
+          "account": "managed",
+          "detail": {
+            "text": "model not found",
+            "audience": "log"
+          },
+          "refusal": {
+            "code": "agent_session_operation_invalid",
+            "details": {
+              "reason": "providerStartFailed",
+              "ownerVerdict": "exited",
+              "rewindReason": "turnActive",
+              "account": "system",
+              "argumentProblem": {
+                "agent": "Codex",
+                "option": "--model",
+                "problem": "missingValue"
+              },
+              "agent": "codex",
+              "agentInstallation": {
+                "agent": "codex",
+                "installedVersion": "0.1.0",
+                "minimumVersion": "0.2.0"
+              },
+              "codexInstallation": {
+                "installedVersion": null,
+                "minimumVersion": "0.2.0"
+              },
+              "currentFence": 3,
+              "currentRevision": 2,
+              "resolution": {
+                "state": "approved",
+                "selectedOptionId": "yes",
+                "answers": [
+                  {
+                    "questionId": "q",
+                    "optionIds": ["a"],
+                    "other": "x"
+                  }
+                ],
+                "resolvedBy": "client",
+                "resolvedAt": 5
+              },
+              "owner": {
+                "sessionId": "session-2",
+                "workspaceId": "ws-2"
+              }
+            }
+          },
+          "attachment": {
+            "reason": "tooLarge",
+            "limit": 10
+          },
+          "retry": {
+            "error": "overloaded",
+            "status": 529,
+            "cause": "busy",
+            "attempt": 1,
+            "maxRetries": 3
+          },
+          "usageLimit": {
+            "window": "fiveHour",
+            "resetsAt": 1000
+          },
+          "argumentProblem": {
+            "agent": "Claude",
+            "option": "-p",
+            "problem": "positionalPrompt"
+          },
+          "neverReachedAgent": true,
+          "backgroundStop": "all",
+          "requestTimeout": {
+            "method": "thread/start",
+            "timeoutMs": 30000
+          }
+        },
+        "submittedAt": 1,
+        "resolvedAt": 2,
+        "submittedSequence": 3,
+        "answeredInTurn": {
+          "turnItemId": "t",
+          "via": "start"
+        },
+        "recovered": true,
+        "handoverRecorded": true,
+        "handedOverAt": 2,
+        "acceptedSequence": 4,
+        "queuedMessageId": "card-1",
+        "origin": "client",
+        "source": {
+          "kind": "agent"
+        },
+        "keptAsQueuedMessageId": "card-1",
+        "options": {
+          "model": "m",
+          "effort": "high",
+          "personality": "p",
+          "fastMode": "true",
+          "serviceTier": "t"
+        }
+      }
+    ]
+  ],
+  [
+    "queue.cards",
+    "\"card-1\"",
+    [
+      "card-1",
+      {
+        "messageId": "card-1",
+        "position": 1,
+        "body": {
+          "kind": "message",
+          "role": "user",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Stopped",
+              "presentation": "status",
+              "tone": "warning",
+              "providerFrame": {
+                "provider": "codex",
+                "kind": "event",
+                "payload": {
+                  "head": "{}",
+                  "byteLength": 2,
+                  "digest": "d",
+                  "truncated": false
+                }
+              },
+              "contextClear": {
+                "operationId": "clear-1",
+                "afterFence": 1,
+                "clearedAt": 4
+              },
+              "failure": {
+                "kind": "startFailed",
+                "account": "managed",
+                "detail": {
+                  "text": "model not found",
+                  "audience": "log"
+                },
+                "refusal": {
+                  "code": "agent_session_operation_invalid",
+                  "details": {
+                    "reason": "providerStartFailed",
+                    "ownerVerdict": "exited",
+                    "rewindReason": "turnActive",
+                    "account": "system",
+                    "argumentProblem": {
+                      "agent": "Codex",
+                      "option": "--model",
+                      "problem": "missingValue"
+                    },
+                    "agent": "codex",
+                    "agentInstallation": {
+                      "agent": "codex",
+                      "installedVersion": "0.1.0",
+                      "minimumVersion": "0.2.0"
+                    },
+                    "codexInstallation": {
+                      "installedVersion": null,
+                      "minimumVersion": "0.2.0"
+                    },
+                    "currentFence": 3,
+                    "currentRevision": 2,
+                    "resolution": {
+                      "state": "approved",
+                      "selectedOptionId": "yes",
+                      "answers": [
+                        {
+                          "questionId": "q",
+                          "optionIds": ["a"],
+                          "other": "x"
+                        }
+                      ],
+                      "resolvedBy": "client",
+                      "resolvedAt": 5
+                    },
+                    "owner": {
+                      "sessionId": "session-2",
+                      "workspaceId": "ws-2"
+                    }
+                  }
+                },
+                "attachment": {
+                  "reason": "tooLarge",
+                  "limit": 10
+                },
+                "retry": {
+                  "error": "overloaded",
+                  "status": 529,
+                  "cause": "busy",
+                  "attempt": 1,
+                  "maxRetries": 3
+                },
+                "usageLimit": {
+                  "window": "fiveHour",
+                  "resetsAt": 1000
+                },
+                "argumentProblem": {
+                  "agent": "Claude",
+                  "option": "-p",
+                  "problem": "positionalPrompt"
+                },
+                "neverReachedAgent": true,
+                "backgroundStop": "all",
+                "requestTimeout": {
+                  "method": "thread/start",
+                  "timeoutMs": 30000
+                }
+              },
+              "orcaStop": {
+                "cause": "user",
+                "turnItemId": "turn-item"
+              },
+              "usageLimitTurnItemId": "turn-item"
+            },
+            {
+              "type": "tool-call",
+              "name": "shell",
+              "input": {
+                "command": ["ls"]
+              },
+              "callId": "call-1",
+              "state": "completed",
+              "endedAs": "completed",
+              "mcpIdentity": {
+                "server": "s",
+                "tool": "t"
+              },
+              "exitCode": 0,
+              "durationMs": 5,
+              "webSearchResults": [
+                {
+                  "title": "t",
+                  "url": "https://example.com"
+                }
+              ]
+            },
+            {
+              "type": "tool-result",
+              "output": "ok",
+              "isError": false,
+              "callId": "call-1",
+              "fullOutputItemId": "full-1",
+              "editPatch": {
+                "filePath": "a.ts",
+                "hunks": [
+                  {
+                    "oldStart": 1,
+                    "oldLines": 1,
+                    "newStart": 1,
+                    "newLines": 2,
+                    "lines": ["-a", "+a", "+b"]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "image-ref",
+              "path": "/tmp/a.png",
+              "alt": "a"
+            },
+            {
+              "type": "subagent-group",
+              "groupId": "g",
+              "agents": [
+                {
+                  "id": "c",
+                  "label": "child",
+                  "state": "working",
+                  "tokens": 1,
+                  "startedAt": 1,
+                  "settledAt": 2
+                }
+              ]
+            },
+            {
+              "type": "subagent",
+              "id": "c",
+              "label": "child",
+              "state": "completed",
+              "groupId": "g",
+              "parentId": "p",
+              "run": "r",
+              "outcomeBasis": "stop-acknowledged",
+              "background": true
+            },
+            {
+              "type": "background-task",
+              "taskId": "t",
+              "kind": "command",
+              "label": "build",
+              "state": "running",
+              "parentToolUseId": "call-1",
+              "summary": "s",
+              "error": "e",
+              "outputFile": "/tmp/o",
+              "tokens": 1,
+              "startedAt": 1,
+              "settledAt": 2
+            }
+          ],
+          "sentAs": "steer",
+          "command": {
+            "name": "compact"
+          },
+          "skills": [
+            {
+              "name": "s",
+              "path": "/s"
+            }
+          ],
+          "state": "completed",
+          "completedAt": 3,
+          "from": {
+            "kind": "agent",
+            "senders": [
+              {
+                "party": {
+                  "address": "term_worker",
+                  "terminalHandle": "term_worker",
+                  "orcaSessionId": null
+                },
+                "name": "Worker",
+                "relation": "worker"
+              }
+            ],
+            "orchestration": {
+              "message": "mail-notice",
+              "mailbox": "m",
+              "dispatchId": null,
+              "messages": [
+                {
+                  "messageId": "m1",
+                  "runId": "r1",
+                  "from": "term_worker"
+                }
+              ]
+            }
+          }
+        },
+        "fingerprint": "f",
+        "state": "returned",
+        "holdReason": null,
+        "returnedReason": "refused",
+        "returnedRejection": {
+          "kind": "startFailed",
+          "account": "managed",
+          "detail": {
+            "text": "model not found",
+            "audience": "log"
+          },
+          "refusal": {
+            "code": "agent_session_operation_invalid",
+            "details": {
+              "reason": "providerStartFailed",
+              "ownerVerdict": "exited",
+              "rewindReason": "turnActive",
+              "account": "system",
+              "argumentProblem": {
+                "agent": "Codex",
+                "option": "--model",
+                "problem": "missingValue"
+              },
+              "agent": "codex",
+              "agentInstallation": {
+                "agent": "codex",
+                "installedVersion": "0.1.0",
+                "minimumVersion": "0.2.0"
+              },
+              "codexInstallation": {
+                "installedVersion": null,
+                "minimumVersion": "0.2.0"
+              },
+              "currentFence": 3,
+              "currentRevision": 2,
+              "resolution": {
+                "state": "approved",
+                "selectedOptionId": "yes",
+                "answers": [
+                  {
+                    "questionId": "q",
+                    "optionIds": ["a"],
+                    "other": "x"
+                  }
+                ],
+                "resolvedBy": "client",
+                "resolvedAt": 5
+              },
+              "owner": {
+                "sessionId": "session-2",
+                "workspaceId": "ws-2"
+              }
+            }
+          },
+          "attachment": {
+            "reason": "tooLarge",
+            "limit": 10
+          },
+          "retry": {
+            "error": "overloaded",
+            "status": 529,
+            "cause": "busy",
+            "attempt": 1,
+            "maxRetries": 3
+          },
+          "usageLimit": {
+            "window": "fiveHour",
+            "resetsAt": 1000
+          },
+          "argumentProblem": {
+            "agent": "Claude",
+            "option": "-p",
+            "problem": "positionalPrompt"
+          },
+          "neverReachedAgent": true,
+          "backgroundStop": "all",
+          "requestTimeout": {
+            "method": "thread/start",
+            "timeoutMs": 30000
+          }
+        },
+        "consumedAs": null,
+        "queuedAt": {
+          "epoch": "epoch-1",
+          "sequence": 2
+        },
+        "options": {
+          "model": "m"
+        }
+      }
+    ]
+  ]
+]

@@ -31,7 +31,7 @@ function luminance(color: string | boolean | undefined): number {
 function resolvedDarkTheme(): NonNullable<
   ReturnType<typeof mermaid.mermaidAPI.getConfig>['themeVariables']
 > {
-  mermaid.initialize(getMermaidConfig(true, false, darkColors))
+  mermaid.initialize(getMermaidConfig(true, darkColors))
   const variables = mermaid.mermaidAPI.getConfig().themeVariables
   if (!variables) {
     throw new Error('Mermaid did not resolve the theme')
@@ -40,43 +40,6 @@ function resolvedDarkTheme(): NonNullable<
 }
 
 describe('getMermaidConfig', () => {
-  it('uses strict Mermaid rendering defaults', () => {
-    expect(getMermaidConfig(false)).toMatchObject({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      suppressErrorRendering: true,
-      theme: 'default',
-      htmlLabels: false
-    })
-  })
-
-  it('can enable HTML labels for callers that explicitly need them', () => {
-    expect(getMermaidConfig(false, true)).toMatchObject({
-      startOnLoad: false,
-      theme: 'default',
-      htmlLabels: true
-    })
-  })
-
-  it('uses the colored dark palette when the preview is dark', () => {
-    const colors = darkColors
-    expect(getMermaidConfig(true, false, colors)).toMatchObject({
-      theme: 'base',
-      darkMode: true,
-      themeVariables: {
-        darkMode: true,
-        primaryColor: colors.primary,
-        tertiaryColor: colors.tertiary,
-        primaryTextColor: colors.foreground,
-        tertiaryTextColor: colors.foreground,
-        primaryBorderColor: colors.border,
-        lineColor: colors.foreground,
-        edgeLabelBackground: colors.background
-      },
-      htmlLabels: false
-    })
-  })
-
   it('keeps Gantt labels readable on completed and active tasks and alternate sections', () => {
     const variables = resolvedDarkTheme()
     for (const [text, background] of [

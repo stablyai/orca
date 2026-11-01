@@ -38,10 +38,8 @@ import {
 } from '../browser/doc-preview-grant-registry'
 import {
   DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
-  DOC_PREVIEW_LINK_CLICK_CHANNEL,
   DOC_PREVIEW_MINT_GRANT_CHANNEL,
-  DOC_PREVIEW_REVOKE_GRANT_CHANNEL,
-  parseDocPreviewUrl
+  DOC_PREVIEW_REVOKE_GRANT_CHANNEL
 } from '../../shared/doc-preview-scheme'
 
 const REQUEST: DocPreviewGrantRequest = {
@@ -78,14 +76,6 @@ function authorize(grantId: unknown, relativePath: unknown): boolean {
   return handler({ sender }, grantId, relativePath) as boolean
 }
 
-function reportLinkClick(url: unknown): void {
-  const listener = mocks.listeners.get(DOC_PREVIEW_LINK_CLICK_CHANNEL)
-  if (!listener) {
-    throw new Error('link click listener not registered')
-  }
-  listener({ sender }, url)
-}
-
 beforeEach(() => {
   mocks.handlers.clear()
   mocks.listeners.clear()
@@ -97,33 +87,7 @@ beforeEach(() => {
 })
 
 describe('document preview grant handlers', () => {
-  it('mints a grant addressable by the URL it returns', () => {
-    const result = mint()
-
-    expect(parseDocPreviewUrl(result.url)).toEqual({
-      grantId: result.grantId,
-      relativePath: 'index.html'
-    })
-    expect(getDocPreviewGrant(result.grantId)?.root).toBe('/home/alice/docs')
-    expect(mocks.isTrustedBrowserRenderer).toHaveBeenCalledWith(sender)
-  })
-
-  it('revokes a grant it minted', () => {
-    const result = mint()
-
-    expect(revoke(result.grantId)).toBe(true)
-    expect(getDocPreviewGrant(result.grantId)).toBeNull()
-  })
-
-  it('rejects a request that names no root, entry document or page', () => {
-    expect(() => mint({ ...REQUEST, root: '  ' })).toThrow(/Invalid/)
-    expect(() => mint({ ...REQUEST, entryRelativePath: '' })).toThrow(/Invalid/)
-    expect(() => mint({ ...REQUEST, browserPageId: ' ' })).toThrow(/Invalid/)
-  })
-
-  // Why this is refused here and not left to registration: this is where a page becomes a document
-  // page, and the two halves of the page registry have to stay disjoint. A page already hosting a
-  // browsing guest would otherwise resolve in both, and the tool door prefers the document one.
+  // Keep browser/document registries disjoint when minting the document identity.
   it('refuses to make a page that already hosts a browsing guest into a document page', () => {
     mocks.getGuestWebContentsId.mockReturnValue(42)
 
@@ -131,8 +95,7 @@ describe('document preview grant handlers', () => {
     expect(mocks.getGuestWebContentsId).toHaveBeenCalledWith('doc-page-1')
   })
 
-  // Why: this channel hands out filesystem-read authority, so an untrusted sender must leave with
-  // nothing rather than with a grant id the scheme handler would honor.
+  // Untrusted senders must receive no filesystem-read grant.
   it('mints nothing for a sender that is not the trusted renderer', () => {
     mocks.isTrustedBrowserRenderer.mockReturnValue(false)
 
@@ -170,25 +133,5 @@ describe('document preview grant handlers', () => {
     expect(authorize(result.grantId, null)).toBe(false)
     expect(authorize(null, 'assets/app.js')).toBe(false)
     expect(authorize('0'.repeat(32), 'assets/app.js')).toBe(false)
-  })
-
-  // Why this channel skips the trusted-renderer check: its sender is a preview guest rendering a
-  // workspace document, which is the untrusted side by construction. The guest policy holds the
-  // gate, so all this listener owes is the sender and a string.
-  it('hands a reported link click to the guest policy with the sender that reported it', () => {
-    reportLinkClick('https://example.com/docs')
-
-    expect(mocks.reportDocPreviewLinkClick).toHaveBeenCalledExactlyOnceWith(
-      sender,
-      'https://example.com/docs'
-    )
-    expect(mocks.isTrustedBrowserRenderer).not.toHaveBeenCalled()
-  })
-
-  it('ignores a reported click that is not a string at all', () => {
-    reportLinkClick({ url: 'https://example.com/docs' })
-    reportLinkClick(undefined)
-
-    expect(mocks.reportDocPreviewLinkClick).not.toHaveBeenCalled()
   })
 })

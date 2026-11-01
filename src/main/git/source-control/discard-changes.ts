@@ -14,9 +14,6 @@ import { redoWriteForDriveCheckoutSuspects } from './drive-checkout-suspect-writ
 
 const DISCARD_WRITE = ['restore', '--worktree'] as const
 
-/**
- * Discard working tree changes for a file.
- */
 export async function discardChanges(
   worktreePath: string,
   filePath: string,
@@ -39,9 +36,7 @@ export async function discardChanges(
         }
       )
       tracked = true
-    } catch {
-      // File is not tracked by git
-    }
+    } catch {}
 
     if (tracked) {
       await gitExecFileAsync(
@@ -70,14 +65,8 @@ async function listTrackedPathSpecs(
   const trackedPaths: string[] = []
   const commands = bulkPathspecCommands(['ls-files', '-z', '--'], filePaths, worktreePath, options)
   for (const args of commands) {
-    const { stdout } = await gitExecFileAsync(args, {
-      ...gitOptionsForWorktree(worktreePath, options),
-      // Why: this buffers rather than streams, so it must fence -- an unfenced WSL
-      // login shell glues its rc banner onto the first NUL record, and a tracked
-      // path that fails to match is silently reclassified as untracked.
-      captureWslLoginShellOutput: true
-    })
-    // Why: a tracked directory can hold enough paths to exceed the JS argument limit.
+    const { stdout } = await gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
+    // Iterate instead of spreading: tracked directories can exceed the JS argument limit.
     for (const trackedPath of stdout.split('\0')) {
       if (trackedPath) {
         trackedPaths.push(trackedPath)
@@ -92,17 +81,13 @@ async function cleanUntrackedPaths(
   filePaths: readonly string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
-  // A pathspec-free `clean -ffdx` would sweep the whole worktree; the chunker emits no empty chunk.
+  // Git pathspecs avoid recursive deletion through symlinked parents; empty chunks must never invoke clean.
   const commands = bulkPathspecCommands(['clean', '-ffdx', '--'], filePaths, worktreePath, options)
   for (const args of commands) {
     await gitExecFileAsync(args, { ...gitOptionsForWorktree(worktreePath, options) })
   }
 }
 
-/**
- * Discard working tree changes for many paths in a small number of subprocesses.
- */
 export async function bulkDiscardChanges(
   worktreePath: string,
   filePaths: string[],

@@ -1,13 +1,9 @@
-// Work that outlives its turn is a background-task row: a message carrying a `background-task`
-// block with its own run state, the row every lane writes for it. It is not open work a turn's
-// end settles, so it outlives its turn by what the row is, whichever run of the assembler ends
-// that turn; only its own updates, or the session's end, change its state.
+// Background-task rows outlive turn settlement; only their own updates or session end settle them.
 
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
-import { canReplaceBackgroundTaskState } from '../../../shared/native-chat-background-task-row'
+import { canReplaceBackgroundTaskState } from '../../../shared/native-chat/input/native-chat-background-task-row'
 import { isBackgroundTaskBlock } from '../../../shared/native-chat-types'
 
-/** Whether `next` would move a task `held` already settled back to a state it may not take. */
 export function relightsProviderTimelineBackgroundTask(
   held: AgentJournalItemBody | null,
   next: AgentJournalItemBody

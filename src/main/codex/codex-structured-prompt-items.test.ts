@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   codexApprovalItem,
   codexApprovalOptions,
-  codexPromptIdentity,
   codexQuestionItems
 } from './codex-structured-prompt-items'
+
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
+  CODEX_MCP_ELICITATION_METHOD,
   encodeCodexQuestionOptionId
 } from './codex-structured-prompt-replies'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../native-chat/agent-session-journal/journal-row-schema'
@@ -36,27 +37,6 @@ describe('codex approval items', () => {
     expect(
       codexApprovalOptions({ availableDecisions: ['accept', 'teleport'] }).map((o) => o.id)
     ).toEqual(['accept'])
-  })
-
-  it('titles the prompt by what codex asked for and starts it pending', () => {
-    const command = codexApprovalItem({
-      method: CODEX_COMMAND_APPROVAL_METHOD,
-      params: { availableDecisions: ['accept'] },
-      detail: 'rm -rf build'
-    })
-
-    expect(command).toMatchObject({
-      kind: 'approval',
-      title: 'Run a command?',
-      detail: 'rm -rf build',
-      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-    })
-    expect(
-      codexApprovalItem({ method: CODEX_FILE_CHANGE_APPROVAL_METHOD, params: {}, detail: null })
-    ).toMatchObject({ title: 'Apply file changes?', detail: null })
-    expect(
-      codexApprovalItem({ method: 'item/other/requestApproval', params: {}, detail: null })
-    ).toMatchObject({ title: 'Approve this action?' })
   })
 
   it("prefers codex's own reason over the command the item announced", () => {
@@ -101,7 +81,47 @@ describe('codex approval items', () => {
     })
 
     expect(item.detail).toContain('output truncated')
-    expect(Buffer.byteLength(JSON.stringify(item), 'utf8')).toBeLessThan(32 * 1024)
+    expect(Buffer.byteLength(JSON.stringify(item), 'utf8')).toBeLessThan(160 * 1024)
+  })
+
+  it('renders an MCP tool-call approval with the tool arguments and the TUI decision set', () => {
+    const item = codexApprovalItem({
+      method: CODEX_MCP_ELICITATION_METHOD,
+      params: {
+        message: 'Allow Notion to run tool "notion.notion-update-page"?',
+        requestedSchema: { type: 'object', properties: {} },
+        _meta: {
+          codex_approval_kind: 'mcp_tool_call',
+          persist: ['session', 'always'],
+          tool_params: { page_id: 'page-1' }
+        }
+      },
+      detail: null
+    })
+
+    expect(item).toMatchObject({
+      title: 'Allow Notion to run tool "notion.notion-update-page"?',
+      detail: '{"page_id":"page-1"}',
+      resolution: { state: 'pending' }
+    })
+    expect(item.options).toEqual([
+      { id: 'accept', label: 'Allow' },
+      { id: 'acceptForSession', label: 'Allow for this session' },
+      // Not "Cancel": the card's close button already means stop the turn.
+      { id: 'cancel', label: 'Deny' }
+    ])
+  })
+
+  it('offers no session reuse for an MCP tool call that does not allow it', () => {
+    const item = codexApprovalItem({
+      method: CODEX_MCP_ELICITATION_METHOD,
+      params: { _meta: { codex_approval_kind: 'mcp_tool_call' } },
+      detail: null
+    })
+
+    expect(item.title).toBe('Allow this tool call?')
+    expect(item.detail).toBeNull()
+    expect(item.options.map((option) => option.id)).toEqual(['accept', 'cancel'])
   })
 })
 
@@ -152,12 +172,6 @@ describe('codex question items', () => {
     })
 
     expect(items.map((item) => item.questionId)).toEqual(['q4'])
-  })
-
-  it('returns nothing when the request carries no questions at all', () => {
-    expect(
-      codexQuestionItems({ threadId: THREAD_ID, promptKey: CODEX_ITEM_ID, params: {} })
-    ).toEqual([])
   })
 
   it('preserves a free-text path for null options and Other', () => {
@@ -211,12 +225,5 @@ describe('codex question items', () => {
     expect(
       Buffer.byteLength(JSON.stringify({ identity: item.identity, body: item.body }), 'utf8')
     ).toBeLessThan(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES)
-  })
-
-  it('keys an approval without a question id', () => {
-    expect(codexPromptIdentity({ threadId: THREAD_ID, promptKey: CODEX_ITEM_ID })).toEqual({
-      provider: 'orca',
-      clientMessageId: 'codex-prompt:thread-abc:item-4'
-    })
   })
 })

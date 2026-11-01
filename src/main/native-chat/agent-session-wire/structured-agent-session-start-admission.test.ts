@@ -1,8 +1,3 @@
-// A chat's agent starts outside the session's serialize: each wait a start makes is held in turn
-// here, against the real host, store and journal with a scripted adapter. While it is held, a send
-// is accepted at once, a Stop or quit ends the start without waiting on it, and what was sent is
-// handed over once, in order, to the child the start published.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,7 +11,10 @@ import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-se
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
@@ -53,7 +51,6 @@ type Point =
 const holds = new Map<Point, PromiseWithResolvers<void>>()
 const reached = new Set<Point>()
 
-/** Each hold stops the first start step that reaches it, once. */
 async function at(point: Point): Promise<void> {
   const held = holds.get(point)
   if (held) {
@@ -118,7 +115,6 @@ function startHost(): void {
     idleSweep,
     now: () => NOW
   })
-  // The attempt's sink drains before its child is published.
   const { runtimeState } = host.collaboratorsForTests()
   const mint = runtimeState.mintEventSink.bind(runtimeState)
   vi.spyOn(runtimeState, 'mintEventSink').mockImplementation((sessionId) => {
@@ -132,8 +128,6 @@ function startHost(): void {
   })
 }
 
-/** A new host with no child, so the next send starts one; `reopen` loads the store anew, so its
- *  lease is unreconciled. */
 async function restart(reopen = false): Promise<void> {
   await host.close(SESSION, 'evict')
   await host.flushAllStreamedEvents()
@@ -143,10 +137,9 @@ async function restart(reopen = false): Promise<void> {
   startHost()
 }
 
-/** How each point is reached: everything before its hold has already happened. */
 const SETUP: Record<Point, () => Promise<void>> = {
   closing: async () => {
-    // A stop whose close stayed unproven leaves the child closing; the next start joins it.
+    // Unproven Stop leaves a close for startup to join.
     closeSession.mockResolvedValueOnce(false)
     const { serialize, lifetime } = host.collaboratorsForTests()
     await serialize(SESSION, () => lifetime.stopAgent(SESSION, { cause: 'evict', resting: true }))
@@ -167,7 +160,6 @@ const SETUP: Record<Point, () => Promise<void>> = {
   drain: () => restart(),
   open: () => restart(),
   recovery: async () => {
-    // A rewind in doubt over a turn the chat holds, so the start asks the provider about it.
     const turn = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 0 }
     events!.appendItem(turn, hostTestMessage('rewound'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await host.flushStreamedEvents(SESSION)
@@ -199,7 +191,6 @@ const SETUP: Record<Point, () => Promise<void>> = {
   dispatch: () => restart()
 }
 
-/** The lease as a failed attempt leaves it: still naming its owner, in the recovering stage. */
 async function leaveRecovering(): Promise<void> {
   const owner = store.getRecord(SESSION)!.lease.ownerProcess
   await restart()
@@ -209,7 +200,6 @@ async function leaveRecovering(): Promise<void> {
   }))
 }
 
-/** Answers the owner probes in turn; the one at `heldAt` waits on the probe hold for its point. */
 function holdProbes(answers: AgentSessionOwnerProbe[], heldAt: number): void {
   answers.forEach((answer, index) =>
     probeOwner.mockImplementationOnce(async () => {
@@ -258,6 +248,7 @@ afterEach(async () => {
   }
   vi.restoreAllMocks()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -282,10 +273,8 @@ async function submission(id: string) {
   return submissions.find((entry) => entry.clientMessageId === id)
 }
 
-/** A Stop naming no turn: it stops whatever the chat has in flight, a start included. */
 const stop = () => host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
 
-/** Holds `point`, sends the first message and waits for its start to reach the hold. */
 async function heldAt(point: Point) {
   await SETUP[point]()
   const held = Promise.withResolvers<void>()
@@ -298,7 +287,6 @@ async function heldAt(point: Point) {
 
 const child = () => host.collaboratorsForTests().sessions.get(SESSION)?.child ?? null
 const PRE_PUBLISH: readonly Point[] = ['probe', 'reprobe', 'resolver', 'spawn', 'drain']
-// The owner probe's signal and re-probe are POSIX-only: Windows never signals a saved pid.
 const POSIX = process.platform !== 'win32'
 
 describe('a send while the agent start is held', () => {
@@ -310,7 +298,7 @@ describe('a send while the agent start is held', () => {
     { point: 'spawn' },
     { point: 'drain' },
     { point: 'open' },
-    // A send waits on a rewind in doubt by design; it waits outside the lock, behind the start.
+    // Provider-only rewind waits outside serialization before acceptance.
     { point: 'recovery', acceptedWhileHeld: false },
     { point: 'dispatch' }
   ])('at $point is accepted at once and handed over once, in order', async (row) => {
@@ -335,7 +323,6 @@ describe('a send while the agent start is held', () => {
 
 describe('a Stop while the agent start is held', () => {
   it.each<Point>([
-    // The first await after the start registers: nothing is probed, resolved or spawned yet.
     'probe',
     ...(POSIX ? ['reprobe' as const] : []),
     'resolver',
@@ -349,7 +336,7 @@ describe('a Stop while the agent start is held', () => {
     const { first, release } = await heldAt(point)
 
     const stopped = stop()
-    // The pending row is a commit, which the Stop's own step queues behind; its abort does not.
+    // Stop’s persistence queues behind pending-row commit; abort itself is immediate.
     if (point !== 'pending-row') {
       expect(await stopped).toMatchObject({ ok: true })
     }
@@ -360,7 +347,6 @@ describe('a Stop while the agent start is held', () => {
       expect(host.collaboratorsForTests().runtimeState.startFlights.get(SESSION)).toBeUndefined()
     )
     if (point === 'recovery') {
-      // A send waiting on a rewind in doubt was never accepted: the Stop ended what it waited on.
       expect(await first.sent).toMatchObject({ ok: false })
     } else {
       await eventually(async () =>
@@ -371,7 +357,6 @@ describe('a Stop while the agent start is held', () => {
       )
     }
     expect(delivered).toEqual([])
-    // A child spawned for the stopped start is closed, never published as the session's.
     if (PRE_PUBLISH.includes(point)) {
       expect(child()).toBeNull()
     }
@@ -447,10 +432,12 @@ describe('a start racing the host', () => {
     expect(replayed).toBe(false)
     expect(child()).toBeNull()
     release()
-    expect(await replay).toMatchObject({ ok: true, replayed: true })
+    await eventually(() => expect(child()?.phase).toBe('starting'))
+    expect(replayed).toBe(false)
     expect(child()).toMatchObject({ phase: 'starting', generation: `generation-${spawned + 1}` })
     expect(operationRan).toBe(false)
     opened.resolve()
+    expect(await replay).toMatchObject({ ok: true, replayed: true })
     expect(await operation).toMatchObject({ ok: true })
     expect(operationRan).toBe(true)
     await eventually(async () =>

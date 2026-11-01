@@ -45,8 +45,7 @@ describe('resolveDefaultAgentForNewTab', () => {
   })
 
   it('falls back to the auto-pick order when the default is blank', () => {
-    // Why: 'blank' configures agent-less new workspaces, but an explicit
-    // new-agent-tab chord still wants an agent.
+    // Blank suppresses agents only for new workspaces; an explicit new-agent-tab chord still requests one.
     expect(
       resolveDefaultAgentForNewTab({
         defaultTuiAgent: 'blank',

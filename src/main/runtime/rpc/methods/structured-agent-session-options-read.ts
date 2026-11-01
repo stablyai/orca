@@ -1,12 +1,6 @@
-// The options read surface: what a session reports about itself, and the
-// host's stored model catalog behind the picker.
-//
-// `agentSession.options` answers at rest from the record and the catalog, and
-// asks the live provider only when one runs. `agentSession.modelCatalog` deliberately does
-// neither — answering from the host store (and what a running child's start already said) is
-// what lets a picker render while an attach is still running. It is additive: an older host answers
-// `method_not_found` (or `forbidden` through the mobile allowlist gate), and
-// the client keeps its static seed.
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
+// options reads at-rest records/catalogs or the live provider; modelCatalog reads stored/start-published facts without waiting on attach.
+// Older hosts return method_not_found (mobile may see forbidden); clients retain static seeds.
 
 import { defineMethod } from '../core'
 import {
@@ -21,8 +15,10 @@ import {
   OptionsParams
 } from './structured-agent-session-schemas'
 import { agentSessionPinnedLaunchDirectory } from '../../agent-session-record-launch-directory'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import { clientReadsOptionsWithoutModel } from './structured-agent-session-policy'
+import {
+  clientRequestsCommands,
+  clientReadsOptionsWithoutModel
+} from './structured-agent-session-policy'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 import { structuredAgentSessionOptionModels } from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
 import { finishedListingIds } from '../../../../shared/structured-agent-session-options'
@@ -47,7 +43,10 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
     permission: 'workspace',
     params: OptionsParams,
     handler: async (params, ctx) =>
-      (await requireInstalledStructuredHost(ctx, params.sessionId)).readCommands(params.sessionId)
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).readCommands(
+        params.sessionId,
+        clientRequestsCommands(ctx)
+      )
   }),
   defineMethod({
     name: 'agentSession.options',
@@ -58,9 +57,14 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
       const host = await requireInstalledStructuredHost(ctx, params.sessionId)
       const result = await host.readOptions(params.sessionId, { readsWithoutModel })
       if (result.current.model === undefined && !readsWithoutModel) {
-        throw agentSessionRefusalError('structured_agent_session_unsupported', {
-          reason: 'clientCapabilityMissing'
-        })
+        return {
+          ...result,
+          current: { ...result.current, model: '' },
+          models: [
+            { id: '', label: 'Model not reported', isDefault: false, efforts: [] },
+            ...result.models.filter((model) => model.id !== '')
+          ]
+        }
       }
       return result
     }
@@ -69,8 +73,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
     name: 'agentSession.modelCatalog',
     permission: 'workspace',
     params: ModelCatalogParams,
-    // A structured chat's read names its session and builds the host, since it may come first;
-    // terminal-backed chat's session-less read must not open the journal where none runs.
+    // Session reads may build the host; session-less terminal reads must not open unused structured journals.
     handler: async ({ worktree, ...params }, ctx) => {
       requireStructuredAgentAudience(ctx, params.agent)
       const host =
@@ -78,7 +81,11 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
           ? requireStructuredHost(ctx)
           : await requireInstalledStructuredHost(ctx, params.sessionId)
       const record =
-        params.sessionId === undefined ? null : host.deps.store.getRecord(params.sessionId)
+        params.sessionId === undefined ? null : host.deps.store.getConversation(params.sessionId)
+      const coherent =
+        ctx.clientKind === undefined ||
+        ctx.clientCapabilities?.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY) === true
+      const scope = coherent ? {} : { legacy: true }
       const read = async (): Promise<AgentSessionModelCatalogResult> => {
         const catalog = host.deps.modelCatalog
         if (!catalog) {
@@ -86,22 +93,35 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         }
         // A floating chat runs in the folder it was created in, not the floating setting's current one.
         const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
-        if (launchDirectory) {
-          return catalog.read({ ...params, workspacePath: launchDirectory })
+        const request = {
+          ...params,
+          ...scope,
+          ...(launchDirectory
+            ? { workspacePath: launchDirectory }
+            : worktree === undefined
+              ? {}
+              : {
+                  workspace: {
+                    selector: worktree,
+                    identity: () =>
+                      ctx.runtime.structuredAgentSessionCatalogWorkspaceIdentity(worktree),
+                    resolve: () => ctx.runtime.resolveStructuredAgentCatalogWorkspace(worktree)
+                  }
+                })
         }
-        if (worktree === undefined) {
-          return catalog.read(params)
+        if (params.sessionId !== undefined) {
+          return host.readModelCatalog(request)
         }
-        const workspacePath = await ctx.runtime
-          .resolveStructuredAgentSessionLocalWorkspacePath(worktree)
-          .catch(() => null)
-        return catalog.read({ ...params, workspacePath })
+        if (!params.savedOnly) {
+          void catalog.demand(request)
+        }
+        return catalog.read(request)
       }
       const listing = await read()
       const own = record?.provider === params.agent ? record : null
-      // A reopened chat's own model stays a row, so a client that replaces an unlisted one keeps
-      // it. Not a new chat's read (it names a worktree): that answer seeds the next new chat's list.
-      return own &&
+      // Preserve a reopened chat's own model even if unlisted; new-chat reads instead seed the next picker.
+      return !coherent &&
+        own &&
         worktree === undefined &&
         finishedListingIds(listing) &&
         listing.origin !== 'unknown'

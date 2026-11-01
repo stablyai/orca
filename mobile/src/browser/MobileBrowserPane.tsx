@@ -1,6 +1,9 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AppState, type View } from 'react-native'
+import type { MobileBrowserTab } from '../session/mobile-session-route-types'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc-client'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
@@ -30,18 +33,7 @@ import { useMobileBrowserInteractions } from './use-mobile-browser-interactions'
 import { useMobileBrowserStream } from './use-mobile-browser-stream'
 import { useBrowserBinaryScreencastGrant } from './use-browser-binary-screencast-grant'
 
-export type MobileBrowserTab = {
-  type: 'browser'
-  id: string
-  title: string
-  browserWorkspaceId: string
-  browserPageId: string | null
-  url: string
-  loading: boolean
-  canGoBack: boolean
-  canGoForward: boolean
-  isActive: boolean
-}
+export type { MobileBrowserTab } from '../session/mobile-session-route-types'
 
 type MobileBrowserPaneProps = {
   client: RpcClient | null
@@ -71,6 +63,7 @@ export function MobileBrowserPane({
   bottomInset,
   onToast
 }: MobileBrowserPaneProps) {
+  useMobileTranslation()
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
     getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
   )
@@ -122,8 +115,7 @@ export function MobileBrowserPane({
 
   const setRootViewRef = useCallback(
     (node: View | null) => {
-      // Why: long-press right-click timers belong to this responder surface;
-      // clearing from ref cleanup preserves the same unmount boundary.
+      // Clear surface-owned long-press timers at ref cleanup to preserve unmount boundary.
       if (node === null) {
         clearLongPressTimer()
       }
@@ -163,15 +155,13 @@ export function MobileBrowserPane({
   if (addressSync.nextState !== addressSyncState) {
     setAddressSyncState(addressSync.nextState)
     if (addressSync.shouldSyncValue) {
-      // Why: keep browser stream/goto address updates intact, but avoid a
-      // stale post-blur paint when the tab URL is the source of truth.
+      // Preserve stream/goto updates without stale post-blur paint when tab URL is authoritative.
       setAddressValue(displayBrowserUrl(tab.url))
     }
   }
 
   useLayoutEffect(() => {
-    // Why: gesture and stream handlers need committed values before passive
-    // Effects flush, without leaking refs from an uncommitted render.
+    // Publish committed gesture/stream refs before passive effects without leaking uncommitted render values.
     frameMetadataRef.current = frameMetadata
     layoutRef.current = layout
     dialogRef.current = dialog
@@ -220,7 +210,7 @@ export function MobileBrowserPane({
   const navigateToAddress = useCallback(async () => {
     const url = normalizeBrowserUrl(addressValue)
     if (!url) {
-      setError('Enter a valid URL.')
+      setError(translate('browser.pane.invalidUrl', 'Enter a valid URL.'))
       return
     }
     const settled = await sendBrowserRequest(

@@ -68,8 +68,7 @@ export function readWslSkillDiscoveryObservation(
         id: stablePathId(canonicalSkillFilePath),
         name: summary.name ?? directoryName,
         description: summary.description,
-        // Copy: `root.providers` is shared across every skill/source from this
-        // root, so a later in-place merge must not mutate the aliased array.
+        // Copy shared root tags so later merges cannot mutate sibling skills/sources.
         providers: [...root.providers],
         sourceKind,
         sourceLabel: sourceLabelForSkill(root, sourceKind),

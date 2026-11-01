@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 import { parse } from 'yaml'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
+import { collectNodeServerInputs } from './node-server-change-scope.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const unit = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
@@ -52,9 +53,14 @@ function routedOutputs(files, reused, options) {
     }
   }
   return Object.fromEntries(
-    ['test', 'static_analysis', 'typecheck', 'mobile_ci_tools', ...routes.map(([job]) => job)].map(
-      (name) => [name, String(evaluate(workflow.jobs.code_paths.outputs[name], context))]
-    )
+    [
+      'test',
+      'static_analysis',
+      'typecheck',
+      'mobile_ci_tools',
+      'relay_integration',
+      ...routes.map(([job]) => job)
+    ].map((name) => [name, String(evaluate(workflow.jobs.code_paths.outputs[name], context))])
   )
 }
 
@@ -62,9 +68,11 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
   const job = workflow.jobs[jobName === 'orcad_browser' ? 'test' : jobName]
   const condition =
     jobName === 'orcad_browser' ? `(${job.if}) && (${chrome.if}) && (${browser.if})` : job.if
+  // Unit shards wait for their plan rather than preflight.
+  const gate = jobName === 'orcad_browser' ? 'unit_plan' : 'preflight'
 
-  it('waits for the detector and physical preflight job', () => {
-    expect(job.needs).toEqual(['code_paths', 'preflight'])
+  it('waits for the detector and its prerequisite job', () => {
+    expect(job.needs).toEqual(['code_paths', gate])
     expect(job.if).toContain('!cancelled()')
     expect(job['continue-on-error']).toBeUndefined()
   })
@@ -99,7 +107,7 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
             [jobName]: scenario.selected === undefined ? 'true' : (scenario.selected ?? undefined)
           }
         },
-        preflight: {
+        [gate]: {
           result: scenario.preflight === undefined ? 'success' : (scenario.preflight ?? undefined)
         }
       }
@@ -136,7 +144,7 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
         cancelled: () => false,
         success: () => true,
         inputs: {},
-        needs: { code_paths: { result: 'success', outputs }, preflight: { result: 'success' } }
+        needs: { code_paths: { result: 'success', outputs }, [gate]: { result: 'success' } }
       }
       if (jobName === 'orcad_browser') {
         context.inputs.browser_contract = evaluate(job.with.browser_contract, context)
@@ -259,7 +267,6 @@ describe('Mobile CI tool preflight routing', () => {
     expect(
       evaluate(unit.jobs.relay_integration.if, { inputs: { run_relay_integration: false } })
     ).toBe(false)
-    expect(workflow.jobs.test.with.run_relay_integration).toBeUndefined()
     expect(unit.jobs.relay_integration.needs).toBeUndefined()
   })
 
@@ -292,6 +299,74 @@ describe('Mobile CI tool preflight routing', () => {
   })
 })
 
+describe('Renderer-only relay admission', () => {
+  const renderer = 'src/renderer/src/components/right-sidebar/FileExplorer.tsx'
+  const admitted = (files) => {
+    const outputs = routedOutputs(files, 'false')
+    const runRelay = evaluate(workflow.jobs.test.with.run_relay_integration, {
+      needs: { code_paths: { outputs } }
+    })
+    return evaluate(unit.jobs.relay_integration.if, {
+      inputs: { run_relay_integration: runRelay }
+    })
+  }
+
+  it('skips relay setup for renderer-only changes while retaining unit and package checks', () => {
+    const files = [renderer, 'src/renderer/src/i18n/locales/en.json', 'README.md']
+    expect(admitted(files)).toBe(false)
+    expect(classifyPrJobs(files)).toMatchObject({
+      test: true,
+      static_analysis: true,
+      typecheck: true,
+      package: true,
+      package_windows: true
+    })
+  })
+
+  it.each([
+    [],
+    ['src/main/runtime/mobile-cloud-relay/relay-http-client.ts'],
+    ['src/shared/relay-region-preference.ts'],
+    ['tests/e2e/relay-region-compatibility.unit.test.ts'],
+    ['src/main/orcad/orcad-browser-provider.ts'],
+    ['package.json'],
+    ['pnpm-lock.yaml'],
+    ['config/vitest.config.ts'],
+    ['.github/workflows/unit-tests.yml'],
+    ['.github/workflows/pr.yml'],
+    ['unknown-input'],
+    [renderer, 'cloud/packages/relay-contract/src/director-messages.ts'],
+    [renderer, 'src/main/runtime/mobile-cloud-relay/relay-http-client.ts'],
+    [renderer, 'src/shared/relay-region-preference.ts']
+  ])('retains relay coverage for non-renderer or incomplete evidence: %j', (...files) => {
+    expect(admitted(files)).toBe(true)
+  })
+
+  it.each([
+    {},
+    { relay_integration: '' },
+    { relay_integration: 'unknown' },
+    { relay_integration: 'false', orcad_browser: 'true' }
+  ])(
+    'retains relay/browser execution for missing routes or a selected browser contract: %j',
+    (outputs) => {
+      expect(
+        evaluate(workflow.jobs.test.with.run_relay_integration, {
+          needs: { code_paths: { outputs } }
+        })
+      ).toBe(true)
+    }
+  )
+
+  it('keeps the shipped relay contracts independent of renderer inputs', async () => {
+    const testStep = relaySteps.find((step) => step.name === 'Test relay integration contracts')
+    const entryPoints = testStep.run.split(/\s+/).filter((arg) => arg.endsWith('.test.ts'))
+    expect(entryPoints.length).toBeGreaterThan(0)
+    const inputs = await collectNodeServerInputs({ entryPoints })
+    expect([...inputs].filter((file) => file.startsWith('src/renderer/'))).toEqual([])
+  })
+})
+
 const mobileCiScopeDirectories = []
 afterEach(() => {
   for (const directory of mobileCiScopeDirectories.splice(0)) {
@@ -312,8 +387,14 @@ function createMobileCiScopeRepository(
     'config/scripts/pr-code-change-scope.mjs',
     'config/scripts/pr-package-test-paths.mjs',
     'config/scripts/pr-layout-oracle-route.mjs',
+    'config/scripts/pr-shell-contract-prefixes.mjs',
     'config/scripts/git-pull-request-diff-base.mjs',
     'config/scripts/pr-e2e-source-routing.mjs',
+    'config/scripts/pr-browser-e2e-source-routes.mjs',
+    'config/scripts/pr-editor-preview-e2e-source-routes.mjs',
+    'config/scripts/pr-feature-area-e2e-source-routes.mjs',
+    'config/scripts/pr-plugin-e2e-source-routes.mjs',
+    'config/scripts/pr-wsl-e2e-source-routes.mjs',
     'config/scripts/ci-e2e-job-selection.mjs'
   ]) {
     mkdirSync(dirname(join(directory, file)), { recursive: true })
@@ -441,11 +522,10 @@ describe.skipIf(process.platform === 'win32')('Daemon mock complete Git change e
     expect(flags).toContain('test=true\n')
     expect(flags).toContain('typecheck=true\n')
   })
-  it('routes the complete four-file modification through the real detector', () => {
+  it('routes the complete three-file modification through the real detector', () => {
     const companions = [
       'src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts',
-      'config/scripts/process-host-build-dist.test.mjs',
-      'src/main/codex/codex-app-server-connection.test.ts'
+      'config/scripts/process-host-build-dist.test.mjs'
     ]
     const repo = createMobileCiScopeRepository(true, helper, companions)
     for (const file of [helper, ...companions]) {

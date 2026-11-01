@@ -23,7 +23,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const WORKTREE = 'repo-1::/root/repo'
 const FILE_PATH = '/root/repo/README.md'
 
-/** The workspace now lives on its managed server; the tab was saved by the relay era, unstamped. */
+/** Simulate unstamped relay-era tabs after their workspace moves to a managed server. */
 function seedConvertedWorkspace(): void {
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
@@ -117,7 +117,7 @@ describe('a restored tab whose workspace moved to its managed server', () => {
     expect(file).toMatchObject({ worktreeId: WORKTREE, runtimeEnvironmentId: 'env-1' })
     const tabs = state.unifiedTabsByWorktree[WORKTREE] ?? []
     expect(tabs.map((tab) => tab.entityId)).toEqual([file.id])
-    // Same group, same slot: re-owning is not a second tab.
+    // Re-own in place without adding a tab or moving its slot.
     expect((state.groupsByWorktree[WORKTREE] ?? []).flatMap((group) => group.tabOrder)).toEqual([
       tabs[0]?.id
     ])

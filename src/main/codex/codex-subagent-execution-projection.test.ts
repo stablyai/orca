@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
@@ -114,7 +114,6 @@ describe('shared child execution projection', () => {
       expect(h.tracker.state).toBeNull()
       h.send(turn('turn/started', CHILD, 'child-2'))
       h.send(turn('turn/completed', PRIMARY, parent))
-      // One entry per child: the follow-up reopens the child that was spawned.
       expect(h.tracker.state?.tasks).toHaveLength(1)
       h.send(turn('turn/completed', CHILD, 'child-1'))
       h.send(turn('turn/started', CHILD, 'child-1'))

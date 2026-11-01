@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, MessageSquarePlus } from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
+import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -25,10 +30,7 @@ import {
   type AgentSessionContinuationContextMode,
   type AgentSessionContinuationRequest
 } from '@/lib/agent-session-continuation'
-import {
-  detectAgentSessionContinuationAgents,
-  launchAgentSessionContinuation
-} from '@/lib/launch-agent-session-continuation'
+import { launchAgentSessionContinuation } from '@/lib/launch-agent-session-continuation'
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -55,83 +57,87 @@ export function AgentSessionContinuationDialog({
   onOpenChange,
   onStarted
 }: AgentSessionContinuationDialogProps): React.JSX.Element {
+  const workspace = request ? worktreeLaunchWorkspace(request.worktreeId) : null
+  const abortRef = useRef<AbortController | null>(null)
   const settings = useAppStore((state) => state.settings)
-  const [detectedAgents, setDetectedAgents] = useState<TuiAgent[]>([])
-  const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(null)
-  const [contextMode, setContextMode] = useState<AgentSessionContinuationContextMode>('focused')
-  const [detecting, setDetecting] = useState(true)
-  const [detectionFailed, setDetectionFailed] = useState(false)
+  const [pick, setPick] = useState<{
+    request: AgentSessionContinuationRequest | null
+    agent: TuiAgent
+    surface?: AgentLaunchSurface
+  } | null>(null)
+  const detectionTarget = useAgentDetectionTargetForWorktree(request?.worktreeId ?? null)
+  const [contextPick, setContextPick] = useState<{
+    request: AgentSessionContinuationRequest | null
+    mode: AgentSessionContinuationContextMode
+  } | null>(null)
+  if (!open) {
+    if (pick) {
+      setPick(null)
+    }
+    if (contextPick) {
+      setContextPick(null)
+    }
+  }
+  const contextMode = contextPick?.request === request ? contextPick.mode : 'focused'
   const [starting, setStarting] = useState(false)
   const [showStarting, setShowStarting] = useState(false)
   const disabledAgents = settings?.disabledTuiAgents ?? EMPTY_DISABLED_AGENTS
 
-  const agents = useMemo(
-    () =>
-      getAgentCatalog().filter(
-        (agent) =>
-          detectedAgents.includes(agent.id) &&
-          isTuiAgentEnabled(agent.id, disabledAgents) &&
-          isContinuationAgentAllowed(
-            agent.id,
-            request?.source.sourceAgent,
-            request?.avoidSourceAgent
-          )
-      ),
-    [detectedAgents, disabledAgents, request]
+  const observation = useAgentMenuObservation(
+    workspace ? { workspace, launchCwd: request?.initialCwd } : null,
+    open && Boolean(request),
+    detectionTarget,
+    { wakeOnOpen: true }
   )
+  const { detectedIds, detectionFailed } = observation.detection
+  const detecting =
+    detectedIds === null && !detectionFailed && !observation.detection.needsServerUpdate
+  // Agents whose chat opens without their CLI are listed too; their rows decide what is pickable.
+  const offered = workspace
+    ? agentsOfferedForLaunch(useAppStore.getState(), workspace, detectedIds)
+    : []
+  const agents = getAgentCatalog().filter(
+    (agent) =>
+      isTuiAgentEnabled(agent.id, disabledAgents) &&
+      isContinuationAgentAllowed(agent.id, request?.source.sourceAgent, request?.avoidSourceAgent)
+  )
+  const destinationModel =
+    observation.model.state === 'settled'
+      ? {
+          ...observation.model,
+          rows: observation.model.rows.filter((row) =>
+            agents.some((agent) => agent.id === row.agent)
+          )
+        }
+      : observation.model
+  const rows = destinationModel.state === 'settled' ? destinationModel.rows : []
+  const pickable = agents
+    .map((agent) => agent.id)
+    .filter(
+      (agent) =>
+        offered.includes(agent) &&
+        rows.some((row) => row.agent === agent && row.kind !== 'chat-unavailable')
+    )
   const preparing = request === null
   const controlsDisabled = preparing || detecting || starting
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
 
   useEffect(() => {
-    if (!open || !request) {
-      return
-    }
-    let cancelled = false
-    setDetecting(true)
-    setDetectionFailed(false)
-    setDetectedAgents([])
-    setSelectedAgent(null)
-    setContextMode('focused')
-    void detectAgentSessionContinuationAgents(request.worktreeId)
-      .then((detected) => {
-        if (cancelled) {
-          return
-        }
-        const enabled = detected.filter((agent) => isTuiAgentEnabled(agent, disabledAgents))
-        setDetectedAgents(enabled)
-        setSelectedAgent(
-          chooseInitialContinuationAgent({
-            availableAgents: enabled.filter((agent) =>
-              isContinuationAgentAllowed(
-                agent,
-                request.source.sourceAgent,
-                request.avoidSourceAgent
-              )
-            ),
-            sourceAgent: request.avoidSourceAgent ? null : request.source.sourceAgent,
-            defaultAgent: settings?.defaultTuiAgent
-          })
-        )
-      })
-      .catch((error) => {
-        console.error('Agent detection failed for continuation dialog', error)
-        if (!cancelled) {
-          setDetectedAgents([])
-          setSelectedAgent(null)
-          setDetectionFailed(true)
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setDetecting(false)
-        }
-      })
+    const abort = open && request ? new AbortController() : null
+    abortRef.current = abort
+    return () => abort?.abort()
+  }, [open, request])
 
-    return () => {
-      cancelled = true
-    }
-  }, [disabledAgents, open, request, settings?.defaultTuiAgent])
+  const currentPick = pick?.request === request && pickable.includes(pick.agent) ? pick : null
+  const selectedAgent =
+    currentPick?.agent ??
+    chooseInitialContinuationAgent({
+      availableAgents: pickable,
+      automaticAgents: pickable.filter((agent) => detectedIds?.includes(agent)),
+      sourceAgent: request?.avoidSourceAgent ? null : (request?.source.sourceAgent ?? null),
+      defaultAgent: settings?.defaultTuiAgent
+    })
+  const selection = observation.selectionFor(selectedAgent, currentPick?.surface)
 
   useEffect(() => {
     if (!starting) {
@@ -144,13 +150,7 @@ export function AgentSessionContinuationDialog({
   }, [starting])
 
   const handleStart = async (): Promise<void> => {
-    if (
-      !request ||
-      detecting ||
-      !selectedAgent ||
-      !agents.some((agent) => agent.id === selectedAgent) ||
-      starting
-    ) {
+    if (!request || detecting || !selectedAgent || starting || !selection.ready) {
       return
     }
     const prompt = buildAgentSessionContinuationPrompt(request.source, contextMode)
@@ -164,7 +164,9 @@ export function AgentSessionContinuationDialog({
       worktreeId: request.worktreeId,
       groupId: request.groupId,
       initialCwd: request.initialCwd,
-      launchSource: request.launchSource
+      launchChoice: selection.choice,
+      launchSource: request.launchSource,
+      signal: abortRef.current?.signal
     })
     setStarting(false)
     if (launched) {
@@ -177,7 +179,8 @@ export function AgentSessionContinuationDialog({
   const sourceAgentLabel = request?.source.sourceAgent
     ? getAgentLabel(request.source.sourceAgent)
     : null
-  const startDisabled = controlsDisabled || !agents.some((agent) => agent.id === selectedAgent)
+  const startDisabled =
+    controlsDisabled || agents.length === 0 || !selectedAgent || !selection.ready
   const workingDirectory = sourceWorkingDirectory ?? request?.initialCwd
 
   return (
@@ -231,7 +234,14 @@ export function AgentSessionContinuationDialog({
               disabled={controlsDisabled}
               agents={agents}
               value={selectedAgent}
-              onValueChange={setSelectedAgent}
+              onValueChange={(agent) => setPick({ request, agent })}
+              surfaceRows={{
+                model: destinationModel,
+                selection,
+                contextKey: observation.contextKey,
+                surface: currentPick?.surface,
+                onPick: (agent, surface) => setPick({ request, agent, surface })
+              }}
               allowNarrowTrigger
               triggerClassName="min-w-0 w-full"
             />
@@ -257,7 +267,7 @@ export function AgentSessionContinuationDialog({
                     'Could not detect Agents on this workspace host.'
                   )}
                 </p>
-              ) : agents.length === 0 ? (
+              ) : destinationModel.state === 'settled' && rows.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground">
                   {translate(
                     'components.agentSessionContinuation.noAgents',
@@ -275,9 +285,11 @@ export function AgentSessionContinuationDialog({
             <Select
               disabled={controlsDisabled}
               value={contextMode}
-              onValueChange={(value) =>
-                setContextMode(value as AgentSessionContinuationContextMode)
-              }
+              onValueChange={(value) => {
+                if (value === 'focused' || value === 'full') {
+                  setContextPick({ request, mode: value })
+                }
+              }}
             >
               <SelectTrigger className="min-w-0 w-full" size="sm">
                 <SelectValue />

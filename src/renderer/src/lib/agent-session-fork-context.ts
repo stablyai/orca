@@ -28,8 +28,7 @@ function tailBoundForkCapture(value: string): string {
   if (value.length <= MAX_FORK_CAPTURE_SANITIZE_CHARS) {
     return value
   }
-  // Why: fork prompts keep newest terminal turns. Bound the raw capture before
-  // ANSI/OSC cleanup so a huge scrollback cannot run several full-output scans.
+  // Bound raw capture before ANSI/OSC cleanup to avoid repeated scans of huge scrollback.
   return value.slice(-MAX_FORK_CAPTURE_SANITIZE_CHARS)
 }
 

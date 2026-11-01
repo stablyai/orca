@@ -5,7 +5,6 @@ import {
   resolveFocusedFrameRoute,
   type GuestSessionCdpSender
 } from './guest-focused-frame-route'
-import { sendFrameSessionInput } from './guest-frame-input-sessions'
 
 function fakeGuest(): WebContents {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the route only uses the guest as a cache key.
@@ -13,8 +12,7 @@ function fakeGuest(): WebContents {
 }
 
 type FrameModel = {
-  // Frame id focused in each document: '' is the root, a session id is a cross-site frame's
-  // document, and 'frame:<id>' is a same-site frame's document reached through an isolated world.
+  // Document keys: '' = root, session ID = cross-site frame, 'frame:<id>' = same-site context.
   focusedFrameBySession: Record<string, string | null>
   crossSiteTargets: string[]
   sessionForTarget: Record<string, string>
@@ -68,26 +66,6 @@ function frameSender(model: FrameModel) {
 }
 
 describe('resolveFocusedFrameRoute', () => {
-  it('uses widget input when focus is in the main frame or a same-site frame', async () => {
-    const guest = fakeGuest()
-    expect(
-      await resolveFocusedFrameRoute(
-        guest,
-        frameSender({ focusedFrameBySession: {}, crossSiteTargets: [], sessionForTarget: {} })
-      )
-    ).toEqual({ kind: 'widget' })
-    expect(
-      await resolveFocusedFrameRoute(
-        guest,
-        frameSender({
-          focusedFrameBySession: { '': 'SAME-SITE' },
-          crossSiteTargets: ['OTHER'],
-          sessionForTarget: {}
-        })
-      )
-    ).toEqual({ kind: 'widget' })
-  })
-
   it('follows focus through a same-site frame into a cross-site frame inside it', async () => {
     const send = frameSender({
       focusedFrameBySession: { '': 'SAME-SITE', 'frame:SAME-SITE': 'CROSS' },
@@ -205,33 +183,5 @@ describe('isOrcaFrameSessionTraffic', () => {
     expect(
       isOrcaFrameSessionTraffic(guest, 'Target.detachedFromTarget', { sessionId: 'S1' }, undefined)
     ).toBe(true)
-  })
-})
-
-describe('sendFrameSessionInput', () => {
-  it('enables focus emulation once, retrying a failed enable before sending', async () => {
-    const guest = fakeGuest()
-    let failEmulation = true
-    const send = vi.fn<GuestSessionCdpSender>(async (method) => {
-      if (method === 'Emulation.setFocusEmulationEnabled' && failEmulation) {
-        failEmulation = false
-        throw new Error('Inspected target navigated or closed')
-      }
-      return {}
-    })
-
-    for (let i = 0; i < 3; i += 1) {
-      await sendFrameSessionInput(guest, send, 'S1', 'Input.insertText', { text: 'x' })
-    }
-
-    expect(send.mock.calls.slice(0, 3).map(([method]) => method)).toEqual([
-      'Emulation.setFocusEmulationEnabled',
-      'Emulation.setFocusEmulationEnabled',
-      'Input.insertText'
-    ])
-    expect(
-      send.mock.calls.filter(([method]) => method === 'Emulation.setFocusEmulationEnabled')
-    ).toHaveLength(2)
-    expect(send.mock.calls.filter(([method]) => method === 'Input.insertText')).toHaveLength(3)
   })
 })

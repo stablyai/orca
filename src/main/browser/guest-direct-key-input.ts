@@ -18,25 +18,20 @@ import {
   type HeldInputRelease
 } from './remote-cli-page-admission'
 
-// Why: Chromium routes main-session CDP key and text input on a <webview> guest by the
-// window's focus, so it lands in whatever the user is typing into (#20595). Events sent to
-// the guest's own widget reach its page without moving focus.
-// See docs/reference/agent-browser-focus-isolation.md.
+// Main-session CDP keys follow window focus; guest widget events protect the user's input (#20595).
 
 export type GuestCdpSender = GuestSessionCdpSender
 
-// Why: getType() is 'webview' only for guests hosted in an Orca window; offscreen and
-// headless pages have no host frame tree, so CDP input already reaches them.
+// Offscreen and headless pages lack a host frame tree, so CDP already targets them.
 export function isEmbeddedGuest(webContents: WebContents): boolean {
   return webContents.getType() === 'webview'
 }
 
-// Why: sendInputEvent returns before the page handles the event, but CDP input replies only after.
-// A task-queue round trip in the page lets callers read the result of what they just typed.
+// Wait for widget input handling before callers read its effects, matching CDP behavior.
 async function waitForPageToHandleInput(send: GuestCdpSender): Promise<void> {
   await settleWithin(
     send('Runtime.evaluate', {
-      // Why: a message-channel task, not setTimeout, which hidden pages throttle to once a second.
+      // MessageChannel avoids hidden-page timer throttling.
       expression:
         'new Promise((resolve) => { const channel = new MessageChannel(); channel.port1.onmessage = () => resolve(); channel.port2.postMessage(0) })',
       awaitPromise: true
@@ -46,7 +41,7 @@ async function waitForPageToHandleInput(send: GuestCdpSender): Promise<void> {
 }
 
 function runEditCommand(webContents: WebContents, command: GuestEditCommand): void {
-  // Why: it runs after awaiting the page, so a host's access may have been revoked meanwhile.
+  // Access may be revoked while awaiting page input handling.
   assertRemoteCliPageAccess(webContents.id)
   switch (command) {
     case 'selectAll':
@@ -74,8 +69,7 @@ function runEditCommand(webContents: WebContents, command: GuestEditCommand): vo
 
 const NO_FOCUS_GUARD: AgentInputFocusGuard = async () => () => {}
 
-// Why: the fallback needs the guest natively focused for CDP to reach it; the guard hands the
-// user's focus back afterwards, and emulation keeps the page from seeing that as a blur.
+// Restore user focus after CDP fallback; emulation keeps the page from seeing blur.
 async function focusGuestForCdpInput(
   webContents: WebContents,
   send: GuestCdpSender,
@@ -87,7 +81,7 @@ async function focusGuestForCdpInput(
   return release
 }
 
-// Why: CDP input on a cross-site frame's own session reaches that frame without the user's focus.
+// Cross-site frame sessions route CDP input without borrowing user focus.
 async function sendToFrameSession(
   webContents: WebContents,
   send: GuestCdpSender,
@@ -100,58 +94,95 @@ async function sendToFrameSession(
   )
 }
 
-/**
- * Delivers a CDP key event to a page. Embedded guests get widget events, or CDP on a focused
- * cross-site frame's own session; anything else keeps the CDP path while borrowing focus.
- */
+/** Prefer guest widget or frame-session events; borrow focus for embedded-guest CDP fallback. */
 export async function dispatchPageKeyEvent(
   webContents: WebContents,
   params: Record<string, unknown>,
   send: GuestCdpSender,
   guardFocus: AgentInputFocusGuard = NO_FOCUS_GUARD
 ): Promise<unknown> {
+  return await dispatchPageKeyEvents(webContents, [params], send, guardFocus)
+}
+
+const isTabDown = (params: Record<string, unknown>): boolean =>
+  params.key === 'Tab' && (params.type === 'keyDown' || params.type === 'rawKeyDown')
+
+/** Deliver a run of key events along one focus route; callers split runs where focus may move. */
+export async function dispatchPageKeyEvents(
+  webContents: WebContents,
+  events: readonly Record<string, unknown>[],
+  send: GuestCdpSender,
+  guardFocus: AgentInputFocusGuard = NO_FOCUS_GUARD
+): Promise<unknown> {
+  let result: unknown = {}
   if (!isEmbeddedGuest(webContents)) {
-    return await send('Input.dispatchKeyEvent', params)
+    for (const params of events) {
+      result = await send('Input.dispatchKeyEvent', params)
+    }
+    return result
   }
-  const route = await resolveFocusedFrameRoute(webContents, send)
-  if (route.kind === 'session') {
-    // Why: Tab from a frame's last field can move focus out of the guest into Orca's window.
-    const isTabDown =
-      params.key === 'Tab' && (params.type === 'keyDown' || params.type === 'rawKeyDown')
-    const release = isTabDown ? await guardFocus() : () => {}
+  let start = 0
+  let route = await resolveFocusedFrameRoute(webContents, send)
+  // A frame's key handler can move focus to another frame, so each key finds its route again.
+  while (route.kind === 'session') {
+    const keyUp = events.findIndex((params, index) => index >= start && params.type === 'keyUp')
+    const end = keyUp === -1 ? events.length : keyUp + 1
+    const key = events.slice(start, end)
+    // Tab from the last frame field can escape into Orca's window.
+    const release = key.some(isTabDown) ? await guardFocus() : () => {}
     try {
-      return await sendToFrameSession(
-        webContents,
-        send,
-        route.sessionId,
-        'Input.dispatchKeyEvent',
-        params
-      )
+      for (const params of key) {
+        result = await sendToFrameSession(
+          webContents,
+          send,
+          route.sessionId,
+          'Input.dispatchKeyEvent',
+          params
+        )
+      }
     } finally {
       release()
     }
+    if (end >= events.length) {
+      return result
+    }
+    start = end
+    route = await resolveFocusedFrameRoute(webContents, send)
   }
-  const plan = planCdpKeyEvent(params)
-  if (plan && route.kind === 'widget') {
-    // Why: Tab from the page's last field moves focus out of the guest into Orca's window.
-    const release = plan.events.some((event) => event.type === 'keyDown' && event.keyCode === 'Tab')
-      ? await guardFocus()
-      : () => {}
+  const remaining = events.slice(start)
+  const plans = remaining.map((params) => planCdpKeyEvent(params))
+  if (route.kind === 'widget' && plans.every((plan) => plan !== null)) {
+    // Tab from the last page field can escape into Orca's window.
+    const release = remaining.some(isTabDown) ? await guardFocus() : () => {}
     try {
-      await withAgentInputInjection(webContents, () =>
-        // Why: widget events skip the CDP send, so this key is recorded on the page's hold here.
-        trackRemoteCliInput(webContents.id, 'Input.dispatchKeyEvent', params, async () => {
-          for (const event of plan.events) {
-            webContents.sendInputEvent(event)
-          }
-          if (plan.commands.length > 0 || plan.events.length > 0) {
-            await waitForPageToHandleInput(send)
-          }
-          for (const command of plan.commands) {
-            runEditCommand(webContents, command)
-          }
-        })
-      )
+      await withAgentInputInjection(webContents, async () => {
+        // One page round trip settles the whole run; edit commands must see the keys before them.
+        let unsettled = false
+        for (const [index, plan] of plans.entries()) {
+          // Widget events bypass CDP send, so track held keys here.
+          await trackRemoteCliInput(
+            webContents.id,
+            'Input.dispatchKeyEvent',
+            remaining[index],
+            async () => {
+              for (const event of plan.events) {
+                webContents.sendInputEvent(event)
+              }
+              unsettled ||= plan.events.length > 0
+              if (plan.commands.length > 0) {
+                await waitForPageToHandleInput(send)
+                unsettled = false
+                for (const command of plan.commands) {
+                  runEditCommand(webContents, command)
+                }
+              }
+            }
+          )
+        }
+        if (unsettled) {
+          await waitForPageToHandleInput(send)
+        }
+      })
     } finally {
       release()
     }
@@ -159,13 +190,18 @@ export async function dispatchPageKeyEvent(
   }
   const release = await focusGuestForCdpInput(webContents, send, guardFocus)
   try {
-    return await withAgentInputInjection(webContents, () => send('Input.dispatchKeyEvent', params))
+    for (const params of remaining) {
+      result = await withAgentInputInjection(webContents, () =>
+        send('Input.dispatchKeyEvent', params)
+      )
+    }
+    return result
   } finally {
     release()
   }
 }
 
-/** Lets go of what a revoked host's command left pressed; a key goes where the focus routes it. */
+/** Release input held by a revoked host, routing keys to the focused frame. */
 export async function releaseHeldPageInput(
   webContents: WebContents,
   release: HeldInputRelease,
@@ -173,7 +209,7 @@ export async function releaseHeldPageInput(
 ): Promise<unknown> {
   const send: GuestCdpSender = (method, params, sessionId) =>
     sendGuestCdpCommand(webContents, method, params, sessionId)
-  // Why: the command's own debugger lease may already be gone, detaching the debugger.
+  // The command's debugger lease may already have detached.
   const lease = acquireElectronDebugger(webContents)
   try {
     if (release.method === 'Input.dispatchKeyEvent') {
@@ -186,7 +222,7 @@ export async function releaseHeldPageInput(
     const state = cdpPointerStateFor(webContents)
     const remaining = { ...state }
     releaseCdpPointerButton(remaining, button)
-    // Why the live mask: another caller's button may still be down; reporting none would drop it.
+    // Preserve other callers' held buttons when releasing this one.
     const result = await send(release.method, { ...release.params, buttons: remaining.buttons })
     releaseCdpPointerButton(state, button)
     return result
@@ -197,15 +233,11 @@ export async function releaseHeldPageInput(
 
 export type TextInsertionRoute = {
   deliver: (params: Record<string, unknown>) => Promise<unknown>
-  // Why: the fallback holds borrowed focus from routing until delivery; an insert abandoned in
-  // between must still give it back.
+  // Release borrowed focus even if delivery is abandoned.
   release: () => void
 }
 
-/**
- * Chooses how Input.insertText reaches a page: guest widget events for embedded guests, else
- * CDP with the guest focused. Call before any DOM.focus replay; the fallback's focus blurs.
- */
+/** Route before DOM.focus replay: CDP fallback can blur the selected element. */
 export async function routePageTextInsertion(
   webContents: WebContents,
   params: Record<string, unknown>,

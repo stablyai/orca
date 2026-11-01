@@ -1,12 +1,13 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/utils'
 import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
-import { normalizeTaskRepoSelection } from '@/components/task-page-default-repo-selection'
+import { normalizeTaskRepoSelection } from '@/components/task-page/task-page-default-repo-selection'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { ExternalLink } from 'lucide-react'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageGitHubModeControls({
   model
 }: {
@@ -113,11 +114,11 @@ export function TaskPageGitHubModeControls({
             type="button"
             variant="outline"
             size="icon-sm"
-            onClick={() => {
+            onClick={(event) => {
               if (!selectedGitHubRepoExternalLink?.url) {
                 return
               }
-              void window.api.shell.openUrl(selectedGitHubRepoExternalLink.url)
+              openAppHttpLink(selectedGitHubRepoExternalLink.url, { event })
             }}
             aria-label={
               selectedGitHubRepoExternalLink

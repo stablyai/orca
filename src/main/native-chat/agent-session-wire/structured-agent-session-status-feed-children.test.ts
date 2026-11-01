@@ -1,7 +1,3 @@
-// The status summary reads a session's child records from the sink its row landed in, and derives
-// the legacy task list an older client folds from those same records. One chat's helpers are all
-// recorded whatever their number, and its next accepted send retires every settled one.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,8 +30,7 @@ const USER_IDENTITY = {
   turnId: 'turn-1',
   ordinal: 1
 } as const
-/** The legacy row an older client reads for `childView()`, derived from it. These sessions are
- *  Codex's, so a subagent keeps the id its row carried before views, which no Stop can name. */
+/** Legacy Codex task IDs retain their old unaddressable-by-Stop prefix. */
 const LEGACY_TASK = {
   id: 'codex-agent:task-1',
   kind: 'agent',
@@ -83,7 +78,7 @@ async function feedWithChildren(provider: AgentSessionHandleProvider = 'codex') 
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, indexedStatusFeedSession({ journal, provider })]]),
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => (now += 1),
     statusSink: () => sink,
     onChildWorkChanged: (sessionId) => changed.push(sessionId)
@@ -119,7 +114,6 @@ describe('structured status summary child records', () => {
       session: expect.objectContaining({ backgroundTasks: [LEGACY_TASK], children: views })
     })
 
-    // No journal change: only the record's state moved.
     views = [childView({ state: 'waiting' })]
     const before = events.length
     feed.publish(SESSION, journal)
@@ -131,7 +125,6 @@ describe('structured status summary child records', () => {
       })
     })
 
-    // An identical projection is suppressed.
     feed.publish(SESSION, journal)
     expect(events).toHaveLength(before + 1)
   })
@@ -149,9 +142,7 @@ describe('structured status summary child records', () => {
     feed.publish(SESSION, journal)
     const before = events.length
 
-    // A `task_progress` frame moves usage, which no status-summary reader renders, and the
-    // child's evidence clocks; re-broadcasting the whole summary per frame would cost every
-    // remote subscriber. The chat strip's channel carries both per tick.
+    // Per-tick usage/freshness belongs on the chat channel, avoiding full broadcasts to remote lists.
     views = [
       childView({
         totalTokens: 4_200,
@@ -169,12 +160,10 @@ describe('structured status summary child records', () => {
       })
     })
 
-    // The clock re-broadcasts once it moved far enough to change a "no update" minute.
     views = [childView({ observedAt: 60_101, operation: { ...operation, observedAt: 60_101 } })]
     feed.publish(SESSION, journal)
     expect(events).toHaveLength(before + 1)
 
-    // What the child is doing, or its state, re-broadcasts at once.
     views = [
       childView({
         observedAt: 60_200,
@@ -194,7 +183,6 @@ describe('structured status summary child records', () => {
     })
   })
 
-  // The sidebar and the strip list running children only; a finished one is on neither.
   it('lists only running children on the summary, and no finished one in any of its lists', async () => {
     const { feed, events, views } = await feedWithChildren()
     const failed = childView({
@@ -209,7 +197,7 @@ describe('structured status summary child records', () => {
     })
     views.current = () => [childView(), failed]
     feed.publish(SESSION)
-    // An older client reads a failed task's legacy `blocked` as still running.
+    // Legacy blocked failures would otherwise keep old clients’ parent status working.
     expect(lastSummary(events)).toMatchObject({
       backgroundTasks: [LEGACY_TASK],
       children: [childView()]
@@ -251,7 +239,6 @@ describe('structured status summary child records', () => {
         agentId,
         'codex-command:primary:cmd-1'
       ])
-      // The views name the child as its records do; only the legacy shape is mapped.
       expect(lastSummary(events)?.children?.map((view) => view.providerId)).toEqual([
         'task-1',
         'codex-command:primary:cmd-1'
@@ -303,7 +290,6 @@ describe('structured status summary child records', () => {
     const retirements = () => admitted.flat().filter((edge) => edge.type === 'turn-started')
     feed.publish(SESSION)
     await send('send-1')
-    // Written but not taken: the provider may still refuse it.
     expect(retirements()).toHaveLength(0)
     await accept('send-1')
     expect(retirements()).toHaveLength(1)
@@ -311,7 +297,6 @@ describe('structured status summary child records', () => {
     feed.publish(SESSION)
     await turn('turn-1', 'completed')
     feed.publish(SESSION)
-    // Neither a subagent's turn nor a turn the provider opened on its own is the user's.
     await turn('child-turn', 'running', 'child-thread')
     feed.publish(SESSION)
     await turn('wake-turn', 'running')
@@ -323,7 +308,6 @@ describe('structured status summary child records', () => {
     feed.publish(SESSION)
     expect(retirements()).toHaveLength(2)
 
-    // A rewind replaces the conversation, as the user's own action.
     await journal.replaceEpochItems('handle_forked', 1, [])
     feed.publish(SESSION)
     expect(retirements()).toHaveLength(3)
@@ -346,7 +330,7 @@ describe('structured status summary child records', () => {
     expect(lastSummary(events)?.children).toHaveLength(1)
     feed.forget(SESSION)
     expect(lastSummary(events)).not.toHaveProperty('children')
-    // A reload reads the retained projection: it must not list what the store no longer holds.
+    // Reloads must project retained records after the store retires them.
     feed.subscribe({ id: 'list-2', emit: (event) => events.push(event) })
     const snapshot = events.at(-1)
     expect(snapshot?.type === 'snapshot' ? snapshot.sessions[0] : null).not.toHaveProperty(
@@ -371,7 +355,7 @@ describe('structured status feed over the real child-record store', () => {
     const feed = new StructuredAgentSessionStatusFeed({
       logger: createStructuredAgentSessionLogger(),
       sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
-      getRecord: () => null,
+      getConversation: () => null,
       now: () => 1_000,
       statusSink: () => sink
     })

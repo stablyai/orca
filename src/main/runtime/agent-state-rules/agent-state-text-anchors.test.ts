@@ -78,7 +78,7 @@ describe('the bundled Cursor approval menu', () => {
 })
 
 describe('the blocked layer prefilter', () => {
-  it('includes every bundled blocked anchor', () => {
+  it('includes the bundled command approval anchor', () => {
     expect(terminalWaitBlockedSentinelRe().test('Run this command?')).toBe(true)
   })
 })

@@ -1,4 +1,5 @@
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { findNativeChatPasteField } from '@/lib/native-chat-paste-request'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import {
   shouldFocusNativeChatComposerFromEditingKey,
@@ -12,7 +13,6 @@ type NativeChatRootKeyEvent = KeyboardRedirectEvent & {
   stopPropagation: () => void
 }
 
-/** Routes a key pressed in the chat pane outside any input to the chat's input. */
 export function routeNativeChatRootKeyToInput(
   event: NativeChatRootKeyEvent,
   composer: NativeChatComposerHandle | null,
@@ -27,18 +27,20 @@ export function routeNativeChatRootKeyToInput(
   ) {
     return
   }
-  // Backspace/Delete outside an input focuses the composer (like typing)
-  // but inserts nothing — let the now-focused field handle the keystroke.
+  // Editing keys outside inputs focus the composer without inserting text.
   if (shouldFocusNativeChatComposerFromEditingKey(event)) {
     composer?.focus()
     return
   }
-  // The question card replaces the composer, so at most one input exists. If it
-  // cannot take focus (disabled), the paste reaches the bridge, which explains why.
+  // Resolve an editing card before the primary input so the native paste keeps its owner.
   const isMac = getShortcutPlatform() === 'darwin'
   if (shouldFocusNativeChatInputForPaste(event, isMac)) {
-    const input = composer ?? questionAnswerInput
-    input?.focus()
+    const field = findNativeChatPasteField(event.target)
+    if (field) {
+      field.focus({ preventScroll: true })
+    } else {
+      ;(composer ?? questionAnswerInput)?.focus()
+    }
     return
   }
   if (!shouldRedirectNativeChatTyping(event, isMac)) {

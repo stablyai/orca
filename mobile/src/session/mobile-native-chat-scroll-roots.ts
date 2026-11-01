@@ -1,5 +1,5 @@
-import { MobileNativeChatPageMotion, pageKeepsPlace } from './mobile-native-chat-page-motion'
-import { MobileNativeChatPageAnchoring } from './mobile-native-chat-page-anchoring'
+import { MobileNativeChatScrollMotion, scrollKeepsPlace } from './mobile-native-chat-scroll-motion'
+import { MobileNativeChatScrollAnchoring } from './mobile-native-chat-scroll-anchoring'
 import {
   mobileNativeChatScrollRootAttribute as ROOT,
   mobileNativeChatScrollRootOwners as owners,
@@ -32,13 +32,11 @@ function disclosureOwns(key: string, address: string): boolean {
   return false
 }
 
-/** Mounted handles only; the chat's existing bounded memory owns positions across eviction. */
+// Track mounted handles only; bounded chat memory retains positions across eviction.
 export class MobileNativeChatScrollRoots {
   private roots = new Map<string, Root>()
   private observer: ResizeObserver | null = null
   private held = new Set<Root>()
-  private generation = 0
-  private page: MobileNativeChatPageMotion | null = null
 
   constructor(
     private readonly memory: Map<string, MobileNativeChatRootPosition>,
@@ -64,7 +62,7 @@ export class MobileNativeChatScrollRoots {
     if (occupant) {
       this.unregister(occupant, true)
     }
-    const motion = new MobileNativeChatPageMotion(() => {}, node.scrollTop)
+    const motion = new MobileNativeChatScrollMotion(node.scrollTop)
     const root: Root = {
       id,
       address,
@@ -78,7 +76,7 @@ export class MobileNativeChatScrollRoots {
       nextWork: undefined,
       fresh: true,
       motion,
-      anchoring: new MobileNativeChatPageAnchoring(
+      anchoring: new MobileNativeChatScrollAnchoring(
         () => node,
         () => root.position.followsEnd
       ),
@@ -240,7 +238,7 @@ export class MobileNativeChatScrollRoots {
               node.getBoundingClientRect().top -
               position.offset
             : (position?.top ?? node.scrollTop)
-        const ordinary = !position.followsEnd && pageKeepsPlace(node.scrollTop)
+        const ordinary = !position.followsEnd && scrollKeepsPlace(node.scrollTop)
         const clamped = Math.max(0, Math.min(target, max))
         if (
           (pin || explicit || ordinary) &&
@@ -291,27 +289,10 @@ export class MobileNativeChatScrollRoots {
     }
   }
 
-  async settled(page: MobileNativeChatPageMotion): Promise<void> {
-    const generation = this.generation
-    this.page = page
-    do {
-      await Promise.all([
-        page.whenSettled(),
-        ...Array.from(this.roots.values(), (r) => r.motion.whenSettled())
-      ])
-      if (generation !== this.generation) {
-        return
-      }
-    } while (!page.settled() || Array.from(this.roots.values()).some((r) => !r.motion.settled()))
-  }
-
   dispose(): void {
-    this.generation += 1
     for (const root of this.roots.values()) {
       this.unregister(root, false)
     }
-    this.page?.release()
-    this.page = null
     this.observer = null
     this.releaseHold()
   }

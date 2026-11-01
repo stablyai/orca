@@ -41,7 +41,7 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
               )
             : translate(
                 'components.tab.bar.SortableTabContextMenu.switchToChatView',
-                'Switch to Chat'
+                'Continue in Chat UI'
               )}
         </Item>
       ) : null}
@@ -61,7 +61,7 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
                   )
                 : translate(
                     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                    'Switch to Terminal'
+                    'Continue with Terminal Agent'
                   )}
             </Item>
           </TooltipTrigger>

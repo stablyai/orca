@@ -4,6 +4,7 @@ import { setMigrationUnsupportedPtyListener } from '../agent-hooks/migration-uns
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
 import { stopSyntheticTitleSpinnerTimer } from './synthetic-title-runtime'
 import { mainProcessState as state } from './main-process-state'
+import { pickHostTurnEnd } from '../../shared/agent-status-types'
 
 export type MainWindowAgentStatusOptions = {
   window: BrowserWindow
@@ -22,6 +23,8 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       evidenceObservedAt,
       stateStartedAt,
       turnStartedAt,
+      turnEndedAt,
+      turnEndDisposition,
       launchToken,
       providerSession,
       providerSessionOnly,
@@ -32,18 +35,18 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       authorityRestartId,
       structuredHost,
       programStatus,
-      programStatusOnly
+      programStatusOnly,
+      agentPresence
     }) => {
       if (state.mainWindow?.isDestroyed()) {
         return
       }
-      // Why: the renderer still derives structured rows from its own feed subscription; forwarding
-      // these too would give one pane key two writers until that bridge is retired.
+      // Renderer still owns structured rows; forwarding would give each pane key two writers until that bridge retires.
       if (structuredHost) {
         return
       }
       if (providerSessionOnly) {
-        // Why: session_start just refreshes durable resume identity while Pi is idle; forward it without titles, telemetry, or status UI.
+        // Idle Pi session_start only refreshes resume identity; skip titles, telemetry and status UI.
         state.mainWindow?.webContents.send('agentStatus:set', {
           ...payload,
           paneKey,
@@ -76,6 +79,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(evidenceObservedAt !== undefined ? { evidenceObservedAt } : {}),
         stateStartedAt,
         ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
+        ...pickHostTurnEnd({ turnEndedAt, turnEndDisposition }),
         ...(providerSession ? { providerSession } : {}),
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
@@ -83,7 +87,10 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(orchestration ? { orchestration } : {}),
         ...(programStatus ? { programStatus } : {}),
         ...(programStatusOnly === true ? { programStatusOnly: true } : {}),
-        // Why: reconnect replays re-send cached rows; the renderer must not treat them as fresh completions.
+        ...(agentPresence?.session && !agentPresence.ended
+          ? { paneOwner: { agent: agentPresence.agent, session: agentPresence.session } }
+          : {}),
+        // Mark reconnect replays so cached completions do not notify again.
         ...(isReplay === true ? { isReplay: true } : {})
       }
       state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
@@ -116,11 +123,10 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
 }
 
 export function clearMainWindowAgentStatusListeners(): void {
-  // Why: detach the hook listener on close so the server never fires into destroyed webContents before reopen, and replay runs only on deliberate recreations.
+  // Detach window listeners before destroyed WebContents; only deliberate window recreation replays.
   agentHookServer.setListener(null)
   agentHookServer.setPaneStatusClearListener(null)
   setMigrationUnsupportedPtyListener(null)
-  // Why timer only: it would fire into destroyed webContents, but the hook subscription has no
-  // replay, so a reopened window resumes the kept working entries on 'show'.
+  // Stop the timer only; retained working entries resume on reopened show without hook replay.
   stopSyntheticTitleSpinnerTimer()
 }

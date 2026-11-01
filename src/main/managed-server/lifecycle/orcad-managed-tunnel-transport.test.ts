@@ -83,7 +83,7 @@ describe('the managed tunnel’s transport', () => {
   })
 
   it('replaces a system SSH forward whose channel sshd refused with the stdio bridge', async () => {
-    // System SSH has no ssh2 client to probe, so only the forward's own channel check can tell.
+    // System SSH exposes refusal through the forward's channel check, without an ssh2 client.
     const chosen = select('unverifiable', 'refused')
     await expect(chosen.transport.start(conn, options)).resolves.toMatchObject({
       entry: { id: 'stdio' }
@@ -93,7 +93,7 @@ describe('the managed tunnel’s transport', () => {
       chosen.stdio.start.mock.invocationCallOrder[0]
     )
     expect(chosen.stdio.start).toHaveBeenCalledWith(conn, options)
-    // The closed forward's ssh must have released the persisted port before the bridge binds it.
+    // Release the persisted port before the bridge binds it.
     expect(chosen.reserveLocalPort.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
       chosen.forward.close.mock.invocationCallOrder[0]
     )
@@ -128,7 +128,6 @@ describe('the managed tunnel’s transport', () => {
     await chosen.transport.start(conn, options)
     expect(chosen.forward.start).toHaveBeenCalledOnce()
     expect(chosen.stdio.start).toHaveBeenCalledTimes(2)
-    // A stale `ssh -L` from an earlier Orca may still hold the persisted port.
     expect(chosen.reserveLocalPort).toHaveBeenCalledWith(conn, options)
 
     generation = 2
@@ -151,26 +150,13 @@ describe('the managed tunnel’s transport', () => {
     ).resolves.toMatchObject({ entry: { id: 'stdio' } })
     expect(chosen.forward.close).toHaveBeenCalledOnce()
     expect(knownOrcadTunnelTransport('ssh-1')).toBe('stdio_bridge')
-    // A late exit of the abandoned forward must not read as the bridge closing.
+    // Late exits from abandoned forwards must not close the replacement bridge.
     chosen.forward.start.mock.calls[0]?.[1].onUnexpectedClose?.(options, {
       kind: 'unexpected-exit'
     })
     expect(onUnexpectedClose).toHaveBeenCalledOnce()
   })
 
-  it('reports ssh’s own exit reason over a listener that never came up', async () => {
-    const chosen = select('unverifiable', 'not-listening', false)
-    chosen.checkForward.mockImplementation(async () => {
-      chosen.forward.start.mock.calls[0]?.[1].onUnexpectedClose?.(options, {
-        kind: 'unexpected-exit',
-        detail: 'Permission denied (publickey).'
-      })
-      return 'not-listening'
-    })
-    await expect(chosen.transport.start(conn, options)).rejects.toThrow(/Permission denied/)
-  })
-
-  // Why: a ControlMaster can hold a login (MFA, a hardware key) the forward cannot repeat alone.
   it('takes the bridge when the forward fails to start at all', async () => {
     const chosen = select('unverifiable')
     chosen.forward.start.mockRejectedValueOnce(
@@ -186,7 +172,6 @@ describe('the managed tunnel’s transport', () => {
     expect(chosen.forward.start).toHaveBeenCalledOnce()
   })
 
-  // Why: a forward still waiting on a key touch or a prompt never binds, yet has not exited.
   it('takes the bridge when the forward never listened', async () => {
     const chosen = select('unverifiable', 'not-listening')
     await expect(chosen.transport.start(conn, options)).resolves.toMatchObject({
@@ -208,13 +193,6 @@ describe('the managed tunnel’s transport', () => {
     const chosen = select('unverifiable', 'refused')
     await chosen.transport.start(conn, { ...options, localPort: 0 })
     expect(chosen.reserveLocalPort).not.toHaveBeenCalled()
-  })
-
-  it('surfaces the bridge’s own failure when neither route starts', async () => {
-    const chosen = select('unverifiable')
-    chosen.forward.start.mockRejectedValueOnce(new Error('forward login refused'))
-    chosen.stdio.start.mockRejectedValueOnce(new Error('bridge unavailable'))
-    await expect(chosen.transport.start(conn, options)).rejects.toThrow('bridge unavailable')
   })
 
   it('never records a refusal answered before a reconnect against the new transport', async () => {

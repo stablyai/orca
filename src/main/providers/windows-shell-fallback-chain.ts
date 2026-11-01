@@ -6,8 +6,6 @@ import {
   type WindowsPowerShellResolveOptions
 } from './windows-powershell-executable'
 
-/** A single attempt in the Windows shell-spawn fallback chain: the absolute
- *  executable plus the launch args + cwd computed for it. */
 export type WindowsShellSpawnAttempt = {
   shellPath: string
   shellArgs: string[]
@@ -39,19 +37,8 @@ function toAttempt(
   }
 }
 
-/**
- * Build the ordered list of Windows PowerShell spawn attempts for a resolved
- * PowerShell shell path.
- *
- * Why: handing ConPTY a bare `pwsh.exe` lets Windows resolve it to the Store
- * App Execution Alias stub, whose CreateProcessW launch fails with
- * ERROR_ACCESS_DENIED (error code 5). Each attempt here is a real absolute
- * executable: requested PowerShell -> inbox Windows PowerShell -> cmd.exe, with
- * args recomputed per shell so the cmd.exe fallback still gets `chcp 65001`.
- *
- * Returns an empty array when `shellPath` is not a PowerShell family, so callers
- * keep their existing single-shell behavior for cmd.exe / wsl.exe / Git Bash.
- */
+/** Requested PowerShell → inbox PowerShell → cmd.exe, with absolute ConPTY-safe paths and per-shell argv.
+ * Store alias stubs fail CreateProcessW (5); non-PowerShell requests retain their single-shell path. */
 export function buildWindowsPowerShellSpawnAttempts(args: {
   shellPath: string
   cwd: string

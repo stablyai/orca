@@ -5,11 +5,16 @@ import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type Database from '../sqlite/sync-database'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
+import type { RuntimeStore } from './runtime-store-contract'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { bindPaneFirst, registerBoundPty } from './bind-first-pane.test-fixture'
+import { publishHeadlessRuntimeGraph } from './headless-runtime-graph'
 
 export const TAB_ID = '11111111-1111-4111-8111-111111111111'
 export const LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -36,12 +41,24 @@ export function sqliteFor(db: OrchestrationDb): Database.Database {
   return (db as unknown as { db: Database.Database }).db
 }
 
-export function createBoundRun(db: OrchestrationDb, objective: string) {
-  return db.createRun({
+/** `rebind` then run-uses it, so the pane keeps only the new Run. */
+export function createBoundRun(
+  db: OrchestrationDb,
+  objective: string,
+  options: { rebind?: boolean } = {}
+) {
+  const run = db.createRun({
     objective,
     coordinatorHandle: TERMINAL_HANDLE,
     coordinatorPaneKey: PANE_KEY
   })
+  return options.rebind
+    ? db.bindRun({
+        runId: run.id,
+        coordinatorHandle: TERMINAL_HANDLE,
+        coordinatorPaneKey: PANE_KEY
+      })!
+    : run
 }
 
 export function insertDirectRunMessage(db: OrchestrationDb, runId: string, subject: string) {
@@ -59,8 +76,14 @@ export function insertDirectRunMessage(db: OrchestrationDb, runId: string, subje
   return db.getMessageById(message.id)!
 }
 
+class MailboxRuntime extends OrcaRuntimeService {
+  get idleEvidenceSource() {
+    return this.tuiIdleEvidenceSource
+  }
+}
+
 export type MailboxNotificationHarness = {
-  runtime: OrcaRuntimeService
+  runtime: MailboxRuntime
   write: ReturnType<typeof vi.fn>
 }
 
@@ -83,23 +106,52 @@ export type MailboxCheckOptions = {
   signal?: AbortSignal
 }
 
+/** Keep main-owned pane bindings in the fixture's session layout. */
+function mailboxLayoutStore(): RuntimeStore {
+  return {
+    getRepos: () => [],
+    getRepo: () => undefined,
+    addRepo: vi.fn<RuntimeStore['addRepo']>(),
+    updateRepo: vi.fn<RuntimeStore['updateRepo']>(),
+    getAllWorktreeMeta: () => ({}),
+    getWorktreeMeta: () => undefined,
+    setWorktreeMeta: vi.fn<RuntimeStore['setWorktreeMeta']>(),
+    removeWorktreeMeta: vi.fn<RuntimeStore['removeWorktreeMeta']>(),
+    getGitHubCache: vi.fn<RuntimeStore['getGitHubCache']>(),
+    getSettings: () => ({
+      workspaceDir: '/workspaces',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      branchPrefix: 'none',
+      branchPrefixCustom: ''
+    })
+  }
+}
+
 export function createRuntime(
   db: OrchestrationDb,
   options: {
     connectionId?: string
     isWsl?: boolean
+    /** A headless serve: no window, only the empty headless graph. */
+    headless?: boolean
     getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
     checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
+    launchAgent?: TuiAgent | null
   } = {}
 ): MailboxNotificationHarness {
-  const runtime = new OrcaRuntimeService(null, undefined, {
-    getAgentStatusSnapshot: options.getAgentStatusSnapshot,
-    checkHookAgentPresence: options.checkHookAgentPresence,
-    attestAgentHookCompatibilityAuthority: ({ paneKey }) =>
-      paneKey === PANE_KEY || paneKey.startsWith(`${SECOND_TAB_ID}:`)
-        ? { paneKey, source: 'current_hook' }
-        : null
-  })
+  const runtime = new MailboxRuntime(
+    ORCA_LAYOUT_OWNER_IS_MAIN ? mailboxLayoutStore() : null,
+    undefined,
+    {
+      getAgentStatusSnapshot: options.getAgentStatusSnapshot,
+      checkHookAgentPresence: options.checkHookAgentPresence,
+      attestAgentHookCompatibilityAuthority: ({ paneKey }) =>
+        paneKey === PANE_KEY || paneKey.startsWith(`${SECOND_TAB_ID}:`)
+          ? { paneKey, source: 'current_hook' }
+          : null
+    }
+  )
   const write = vi.fn(() => true)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
@@ -108,6 +160,7 @@ export function createRuntime(
     kill: vi.fn(),
     getForegroundProcess: async () => null
   })
+  bindPaneFirst(runtime, { worktreeId: WORKTREE_ID, tabId: TAB_ID, leafId: LEAF_ID, ptyId: PTY_ID })
   runtime.registerPty(
     PTY_ID,
     WORKTREE_ID,
@@ -116,11 +169,22 @@ export function createRuntime(
       tabId: TAB_ID,
       leafId: LEAF_ID,
       incarnationId: 'mailbox-incarnation',
-      agentLaunchAuthority: { launchToken: LAUNCH_TOKEN, launchAgent: 'codex' }
+      ...(options.launchAgent === null
+        ? {}
+        : {
+            agentLaunchAuthority: {
+              launchToken: LAUNCH_TOKEN,
+              launchAgent: options.launchAgent ?? 'codex'
+            }
+          })
     },
     options.isWsl
   )
   runtime.registerPreAllocatedHandleForPty(PTY_ID, TERMINAL_HANDLE)
+  if (options.headless) {
+    publishHeadlessRuntimeGraph(runtime)
+    return { runtime, write }
+  }
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
     tabs: [
@@ -150,7 +214,7 @@ export function registerSecondPane(
   leafId = SECOND_LEAF_ID,
   includeFirstPane = true
 ): void {
-  runtime.registerPty(SECOND_PTY_ID, WORKTREE_ID, null, {
+  registerBoundPty(runtime, SECOND_PTY_ID, WORKTREE_ID, null, {
     tabId: SECOND_TAB_ID,
     leafId,
     incarnationId: 'mailbox-second-incarnation',
@@ -203,9 +267,8 @@ export function registerSecondPane(
 
 export async function driveToLiveIdle(runtime: OrcaRuntimeService): Promise<void> {
   await runtime.listTerminals()
-  runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 1)
-  runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 2)
-  // Why: the snapshot awaits the headless model's write chain, so both chunks are parsed.
+  runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 1)
+  // Await the model's write chain so the chunk is parsed.
   await runtime.serializeMainTerminalBuffer(PTY_ID)
 }
 

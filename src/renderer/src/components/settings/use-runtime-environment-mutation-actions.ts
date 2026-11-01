@@ -1,17 +1,21 @@
-import { useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
+import { useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { isRuntimeEnvironmentRemovalBlocked } from './runtime-environment-host-details'
+import { defaultServerNameForAccessLink } from './runtime-server-default-name'
+import { forgetCachedRuntimeHostDetails } from './use-runtime-environment-catalog'
 import type { RuntimeHostAccessFailure } from './RuntimeHostAccessFailureAlert'
+import { warnWslHostServerStop } from '../sidebar/wsl-host-removal'
 
 type RuntimeEnvironmentMutationActionParams = {
   settings: GlobalSettings
   allowLocalRuntime: boolean
   mountedRef: MutableRefObject<boolean>
-  setAddServerFormOpen: Dispatch<SetStateAction<boolean>>
+  setAddServerFormOpen: (open: boolean) => void
   loadEnvironments: (verified?: {
     environmentId: string
     runtimeStatus: RuntimeStatus
@@ -45,8 +49,10 @@ export function useRuntimeEnvironmentMutationActions({
   }
 
   const addEnvironment = async (allowLoopback: boolean): Promise<void> => {
-    const trimmedName = name.trim()
     const trimmedPairingCode = pairingCode.trim()
+    const trimmedName =
+      name.trim() ||
+      defaultServerNameForAccessLink(trimmedPairingCode, useAppStore.getState().runtimeEnvironments)
     if (!trimmedName || !trimmedPairingCode) {
       toast.error(
         translate(
@@ -59,7 +65,7 @@ export function useRuntimeEnvironmentMutationActions({
     setAddServerFailure(null)
     setIsSaving(true)
     try {
-      // Why main judges a taken name: a code for that same saved server refreshes it instead.
+      // Main distinguishes duplicate names from refreshing the same saved server.
       const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
         name: trimmedName,
         pairingCode: trimmedPairingCode,
@@ -67,7 +73,7 @@ export function useRuntimeEnvironmentMutationActions({
       })
       if (!result.ok) {
         if (mountedRef.current) {
-          setAddServerFailure({ kind: result.kind, message: result.message })
+          setAddServerFailure(result)
         }
         return
       }
@@ -90,7 +96,7 @@ export function useRuntimeEnvironmentMutationActions({
       }
       if (!allowLocalRuntime) {
         const connected = await connectEnvironment(result.environment)
-        // Why not a refreshed entry: removing it would drop a server the user had already saved.
+        // Rollback must not remove an existing server refreshed by this pairing.
         if (!connected && !result.updatedExisting) {
           await window.api.runtimeEnvironments.remove({ selector: result.environment.id })
           await loadEnvironments()
@@ -100,8 +106,8 @@ export function useRuntimeEnvironmentMutationActions({
         if (mountedRef.current) {
           toast.success(
             translate(
-              'auto.components.settings.RuntimeEnvironmentsPane.7b5986c8df',
-              'Connected to {{value0}}. To create new projects there by default, choose it under Advanced > Default host for new projects.',
+              'auto.components.settings.RuntimeEnvironmentsPane.connectedNewProjectsHint',
+              'Connected to {{value0}}. To create new projects there by default, choose it under New projects open on.',
               { value0: result.environment.name }
             )
           )
@@ -138,16 +144,18 @@ export function useRuntimeEnvironmentMutationActions({
         if (mountedRef.current) {
           setRemoveError(
             translate(
-              'auto.components.settings.RuntimeEnvironmentsPane.removeActiveServerBlocked',
-              'This server is the default host for new projects. Choose another one in Advanced before removing it.'
+              'auto.components.settings.RuntimeEnvironmentsPane.removeDefaultServerBlocked',
+              'This server is the default host for new projects. Choose another one under New projects open on before removing it.'
             )
           )
         }
         return false
       }
-      await window.api.runtimeEnvironments.remove({ selector: environment.id })
+      const removal = await window.api.runtimeEnvironments.remove({ selector: environment.id })
+      forgetCachedRuntimeHostDetails(environment.id)
       await loadEnvironments()
-      if (mountedRef.current) {
+      // A WSL host whose Remove couldn't prove its server stopped says so instead of "Removed".
+      if (mountedRef.current && !warnWslHostServerStop(removal?.serverStop)) {
         toast.success(
           translate(
             'auto.components.settings.RuntimeEnvironmentsPane.b5b5114cb0',

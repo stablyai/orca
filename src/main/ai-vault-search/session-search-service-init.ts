@@ -3,15 +3,13 @@ import type { AiVaultSessionSearchInit } from '../ai-vault/session-scanner-servi
 import { sessionSearchDatabasePath } from './session-search-database-path'
 import { sessionSearchPolicy } from './session-search-policy'
 
-// Captured once from the composition root's data path, like the parse cache:
-// every export is inert until then, so no test or early import can index.
+// Keep early imports inert until the composition root installs the data path.
 let databasePath: string | null = null
 
 export function installSessionSearchDataRoot(dataRoot: string): void {
   databasePath = sessionSearchDatabasePath(dataRoot)
 }
 
-/** Read at every spawn and every settings change; null before the data root is installed. */
 export function sessionSearchServiceInit(): AiVaultSessionSearchInit | null {
   return databasePath
     ? {

@@ -28,21 +28,23 @@ export const WORKTREE_CATALOG_METHODS = [
             supportsWorktreeVisibilitySourceDefaults(
               context,
               params.supportsWorktreeVisibilitySourceDefaults
-            )
+            ),
+            params.includeAgentWait === true
           ),
           context,
           pendingAtScan
         ),
         context
       )
-      // Why: callers that never send the field get the byte-exact legacy response.
-      if (params.afterSnapshotId === undefined) {
+      // Why: callers that send neither field get the byte-exact legacy response.
+      if (params.afterSnapshotId === undefined && params.acceptRowDelta !== true) {
         return result
       }
-      // Why: snapshot pollers get activity at poll-friendly granularity so the id survives terminal output.
+      // Why: pollers get activity at poll-friendly granularity so the id survives terminal output.
       return resolveWorktreeCatalogSnapshot(
-        coarsenWorktreePsActivity(result),
-        params.afterSnapshotId
+        params.exactActivity === true ? result : coarsenWorktreePsActivity(result),
+        params.afterSnapshotId ?? null,
+        { acceptRowDelta: params.acceptRowDelta === true }
       )
     }
   }),

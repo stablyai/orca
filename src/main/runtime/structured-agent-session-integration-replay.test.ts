@@ -1,10 +1,4 @@
-// One structured Codex session driven end to end over `agentSession.*`.
-//
-// Nothing here is stubbed except the Codex child itself: the RPC dispatcher, the
-// zod schemas, the capability gate, the durable record store, the journal, the
-// lease, the Codex adapter, and the event-to-journal translation are all the ones
-// that ship. The fake app-server answers the same JSON-RPC calls the real one
-// does and pushes the same notifications and blocking requests back.
+// Exercise shipped RPC, schemas, capability gate, stores, lease and adapter; only the Codex app-server child is fake.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
@@ -90,7 +84,6 @@ describe('a structured codex session over agentSession.*', () => {
     const turnStarts = () =>
       harness.codex.live().calls.filter((entry) => entry.method === 'turn/start')
     await harness.ok('agentSession.send', params)
-    // Accepted first; the delivery loop hands it over once.
     await vi.waitFor(() => expect(turnStarts()).toHaveLength(1))
     const replay = await harness.call('agentSession.send', params)
 

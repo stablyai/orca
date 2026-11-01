@@ -1,11 +1,6 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { retireStructuredAgentSessionTab } from '@/runtime/structured-agent-session-tab-retirement'
-import {
-  deleteStructuredAgentLaunchRecord,
-  hasStructuredAgentLaunchCancellationTombstonePersisted
-} from './structured-agent-session-launch-persistence'
-import { markStructuredAgentLaunchCancellation } from './launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
+import { deleteStructuredAgentLaunchRecord } from './agent-session/launch/structured-agent-session-launch-persistence'
 
 // Chats a cancel closed on this machine's host; session ids are never reused.
 const closedByLocalCancel = new Set<string>()
@@ -15,16 +10,14 @@ export function wasStructuredAgentLaunchClosedByLocalCancel(sessionId: string): 
   return closedByLocalCancel.has(sessionId)
 }
 
-/**
- * ORCA_LAYOUT_OWNER=main only: this machine's host refuses a create whose close came first, or
- * closes the chat as it lands, so a local cancel retires the chat on the host at once instead of
- * keeping a tombstone until the host lists it. A host that cannot be told gets the tombstone.
- */
+export function resetStructuredAgentLocalLaunchCancelsForTests(): void {
+  closedByLocalCancel.clear()
+}
+
+/** With main layout ownership, local close fences concurrent create and retires immediately without tombstone. Log retirement failure; main still remembers close. */
 export function cancelStructuredAgentLaunchOnLocalHost(
   worktreeId: string,
-  sessionId: string,
-  onTombstoned: () => void,
-  launchPromise?: Promise<unknown>
+  sessionId: string
 ): void {
   deleteStructuredAgentLaunchRecord(sessionId)
   // Why: main answers a create for a chat closed meanwhile as ok, and no tombstone is written.
@@ -35,16 +28,9 @@ export function cancelStructuredAgentLaunchOnLocalHost(
     sessionId,
     onError: (error) => {
       // A create that has not landed has no host tab yet; main still heard the close.
-      if (hasRuntimeRpcErrorCode(error, 'tab_not_found')) {
-        return
+      if (!hasRuntimeRpcErrorCode(error, 'tab_not_found')) {
+        console.warn('[structured-agent-session] local cancel retirement failed', error)
       }
-      markStructuredAgentLaunchCancellation(
-        sessionId,
-        LOCAL_EXECUTION_HOST_ID,
-        hasStructuredAgentLaunchCancellationTombstonePersisted(sessionId),
-        launchPromise
-      )
-      onTombstoned()
     }
   })
 }

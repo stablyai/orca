@@ -1,13 +1,3 @@
-// A send Codex answered into a turn that then ended without echoing it. On an interrupt, a
-// steered send waits in Codex's pending input, which the interrupt clears; a send that opened the
-// turn is saved as the turn cancels, but Codex hard-aborts that save after 100 ms, so it is lost
-// or reaches only the model's context, and the thread history shows no user message either way.
-// So it is withdrawn, as a Stop's host-side withdrawal is. Any other end records pending
-// input before `turn/completed`, a failed turn after its `error` frame, so only that
-// frame settles: a failed turn that never echoed the send refused it, in Codex's words,
-// and a completed one leaves it pending for the journal's recovery on exit. A turn Codex never
-// opened has no `turn/completed`: before 0.148 its final `error` is its end (`unopenedTurnFailure`).
-
 import {
   agentSessionFailureFact,
   providerDiagnostic,
@@ -32,7 +22,6 @@ import {
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import { codexAuthenticationFailure } from './codex-authentication-failure'
 
-/** A message Codex rejected, in the words that name Codex and its legacy markers. */
 export function codexDispatchRejection(
   failure: SubmissionRejectionFact,
   account?: CodexSession['account']
@@ -50,7 +39,6 @@ export function codexDispatchRejection(
 export type CodexTurnEndSettlement = {
   clientMessageId: string
   state: 'rejected'
-  /** The turn Codex answered the send into, whose end settled it, and how the send joined it. */
   answeredInTurn?: AgentJournalAnsweredTurnIdentity
 } & AgentJournalDispatchRejection
 
@@ -59,8 +47,7 @@ function errorDetail(params: unknown): ProviderDiagnostic | undefined {
   return message ? providerDiagnostic(message, 'person') : undefined
 }
 
-/** A final `error` naming a turn Codex never opened: before 0.148 that is the only end such a
- *  turn reports. One it opened still reports its own `turn/completed`. */
+/** Pre-0.148 unopened turns can end with only a final error; opened turns still send turn/completed. */
 function unopenedTurnFailure(
   session: Pick<CodexSession, 'threadId' | 'dispatchEchoes'>,
   method: string,
@@ -84,7 +71,6 @@ function unopenedTurnFailure(
   }
 }
 
-/** The end a primary-thread notification reports for its turn, or null for any other frame. */
 export function readCodexTurnEnd(method: string, params: unknown): CodexTurnEnd | null {
   if (method !== 'turn/completed') {
     return null
@@ -106,11 +92,12 @@ export function readCodexTurnEnd(method: string, params: unknown): CodexTurnEnd 
   return { status: 'completed' }
 }
 
-/** How an ended turn settles a send it never echoed; null leaves the send to its echo. */
+/** Settle unechoed sends only at turn end, after any failed-turn input persistence. */
 export function codexTurnEndRejection(
   end: CodexTurnEnd,
   account?: CodexSession['account']
 ): AgentJournalDispatchRejection | null {
+  // Interrupt clears pending steers and can abort initial-input persistence after 100 ms.
   if (end.status === 'interrupted') {
     return agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
   }
@@ -122,10 +109,11 @@ export function codexTurnEndRejection(
       })
     )
   }
+  // Successful completion cannot disprove delivery; missing echoes await journal recovery.
   return null
 }
 
-/** Records a turn Codex opened, ahead of the frames that may report the thread idle before it ends. */
+/** Record opening before idle status can arrive ahead of turn completion. */
 export function noteCodexTurnOpened(
   session: Pick<CodexSession, 'threadId' | 'dispatchEchoes'>,
   method: string,
@@ -137,7 +125,6 @@ export function noteCodexTurnOpened(
   }
 }
 
-/** Settles the sends bound to the turn this admitted notification ended. */
 export function settleCodexSendsInEndedTurn(
   session: Pick<CodexSession, 'threadId' | 'dispatchEchoes' | 'account'>,
   frame: { sessionId: string; method: string; params: unknown },
@@ -172,8 +159,7 @@ export function settleCodexSendsInEndedTurn(
   }
 }
 
-/** Names the turn a rejected send was answered into only when Codex opened it: one it never
- *  opened has no record in the journal, so the send was answered into no turn. */
+/** Unopened turns have no journal record to reference in settlement. */
 export function codexAnsweredTurn(
   session: Pick<CodexSession, 'threadId' | 'dispatchEchoes'>,
   sessionId: string,

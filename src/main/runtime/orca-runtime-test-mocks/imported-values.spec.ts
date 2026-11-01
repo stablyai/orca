@@ -63,11 +63,6 @@ import {
 import { RUNTIME_GRAPH_RELOAD_TIMEOUT_MS } from '../runtime-graph-reload-lifecycle'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
-import {
-  appendRecentPtyPathCandidates,
-  recentTerminalPathCandidatesIncludePath,
-  recentTerminalOutputIncludesPath
-} from '../terminal-output-path-candidates'
 import { RecentPtyOutputBuffer } from '../recent-pty-output-buffer'
 import { headlessBrowserTabsUnchanged } from '../mobile-session-browser-equality'
 import {
@@ -81,7 +76,6 @@ import {
   TERMINAL_INPUT_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR
 } from '../../../shared/terminal-input'
-import { MAX_QUICK_COMMANDS } from '../../../shared/terminal-quick-commands'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
@@ -121,7 +115,6 @@ import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git
 import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
-// Imported bindings are copied after Vitest's hoisted mocks have registered.
 export const exportedAGENT_PROMPT_BRACKETED_PASTE_END = AGENT_PROMPT_BRACKETED_PASTE_END
 export const exportedAGENT_PROMPT_BRACKETED_PASTE_START = AGENT_PROMPT_BRACKETED_PASTE_START
 export const exportedAGENT_STATUS_STALE_AFTER_MS = AGENT_STATUS_STALE_AFTER_MS
@@ -136,7 +129,6 @@ export const exportedFOLDER_WORKSPACE_INSTANCE_SEPARATOR = FOLDER_WORKSPACE_INST
 export const exportedHEADLESS_RUNTIME_WINDOW_ID = HEADLESS_RUNTIME_WINDOW_ID
 export const exportedHeadlessEmulator = HeadlessEmulator
 export const exportedMAX_OSC_TITLE_CHARS = MAX_OSC_TITLE_CHARS
-export const exportedMAX_QUICK_COMMANDS = MAX_QUICK_COMMANDS
 export const exportedOrcaRuntimeService = OrcaRuntimeServiceConstructor
 export const exportedOrchestrationDb = RuntimeOrchestrationDb
 export const exportedREVIEW_HEAD_FETCH_TIMEOUT_MS = REVIEW_HEAD_FETCH_TIMEOUT_MS
@@ -161,7 +153,6 @@ export const exportedAdvertisedUrlWatcher = advertisedUrlWatcher
 export const exportedAfterEach = afterEach
 export const exportedAppendBrowserTabOrder = appendBrowserTabOrder
 export const exportedAppendNormalizedToTailBuffer = appendNormalizedToTailBuffer
-export const exportedAppendRecentPtyPathCandidates = appendRecentPtyPathCandidates
 export const exportedAssertWorktreeCleanForRemoval = assertWorktreeCleanForRemoval
 export const exportedBasename = basename
 export const exportedBeforeEach = beforeEach
@@ -217,9 +208,6 @@ export const exportedParseOrcaYaml = parseOrcaYaml
 export const exportedPerformance = performance
 export const exportedProjectHostSetupProjectionFromRepos = projectHostSetupProjectionFromRepos
 export const exportedRandomUUID = randomUUID
-export const exportedRecentTerminalOutputIncludesPath = recentTerminalOutputIncludesPath
-export const exportedRecentTerminalPathCandidatesIncludePath =
-  recentTerminalPathCandidatesIncludePath
 export const exportedRegisterLocalPtyMemoryRow = registerLocalPtyMemoryRow
 export const exportedRemoveWorktree = removeWorktree
 export const exportedResolveSetupRunnerShell = resolveSetupRunnerShell

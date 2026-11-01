@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
@@ -33,32 +34,10 @@ function retry(sequence: number, attempt: number): AgentJournalRenderItem {
 }
 
 function snapshot(items: AgentJournalRenderItem[]): AgentSessionSubscribeEvent {
-  const newest = items.length
-  return {
-    type: 'snapshot',
-    sessionId: 'session-1',
-    fence: 3,
-    page: {
-      sessionId: 'session-1',
-      epoch: 'epoch-1',
-      fence: 3,
-      direction: 'tail',
-      items,
-      removedItemIds: [],
-      submissions: [],
-      window: {
-        oldest: { epoch: 'epoch-1', sequence: 1 },
-        newest: { epoch: 'epoch-1', sequence: newest },
-        nextCursor: { epoch: 'epoch-1', sequence: newest + 1 }
-      },
-      liveCursor: { epoch: 'epoch-1', sequence: newest },
-      hasOlder: false,
-      hasNewer: false
-    }
-  }
+  return snapshotEvent({ items })
 }
 
-// Module scope: the harness assigns these, which a test body's own `let` would narrow to null.
+// Assign through module scope to prevent test-local control-flow narrowing of the harness value to null.
 let renderer: ReactTestRenderer | null = null
 let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
 let listener: ((value: unknown) => void) | null = null
@@ -78,7 +57,9 @@ it('draws one row for a run of provider retries, with what failed on its second 
       _meta: { runtimeId: 'runtime-1' }
     }),
     subscribe: (_method, _params, onData) => {
-      listener = onData
+      if (_method === 'agentSession.subscribe') {
+        listener = onData
+      }
       return () => {}
     },
     updateTerminalSubscriptionViewport: () => {},

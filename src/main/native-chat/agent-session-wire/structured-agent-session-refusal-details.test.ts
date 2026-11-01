@@ -1,6 +1,3 @@
-// A refusal's details name the situation, so every place that answers for a refusal — the first
-// reply, a ledger replay, the store fallback copy — must name the same one.
-
 import { describe, expect, it } from 'vitest'
 import {
   agentSessionRecordFixture,
@@ -19,7 +16,10 @@ import {
   failedAcquisitionSettlement
 } from './structured-agent-session-failed-create-refusal'
 import { withObservedProviderExit } from './structured-agent-session-failure-text'
-import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
+import {
+  withMissingProviderExecutable,
+  withProviderSpawnAbsence
+} from '../../provider-process/provider-executable-missing'
 import { providerDiagnostic, withProviderDiagnostic } from '../../../shared/agent-session-failure'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 
@@ -61,14 +61,18 @@ describe('a ledger replay names the details its first answer did', () => {
       ),
       'providerStartFailed'
     ],
-    // Gone now, with no exit observed: no situation, on the first answer or the replay.
     [new AgentSessionAcquisitionExitProvenError(new Error('spawn codex ENOENT')), undefined],
-    // Its own spawn found no executable: the CLI is not installed.
     [
       new AgentSessionAcquisitionExitProvenError(
         withObservedProviderExit(withMissingProviderExecutable(new Error('exited (code 127)')))
       ),
       'cliMissing'
+    ],
+    [
+      new AgentSessionAcquisitionExitProvenError(
+        withProviderSpawnAbsence(new Error('spawn claude ENOENT'), 'launchFolder')
+      ),
+      'launchFolderMissing'
     ]
   ])('for a failed create: %s', (error, reason) => {
     const first = failedAcquisitionRefusal(error, CLAUDE_CREATE)
@@ -254,7 +258,7 @@ describe('the store fallback copy', () => {
       code: 'agent_session_ownership_unknown',
       details: { reason: 'replaySuperseded' }
     })
-    // Not the latched-owner story: this owner is not in doubt, the replay is just stale.
+    // Stale replay is not uncertain ownership and must not blame the old PID.
     expect(refusal.message).not.toContain('4242')
   })
 
@@ -269,7 +273,7 @@ describe('the store fallback copy', () => {
   })
 
   it('does not promise an update fixes a record this build cannot read', () => {
-    // Unreadable covers a damaged record as well as one a newer build wrote.
+    // Unreadable also covers damage, which updating cannot fix.
     expect(
       classifyStoreFailure(
         agentSessionRefusalError('execution_owner_reconciling', { reason: 'recordUnreadable' }),
@@ -309,7 +313,6 @@ describe('the store fallback copy', () => {
       currentFence: 7,
       message: 'The session store refused this call: agent_session_checkpoint_stale.'
     })
-    // A bare code names no reason, but the fence is still a fact.
     expect(
       classifyStoreFailure(new Error('agent_session_checkpoint_stale'), 7, null)
     ).toMatchObject({ details: { currentFence: 7 }, currentFence: 7 })

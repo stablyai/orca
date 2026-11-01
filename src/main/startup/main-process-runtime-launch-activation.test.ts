@@ -14,7 +14,6 @@ const launchHooks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: electronApp, powerMonitor: { on: vi.fn() } }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('../orca-profiles/profile-cloud-auth-config', () => ({
   getOrcaCloudAuthConfig: () => ({ configured: false })
 }))
@@ -24,8 +23,12 @@ vi.mock('../persistence', () => ({
   migrateMobilePairingDataToCanonicalUserDataPath: vi.fn()
 }))
 const launchOrder = vi.hoisted((): string[] => [])
+const rpcOptions = vi.hoisted((): Record<string, unknown>[] => [])
 vi.mock('../runtime/runtime-rpc', () => ({
   OrcaRuntimeRpcServer: class {
+    constructor(options: Record<string, unknown>) {
+      rpcOptions.push(options)
+    }
     start = vi.fn(async () => {
       launchOrder.push('rpc-start')
     })
@@ -67,7 +70,7 @@ vi.mock('./main-process-pty-startup', () => ({
 vi.mock('./codex-launch-preparation', () => ({ prepareCodexRuntimeHomeForLaunch: vi.fn() }))
 vi.mock('./codex-session-resume-launch', () => ({ prepareCodexSessionResumeForLaunch: vi.fn() }))
 vi.mock('./windows-install-dir-acl-recovery', () => ({
-  // The awaited gap before the first window, where a second-instance launch can land.
+  // Model the awaited repair gap in which a second-instance activation can arrive.
   repairKnownPoisonedInstallDirBeforeWindow: vi.fn(async () => {
     launchHooks.duringInstallDirRepair()
     if (launchHooks.failBeforeWindow) {
@@ -89,6 +92,10 @@ vi.mock('../ipc/startup-notification-registration', () => ({
   triggerStartupNotificationRegistration: vi.fn()
 }))
 vi.mock('./main-process-push-startup', () => ({ startDesktopPushService: vi.fn() }))
+vi.mock('./main-process-connector-startup', () => ({
+  installDesktopConnectorCloud: vi.fn(),
+  connectDesktopConnectorCloud: vi.fn()
+}))
 vi.mock('./startup-diagnostics', () => ({ logStartupMilestone: vi.fn() }))
 const setupHeadlessServeAutoUpdater = vi.hoisted(() => vi.fn())
 vi.mock('../window/main-window-updater', () => ({ setupHeadlessServeAutoUpdater }))
@@ -97,8 +104,10 @@ vi.mock('../browser/browser-identity-mode-store', () => ({
   getBrowserIdentityModeStatus: vi.fn()
 }))
 const showWindowWithoutStealingFocus = vi.hoisted(() => vi.fn())
+const isOrcadSidecarLaunch = vi.hoisted(() => vi.fn(() => false))
 vi.mock('../window/foreground-activation-policy', () => ({
   isBackgroundLaunch: () => true,
+  isOrcadSidecarLaunch,
   isWindowlessLaunch: () => false,
   showWindowWithoutStealingFocus
 }))
@@ -154,7 +163,7 @@ describe('desktop startup activation', () => {
   let firstLoadListeners: (() => void)[]
   const startupSettled = vi.fn()
 
-  // Mirrors openMainWindow's non-idempotent side effects that broke in the field.
+  // Retain non-idempotent window effects that exposed duplicate startup in production.
   function openMainWindow(): FakeWindow {
     const id = windows.length + 1
     const window: FakeWindow = {
@@ -187,6 +196,7 @@ describe('desktop startup activation', () => {
   beforeEach(() => {
     windows = []
     showWindowWithoutStealingFocus.mockClear()
+    isOrcadSidecarLaunch.mockReturnValue(false)
     ipcHandles = new Set()
     trustedRendererId = null
     firstLoadListeners = []
@@ -204,7 +214,6 @@ describe('desktop startup activation', () => {
       whenReady: () => Promise.resolve()
     } as unknown as NonNullable<typeof state.windowsShellPathHydration>
     state.initialProxyApplicationReady = Promise.resolve()
-    // Built the way preflight builds it for a desktop launch.
     state.desktopActivationGate = createServeDesktopActivationGate({
       initialState: 'initializing',
       activateWindow: () =>
@@ -310,7 +319,7 @@ describe('desktop startup activation', () => {
 
     expect(windows).toHaveLength(0)
     expect(launchOrder).toEqual(['ssh-registered', 'rpc-start'])
-    // Signals mark their quit, so the macOS native-quit guard lets them through (#15537).
+    // Signal intent must pass the macOS native-quit guard (#15537).
     expect(registerServeSignalHandlers).toHaveBeenCalledWith(process, quitProcess)
     expect(installServeNativeQuitGuard).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -319,6 +328,39 @@ describe('desktop startup activation', () => {
       })
     )
   })
+  it.each([
+    { sidecar: false, pinnedBindHost: undefined },
+    { sidecar: true, pinnedBindHost: '127.0.0.1' }
+  ])(
+    'pins the serve listener to loopback only for orcad browser sidecars (sidecar=$sidecar, #31895)',
+    async ({ sidecar, pinnedBindHost }) => {
+      state.isServeMode = true
+      isOrcadSidecarLaunch.mockReturnValue(sidecar)
+      vi.mocked(getServeOptions).mockReturnValueOnce({
+        json: false,
+        pairingAddress: null,
+        noPairing: true,
+        mobilePairing: false,
+        grantDesktopControl: false,
+        recipeJson: false,
+        projectRoot: null
+      })
+      Object.assign(state.runtime!, {
+        refreshRestoredOrchestrationAuthority: vi.fn(async () => {}),
+        reconcileLegacyWorkerTerminals: vi.fn(async () => {})
+      })
+
+      await initializeMainProcessReady({
+        openMainWindow: () => {
+          throw new Error('serve must not open a window')
+        },
+        handleMacAppActivation: vi.fn()
+      })
+
+      expect(rpcOptions.at(-1)).toMatchObject({ exposeNetworkByDefault: true })
+      expect(rpcOptions.at(-1)?.pinnedBindHost).toBe(pinnedBindHost)
+    }
+  )
   it('saves Codex auth before a headless serve update restart, like the desktop does', async () => {
     setupHeadlessServeAutoUpdater.mockClear()
     state.isServeMode = true

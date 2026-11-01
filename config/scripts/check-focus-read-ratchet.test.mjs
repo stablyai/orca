@@ -227,21 +227,21 @@ describe('countFocusSettingReads', () => {
     expect(countFocusSettingReads('linearConnect(defaultScopeSource(get().settings), key)')).toBe(1)
   })
 
-  it('counts the legacy-fallback owner adapter and a wrapper that returns its result', () => {
+  it("counts a wrapper that returns a seed reader's result", () => {
     const readers = discoverFocusReaders(
       new Map([
         [
           'src/renderer/src/owner.ts',
           [
-            'export function envUnlessTwin(state, id) {',
-            '  const match = resolveOwnerWithLegacyFallback(state, { workspaceId: id })',
-            "  return match.kind === 'resolved' ? match.owner : null",
+            'export function hostOrNull(state) {',
+            '  const host = defaultScopeHost(state.settings)',
+            '  return host ? host.id : null',
             '}'
           ].join('\n')
         ]
       ])
     )
-    expect(readers.has('envUnlessTwin')).toBe(true)
+    expect(readers.has('hostOrNull')).toBe(true)
   })
 
   it('counts destructuring reads', () => {
@@ -289,5 +289,10 @@ describe('isScannedPath', () => {
     expect(isScannedPath('src/renderer/src/a.test.ts')).toBe(false)
     expect(isScannedPath('src/renderer/src/a.spec.tsx')).toBe(false)
     expect(isScannedPath('src/renderer/src/a.test-fixture.ts')).toBe(false)
+    expect(isScannedPath('src/renderer/src/a.test-support.tsx')).toBe(false)
+    expect(isScannedPath('src/renderer/src/a-test-harness.ts')).toBe(false)
+    expect(isScannedPath('src/renderer/src/a-test-fixture.ts')).toBe(false)
+    expect(isScannedPath('src/renderer/src/a-test-fixtures.ts')).toBe(false)
+    expect(isScannedPath('src/renderer/src/editor-model-lifetime-fixture.ts')).toBe(true)
   })
 })

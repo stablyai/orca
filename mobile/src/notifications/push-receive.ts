@@ -5,7 +5,7 @@ import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { loadHostCatalog } from '../transport/host-store'
 import { resolveHostIdForFingerprint } from './push-host-fingerprint'
 import { readOrcaPushPayload, type OrcaPushPayload } from './push-payload'
-import type { Notification, NotificationBehavior } from 'expo-notifications'
+import type { NotificationBehavior } from 'expo-notifications'
 import { readNativeNotificationData } from './native-notification-data'
 import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
 
@@ -45,14 +45,13 @@ export function resetForegroundPushClaimsForTests(): void {
   recentForegroundPushes.clear()
 }
 
-export async function foregroundNotificationBehavior(
-  notification: Pick<Notification, 'request'>
-): Promise<NotificationBehavior> {
+export async function foregroundNotificationBehavior(notification: {
+  request: Parameters<typeof readNativeNotificationData>[0]
+}): Promise<NotificationBehavior> {
   const data = readNativeNotificationData(notification.request)
   const payload = readOrcaPushPayload(data)
   const preferences = await loadNotificationDeliveryPreferences()
-  // Unrecognized notifications retain normal behavior; recognized pushes fail closed
-  // when consent, host, viewing, or dismissal checks cannot complete.
+  // Preserve unknown notifications; recognized pushes fail closed when eligibility/dismissal checks cannot complete.
   const ineligible = await shouldSuppressForegroundPush(
     payload,
     preferences.suppressWhileViewing
@@ -94,10 +93,7 @@ async function shouldSuppressForegroundPush(
     return true
   }
   const hostId = await resolvePushHostId(payload)
-  // Why suppressed rather than shown: the only pushes that outlive their host are
-  // ones a gateway registration still holds after a removal whose unregister never
-  // reached the desktop. A banner naming a host this phone no longer has cannot be
-  // tapped anywhere, so it is noise the user cannot act on or turn off per-host.
+  // Suppress removed-host pushes: stale gateway registrations cannot route a useful tap and the phone can no longer disable them per host.
   if (!hostId) {
     return true
   }
@@ -111,7 +107,6 @@ async function shouldSuppressForegroundPush(
   return wasPushDismissed(payload)
 }
 
-/** Whether the OS says a notification came from a provider rather than this app. */
 export function isRemotePushTrigger(trigger: unknown): boolean {
   return (
     typeof trigger === 'object' &&
@@ -120,17 +115,8 @@ export function isRemotePushTrigger(trigger: unknown): boolean {
   )
 }
 
-/**
- * Notification data a tap can route with: the gateway names the host by fingerprint,
- * so it is mapped back to this device's hostId. Locally scheduled data passes
- * through untouched, which is what keeps its taps on their existing path.
- *
- * Why null and not the raw data when the fingerprint does not resolve: a gateway
- * payload is attacker-adjacent input, and passing it on would let a stray `hostId`
- * beside the `orca` block route a tap at a host the push never named. A remote
- * push with no fingerprint at all is the same input minus the block, so it is
- * unrouted too rather than handed to the local path as if this app scheduled it.
- */
+// Resolve gateway fingerprints to this device’s host id; preserve locally scheduled data.
+// Unresolved/missing remote fingerprints must not fall back to raw hostId fields that the provider never authenticated as this push’s host.
 export function pushNotificationRouteData(
   data: unknown,
   hosts: readonly { readonly id: string; readonly publicKeyB64: string }[],

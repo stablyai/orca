@@ -13,15 +13,23 @@ const submissions = steps.filter((step) =>
   step.uses?.startsWith('signpath/github-action-submit-signing-request@')
 )
 
-function signingAllowed(submission, outcome, attempt = 1, platform = 'win', uploaded = 'success') {
+function signingAllowed(submission, outcome, attempt = 1, platform = 'win', uploads = {}) {
   const expression = submission.if.replace(/steps\.([a-z][a-z0-9-]*)/g, 'steps["$1"]')
   return runInNewContext(expression, {
     matrix: { platform },
     github: { run_attempt: attempt },
     steps: {
       'mac-signing-gate': { outcome },
-      'upload-unsigned-inner': { outcome: uploaded },
-      'upload-unsigned-windows-installer': { outcome: uploaded }
+      'upload-unsigned-inner': {
+        outcome: Object.hasOwn(uploads, 'upload-unsigned-inner')
+          ? uploads['upload-unsigned-inner']
+          : 'success'
+      },
+      'upload-unsigned-windows-installer': {
+        outcome: Object.hasOwn(uploads, 'upload-unsigned-windows-installer')
+          ? uploads['upload-unsigned-windows-installer']
+          : 'success'
+      }
     }
   })
 }
@@ -33,7 +41,12 @@ describe('Windows release signing waits for macOS success', () => {
     expect(jobs.build.needs).not.toContain('verify-mac-build')
     expect(jobs['build-mac'].needs).not.toContain('build')
     expect(jobs['verify-mac-build'].needs).toContain('build')
+    const windows = jobs.build.strategy.matrix.include.find((entry) => entry.platform === 'win')
+    expect(windows.release_command).toMatch(
+      /^node config\/scripts\/ensure-native-runtime\.mjs --runtime=electron; if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}; pnpm exec electron-builder /
+    )
     const packaging = steps.findIndex((step) => step.name === 'Build Windows release artifacts')
+    expect(steps[packaging].env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
     const gateIndex = steps.indexOf(gate)
     expect(packaging).toBeGreaterThanOrEqual(0)
     expect(gateIndex).toBeGreaterThan(packaging)
@@ -60,11 +73,21 @@ describe('Windows release signing waits for macOS success', () => {
   })
 
   it('allows neither signing request without successful macOS verification and upload', () => {
+    const uploadBySubmission = {
+      'submit-inner-signing': 'upload-unsigned-inner',
+      'submit-signing-request': 'upload-unsigned-windows-installer'
+    }
     for (const submission of submissions) {
+      const upload = uploadBySubmission[submission.id]
+      expect(upload).toBeDefined()
+      const otherUpload = Object.values(uploadBySubmission).find((id) => id !== upload)
       expect(signingAllowed(submission, 'success')).toBe(true)
+      expect(signingAllowed(submission, 'success', 1, 'win', { [otherUpload]: 'failure' })).toBe(
+        true
+      )
       for (const outcome of ['failure', 'cancelled', 'skipped', '', undefined]) {
         expect(signingAllowed(submission, outcome), `${submission.id}: ${outcome}`).toBe(false)
-        expect(signingAllowed(submission, 'success', 1, 'win', outcome ?? null)).toBe(false)
+        expect(signingAllowed(submission, 'success', 1, 'win', { [upload]: outcome })).toBe(false)
       }
       for (const attempt of [2, 3]) {
         expect(signingAllowed(submission, 'success', attempt)).toBe(false)
@@ -87,7 +110,7 @@ describe('Windows release signing waits for macOS success', () => {
   })
 
   it('runs the verifier CLI from paths requiring URL encoding, as Windows paths do', async () => {
-    const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orca signing gate ')))
+    const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orca signing gate # % ')))
     const script = join(directory, 'mac verifier.mjs')
     writeFileSync(script, readFileSync('config/scripts/run-release-mac-build-workflow.mjs'))
     try {

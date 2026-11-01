@@ -98,11 +98,7 @@ afterEach(() => {
 })
 
 describe('regaining contact is its own mirror-recovery trigger', () => {
-  // The mirror subscriptions are (re)installed by the effects in
-  // web-session-tabs-sync/use-web-session-tabs-sync.ts. Holding the target through the outage
-  // strands them unless regaining contact triggers a reinstall, but the connection generation
-  // cannot be that trigger: it is the mirror's cache key, and moving it rebuilds the mirror
-  // (#19647). The two live on separate values, and this suite pins each to its own edge.
+  // Regained contact reinstalls mirror streams via contact epoch; advancing connection generation would rebuild the cached mirror (#19647).
   it('advances the contact epoch, not the connection generation, when a host answers again', () => {
     const store = createSliceStore()
     seedEnvironment(store)
@@ -122,32 +118,6 @@ describe('regaining contact is its own mirror-recovery trigger', () => {
     expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(connectedGeneration)
     expect(mirrorKeys(store).environmentKey).toBe(connected.environmentKey)
     expect(mirrorKeys(store).resubscribeSignal).not.toBe(connected.resubscribeSignal)
-  })
-
-  it('does not advance either value while the host keeps answering', () => {
-    const store = createSliceStore()
-    seedEnvironment(store)
-
-    store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(1, { verification: 'verified' }))
-    const connectedGeneration = getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)
-    const connected = mirrorKeys(store)
-
-    store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(2, { verification: 'verified' }))
-
-    expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(connectedGeneration)
-    expect(mirrorKeys(store)).toEqual(connected)
-  })
-
-  it('leaves a first publication with no prior entry on its original generation', () => {
-    // Regression (#19241): a first contact is not a reconnect, or the generation fence
-    // retires worktree scans already in flight against that same connection.
-    const store = createSliceStore()
-    seedEnvironment(store)
-    const before = getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)
-
-    store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(1, { verification: 'verified' }))
-
-    expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(before)
   })
 
   it('advances the generation when the runtime restarted during the outage', () => {

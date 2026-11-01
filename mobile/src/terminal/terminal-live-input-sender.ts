@@ -1,1 +1,5 @@
-export type TerminalLiveInputSender = (handle: string, bytes: string) => Promise<boolean>
+export type TerminalLiveInputSender = (
+  handle: string,
+  bytes: string,
+  origin?: 'pointer'
+) => Promise<boolean>

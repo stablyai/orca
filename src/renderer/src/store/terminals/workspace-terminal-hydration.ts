@@ -2,7 +2,7 @@ import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   folderWorkspaceKey,
-  parseWorkspaceKey,
+  isWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
 import { buildByIdIndex } from '../slices/worktree-by-id-index'
@@ -56,7 +56,7 @@ export function createWorkspaceTerminalHydrationActions(
           collectPersistedWorktreeIdsForSessionHydration(session)
         )
         const knownRepoIds = new Set(runtimeSessionPlaceholders.repos.map((r) => r.id))
-        // Why: the Floating Workspace isn't a repo worktree, but its tabs use the normal session pipeline so daemon PTYs survive app restart.
+        // Floating Workspace uses session hydration despite being repo-less so daemon PTYs survive restart.
         validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
         for (const workspace of s.folderWorkspaces) {
           validWorktreeIds.add(folderWorkspaceKey(workspace.id))
@@ -84,23 +84,20 @@ export function createWorkspaceTerminalHydrationActions(
           if (session.activeWorktreeId && validWorktreeIds.has(session.activeWorktreeId)) {
             return session.activeWorktreeId
           }
-          // Why: a workspace with no tabs is still valid; fall back from the active repo to avoid a blank landing screen when tabs were pruned or never created.
+          // An empty workspace is valid; fall back from active repo to avoid a blank landing screen.
           return fallbackActiveWorktreeId
         })()
-        const activeWorkspaceKey: WorkspaceKey | null =
-          session.activeWorkspaceKey && validWorktreeIds.has(session.activeWorkspaceKey)
-            ? session.activeWorkspaceKey
-            : activeWorktreeId
-              ? parseWorkspaceKey(activeWorktreeId)
-                ? (activeWorktreeId as WorkspaceKey)
-                : worktreeWorkspaceKey(activeWorktreeId)
-              : null
+        // Derive from the restored worktree; older builds could persist a key naming another workspace.
+        const activeWorkspaceKey: WorkspaceKey | null = activeWorktreeId
+          ? isWorkspaceKey(activeWorktreeId)
+            ? activeWorktreeId
+            : worktreeWorkspaceKey(activeWorktreeId)
+          : null
         const activeWorkspaceExecutionHostId =
           activeWorkspaceKey && session.activeWorkspaceExecutionHostId
             ? session.activeWorkspaceExecutionHostId
             : null
-        // Why: follow a subsumed row to the canonical twin that inherited its PTY, else the app
-        // restarts with no active terminal even though the same session is still mounted.
+        // Follow the canonical row that inherited the PTY or restart loses focus on a still-mounted session.
         const restoredActiveTabId = session.activeTabId
           ? (canonicalTabIdBySubsumedTabId.get(session.activeTabId) ?? session.activeTabId)
           : null
@@ -143,8 +140,7 @@ export function createWorkspaceTerminalHydrationActions(
         if (activeWorktreeId) {
           nextEverActivated.add(activeWorktreeId)
         }
-        // Why indexed: the layout map below looks up a tab per persisted layout, and
-        // re-flattening tabsByWorktree per entry is O(tabs x layouts).
+        // Index once: flattening tabs per persisted layout costs O(tabs × layouts).
         const allTabs = Object.values(tabsByWorktree).flat()
         const tabById = buildByIdIndex(allTabs)
         const hydrated: WorkspaceHydrationPatch = {
@@ -156,33 +152,30 @@ export function createWorkspaceTerminalHydrationActions(
           activeTabIdByWorktree,
           restoredRuntimeHostIdByWorkspaceSessionKey:
             options?.runtimeHostIdByWorkspaceSessionKey ?? {},
-          // Why conditional: a mid-session re-hydration (the SSH pull merge) carries no shadow, and
-          // clearing it there would drop the co-claimant rows the next write has to put back.
+          // Mid-session SSH pulls omit the shadow; clearing it would lose co-claimant rows needed by the next write.
           ...(options?.contestedHostWorkspaceSessions
             ? { contestedHostWorkspaceSessions: options.contestedHostWorkspaceSessions }
             : {}),
           ...(options?.contestedPrimaryHostBySessionKey
             ? { contestedPrimaryHostBySessionKey: options.contestedPrimaryHostBySessionKey }
             : {}),
+          ...(options?.hydratedRuntimeSessionHostIds
+            ? { hydratedRuntimeSessionHostIds: options.hydratedRuntimeSessionHostIds }
+            : {}),
           repos: runtimeSessionPlaceholders.repos,
           tabsByWorktree,
           worktreesByRepo,
-          // Why: restore the focus-recency map; pruning is deferred to App.tsx (post-hydration) because SSH worktrees may still be appearing in worktreesByRepo.
+          // Prune focus recency only after hydration in App.tsx; SSH listings may still be arriving.
           lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
-          // Why union: a persist snapshot that omits the write-once marker is a writer that never
-          // stamped it, not a report that default tabs were never applied (#18117).
+          // Missing write-once markers mean an older writer, not that defaults were never applied (#18117).
           defaultTerminalTabsAppliedByWorktreeId: {
             ...session.defaultTerminalTabsAppliedByWorktreeId,
             ...s.defaultTerminalTabsAppliedByWorktreeId
           },
-          // Why keep the store's when absent: only main's session carries close records, and the
-          // pull merge's session does not, so re-hydrating from it must not clear the mirror.
+          // Only main’s session carries close records; SSH pull hydration must preserve the mirror when absent.
           closedTerminalTabTombstonesByTabId:
             session.closedTerminalTabTombstonesByTabId ?? s.closedTerminalTabTombstonesByTabId,
-          // Why keep the store's when absent: as above, a pull merge's session carries no intents.
-          // Replaced wholesale, not through the replay's reveal path: only the startup read carries
-          // them, before any snapshot can have hidden a tab. A catalog that published first has
-          // already pruned, so a server removed while the app was closed is filtered here.
+          // Pull merges omit intents; only startup replaces them wholesale before snapshots can hide tabs. Filter against any catalog already loaded to discard servers removed while closed.
           pairedTerminalTabCloseIntentsByEnvironment: retainPairedTerminalTabCloseIntentsForCatalog(
             session.pairedTerminalTabCloseIntentsByEnvironment ??
               s.pairedTerminalTabCloseIntentsByEnvironment,

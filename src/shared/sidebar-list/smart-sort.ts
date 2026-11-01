@@ -39,21 +39,13 @@ export function getWorktreeSortLabel(worktree: WorktreeSortLabelInput): string {
     return displayName
   }
 
-  // Why: persisted or remote worktree state can briefly omit displayName after
-  // a custom workspace name is removed; sorting must stay render-safe.
+  // Persisted/remote rows may omit displayName briefly after a rename clear; keep sorting render-safe.
   const pathLabel =
     typeof worktree.path === 'string' ? getRuntimePathBasename(worktree.path).trim() : ''
   return pathLabel || worktree.id
 }
 
-/**
- * Sort labels precomputed once per sort, so the O(N log N) comparator does O(1)
- * lookups instead of re-deriving both labels on every comparison.
- *
- * Why keyed on the row and not its id: a two-host id collision (STA-4343) puts
- * two rows with different paths under one id, and an id key would hand one of
- * them the other's label.
- */
+/** Precompute labels once for O(1) comparisons. Key by row object: same-ID cross-host rows can have different labels (STA-4343). */
 export type WorktreeSortLabels = ReadonlyMap<WorktreeSortLabelInput, string>
 
 export function buildWorktreeSortLabels<T extends WorktreeSortLabelInput>(
@@ -87,8 +79,7 @@ function worktreeSortReads(
     label: (worktree: Worktree): string => labels?.get(worktree) ?? getWorktreeSortLabel(worktree),
     identity: getWorktreeHostIdentity,
     repoLabel: (worktree: Worktree) => repoMap.get(worktree.repoId)?.displayName ?? '',
-    // Why fallback to sortOrder: existing users have a persisted smart-sort snapshot but no
-    // manualOrder yet, so Manual starts from that order instead of alphabetizing.
+    // Legacy users have sortOrder but no manualOrder; seed Manual from saved order instead of alphabetizing.
     manualRank: (worktree: Worktree) => worktree.manualOrder ?? worktree.sortOrder
   }
 }
@@ -114,15 +105,7 @@ export function sortWorktreesByStamps<W extends Worktree>(
   return worktrees.sort(buildStampComparator(sortBy, repoMap, buildWorktreeSortLabels(worktrees)))
 }
 
-/**
- * Build a comparator for sorting worktrees based on the current sort mode.
- *
- * Smart mode requires `attentionByWorktree` — a per-worktree class +
- * timestamp map built once before sorting (see `buildAttentionByWorktree`).
- * Why non-optional: a forgotten caller would silently regress every worktree
- * to Class 5 (idle) and degrade the comparator to recent-activity ordering;
- * making the param required surfaces the omission as a typecheck error.
- */
+/** Require the precomputed attention map: omission would silently reduce Smart to idle/recent ordering. */
 export function buildWorktreeComparator(
   sortBy: SortBy,
   repoMap: Map<string, Pick<Repo, 'displayName'>>,
@@ -141,33 +124,19 @@ export function buildWorktreeComparator(
       const aw = attentionByWorktree.get(a.id) ?? IDLE
       const bw = attentionByWorktree.get(b.id) ?? IDLE
       return (
-        // Why: 1 < 2 < 3 < 4 < 5 — lower class outranks higher.
+        // Lower class outranks higher.
         aw.cls - bw.cls ||
-        // Why: within a class, the more recent attention event ranks first.
+        // Latest attention wins within a class.
         bw.attentionTimestamp - aw.attentionTimestamp ||
-        // Why: idle worktrees fall through to recency (and the create-grace
-        // floor for brand-new worktrees) before alphabetical.
+        // Idle falls back to recency/create grace before labels.
         effectiveRecentActivity(b, now) - effectiveRecentActivity(a, now)
       )
     }
   })
 }
 
-/**
- * Sort worktrees by the smart-attention comparator (status class first,
- * recency-of-attention second). On cold start (no live PTYs yet), falls back
- * to persisted `sortOrder` descending so the sidebar restores the pre-quit
- * order until the agent-status snapshot lands.
- *
- * Both the palette and `getVisibleWorktreeIds()` import this to avoid
- * duplicating the cold/warm branching logic.
- *
- * `agentStatusByPaneKey` carries the primary signal; `runtimePaneTitlesByTabId`
- * and `ptyIdsByTabId` enable the title-heuristic fallback for hookless agents
- * (Edge case 9 in the design doc). Why all three are non-optional: a forgotten
- * caller would silently regress every worktree to Class 5 or quietly disable
- * the hookless-fallback path.
- */
+/** Share palette/sidebar Smart ordering: class then attention time; without live evidence use saved sortOrder.
+ * Require hook/title/PTY sources so omitted callers cannot silently disable attention or hookless fallback. */
 export function sortWorktreesSmart(
   worktrees: Worktree[],
   tabsByWorktree: Record<string, TerminalTab[]>,

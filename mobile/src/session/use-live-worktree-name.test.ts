@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { useLiveWorktreeName } from './use-live-worktree-name'
+import { useLiveWorktreeName, type LiveWorktreeName } from './use-live-worktree-name'
 
 vi.mock('expo-router', async () => {
   const React = await import('react')
@@ -15,6 +15,7 @@ vi.mock('expo-router', async () => {
 
 describe('useLiveWorktreeName request volume', () => {
   let renderer: ReactTestRenderer | null = null
+  let live: LiveWorktreeName | undefined
   let eventListener: ((payload: unknown) => void) | null = null
   const unsubscribeStream = vi.fn()
   const sendRequest = vi.fn().mockResolvedValue({
@@ -33,7 +34,7 @@ describe('useLiveWorktreeName request volume', () => {
 
   async function mountHarness(): Promise<void> {
     function Harness(): null {
-      useLiveWorktreeName({
+      live = useLiveWorktreeName({
         client,
         connState: 'connected',
         routeName: 'Route name',
@@ -76,7 +77,21 @@ describe('useLiveWorktreeName request volume', () => {
   })
 
   it('cuts thirty-second idle request volume from eleven calls to one', async () => {
+    sendRequest.mockResolvedValue({
+      id: 'worktree-show',
+      ok: true,
+      result: {
+        worktree: {
+          id: 'repo-1::/worktree',
+          displayName: 'Live name',
+          path: '/srv/project ',
+          hostId: 'ssh:target'
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
     await mountHarness()
+    expect(live).toMatchObject({ name: 'Live name', path: '/srv/project ', hostId: 'ssh:target' })
     expect(subscribe).toHaveBeenCalledWith(
       'runtime.clientEvents.subscribe',
       null,
@@ -89,7 +104,6 @@ describe('useLiveWorktreeName request volume', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000)
     })
-    // The retired 3s interval made one initial request plus ten idle ticks here.
     expect(sendRequest).toHaveBeenCalledTimes(1)
 
     await emitEvent({ type: 'worktreesChanged', repoId: 'repo-2' })
@@ -224,8 +238,7 @@ describe('useLiveWorktreeName request volume', () => {
     expect(firstNameByWorktree.get('repo-2::/worktree')).toBe('Next workspace')
   })
 
-  // The bounce in use-missing-worktree-bounce.ts rides this poll rather than adding a second
-  // RPC, so the failure branch has to publish a verdict instead of returning early.
+  // The missing-workspace bounce shares this poll, so failure must publish a verdict rather than return silently.
   it('reports the host-proven verdict from the same poll', async () => {
     let resolution = ''
     function VerdictHarness(): null {
@@ -256,8 +269,7 @@ describe('useLiveWorktreeName request volume', () => {
       _meta: { runtimeId: 'runtime-1' }
     })
     await mount()
-    // Why: a transient desktop repo-scan rejection also answers selector_not_found,
-    // so one miss stays unproven; only the confirming poll may say 'missing'.
+    // A transient repo-scan rejection also reports selector_not_found; require a confirming poll.
     expect(resolution).toBe('unknown')
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3_000)
@@ -266,7 +278,6 @@ describe('useLiveWorktreeName request volume', () => {
 
     act(() => renderer?.unmount())
     renderer = null
-    // A dropped socket is not a deletion, so it must leave the verdict unproven.
     sendRequest.mockResolvedValue({
       id: 'worktree-show',
       ok: false,

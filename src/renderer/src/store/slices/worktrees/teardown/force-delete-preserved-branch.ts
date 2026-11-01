@@ -10,7 +10,7 @@ import { preservedBranchCleanupKey } from '../../../../../../shared/preserved-br
 import type { ForceDeleteWorktreeBranchResult } from '../../../../../../shared/worktree/create-types'
 import type { PreservedBranchCleanup } from '../../../../../../shared/preserved-branch-cleanup'
 import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cleanup-target'
-import { WORKTREE_REMOVAL_AMBIGUOUS_ERROR } from '../listing/worktree-slice-constants'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
 
 export function createForceDeletePreservedBranch(
   _set: WorktreeSliceSet,
@@ -45,9 +45,7 @@ export function createForceDeletePreservedBranch(
       if ((options?.hostId || options?.runtimeEnvironmentId) && !retainedTarget) {
         throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
       }
-      // Ambiguous route: deleting against the active runtime could hit the wrong host's branch.
-      // Localized because it surfaces in the toast below; the throw above mirrors a main-process
-      // message verbatim (orca-runtime.ts, ipc/worktrees.ts) and must stay in sync with it.
+      // Ambiguous routes could delete another host’s branch. Localize this toast; keep the earlier main-mirroring throw verbatim (orca-runtime.ts, ipc/worktrees.ts).
       if (!retainedTarget && matchingRetainedTargets.length > 1) {
         throw new Error(
           translate(
@@ -62,7 +60,7 @@ export function createForceDeletePreservedBranch(
       const target =
         retainedTarget?.target ?? runtimeTargetForWorkspaceOwner(get(), { workspaceId: worktreeId })
       if (!target) {
-        throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
+        throw new Error(ambiguousWorkspaceOwnerMessage(get(), worktreeId))
       }
       const parsedCleanupHost = parseExecutionHostId(cleanupHostId)
       const effectiveHostId =

@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useAppStore } from '@/store'
+import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
 import { useStructuredChatTabConversationName } from '@/runtime/structured-conversation-name'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import {
@@ -19,7 +20,7 @@ import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-s
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
-import { nativeChatMessageCopyText } from './native-chat-message-copy-text'
+import { nativeChatMessageCopyText } from '../../../../shared/native-chat-message-copy-text'
 
 export type NativeChatHandOff = {
   /** This chat can seed another agent from its owning workspace. */
@@ -74,7 +75,7 @@ export function useNativeChatHandOff({
   }, [intentKey, retire])
   const chatTab = useAppStore((state) =>
     directory
-      ? state.unifiedTabsByWorktree[directory.worktreeId]?.find((tab) => tab.id === pane.tabId)
+      ? structuredChatTabById(state.unifiedTabsByWorktree, directory.worktreeId, pane.tabId)
       : undefined
   )
   const conversationName = useStructuredChatTabConversationName(chatTab)
@@ -90,7 +91,7 @@ export function useNativeChatHandOff({
       (pane.target.kind === 'environment' ? pane.target.environmentId : null)
   )
   const prepare = useCallback(
-    async (policy: { avoidSourceAgent?: boolean } = {}): Promise<void> => {
+    async (avoidSourceAgent = false): Promise<void> => {
       if (!available || !directory || !epoch || !isTuiAgent(pane.agent)) {
         return
       }
@@ -145,6 +146,9 @@ export function useNativeChatHandOff({
           ? (context.capturedText ?? '')
           : messages
               .flatMap((message) => {
+                if (message.agentStart) {
+                  return []
+                }
                 const text = nativeChatMessageCopyText(message).trim()
                 return text ? [`${message.role}: ${text}`] : []
               })
@@ -161,7 +165,7 @@ export function useNativeChatHandOff({
             initialCwd: directory.worktreePath,
             groupId: pane.groupId,
             launchSource: 'native_chat',
-            ...(policy.avoidSourceAgent ? { avoidSourceAgent: true } : {})
+            ...(avoidSourceAgent ? { avoidSourceAgent: true } : {})
           }
         }
         active.current = prepared
@@ -195,7 +199,7 @@ export function useNativeChatHandOff({
   )
   const open = useCallback(
     (policy?: { avoidSourceAgent?: boolean }) => {
-      void prepare(policy)
+      void prepare(policy?.avoidSourceAgent)
     },
     [prepare]
   )

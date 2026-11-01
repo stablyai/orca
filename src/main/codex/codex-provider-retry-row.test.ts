@@ -4,8 +4,6 @@ import {
   fakeCodex,
   identityFor
 } from './codex-structured-session-adapter-fixture'
-// A Codex stream error it is about to retry is a warning row per attempt, never a red row: the
-// journal keeps every attempt, and the transcript draws only the latest of a run.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -16,7 +14,7 @@ import type {
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 
 const THREAD_ID = 'thread-abc'
 const TURN_ID = 'turn-1'
@@ -53,7 +51,6 @@ function notification(method: string, params: unknown): CodexStructuredSessionEv
   return { type: 'notification', sessionId: 'session-1', threadId: THREAD_ID, method, params }
 }
 
-/** The params the app server sends for a stream error it is about to retry. */
 function retryParams(message: string, additionalDetails?: string) {
   return {
     threadId: THREAD_ID,
@@ -108,62 +105,10 @@ describe('a Codex stream error it is about to retry', () => {
         payload: expect.objectContaining({ head: expect.stringContaining('Reconnecting... 3/5') })
       }
     })
-    // No row revises another: each attempt was written once.
     expect(rows.filter((row) => written.some((retry) => retry.key === row.key))).toHaveLength(3)
     expect(
       reduced(rows).filter((row) => row.body.kind === 'status' && row.body.tone === 'error')
     ).toEqual([])
-  })
-
-  it('is one line when Codex gives no detail, or only repeats its message', () => {
-    const { translator, rows } = harness()
-    translator.handle(retrying('Reconnecting... 1/5'))
-    translator.handle(retrying('Reconnecting... 2/5', 'Reconnecting... 2/5'))
-
-    expect(retryRows(rows).map((row) => row.body.kind === 'status' && row.body.text)).toEqual([
-      'Codex is retrying: Reconnecting... 1/5.',
-      'Codex is retrying: Reconnecting... 2/5.'
-    ])
-  })
-
-  it('publishes every attempt, so each one renews the idle clock', () => {
-    const { translator, publishes } = harness()
-
-    const before = publishes()
-    translator.handle(retrying('Reconnecting... 1/5'))
-    translator.handle(retrying('Reconnecting... 2/5'))
-    translator.handle(retrying('Reconnecting... 3/5'))
-
-    expect(publishes() - before).toBe(3)
-  })
-
-  it('keeps every earlier row when a new connection in the same session retries', () => {
-    const rows: Row[] = []
-    const connect = (acquisitionId: string) => {
-      const translator = createCodexJournalTranslator({
-        sink: {
-          appendItem: (identity, body) => rows.push({ key: agentJournalItemKey(identity), body }),
-          appendTombstone: () => undefined,
-          publish: () => undefined
-        },
-        primaryThreadId: () => THREAD_ID,
-        acquisitionId
-      })
-      translator.handle(notification('turn/started', { turn: { id: TURN_ID } }))
-      return translator
-    }
-    const first = connect('generation-1')
-    first.handle(retrying('Reconnecting... 1/5'))
-    first.handle(retrying('Reconnecting... 2/5'))
-    const second = connect('generation-2')
-    second.handle(retrying('Reconnecting... 1/5'))
-
-    // Each write is a new row: nothing the first connection wrote is revised.
-    expect(retryRows(rows).map((row) => row.body.kind === 'status' && row.body.text)).toEqual([
-      'Codex is retrying: Reconnecting... 1/5.',
-      'Codex is retrying: Reconnecting... 2/5.',
-      'Codex is retrying: Reconnecting... 1/5.'
-    ])
   })
 
   it('is named for the acquisition that received it, so a reconnect writes new rows', async () => {

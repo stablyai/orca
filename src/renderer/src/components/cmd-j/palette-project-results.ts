@@ -6,7 +6,7 @@ import {
   normalizeCmdJPaletteQuery,
   uniqueNormalizedCmdJPaletteKeywords
 } from './palette-query-tokens'
-import type { PaletteResultQualityClass } from '@/lib/palette-match/match-quality'
+import type { PaletteResultQualityClass } from '../../../../shared/palette-match/match-quality'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -50,11 +50,7 @@ type RankedProjectResult = {
   score: number
 }
 
-/**
- * Only rule 1 (query equals this row's own title) is a decisive intent. Rule 3 is
- * equality against a generic alias like `repo`, which every project shares, so it
- * must not let the whole section claim leadership over a named entity hit.
- */
+/** Only exact own-title matches signal decisive intent; generic project/repo aliases must not lead the whole section. */
 function projectRuleQualityClass(rule: number): PaletteResultQualityClass {
   if (rule === 1) {
     return 'exact-intent'
@@ -201,14 +197,12 @@ export function searchCmdJProjectResults({
   projectHostSetups: readonly ProjectHostSetup[]
   renderableRepoIds?: ReadonlySet<string>
 }): CmdJRankedProjectSearchResult[] {
-  // Why: oversized pasted input should not force the palette to scan project,
-  // repo, or group names that may include private workspace details.
+  // Bound pasted queries before scanning potentially private project, repo or group names.
   if (isCmdJPaletteQueryTooLarge(query)) {
     return []
   }
   const normalizedQuery = normalizeCmdJPaletteQuery(query)
-  // Why: project/group rows sit after worktree matches, so one-character
-  // searches would add broad noisy navigation targets before intent is clear.
+  // Require at least two query characters before adding broad project/group navigation targets.
   if (normalizedQuery.length < 2 || isCmdJPaletteQueryOverTokenLimit(normalizedQuery)) {
     return []
   }

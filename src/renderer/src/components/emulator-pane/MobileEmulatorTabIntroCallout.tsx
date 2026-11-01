@@ -10,9 +10,7 @@ export function MobileEmulatorTabIntroCallout(): React.JSX.Element {
   return (
     <div
       className="mobile-emulator-tab-intro-callout--menu mt-1 flex items-center gap-2 rounded-lg border-x border-b border-border/70 bg-muted px-2 py-1.5 dark:bg-accent/80"
-      // Why: Radix dropdown treats pointer-down inside custom panels as an
-      // outside-select; keep the menu open while the user reads or acts on the
-      // Keep/Hide/Dismiss controls (the actions intentionally leave it open).
+      // Prevent Radix outside-selection so Keep/Hide/Dismiss actions leave the callout’s menu open.
       onPointerDown={(event) => event.preventDefault()}
     >
       <p className="min-w-0 flex-1 text-[11px] leading-4 text-foreground/85">

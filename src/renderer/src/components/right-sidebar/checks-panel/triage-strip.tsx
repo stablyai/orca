@@ -42,9 +42,7 @@ export function PRTriageStrip({
   fixChecksDisabledReason?: string
 }): React.JSX.Element {
   const resolvedReview = review ?? pr
-  // Why: the whole strip reads one shared summary so it cannot contradict the checks pill — a
-  // `{status: completed, conclusion: null}` check used to spin here as "1 pending" forever while
-  // the pill two panes away called it unresolved.
+  // Share the pill's classifier so completed checks without conclusions remain unresolved rather than spinning.
   const summary = summarizeProviderChecks(checks)
   const failingCount = summary.failed
   const pendingCount = summary.pending
@@ -68,12 +66,11 @@ export function PRTriageStrip({
           <CircleX className="size-3.5 shrink-0 text-rose-500" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-medium text-foreground">
-              {failingCount}{' '}
               {translate(
-                'auto.components.right.sidebar.checks.panel.content.b652f38caf',
-                'failing check'
+                'auto.components.right.sidebar.checks.panel.content.failingChecks',
+                '{{count}} failing checks',
+                { count: failingCount, defaultValue_one: '{{count}} failing check' }
               )}
-              {failingCount === 1 ? '' : 's'}
             </div>
             <div className="truncate text-[10px] text-muted-foreground">
               {translate(
@@ -109,12 +106,10 @@ export function PRTriageStrip({
           <LoaderCircle className="size-3.5 shrink-0 animate-spin text-amber-500" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-medium text-foreground">
-              {pendingCount}{' '}
-              {translate('auto.components.right.sidebar.checks.panel.content.5341023167', 'check')}
-              {pendingCount === 1 ? '' : 's'}{' '}
               {translate(
-                'auto.components.right.sidebar.checks.panel.content.9ad98f2a17',
-                'pending'
+                'auto.components.right.sidebar.checks.panel.content.pendingChecks',
+                '{{count}} checks pending',
+                { count: pendingCount, defaultValue_one: '{{count}} check pending' }
               )}
             </div>
             <div className="truncate text-[10px] text-muted-foreground">
@@ -129,8 +124,7 @@ export function PRTriageStrip({
     )
   }
 
-  // Why: nothing passed, failed or is still running — a green tick here would contradict the grey
-  // "Unresolved checks" pill reading the same list.
+  // An all-unresolved list must match the grey pill, not show a green tick.
   if (summary.state === 'neutral') {
     return (
       <div className="border-b border-border px-3 py-2">
@@ -138,12 +132,10 @@ export function PRTriageStrip({
           <CircleDashed className="size-3.5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-medium text-foreground">
-              {summary.neutral}{' '}
-              {translate('auto.components.right.sidebar.checks.panel.content.5341023167', 'check')}
-              {summary.neutral === 1 ? '' : 's'}{' '}
               {translate(
-                'auto.components.right.sidebar.checks.panel.content.checksUnresolvedChip',
-                'unresolved'
+                'auto.components.right.sidebar.checks.panel.content.unresolvedChecks',
+                '{{count}} checks unresolved',
+                { count: summary.neutral, defaultValue_one: '{{count}} check unresolved' }
               )}
             </div>
             <div className="truncate text-[10px] text-muted-foreground">
@@ -200,11 +192,15 @@ export function ConflictTriageStrip({
         <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[11px] font-medium text-foreground">
-            {translate(
-              'auto.components.right.sidebar.checks.panel.content.60186d8498',
-              'Conflicts block this'
-            )}{' '}
-            {reviewKind}
+            {reviewKind === 'MR'
+              ? translate(
+                  'auto.components.right.sidebar.checks.panel.content.conflictsBlockThisMr',
+                  'Conflicts block this MR'
+                )
+              : translate(
+                  'auto.components.right.sidebar.checks.panel.content.conflictsBlockThisPr',
+                  'Conflicts block this PR'
+                )}
           </div>
           <div className="truncate text-[10px] text-muted-foreground">
             {translate(

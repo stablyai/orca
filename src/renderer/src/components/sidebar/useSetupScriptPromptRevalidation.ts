@@ -9,11 +9,7 @@ import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 /** Revisiting an already-activated worktree re-inspects at most this often. */
 export const SETUP_PROMPT_REVISIT_REVALIDATION_INTERVAL_MS = 30_000
 
-/**
- * Re-runs the setup-script prompt inspection when a shared `orca.yaml` setup hook
- * can have become effective outside SetupScriptPromptCard's reactive inputs, so a
- * stale "Add a setup script" prompt clears without a full sidebar reopen.
- */
+/** Reinspect external setup changes so stale setup prompts can clear without reopening the sidebar. */
 export function useSetupScriptPromptRevalidation(input: {
   activeRepo: Repo | null
   isDismissed: boolean
@@ -26,28 +22,24 @@ export function useSetupScriptPromptRevalidation(input: {
   const activeRepoHostIdentity = activeRepo ? getRepoHostIdentity(activeRepo) : null
   const repoHost = parseExecutionHostId(activeRepo ? getRepoExecutionHostId(activeRepo) : null)
   const repoRuntimeEnvironmentId = repoHost?.kind === 'runtime' ? repoHost.environmentId : null
-  // Why: scope to the repo's own runtime so an unrelated host reconnect does not
-  // re-fire inspections for every repo.
+  // Subscribe to the repo’s owning runtime so unrelated reconnects do not trigger inspections.
   const repoConnectionGeneration = useAppStore((s) =>
     repoRuntimeEnvironmentId
       ? (s.runtimeStatusByEnvironmentId.get(repoRuntimeEnvironmentId)?.connectionGeneration ?? 0)
       : 0
   )
 
-  // Why: revalidate while the prompt shows no effective setup or a failed inspection —
-  // both can be stale. `forbidden` is permanent and an effective setup has nothing to
-  // clear, so neither is worth an RPC (notably over SSH).
+  // Revalidate stale negative/failed results; forbidden or already-effective setup needs no extra RPC.
   const promptBelongsToActiveRepo =
     promptState?.repoId === activeRepo?.id &&
     Boolean(activeRepo && promptState?.repoHostIdentity === activeRepoHostIdentity)
   const promptNeedsRevalidation =
     promptBelongsToActiveRepo &&
     (promptState?.status === 'error' ||
+      promptState?.status === 'distro-stopped' ||
       (promptState?.status === 'ok' && !promptState.hasEffectiveSetup))
 
-  // Why: orca.yaml is edited on disk or the hook runs in a terminal outside React
-  // state. Re-inspect on window focus so returning to Orca detects it (mirrors
-  // useInstalledAgentSkills' focus revalidation).
+  // Focus may reveal disk or terminal changes that React inputs cannot observe.
   useEffect(() => {
     if (
       !sidebarOpen ||
@@ -64,19 +56,13 @@ export function useSetupScriptPromptRevalidation(input: {
     }
   }, [activeRepo, isDismissed, requestRevalidation, promptNeedsRevalidation, sidebarOpen])
 
-  // Why: the setup hook runs during worktree creation, so activating a worktree in
-  // this repo can make the setup effective after a negative result was cached. Fire
-  // only on an actual activation change, not on mount/remount with a seeded id —
-  // the initial inspection already covers the mounted worktree.
+  // Creation hooks may settle on first activation; initial inspection already covers mount/remount.
   const previousWorktreeIdRef = useRef(activeWorktreeId)
   const previousRepoHostIdentityRef = useRef(activeRepoHostIdentity)
   const previousConnectionGenerationRef = useRef(repoConnectionGeneration)
-  // Why: these signals usually land while the prompt state is still unsettled (the
-  // card nulls it for the whole inspection round trip). Remember them instead of
-  // dropping them, then replay once a revalidatable result exists.
+  // Remember activation/reconnect signals while inspection clears prompt state, then replay them once eligible.
   const pendingRevalidationRef = useRef(false)
-  // Why: a worktree's first activation is when its creation-time setup hook can have landed.
-  // Re-inspecting on every revisit cost two host round trips per click on remote repos (#26785).
+  // Track first activation and throttle revisits to avoid two remote calls per workspace click.
   const activatedWorktreeIdsRef = useRef(
     new Set<string>(activeWorktreeId ? [activeWorktreeId] : [])
   )
@@ -85,8 +71,7 @@ export function useSetupScriptPromptRevalidation(input: {
   useEffect(() => {
     const worktreeChanged = previousWorktreeIdRef.current !== activeWorktreeId
     const hostChanged = previousRepoHostIdentityRef.current !== activeRepoHostIdentity
-    // Why: a runtime reconnect can turn an unreadable orca.yaml into a readable one,
-    // and nothing else in the card's inputs changes when that happens.
+    // Reconnect can make an unreadable setup file readable without changing any other prompt input.
     const reconnected = repoConnectionGeneration > previousConnectionGenerationRef.current
     previousWorktreeIdRef.current = activeWorktreeId
     previousRepoHostIdentityRef.current = activeRepoHostIdentity

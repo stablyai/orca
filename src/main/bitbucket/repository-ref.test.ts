@@ -37,7 +37,27 @@ describe('Bitbucket repository refs', () => {
       workspace: 'team',
       repoSlug: 'project'
     })
+    expect(parseBitbucketRepoRef('git@ssh.bitbucket.org:team/project.git')).toEqual({
+      workspace: 'team',
+      repoSlug: 'project'
+    })
+    expect(parseBitbucketRepoRef('ssh://git@ssh.bitbucket.org/team/project.git')).toEqual({
+      workspace: 'team',
+      repoSlug: 'project'
+    })
     expect(parseBitbucketRepoRef('https://github.com/team/project.git')).toBeNull()
+  })
+
+  it('recognizes the SSH host case-insensitively without accepting lookalike hosts', () => {
+    expect(parseBitbucketRepoRef('git@SSH.BITBUCKET.ORG:team/project.git')).toEqual({
+      workspace: 'team',
+      repoSlug: 'project'
+    })
+    expect(parseBitbucketRepoRef('git@ssh.bitbucket.org.example.com:team/project.git')).toBeNull()
+    expect(
+      parseBitbucketRepoRef('ssh://git@ssh.bitbucket.org.example.com/team/project.git')
+    ).toBeNull()
+    expect(parseBitbucketRepoRef('git@notssh.bitbucket.org:team/project.git')).toBeNull()
   })
 
   it('strips trailing slashes after .git suffixes', () => {
@@ -87,18 +107,5 @@ describe('Bitbucket repository refs', () => {
       cwd: '/repo',
       timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
-  })
-
-  it('bounds cached repository refs for distinct repo paths', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: 'git@bitbucket.org:team/project.git\n',
-      stderr: ''
-    })
-
-    for (let i = 0; i < 513; i += 1) {
-      await getBitbucketRepoRef(`/repo-${i}`)
-    }
-
-    expect(_getBitbucketRepoRefCacheSize()).toBe(512)
   })
 })

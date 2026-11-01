@@ -1,7 +1,7 @@
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { commitAgentSessionFounding } from './agent-session-founding-admission'
-import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 import { draftAgentSessionStoreState } from './agent-session-store-draft'
 import type { AgentSessionStoreTransactions } from './agent-session-store-transactions'
 
@@ -12,12 +12,16 @@ export function createAgentSessionFoundingStore(
 ) {
   return {
     prepare: (request: AgentSessionReserveRequest) =>
-      commitAgentSessionFounding(draftAgentSessionStoreState(transactions.state), request),
+      commitAgentSessionFounding(
+        draftAgentSessionStoreState(transactions.state),
+        request,
+        transactions.legacySessionTabIds
+      ),
     commit: async (request: AgentSessionReserveRequest) => {
       let heldBefore = true
       const result = await transactions.transact((draft) => {
         heldBefore = draft.records.size > 0 || draft.unreadableRecords.size > 0
-        return commitAgentSessionFounding(draft, request)
+        return commitAgentSessionFounding(draft, request, transactions.legacySessionTabIds)
       })
       if (!heldBefore) {
         firstRecordListeners.forEach((listener) => listener())
@@ -28,7 +32,7 @@ export function createAgentSessionFoundingStore(
       let heldBefore = true
       const receipt = transactions.receipt((draft) => {
         heldBefore = draft.records.size > 0 || draft.unreadableRecords.size > 0
-        const result = commitAgentSessionFounding(draft, request)
+        const result = commitAgentSessionFounding(draft, request, transactions.legacySessionTabIds)
         if (result.disposition === 'replayed') {
           throw agentSessionRefusalError('agent_session_operation_unknown', {
             reason: 'outcomeUnknown'

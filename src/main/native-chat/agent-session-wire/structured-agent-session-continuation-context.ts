@@ -22,18 +22,18 @@ export function continuationContextReader(
     workspaceId: string
     expectedCursor: AgentJournalCursor
   }): Promise<AgentSessionContinuationContext> => {
-    const sourceRecord = () => {
-      const record = deps.store.getRecord(input.sessionId)
+    const sourceConversation = () => {
+      const record = deps.store.getConversation(input.sessionId)
       return record?.location.workspaceId === input.workspaceId &&
         record.location.executionHostId === LOCAL_EXECUTION_HOST_ID
         ? record
         : null
     }
-    if (!sourceRecord()) {
+    if (!sourceConversation()) {
       return { status: 'superseded' }
     }
     const session = await conversation(input.sessionId)
-    const record = sourceRecord()
+    const record = sourceConversation()
     const snapshot = session.journal.snapshot()
     if (
       !record ||

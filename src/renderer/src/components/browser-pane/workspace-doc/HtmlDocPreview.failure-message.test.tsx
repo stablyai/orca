@@ -1,19 +1,14 @@
 // @vitest-environment happy-dom
-//
-// The preview guest paints the handler's error body as if it were the document, so every
-// unreadable outcome arrives out-of-band on the failure channel. These pin that each reason
-// reaches the reader as its own sentence, and that a broken subresource cannot blank the page.
-//
-// The payloads here are the ones the reader can actually produce. The entry document is served as
-// text by every owner, so it fails only as too-large (a host-reported truncation) or unreadable (a
-// read error or a revoked grant); 'unsupported-asset' comes from a subresource whose format the
-// host declined to send — a font, say — and never from the document itself.
+// Entry failures arrive out-of-band; unsupported formats are subresource failures and must not replace a rendered document.
 import { act } from 'react'
 import type * as WebviewRegistryModule from '../host-guest/webview-registry'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DocPreviewFailure } from '../../../../../shared/doc-preview-scheme'
+
+const confirmExternalLink = async (): Promise<boolean> => false
 
 const GRANT_ID = 'a'.repeat(32)
 const REMINTED_GRANT_ID = 'c'.repeat(32)
@@ -37,11 +32,15 @@ vi.mock('@/lib/doc-preview-grants', () => ({
     root: '/repo/docs',
     entryRelativePath: ENTRY_RELATIVE_PATH
   }),
-  ensureDocPreviewGrant: () => {
+  ensureDocPreviewGrant: (_previewId: string, location: unknown) => {
     grantRuntime.mints += 1
     // Why a fresh id per mint: a re-mint after a reconnect must bind the guest to the new grant.
     const grantId = grantRuntime.mints === 1 ? GRANT_ID : REMINTED_GRANT_ID
-    return Promise.resolve({ grantId, url: `orca-preview://${grantId}/${ENTRY_RELATIVE_PATH}` })
+    return Promise.resolve({
+      grantId,
+      url: `orca-preview://${grantId}/${ENTRY_RELATIVE_PATH}`,
+      location
+    })
   },
   releaseDocPreviewGrant: (previewId: string) => {
     grantRuntime.released.push(previewId)
@@ -96,14 +95,17 @@ async function renderPreview(container: HTMLDivElement, root: Root): Promise<voi
   const { HtmlDocPreview } = await import('./HtmlDocPreview')
   await act(async () => {
     root.render(
-      <TooltipProvider>
-        <HtmlDocPreview
-          previewId="preview-1"
-          filePath="/repo/docs/doc.html"
-          relativePath="docs/doc.html"
-          worktreeId="wt-1"
-        />
-      </TooltipProvider>
+      <ConfirmationDialogContext.Provider value={confirmExternalLink}>
+        <TooltipProvider>
+          <HtmlDocPreview
+            previewId="preview-1"
+            browserWorkspaceId="browser-1"
+            filePath="/repo/docs/doc.html"
+            relativePath="docs/doc.html"
+            worktreeId="wt-1"
+          />
+        </TooltipProvider>
+      </ConfirmationDialogContext.Provider>
     )
   })
   expect(container.querySelector('webview')).not.toBeNull()
@@ -164,8 +166,7 @@ describe('HtmlDocPreview failure messages', () => {
     )
   })
 
-  // Why a notice and not the panel: the document rendered. Hiding it behind a failure screen would
-  // take away a page the reader can use over one asset the workspace would not send.
+  // An asset refusal must leave the usable document visible.
   it('names the asset the workspace refused without hiding the document', async () => {
     await renderPreview(container, root)
 
@@ -391,7 +392,6 @@ describe('HtmlDocPreview failure messages', () => {
     expect(grantRuntime.authorizations).toEqual([])
   })
 
-  // Why: nothing rendered, so the notice strip would be a footnote on a blank page.
   it('replaces the asset notice with the failure panel when the document itself fails', async () => {
     await renderPreview(container, root)
 
@@ -406,8 +406,7 @@ describe('HtmlDocPreview failure messages', () => {
     expect(container.textContent).not.toContain('Downloads are disabled in document previews.')
   })
 
-  // Why the notice exists at all: the preview partition cancels the download before it starts, so
-  // without this a pressed download button produces nothing the reader can tell from a bug.
+  // The preview partition cancels downloads before start; a notice is the reader’s only response.
   it('tells the reader a refused download was refused, without taking the document away', async () => {
     await renderPreview(container, root)
 
@@ -420,8 +419,7 @@ describe('HtmlDocPreview failure messages', () => {
     expect(container.querySelector('webview')).not.toBeNull()
   })
 
-  // Why: the document chooses when and how often to ask, so a per-attempt row would let a page
-  // scroll Orca's own chrome off the screen.
+  // Deduplicate page-controlled refusals so repeated requests cannot fill Orca’s chrome.
   it('shows one refusal notice however often the document asks', async () => {
     await renderPreview(container, root)
 
@@ -486,8 +484,7 @@ describe('HtmlDocPreview failure messages', () => {
     expect(container.textContent).not.toContain('Preview unavailable')
   })
 
-  // Why: a grant is pinned to the owner ids it was minted with, so after a pairing or SSH
-  // reconnect reloading the guest would just refetch the same failure forever.
+  // Reconnect changes owner IDs; reloading the old pinned grant would repeat its failure.
   it('re-mints the grant when reload is pressed from a failure', async () => {
     await renderPreview(container, root)
     await act(async () => {

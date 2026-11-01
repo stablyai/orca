@@ -17,7 +17,6 @@ import type { NativeChatHandOff } from './use-native-chat-hand-off'
 
 type UsageLimitActions = {
   account: ReactNode
-  reserveAccount: boolean
   handOff?: () => void
   disabled: boolean
 }
@@ -98,7 +97,6 @@ export function NativeChatUsageLimitActionsProvider({
   const actions = useMemo<UsageLimitActions>(
     () => ({
       account,
-      reserveAccount: pane.agent === 'claude',
       disabled,
       ...(canHandOff || (loading && isTuiAgent(pane.agent))
         ? { handOff: () => openHandOff({ avoidSourceAgent: true }) }
@@ -133,35 +131,29 @@ export function NativeChatUsageLimitActions(): React.JSX.Element | null {
     return null
   }
   return (
-    <div className="ml-6 space-y-2 text-chat-foreground-faint">
+    <div className="ml-6 flex flex-wrap items-center gap-2 text-chat-foreground-faint">
       <p className="text-xs">
         {translate(
           'components.native-chat.usageLimitActions.leadIn',
           'Continue this chat without waiting:'
         )}
       </p>
-      <div className="flex flex-wrap gap-2">
-        {actions.reserveAccount ? (
-          <div className="w-32 shrink-0">{actions.account}</div>
-        ) : (
-          actions.account
-        )}
-        {actions.handOff ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            disabled={actions.disabled}
-            onClick={actions.handOff}
-          >
-            <MessageSquarePlus />
-            {translate(
-              'components.agentSessionContinuation.handOffToAnotherAgent',
-              'Hand Off to Another Agent'
-            )}
-          </Button>
-        ) : null}
-      </div>
+      {actions.account ? <div className="w-32 shrink-0 empty:hidden">{actions.account}</div> : null}
+      {actions.handOff ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          disabled={actions.disabled}
+          onClick={actions.handOff}
+        >
+          <MessageSquarePlus />
+          {translate(
+            'components.agentSessionContinuation.handOffToAnotherAgent',
+            'Hand Off to Another Agent'
+          )}
+        </Button>
+      ) : null}
     </div>
   )
 }

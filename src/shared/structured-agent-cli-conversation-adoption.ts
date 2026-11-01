@@ -1,18 +1,12 @@
-/**
- * The chats that can take over a conversation their own CLI recorded, by the agent its Session
- * History row lists under, in the order a resume tries them: each one the host registers a
- * transcript import for, which a registration test checks. Only a conversation recorded on this
- * machine is offered, and this machine's host is this build, so the map cannot disagree with the
- * host that adopts.
- */
+/** Adoption order by Session History row agent; registration tests require a transcript importer for every target.
+ * Conversations stay on their recording host, which validates importer availability before adoption. */
 export const CLI_CONVERSATION_ADOPTING_AGENTS = {
   claude: ['claude'],
   codex: ['codex'],
   grok: ['grok'],
   omp: ['omp'],
   opencode: ['opencode'],
-  // An OpenCode 2.x conversation: the OpenCode 2 chat runs only 2.x, an OpenCode chat runs 2.x
-  // where `opencode` is 2.x.
+  // OpenCode 2 chats require 2.x; ordinary OpenCode chats can adopt when their installed opencode is 2.x.
   opencode2: ['opencode2', 'opencode'],
   pi: ['pi']
 } as const
@@ -41,4 +35,21 @@ export function cliConversationRowsShareAgent(
 ): boolean {
   const rightAgents: readonly string[] = CLI_CONVERSATION_ADOPTING_AGENTS[right]
   return CLI_CONVERSATION_ADOPTING_AGENTS[left].some((agent) => rightAgents.includes(agent))
+}
+
+/** A local status row naming the conversation a chat of `agent` would take over: the host's
+ * writer admission and the renderer's open-chat lookup read rows the same way. */
+export function namesCliConversation(
+  row: { connectionId?: string | null; agentType?: string; providerSession?: { id: string } },
+  agent: string,
+  providerSessionId: string
+): boolean {
+  return (
+    !row.connectionId &&
+    adoptsCliConversations(row.agentType) &&
+    row.providerSession?.id === providerSessionId &&
+    CLI_CONVERSATION_ADOPTING_AGENTS[row.agentType].some((chat) =>
+      chatAgentsShareConversations(chat, agent)
+    )
+  )
 }

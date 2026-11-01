@@ -5,11 +5,7 @@ import {
   type MobilePairingConnectionMode
 } from '../../../../shared/mobile-pairing-connection-mode'
 
-/**
- * Selected pairing path, seeded from the persisted preference and the desktop's
- * sign-in state, and re-synced when either changes. Shared by MobilePage and
- * MobilePane so the two surfaces cannot resolve the default differently.
- */
+/** Resolve persisted mode and sign-in consistently across MobilePage and MobilePane. */
 export function useMobilePairingConnectionMode(): [
   MobilePairingConnectionMode,
   React.Dispatch<React.SetStateAction<MobilePairingConnectionMode>>

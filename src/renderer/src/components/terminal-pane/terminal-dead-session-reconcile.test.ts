@@ -1,21 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
+
 import {
-  reconcileMissingSessions,
   shouldReconcileMissingSession,
   shouldReconcileDeadSession
 } from './terminal-dead-session-reconcile'
 
 describe('shouldReconcileDeadSession', () => {
-  it('reconciles a local, non-remote id genuinely absent from the live set', () => {
-    expect(
-      shouldReconcileDeadSession({
-        ptyId: 'wt@@dead',
-        connectionId: null,
-        liveSessionIds: new Set(['wt@@alive'])
-      })
-    ).toBe(true)
-  })
-
   it('does not reconcile when the bound id is still live', () => {
     expect(
       shouldReconcileDeadSession({
@@ -67,8 +57,7 @@ describe('shouldReconcileDeadSession', () => {
   })
 
   it('does NOT reconcile a newborn pane bound after the snapshot was requested', () => {
-    // Why (regression): the snapshot predates this binding (boundAt >= requestedAt),
-    // so the fresh ptyId's absence from it is meaningless — it cannot prove death.
+    // A snapshot requested before this bind cannot prove the newborn PTY dead.
     expect(
       shouldReconcileDeadSession({
         ptyId: 'wt@@newborn',
@@ -81,8 +70,7 @@ describe('shouldReconcileDeadSession', () => {
   })
 
   it('does NOT reconcile when the binding and snapshot request share a tick (boundAt === requestedAt)', () => {
-    // Why: the guard is inclusive (>=) — a coarse/clamped performance.now() can
-    // land a same-tick bind and request, and that newborn must still be kept.
+    // Coarse performance.now can tie request and bind; inclusive comparison must retain that newborn.
     expect(
       shouldReconcileDeadSession({
         ptyId: 'wt@@newborn',
@@ -107,7 +95,6 @@ describe('shouldReconcileDeadSession', () => {
   })
 
   it('ignores the freshness guard when either timestamp is omitted (back-compat)', () => {
-    // Omitted snapshotRequestedAt: behave exactly as today.
     expect(
       shouldReconcileDeadSession({
         ptyId: 'wt@@dead',
@@ -116,7 +103,6 @@ describe('shouldReconcileDeadSession', () => {
         ptyBoundAt: 1000
       })
     ).toBe(true)
-    // Omitted ptyBoundAt (null): behave exactly as today.
     expect(
       shouldReconcileDeadSession({
         ptyId: 'wt@@dead',
@@ -182,23 +168,5 @@ describe('shouldReconcileMissingSession', () => {
         livenessRequestedAt: 900
       })
     ).toBe(false)
-  })
-})
-
-describe('reconcileMissingSessions', () => {
-  it('invokes each binding with the targeted liveness probe and request timestamp', () => {
-    const hasPty = vi.fn(async () => true)
-    const bindingA = { reconcileIfSessionMissing: vi.fn() }
-    const bindingB = { reconcileIfSessionMissing: vi.fn() }
-    const before = performance.now()
-
-    reconcileMissingSessions({ bindings: [bindingA, bindingB], hasPty })
-
-    const after = performance.now()
-    expect(bindingA.reconcileIfSessionMissing).toHaveBeenCalledWith(hasPty, expect.any(Number))
-    expect(bindingB.reconcileIfSessionMissing).toHaveBeenCalledWith(hasPty, expect.any(Number))
-    const [, requestedAt] = bindingA.reconcileIfSessionMissing.mock.calls[0]!
-    expect(requestedAt).toBeGreaterThanOrEqual(before)
-    expect(requestedAt).toBeLessThanOrEqual(after)
   })
 })

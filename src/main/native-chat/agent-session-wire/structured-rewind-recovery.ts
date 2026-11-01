@@ -1,3 +1,8 @@
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import type {
+  StructuredAgentSessionHostDeps,
+  StructuredAgentSessionHostSession
+} from './structured-agent-session-host-types'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
@@ -13,7 +18,11 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 
-type RewindRecoveryDeps = { store: AgentSessionRecordStore; logger: StructuredAgentSessionLogger }
+type RewindRecoveryDeps = {
+  store: AgentSessionRecordStore
+  logger: StructuredAgentSessionLogger
+  nameProviderConversation?: (record: AgentSessionRecord) => void
+}
 
 export function persistRewindRecord(
   store: AgentSessionRecordStore,
@@ -21,7 +30,7 @@ export function persistRewindRecord(
   fence: number,
   rewind: AgentSessionRewindRecord
 ): Promise<unknown> {
-  // An older build's record copied the kept history; the journal holds it, so it is never rewritten.
+  // Drop legacy copied history; the retained journal remains authoritative.
   const { retained: _retained, hydrationVerified: _hydrationVerified, ...current } = rewind
   return store.transitionHandoff(sessionId, (record) => {
     if (record.lease.runtimeFence !== fence) {
@@ -31,10 +40,7 @@ export function persistRewindRecord(
   })
 }
 
-/**
- * Claude rewind is unsupported, so a pending one (an older build's, or an interrupted one) is
- * settled refused rather than proven. Bookkeeping only: the chat is already attached either way.
- */
+/** Pre-fork Claude rewinds never ran; refuse them without blocking the already-attached chat. */
 async function settleUnsupportedClaudeRewind(
   { store, logger }: RewindRecoveryDeps,
   sessionId: string,
@@ -67,16 +73,14 @@ type RecoveredRewind = Awaited<
   ReturnType<NonNullable<StructuredAgentSessionAdapter['recoverRewind']>>
 >
 
-/** What the provider says about a rewind in doubt, read with no journal or record write, so a
- *  caller can read it outside the session's serialize and apply it inside. Null: none in doubt. */
+/** Read provider evidence outside serialization; apply journal/record changes inside it. */
 export type StructuredRewindRecoveryEvidence = {
   rewind: AgentSessionRewindRecord
-  turns?: Pick<StructuredRewindCut, 'beforeTurnId' | 'keptTurnId'>
+  turns?: { beforeTurnId: string; keptTurnId: string | null }
   recovered?: RecoveredRewind
 } | null
 
-// Only this rewind moves a chat to a new epoch once it has history (imports run at creation), so
-// a moved epoch is its own replacement, committed before the crash.
+// Only rewind replaces an existing epoch, so a changed epoch proves replacement committed.
 function rewindJournalCut(
   record: AgentSessionRecord | null,
   journal: AgentSessionJournal,
@@ -121,7 +125,7 @@ export async function recoverStructuredRewind(
   await applyStructuredRewindRecovery(deps, sessionId, journal, fence, evidence, receipt)
 }
 
-/** `record` is the one the apply will see, when a caller's commit before it changes the record. */
+/** Supply the record a pending commit will expose to apply. */
 export async function readStructuredRewindRecovery(
   { store }: RewindRecoveryDeps,
   sessionId: string,
@@ -138,7 +142,12 @@ export async function readStructuredRewindRecovery(
   }
   const target = parseAgentJournalItemKey(rewind.providerItemId ?? rewind.itemId)
   const { cut } = rewindJournalCut(record, journal, rewind)
-  if (target?.provider === 'claude' || rewind.phase !== 'prepared' || !cut) {
+  if (
+    target?.provider === 'claude' ||
+    rewind.phase !== 'prepared' ||
+    !cut ||
+    !('beforeTurnId' in cut)
+  ) {
     return { rewind }
   }
   const turns = { beforeTurnId: cut.beforeTurnId, keptTurnId: cut.keptTurnId }
@@ -154,8 +163,7 @@ export async function readStructuredRewindRecovery(
   return recovered ? { rewind, turns, recovered } : { rewind, turns }
 }
 
-/** The journal and record writes the evidence proves; a rewind or cut that moved since the read
- *  is not this evidence's to settle. */
+/** Apply only while the saved rewind and cut still match the evidence. */
 export async function applyStructuredRewindRecovery(
   deps: RewindRecoveryDeps,
   sessionId: string,
@@ -177,7 +185,7 @@ export async function applyStructuredRewindRecovery(
     throw new Error('agent_session_rewind:stale-evidence')
   }
   const target = parseAgentJournalItemKey(rewind.providerItemId ?? rewind.itemId)
-  if (target?.provider === 'claude') {
+  if (target?.provider === 'claude' && !rewind.providerFork) {
     await settleUnsupportedClaudeRewind(deps, sessionId, fence, rewind)
     return
   }
@@ -185,8 +193,11 @@ export async function applyStructuredRewindRecovery(
   if (!alreadyReplaced && !cut) {
     throw new Error('agent_session_rewind:invalid-target')
   }
-  if (rewind.phase === 'prepared') {
-    if (!cut) {
+  if (rewind.phase === 'prepared' && rewind.providerFork) {
+    rewind = { ...rewind, phase: 'provider-succeeded' }
+    await persistRewindRecord(store, sessionId, fence, rewind)
+  } else if (rewind.phase === 'prepared') {
+    if (!cut || !('beforeTurnId' in cut)) {
       throw new Error('agent_session_rewind:outcome-unknown')
     }
     if (
@@ -197,8 +208,7 @@ export async function applyStructuredRewindRecovery(
     }
     const { recovered } = evidence
     if (!recovered?.ok) {
-      // The target is still in the provider's history, and the journal is replaced only once the
-      // revert is proven, so both still hold it even when the provider acknowledged the revert.
+      // Keep both histories until revert is proven, even after provider acknowledgement.
       if (recovered?.reason === 'provider-refused') {
         await persistRewindRecord(store, sessionId, fence, {
           ...rewind,
@@ -213,6 +223,18 @@ export async function applyStructuredRewindRecovery(
     await persistRewindRecord(store, sessionId, fence, rewind)
   }
   if (rewind.phase !== 'provider-succeeded') {
+    return
+  }
+  if (rewind.providerFork?.materialized && !rewind.contextClearOperationId && !alreadyReplaced) {
+    const completed = rewind
+    await journal.replaceEpochItems('handle_forked', fence, cut!.kept, (cursor) =>
+      inheritForkName(
+        deps,
+        sessionId,
+        receipt?.(completed, fence, cursor) ??
+          store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
+      )
+    )
     return
   }
   if (rewind.contextClearOperationId && rewind.contextClearSequence) {
@@ -230,8 +252,12 @@ export async function applyStructuredRewindRecovery(
       fence,
       cut!.kept,
       (cursor) =>
-        receipt?.(completed, fence, cursor) ??
-        store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
+        inheritForkName(
+          deps,
+          sessionId,
+          receipt?.(completed, fence, cursor) ??
+            store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
+        )
     )
     return
   }
@@ -252,4 +278,39 @@ export async function applyStructuredRewindRecovery(
       rewind: { itemId: rewind.itemId, epoch: cursor.epoch }
     }
   })
+}
+
+/** Settle prepared rewinds orphaned across processes; provider-only proof waits for the next proven start. */
+export async function settleInterruptedStructuredAgentSessionCommands(
+  deps: StructuredAgentSessionHostDeps,
+  sessionId: string,
+  session: StructuredAgentSessionHostSession
+): Promise<void> {
+  const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
+  try {
+    await recoverStructuredRewind(deps, sessionId, session.journal, fence)
+  } catch (error) {
+    deps.logger.warn('settling an interrupted rewind on open failed', {
+      scope: 'rewind-recovery',
+      sessionId,
+      error
+    })
+  }
+}
+
+function inheritForkName(
+  deps: RewindRecoveryDeps,
+  sessionId: string,
+  receipt: JournalOperationReceipt
+): JournalOperationReceipt {
+  return {
+    write: receipt.write,
+    committed: () => {
+      receipt.committed()
+      const record = deps.store.getRecord(sessionId)
+      if (record?.rewind?.providerFork?.materialized) {
+        deps.nameProviderConversation?.(record)
+      }
+    }
+  }
 }

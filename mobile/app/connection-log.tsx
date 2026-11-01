@@ -19,16 +19,19 @@ import {
   type DiagnosticsHostSelection
 } from '../src/diagnostics/connection-diagnostics-screen-data'
 import { connectionDiagnosticsScreenStyles as styles } from '../src/diagnostics/connection-diagnostics-screen-styles'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { NATIVE_APP_LOG_ID } from '../src/diagnostics/native-render-log'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
 
-// Why: getSnapshot must be referentially stable when there's no data —
-// a fresh [] per call would make useSyncExternalStore re-render forever.
+// Keep empty snapshot identity stable or useSyncExternalStore rerenders forever.
 const EMPTY_ENTRIES: readonly ConnectionLogEntry[] = []
+const subscribeAppLog = (listener: () => void) =>
+  connectionLogStore.subscribe(NATIVE_APP_LOG_ID, listener)
+const getAppLog = () => connectionLogStore.get(NATIVE_APP_LOG_ID)
 
-// Why: reading the log is most needed while a host is failing, so this
-// route also *acquires* the host client — opening it kicks a dial and the
-// log fills live instead of showing a stale tail.
+// Acquire client here so opening logs during host failure starts dialing and live logging.
 export default function NativeConnectionLogRoute() {
+  useMobileColorScheme()
   const clientContext = useRpcClientContext()
   const router = useRouter()
   const params = useLocalSearchParams<{ hostId?: string }>()
@@ -51,7 +54,7 @@ export default function NativeConnectionLogRoute() {
   const selectedId = resolveDiagnosticsHostId(hosts, params.hostId, manualSelection, routeKey)
   const selected = hosts.find((host) => host.id === selectedId) ?? null
   const { client, state } = useHostClient(selected?.id)
-  const { desktopAppVersion } = useHostStatusGates({
+  const { desktopAppVersion, statusPending } = useHostStatusGates({
     hostId: selected?.id,
     client,
     connState: state
@@ -60,6 +63,7 @@ export default function NativeConnectionLogRoute() {
   const { activePath, pendingPath } = useConnectionPathStatus(selected?.id)
 
   useEffect(() => {
+    void readHydratedConnectionLog(connectionLogStore, NATIVE_APP_LOG_ID)
     if (selectedId) {
       void readHydratedConnectionLog(connectionLogStore, selectedId)
     }
@@ -74,13 +78,20 @@ export default function NativeConnectionLogRoute() {
     () => (selectedId ? connectionLogStore.get(selectedId) : EMPTY_ENTRIES),
     [selectedId]
   )
-  const entries = useSyncExternalStore(subscribe, getSnapshot)
+  const hostEntries = useSyncExternalStore(subscribe, getSnapshot)
+  const appEntries = useSyncExternalStore(subscribeAppLog, getAppLog)
+  const entries = useMemo(
+    () => [...hostEntries, ...appEntries].sort((a, b) => a.ts - b.ts),
+    [hostEntries, appEntries]
+  )
   const device = useMemo(
     () =>
-      selected
-        ? createNativeDiagnosticsOperations(selected, clientContext, desktopAppVersion)
-        : null,
-    [selected, clientContext, desktopAppVersion]
+      createNativeDiagnosticsOperations(
+        selected,
+        clientContext,
+        statusPending ? null : desktopAppVersion
+      ),
+    [selected, clientContext, desktopAppVersion, statusPending]
   )
 
   return (

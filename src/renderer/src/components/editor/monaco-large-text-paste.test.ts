@@ -141,6 +141,28 @@ describe('monaco large text paste', () => {
     })
   })
 
+  it('still reports a result when the chunked paste throws, so its start state releases', async () => {
+    const { editor } = makeEditor()
+    const resultSpy = vi.fn()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the paste reads only the editor methods makeEditor stubs.
+    handleMonacoLargeTextPaste(editor as never, pasteEvent('abcdef'.repeat(4)), {
+      directMaxBytes: 8,
+      chunkMaxBytes: 6,
+      yieldToEventLoop: async () => {
+        throw new Error('yield failed')
+      },
+      onPasteStart: vi.fn(),
+      onPasteResult: resultSpy
+    })
+    await flushPromises()
+
+    expect(resultSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'cancelled', reason: 'target-unavailable' })
+    )
+  })
+
   it('claims large Monaco paste with bounded ownership measuring before yielded insertion', async () => {
     const { editor, edits } = makeEditor()
     const resultSpy = vi.fn()
@@ -170,6 +192,29 @@ describe('monaco large text paste', () => {
     expect(resultSpy).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'pasted', mode: 'chunked' })
     )
+  })
+
+  it('rejects a replacement model before yielded byte measurement reaches insertion', async () => {
+    const { editor, edits, replaceModel } = makeEditor()
+    const resultSpy = vi.fn()
+    const event = pasteEvent('x'.repeat(32))
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the paste reads only the editor methods makeEditor stubs.
+    handleMonacoLargeTextPaste(editor as never, event, {
+      directMaxBytes: 4,
+      measureYieldAfterCodeUnits: 8,
+      yieldToEventLoop: async () => replaceModel(),
+      onPasteResult: resultSpy
+    })
+    await flushPromises()
+
+    expect(edits).toEqual([])
+    expect(resultSpy).toHaveBeenCalledWith({
+      status: 'rejected',
+      reason: 'target-unavailable',
+      byteLength: 32,
+      chunksWritten: 0
+    })
   })
 
   it('updates Monaco selection for mixed newlines without splitting chunk text', async () => {

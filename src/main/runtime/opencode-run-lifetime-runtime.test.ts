@@ -59,7 +59,6 @@ const summary = (statuses: RuntimeTerminalAgentStatusEvent[]): string[] =>
       `${event.paneKey}:${event.payload.state}${event.payload.interrupted ? ':interrupted' : ''}:${event.origin}`
   )
 
-// `opencode run` typed in a pane: the pane's own command boundaries and foreground drive its row.
 describe('OpenCode run process lifetime in the runtime', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -83,7 +82,7 @@ describe('OpenCode run process lifetime in the runtime', () => {
     expect(statuses[0]?.yieldsToHookSince).toBe(statuses[1]?.yieldsToHookSince)
   })
 
-  // Why: the renderer drops an exited agent's row on command-finished unless it changed after.
+  // Renderer command-finished handling drops rows unless a newer agent status follows.
   it("publishes the run's Done after the command-finished fact of the same chunk", async () => {
     const { runtime, channelOrder } = createRuntime()
 

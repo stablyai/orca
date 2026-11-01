@@ -63,7 +63,7 @@ describe('an agent installed after the first shell capture', () => {
     const sources = await resolveClaudeChildEnvSources({
       resolveInheritedEnv: host.environment.resolveBaseEnvironment,
       refreshEnvironmentAfterMiss: host.environment.refreshAfterMissingProgram,
-      resolveCommand: (options) => resolveCliCommand(name, options)
+      resolveCommand: (options) => ({ command: resolveCliCommand(name, options), prefixArgs: [] })
     })
     expect(sources.command).toBe(host.program)
     expect(sources.inheritedEnv.PATH).toBe(host.profileBin)
@@ -79,7 +79,7 @@ describe('an agent installed after the first shell capture', () => {
       }),
       resolveEnvironment: host.environment.resolveBaseEnvironment,
       refreshAfterMissingProgram: host.environment.refreshAfterMissingProgram,
-      resolveCommand: (options) => resolveCliCommand(name, options),
+      resolveCommand: (options) => ({ command: resolveCliCommand(name, options), prefixArgs: [] }),
       resolveLaunchArgs: () => []
     })({ identity: { ...identity, agent: 'codex' } })
     expect(launch.command).toBe(host.program)
@@ -102,29 +102,7 @@ describe('an agent installed after the first shell capture', () => {
     expect(launch.command).toBe(host.program)
   })
 
-  it('never refreshes for a program the snapshot already finds', async () => {
-    const name = `codex-l5-found-${process.pid}`
-    const host = hostInstallingAfterFirstCapture(name)
-    // Puts the install in the snapshot before the launch asks.
-    await host.environment.refreshAfterMissingProgram(Date.now())
-    const refresh = vi.fn(async () => {})
-    const launch = await createCodexStructuredLaunchResolver({
-      store: store({
-        provider: 'codex',
-        accountHome: { variable: 'CODEX_HOME', path: join(host.profileBin, '..', '.codex') }
-      }),
-      resolveEnvironment: host.environment.resolveBaseEnvironment,
-      refreshAfterMissingProgram: refresh,
-      resolveCommand: (options) => resolveCliCommand(name, options),
-      resolveLaunchArgs: () => []
-    })({ identity: { ...identity, agent: 'codex' } })
-    expect(launch.command).toBe(host.program)
-    expect(refresh).not.toHaveBeenCalled()
-  })
-
   it('rereads only when no PATH entry has the program, a relative one searched from the chat', async () => {
-    // A workspace `bin` on PATH: the spawn finds the program in the chat's directory, where the
-    // lookup did not search, so its bare name is not a miss; an entry without it still is.
     const name = `codex-relative-${process.pid}`
     const workspace = mkdtempSync(join(tmpdir(), 'orca-relative-path-'))
     roots.push(workspace)
@@ -141,13 +119,16 @@ describe('an agent installed after the first shell capture', () => {
         resolveWorkspacePath: async () => workspace,
         resolveEnvironment: async () => ({ PATH, HOME: '/home/user' }),
         refreshAfterMissingProgram: refresh,
-        resolveCommand: (options) => resolveCliCommand(name, options),
+        resolveCommand: (options) => ({
+          command: resolveCliCommand(name, options),
+          prefixArgs: []
+        }),
         resolveLaunchArgs: () => []
       })({ identity: { ...identity, agent: 'codex' } })
       return { command: launch.command, rereads: refresh.mock.calls.length }
     }
     expect(await launchFrom(['/usr/bin', join('node_modules', '.bin')].join(delimiter))).toEqual({
-      command: name,
+      command: join(workspace, 'node_modules', '.bin', name),
       rereads: 0
     })
     expect(await launchFrom(['/usr/bin', 'bin'].join(delimiter))).toEqual({

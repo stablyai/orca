@@ -1,14 +1,17 @@
+import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import {
+  AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
+  RUNTIME_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
-import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { AcpStructuredOptions } from '../../../acp/acp-structured-options'
 import { NewSessionResponseSchema } from '../../../acp/generated/acp-protocol.generated'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
@@ -30,7 +33,8 @@ import {
 } from './structured-agent-session-rpc.test-fixture'
 import {
   createQueuedMessageTestRig,
-  eventually
+  eventually,
+  QUEUED_RIG_CALLER
 } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
 import {
   HOST_TEST_SESSION as HOST_SESSION,
@@ -79,6 +83,10 @@ it.each([
   await call('agentSession.subscribe', { sessionId: SESSION }, client)
   expect(input?.boundedFrames === true).toBe(bounded)
   expect(input?.snapshotCatchUp).toBe(snapshot)
+  const request = { sessionId: SESSION, direction: 'after', cursor: { epoch: 'e', sequence: 1 } }
+  await call('agentSession.history', request, client)
+  const replaceHistory = snapshot && input?.readsCurrentRequests === true
+  expect(hostCalls.history).toHaveBeenCalledWith(request, undefined, replaceHistory)
 })
 
 it('allows the local desktop renderer to replace a missed gap with a snapshot', async () => {
@@ -155,6 +163,40 @@ describe('agentSession.conversationOutline', () => {
   })
 })
 
+describe('agentSession.item', () => {
+  it('returns a whole output that every other read sends a head of', async () => {
+    const output = 'z'.repeat(64 * 1024)
+    const item = {
+      itemId: 'tool-1',
+      revision: 2,
+      sequence: 7,
+      observedAt: 7,
+      body: {
+        kind: 'tool-call',
+        name: 'shell',
+        input: { command: 'cat big.log' },
+        state: 'completed',
+        output: { head: output, byteLength: output.length, digest: 'd', truncated: false }
+      }
+    }
+    hostCalls.journalSnapshot.mockReturnValueOnce({
+      sessionId: SESSION,
+      cursor: { epoch: 'epoch-a', sequence: 7 },
+      items: [item],
+      submissions: []
+    })
+
+    const response = await call(
+      'agentSession.item',
+      { sessionId: SESSION, itemId: 'tool-1' },
+      STRUCTURED_MOBILE_CLIENT
+    )
+
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)
+    expect(response).toMatchObject({ ok: true, result: { item } })
+  })
+})
+
 describe('options without a selected model across client versions', () => {
   const CURRENT_CLIENT = {
     ...STRUCTURED_CLIENT,
@@ -185,7 +227,7 @@ describe('options without a selected model across client versions', () => {
   }
 
   it.each(['runtime', 'mobile'] as const)(
-    'refuses the captured model-less report for an older %s client',
+    'labels the captured model-less report for an older %s client',
     async (clientKind) => {
       hostCalls.readOptions.mockResolvedValue(missingModelReport())
       const reply = await call(
@@ -197,10 +239,12 @@ describe('options without a selected model across client versions', () => {
         }
       )
       expect(reply).toMatchObject({
-        ok: false,
-        error: { message: 'structured_agent_session_unsupported' }
+        ok: true,
+        result: {
+          current: { model: '' },
+          models: [{ id: '', label: 'Model not reported', isDefault: false, efforts: [] }]
+        }
       })
-      expect(reply).not.toHaveProperty('result')
       expect(hostCalls.readOptions).toHaveBeenCalledTimes(1)
     }
   )
@@ -267,7 +311,8 @@ describe('options without a selected model across client versions', () => {
     expect(
       await call('agentSession.options', { sessionId: SESSION }, STRUCTURED_CLIENT)
     ).toMatchObject({
-      ok: false
+      ok: true,
+      result: { current: { model: '' } }
     })
     const report = { models: [], current: { model: 'later-model', effort: 'off' } }
     hostCalls.readOptions.mockResolvedValueOnce(report)
@@ -305,8 +350,7 @@ describe('legacy attach-shaped permission creation', () => {
           structuredAgentSessionLaunchSeedOptions: seed
         })
       ).toMatchObject({ ok: true })
-      expect(hostCalls.attach).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
         expect.objectContaining({
           options: { permissionMode: 'full-access' },
           envelope: params.envelope
@@ -449,6 +493,15 @@ describe('agentSession.send reply timing', () => {
     let release = () => {}
     try {
       const working = await rig.workingSend()
+      const compactId = hostTestOperationId()
+      const compactFields = { command: 'compact' as const, delivery: 'queue-if-active' as const }
+      expect(
+        await rig.host.conversationCommand(QUEUED_RIG_CALLER, {
+          ...compactFields,
+          envelope: rig.envelope(compactFields, 'agentSession.conversationCommand', compactId),
+          userSend: true
+        })
+      ).toMatchObject({ ok: true, value: { queued: { messageId: compactId } } })
       const image = imageSend()
       expect(
         await call('agentSession.send', image.request, STRUCTURED_MOBILE_CLIENT)
@@ -456,8 +509,12 @@ describe('agentSession.send reply timing', () => {
         ok: true,
         result: { value: { submission: { clientMessageId: image.id } } }
       })
-      expect(await rig.drafts()).toEqual([])
+      expect((await rig.drafts()).map((card) => card.messageId)).toEqual([compactId])
+      expect((await rig.submission(image.id))?.handedOverAt).toBeUndefined()
       await rig.settleAccepted(working, 'working')
+      await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+      expect((await rig.submission(image.id))?.handedOverAt).toBeUndefined()
+      rig.finishCompact()
       await eventually(async () => {
         expect((await rig.submission(image.id))?.handedOverAt).toBeDefined()
         expect(
@@ -536,3 +593,36 @@ describe('agentSession.subscribeTurnCompletions', () => {
     expect(subscribed().map((sub) => sub.includePrompts)).toEqual([true])
   })
 })
+
+it.each([false, true])(
+  'negotiates command demand per request and subscriber: capable=%s',
+  async (capable) => {
+    const client = {
+      ...STRUCTURED_CLIENT,
+      clientCapabilities: [
+        ...STRUCTURED_CLIENT.clientCapabilities,
+        ...(capable ? [AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY] : [])
+      ]
+    }
+    hostCalls.readCommands = vi.fn(async () => ({ commands: [] }))
+    expect(await call('agentSession.commands', { sessionId: SESSION }, client)).toMatchObject({
+      ok: true
+    })
+    expect(hostCalls.readCommands).toHaveBeenCalledWith(SESSION, capable)
+    let subscription: AgentSessionSubscribeInput | undefined
+    hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
+      subscription = input
+      input.emit({ type: 'end' })
+      return () => {}
+    })
+    await call('agentSession.subscribe', { sessionId: SESSION }, client)
+    expect(subscription?.commandsOnRequest).toBe(capable)
+    expect(DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES).toContain(
+      AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY
+    )
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY)
+    expect(
+      parseRuntimeClientCapabilities([...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES])
+    ).toContain(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY)
+  }
+)

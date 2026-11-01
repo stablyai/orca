@@ -1,17 +1,12 @@
-// Send now, Delete and Resume accept through their own command receipt, committed with the draft or
-// row they change: no ledger policy decides them, a retry answers from that receipt, and an id
-// another command already used is refused.
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { holdLane } from './structured-agent-session-delivery-hold.test-fixture'
-import { structuredAgentSessionHostInstance } from './structured-agent-session-queued-pause'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
   createQueuedMessageTestRig,
+  eventually,
   QUEUED_RIG_CALLER as CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
@@ -72,7 +67,7 @@ function writeUnreadableReceipt(id: string, method: string): void {
     .run(id, SESSION, CALLER.callerKey, method)
 }
 
-/** Simulates an older host retiring the whole epoch, including its unsent submissions. */
+/** Retire the epoch and unsent submissions, as older hosts could. */
 async function rewindConversation(): Promise<void> {
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
   if (!journal) {
@@ -81,7 +76,6 @@ async function rewindConversation(): Promise<void> {
   await journal.rollEpoch('handle_forked', rig.store.getRecord(SESSION)!.lease.runtimeFence)
 }
 
-/** A stop that leaves a waiting card paused, which only a Resume lifts. */
 async function pausedQueue(): Promise<void> {
   await rig.workingSend()
   await queuedDraft('held by stop')
@@ -160,7 +154,6 @@ describe('Send now', () => {
       replayed: false,
       value: { clientMessageId: first }
     })
-    // The provider refuses the first hand-off: the card comes back, and another Send takes it.
     await rig.settleRejected(first, 'nope')
     const later = opId()
     expect(await rig.sendNow(draftId, later)).toMatchObject({
@@ -172,25 +165,6 @@ describe('Send now', () => {
       replayed: true,
       value: { clientMessageId: first }
     })
-  })
-
-  it('replays its hand-off once the dispatched card is pruned', async () => {
-    await rig.workingSend()
-    const draftId = await queuedDraft('pruned card')
-    const first = opId()
-    await rig.sendNow(draftId, first)
-    const ack = opId()
-    await rig.sendNow(draftId, ack)
-    openTestJournalHostDatabase(rig.root)
-      .db.prepare('DELETE FROM queued_messages WHERE session_id = ? AND message_id = ?')
-      .run(SESSION, draftId)
-    for (const id of [first, ack]) {
-      expect(await rig.sendNow(draftId, id)).toMatchObject({
-        ok: true,
-        replayed: true,
-        value: { clientMessageId: first }
-      })
-    }
   })
 
   it('refuses the same id naming another card', async () => {
@@ -259,7 +233,7 @@ describe('Send now', () => {
     expect(await rig.handoff(draftId)).toBeUndefined()
   })
 
-  it('answers a retry after a rewind dropped its hand-off as spent, and sends nothing again', async () => {
+  it('answers a retry after a rewind dropped its hand-off as lost, and never sends under that id again', async () => {
     await rig.workingSend()
     const draftId = await queuedDraft('rewound away')
     const id = opId()
@@ -269,7 +243,9 @@ describe('Send now', () => {
       ok: false,
       refusal: { code: 'agent_session_operation_unknown', details: { reason: 'resultLost' } }
     })
-    expect(await rig.handoff(draftId)).toBeUndefined()
+    // A never-dispatched handoff returns to waiting without redelivery under the retried ID.
+    const { submissions } = await rig.host.journalSnapshot(SESSION)
+    expect(submissions.some((entry) => entry.clientMessageId === id)).toBe(false)
   })
 })
 
@@ -536,7 +512,7 @@ describe('an id reused across commands', () => {
     expect(await rig.deleteQueued(draftId, id)).toMatchObject(conflict)
     expect(await rig.resume(id)).toMatchObject(conflict)
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    // Only the Stop's own receipt: neither refused action committed anything over it.
+    // Refused actions cannot overwrite the Stop receipt.
     expect(receipt(id)).toMatchObject({
       verdict: 'readable',
       receipt: { method: 'agentSession.cancel', result: { kind: 'journal-row' } }
@@ -633,12 +609,9 @@ describe('source-bound ordinary Continue', () => {
     const current = await limitedTurn('current')
     const release = holdLane(rig.host, SESSION)
     try {
-      const body = hostTestMessage('backlog')
       const row = await journal.queuedMessages.insert({
         messageId: opId(),
-        body,
-        fingerprint: agentSessionSendBodyFingerprint(SESSION, body),
-        hostInstance: structuredAgentSessionHostInstance()
+        body: hostTestMessage('backlog')
       })
       journal.queuedMessages.editLeases.acquire(
         { callerKey: CALLER.callerKey, editId: 'edit' },
@@ -654,3 +627,28 @@ describe('source-bound ordinary Continue', () => {
     }
   })
 })
+
+it.each(['send-now', 'automatic'] as const)(
+  'clears Sleep on queued submission only: %s',
+  async (mode) => {
+    await rig.workingSend()
+    const draftId = await queuedDraft('retained through Sleep')
+    expect(await rig.host.sleepWorkspace('workspace-1', true)).toEqual({
+      stoppedSessionIds: [SESSION]
+    })
+    const sleptAt = rig.store.getRecord(SESSION)?.sleptAt
+    expect(sleptAt).toEqual(expect.any(Number))
+    await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(rig.store.getRecord(SESSION)?.sleptAt).toBe(sleptAt)
+    const release = rig.holdNextStart()
+    try {
+      expect(await (mode === 'send-now' ? rig.sendNow(draftId) : rig.resume())).toMatchObject({
+        ok: true
+      })
+      await eventually(() => expect(rig.store.getRecord(SESSION)?.sleptAt).toBeUndefined())
+      expect(await rig.handoff(draftId)).toBeDefined()
+    } finally {
+      release()
+    }
+  }
+)

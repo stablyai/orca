@@ -47,7 +47,7 @@ function legacyRow(overrides: Partial<MigrationUnsupportedPtyEntry>): MigrationU
   }
 }
 
-// Ambiguity must fail closed: only an exactly-one row per tab may mint an alias.
+// Only one unambiguous row per tab may mint aliases.
 it.each([
   ['0 rows', 0],
   ['2 rows', 2],
@@ -102,7 +102,7 @@ it('keeps unambiguous tabs in first-seen order while dropping ambiguous neighbou
     ptyId: 'pty-late',
     paneKey: 'late:44444444-4444-4444-8444-444444444444'
   })
-  // A third row for 'dup' must not resurrect it: ambiguity is sticky, not a parity toggle.
+  // Ambiguity stays sticky even with an odd number of duplicate rows.
   const aliases = legacyMigrationUnsupportedRowsToAliasEntries([solo, dupA, dupB, late, dupA])
   expect(aliases.map((entry) => entry.legacyPaneKey)).toEqual([
     'solo:0',

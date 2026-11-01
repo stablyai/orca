@@ -1,7 +1,5 @@
-import { mkdtemp } from 'node:fs/promises'
+import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../shared/browser-runtime-capabilities'
 import { createServer, type AddressInfo } from 'node:net'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import { BrowserError } from '../browser/browser-error'
@@ -17,7 +15,13 @@ import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime
 import { electronIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
 import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
+import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
 import { electronServeEnvironment } from './electron-serve-browser-environment'
+import {
+  createElectronSidecarProfile,
+  removeLeftoverElectronSidecarProfile,
+  stopElectronSidecar
+} from './electron-sidecar-profile'
 import {
   ElectronSidecarTabRegistry,
   ElectronSidecarTabSchema,
@@ -29,7 +33,6 @@ import {
 } from './electron-sidecar-method-routing'
 
 const START_TIMEOUT_MS = 120_000
-const STOP_TIMEOUT_MS = 5_000
 const BrowserPageResult = z.object({ browserPageId: z.string() }).passthrough()
 const BrowserCloseResult = z.object({ closed: z.boolean() }).passthrough()
 const BrowserTabListResult = z.object({ tabs: z.array(ElectronSidecarTabSchema) }).passthrough()
@@ -56,26 +59,24 @@ async function reserveLoopbackPort(): Promise<number> {
   })
   return address.port
 }
-function signalProcess(pid: number, signal: NodeJS.Signals): void {
-  try {
-    process.kill(pid, signal)
-  } catch {
-    // The sidecar already exited.
-  }
-}
 
 export class ElectronServeBrowserProcess {
   private child: ReturnType<typeof spawnProcess> | null = null
   private metadata: RuntimeMetadata | null = null
   private readonly tabs = new ElectronSidecarTabRegistry()
+  private googleCookieClearSupported = false
   private sidecarDataPath: string | null = null
 
-  constructor(private readonly executablePath: string) {}
+  constructor(
+    private readonly executablePath: string,
+    private readonly orcadUserDataPath: string
+  ) {}
 
   async start(signal?: AbortSignal): Promise<void> {
+    this.googleCookieClearSupported = false
     signal?.throwIfAborted()
-    const temporaryRoot = process.platform === 'win32' ? tmpdir() : '/tmp'
-    const userDataPath = await mkdtemp(join(temporaryRoot, 'orcad-browser-'))
+    await removeLeftoverElectronSidecarProfile(this.orcadUserDataPath)
+    const userDataPath = await createElectronSidecarProfile(this.orcadUserDataPath)
     this.sidecarDataPath = userDataPath
     const port = await reserveLoopbackPort()
     signal?.throwIfAborted()
@@ -97,7 +98,7 @@ export class ElectronServeBrowserProcess {
     })
     this.child = child
     let spawnError: unknown = null
-    // Why: a restart can race the bundle swap after an install; ENOENT must fail start, not orcad.
+    // Bundle swaps can race restart; report ENOENT as start failure without crashing orcad.
     child.on('error', (error) => {
       spawnError = error
     })
@@ -117,6 +118,9 @@ export class ElectronServeBrowserProcess {
           )
           signal?.throwIfAborted()
           if (status.capabilities?.includes('browser.headless.v1')) {
+            this.googleCookieClearSupported = status.capabilities.includes(
+              BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY
+            )
             this.metadata = metadata
             return
           }
@@ -143,24 +147,25 @@ export class ElectronServeBrowserProcess {
 
   createCommands(host: RuntimeBrowserCommandHost): RuntimeBrowserCommands {
     return new Proxy({} as RuntimeBrowserCommands, {
-      // Why: startup checks membership before invoking dynamically resolved commands.
+      // Startup checks membership before resolving commands dynamically.
       has: (_target, property) => typeof property === 'string' && property !== 'then',
       get: (_target, property) => {
-        if (property === 'then') {
-          return undefined
-        }
-        if (typeof property !== 'string') {
+        if (property === 'then' || typeof property !== 'string') {
           return undefined
         }
         return (...args: unknown[]) => this.invoke(host, property, args)
       }
     })
   }
+  supportsGoogleCookieClear(): boolean {
+    return this.isAvailable() && this.googleCookieClearSupported
+  }
+
   isAvailable(): boolean {
     return this.metadata !== null && isProcessAlive(this.metadata.pid)
   }
 
-  /** From the child's own exit state, so a recycled pid is never reported as the helper. */
+  /** Read child exit state so recycled PIDs cannot identify an unrelated process. */
   pid(): number | null {
     const child = this.child
     return child?.pid && child.exitCode === null && child.signalCode === null ? child.pid : null
@@ -172,21 +177,14 @@ export class ElectronServeBrowserProcess {
     const sidecarDataPath = this.sidecarDataPath
     this.child = null
     this.metadata = null
+    this.googleCookieClearSupported = false
     this.sidecarDataPath = null
     this.tabs.clear()
     if (sidecarPid) {
-      signalProcess(sidecarPid, 'SIGTERM')
-      const deadline = Date.now() + STOP_TIMEOUT_MS
-      while (isProcessAlive(sidecarPid) && Date.now() < deadline) {
-        await delay(50)
-      }
-      if (isProcessAlive(sidecarPid)) {
-        signalProcess(sidecarPid, 'SIGKILL')
-      }
+      await stopElectronSidecar(sidecarPid)
     }
     if (sidecarDataPath) {
-      // Why best-effort: on Windows the killed sidecar's helpers hold this throwaway profile for a
-      // moment, and a leftover temp dir must not fail orcad's stop and strand its instance lock.
+      // Windows helpers may briefly hold this temp profile; cleanup failure must not strand the instance lock.
       await removeTree(sidecarDataPath).catch((error: unknown) =>
         console.warn('[orcad] Electron browser sidecar data was not removed:', error)
       )
@@ -227,7 +225,7 @@ export class ElectronServeBrowserProcess {
         this.tabs.require(requestedPageId, worktreeId)
         return { browserPageId: requestedPageId }
       }
-      // The sidecar mints its own tab id; adopt the caller's provisional id after creating it.
+      // Sidecars mint their own IDs; adopt the caller’s provisional ID after creation.
       delete params.page
     }
 
@@ -257,7 +255,12 @@ export class ElectronServeBrowserProcess {
 
     let result: unknown
     try {
-      result = await sendOrcadSidecarRequest(metadata, rpcMethod, params)
+      result = await sendOrcadSidecarRequest(
+        metadata,
+        rpcMethod,
+        params,
+        method === 'browserWait' ? browserWaitRequestTimeoutMs(params.timeout) : undefined
+      )
     } catch (error) {
       if (
         targetPage &&

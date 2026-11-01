@@ -200,8 +200,7 @@ export function persistVisitedWorkflow(id: FeatureWallWorkflowId): void {
     next.add(id)
     localStorage.setItem(VISITED_WORKFLOWS_STORAGE_KEY, JSON.stringify([...next]))
   } catch {
-    // localStorage can be unavailable in hardened browser contexts; completion
-    // still works for the current open modal from React state.
+    // Storage may be blocked; React state still preserves progress in the open modal.
   }
 }
 
@@ -214,8 +213,7 @@ export function persistCompletedWorkflow(id: FeatureWallWorkflowId): void {
     next.add(id)
     localStorage.setItem(COMPLETED_WORKFLOWS_STORAGE_KEY, JSON.stringify([...next]))
   } catch {
-    // localStorage can be unavailable in hardened browser contexts; completion
-    // still works for the current open modal from React state.
+    // Storage may be blocked; React state still preserves progress in the open modal.
   }
 }
 
@@ -228,8 +226,7 @@ export function persistVisitedAgentStep(id: AgentsStepId): void {
     next.add(id)
     localStorage.setItem(VISITED_AGENT_STEPS_STORAGE_KEY, JSON.stringify([...next]))
   } catch {
-    // localStorage can be unavailable in hardened browser contexts; completion
-    // still works for the current open modal from React state.
+    // Storage may be blocked; React state still preserves progress in the open modal.
   }
 }
 
@@ -242,8 +239,7 @@ export function persistCompletedAgentStep(id: AgentsStepId): void {
     next.add(id)
     localStorage.setItem(COMPLETED_AGENT_STEPS_STORAGE_KEY, JSON.stringify([...next]))
   } catch {
-    // localStorage can be unavailable in hardened browser contexts; completion
-    // still works for the current open modal from React state.
+    // Storage may be blocked; React state still preserves progress in the open modal.
   }
 }
 
@@ -256,8 +252,7 @@ export function persistVisitedWorkbenchStep(id: WorkbenchStepId): void {
     next.add(id)
     localStorage.setItem(VISITED_WORKBENCH_STEPS_STORAGE_KEY, JSON.stringify([...next]))
   } catch {
-    // localStorage can be unavailable in hardened browser contexts; completion
-    // still works for the current open modal from React state.
+    // Storage may be blocked; React state still preserves progress in the open modal.
   }
 }
 
@@ -270,8 +265,7 @@ export function persistCompletedWorkbenchStep(id: WorkbenchStepId): void {
     next.add(id)
     localStorage.setItem(COMPLETED_WORKBENCH_STEPS_STORAGE_KEY, JSON.stringify([...next]))
   } catch {
-    // localStorage can be unavailable in hardened browser contexts; completion
-    // still works for the current open modal from React state.
+    // Storage may be blocked; React state still preserves progress in the open modal.
   }
 }
 
@@ -284,8 +278,7 @@ export function persistVisitedReviewStep(id: ReviewStepId): void {
     next.add(id)
     localStorage.setItem(VISITED_REVIEW_STEPS_STORAGE_KEY, JSON.stringify([...next]))
   } catch {
-    // localStorage can be unavailable in hardened browser contexts; completion
-    // still works for the current open modal from React state.
+    // Storage may be blocked; React state still preserves progress in the open modal.
   }
 }
 
@@ -298,7 +291,6 @@ export function persistCompletedReviewStep(id: ReviewStepId): void {
     next.add(id)
     localStorage.setItem(COMPLETED_REVIEW_STEPS_STORAGE_KEY, JSON.stringify([...next]))
   } catch {
-    // localStorage can be unavailable in hardened browser contexts; completion
-    // still works for the current open modal from React state.
+    // Storage may be blocked; React state still preserves progress in the open modal.
   }
 }

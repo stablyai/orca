@@ -1,3 +1,4 @@
+import { canonicalWorktreePath } from '../git/worktree-path-comparison'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -7,8 +8,7 @@ import {
   WATCHER_REMOVAL_IN_PROGRESS_MESSAGE
 } from '../../shared/worktree/removal-fence-error'
 
-// Why: fence slots are identities, not a counter, so a removal that gives up waiting can drop exactly
-// the installs it waited on without a late finishInstall corrupting the count for a newer install.
+// Identity tokens let timed-out removals abandon exact installs without late completions releasing newer fences.
 type WatcherInstallToken = symbol
 
 type WatcherRemovalGateState = {
@@ -22,9 +22,7 @@ type WatcherRemovalGateState = {
 
 export type WatcherRemovalGate = {
   ready: Promise<void>
-  /** Drop the install fence slots this removal waited on. Call only after `ready` timed out: the
-   *  installs are presumed wedged, and leaving them counted makes every later removal of this root
-   *  wait out the full drain budget again. */
+  /** Abandon only installs whose ready wait timed out, preventing repeated full-budget waits for wedged work. */
   abandonPendingInstalls(): void
   release(): void
 }
@@ -49,7 +47,12 @@ export class TerminalRemovalInProgressError extends Error {
 
 const states = new Map<string, WatcherRemovalGateState>()
 
-export function beginWatcherInstall(rootPath: string, connectionId?: string): () => void {
+export type RemovalSensitiveInstall = (() => void) & { isCurrent(): boolean }
+
+export function beginWatcherInstall(
+  rootPath: string,
+  connectionId?: string
+): RemovalSensitiveInstall {
   return beginRemovalSensitiveInstall(
     rootPath,
     connectionId,
@@ -69,10 +72,9 @@ function beginRemovalSensitiveInstall(
   rootPath: string,
   connectionId: string | undefined,
   createRemovalError: () => Error
-): () => void {
-  const normalizedRoot = normalizeRuntimePathForComparison(rootPath)
-  // Why: PTY admission can fence both worktree identity and cwd, which may be
-  // parent/child roots; neither side may overlap an active removal.
+): RemovalSensitiveInstall {
+  const normalizedRoot = removalRootComparisonKey(rootPath, connectionId)
+  // PTY worktree and cwd roots may overlap; both must respect active removal fences.
   if (
     matchingHostStates(connectionId).some(
       (state) =>
@@ -87,18 +89,21 @@ function beginRemovalSensitiveInstall(
   const state = states.get(key) ?? createState(key, normalizedRoot, connectionId)
   const token: WatcherInstallToken = Symbol(normalizedRoot)
   state.installs.add(token)
-  return () => {
-    if (state.installs.delete(token) && state.installs.size === 0) {
-      resolveInstallDrain(state)
-    }
-  }
+  return Object.assign(
+    () => {
+      if (state.installs.delete(token) && state.installs.size === 0) {
+        resolveInstallDrain(state)
+      }
+    },
+    { isCurrent: () => state.installs.has(token) }
+  )
 }
 
 export function acquireWatcherRemovalGate(
   rootPath: string,
   connectionId?: string
 ): WatcherRemovalGate {
-  const normalizedRoot = normalizeRuntimePathForComparison(rootPath)
+  const normalizedRoot = removalRootComparisonKey(rootPath, connectionId)
   const hostStates = matchingHostStates(connectionId)
   if (
     hostStates.some(
@@ -108,15 +113,13 @@ export function acquireWatcherRemovalGate(
           isPathInsideOrEqual(normalizedRoot, state.rootPath))
     )
   ) {
-    // Why: desktop and runtime removal entry points have separate request
-    // dedupe; the shared root fence must still prevent two destructive runs.
+    // Desktop and runtime deduplicate separately; the shared root fence prevents concurrent destructive runs.
     throw new Error('Worktree deletion already in progress')
   }
   const key = watcherRemovalGateKey(normalizedRoot, connectionId)
   const state = states.get(key) ?? createState(key, normalizedRoot, connectionId)
   state.removalCount++
-  // Why: deleting a parent root must wait for native installs already admitted
-  // under that root, not only installs keyed to the exact same spelling.
+  // Parent removal must also wait for installs admitted under descendant roots.
   const fenced = matchingHostStates(connectionId)
     .filter(
       (candidate) =>
@@ -158,9 +161,15 @@ export function isWatcherRemovalInProgressError(
   return error instanceof WatcherRemovalInProgressError
 }
 
+function removalRootComparisonKey(rootPath: string, connectionId?: string): string {
+  // Remote roots keep the owning host's path semantics.
+  return normalizeRuntimePathForComparison(
+    connectionId === undefined ? canonicalWorktreePath(rootPath) : rootPath
+  )
+}
+
 function watcherRemovalGateKey(normalizedRoot: string, connectionId?: string): string {
-  // Why: the same path can exist on local and multiple SSH hosts, while
-  // Windows-equivalent spellings must still share one physical-removal fence.
+  // Fence physical Windows-equivalent paths separately for each local/SSH host.
   return JSON.stringify([connectionId ?? null, normalizedRoot])
 }
 

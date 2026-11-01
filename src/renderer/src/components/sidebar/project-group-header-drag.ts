@@ -18,8 +18,7 @@ import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autosc
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
 
-// Why pointer events instead of HTML5 DnD: Project Group rows are virtualized
-// and may unmount while scrolling; cached row-model indices keep drops stable.
+// Virtualized rows can unmount during drag; pointer events and cached model indices keep drops stable.
 
 export function useProjectGroupHeaderDrag({
   sidebarProjectGroupHeaderIdsByBucket,
@@ -113,7 +112,7 @@ export function useProjectGroupHeaderDrag({
       try {
         session.handleEl.releasePointerCapture(session.pointerId)
       } catch {
-        // capture may already be released (pointercancel, element unmounted)
+        // Pointer cancellation or unmount may already have released capture.
       }
       if (session.promoted) {
         clickSwallowTimeoutRef.current = swallowNextClickOnDragHandle(session.handleEl)
@@ -203,14 +202,11 @@ export function useProjectGroupHeaderDrag({
           return
         }
         session.promoted = true
-        // Why: virtualized headers may detach during drag; global listeners
-        // still keep the operation alive if pointer capture is unavailable.
+        // Virtualization may detach headers; global listeners keep dragging alive without capture.
         if (session.handleEl.isConnected) {
           try {
             session.handleEl.setPointerCapture(session.pointerId)
-          } catch {
-            // Ignore capture failure; global listeners will handle the drag.
-          }
+          } catch {}
         }
         refreshHeaderRects()
         setState({ draggingGroupId: session.groupId, dropIndex: null, dropIndicatorY: null })

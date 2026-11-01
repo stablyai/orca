@@ -1,8 +1,9 @@
 import { Platform, StyleSheet } from 'react-native'
 
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileSessionReaderStyles = StyleSheet.create({
+export const mobileSessionReaderStyles = themedStyleSheet(() => ({
   markdownTextInput: {
     flex: 1,
     minHeight: 0,
@@ -35,20 +36,6 @@ export const mobileSessionReaderStyles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     backgroundColor: colors.editorSurface
-  },
-  imagePreviewScroll: {
-    flex: 1
-  },
-  imagePreviewContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg
-  },
-  imagePreview: {
-    width: '100%',
-    height: '100%',
-    minHeight: 200
   },
   diffNotesToolbar: {
     flexDirection: 'row',
@@ -85,7 +72,7 @@ export const mobileSessionReaderStyles = StyleSheet.create({
     gap: spacing.xs,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.sm,
     backgroundColor: colors.bgRaised
   },
@@ -137,4 +124,4 @@ export const mobileSessionReaderStyles = StyleSheet.create({
   diffPrefixDeleted: {
     color: colors.gitDecorationDeleted
   }
-})
+}))

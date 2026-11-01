@@ -46,7 +46,7 @@ async function recoverJob(
     return false
   }
   const identity = await getPsProcessIdentityAsync(job.pid)
-  // A newly bootstrapping service may not have published yet; it is never a recovery target.
+  // Newly bootstrapping services may not have published their endpoint yet.
   if (!identity?.startedAtMs || Date.now() - identity.startedAtMs < 10_000) {
     return false
   }
@@ -57,7 +57,7 @@ async function recoverJob(
   if (beforeCapture?.startedAtMs !== identity.startedAtMs) {
     return false
   }
-  // Capture before signalling; let the daemon reap children while their exits are verified.
+  // Capture children before signalling so the daemon can reap them while exits are verified.
   const snapshot = await captureDescendantSnapshot(job.pid)
   if (
     !snapshot?.root ||
@@ -92,10 +92,7 @@ async function recoverJob(
   return true
 }
 
-/**
- * Releases one label held by a service that retired its endpoint and PID record but never exited.
- * False leaves the job alone: it is live, unverifiable, still starting, or not this endpoint's.
- */
+/** Recover a verified retired service; false means no safe target was established. */
 export async function recoverRetiredMacDaemonJob(
   userDataPath: string,
   runtimeDir: string,

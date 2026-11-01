@@ -28,7 +28,6 @@ function requestSignal(options: RequestInit | undefined): AbortSignal {
   return options.signal
 }
 
-/** A body that delivers its first half, then fails as Chromium does when the network drops. */
 function droppedMidway(): Response {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -80,6 +79,34 @@ describe('downloading a pinned runtime archive over a flaky network', () => {
     expect(signals[1]?.aborted).toBe(false)
   })
 
+  it('gives up at once, without retrying, when no response arrives within its connect budget', async () => {
+    const fetcher = vi.fn<typeof fetch>(
+      (_url, options) =>
+        new Promise<Response>((_resolve, reject) => {
+          // A firewall that drops packets: nothing comes back until the request is aborted.
+          requestSignal(options).addEventListener('abort', () => reject(new Error('aborted')))
+        })
+    )
+    await expect(
+      downloadVerifiedArchive(archive(), destination, fetcher, undefined, NO_DELAY, undefined, 20)
+    ).rejects.toThrow('Node runtime download got no response within 0.02 s')
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets a response that arrives in time download in full', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => ok())
+    await downloadVerifiedArchive(
+      archive(),
+      destination,
+      fetcher,
+      undefined,
+      NO_DELAY,
+      undefined,
+      5_000
+    )
+    expect(new Uint8Array(await readFile(destination))).toEqual(BODY)
+  })
+
   it('gives up after its bounded attempts with the last error', async () => {
     const signals: AbortSignal[] = []
     const failure = new Error('net::ERR_NETWORK_CHANGED')
@@ -111,7 +138,6 @@ describe('downloading a pinned runtime archive over a flaky network', () => {
     expect(signals[0]?.aborted).toBe(true)
   })
 
-  // QA: a refused proxy was blamed on the release instead of the network.
   it('blames the release only for a proven mismatch', async () => {
     const failure = (response: () => Promise<Response>) =>
       downloadVerifiedArchive(

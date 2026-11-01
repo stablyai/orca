@@ -71,8 +71,16 @@ describe('sidebar reveal actions', () => {
     store.getState().revealSidebarRow('repo:r1')
 
     expect(store.getState().sidebarBody).toBe('workspaces')
-    expect(store.getState().pendingRevealWorktree?.worktreeId).toBe('wt-1')
+    expect(store.getState().pendingRevealWorktree).toBeNull()
     expect(store.getState().pendingRevealSidebarRow?.rowKey).toBe('repo:r1')
+    const oldRow = store.getState().pendingRevealSidebarRow
+    store.getState().revealWorktreeInSidebar('wt-2', { rowKey: 'pinned:wt-2' })
+    const newer = store.getState().pendingRevealWorktree
+    store.getState().clearPendingRevealSidebarRow(oldRow)
+    store.getState().revealWorktreeInSidebar('wt-2', { rowKey: 'pinned:wt-2' })
+    store.getState().clearPendingRevealWorktreeId(newer)
+    expect(store.getState().pendingRevealSidebarRow).toBeNull()
+    expect(store.getState().pendingRevealWorktree?.rowKey).toBe('pinned:wt-2')
   })
 })
 
@@ -93,8 +101,7 @@ describe('createUISlice hydratePersistedUI', () => {
   })
 
   it('treats a legacy profile with no default-branch exemption key as opted in', () => {
-    // Why: profiles written before #8873 are exactly the ones showing the bug,
-    // so an absent key must hydrate to on rather than silently re-hiding main.
+    // Pre-#8873 profiles omit this key; absence must enable the exemption rather than hide main again.
     const store = createUIStore()
     const legacy = makePersistedUI()
     delete (legacy as Partial<PersistedUIState>).alwaysShowDefaultBranchWorkspace
@@ -476,7 +483,6 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().settingsProjectSetupSelection).toEqual({
       'git:acme/app': 'jump-setup'
     })
-    // Ephemeral: never written through the UI persistence pipeline.
     expect(setUI).not.toHaveBeenCalled()
   })
 
@@ -696,8 +702,6 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    // Left sidebar stays capped; right sidebar now allows wide drag targets
-    // so long file names remain readable.
     expect(store.getState().sidebarWidth).toBe(260)
     expect(store.getState().rightSidebarWidth).toBe(900)
   })

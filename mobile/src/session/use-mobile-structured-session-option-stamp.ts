@@ -1,10 +1,11 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import { structuredAgentSessionOptionStamp } from '../../../src/shared/structured-agent-session-option-state'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 
 const noSubscription = (): (() => void) => () => {}
 
-/** The host status's option values as one stamp; another device's pick moves it, off `enabled` never. */
+// Track other devices’ picks only while the host status feed is enabled.
 export function useMobileStructuredSessionOptionStamp(args: {
   client: RpcClient | null
   sessionId: string | null
@@ -18,7 +19,7 @@ export function useMobileStructuredSessionOptionStamp(args: {
   )
   const readStamp = (): string => {
     const summary = feed && sessionId ? feed.getSnapshot().get(sessionId) : undefined
-    return `${summary?.model ?? ''}|${summary?.permissionMode ?? ''}`
+    return JSON.stringify([structuredAgentSessionOptionStamp(summary), summary?.hostExecutionPhase])
   }
   return useSyncExternalStore(subscribe, readStamp, readStamp)
 }

@@ -1,7 +1,15 @@
+import {
+  getConnectionIdForWorktreeCopy,
+  getConnectionIdFromState
+} from '@/lib/connection-owner-resolution'
+import { normalizeExecutionHostId } from '../../../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { useAppStore } from '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import {
+  resolveRuntimeHostReportedPlatform,
+  resolveRuntimeHostTerminalWindowsShell,
   resolveSshHostReportedPlatform,
   resolveAgentResumeLaunchTarget
 } from '@/lib/agent-resume-launch-target'
@@ -16,9 +24,30 @@ import {
   normalizeAgentProviderSession
 } from '../../../../../shared/agent-session-resume'
 
+import type { HeldPaneReopenOutcome } from '../newer-daemon-hold-state'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+
+export const NOT_REOPENED: HeldPaneReopenOutcome = { reopened: false, agentResumed: false }
+
+type AppState = ReturnType<typeof useAppStore.getState>
+
+/** The agent session a cold restore of this pane would resume; read-only, so pre-spawn checks can share it. */
+export function findColdRestoreResumeSource(session: ConnectPanePtySession, state: AppState) {
+  const entry = state.agentStatusByPaneKey[session.cacheKey]
+  const sleepingRecordEntry = session.getSleepingRecordForPane(state)
+  const sleepingRecord = sleepingRecordEntry?.record
+  const liveEntry = entry && entry.state !== 'done' ? entry : null
+  const agent = liveEntry ? liveEntry.agentType : sleepingRecord?.agent
+  if (!agent || !isResumableTuiAgent(agent)) {
+    return null
+  }
+  const providerSession = normalizeAgentProviderSession(
+    liveEntry ? liveEntry.providerSession : sleepingRecord?.providerSession
+  )
+  return providerSession ? { agent, providerSession, liveEntry, sleepingRecordEntry } : null
+}
 
 export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySession): void {
   session.buildColdRestoreAgentResumeStartup = (): ColdRestoreAgentResumeStartup | null => {
@@ -26,31 +55,15 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       return null
     }
     const state = useAppStore.getState()
-    const entry = state.agentStatusByPaneKey[session.cacheKey]
-    const sleepingRecordEntry = session.getSleepingRecordForPane(state)
+    const source = findColdRestoreResumeSource(session, state)
+    if (!source) {
+      return null
+    }
+    const { agent, providerSession, sleepingRecordEntry } = source
+    const entry = source.liveEntry
     const sleepingRecord = sleepingRecordEntry?.record
-
-    const useLiveEntry = entry && entry.state !== 'done'
-    const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
-    if (!agent || !isResumableTuiAgent(agent)) {
-      return null
-    }
-    const providerSession = normalizeAgentProviderSession(
-      useLiveEntry ? entry.providerSession : sleepingRecord?.providerSession
-    )
-    if (!providerSession) {
-      return null
-    }
-    // Why: this is the second issuer of `--resume`, and the one that handles a quit/live record
-    // whose pane still exists — the sweep hands those here rather than launching them. A session id
-    // names a transcript on the machine that captured it, so replaying one over a pane now attached
-    // to a different host answers `No conversation found`. Returning null leaves the pane with a
-    // plain shell and the record intact, which the user can resume by hand.
-    //
-    // Two sources are consulted because either can be the one that knows. `session.executionHostId`
-    // is the pane's own transport and is authoritative when set, but it is still unresolved on an
-    // early reattach frame — and failing open on that frame is precisely when a wrong resume slips
-    // out. The catalog's answer for the record's worktree covers that window.
+    const useLiveEntry = entry !== null
+    // Resume IDs name host-local transcripts: reject cross-host records, using catalog ownership while the pane transport is unresolved; retain the record for manual recovery.
     if (
       agentResumeOriginNamesAnotherExecutionHost(
         useLiveEntry ? entry.connectionId : sleepingRecord?.connectionId,
@@ -70,11 +83,17 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     const launchConfig =
       (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
       matchingSleepingLaunchConfig
-    // Why: the resume line is typed into this pane's live shell, so its quoting must
-    // follow the tab's effective Windows shell, not the win32 PowerShell default.
+    // Quote resume for the live pane’s effective Windows shell rather than the platform’s PowerShell default.
+    // Why: a nested-SSH pane on a server runs on its SSH target; the pane's host names a worktree
+    // copy, while a folder's own record carries its connection.
+    const paneHostId = normalizeExecutionHostId(session.executionHostId)
+    const connectionId =
+      (paneHostId && parseWorkspaceKey(session.deps.worktreeId)?.type !== 'folder'
+        ? getConnectionIdForWorktreeCopy(state, session.deps.worktreeId, paneHostId)
+        : getConnectionIdFromState(state, session.deps.worktreeId)) ?? null
     const resumeTarget = resolveAgentResumeLaunchTarget({
       projectRuntime: session.projectRuntime,
-      connectionId: null,
+      connectionId,
       executionHostId: session.executionHostId,
       worktreePath: session.worktree?.path,
       terminalWindowsShell: state.settings?.terminalWindowsShell,
@@ -83,7 +102,13 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       remotePlatform: resolveSshHostReportedPlatform(
         state,
         session.executionHostId,
-        session.transport.getRuntimeEnvironmentId?.() ?? null
+        session.transport.getRuntimeEnvironmentId?.() ?? null,
+        connectionId
+      ),
+      runtimeHostPlatform: resolveRuntimeHostReportedPlatform(state, session.executionHostId),
+      runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(
+        state,
+        session.executionHostId
       )
     })
     const startupPlan = buildAgentResumeStartupPlan({
@@ -92,14 +117,14 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
       ...resolveResumeLaunchRecipe(launchConfig),
       platform: resumeTarget.platform,
-      shell: resumeTarget.shell
+      agentHostPlatform: resumeTarget.agentHostPlatform,
+      shell: resumeTarget.shell,
+      launchCwd: session.worktree?.path
     })
     if (!startupPlan) {
       return null
     }
     const coldRestoreLaunchToken = createBrowserUuid()
-    // Why: cold restore means the PTY process is gone but the agent provider
-    // session is still resumable, so the replacement spawn must launch it.
     return {
       agent,
       command: startupPlan.launchCommand,
@@ -109,10 +134,51 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       },
       launchConfig: startupPlan.launchConfig,
       resumeProviderSession: providerSession,
+      resumeOrigin: 'saved',
+      resumeSource: {
+        cancelled: false,
+        ...(sleepingRecord &&
+        sleepingRecord.agent === agent &&
+        agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)
+          ? { record: sleepingRecord }
+          : {}),
+        ...(useLiveEntry && entry
+          ? {
+              expectedStatus: {
+                paneKey: session.cacheKey,
+                receivedAt: entry.updatedAt,
+                stateStartedAt: entry.stateStartedAt
+              }
+            }
+          : {})
+      },
       launchToken: coldRestoreLaunchToken,
       useLiveEntry: Boolean(useLiveEntry),
       hasSleepingRecord: Boolean(sleepingRecord),
       sleepingRecordEntry
     }
   }
+}
+
+/** Keeps the reattach fallback's actual fresh-agent outcome with the pane's start. */
+export function reopenPaneAfterMissingReattach(
+  session: ConnectPanePtySession,
+  startup: ColdRestoreAgentResumeStartup | null,
+  resumedAgent: (ptyId: string) => boolean
+): Promise<HeldPaneReopenOutcome> {
+  let resumeUnavailable = false
+  return session
+    .startFreshColdRestoreAgentResume(startup, {
+      forceBlankRestoredViewport: true,
+      onAgentResumeUnavailable: () => {
+        resumeUnavailable = true
+      }
+    })
+    .then(
+      (ptyId: string | null) => ({
+        reopened: ptyId !== null,
+        agentResumed: ptyId !== null && resumedAgent(ptyId) && !resumeUnavailable
+      }),
+      () => NOT_REOPENED
+    )
 }
