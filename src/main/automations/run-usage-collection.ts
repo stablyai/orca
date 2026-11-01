@@ -1,5 +1,5 @@
 import type { Automation, AutomationRun, AutomationRunUsage } from '../../shared/automations-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRunWriter } from './automation-run-writer'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'

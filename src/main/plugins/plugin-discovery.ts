@@ -26,6 +26,7 @@ import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
 import { readPluginManifestText } from './plugin-manifest-file'
 import { readPluginCurrentPointer } from './installation/plugin-current-pointer'
 import { hashPluginTree } from './plugin-content-hash'
+import { pluginDevChangeCount } from './plugin-dev-revision'
 
 export { PLUGIN_CURRENT_POINTER_FILENAME } from './installation/plugin-current-pointer'
 
@@ -46,6 +47,8 @@ export type ValidDiscoveredPlugin = {
   contentHash: string | null
   /** Dev worker plugins: hash of the working tree, so a save restarts the worker. */
   devRevision?: string | null
+  /** Dev folders: the watcher's change count when this discovery read the folder. */
+  devChangeCount?: number
   isDev: boolean
 }
 
@@ -53,6 +56,7 @@ export type InvalidDiscoveredPlugin = {
   pluginKey?: string
   rootDir: string
   error: string
+  devChangeCount?: number
   isDev: boolean
 }
 
@@ -264,7 +268,12 @@ export async function discoverPlugins(options: {
     ...(await readInstalledPlugins(options.pluginsDir, installedEntries, options.hostVersion))
   )
   for (const devPath of options.devPluginPaths) {
-    const plugin = await readManifestDir(devPath, options.hostVersion, true)
+    // Why read the count first: a save during the read bumps it again and schedules another refresh.
+    const devChangeCount = pluginDevChangeCount(devPath)
+    const plugin = {
+      ...(await readManifestDir(devPath, options.hostVersion, true)),
+      devChangeCount
+    }
     // Dev paths override installed identities; two dev paths still cannot claim one identity.
     if (!isInvalidDiscoveredPlugin(plugin)) {
       const collision = discovered.find(

@@ -10,7 +10,7 @@ import type {
   AgentStatusIpcPayload,
   RefusedPaneResume
 } from '../../../../shared/agent-status-types'
-import type { AgentSessionRecordStore } from '../../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionLeasePossiblyWriting,
   listStructuredProviderSessionOwnership

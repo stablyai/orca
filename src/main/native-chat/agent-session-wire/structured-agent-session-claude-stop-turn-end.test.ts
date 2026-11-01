@@ -6,15 +6,15 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
-import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { ClaudeStructuredSessionAdapter } from '../../claude/structured/claude-structured-session-adapter'
 import {
   fakeClaude,
   PROVIDER_SESSION_ID,
   type FakeConnection
-} from '../../claude/claude-structured-session-test-support'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+} from '../../claude/structured/claude-structured-session-test-support'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
 import {
   closeTestJournalHostDatabases,

@@ -24,7 +24,9 @@ export const FRAME_EVENTS = {
   /** frame → host: a modifier chord, so Orca's save shortcut works inside an editor. */
   editorKeydown: 'editor.keydown',
   /** host → frame: the document, on ready and whenever it changes outside the frame. */
-  editorDocument: 'editor.document'
+  editorDocument: 'editor.document',
+  /** host → frame, payload `PluginPanelPush`: a worker post, an event or a data change. */
+  push: 'plugin.push'
 } as const
 
 /** Frame-local methods a custom editor handles or calls on the same envelope. */
@@ -47,9 +49,10 @@ export type PluginFrameHello = {
   locale?: string
 }
 
-/** Per-plugin bridge budgets, enforced host-side. */
+/** Per-plugin bridge budgets, enforced host-side. Why 120: a panel loading its storage atoms,
+ *  settings and first worker requests makes a burst of small calls. */
 export const PANEL_MESSAGE_MAX_BYTES = 64 * 1024
-export const PANEL_MESSAGE_RATE_LIMIT = { maxMessages: 30, perMs: 10_000 }
+export const PANEL_MESSAGE_RATE_LIMIT = { maxMessages: 120, perMs: 10_000 }
 
 /** Size-only liveness lane: count limits let a panel’s pongs exhaust the budget and starve genuine replies.
  * Pongs also spend the data budget, bounding aggregate cost; walks are capped here. */
@@ -72,8 +75,11 @@ export const panelActionCallSchema = z
 
 export type PluginPanelActionCall = z.infer<typeof panelActionCallSchema>
 
-/** Where a desktop frame loads as an isolated `<webview>` guest (plugin-frame-guest.ts). */
-export type PluginFrameGuest = { partition: string; url: string }
+/**
+ * Where a desktop frame loads as an isolated `<webview>` guest (plugin-frame-guest.ts). `dev`: a
+ * development folder's, whose URL changes on every save (components panels hot reload then).
+ */
+export type PluginFrameGuest = { partition: string; url: string; dev?: true }
 
 export type PluginFrameEntry = {
   html: string

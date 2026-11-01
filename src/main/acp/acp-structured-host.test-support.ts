@@ -18,8 +18,8 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { AgentSessionRecoveryCapsule } from '../runtime/agent-session-recovery-capsule'
-import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record-store-test-harness'
+import { AgentSessionRecoveryCapsule } from '../runtime/agent-session/records/agent-session-recovery-capsule'
+import { openTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
 import {
   GROK,

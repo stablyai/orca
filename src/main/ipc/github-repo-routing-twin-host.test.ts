@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GitHubPRRefreshCandidate } from '../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../shared/repo-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 vi.mock('../project-runtime-git-options', () => ({
   getLocalProjectGhExecOptions: () => ({})

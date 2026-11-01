@@ -1345,7 +1345,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Los archivos fuera del espacio de trabajo aún no se pueden previsualizar en un servidor emparejado.",
           "webClientUnavailable": "Las vistas previas de documentos no están disponibles en el cliente web."
         }
       },

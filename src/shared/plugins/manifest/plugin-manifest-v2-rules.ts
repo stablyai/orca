@@ -10,7 +10,10 @@ import {
   PLUGIN_DERIVED_PUBLISHER_SINCE,
   PLUGIN_SOURCE_MODULES_SINCE
 } from './plugin-schema-field-docs'
-import { isPluginSourceModulePath } from '../frames/plugin-frame-source-modules'
+import {
+  isPluginSourceModulePath,
+  isPluginWorkerSourcePath
+} from '../frames/plugin-frame-source-modules'
 
 type V2RuleSubject = {
   execution: PluginExecutionProfile
@@ -69,6 +72,7 @@ const engineBelow = (range: string, version: string): boolean =>
 export function validateSourceModuleEntryFloor(
   manifest: {
     engines: { orca: string }
+    main?: string
     contributes: {
       panels: readonly { entry: string }[]
       customEditors: readonly { entry: string }[]
@@ -85,6 +89,23 @@ export function validateSourceModuleEntryFloor(
       code: 'custom',
       path: ['engines', 'orca'],
       message: `must be at least >=${PLUGIN_SOURCE_MODULES_SINCE} when a panel or editor entry is a .ts, .tsx, .mts or .jsx file, because older Orca does not transpile it`
+    })
+  }
+  const main = manifest.main?.toLowerCase()
+  if (main === undefined || !isPluginSourceModulePath(main)) {
+    return
+  }
+  if (!isPluginWorkerSourcePath(main)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['main'],
+      message: 'a worker runs in Node with no JSX; use a .ts, .mts, .js or .mjs file'
+    })
+  } else if (engineBelow(manifest.engines.orca, PLUGIN_SOURCE_MODULES_SINCE)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['engines', 'orca'],
+      message: `must be at least >=${PLUGIN_SOURCE_MODULES_SINCE} when main is a .ts or .mts file, because older Orca does not transpile it`
     })
   }
 }

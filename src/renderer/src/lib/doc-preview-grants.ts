@@ -48,8 +48,25 @@ export function buildDocPreviewGrantRequest(
           relativePath: worktreeRelativePath
         }
       : chatScratchFileAddress(filePath)
-  if (!environmentId || !base) {
+  if (!environmentId) {
     return null
+  }
+  if (!base) {
+    if (!worktreeRoot) {
+      return null
+    }
+    return {
+      owner: {
+        kind: 'runtime',
+        environmentId,
+        worktreeSelector: toRuntimeWorktreeSelector(worktreeId),
+        worktreeRoot,
+        fileAccess: 'terminal-artifact'
+      },
+      requestBase: root,
+      root,
+      entryRelativePath: basename(filePath)
+    }
   }
   return {
     owner: {

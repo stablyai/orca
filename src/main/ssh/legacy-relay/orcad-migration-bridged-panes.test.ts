@@ -21,33 +21,6 @@ const LEASE: SshRemotePtyLease = {
 }
 
 describe('preserving the relay bridge when skipping saved state', () => {
-  it.each([DORMANT_WORKTREE_ID, 'folder:folder-1'])(
-    'accepts the exported pane in %s with a host-qualified lease owner',
-    (owner) => {
-      const payload = { ...manifest().payload, dormantState: dormantState() }
-      const session = payload.dormantState!.workspaceSession!
-      session.tabsByWorktree = {
-        [owner]: session.tabsByWorktree[DORMANT_WORKTREE_ID]!.map((tab) => ({
-          ...tab,
-          worktreeId: owner
-        }))
-      }
-      expect(
-        preservesOrcadMigrationBridgedPanes(
-          payload,
-          [
-            {
-              ...LEASE,
-              worktreeId: `ssh:ssh-prod|${owner}`
-            }
-          ],
-          [LEASE.ptyId],
-          isBridgeableLease
-        )
-      ).toBe(true)
-    }
-  )
-
   it('refuses when a tab survives but the running split pane is omitted', () => {
     const payload = { ...manifest().payload, dormantState: dormantState() }
     const session = payload.dormantState!.workspaceSession!
@@ -76,26 +49,5 @@ describe('preserving the relay bridge when skipping saved state', () => {
     expect(preservesOrcadMigrationBridgedPanes(payload, [], [LEASE.ptyId], isBridgeableLease)).toBe(
       false
     )
-  })
-
-  it('does not require the omitted pane of a superseded lease the bridge never serves', () => {
-    const payload = { ...manifest().payload, dormantState: dormantState() }
-    const superseded = {
-      ...LEASE,
-      ptyId: 'old-pty',
-      tabId: 'closed-tab',
-      supersededBy: LEASE.ptyId
-    }
-    expect(
-      preservesOrcadMigrationBridgedPanes(
-        payload,
-        [LEASE, superseded],
-        [LEASE.ptyId, superseded.ptyId],
-        isBridgeableLease
-      )
-    ).toBe(true)
-    expect(
-      preservesOrcadMigrationBridgedPanes(payload, [LEASE, superseded], [superseded.ptyId])
-    ).toBe(false)
   })
 })

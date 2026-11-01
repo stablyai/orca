@@ -10,12 +10,12 @@ import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
 } from '../claude-stream-json-connection'
-import type { ClaudeStructuredLaunch } from '../claude-structured-launch-resolution'
+import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
 import type { StructuredLaunchRequest } from '../../runtime/structured-agent-launch-composition'
 import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from '../claude-prompt-registry'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
-import type { AgentSessionFastModeState } from '../../../shared/agent-session-wire'
+import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
 import type { ClaudeChildWorkDecoder } from '../claude-child-work-decoder'

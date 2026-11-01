@@ -66,6 +66,9 @@ export type PluginHostListEntry = {
   needsReconsent: boolean
   error?: string
   isDev: boolean
+  /** Dev folders: file changes the host had seen when it last loaded the folder, so a client can
+   *  tell a reload happened. Absent on older hosts and installed plugins. */
+  devChangeCount?: number
   official: boolean
   bundled: boolean
   capabilities: { kind: string; description: string }[]

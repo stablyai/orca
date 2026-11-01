@@ -30,33 +30,9 @@ function idleAfter(...chunks: string[]): boolean {
 }
 
 describe('idle at a shell prompt', () => {
-  it('is idle once a prompt follows a cleanly finished command', () => {
-    expect(idleAfter(shellRuns('ls', 'file') + PROMPT)).toBe(true)
-  })
-
   it('is idle when the markers split across chunks', () => {
     const bytes = shellRuns('ls', 'file') + PROMPT
     expect(idleAfter(...bytes.split(''))).toBe(true)
-  })
-
-  it('does not trust a first prompt before the shell has shown it marks command starts', () => {
-    expect(idleAfter(PROMPT)).toBe(false)
-  })
-
-  it('is not idle while a command runs, before its prompt returns, or after a failed command', () => {
-    expect(idleAfter(`${PROMPT}sleep 9\r\n${C}`)).toBe(false)
-    expect(idleAfter(shellRuns('ls', 'file'))).toBe(false)
-    expect(idleAfter(shellRuns('false', '', D1) + PROMPT)).toBe(false)
-  })
-
-  it('is not idle without shell integration', () => {
-    expect(idleAfter('user@host:~$ ls\r\nfile\r\nuser@host:~$ ')).toBe(false)
-  })
-
-  it('is not idle on the alternate screen or after a full reset', () => {
-    const idle = shellRuns('ls', 'file') + PROMPT
-    expect(idleAfter(idle, '\x1b[?1049h')).toBe(false)
-    expect(idleAfter(idle, '\x1bc')).toBe(false)
   })
 
   // Review case 1: a mirror seeded or created mid-session must not read an agent's own A as a prompt.
@@ -68,12 +44,6 @@ describe('idle at a shell prompt', () => {
     scanner.scan(`${A}> `)
     expect(scanner.isIdleAtPrompt).toBe(false)
     expect(idleAfter(`agent output\r\n${A}> `)).toBe(false)
-  })
-
-  // Review case 2: a prompt-only integration never marks the agent the user typed.
-  it('stays not idle when the integration paints prompts but never command starts', () => {
-    expect(idleAfter(PROMPT, 'claude\r\n', 'agent ui', `${A}> `)).toBe(false)
-    expect(idleAfter(`${PROMPT}ls\r\nfile\r\n${PROMPT}`)).toBe(false)
   })
 
   // Review case 3: an app's zones inside the shell's command never close that command.

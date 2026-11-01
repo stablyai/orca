@@ -28,7 +28,8 @@ import {
   pluginPathFieldDoc,
   PLUGIN_DERIVED_PUBLISHER_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
-  PLUGIN_SCHEMA_SINCE_V1
+  PLUGIN_SCHEMA_SINCE_V1,
+  PLUGIN_SOURCE_MODULES_SINCE
 } from './plugin-schema-field-docs'
 import {
   pluginExecutionProfileSchema,
@@ -127,7 +128,7 @@ const pluginManifestFields = {
     .optional()
     .meta(
       pluginPathFieldDoc(
-        'Node entry run in an out-of-process plugin worker. Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events` and by any command without an `action`.',
+        `Node entry run in an out-of-process plugin worker: a \`.js\`/\`.mjs\` module, or a \`.ts\`/\`.mts\` module that Orca transpiles when it loads (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`). Requires the \`trusted-worker\` execution profile, and is required by it, by \`contributes.events\` and by any command without an \`action\`.`,
         V1,
         ['dist/main.mjs']
       )

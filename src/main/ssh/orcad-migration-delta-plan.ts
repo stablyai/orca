@@ -7,7 +7,7 @@ import type {
 import { isRetainedOrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { collectOrcadMigrationSourceCatalog } from '../persistence/migrating-orcad-catalog/orcad-source-catalog'
 import { listOrcadMigrationCutoverChainForTarget } from './orcad-migration-cutover-journal'
 import {

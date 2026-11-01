@@ -2,10 +2,10 @@ import { structuredLaunchSeedOptions } from '../../shared/native-chat/input/nati
 import {
   adoptClaudeStructuredSpawnOptions,
   claudeStructuredSpawnOptions
-} from '../claude/claude-structured-spawn-options'
-import { applyClaudeMessageOptions } from '../claude/claude-structured-message-options'
-import { sessionFor } from '../claude/claude-structured-dispatch-test-support'
-import { fakeClaude } from '../claude/claude-structured-session-test-support'
+} from '../claude/structured/launch/claude-structured-spawn-options'
+import { applyClaudeMessageOptions } from '../claude/structured/launch/claude-structured-message-options'
+import { sessionFor } from '../claude/structured/claude-structured-dispatch-test-support'
+import { fakeClaude } from '../claude/structured/claude-structured-session-test-support'
 import { readAgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
 import { resolveAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
 import { quoteStartupArg, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'

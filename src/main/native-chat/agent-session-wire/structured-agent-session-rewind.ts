@@ -5,7 +5,7 @@ import type {
   AgentSessionRewindRecord,
   AgentSessionRewindResult
 } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
-import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionMutationResult } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import {
   runWithReadyStructuredAgentSessionOperation,

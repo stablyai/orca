@@ -6,7 +6,7 @@ import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecyc
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   savedStructuredAgentSessionStatus,
   StructuredAgentSessionSavedStatus
@@ -32,7 +32,7 @@ import {
 } from './structured-agent-session-restart-interruption-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
-import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
 import { savedStatusContracts } from '../../../shared/agent-session-saved-status.test-fixture'
 

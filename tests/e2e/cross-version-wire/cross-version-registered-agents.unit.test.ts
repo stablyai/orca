@@ -12,11 +12,9 @@ import {
   type AgentSessionRecord
 } from '../../../src/shared/agent-session/lifecycle/agent-session-record'
 import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import {
-  RUNTIME_CAPABILITIES,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
+import { RUNTIME_CAPABILITIES } from '../../../src/shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/runtime-types'
 import { resolveStructuredNativeChatSupport } from '../../../src/shared/structured-native-chat-launch-route'
 import { parseWorkspaceSession } from '../../../src/shared/workspace-session-schema'

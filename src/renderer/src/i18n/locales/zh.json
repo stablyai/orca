@@ -1320,7 +1320,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "工作区之外的文件尚无法在配对服务器上预览。",
           "webClientUnavailable": "文档预览在 Web 客户端中不可用。"
         }
       },

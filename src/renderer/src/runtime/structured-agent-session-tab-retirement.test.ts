@@ -33,7 +33,7 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-registry', (
 vi.mock('@/components/native-chat/native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: mocks.remember
 }))
-vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-prompt', () => ({
   discardStructuredAgentSessionChatSends: mocks.discardOutbox
 }))
 vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({

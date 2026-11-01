@@ -6,7 +6,7 @@ import {
   claudeFrame as frame,
   claudeWasSent as wrote,
   PROVIDER_SESSION_ID
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
 import {

@@ -14,7 +14,7 @@ import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { test as base, expect } from './orca-app'
 import { resolveCliCommand } from '../../../src/shared/node-cli-command-resolution'
-import { createStructuredAgentSessionId } from '../../../src/shared/structured-agent-session-create'
+import { createStructuredAgentSessionId } from '../../../src/shared/agent-session/structured-agent-session-create'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionCreateFingerprint

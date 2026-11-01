@@ -3,7 +3,7 @@ import {
   refuseUnclassified,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import { sameProviderChild } from './structured-agent-session-provider-child'

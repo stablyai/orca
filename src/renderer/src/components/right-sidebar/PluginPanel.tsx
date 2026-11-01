@@ -10,6 +10,7 @@ import {
 import { PluginDeclarativePanel } from './PluginDeclarativePanel'
 import { usePluginFrameHost } from './use-plugin-frame-host'
 import { usePluginFrameEntry } from './use-plugin-frame-entry'
+import { reportPluginPanelFailure, useReportFramePanelDraw } from './use-plugin-panel-draw-report'
 import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -62,8 +63,13 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       setPanelHealth(tabKey, 'healthy')
     } else if (entry.status !== 'loading') {
       setPanelHealth(tabKey, 'error')
+      reportPluginPanelFailure(
+        tabKey,
+        `the panel ${entry.status === 'error' ? 'could not be loaded' : 'stopped responding'}`
+      )
     }
   }, [entry.status, setPanelHealth, tabKey])
+  useReportFramePanelDraw(tabKey, frameRef, guest && !declarative ? guest.url : null)
 
   // Persisted tabs can outlive an uninstalled or disabled plugin.
   if (!panel) {
@@ -110,7 +116,10 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   if (declarative) {
     return guest && panelFrameKey ? (
       <PluginDeclarativePanel
-        key={panelFrameKey}
+        // A dev save keeps the panel (last good tree, memory atoms) and swaps only its guest.
+        key={guest.dev ? `${tabKey}:dev` : panelFrameKey}
+        tabKey={tabKey}
+        hotReload={guest.dev === true}
         panelId={panel.id}
         title={panel.title}
         guest={guest}

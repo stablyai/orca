@@ -25,7 +25,7 @@ import {
 } from '../orchestration/orchestration-party'
 import { lookupOrcaAgentSession } from '../orchestration/structured-session-mail-address'
 import { conversationRecordReader } from '../orchestration/structured-session-lineage'
-import type { AgentSessionRecordStore } from '../agent-session-record-store'
+import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { RpcRequest } from './core'

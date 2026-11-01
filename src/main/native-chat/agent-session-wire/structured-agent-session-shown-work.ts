@@ -8,9 +8,9 @@ import type { AgentChildWorkView } from '../../../shared/agent-status-child-work
 import {
   structuredAgentSessionAgentStatus,
   type StructuredAgentSessionAgentStatus
-} from '../../../shared/structured-agent-session-agent-status'
-import { projectStructuredAgentSessionStatus } from '../../../shared/structured-agent-session-projection'
-import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
+} from '../../../shared/agent-session/view/structured-agent-session-agent-status'
+import { projectStructuredAgentSessionStatus } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import type { StructuredAgentSessionWorkScope } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 
 export function structuredAgentSessionShownStatus(
   journal: {

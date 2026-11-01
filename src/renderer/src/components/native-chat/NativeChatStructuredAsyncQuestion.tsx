@@ -1,5 +1,5 @@
 import { asyncQuestionSourceScope } from '../../../../shared/native-chat/input/native-chat-ask'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredAgentSessionHostKey } from '../../runtime/structured-agent-session-host-capability'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { useStructuredAgentSession } from './use-structured-agent-session'

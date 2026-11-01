@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { StructuredAgentSessionCreateParams } from '../../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
 import type * as FrameDrawnChatTabPlacementModule from '@/lib/frame-drawn-chat-tab-placement'
 
 const mocks = vi.hoisted(() => {
@@ -37,7 +37,7 @@ vi.mock('@/runtime/structured-session-tab-inventory', () => ({
     throw new Error('Reply unavailable')
   }
 }))
-vi.mock('@/lib/structured-agent-session-create-hydration', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-create-hydration', () => ({
   publishStructuredAgentSessionCreateHydration: vi.fn()
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toast } }))
@@ -75,8 +75,10 @@ import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import {
   getStructuredAgentSessionLaunchLifecycle,
-  retryStructuredAgentSessionLaunch
-} from '@/lib/structured-agent-session-launch'
+  resetStructuredAgentLaunchRegistryForTests,
+  structuredLaunchStates
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { retryStructuredAgentSessionLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import {
   readStructuredAgentLaunchRecord,
   writeStructuredAgentLaunchRecord,
@@ -86,7 +88,7 @@ import {
   reserveStructuredLaunchSlot,
   restoreStructuredLaunchSurfaces,
   stopStructuredLaunchSlotTracking
-} from '@/lib/structured-agent-session-launch-surface'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
@@ -99,10 +101,6 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { runCliChatResume } from './cli-chat-resume-run'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
-import {
-  resetStructuredAgentLaunchRegistryForTests,
-  structuredLaunchStates
-} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
 import {
   clearWebSessionFocusIntent,

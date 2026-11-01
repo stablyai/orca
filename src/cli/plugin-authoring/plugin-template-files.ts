@@ -49,9 +49,7 @@ ${body}
 
 \`\`\`sh
 orca plugin validate .
-orca plugin dev load .     # loads this folder into the running Orca; edits reload automatically
-orca plugin logs ${pluginTemplateKey(input)}
-orca plugin dev unload .
+orca plugin dev watch .    # loads this folder into Orca and prints its logs and reloads; Ctrl-C unloads it
 \`\`\`
 
 Orca names the publisher after where the plugin is installed from: the GitHub or GitLab owner of

@@ -9,7 +9,7 @@ import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-b
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
 import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import type { InitializeResponse } from './generated/acp-protocol.generated'
 import { compareAppVersions } from '../../shared/app-version'

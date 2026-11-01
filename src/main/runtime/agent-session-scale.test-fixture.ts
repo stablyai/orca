@@ -18,8 +18,8 @@ import {
   seedTestAgentSessionRecordStore,
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+} from './agent-session/records/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 const roots: string[] = []

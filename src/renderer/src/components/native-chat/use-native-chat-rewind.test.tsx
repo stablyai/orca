@@ -6,7 +6,7 @@ const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 import { AGENT_SESSION_REWIND_REASONS } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
-import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../shared/structured-agent-session-reducer'
+import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../shared/agent-session/structured-agent-session-reducer'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { NATIVE_CHAT_REWIND_RESET_TIMEOUT_MS, useNativeChatRewind } from './use-native-chat-rewind'

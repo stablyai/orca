@@ -7,8 +7,8 @@ import type {
   AgentJournalRenderItem
 } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import * as toolFold from '../../../../../src/shared/native-chat/tools/native-chat-tool-pairs'
-import { projectStructuredItemsToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
-import { foldMobileNativeChatMessages } from '../../mobile-native-chat-render-data'
+import { projectStructuredItemsToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
+import { foldMobileNativeChatMessages } from '../mobile-native-chat-render-data'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 vi.mock('react-native', async () => {

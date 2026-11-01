@@ -6,7 +6,7 @@ import {
   MAX_CONTEXT_MODEL_ID_CHARS,
   type AgentSessionContextUsage,
   type AgentSessionContextWindow
-} from '../../../shared/agent-session-context-usage'
+} from '../../../shared/agent-session/agent-session-context-usage'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
