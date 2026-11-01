@@ -67,7 +67,14 @@ export function parseWindowsCimProcessRows(stdout: string): WindowsProcessRow[] 
 export async function readWindowsProcessRowsWithCim(): Promise<WindowsProcessRow[]> {
   const result = await runProcess({
     program: windowsPowerShellPath(),
-    args: ['-NoProfile', '-NonInteractive', '-Command', POWERSHELL_PROCESS_QUERY],
+    args: [
+      '-NoProfile',
+      '-NonInteractive',
+      '-WindowStyle',
+      'Hidden',
+      '-Command',
+      POWERSHELL_PROCESS_QUERY
+    ],
     timeoutMs: WINDOWS_CIM_QUERY_TIMEOUT_MS,
     maxOutputBytes: WINDOWS_CIM_MAX_OUTPUT_BYTES
   })
