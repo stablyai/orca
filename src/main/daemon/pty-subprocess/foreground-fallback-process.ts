@@ -1,5 +1,6 @@
 import { win32 as pathWin32 } from 'node:path'
 import { isTerminalScopeWrapper } from '../terminal-scopes-runtime'
+import { isMacosTerminalAnchorProcess } from './macos-terminal-anchor'
 
 function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
   const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
@@ -15,9 +16,10 @@ export function resolveFallbackForegroundProcess(
   shellPath: string
 ): string | null {
   // node-pty can report Orca’s scope wrapper during exec or after the foreground leader exits.
-  const normalized = normalizeForegroundProcessName(
-    processName && isTerminalScopeWrapper(processName.trim()) ? shellPath : processName
-  )
+  const isWrapper =
+    processName &&
+    (isTerminalScopeWrapper(processName.trim()) || isMacosTerminalAnchorProcess(processName.trim()))
+  const normalized = normalizeForegroundProcessName(isWrapper ? shellPath : processName)
   if (normalized || process.platform !== 'win32') {
     return normalized
   }

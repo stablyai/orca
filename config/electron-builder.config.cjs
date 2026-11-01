@@ -343,6 +343,7 @@ module.exports = {
     'out/main/skills/bundled-skill-install/cli-entry.js',
     'out/main/startup/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',
+    'out/main/terminal-anchor-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
@@ -630,6 +631,10 @@ module.exports = {
       {
         from: 'native/process-footprint-macos/.build/release/orca-process-footprint',
         to: 'MacOS/orca-process-footprint'
+      },
+      {
+        from: 'native/terminal-anchor-macos/.build/release/orca-terminal-anchor',
+        to: 'MacOS/orca-terminal-anchor'
       }
     ],
     target: [

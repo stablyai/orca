@@ -48,3 +48,21 @@ hands → probe once more → `rename` in one syscall → verify we kept it.
 **Residual risk.** The final probe and the `rename` are two syscalls, and POSIX has no
 rename-if-target-is-inode-X. The harm is separately unreachable: a daemon never creates a session
 on an endpoint it no longer holds (`daemon-server.ts`), and it drains rather than serving on.
+
+## macOS Terminal Anchors
+
+`ORCA_TERMINAL_ANCHOR=1` gives each terminal its own macOS responsible process, the identity the
+kernel hands to every descendant at spawn. Clearing the environment, double-forking and `setsid`
+do not change it, so `orca-terminal-anchor origin <pid>` can name the terminal of a process that
+carries no tag. The tree is `host → launcher → anchor → (login →) shell`.
+
+- **The anchor must run on the signed host binary.** TCC follows the responsible process. Measured
+  with `TCCAccessPreflight`, an ad-hoc anchor loses every grant, and the unmodified host binary
+  keeps them all.
+- **The launcher reports, the anchor stays.** node-pty waits on the launcher, so it exits with the
+  shell. The kernel forgets a dead responsible process, so the anchor stays for as long as
+  anything names it. That is what keeps an orphan attributable.
+- **Sweeps walk through the anchor and never signal it** (`anchored-pty-roots.ts`). It shares the
+  root's process group, so the forced kill signals that group's root by pid, and the shell runs in
+  a foreground group of its own.
+- **A terminal always starts.** If the anchor cannot start, the launcher runs the shell directly.

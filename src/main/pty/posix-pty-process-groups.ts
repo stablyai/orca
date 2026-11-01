@@ -1,5 +1,6 @@
 import { hasControllingTty } from '../../shared/posix-controlling-terminal'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import { isPtyRootAnchored } from './anchored-pty-roots'
 import {
   parseProcessRows,
   readLinuxProcessSessionId,
@@ -126,7 +127,7 @@ export async function signalPosixPtyProcessGroups(
   if (deps.ownsRoot && !deps.ownsRoot()) {
     return
   }
-  deliverPosixPtyGroupSignal(groups, signal, fallback, deps)
+  deliverToRootAndGroups(rootPid, groups, signal, fallback, deps)
 }
 
 function signalPosixPtyProcessGroupsSync(
@@ -151,7 +152,33 @@ function signalPosixPtyProcessGroupsSync(
   } catch {
     groups = null
   }
-  deliverPosixPtyGroupSignal(groups, signal, fallback, deps)
+  deliverToRootAndGroups(rootPid, groups, signal, fallback, deps)
+}
+
+/** The anchor shares the root's group and must outlive the terminal, so that group is signalled by pid. */
+function deliverToRootAndGroups(
+  rootPid: number,
+  groups: number[] | null,
+  signal: NodeJS.Signals,
+  fallback: () => void,
+  deps: PosixPtyGroupSignalDeps
+): void {
+  if (!groups || !isPtyRootAnchored(rootPid)) {
+    deliverPosixPtyGroupSignal(groups, signal, fallback, deps)
+    return
+  }
+  const others = groups.slice(0, -1)
+  if (others.length > 0) {
+    deliverPosixPtyGroupSignal(others, signal, fallback, deps)
+  }
+  try {
+    fallback()
+  } catch (error) {
+    // The root exits with its shell, so it can already be gone by now.
+    if (!isProcessAlreadyGone(error)) {
+      throw error
+    }
+  }
 }
 
 /** Prefetch session ids for the root's terminal so group selection stays synchronous. */

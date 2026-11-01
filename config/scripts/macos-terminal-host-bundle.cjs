@@ -17,6 +17,7 @@ const { pathToFileURL } = require('node:url')
 
 const MAC_TERMINAL_HOST_NAME = 'Orca Terminal Host'
 const MAC_TERMINAL_HOST_EXECUTABLE = 'orca-terminal-host'
+const MAC_TERMINAL_ANCHOR_EXECUTABLE = 'orca-terminal-anchor'
 const macTerminalHostSignIgnore = [`/Contents/Helpers/${MAC_TERMINAL_HOST_NAME}\\.app(/|$)`]
 const NODE_PTY_FILES = [
   'package.json',
@@ -38,6 +39,7 @@ const LOAD_CALL = /\b(?:require|import)\(/g
 // The whole argument must be one plain string literal; anything else is a computed name.
 const LITERAL_ARGUMENT = /^\s*([`'"])([^`'"$]+)\1\s*\)/
 const LIPO_ARCH_TO_NODE_ARCH = { x86_64: 'x64', arm64: 'arm64' }
+const NODE_ARCH_TO_LIPO_ARCH = { x64: 'x86_64', arm64: 'arm64' }
 
 function macTerminalHostPaths(appPath) {
   const bundle = join(appPath, 'Contents', 'Helpers', `${MAC_TERMINAL_HOST_NAME}.app`)
@@ -48,6 +50,7 @@ function macTerminalHostPaths(appPath) {
     bundle,
     infoPlist: join(contents, 'Info.plist'),
     executable: join(contents, 'MacOS', MAC_TERMINAL_HOST_EXECUTABLE),
+    terminalAnchor: join(contents, 'MacOS', MAC_TERMINAL_ANCHOR_EXECUTABLE),
     icon: join(contents, 'Resources', 'icon.icns'),
     daemon,
     entry: join(daemon, 'out', 'main', 'daemon-entry.js'),
@@ -261,7 +264,13 @@ function assembleMacTerminalHost({ appPath, nodeExecutable, iconPath, info }) {
   const resourcesDir = join(appPath, 'Contents', 'Resources')
   const daemonOut = join(resourcesDir, 'app.asar.unpacked', 'out')
   const nodePty = join(resourcesDir, 'node_modules', 'node-pty')
-  for (const required of [join(daemonOut, 'main', 'daemon-entry.js'), nodePty, nodeExecutable]) {
+  const terminalAnchor = join(appPath, 'Contents', 'MacOS', MAC_TERMINAL_ANCHOR_EXECUTABLE)
+  for (const required of [
+    join(daemonOut, 'main', 'daemon-entry.js'),
+    nodePty,
+    nodeExecutable,
+    terminalAnchor
+  ]) {
     if (!existsSync(required)) {
       throw new Error(`[macos-terminal-host] missing ${required}`)
     }
@@ -271,6 +280,8 @@ function assembleMacTerminalHost({ appPath, nodeExecutable, iconPath, info }) {
   mkdirSync(join(paths.bundle, 'Contents', 'MacOS'), { recursive: true })
   cpSync(nodeExecutable, paths.executable)
   chmodSync(paths.executable, 0o755)
+  cpSync(terminalAnchor, paths.terminalAnchor)
+  chmodSync(paths.terminalAnchor, 0o755)
   cpSync(iconPath, paths.icon)
   cpSync(join(daemonOut, 'main'), join(paths.daemon, 'out', 'main'), { recursive: true })
   // Pins out/ to CommonJS so a stray parent package.json cannot change the loader.
@@ -286,6 +297,20 @@ function assembleMacTerminalHost({ appPath, nodeExecutable, iconPath, info }) {
   chmodSync(paths.spawnHelper, 0o755)
   writePlist(paths.infoPlist, info)
   return paths
+}
+
+/** The helper is built universal for Orca.app; each host slice holds one architecture. */
+function thinToArch(binary, arch) {
+  const archs = spawnChecked('/usr/bin/lipo', ['-archs', binary]).stdout.trim().split(/\s+/)
+  if (archs.length > 1) {
+    spawnChecked('/usr/bin/lipo', [
+      binary,
+      '-thin',
+      NODE_ARCH_TO_LIPO_ARCH[arch],
+      '-output',
+      binary
+    ])
+  }
 }
 
 async function loadNodeRuntimePin() {
@@ -322,8 +347,10 @@ async function buildMacTerminalHost({
       minimumOs: NODE_RUNTIME_DARWIN_MINIMUM_OS
     })
   })
+  thinToArch(paths.terminalAnchor, arch)
   await signCode(paths.ptyNode, {})
   await signCode(paths.spawnHelper, {})
+  await signCode(paths.terminalAnchor, {})
   await signCode(paths.bundle, { entitlements: entitlementsPath })
   return paths
 }
@@ -350,7 +377,15 @@ async function verifyMacTerminalHost({ appPath, arch, usageDescriptions, expecte
   const { NODE_RUNTIME_DARWIN_MINIMUM_OS: minimumOs } = await loadNodeRuntimePin()
   const paths = macTerminalHostPaths(appPath)
   const problems = []
-  for (const key of ['executable', 'icon', 'entry', 'outPackageJson', 'ptyNode', 'spawnHelper']) {
+  for (const key of [
+    'executable',
+    'terminalAnchor',
+    'icon',
+    'entry',
+    'outPackageJson',
+    'ptyNode',
+    'spawnHelper'
+  ]) {
     if (!existsSync(paths[key])) {
       problems.push(`missing ${paths[key]}`)
     }
@@ -379,7 +414,7 @@ async function verifyMacTerminalHost({ appPath, arch, usageDescriptions, expecte
       `the Node binary's minos is ${minos}, but NODE_RUNTIME_DARWIN_MINIMUM_OS is ${minimumOs}`
     )
   }
-  for (const binary of [paths.executable, paths.ptyNode, paths.spawnHelper]) {
+  for (const binary of [paths.executable, paths.terminalAnchor, paths.ptyNode, paths.spawnHelper]) {
     const archs = lipoArchsToNodeArchs(spawnChecked('/usr/bin/lipo', ['-archs', binary]).stdout)
     if (archs.length !== 1 || archs[0] !== arch) {
       problems.push(`${binary} has architectures ${archs.join(',')}, expected ${arch}`)
