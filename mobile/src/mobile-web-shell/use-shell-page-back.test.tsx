@@ -137,8 +137,7 @@ describe('the shell taking the device Back key for a page that claimed it', () =
     expect(setOptions).toHaveBeenLastCalledWith({ gestureEnabled: true })
   })
 
-  // The host list document is its stack's only screen, so the parent screen's swipe would pop it to Home.
-  // Another shell under the same parent dropping its claim must not hand that swipe back.
+  // A pushed session releasing its claim must not hand the host's swipe back while its list still claims.
   it("keeps the parent screen's swipe off until the last claim under it ends", () => {
     native.platform.os = 'ios'
     const parent = { setOptions: vi.fn() }

@@ -3,7 +3,6 @@ import { BackHandler, Platform } from 'react-native'
 
 type GestureOptions = { setOptions: (options: { gestureEnabled: boolean }) => void }
 
-// Several shells can sit under one parent screen; its swipe comes back only when the last claim ends.
 const parentClaims = new WeakMap<GestureOptions, number>()
 
 // Android intercepts/posts hardware Back; iOS disables the stack swipe while claimed so it cannot pop the page (the shell's edge swipe sends Back instead). No live claim leaves navigation unchanged.
@@ -12,9 +11,9 @@ export function useShellPageBack(args: {
   isFocused: () => boolean
   // Return false for an undeliverable press so navigation can handle it.
   sendBack: () => boolean
-  setOptions: (options: { gestureEnabled: boolean }) => void
-  // A nested stack's only screen is popped by its parent screen's swipe, so a claim turns that one off too.
-  // Harmless while a screen sits above: the nested stack's own swipe handles it.
+  setOptions: GestureOptions['setOptions']
+  // The parent screen's swipe pops a nested stack's only screen and takes the edge whenever the nested swipe is off,
+  // so it stays off until the last claim among the shells under it ends.
   parent: GestureOptions | undefined
 }): void {
   const { claimed } = args
@@ -45,14 +44,19 @@ export function useShellPageBack(args: {
     if (!claimed || !parent) {
       return
     }
-    parentClaims.set(parent, (parentClaims.get(parent) ?? 0) + 1)
-    parent.setOptions({ gestureEnabled: false })
+    const held = (parentClaims.get(parent) ?? 0) + 1
+    parentClaims.set(parent, held)
+    if (held === 1) {
+      parent.setOptions({ gestureEnabled: false })
+    }
     return () => {
       const left = (parentClaims.get(parent) ?? 1) - 1
-      parentClaims.set(parent, left)
-      if (left === 0) {
-        parent.setOptions({ gestureEnabled: true })
+      if (left > 0) {
+        parentClaims.set(parent, left)
+        return
       }
+      parentClaims.delete(parent)
+      parent.setOptions({ gestureEnabled: true })
     }
   }, [claimed])
 }
