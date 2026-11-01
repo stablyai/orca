@@ -18,7 +18,9 @@ function OlderToastOverModalSheet(): React.JSX.Element {
       action: { label: 'Open Mobile Settings', onClick: () => setDraft('') }
     })
     setSheetOpen(true)
-    return () => toast.dismiss('older-persistent-toast')
+    return () => {
+      toast.dismiss('older-persistent-toast')
+    }
   }, [])
   return (
     <>
