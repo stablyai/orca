@@ -15,6 +15,8 @@ type Props = {
   staleCommentIds: ReadonlySet<string>
   onEditNote: (comment: DiffComment) => void
   onToggleViewed: (item: MobileDiffReviewQueueItem) => void
+  /** GitHub threads on this file that can't sit under their lines until the branch matches the PR. */
+  hiddenThreadCount: number
 }
 
 /** Uncommitted files are staged rather than viewed, and a past commit's files are read-only. */
@@ -36,7 +38,8 @@ export function MobileDiffReviewFileSummary({
   item,
   staleCommentIds,
   onEditNote,
-  onToggleViewed
+  onToggleViewed,
+  hiddenThreadCount
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -62,6 +65,21 @@ export function MobileDiffReviewFileSummary({
           />
         ) : null}
       </View>
+      {hiddenThreadCount > 0 ? (
+        <Text style={styles.meta} numberOfLines={2}>
+          {hiddenThreadCount === 1
+            ? t(
+                'components.diffReviewFileSummary.threadsWhenInSync_one',
+                'Its GitHub comment shows here once this branch matches the pull request.',
+                { count: hiddenThreadCount }
+              )
+            : t(
+                'components.diffReviewFileSummary.threadsWhenInSync_other',
+                'Its {{count}} GitHub comments show here once this branch matches the pull request.',
+                { count: hiddenThreadCount }
+              )}
+        </Text>
+      ) : null}
       {item.oldPath ? (
         <Text style={styles.meta} numberOfLines={1}>
           {t('components.diffReviewFileSummary.renamedFrom', 'Renamed from {{oldPath}}', {

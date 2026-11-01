@@ -10,7 +10,6 @@ import { getUnsentMobileDiffComments } from './mobile-diff-comment-edit'
 import {
   buildMobileDiffReviewQueue,
   filterMobileDiffReviewQueue,
-  mobileDiffReviewCommentMatchesItem,
   type MobileDiffReviewQueueFilter
 } from './mobile-diff-review-queue'
 import { useMobileDiffReviewSelection } from './use-mobile-diff-review-selection'
@@ -29,6 +28,11 @@ import {
 import { useMobileDiffReviewInteractions } from './use-mobile-diff-review-interactions'
 import { resolveMobileAgentLaunchAvailability } from './mobile-agent-launch-availability'
 import { useMobilePrSidebarController } from './use-mobile-pr-sidebar-controller'
+import { useMobileDiffReviewGitHub } from './use-mobile-diff-review-github'
+import { mobileDiffReviewThreadsForItem } from './mobile-diff-review-github'
+import { mobileDiffReviewNotesForItem } from './mobile-diff-comments'
+
+const NO_COMMENTS: readonly DiffComment[] = []
 
 type ControllerInput = {
   client: RpcClient | null
@@ -43,6 +47,8 @@ type ControllerInput = {
   initialTarget: MobileDiffReviewInitialTarget | null
   /** Shows this commit's files instead of the worktree's changes. */
   commitOid: string | null
+  /** A line of the tapped file to scroll to once, e.g. from a review thread's "Open in diff". */
+  initialLine?: number | null
   onOpenSession: () => void
   /** Null on the page, where the shell owns the connection. */
   onReconnect: ((hostId: string) => void | Promise<void>) | null
@@ -62,6 +68,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     initialFilter,
     initialTarget,
     commitOid,
+    initialLine = null,
     onOpenSession,
     onReconnect
   } = input
@@ -70,6 +77,8 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   // Bumped by every snapshot load (open, retry, after a git action), so the open file's diff reloads with it.
   const [snapshotVersion, setSnapshotVersion] = useState(0)
   const filter = initialFilter
+  const [pendingLine, setPendingLine] = useState<number | null>(initialLine)
+  const clearScrollToLine = useCallback(() => setPendingLine(null), [])
   const [sheets, dispatchSheets] = useReducer(reduceReviewSheets, NO_REVIEW_SHEETS)
   const sheetIntents = useMemo(() => reviewSheetIntents(dispatchSheets), [])
   const composer = reviewComposer(sheets)
@@ -147,6 +156,30 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     void loadReviewData()
   }, [loadReviewData])
 
+  // Use git.status for PR head identity; branchCompare’s base ref is not the head.
+  const prSidebarBranch = screenState.kind === 'ready' ? (screenState.status.branch ?? null) : null
+  const prSidebarHeadSha =
+    screenState.kind === 'ready'
+      ? (screenState.status.head ?? screenState.branchCompare?.summary.headOid ?? null)
+      : null
+  const prSidebar = useMobilePrSidebarController({
+    client,
+    connState,
+    worktreeId,
+    branch: prSidebarBranch,
+    headSha: prSidebarHeadSha
+  })
+
+  const { github, applyViewed, setRemoteViewed, commentOnGitHub } = useMobileDiffReviewGitHub({
+    client,
+    connState,
+    worktreeId,
+    filter,
+    screenState,
+    prSidebar,
+    setActionError
+  })
+
   const queue = useMemo(() => {
     if (screenState.kind !== 'ready') {
       return []
@@ -155,7 +188,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       screenState.branchCompare && canOpenMobileBranchCompareDiff(screenState.branchCompare.summary)
         ? (screenState.branchCompare.entries ?? [])
         : []
-    return buildMobileDiffReviewQueue({
+    const built = buildMobileDiffReviewQueue({
       worktreeId,
       statusEntries: screenState.status.entries,
       branchEntries,
@@ -165,7 +198,8 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       comments: screenState.comments,
       reviewState: screenState.reviewState
     })
-  }, [screenState, worktreeId])
+    return applyViewed(built)
+  }, [applyViewed, screenState, worktreeId])
 
   const filteredQueue = useMemo(() => filterMobileDiffReviewQueue(queue, filter), [filter, queue])
   const { currentIndex, currentItem, selectIndex, selectKey, moveSelection } =
@@ -186,53 +220,11 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     snapshotVersion
   })
 
-  const commentsForCurrentItem = useMemo(() => {
-    if (!currentItem || screenState.kind !== 'ready') {
-      return []
-    }
-    return screenState.comments.filter((comment) =>
-      mobileDiffReviewCommentMatchesItem(comment, currentItem)
-    )
-  }, [currentItem, screenState])
-
-  const staleCommentIds = useMemo(
-    () =>
-      new Set(
-        commentsForCurrentItem
-          .filter(
-            (comment) =>
-              currentItem &&
-              comment.diffIdentity !== undefined &&
-              comment.diffIdentity !== currentItem.diffIdentity
-          )
-          .map((comment) => comment.id)
-      ),
-    [commentsForCurrentItem, currentItem]
+  const comments = screenState.kind === 'ready' ? screenState.comments : NO_COMMENTS
+  const { commentsByLine, staleCommentIds } = useMemo(
+    () => mobileDiffReviewNotesForItem(comments, currentItem),
+    [comments, currentItem]
   )
-
-  const commentsByLine = useMemo(() => {
-    const map = new Map<number, DiffComment[]>()
-    for (const comment of commentsForCurrentItem) {
-      const list = map.get(comment.lineNumber) ?? []
-      list.push(comment)
-      map.set(comment.lineNumber, list)
-    }
-    return map
-  }, [commentsForCurrentItem])
-
-  // Use git.status for PR head identity; branchCompare’s base ref is not the head.
-  const prSidebarBranch = screenState.kind === 'ready' ? (screenState.status.branch ?? null) : null
-  const prSidebarHeadSha =
-    screenState.kind === 'ready'
-      ? (screenState.status.head ?? screenState.branchCompare?.summary.headOid ?? null)
-      : null
-  const prSidebar = useMobilePrSidebarController({
-    client,
-    connState,
-    worktreeId,
-    branch: prSidebarBranch,
-    headSha: prSidebarHeadSha
-  })
 
   const interactions = useMobileDiffReviewInteractions({
     client,
@@ -251,6 +243,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     selectIndex,
     selectKey,
     moveSelection,
+    remoteViewed: setRemoteViewed,
     setComposerBody,
     setActionError,
     setBusyAction,
@@ -276,6 +269,18 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     worktreeId,
     prSidebarBranch,
     prSidebarHeadSha,
+    github,
+    // Threads only line up when the local branch is at the PR head; otherwise the file says so.
+    ...mobileDiffReviewThreadsForItem(github, currentItem),
+    commentOnGitHub,
+    // Only the tapped file scrolls to the line, and only until it has.
+    scrollToLine:
+      pendingLine !== null &&
+      initialTarget !== null &&
+      currentItem?.filePath === initialTarget.filePath
+        ? pendingLine
+        : null,
+    clearScrollToLine,
     actionError,
     busyAction,
     commentsByLine,

@@ -1,26 +1,16 @@
-import { useMemo, useState } from 'react'
-import { FlatList, Pressable, Text } from 'react-native'
-import { ChevronsUpDown, FileText, ListChecks } from 'lucide-react-native'
+import { FileText, ListChecks } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { MobileLoadErrorState, MobileOfflineState, MobileStateView } from './MobileStateView'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { MobileDiffReviewLine } from './MobileDiffReviewLine'
-import type {
-  ReviewDiffLine,
-  ReviewDiffState,
-  ReviewScreenState
-} from '../session/mobile-diff-review-screen-model'
-import {
-  buildMobileDiffReviewRows,
-  type MobileDiffReviewRow
-} from '../session/mobile-diff-review-rows'
-import { colors } from '../theme/mobile-theme'
+import { MobileDiffReviewLines, type LineRange } from './MobileDiffReviewLines'
+import type { ReviewDiffState, ReviewScreenState } from '../session/mobile-diff-review-screen-model'
 import type {
   MobileDiffReviewQueueFilter,
   MobileDiffReviewQueueItem
 } from '../session/mobile-diff-review-queue'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import type { MobileDiffReviewThread } from '../session/mobile-diff-review-github'
+import type { PRCommentCardActions } from './pr-sidebar/PRCommentCard'
 
 type Props = {
   commentsByLine: ReadonlyMap<number, DiffComment[]>
@@ -29,7 +19,13 @@ type Props = {
   filteredCount: number
   screenState: ReviewScreenState
   staleCommentIds: ReadonlySet<string>
-  onAddNote: (lineNumber: number) => void
+  threadsByLine: ReadonlyMap<number, readonly MobileDiffReviewThread[]>
+  threadActions: PRCommentCardActions | undefined
+  selectedRange: LineRange | null
+  onPickLines: (range: LineRange) => void
+  /** Scroll to this line once, then report it done. */
+  scrollToLine: number | null
+  onScrolledToLine: () => void
   onEditNote: (comment: DiffComment) => void
   onRetry: (() => void) | undefined
   /** The host is unreachable, so a failed load is a wait rather than an error. */
@@ -46,7 +42,12 @@ export function MobileDiffReviewBody({
   filteredCount,
   screenState,
   staleCommentIds,
-  onAddNote,
+  threadsByLine,
+  threadActions,
+  selectedRange,
+  onPickLines,
+  scrollToLine,
+  onScrolledToLine,
   onEditNote,
   onRetry,
   offline,
@@ -121,92 +122,13 @@ export function MobileDiffReviewBody({
       truncated={diffState.truncated}
       commentsByLine={commentsByLine}
       staleCommentIds={staleCommentIds}
-      {...(currentItem?.scope === 'commit' ? {} : { onAddNote })}
+      threadsByLine={threadsByLine}
+      threadActions={threadActions}
+      selectedRange={selectedRange}
+      scrollToLine={scrollToLine}
+      onScrolledToLine={onScrolledToLine}
+      {...(currentItem?.scope === 'commit' ? {} : { onPickLines })}
       onEditNote={onEditNote}
-    />
-  )
-}
-
-const NO_OPENED_LINES: ReadonlySet<number> = new Set()
-
-// Keyed by file, so folds the reader opened close again on the next file.
-function MobileDiffReviewLines({
-  lines,
-  truncated,
-  commentsByLine,
-  staleCommentIds,
-  onAddNote,
-  onEditNote
-}: {
-  lines: ReviewDiffLine[]
-  truncated: boolean
-  commentsByLine: ReadonlyMap<number, DiffComment[]>
-  staleCommentIds: ReadonlySet<string>
-  onAddNote?: (lineNumber: number) => void
-  onEditNote: (comment: DiffComment) => void
-}) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
-  // Opened folds are line indexes into this load; a reload with new lines starts folded again.
-  const [opened, setOpened] = useState<{ lines: ReviewDiffLine[]; indexes: ReadonlySet<number> }>(
-    () => ({ lines, indexes: new Set() })
-  )
-  const openedLines = opened.lines === lines ? opened.indexes : NO_OPENED_LINES
-  const rows = useMemo(
-    () => buildMobileDiffReviewRows(lines, openedLines, new Set(commentsByLine.keys())),
-    [commentsByLine, lines, openedLines]
-  )
-  return (
-    <FlatList<MobileDiffReviewRow<ReviewDiffLine>>
-      data={rows}
-      keyExtractor={(row) => row.key}
-      renderItem={({ item: row }) =>
-        row.kind === 'fold' ? (
-          <Pressable
-            style={({ pressed }) => [styles.foldRow, pressed && styles.buttonPressed]}
-            onPress={() => {
-              const next = new Set(openedLines)
-              for (let index = row.startIndex; index < row.endIndex; index += 1) {
-                next.add(index)
-              }
-              setOpened({ lines, indexes: next })
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={t(
-              'components.diffReviewBody.showUnchangedLines',
-              'Show {{count}} unchanged lines',
-              { count: row.hiddenCount }
-            )}
-          >
-            <ChevronsUpDown size={13} color={colors.textMuted} strokeWidth={2.2} />
-            <Text style={styles.foldText}>
-              {row.hiddenCount === 1
-                ? t('components.diffReviewBody.unchangedLines_one', '{{count}} unchanged line', {
-                    count: row.hiddenCount
-                  })
-                : t('components.diffReviewBody.unchangedLines_other', '{{count}} unchanged lines', {
-                    count: row.hiddenCount
-                  })}
-            </Text>
-          </Pressable>
-        ) : (
-          <MobileDiffReviewLine
-            line={row.line}
-            comments={commentsByLine.get(row.line.newLineNumber ?? -1) ?? []}
-            staleCommentIds={staleCommentIds}
-            onAddNote={onAddNote}
-            onEditNote={onEditNote}
-          />
-        )
-      }
-      contentContainerStyle={styles.diffList}
-      ListFooterComponent={
-        truncated ? (
-          <Text style={styles.truncatedText}>
-            {t('components.diffReviewBody.diffTruncated', 'Diff truncated for mobile preview.')}
-          </Text>
-        ) : null
-      }
     />
   )
 }

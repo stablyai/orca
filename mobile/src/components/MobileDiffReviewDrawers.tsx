@@ -19,6 +19,7 @@ import { MessageBox } from './composer-input/MessageBox'
 import { composerInputStyles } from './composer-input/composer-input-styles'
 import { hostOs } from '../platform/host-os'
 import { MobileDiffReviewFilesSheet } from './MobileDiffReviewFilesSheet'
+import { MobileDiffReviewRangeSheet } from './MobileDiffReviewRangeSheet'
 import { mobileDiffReviewFilesSubtitle } from '../session/mobile-diff-review-screen-model'
 
 type Props = {
@@ -51,7 +52,7 @@ function ReviewSheetContent({ controller, sheet }: Props & { sheet: ReviewSheet 
   const t = useMobileTranslation()
   switch (sheet.kind) {
     case 'send':
-      return <SendNotesContent controller={controller} load={sheet.load} />
+      return <SendNotesContent controller={controller} load={sheet.load} only={sheet.only} />
     case 'discard':
       return (
         <ConfirmContent
@@ -74,6 +75,8 @@ function ReviewSheetContent({ controller, sheet }: Props & { sheet: ReviewSheet 
       return <NoteComposerContent controller={controller} composer={sheet.composer} />
     case 'completion':
       return <CompletionContent controller={controller} />
+    case 'range':
+      return <MobileDiffReviewRangeSheet controller={controller} range={sheet} />
     case 'files':
       return (
         <MobileDiffReviewFilesSheet
@@ -95,9 +98,13 @@ function ReviewSheetContent({ controller, sheet }: Props & { sheet: ReviewSheet 
   }
 }
 
-function SendNotesContent({ controller, load }: Props & { load: SendSheetState }) {
+function SendNotesContent({
+  controller,
+  load,
+  only
+}: Props & { load: SendSheetState; only?: readonly string[] }) {
   const t = useMobileTranslation()
-  const sendActions = useSendActions(controller, load)
+  const sendActions = useSendActions(controller, load, only)
   return (
     <ActionSheetContent
       title={t('components.diffReviewDrawers.sendNotes', 'Send Notes')}
@@ -110,11 +117,14 @@ function SendNotesContent({ controller, load }: Props & { load: SendSheetState }
 
 function useSendActions(
   controller: ReturnType<typeof useMobileDiffReviewController>,
-  load: SendSheetState
+  load: SendSheetState,
+  only: readonly string[] | undefined
 ) {
   const t = useMobileTranslation()
   return useMemo<ActionSheetAction[]>(() => {
-    const comments = controller.unsentComments
+    const comments = only
+      ? controller.unsentComments.filter((comment) => only.includes(comment.id))
+      : controller.unsentComments
     const terminalActions =
       load.kind === 'ready' || load.kind === 'error'
         ? load.terminals.map((terminal) => ({
@@ -155,12 +165,14 @@ function useSendActions(
         id: 'copyNotes',
         label: t('components.diffReviewDrawers.copyNotes', 'Copy Notes'),
         icon: Copy,
-        disabled:
-          controller.screenState.kind !== 'ready' || controller.screenState.comments.length === 0,
-        onPress: () => void controller.copyNotes()
+        // A sheet for one new note copies that note, not every note in the workspace.
+        disabled: only
+          ? comments.length === 0
+          : controller.screenState.kind !== 'ready' || controller.screenState.comments.length === 0,
+        onPress: () => void controller.copyNotes(only ? comments : undefined)
       }
     ]
-  }, [controller, load, t])
+  }, [controller, load, only, t])
 }
 
 function NoteComposerContent({ controller, composer }: Props & { composer: ComposerState }) {

@@ -48,7 +48,12 @@ vi.mock('../session/mobile-diff-review-loaders', () => ({
   loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' })
 }))
 vi.mock('../session/use-mobile-pr-sidebar-controller', () => ({
-  useMobilePrSidebarController: () => ({})
+  useMobilePrSidebarController: () => ({
+    prSidebarState: { kind: 'hidden' },
+    prSidebarIsGithubRepo: false,
+    refetchPRSidebar: async () => {},
+    ensurePrSidebarDetails: async () => {}
+  })
 }))
 
 const { MobileDiffReviewDrawers } = await import('./MobileDiffReviewDrawers')

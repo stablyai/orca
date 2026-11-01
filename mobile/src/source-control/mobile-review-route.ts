@@ -7,6 +7,8 @@ export type MobileReviewRouteTarget = {
   worktreeId: string
   worktreeName: string
   filePath: string
+  /** Scrolls to this new-side line, e.g. a review thread's "Open in diff". */
+  line?: number
 } & ({ area: MobileReviewRouteArea } | { area: 'commit'; commitOid: string })
 
 export function buildMobileReviewFileRoute(target: MobileReviewRouteTarget): string {
@@ -15,6 +17,9 @@ export function buildMobileReviewFileRoute(target: MobileReviewRouteTarget): str
   params.set('area', target.area)
   if (target.area === 'commit') {
     params.set('commit', target.commitOid)
+  }
+  if (target.line !== undefined) {
+    params.set('line', String(target.line))
   }
   if (target.worktreeName) {
     params.set('name', target.worktreeName)

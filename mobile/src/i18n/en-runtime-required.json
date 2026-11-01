@@ -140,6 +140,10 @@
       "viewedFiles_one": "{{count}} file viewed",
       "viewedFiles_other": "{{count}} files viewed"
     },
+    "diffReviewFileSummary": {
+      "threadsWhenInSync_one": "Its GitHub comment shows here once this branch matches the pull request.",
+      "threadsWhenInSync_other": "Its {{count}} GitHub comments show here once this branch matches the pull request."
+    },
     "worktreeAgentList": {
       "hideChildAgents_one": "Hide {{count}} child agent",
       "hideChildAgents_other": "Hide {{count}} child agents",

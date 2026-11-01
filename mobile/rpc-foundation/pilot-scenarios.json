@@ -8929,6 +8929,83 @@
       ]
     },
     {
+      "id": "pr-line-comment-and-file-viewed",
+      "operation": "session.pr-mutations",
+      "family": "github.pr-comment-mutation",
+      "sites": ["mobile/src/session/github-pr-review-line-mutations.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "line-comment",
+          "id": "line-comment"
+        },
+        {
+          "complete": "github.addPRReviewComment#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "commitId": "head-sha-1",
+            "path": "src/app.ts",
+            "line": 5,
+            "body": "recorded line comment",
+            "startLine": 3
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true,
+              "comment": {
+                "id": 57
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "line-comment"
+        },
+        {
+          "action": "file-viewed",
+          "id": "viewed"
+        },
+        {
+          "complete": "github.setPRFileViewed#1",
+          "params": {
+            "repo": "id:repo-9",
+            "pullRequestId": "PR_kwDO",
+            "path": "src/app.ts",
+            "viewed": true
+          },
+          "reply": {
+            "ok": true,
+            "result": true
+          }
+        },
+        {
+          "checkpoint": "viewed"
+        },
+        {
+          "action": "file-viewed",
+          "id": "refused"
+        },
+        {
+          "complete": "github.setPRFileViewed#2",
+          "params": {
+            "repo": "id:repo-9",
+            "pullRequestId": "PR_kwDO",
+            "path": "src/app.ts",
+            "viewed": true
+          },
+          "reply": {
+            "ok": true,
+            "result": false
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
       "id": "pr-comment-resolve-unconfirmed",
       "operation": "session.pr-mutations",
       "family": "github.pr-comment-mutation",
