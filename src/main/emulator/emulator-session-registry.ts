@@ -1,4 +1,8 @@
-import type { EmulatorBackendKind, EmulatorSessionInfo } from './emulator-types'
+import type {
+  EmulatorActiveSession,
+  EmulatorBackendKind,
+  EmulatorSessionInfo
+} from './emulator-types'
 import type { EmulatorSessionState } from './emulator-bridge-types'
 import type { EmulatorBackend } from './backends/emulator-backend'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
@@ -60,6 +64,22 @@ export class EmulatorSessionRegistry {
 
   hasActiveWorktreeForSession(key: string): boolean {
     return [...this.activeByWorktree.values()].some((activeKey) => activeKey === key)
+  }
+
+  /** One row per worktree's active session; a shared device appears once per worktree. */
+  listActive(worktreeId?: string): EmulatorActiveSession[] {
+    const rows: EmulatorActiveSession[] = []
+    for (const [activeWorktreeId, key] of this.activeByWorktree) {
+      const session = this.sessions.get(key)
+      if (session && (!worktreeId || activeWorktreeId === worktreeId)) {
+        rows.push({
+          worktreeId: activeWorktreeId,
+          backend: session.backend,
+          ...toSessionInfo(session)
+        })
+      }
+    }
+    return rows
   }
 
   listSessions(): EmulatorSessionState[] {

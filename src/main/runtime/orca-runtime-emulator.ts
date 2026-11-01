@@ -9,7 +9,7 @@ import {
 import { resolveDefaultAttachDevice } from '../emulator/emulator-default-attach-device'
 import { setConfiguredAndroidSdkPath } from '../emulator/android/android-sdk-host-discovery'
 import type { EmulatorGesturePoint } from '../emulator/emulator-gesture-sender'
-import type { EmulatorSessionInfo } from '../emulator/emulator-types'
+import type { EmulatorActiveSession, EmulatorSessionInfo } from '../emulator/emulator-types'
 import type { SimulatorDevice } from '../emulator/simctl-simulator-devices'
 import type { EmulatorDevice } from '../emulator/backends/emulator-backend'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -178,9 +178,12 @@ export class RuntimeEmulatorCommands {
     return { attached: true, info }
   }
 
-  async emulatorList(_params: { worktree?: string } = {}): Promise<unknown> {
+  async emulatorList(
+    params: { worktree?: string } = {}
+  ): Promise<{ sessions: EmulatorActiveSession[] }> {
     const bridge = this.requireEmulatorBridge()
-    return bridge.listRunningHelpers()
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    return { sessions: bridge.listActiveSessions(worktreeId) }
   }
 
   async emulatorUnregisterActive(params: { worktree?: string }): Promise<{ ok: true }> {

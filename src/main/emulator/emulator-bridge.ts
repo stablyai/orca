@@ -1,6 +1,6 @@
 import { platform } from 'node:os'
 import { EmulatorError } from './emulator-errors'
-import type { EmulatorSessionInfo } from './emulator-types'
+import type { EmulatorActiveSession, EmulatorSessionInfo } from './emulator-types'
 import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { EmulatorBridgeOptions } from './emulator-bridge-types'
 import type { EmulatorGesturePoint } from './emulator-gesture-sender'
@@ -47,8 +47,9 @@ export class EmulatorBridge {
     return this.iosBackend.listSimulators()
   }
 
-  async listRunningHelpers(): Promise<unknown> {
-    return this.iosBackend.listRunningHelpers()
+  /** Orca's registered sessions; without a worktree, every worktree's. */
+  listActiveSessions(worktreeId?: string): EmulatorActiveSession[] {
+    return this.sessionRegistry.listActive(worktreeId)
   }
 
   async checkServeSimAvailable(): Promise<void> {
