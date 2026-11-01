@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { View, TextInput } from 'react-native'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { hostOs } from '../platform/host-os'
@@ -8,7 +9,9 @@ import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
 } from '../terminal/terminal-keyboard-type'
+import { resolveTerminalInputMaskedState } from '../terminal/terminal-password-prompt'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
+import { MobileTerminalPasswordMaskOverlay } from './MobileTerminalPasswordMaskOverlay'
 import { MobileTerminalCommandDictationPreview } from './MobileTerminalCommandDictationPreview'
 import { readMobileDictationAnchor } from '../dictation/mobile-dictation-text-insertion'
 import {
@@ -76,6 +79,20 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     attachImage,
     keyboardLift
   } = controller
+  const [manualMaskByHandle, setManualMaskByHandle] = useState<ReadonlyMap<string, boolean>>(
+    () => new Map()
+  )
+  const maskScopeKey = activeHandle ?? '__default__'
+  const autoDetectedPrompt = Boolean(
+    activeHandle && controller.terminalPasswordPromptHandles?.has(activeHandle)
+  )
+  const inputMasked = resolveTerminalInputMaskedState({
+    autoDetectedPrompt,
+    manualOverride: manualMaskByHandle.get(maskScopeKey)
+  })
+  const toggleInputMask = () => {
+    setManualMaskByHandle((prev) => new Map(prev).set(maskScopeKey, !inputMasked))
+  }
   if (!sessionCommandDockShown(controller)) {
     return null
   }
@@ -125,6 +142,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               style={[
                 inputStyles.fieldText,
                 inputStyles.mono,
+                inputMasked && liveInputCapture.length > 0 && inputStyles.hiddenText,
                 !canSend && styles.liveInputCaptureDisabled
               ]}
               value={liveInputCapture}
@@ -162,6 +180,11 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               editable={canSend}
               importantForAutofill="no"
               tabIndex={liveInputEnabled ? 0 : -1}
+            />
+            <MobileTerminalPasswordMaskOverlay
+              value={liveInputCapture}
+              masked={inputMasked}
+              onToggleMask={toggleInputMask}
             />
             {liveInputEnabled ? (
               <MobileTerminalLiveInputStatus
@@ -212,6 +235,12 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                   draft={draft}
                   preview={commandDictationPreview}
                   monospace={!runsAgent}
+                />
+              ) : !liveInputEnabled && inputMasked && draft.length > 0 ? (
+                <MobileTerminalPasswordMaskOverlay
+                  value={draft}
+                  masked={inputMasked}
+                  onToggleMask={toggleInputMask}
                 />
               ) : undefined
             }
