@@ -96,6 +96,7 @@ type Props = MobileNativeChatMicProps & {
   /** A structured chat's context-window readout; null hides the ring. */
   contextUsage?: NativeChatContextUsageSummary | null
   onAttachImage?: () => void
+  onTakePhoto?: () => void
   /** Images pasted into the field attach like a Photos pick. */
   onPasteImages?: (paste: MobilePastedImages) => void
   attachments?: PendingNativeChatImage[]
@@ -134,6 +135,7 @@ export function MobileNativeChatComposer({
   sessionOptions,
   contextUsage = null,
   onAttachImage,
+  onTakePhoto,
   onPasteImages,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
@@ -362,6 +364,7 @@ export function MobileNativeChatComposer({
             <View style={styles.leadingControls}>
               <MobileNativeChatComposerAttachButton
                 onAttachImage={onAttachImage}
+                onTakePhoto={onTakePhoto}
                 onAttachFiles={structured?.onAttachFiles}
                 structured={structured !== null}
                 isAttaching={isAttaching}
@@ -389,14 +392,16 @@ export function MobileNativeChatComposer({
             {contextRing.ring}
             {onMicPress ? (
               <MobileNativeChatComposerMic
-                onMicPress={onMicPress}
-                micActive={micActive}
-                micStarting={micStarting}
-                micProcessing={micProcessing}
-                dictationMode={dictationMode}
-                onMicPressIn={onMicPressIn}
-                onMicPressOut={onMicPressOut}
-                disabled={disabled}
+                {...{
+                  onMicPress,
+                  micActive,
+                  micStarting,
+                  micProcessing,
+                  dictationMode,
+                  onMicPressIn,
+                  onMicPressOut,
+                  disabled
+                }}
               />
             ) : null}
             {editSession ? (
