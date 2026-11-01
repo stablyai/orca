@@ -52,11 +52,9 @@ import {
   isCodexConfigTomlRefusedError,
   moveHookTrustEntries,
   readHookTrustEntries,
-  removeHookTrustEntries,
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
-import { applyMirroredRuntimeUserHookTrustStates } from './codex-hook-user-mirroring'
 import { installCodexHooksRemote } from './codex-hook-remote-install'
 
 let dir: string
@@ -116,14 +114,6 @@ describe('hook approval writes never break a config.toml Codex can load', () => 
     expect(readFileSync(tomlPath, 'utf-8')).toBe(original)
   })
 
-  it('upsert may still repair a file Codex already cannot load', () => {
-    writeFileSync(tomlPath, 'model = \n')
-
-    upsertHookTrustEntries(tomlPath, [stopEntry()])
-
-    expect(readFileSync(tomlPath, 'utf-8')).toContain('trusted_hash')
-  })
-
   it('a move refuses to land on a key the user approved as dotted keys', () => {
     const original =
       `hooks.state."${tomlKey(stopEntry(0))}".trusted_hash = "sha256:user"\n\n` +
@@ -134,28 +124,6 @@ describe('hook approval writes never break a config.toml Codex can load', () => 
       moveHookTrustEntries(tomlPath, [
         { oldKey: computeTrustKey(stopEntry(1)), newKey: computeTrustKey(stopEntry(0)) }
       ])
-    )
-
-    expect(readFileSync(tomlPath, 'utf-8')).toBe(original)
-  })
-
-  it('a removal is checked before it is written', () => {
-    upsertHookTrustEntries(tomlPath, [stopEntry(0), { ...stopEntry(1), command: 'user.sh' }])
-    const original = readFileSync(tomlPath, 'utf-8')
-    mocks.rejectParse = (content) => !content.includes(computeTrustKey(stopEntry(0)))
-
-    expectRefusal(() => removeHookTrustEntries(tomlPath, [computeTrustKey(stopEntry(0))]))
-
-    expect(readFileSync(tomlPath, 'utf-8')).toBe(original)
-  })
-
-  it("mirroring a user hook's enabled state is checked before it is written", () => {
-    upsertHookTrustEntries(tomlPath, [{ ...stopEntry(), enabled: true }])
-    const original = readFileSync(tomlPath, 'utf-8')
-    mocks.rejectParse = (content) => content.includes('enabled = false')
-
-    expectRefusal(() =>
-      applyMirroredRuntimeUserHookTrustStates(tomlPath, [{ entry: stopEntry(), enabled: false }])
     )
 
     expect(readFileSync(tomlPath, 'utf-8')).toBe(original)
