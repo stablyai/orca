@@ -1,5 +1,6 @@
 import type { CodeEditorThemeChoice } from '../../../shared/plugin-appearance-settings-types'
 import type { PluginThemeRegistration } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
+import { pluginAppThemeCssFallback } from '../../../shared/plugins/artifacts/plugin-theme-css-fallbacks'
 import { derivePluginMonacoTheme, type PluginMonacoTheme } from './plugin-monaco-theme'
 import { safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
 
@@ -48,6 +49,34 @@ export function findCodeEditorTheme(
     return choice
   }
   return themes.find((theme) => theme.id === choice) ?? null
+}
+
+/** A token as main.css would paint it from these tokens: the theme's value, else its CSS fallback. */
+function readThemeToken(
+  tokens: Readonly<Record<string, string>>,
+  base: ThemeBase,
+  token: string
+): string {
+  if (tokens[token]) {
+    return tokens[token]
+  }
+  const rule = pluginAppThemeCssFallback(token, base)
+  const read = (source: string): string => readThemeToken(tokens, base, source)
+  if (!rule) {
+    return ''
+  }
+  if ('tint' in rule) {
+    const hue = read(rule.tint)
+    return hue ? `color-mix(in srgb, ${hue} ${rule.percent}%, transparent)` : ''
+  }
+  if ('mixForeground' in rule) {
+    const foreground = read('--foreground')
+    const into = read(rule.into ?? '--background')
+    return foreground && into
+      ? `color-mix(in srgb, ${foreground} ${rule.mixForeground}%, ${into})`
+      : ''
+  }
+  return rule.map(read).find(Boolean) ?? ''
 }
 
 function monacoColors(theme: PluginMonacoTheme, base: ThemeBase): CodeEditorColors {
@@ -100,10 +129,10 @@ export function resolveCodeEditorTheme(input: {
   }
   // Why the theme's own tokens: the document shows the app theme. The same contrast gate as an
   // app theme drops unreadable ones; no built-ins, as the derivation has its own fallbacks.
-  const tokens = safePluginThemeTokens(selected.tokens, {}, input.probe)
+  const tokens = safePluginThemeTokens(selected.tokens, selected.base, {}, input.probe)
   const monaco = derivePluginMonacoTheme({
     base: selected.base,
-    read: (token) => tokens[token] ?? '',
+    read: (token) => readThemeToken(tokens, selected.base, token),
     painted: tokens,
     probe: input.probe,
     tokenColors: selected.tokenColors

@@ -47,6 +47,7 @@ function resolve(
     dark: false,
     appTheme,
     selected,
+    appPainted: appTheme?.tokens ?? {},
     readDocument: (token) => dawn.tokens[token] ?? '',
     probe
   })
