@@ -9,6 +9,7 @@ import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
 import { hostRouteWithNotice } from '../host-route-notice'
+import { useHorizontalEdgePadding } from '../layout/screen-edge-padding'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
@@ -48,6 +49,7 @@ export function MobileHomeScreen() {
   useMobileColorScheme()
   const data = useMobileHomeData()
   const insets = useSafeAreaInsets()
+  const horizontalPadding = useHorizontalEdgePadding()
   const openMobileHostEdit = useOpenMobileHostEdit()
   const openMobileTasks = useOpenMobileTasks()
   const openMobileAutomations = useOpenMobileAutomations()
@@ -177,7 +179,7 @@ export function MobileHomeScreen() {
   const contentBottom = spacing.xl + (fab ? FAB_CLEARANCE : 0)
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, horizontalPadding]} edges={['top']}>
       <View style={styles.fill}>
         {HOME_TABS.map((id) =>
           visitedTabs.has(id) ? (
