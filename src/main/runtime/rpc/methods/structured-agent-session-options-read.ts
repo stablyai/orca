@@ -15,8 +15,10 @@ import {
   OptionsParams
 } from './structured-agent-session-schemas'
 import { agentSessionPinnedLaunchDirectory } from '../../agent-session-record-launch-directory'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import { clientReadsOptionsWithoutModel } from './structured-agent-session-policy'
+import {
+  clientRequestsCommands,
+  clientReadsOptionsWithoutModel
+} from './structured-agent-session-policy'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 import { structuredAgentSessionOptionModels } from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
 import { finishedListingIds } from '../../../../shared/structured-agent-session-options'
@@ -41,7 +43,10 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
     permission: 'workspace',
     params: OptionsParams,
     handler: async (params, ctx) =>
-      (await requireInstalledStructuredHost(ctx, params.sessionId)).readCommands(params.sessionId)
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).readCommands(
+        params.sessionId,
+        clientRequestsCommands(ctx)
+      )
   }),
   defineMethod({
     name: 'agentSession.options',
@@ -53,9 +58,14 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         await requireInstalledStructuredHost(ctx, params.sessionId)
       ).readOptions(params.sessionId, { readsWithoutModel })
       if (result.current.model === undefined && !readsWithoutModel) {
-        throw agentSessionRefusalError('structured_agent_session_unsupported', {
-          reason: 'clientCapabilityMissing'
-        })
+        return {
+          ...result,
+          current: { ...result.current, model: '' },
+          models: [
+            { id: '', label: 'Model not reported', isDefault: false, efforts: [] },
+            ...result.models.filter((model) => model.id !== '')
+          ]
+        }
       }
       return result
     }
@@ -99,6 +109,9 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
                     resolve: () => ctx.runtime.resolveStructuredAgentCatalogWorkspace(worktree)
                   }
                 })
+        }
+        if (params.sessionId !== undefined) {
+          return host.readModelCatalog(request)
         }
         if (!params.savedOnly) {
           void catalog.demand(request)

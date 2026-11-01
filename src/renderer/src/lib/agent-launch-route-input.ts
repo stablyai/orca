@@ -228,15 +228,18 @@ export function buildAgentLaunchRouteInput(
       executionHostId
     ),
     // Only custom cwd forces a terminal; workspace-root cwd follows the same rule as host agent-launch-mode.ts.
-    startsOutsideWorkspaceRoot: requestsCwdOutsideWorkspaceRootForWorkspace({
-      workspaceId: workspace.worktreeId,
-      requestedCwd: tuiCustomization?.cwd,
-      workspacePath: workspace.worktreeId
-        ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
-        : undefined,
-      resolveFolderWorkspacePath: (folderWorkspaceId) =>
-        selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
-    }),
+    startsOutsideWorkspaceRoot: tuiCustomization?.cwd?.trim()
+      ? requestsCwdOutsideWorkspaceRootForWorkspace({
+          workspaceId: workspace.worktreeId,
+          requestedCwd: tuiCustomization?.cwd,
+          workspacePath: workspace.worktreeId
+            ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
+            : undefined,
+          resolveFolderWorkspacePath: (folderWorkspaceId) =>
+            selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)
+              ?.folderPath
+        })
+      : false,
     ...hostStructuredAgentsInput(store, executionHostId)
   }
 }

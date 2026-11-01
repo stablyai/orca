@@ -93,10 +93,30 @@ describe('orcad external-chromium agent-browser environment', () => {
     }
   )
 
+  it('reports a ref whose element is gone as stale', async () => {
+    runProcessMock.mockResolvedValue({
+      code: 1,
+      signal: null,
+      stdout: JSON.stringify({
+        success: false,
+        error:
+          'Stale ref for role=button name=Approve cannot be recovered: several elements now match.'
+      }),
+      stderr: '',
+      timedOut: false
+    })
+    const session = new ExternalChromiumBrowserSession(
+      '/opt/orca/agent-browser',
+      { executablePath: BASE.executablePath, provider: 'chromium' },
+      '/state'
+    )
+    await expect(session.run(['click', '@e2'])).rejects.toMatchObject({ code: 'browser_stale_ref' })
+  })
+
   it('never bounds the daemon that owns the Chromium tree', () => {
     const env = externalChromiumAgentBrowserEnvironment({ inheritedEnv: {}, ...BASE })
 
-    expect(env.AGENT_BROWSER_IDLE_TIMEOUT_MS).toBeUndefined()
+    expect(env.AGENT_BROWSER_IDLE_TIMEOUT_MS).toBe('0')
     expect(env.AGENT_BROWSER_EXECUTABLE_PATH).toBe(BASE.executablePath)
     expect(env.AGENT_BROWSER_SESSION).toBe(BASE.sessionName)
   })
@@ -145,6 +165,32 @@ describe('orcad external-chromium agent-browser environment', () => {
     const issued = commands().map(([name]) => name)
     expect(issued).not.toContain('close')
     expect(issued).not.toContain('open')
+  })
+
+  it('selects a tab only when it is not already active, keeping the snapshot refs', async () => {
+    runProcessMock.mockImplementation(() => {
+      const tabs = [
+        { active: true, tabId: 't1', title: 'a', url: 'about:blank' },
+        { active: false, tabId: 't2', title: 'b', url: 'about:blank' }
+      ]
+      return Promise.resolve({
+        code: 0,
+        signal: null,
+        stdout: JSON.stringify({ success: true, data: { tabs } }),
+        stderr: '',
+        timedOut: false
+      })
+    })
+    const session = new ExternalChromiumBrowserSession(
+      '/opt/orca/agent-browser',
+      { executablePath: BASE.executablePath, provider: 'chromium' },
+      '/state'
+    )
+
+    await session.selectPage('t1')
+    expect(commands()).toEqual([['tab']])
+    await session.selectPage('t2')
+    expect(commands()).toEqual([['tab'], ['tab'], ['tab', 't2']])
   })
 
   it('reclaims a session that answers nothing, then opens', async () => {

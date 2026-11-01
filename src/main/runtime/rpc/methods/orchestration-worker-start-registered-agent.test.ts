@@ -1,5 +1,6 @@
 // Registered native-chat agents must start structured workers; agents without chat support retain terminal mode.
 
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it } from 'vitest'
 import { decideAgentLaunchMode } from '../../../agent-launch/agent-launch-mode'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -10,8 +11,7 @@ import {
 } from './orchestration-worker-start-mode'
 
 const STRUCTURED_PREFERENCE = {
-  experimentalNativeChat: true,
-  nativeChatProviders: { grok: true, opencode: true, omp: true, pi: true, gemini: true }
+  nativeChatProviders: { ...EVERY_AGENT_CHAT, opencode2: true }
 } as const
 
 const REGISTERED_AGENTS = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(
@@ -91,12 +91,12 @@ describe('a worker for a registered native-chat agent', () => {
     ).toMatchObject({ mode: 'terminal', reason: 'agent_without_structured_session' })
   })
 
-  it('starts a terminal agent while the setting is off, as Claude does', () => {
+  it('starts a terminal agent while it is set to CLI, as Claude does', () => {
     for (const agent of ['opencode', 'claude']) {
       expect(
         decideWorkerStartMode({
           params: { agent },
-          settings: { experimentalNativeChat: false }
+          settings: { nativeChatProviders: { [agent]: false } }
         })
       ).toMatchObject({ mode: 'terminal', preferred: 'terminal', reason: 'user_default' })
     }

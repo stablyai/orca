@@ -225,7 +225,9 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     if (resumeStartup === undefined && tab.launchAgent) {
       let workspace
       try {
-        workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+        workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`, undefined, {
+          wslUserAct: wslUserAct === true
+        })
         agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
           agent: tab.launchAgent
         })

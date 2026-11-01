@@ -117,7 +117,9 @@ export async function consumePreparedBackgroundCommand(
     'id:wt-1',
     undefined,
     false,
-    expect.any(Function)
+    expect.any(Function),
+    // terminal.create is the caller's own act, as its createTerminal (E9).
+    { wslUserAct: true }
   )
   return result
 }

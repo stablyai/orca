@@ -1,9 +1,10 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { RuntimeManagedWorktreeCreateArgs } from '../runtime/runtime-managed-worktree-create-types'
 import { createWorktreeWithStartupAgent } from './startup-agent-worktree-create'
 
-const CHAT_DEFAULT_ON = { experimentalNativeChat: true }
+const CHAT_DEFAULT_ON = { nativeChatProviders: EVERY_AGENT_CHAT }
 
 function harness(
   options: {

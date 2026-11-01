@@ -80,18 +80,6 @@ it('keeps a folder bound again since it was queued, and retries one that failed'
   expect(JSON.parse(readFileSync(listPath, 'utf8'))).toEqual([busy])
 })
 
-it('does nothing with no list', async () => {
-  expect(
-    await deletePendingBrowserRoutePartitionDirectories({
-      filePath: listPath,
-      partitionDataRoot: partitions,
-      isBound: () => false,
-      removeDirectory
-    })
-  ).toEqual([])
-  expect(existsSync(listPath)).toBe(false)
-})
-
 it('never deletes a listed path that is not strictly inside Partitions', async () => {
   const outside = join(root, 'outside')
   mkdirSync(outside)

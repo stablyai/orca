@@ -31,6 +31,7 @@ import type {
   WslDistroHolderChild,
   WslDistroHolderDependencies,
   WslDistroHolderEnsureResult,
+  WslDistroHolderReleaseOptions,
   WslDistroHolderState
 } from './wsl-distro-holder-types'
 
@@ -41,7 +42,8 @@ const RELEASE_EXIT_TIMEOUT_MS = 5_000
 export const WSL_HOLDER_UNVERIFIABLE_REPLACE_AFTER_MS = 5 * 60_000
 
 function spawnDetachedHolder(distro: string): WslDistroHolderChild {
-  // Detached holders outlive Orca's libuv kill-on-close job; explicit taskkill /T still reaches descendants.
+  // Detached and broken away from Orca's jobs where they allow it, so a holder outlives a crash of
+  // Orca even inside a kill-on-close job (an OpenSSH session's); taskkill /T still reaches it.
   // Inheriting none of Orca's handles keeps a launcher's pipe or a DevTools socket from outliving Orca.
   return spawnDetachedWithoutInheritance({
     program: resolveWslExecutablePath(),
@@ -187,11 +189,20 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
 
   async function stopRecordedHolder(
     record: WslDistroHolderRecord,
-    { spawnedHere = false } = {}
+    { spawnedHere = false, forUninstall = false } = {}
   ): Promise<WslDistroHolderState> {
-    let state = classifyWslDistroHolderProcess(record, await queryProcess(record.pid))
+    const classify = async (): Promise<WslDistroHolderState> =>
+      classifyWslDistroHolderProcess(record, await queryProcess(record.pid), {
+        commandLineSuffices: forUninstall
+      })
+    let state = await classify()
+    if (state === 'unverifiable' && forUninstall) {
+      await sleep(BOOT_POLL_INTERVAL_MS)
+      state = await classify()
+    }
     // A command line alone can't tell our holder from a reused pid running the same argv.
-    const provenOurs = spawnedHere || record.creationTimeMs !== null
+    const provenOurs = spawnedHere || record.creationTimeMs !== null || forUninstall
+    const stateBeforeKill = state
     if (state === 'live' && provenOurs) {
       try {
         // WSL 2.7.10 relaunches a same-argv child; killing the recorded parent ends both.
@@ -201,7 +212,7 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
       }
       const deadline = monotonicNow() + RELEASE_EXIT_TIMEOUT_MS
       for (;;) {
-        state = classifyWslDistroHolderProcess(record, await queryProcess(record.pid))
+        state = await classify()
         // Mid-exit rows may retain PID but lose command line; only exited proves termination.
         if (state === 'exited' || monotonicNow() >= deadline) {
           break
@@ -211,6 +222,11 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
     }
     if (state === 'exited') {
       await removeWslDistroHolderRecord(userDataPath, record.distro)
+    }
+    if (forUninstall) {
+      console.warn(
+        `[wsl] uninstall: ${record.distro} holder pid ${record.pid} was ${stateBeforeKill}, now ${state}`
+      )
     }
     return state === 'live' && !provenOurs ? 'unverifiable' : state
   }
@@ -289,10 +305,10 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
 
     release: (distro) => releaseRecorded(distro),
 
-    async releaseAll() {
+    async releaseAll(options) {
       const distros = await listWslDistroHolderRecordDistros(userDataPath)
       return Promise.all(
-        distros.map(async (distro) => ({ distro, state: await releaseRecorded(distro) }))
+        distros.map(async (distro) => ({ distro, state: await releaseRecorded(distro, options) }))
       )
     },
 
@@ -302,7 +318,10 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
   }
   return holder
 
-  function releaseRecorded(distro: string): Promise<WslDistroHolderState> {
+  function releaseRecorded(
+    distro: string,
+    options: WslDistroHolderReleaseOptions = {}
+  ): Promise<WslDistroHolderState> {
     return serialize(distro, async () => {
       const read = await readWslDistroHolderRecord(userDataPath, distro)
       if (read.status === 'unreadable') {
@@ -312,7 +331,7 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
         await removeWslDistroHolderRecord(userDataPath, distro)
         return 'exited'
       }
-      return stopRecordedHolder(read.record)
+      return stopRecordedHolder(read.record, options)
     })
   }
 }

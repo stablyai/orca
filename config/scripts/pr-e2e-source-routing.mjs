@@ -9,6 +9,9 @@ import { MANAGED_SSH_E2E_SPEC_PREFIX } from './ci-e2e-job-selection.mjs'
 import { LAYOUT_ORACLE_E2E_SPECS } from './pr-layout-oracle-route.mjs'
 import { PR_BROWSER_E2E_SOURCE_ROUTES } from './pr-browser-e2e-source-routes.mjs'
 import { PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES } from './pr-editor-preview-e2e-source-routes.mjs'
+import { PR_FEATURE_AREA_E2E_SOURCE_ROUTES } from './pr-feature-area-e2e-source-routes.mjs'
+import { PR_PLUGIN_E2E_SOURCE_ROUTES } from './pr-plugin-e2e-source-routes.mjs'
+import { PR_WSL_E2E_SOURCE_ROUTES } from './pr-wsl-e2e-source-routes.mjs'
 
 const isProductSource = (file) => !/\.test\.tsx?$/.test(file) && !isUnitTestSupportSource(file)
 
@@ -37,6 +40,9 @@ const ENABLED_AUTOMATION_MOVE =
 export const PR_E2E_SOURCE_ROUTES = [
   ...PR_BROWSER_E2E_SOURCE_ROUTES,
   ...PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES,
+  ...PR_FEATURE_AREA_E2E_SOURCE_ROUTES,
+  ...PR_PLUGIN_E2E_SOURCE_ROUTES,
+  ...PR_WSL_E2E_SOURCE_ROUTES,
   {
     id: 'ssh.orcad-editor-ownership',
     specs: ['tests/e2e/ssh-orcad-editor-ownership.spec.ts'],
@@ -393,32 +399,6 @@ export const PR_E2E_SOURCE_ROUTES = [
         /^src\/main\/(?:browser\/(?:ssh-browser-network-execution-route|browser-network-deferred-socket|browser-network-execution-route|system-ssh-socks-client-socket)|ssh\/system-transport\/system-ssh-dynamic-forward-process)\.ts$/.test(
           file
         ))
-  },
-  {
-    id: 'wsl-host.fake-connector',
-    specs: ['tests/e2e/wsl-host-fake-transport.spec.ts', 'tests/e2e/wsl-host-chat.spec.ts'],
-    matches: (file) => file === 'src/main/wsl/wsl-host-e2e-fake-connector.ts'
-  },
-  {
-    // Remove runs through the fake transport spec; its peer check asks the server who else uses it.
-    id: 'wsl-host.remove',
-    specs: ['tests/e2e/wsl-host-fake-transport.spec.ts'],
-    matches: (file) =>
-      /^src\/main\/wsl\/(?:wsl-host-server-stop|wsl-host-peer-desktops|wsl-host-removal)\.ts$/.test(
-        file
-      )
-  },
-  {
-    id: 'terminal.windows-wsl-launch-and-paste',
-    specs: [
-      'tests/e2e/golden-tab-bar-agent-launch.spec.ts',
-      'tests/e2e/terminal-windows-shell-paste-ownership.spec.ts'
-    ],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^(?:config\/scripts\/(?:verify-wsl-e2e-participation|verify-wsl-no-background-boot-participation|verify-playwright-participation)\.mjs$|src\/main\/(?:wsl[/-]|pty\/.*wsl|providers\/wsl)|src\/shared\/(?:wsl-|windows-terminal-shell|shell-argument-quoting)|src\/renderer\/src\/.*(?:terminal-paste|pty-paste)|tests\/e2e\/(?:golden-tab-bar-agent-launch\.spec|terminal-windows-shell-paste-ownership\.spec|terminal-inline-images-windows\.spec|wsl-bridge-no-background-boot\.spec|helpers\/(?:wsl-golden-stub-agent|golden-stub-agent))|\.github\/(?:actions\/setup-wsl-test-runtime\/|workflows\/windows-wsl-e2e\.yml))/.test(
-        file
-      )
   },
   {
     id: 'terminal-input.ime-and-synthetic-forwarding',

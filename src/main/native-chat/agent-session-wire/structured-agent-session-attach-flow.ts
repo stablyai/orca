@@ -1,3 +1,4 @@
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import { refuse } from '../../../shared/agent-session-wire-refusals'
 import {
   settlePostAcquisitionAttachFailure,
@@ -16,6 +17,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import {
   admitAttachOrRefuse,
@@ -79,6 +81,7 @@ export type AttachFlowInput = {
     attempt: StructuredAgentSessionStartupAttempt
   ) => StructuredAgentSessionStartupProgress
   startupOptions?: Readonly<Record<string, string>>
+  launchAccountRecipe?: (record: AgentSessionRecord) => Promise<ClaudeAccountRecipe | undefined>
   launchPermissionMode?: (
     record: AgentSessionRecord
   ) => Promise<AgentChatPermissionChoice | undefined>
@@ -86,7 +89,9 @@ export type AttachFlowInput = {
   onAttached: (
     attached: AttachedJournal,
     acquisitionGeneration: string | null,
-    owner: AttachedOwner
+    owner: AttachedOwner,
+    /** The account home the spawned child launched under, when its adapter reports one. */
+    accountHome?: AgentSessionAccountHome
   ) => Promise<void> | void
   /** Wait outside commits for sink drains/provider reads. */
   beforePublish?: (owner: AttachedOwner) => Promise<void>
@@ -137,6 +142,7 @@ export async function performAttach(
 
   let record: AgentSessionRecord
   let acquisitionGeneration: string | null = null
+  let accountHome: AgentSessionAccountHome | undefined
   let owner: AttachedOwner = 'kept'
   let reservedRecord: AgentSessionRecord | null = null
   let unsupportedReservationSettlementAttempted = false
@@ -144,7 +150,7 @@ export async function performAttach(
   const lock = input.lock ?? heldStructuredAgentSessionAttachLock(input.acquireSignal)
   const preparedTranscript = store.getRecord(sessionId)
     ? { ok: true as const, items: null }
-    : await prepareAdoptedTranscript(params)
+    : await prepareAdoptedTranscript(params, lock.signal)
   if (!preparedTranscript.ok) {
     return preparedTranscript
   }
@@ -204,6 +210,7 @@ export async function performAttach(
       )
       record = acquired.record
       acquisitionGeneration = acquired.acquisitionGeneration
+      accountHome = acquired.accountHome
       owner = 'acquired'
     }
   } catch (error) {
@@ -262,7 +269,7 @@ export async function performAttach(
         openConversation: input.openConversation
       })
       await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items)
-      await input.onAttached(journal, acquisitionGeneration, owner)
+      await input.onAttached(journal, acquisitionGeneration, owner, accountHome)
       return journal
     })
     await lock.wait(input.beforePublish?.(owner) ?? Promise.resolve())

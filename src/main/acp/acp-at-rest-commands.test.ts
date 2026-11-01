@@ -662,3 +662,33 @@ it.each([10, 100])(
     }
   }
 )
+
+it('takes an OMP context out of the legacy queue for a capable menu while joining admitted work', async () => {
+  const gate = deferred<void>()
+  const { catalog, children } = await rig((child) => {
+    const initialize = child.initialize.bind(child)
+    vi.spyOn(child, 'initialize').mockImplementation(async () => {
+      await gate.promise
+      return initialize()
+    })
+  })
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  try {
+    catalog.read(ompRecord('legacy-one'))
+    catalog.read(ompRecord('legacy-two'))
+    await waitFor(() => expect(children).toHaveLength(2))
+    catalog.read(ompRecord('queued'))
+    const explicit = catalog.settled(ompRecord('queued'), 1_000, true)
+    const joined = catalog.settled(ompRecord('legacy-one'), 1_000, true)
+    await waitFor(() => expect(children).toHaveLength(3))
+    expect(children.filter((child) => !child.exited)).toHaveLength(3)
+    gate.resolve()
+    expect(await explicit).toBeDefined()
+    expect(await joined).toBeDefined()
+    await waitFor(() => expect(children.every((child) => child.exited)).toBe(true))
+    expect(children).toHaveLength(3)
+  } finally {
+    gate.resolve()
+    catalog.dispose()
+  }
+})

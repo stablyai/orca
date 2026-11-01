@@ -29,6 +29,7 @@ import type { NativeChatComposerGoalMode } from './use-native-chat-composer-subm
 import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
 import { useLatestHandler } from '@/lib/use-latest-handler'
+import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat-follow-up-behavior'
 
 function noop(): void {}
 
@@ -36,6 +37,7 @@ export type NativeChatComposerFieldProps = {
   editSession?: { cancel: () => void }
   /** Own draft persistence and native-drop routing by this pane so drops cannot land in another composer. */
   draftScopeKey: string
+  positionTarget?: string
   textareaRef: RefObject<NativeChatComposerInput | null>
   draft: string
   disabled: boolean
@@ -55,6 +57,10 @@ export type NativeChatComposerFieldProps = {
   /** Why the send button is disabled, when the user can do something about it. */
   sendBlockedReason?: string | null
   isWorking: boolean
+  /** The draft holds text or images, so Send takes Stop's place while the agent works. */
+  hasDraft?: boolean
+  /** While the agent works: what Cmd/Ctrl+Enter would do instead of a plain send, when it differs. */
+  alternateSend?: NativeChatFollowUpBehavior
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */
   isStopping?: boolean
   /** After Stop, describe whether the host queues the next message as a card or holds the send. */
@@ -123,6 +129,7 @@ function imeComposedSegment(base: string, settled: string): string {
 export function NativeChatComposerField({
   editSession,
   draftScopeKey,
+  positionTarget,
   textareaRef,
   draft,
   disabled,
@@ -139,6 +146,8 @@ export function NativeChatComposerField({
   sendButtonDisabled,
   sendBlockedReason,
   isWorking,
+  hasDraft = false,
+  alternateSend,
   isStopping = false,
   afterStop,
   attachDisabled,
@@ -318,6 +327,7 @@ export function NativeChatComposerField({
             <NativeChatPromptEditor
               key={draftScopeKey}
               scopeKey={draftScopeKey}
+              positionTarget={positionTarget}
               imageRow={imageRow}
               inputRef={textareaRef}
               initialValue={draft}
@@ -364,6 +374,8 @@ export function NativeChatComposerField({
                 sendBlockedReason={sendBlockedReason}
                 draftNotSaved={draftNotSaved}
                 isWorking={isWorking}
+                hasDraft={hasDraft}
+                alternateSend={alternateSend}
                 isStopping={isStopping}
                 isDictating={isDictating}
                 isDictationHoldMode={isDictationHoldMode}

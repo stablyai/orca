@@ -1,3 +1,4 @@
+import type { ClaudeNamingGeneration } from './claude-naming-generation'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import {
   AgentSessionAcquisitionExitUnprovenError,
@@ -27,7 +28,7 @@ import {
   type ClaudeStructuredSessionAdapterDeps
 } from './structured/claude-structured-session-state'
 import {
-  claudeAcquisitionCleanupError,
+  claudeCloseReport,
   closeClaudePublishedSessionForDeps
 } from './claude-structured-session-close'
 
@@ -44,11 +45,19 @@ export async function resolveClaudeAcquisitionLaunch(args: {
   callbacks: ClaudeAcquireCallbacks
   previous: ClaudeAcquisitionAttempt | undefined
   attempt: ClaudeAcquisitionAttempt
+  naming?: ClaudeNamingGeneration
 }): Promise<ClaudeAcquisitionLaunch> {
   const { input, deps, sessions, acquisitions, exits, callbacks, previous, attempt } = args
   const sessionId = input.identity.sessionId
   return withAgentSessionCreatePhase('auth_settle', input.recordPhase, async () => {
-    if (previous && !(await cancelClaudeAcquisitionAttempt(previous))) {
+    if (
+      previous &&
+      claudeCloseReport(
+        previous.connection,
+        await cancelClaudeAcquisitionAttempt(previous),
+        new Error(`claude acquisition for session ${sessionId} could not be stopped`)
+      ) instanceof AgentSessionAcquisitionExitUnprovenError
+    ) {
       acquisitions.restoreIfCurrent(sessionId, attempt, previous)
       throw new AgentSessionAcquisitionExitUnprovenError(
         new Error(`claude acquisition for session ${sessionId} could not be stopped`)
@@ -68,15 +77,9 @@ export async function resolveClaudeAcquisitionLaunch(args: {
     if (retainedExit) {
       const firstProof = retainedExit.closePromise ? await retainedExit.closePromise : false
       const proven = firstProof || (await retainedExit.connection.close().catch(() => false))
-      if (!proven) {
-        const cleanupError = claudeAcquisitionCleanupError(
-          retainedExit.connection,
-          retainedExit.error
-        )
-        // A proven root exit releases the lease even when descendant cleanup remains unverified.
-        if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
-          throw cleanupError
-        }
+      const cleanupError = claudeCloseReport(retainedExit.connection, proven, retainedExit.error)
+      if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
+        throw cleanupError
       }
       // Settle the old child before reusing its durable resume identity.
       await callbacks.settleExit(sessionId, retainedExit)
@@ -96,6 +99,7 @@ export async function resolveClaudeAcquisitionLaunch(args: {
       .resolveLaunch({
         identity: launchIdentity,
         spawnToken: input.spawnToken,
+        ...(input.accountRecipe ? { accountRecipe: input.accountRecipe } : {}),
         ...(input.permissionMode ? { permissionMode: input.permissionMode } : {})
       })
       .catch((error: unknown) => {

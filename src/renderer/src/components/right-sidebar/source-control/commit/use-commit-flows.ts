@@ -94,7 +94,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     updateCommitMessageGenerationRecord,
     worktreePath
   })
-  const { handleCommit: commitStagedChanges } = commitAction
+  const { handleCommit: commitStagedChanges, handleCompleteMerge } = commitAction
   const { handleCancelGenerate } = commitMessageGeneration
   // Cancel box generation when committing its draft so a late reply cannot refill it; Create PR has its own target.
   const handleCommit = useCallback<typeof commitStagedChanges>(
@@ -153,6 +153,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
 
   return {
     handleCommit,
+    handleCompleteMerge,
     ...commitMessageGeneration,
     ...createPrIntentCommitMessage,
     ...remoteActionRunner,

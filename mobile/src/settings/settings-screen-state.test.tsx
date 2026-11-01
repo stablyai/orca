@@ -12,12 +12,12 @@ vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',
   Pressable: 'Pressable',
-  Switch: 'Switch',
   ScrollView: 'ScrollView',
   ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   AppState: { addEventListener: () => ({ remove() {} }) }
 }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))

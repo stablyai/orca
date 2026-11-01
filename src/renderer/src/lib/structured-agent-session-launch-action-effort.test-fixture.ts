@@ -9,6 +9,7 @@ import { newAgentLaunchRequestId } from './agent-launch-request-id'
 export function registerActionEffortCreateTests(
   mocks: {
     settings: Record<string, unknown>
+    exactSupport: Mock
     call: Mock<(target: unknown, method: string, params: unknown) => Promise<unknown>>
   },
   created: () => unknown
@@ -18,6 +19,7 @@ export function registerActionEffortCreateTests(
     '%s action effort overlays remembered effort in create and yields to a held pick',
     async (agent) => {
       const model = agent === 'claude' ? 'claude-opus-5-5[1m]' : 'gpt-5.4'
+      mocks.exactSupport.mockResolvedValue(true)
       mocks.settings = {
         nativeChatSessionOptions: {
           [agent]: { model, valuesByModel: { [model]: { effort: 'low' } } }
@@ -60,6 +62,7 @@ export function registerActionEffortCreateTests(
           expect(params.firstMessage?.body.blocks).toEqual([{ type: 'text', text: 'opening text' }])
           expect(params.optionsMode).toBeUndefined()
           expect(params.options).toMatchObject({ effort: held ?? 'high' })
+          expect(params.firstMessage?.selection).toMatchObject({ effort: held ?? 'high' })
           if (agent === 'claude') {
             expect(params.options?.model).toBe(model)
           }

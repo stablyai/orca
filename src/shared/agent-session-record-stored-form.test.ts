@@ -447,3 +447,46 @@ it('preserves the saved turn and unknown JSON through a record transition', () =
     laterField: 'keep'
   })
 })
+
+it('stores a delivered kill in the form older builds read and reads only that exact pair back', () => {
+  const evidence = { detail: 'killed', observedAt: 40, ownerFence: 7 } as const
+  const withEvidence = (deathEvidence: unknown) => ({
+    ...encodeAgentSessionRecord(agentSessionRecordFixture()),
+    lease: { ...agentSessionLeaseFixture({ claimStatus: 'released' }), deathEvidence }
+  })
+  const killed = agentSessionRecordFixture(
+    agentSessionLeaseFixture({
+      claimStatus: 'released',
+      deathEvidence: { kind: 'kill-delivered', ...evidence }
+    })
+  )
+  const stored = encodeAgentSessionRecord(killed)
+  expect(stored.lease.deathEvidence).toEqual({ kind: 'pid-absent', delivery: 'kill', ...evidence })
+  expect(isPersistedAgentSessionRecord(stored)).toBe(true)
+  expect(decodePersistedAgentSessionRecord(stored).record).toEqual(killed)
+  // Rows written before this encoding, a plain absent pid, and stale or foreign markers.
+  for (const [saved, read] of [
+    [
+      { kind: 'kill-delivered', ...evidence },
+      { kind: 'kill-delivered', ...evidence }
+    ],
+    [
+      { kind: 'pid-absent', ...evidence },
+      { kind: 'pid-absent', ...evidence }
+    ],
+    [
+      { kind: 'pid-absent', delivery: 'signal', ...evidence },
+      { kind: 'pid-absent', ...evidence }
+    ],
+    [
+      { kind: 'exit-observed', delivery: 'kill', ...evidence },
+      { kind: 'exit-observed', ...evidence }
+    ]
+  ]) {
+    const row: unknown = withEvidence(saved)
+    if (!isPersistedAgentSessionRecord(row)) {
+      throw new Error('the stored evidence fixture must pass record validation')
+    }
+    expect(decodePersistedAgentSessionRecord(row).record.lease.deathEvidence).toEqual(read)
+  }
+})

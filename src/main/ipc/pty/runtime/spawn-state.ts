@@ -33,6 +33,7 @@ import type {
 import { localProvider } from '../provider/registry'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
+import type { TerminalWorkspaceLaunchScope } from '../../../runtime/runtime-legacy-worker-terminal-recovery-types'
 
 export type RuntimePtySpawnState = {
   deps: PtyRuntimeControllerDeps
@@ -58,6 +59,7 @@ export type RuntimePtySpawnState = {
   effectiveSessionAppId: string | undefined
   ownsNewIncarnation: boolean
   expectedWslDistro: string | null
+  wslHoldReadAnchor: number | undefined
   /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
   resumeAdmission: ResumeSpawnAdmission | null
   codexSelectionTarget: CodexAccountSelectionTarget
@@ -110,6 +112,7 @@ export type RuntimePtySpawnState = {
 }
 
 export type RuntimePtySpawnArgs = {
+  resolvedWorkspace?: TerminalWorkspaceLaunchScope
   cols: number
   rows: number
   cwd?: string
@@ -206,6 +209,7 @@ export function createRuntimePtySpawnState(
     effectiveSessionAppId: undefined,
     ownsNewIncarnation: false,
     expectedWslDistro: null,
+    wslHoldReadAnchor: undefined,
     resumeAdmission: null,
     codexSelectionTarget: { runtime: 'host' },
     launchCommand: undefined,
@@ -241,4 +245,9 @@ export function createRuntimePtySpawnState(
     reportPtySpawnCommitted: () => {},
     preSpawnHiddenMarkId: null
   }
+}
+
+/** Default-deny (E9): a main-side start is background unless its caller names the user's act; an adopted pane starts nothing. */
+export function isRuntimeWslBackgroundStart(ctx: RuntimePtySpawnState): boolean {
+  return !ctx.preAdoptedStablePane && ctx.args.wslUserAct !== true
 }

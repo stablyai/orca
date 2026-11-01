@@ -6,6 +6,7 @@ import { getDiffCommentLineMetaLabel } from './diff-comment-line-meta-label'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 // Render note cards in per-zone React roots; keep persisted DiffComment names while UI says Note to distinguish PR review comments.
 
@@ -201,7 +202,7 @@ export function DiffCommentCard({
                     onClick={(ev) => {
                       ev.preventDefault()
                       ev.stopPropagation()
-                      void window.api.shell.openUrl(url)
+                      openAppHttpLink(url, { event: ev })
                     }}
                   >
                     {translate('auto.components.diff.comments.DiffCommentCard.6978871a3d', 'Open')}

@@ -22,7 +22,12 @@ const thinking = (support: Support, launch: typeof LAUNCH): Promise<boolean> =>
 
 type Probe = (
   command: string,
-  launch: { cwd: string; env: Record<string, string>; timeoutMs: number }
+  launch: {
+    cwd: string
+    env: Record<string, string>
+    timeoutMs: number
+    prefixArgs?: readonly string[]
+  }
 ) => Promise<string | null>
 
 function supportWith(
@@ -285,15 +290,13 @@ describe('whether a launch passes a Claude CLI flag', () => {
 
 it('keeps version facts separate for different prefixes through the same program', async () => {
   const { support, calls } = supportWith(async (_command, launch) =>
-    'prefixArgs' in launch && Array.isArray(launch.prefixArgs) && launch.prefixArgs.includes('new')
-      ? '2.1.280'
-      : '2.0.0'
+    launch.prefixArgs?.includes('new') ? '2.1.280' : '2.0.0'
   )
   await expect(
-    support.supports(CLAUDE_THINKING_DISPLAY_FLAG, { ...LAUNCH, prefixArgs: ['old'] })
+    supports(support, CLAUDE_THINKING_DISPLAY_FLAG, { ...LAUNCH, prefixArgs: ['old'] })
   ).resolves.toBe(false)
   await expect(
-    support.supports(CLAUDE_THINKING_DISPLAY_FLAG, { ...LAUNCH, prefixArgs: ['new'] })
+    supports(support, CLAUDE_THINKING_DISPLAY_FLAG, { ...LAUNCH, prefixArgs: ['new'] })
   ).resolves.toBe(true)
   expect(calls).toHaveBeenCalledTimes(2)
 })

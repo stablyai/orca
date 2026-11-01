@@ -66,17 +66,19 @@ export function ConnectionDiagnosticsView({
       </View>
 
       {hostPicker}
-      {hasHost ? (
+      {hasHost || entries.length > 0 ? (
         <>
           <View style={styles.statusRow}>
             <Text style={styles.statusText}>
-              {reconnectAttempts > 0
-                ? t(
-                    'diagnostics.connectionDiagnosticsView.stateWithAttempt',
-                    '{{state}} · attempt {{attempts}}',
-                    { state: stateLabels[state], attempts: reconnectAttempts }
-                  )
-                : stateLabels[state]}
+              {!hasHost
+                ? t('diagnostics.connectionDiagnosticsView.noHosts', 'No paired hosts.')
+                : reconnectAttempts > 0
+                  ? t(
+                      'diagnostics.connectionDiagnosticsView.stateWithAttempt',
+                      '{{state}} · attempt {{attempts}}',
+                      { state: stateLabels[state], attempts: reconnectAttempts }
+                    )
+                  : stateLabels[state]}
             </Text>
             <Pressable style={styles.copyButton} onPress={() => void copyDiagnostics()}>
               {copied ? (

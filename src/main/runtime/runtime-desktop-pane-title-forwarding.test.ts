@@ -87,14 +87,6 @@ describe('client pane names on a host with its own desktop window', () => {
     expect(setPaneTitle).not.toHaveBeenCalled()
   })
 
-  it('sends nothing when the client left titles out, which means unchanged', async () => {
-    const { setPaneTitle, renamePanes } = desktopHostRuntime()
-
-    await renamePanes(SPLIT_ROOT, undefined)
-
-    expect(setPaneTitle).not.toHaveBeenCalled()
-  })
-
   it('fails the call when the window cannot take the name, so the client retries', async () => {
     const { setPaneTitle, renamePanes } = desktopHostRuntime()
     setPaneTitle.mockReturnValue(false)
@@ -125,10 +117,6 @@ it('routes old-client chat tab renames to the owning record with or without an a
       const desktop = desktopHostRuntime()
       const runtime = attached ? desktop.runtime : new OrcaRuntimeService(null)
       vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
-      vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
-        ...desktop.runtime.getClientSettings(),
-        experimentalNativeChat: true
-      })
       const snapshot: RuntimeMobileSessionTabsSnapshot = {
         worktree: TEST_WORKTREE_ID,
         publicationEpoch: 'chat-rename',

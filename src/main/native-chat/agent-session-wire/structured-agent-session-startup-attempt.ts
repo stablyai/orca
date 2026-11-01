@@ -1,3 +1,4 @@
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import { randomUUID } from 'node:crypto'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import {
@@ -22,13 +23,15 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
   identity: AgentSessionJournalIdentity
   spawnToken: string
   permissionMode?: AgentChatPermissionChoice
+  accountRecipe?: ClaudeAccountRecipe
   events?: StructuredAgentSessionEventSink
   signal?: AbortSignal
   startupOptions?: Readonly<Record<string, string>>
   attemptId?: string
 }): StructuredAgentSessionStartupAttempt {
   const { record } = input
-  const options = input.startupOptions ?? record.options
+  const selected = input.startupOptions ?? record.options
+  const options = record.provider === 'claude' ? { fastMode: 'false', ...selected } : selected
   return {
     attemptId: input.attemptId ?? randomUUID(),
     identity: input.identity,
@@ -41,6 +44,7 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
     },
     ...(options ? { options } : {}),
     ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
+    ...(input.accountRecipe ? { accountRecipe: input.accountRecipe } : {}),
     ...(input.events ? { events: input.events } : {}),
     ...(input.signal ? { signal: input.signal } : {})
   }

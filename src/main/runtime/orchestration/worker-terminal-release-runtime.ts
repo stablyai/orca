@@ -21,4 +21,5 @@ export type WorkerTerminalReleaseRuntime = Pick<
   | 'getExactWorkerProviderSession'
   | 'readTerminal'
   | 'notifyMessageArrived'
+  | 'isWorkerAgentInTurn'
 >

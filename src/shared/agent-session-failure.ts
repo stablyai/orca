@@ -4,8 +4,7 @@ import type { AgentSessionAccountKind } from './agent-session-availability'
 import {
   readAgentSessionArgumentProblem,
   type AgentSessionArgumentProblem
-} from './agent-session-argument-problem'
-export type { AgentSessionArgumentProblem } from './agent-session-argument-problem'
+} from './agent-session/agent-session-argument-problem'
 import {
   readAgentSessionUsageLimit,
   type AgentSessionUsageLimit
@@ -14,7 +13,7 @@ import {
 import {
   readAgentSessionRequestTimeout,
   type AgentSessionRequestTimeout
-} from './agent-session-request-timeout'
+} from './agent-session/agent-session-request-timeout'
 import { structuralValuesEqualIgnoringUndefined } from './structural-value-equality'
 import {
   readAgentSessionRefusalReference,

@@ -28,6 +28,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveAccountHome?: ClaudeAtRestCommandsDeps['resolveAccountHome']
   resolveLaunch: ClaudeStructuredSessionAdapterDeps['resolveLaunch']
+  namingInputs?: ClaudeStructuredSessionAdapterDeps['namingInputs']
   /** The binary and env the startup version prewarm asks, as a launch would. */
   resolveClaudeCommand?: ClaudeEnvDeps['resolveCommand']
   resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
@@ -65,6 +66,7 @@ export function structuredClaudeLifecycleEvent(
       reason: event.reason,
       ...(event.failure ? { failure: event.failure } : {}),
       cause: event.cause,
+      ...(event.deathEvidenceKind ? { deathEvidenceKind: event.deathEvidenceKind } : {}),
       fence: event.fence,
       acquisitionGeneration: event.acquisitionGeneration,
       // The instant the translator ended the open turn at; the host reads the exit's turn by it.
@@ -97,6 +99,12 @@ export function createStructuredClaudeRuntimeAdapter(
       ...(deps.atRestCommandProbe ? { probe: deps.atRestCommandProbe } : {})
     }),
     resolveLaunch: deps.resolveLaunch,
+    ...(deps.namingInputs
+      ? {
+          namingInputs: deps.namingInputs,
+          namingRecord: (sessionId: string) => store.getRecord(sessionId)
+        }
+      : {}),
     persistHandle: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
       const currentFence = store.getRecord(sessionId)?.lease.runtimeFence ?? fence
       const observedAt = Date.now()

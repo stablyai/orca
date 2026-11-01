@@ -14,6 +14,8 @@ import {
 } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import { styles } from './mobile-source-control-styles'
+import { mobileConflictResolutionLabel } from './mobile-source-control-conflict-actions'
+import { getUnstageablePaths } from './mobile-git-status'
 
 type RowState = Pick<
   MobileSourceControlState,
@@ -21,6 +23,7 @@ type RowState = Pick<
   | 'openingPath'
   | 'openingBranchPath'
   | 'openFile'
+  | 'resolveConflict'
   | 'runGitAction'
   | 'setDiscardTarget'
 >
@@ -47,27 +50,39 @@ function conflictKindLabel(kind: GitConflictKind | undefined, t: Translate): str
 }
 
 export function makeRenderFileRow(state: RowState, t: Translate) {
-  const { busyAction, openingPath, openingBranchPath, openFile, runGitAction, setDiscardTarget } =
-    state
+  const {
+    busyAction,
+    openingPath,
+    openingBranchPath,
+    openFile,
+    resolveConflict,
+    runGitAction,
+    setDiscardTarget
+  } = state
   return function renderFileRow({ item }: { item: MobileGitStatusEntryView }) {
     const rowBusy =
       busyAction === item.stageActionId ||
       busyAction === item.unstageActionId ||
       busyAction === item.discardActionId ||
+      busyAction === item.resolveActionId ||
       openingPath === item.path
     const rowDisabled =
       !item.canOpen || busyAction !== null || openingPath !== null || openingBranchPath !== null
     const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+    const hasConflictActions = item.conflictResolutions.length > 0
     return (
       <Pressable
         style={({ pressed }) => [
           styles.fileRow,
           pressed && item.canOpen && styles.fileRowPressed,
-          rowDisabled && styles.fileRowDisabled,
-          !item.canOpen && styles.fileRowUnavailable
+          // Conflict rows cannot open but carry live actions; their buttons dim themselves while busy.
+          rowDisabled && !hasConflictActions && styles.fileRowDisabled,
+          !item.canOpen && !hasConflictActions && styles.fileRowUnavailable
         ]}
         onPress={() => void openFile(item)}
         disabled={rowDisabled}
+        // An accessible row hides nested buttons from iOS VoiceOver; conflict rows cannot open anyway.
+        accessible={!hasConflictActions}
         accessibilityLabel={t(
           'sourceControl.fileRows.openChangedFile',
           'Open changed file {{path}}',
@@ -102,6 +117,35 @@ export function makeRenderFileRow(state: RowState, t: Translate) {
               {conflictKindLabel(item.conflictKind, t)}
             </Text>
           ) : null}
+          {!rowBusy && hasConflictActions ? (
+            <View style={styles.conflictActions}>
+              {item.conflictResolutions.map((resolution) => (
+                <Pressable
+                  key={resolution}
+                  style={({ pressed }) => [
+                    styles.conflictActionButton,
+                    ioBusy && styles.iconButtonDisabled,
+                    pressed && styles.iconButtonPressed
+                  ]}
+                  disabled={ioBusy}
+                  onPress={() => void resolveConflict(item, resolution)}
+                  hitSlop={4}
+                  accessibilityLabel={t(
+                    'sourceControl.conflictActions.resolveFile',
+                    '{{action}}: {{path}}',
+                    {
+                      action: mobileConflictResolutionLabel(resolution, t),
+                      path: item.path
+                    }
+                  )}
+                >
+                  <Text style={styles.conflictActionText}>
+                    {mobileConflictResolutionLabel(resolution, t)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
         {rowBusy ? (
           <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -113,9 +157,12 @@ export function makeRenderFileRow(state: RowState, t: Translate) {
               pressed && styles.iconButtonPressed
             ]}
             disabled={ioBusy}
-            onPress={() =>
-              void runGitAction(item.unstageActionId, 'git.unstage', { filePath: item.path })
-            }
+            onPress={() => {
+              const filePaths = getUnstageablePaths([item])
+              void (filePaths.length > 1
+                ? runGitAction(item.unstageActionId, 'git.bulkUnstage', { filePaths })
+                : runGitAction(item.unstageActionId, 'git.unstage', { filePath: item.path }))
+            }}
             hitSlop={8}
             accessibilityLabel={t('sourceControl.fileRows.unstageFile', 'Unstage {{path}}', {
               path: item.path

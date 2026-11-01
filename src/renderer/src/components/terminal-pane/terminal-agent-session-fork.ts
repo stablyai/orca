@@ -1,6 +1,8 @@
 import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { settleAgentTabLaunch } from '@/lib/launch-agent-in-new-tab-host-agents'
+import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import {
   buildAgentSessionForkPrompt,
   buildBoundedSessionTranscript
@@ -285,7 +287,14 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
       }) !== false,
     ...(launchPlatform ? { launchPlatform } : {})
   })
-  if (!result) {
+  const settled = await settleAgentTabLaunch(result)
+  const delivery =
+    result?.promptDeliveryResult ??
+    (settled.kind === 'structured' ? settled.promptDeliveryResult : undefined)
+  if (
+    (settled.kind !== 'terminal' && settled.kind !== 'structured') ||
+    (delivery && !(await newAgentPromptOutcome({ delivery })).delivered)
+  ) {
     activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
     return copyAgentSessionForkContext(fork)
   }

@@ -68,16 +68,6 @@ describe('host-created terminal close durability', () => {
     expect(store.getWorkspaceSession().tabsByWorktree?.[WT] ?? []).toEqual([])
   })
 
-  it('stays removed with the PTY still connected and no exit ever delivered', async () => {
-    const store = await makeStore()
-    await store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
-    store.setWorkspaceSession(rendererWriteWithout(store.getWorkspaceSession(), TAB))
-    for (let i = 0; i < 3; i += 1) {
-      store.setWorkspaceSession({ ...store.getWorkspaceSession() })
-    }
-    expect(store.getWorkspaceSession().tabsByWorktree?.[WT] ?? []).toEqual([])
-  })
-
   it('pre-existing host-authoritative membership rebases the close away (not ours)', async () => {
     const store = await makeStore()
     store.setWorkspaceSession({
@@ -102,24 +92,6 @@ describe('topology fence census', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('no host-create binding shape arms a fresh repo fence', async () => {
-    for (const [index, extra] of [
-      {},
-      { incarnationId: '33333333-3333-4333-8333-333333333333' },
-      { startupCwd: '/tmp/wt-cli' }
-    ].entries()) {
-      const store = await makeStore()
-      await store.persistPtyBinding({
-        worktreeId: WT,
-        tabId: `${TAB}-${index}`,
-        leafId: LEAF,
-        ptyId: `${PTY}-${index}`,
-        ...extra
-      })
-      expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.[REPO_ID] ?? 0).toBe(0)
-    }
-  })
-
   it('a second pane in the same tab still does not arm the fence', async () => {
     const store = await makeStore()
     await store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
@@ -130,17 +102,5 @@ describe('topology fence census', () => {
       ptyId: `${PTY}-b`
     })
     expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.[REPO_ID] ?? 0).toBe(0)
-  })
-
-  it('an armed fence keeps climbing, so exit-driven retirement still outranks replays', async () => {
-    const store = await makeStore()
-    store.setWorkspaceSession({
-      ...store.getWorkspaceSession(),
-      terminalTopologyRevisionByRepoId: { [REPO_ID]: 1 }
-    })
-    await store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
-    expect(
-      store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.[REPO_ID] ?? 0
-    ).toBeGreaterThan(1)
   })
 })

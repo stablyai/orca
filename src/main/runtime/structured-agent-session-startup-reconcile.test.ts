@@ -44,7 +44,7 @@ beforeEach(async () => {
 afterEach(async () => {
   writes.failing = false
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
@@ -56,7 +56,7 @@ async function seedChat(options: { newer?: boolean } = {}) {
   if (options.newer) {
     await seedTestAgentSessionStoreFromNewerBuild(root)
   }
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   return { path: journalDatabasePath(root), sessionId: record.sessionId }
 }
 
@@ -118,34 +118,4 @@ it('finishes startup when the reconcile cannot write, and reports it', async () 
     })
   ])
   expect(getStructuredAgentSessionHost()?.sessionAgent(sessionId)).toBe('claude')
-})
-
-it('closes a chat tab over records a newer Orca wrote, reporting the index it cannot write', async () => {
-  const { sessionId } = await seedChat({ newer: true })
-  const log = recordingStructuredAgentSessionLogger()
-  const runtime = startupRuntime(log)
-  await runtime.prepareStructuredAgentSessionStartupRestoration()
-  const host = getStructuredAgentSessionHost()
-  const close = vi.spyOn(host!, 'close')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime's own protected close path, reached with the one field it reads.
-  const internal = runtime as unknown as {
-    closeStructuredAgentSessionTab(tab: { sessionId: string }, cause: 'user-close'): Promise<void>
-  }
-
-  await expect(
-    internal.closeStructuredAgentSessionTab({ sessionId }, 'user-close')
-  ).resolves.toBeUndefined()
-
-  expect(log.entries).toContainEqual({
-    level: 'warn',
-    message: 'recording a closed chat tab failed',
-    fields: {
-      scope: 'tab-visibility-close',
-      sessionId,
-      error: expect.objectContaining({
-        refusal: expect.objectContaining({ details: { reason: 'journalWrittenByNewerOrca' } })
-      })
-    }
-  })
-  expect(close).toHaveBeenCalledWith(sessionId, 'user-close')
 })

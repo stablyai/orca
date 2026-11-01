@@ -1,29 +1,80 @@
 import { vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { RuntimeTerminalShow } from '../../../../../../shared/runtime-terminal-contracts'
 
-export function configureFederationWorkerRuntime(runtime: OrcaRuntimeService): void {
+export function configureFederationWorkerRuntime(
+  runtime: OrcaRuntimeService,
+  handle = 'term_windows_worker'
+): void {
+  const terminal: RuntimeTerminalShow = {
+    handle,
+    ptyId: handle,
+    worktreeId: 'repo::windows-worktree',
+    worktreePath: '/workspace/windows-worktree',
+    branch: 'remote-worker',
+    tabId: 'tab_worker',
+    leafId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    title: 'Codex',
+    connected: true,
+    writable: true,
+    lastOutputAt: null,
+    preview: '',
+    paneRuntimeId: 1,
+    rendererGraphEpoch: 1
+  }
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-  vi.spyOn(runtime, 'showRepo').mockResolvedValue({ id: 'windows-repo', kind: 'git' } as never)
+  vi.spyOn(runtime, 'showRepo').mockResolvedValue({
+    id: 'windows-repo',
+    kind: 'git',
+    path: '/workspace/repo',
+    displayName: 'Windows repo',
+    badgeColor: 'blue',
+    addedAt: 1
+  })
   vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
-    worktree: { id: 'repo::windows-worktree', repoId: 'repo' },
-    startupTerminal: { spawned: true, handle: 'term_windows_worker' },
+    worktree: {
+      id: terminal.worktreeId,
+      repoId: 'repo',
+      path: terminal.worktreePath,
+      branch: terminal.branch,
+      head: 'head',
+      isBare: false,
+      isMainWorktree: false,
+      displayName: 'Remote worker',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0
+    },
+    startupTerminal: { spawned: true, handle },
     setupReceipt: {
       requested: 'run',
       hookFound: true,
       startupPolicy: 'start-immediately',
       state: 'running'
     }
-  } as never)
+  })
   vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
     terminals: [
-      { handle: 'term_windows_worker', title: 'Codex' },
-      { handle: 'term_windows_setup', title: 'Setup' }
+      terminal,
+      {
+        ...terminal,
+        handle: 'term_windows_setup',
+        ptyId: 'term_windows_setup',
+        tabId: 'tab_setup',
+        title: 'Setup'
+      }
     ],
     totalCount: 2,
     truncated: false
-  } as never)
+  })
   vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
-    handle: 'term_windows_worker',
+    handle,
     condition: 'tui-idle',
     satisfied: true,
     status: 'running',
@@ -35,29 +86,26 @@ export function configureFederationWorkerRuntime(runtime: OrcaRuntimeService): v
   vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('windows_runtime:pty:1')
   vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
   vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
-    handle: 'term_windows_worker',
+    handle,
     accepted: true,
     bytesWritten: 1
   })
-  vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-    handle: 'term_windows_worker',
-    worktreeId: 'repo::windows-worktree',
-    status: 'running'
-  } as never)
+  vi.spyOn(runtime, 'showTerminal').mockResolvedValue(terminal)
   vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
     status: 'live',
-    ptyIds: ['term_windows_worker']
+    ptyIds: [handle]
   })
   vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
-    handle: 'term_windows_worker',
+    handle,
     status: 'running',
-    entries: [{ cursor: 1, text: 'remote output' }],
+    tail: ['remote output'],
+    truncated: false,
     nextCursor: '1',
     limited: false
-  } as never)
+  })
   vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
-    handle: 'term_windows_worker',
+    handle,
     tabId: 'tab-windows-worker',
     ptyKilled: true
-  } as never)
+  })
 }

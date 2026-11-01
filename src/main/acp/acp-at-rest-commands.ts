@@ -66,7 +66,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
           record.location,
           deps.isWindowsProcessStartTimeAvailable
         ),
-      scan: (record, cwd, isCurrent, _generation, contextSignal) => {
+      scan: (record, cwd, isCurrent, _generation, contextSignal, _admitted, demand) => {
         const signal = AbortSignal.any([lifetime.signal, contextSignal])
         let answer: (value: AtRestCommandScan) => void = () => {}
         let fail: (reason: unknown) => void = () => {}
@@ -82,20 +82,31 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
         }
         const run = async () => {
           check()
-          if (admitted >= 34) {
+          if (!demand.independent && admitted >= 34) {
             throw new Error('ACP command discovery busy')
           }
-          admitted++
+          let countedLegacy = !demand.independent
+          if (countedLegacy) {
+            admitted++
+          }
           let release: () => void
           try {
-            release = await admission.acquire(0, signal)
+            release = await demand.acquire(admission, signal)
+            if (countedLegacy && demand.independent) {
+              admitted--
+              countedLegacy = false
+            }
           } catch (error) {
-            admitted--
+            if (countedLegacy) {
+              admitted--
+            }
             throw error
           }
           const releasePermit = release
           release = () => {
-            admitted--
+            if (countedLegacy) {
+              admitted--
+            }
             releasePermit()
           }
           let folder: Awaited<ReturnType<typeof acpRunFolder>> | undefined

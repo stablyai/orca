@@ -46,7 +46,7 @@ vi.mock('./structured-agent-session-create', () => ({
 const harness = createOrchestrationRpcHarness()
 let state: ReturnType<typeof harness.setup>
 let dispatchId: string
-let dispatchIds: string[]
+let workerSessionIds: string[]
 
 function createDispatch() {
   const task = state.db.createTask({ spec: 'redrive test' })
@@ -56,7 +56,6 @@ function createDispatch() {
     taskId: task.id,
     startOptions: {}
   }).dispatch.id
-  dispatchIds.push(id)
   return id
 }
 
@@ -86,12 +85,12 @@ beforeEach(() => {
     }
   })
   setStructuredAgentSessionHost(host)
-  dispatchIds = []
+  workerSessionIds = []
   dispatchId = createDispatch()
 })
 
 afterEach(() => {
-  for (const id of dispatchIds) {
+  for (const id of workerSessionIds) {
     releaseStructuredWorkerSession(id, state.runtime)
   }
   vi.useRealTimers()
@@ -112,6 +111,7 @@ async function startWorker(
     dispatchId: workerDispatchId,
     onJournalActivity
   })
+  workerSessionIds.push(identity.sessionId)
   return { ...workerJournal(identity), onJournalActivity }
 }
 
@@ -256,7 +256,10 @@ describe('the structured redrive publication edge', () => {
       const sendMail = async (subject: string) => {
         output.mockClear()
         process.exitCode = undefined
-        await main(['orchestration', 'send', '--to', mailbox, '--subject', subject, '--json'], root)
+        await main(
+          ['orchestration', 'send', '--to', mailbox, '--subject', subject, '--json', '--full'],
+          root
+        )
         expect(process.exitCode, JSON.stringify(output.mock.calls)).toBeUndefined()
         const response: unknown = JSON.parse(String(output.mock.calls.at(-1)?.[0]))
         return idOf(resultOf(response).message)
@@ -302,7 +305,7 @@ describe('the structured redrive publication edge', () => {
         const cancelledId = await sendMail('Do not deliver after teardown')
         expect(state.db.getMessageById(cancelledId)?.delivered_at).toBeNull()
         await worker.journal.appendTombstone(nextTurn, { fence })
-        releaseStructuredWorkerSession(dispatchId, state.runtime)
+        releaseStructuredWorkerSession(worker.identity.sessionId, state.runtime)
         disposeStream()
         notify.mockClear()
         await worker.append('after-teardown')
@@ -388,8 +391,8 @@ describe('the structured redrive publication edge', () => {
       visits.get(worker.identity.sessionId)!.mockClear()
       await worker.append('pending-at-release')
     }
-    for (const id of dispatchIds) {
-      releaseStructuredWorkerSession(id, state.runtime)
+    for (const worker of workers) {
+      releaseStructuredWorkerSession(worker.identity.sessionId, state.runtime)
     }
     for (const worker of workers) {
       visits.get(worker.identity.sessionId)!.mockClear()
@@ -534,10 +537,20 @@ describe('the structured redrive publication edge', () => {
       await append('before-release')
 
       if (action === 'release') {
-        releaseStructuredWorkerSession(dispatchId, state.runtime)
+        releaseStructuredWorkerSession(identity.sessionId, state.runtime)
       } else if (action === 'stop') {
-        await stopStructuredWorker(identity, dispatchId, state.runtime)
+        await stopStructuredWorker(identity, state.runtime)
       } else {
+        // Abandon finds the worker by the authority its start recorded.
+        state.db.prepareStartingWorkerAuthority({
+          dispatchId,
+          handle: identity.handle,
+          paneKey: identity.paneKey,
+          processIncarnation: identity.processIncarnation,
+          worktreeId: identity.worktreeId,
+          effects: [],
+          setupState: 'not_applicable'
+        })
         await harness.call('orchestration.workerAbandon', { dispatch: dispatchId }, state.ctx)
       }
 

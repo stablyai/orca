@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
+import { setSidebarLiveWidth } from './sidebar-live-width'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import WslMovedProjectsSection from './WslMovedProjectsSection'
@@ -112,10 +113,6 @@ function Sidebar({
     cancelWorkspaceBoardDragPreview
   } = useWorkspaceBoardPanel()
 
-  const setLiveSidebarWidth = React.useCallback((width: number) => {
-    document.documentElement.style.setProperty('--workspace-sidebar-live-width', `${width}px`)
-  }, [])
-
   const repoCount = repos.length
   const previousRepoCountRef = React.useRef(repoCount)
   useEffect(() => {
@@ -146,7 +143,7 @@ function Sidebar({
     maxWidth: MAX_WIDTH,
     deltaSign: 1,
     setWidth: setSidebarWidth,
-    onDraftWidthChange: setLiveSidebarWidth
+    onDraftWidthChange: setSidebarLiveWidth
   })
 
   useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents')

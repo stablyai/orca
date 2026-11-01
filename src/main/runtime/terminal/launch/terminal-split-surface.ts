@@ -47,7 +47,8 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     const direction = opts.direction ?? 'horizontal'
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
       `id:${pty.worktreeId}`,
-      createdWorktree
+      createdWorktree,
+      { wslUserAct: opts.wslUserAct === true }
     )
     const sourceAuthority = this.resolveTerminalSplitSourceAuthority(
       workspace.id,
@@ -80,6 +81,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       envToDelete: opts.envToDelete,
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
+      resolvedWorkspace: workspace,
       ...(opts.wslUserAct ? { wslUserAct: true } : {}),
       preAllocatedHandle,
       tabId: parentTabId,
@@ -121,6 +123,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       )
       createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
       createdPty.launchCommandAgent = resolveLaunchCommandPaneAgent(opts.command)
+      this.watchLaunchComposer(result.id, createdPty.launchCommandAgent)
       this.setPairedRendererSessionOwnership(
         createdPty.ptyId,
         this.pairedRendererSessionOwnedPtyIds.has(pty.ptyId)

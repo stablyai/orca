@@ -1,6 +1,6 @@
 import type { AgentJournalCursor } from './agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from './agent-session-wire'
-import { createStructuredAgentSessionEventCoalescer } from './structured-agent-session-coalescer'
+import { createStructuredAgentSessionEventCoalescer } from './agent-session/structured-agent-session-coalescer'
 import {
   AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
   isFinalAgentSessionReadRefusal,
@@ -164,7 +164,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       openingFrameGeneration = 0
     }
     // First resumed batch replaces detached state; apply alone so coalescing cannot turn it into unchanged state.
-    if (opensSubscription && event.type === 'batch') {
+    if (opensSubscription) {
       coalescer.flush()
       if (isCurrentOpenGeneration(eventOpenGeneration)) {
         args.applyEvent(event, { opensSubscription: true })

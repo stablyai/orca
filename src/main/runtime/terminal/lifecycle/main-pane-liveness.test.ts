@@ -39,6 +39,7 @@ function hostController(host: Host, cwd: string, worktreeId: string) {
     kill: () => true,
     getForegroundProcess: async () => null,
     hasPty: (ptyId: string) => host.live.has(ptyId),
+    getPtyAvailability: (ptyId: string) => host.live.has(ptyId),
     listProcesses: async (providerKey?: string) =>
       [...host.live]
         .filter((id) => (id === SSH_PTY) === (providerKey === 'ssh:ssh-target'))
@@ -285,6 +286,52 @@ describe('a reused terminal id of another workspace (switch on)', () => {
   })
 })
 
+describe('idle admission across SSH inventory uncertainty', () => {
+  it.each([
+    { isMain: true, windowed: true },
+    { isMain: true, windowed: false }
+  ])(
+    'recovers the same incarnation ($isMain, windowed=$windowed)',
+    async ({ isMain, windowed }) => {
+      layoutOwner.isMain = isMain
+      const { runtime, host } = savedPaneHost(SSH_PTY, { windowed })
+      runtime.registerPty(SSH_PTY, TEST_WORKTREE_ID, 'ssh-target', {
+        tabId: 'host-tab',
+        leafId: HEADLESS_LEAF_ID,
+        incarnationId: 'ssh-inc-1'
+      })
+      await sweepProvider(runtime, 'ssh-target')
+      const handle = runtime.resolveTerminalPane(
+        `host-tab:${HEADLESS_LEAF_ID}`,
+        TEST_WORKTREE_ID
+      ).handle
+      host.live.clear()
+      await sweepProvider(runtime, 'ssh-target')
+      expect(record(runtime, SSH_PTY)).toMatchObject({ connected: false, lastExitCode: null })
+      // An uncertain host cannot supply the positive live claim an exit wait needs.
+      runtime.markPtyLivenessUnverifiable(SSH_PTY, 'relay unavailable')
+      await expect(runtime.waitForTerminal(handle, { condition: 'exit' })).resolves.toMatchObject({
+        satisfied: true,
+        status: 'unknown',
+        exitCode: null
+      })
+      const settled = vi.fn()
+      const waiting = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 5_000 })
+      waiting.then(settled, settled)
+      await vi.waitFor(() => {
+        expect(runtime['terminalWaiters'].forPty(SSH_PTY)).toHaveLength(1)
+      })
+      expect(settled).not.toHaveBeenCalled()
+      host.live.add(SSH_PTY)
+      await sweepProvider(runtime, 'ssh-target')
+      expect(record(runtime, SSH_PTY)?.incarnationId).toBe('ssh-inc-1')
+      runtime.onPtyData(SSH_PTY, '\x1b]0;Codex ready\x07', 1)
+      await expect(waiting).resolves.toMatchObject({ satisfied: true, status: 'running' })
+      expect(runtime['terminalWaiters'].forPty(SSH_PTY)).toHaveLength(0)
+    }
+  )
+})
+
 describe('an exit wait through a listing gap (switch on)', () => {
   it('keeps waiting on a disconnected terminal main binds until its exit is certified', async () => {
     const { runtime, host } = savedPaneHost('saved-pty', { windowed: true })
@@ -380,14 +427,14 @@ describe('a terminal registered while a listing is in flight (switch on)', () =>
 })
 
 describe('switch off: a window leaf still vouches for its terminal', () => {
-  it('keeps a windowed pane connected when the inventory stops listing it', async () => {
+  it('keeps the window record but withholds a ready mobile handle when the host loses its PTY', async () => {
     layoutOwner.isMain = false
     const { runtime, host } = savedPaneHost('saved-pty', { windowed: true })
     expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('ready')
 
     host.live.clear()
 
-    expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('ready')
+    expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('pending-handle')
     expect(record(runtime, 'saved-pty')?.connected).toBe(true)
   })
 })

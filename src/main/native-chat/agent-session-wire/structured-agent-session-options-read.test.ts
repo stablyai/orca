@@ -1,17 +1,27 @@
-import { claudeOpened } from '../../claude/claude-structured-startup-settled-test-support'
+import {
+  hostTestCatalogReadOperation,
+  hostTestRestingOptionsRecord as restingRecord,
+  HOST_TEST_RESTING_OPTIONS_CREATED_LINKS as created,
+  hostTestRestingOptionsJournal as restingJournal,
+  hostTestOptionsReadStore
+} from './structured-agent-session-host-test-data'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
+import {
+  structuredAgentSessionMessageSelection,
+  structuredAgentSessionSendSelection
+} from '../../../shared/structured-agent-session-option-view'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import type { ClaudeStructuredSessionEvent } from '../../claude/structured/claude-structured-session-state'
 import { startCodexTurn } from '../../codex/codex-structured-turn-start'
 import { readLiveCodexSessionOptions } from '../../codex/codex-structured-session-options'
 import { optionSession } from '../../codex/codex-structured-option-session.test-fixture'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { structuredAgentSessionDrawnValues } from '../../../shared/structured-agent-session-option-snapshot'
+
 import { structuredAgentSessionCapabilityView } from './structured-agent-session-option-models'
 import { claudeFallbackModelOptions } from '../../claude/claude-structured-session-options'
 import {
   acquired,
   fakeClaude,
-  claudeFrame,
   USER_MESSAGE
 } from '../../claude/claude-structured-session-test-support'
 import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
@@ -20,33 +30,22 @@ import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
 } from '../../../shared/structured-agent-session-options'
-import { structuredAgentSessionSendSelection } from '../../../shared/structured-agent-session-option-view'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
-
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import {
-  hostTestRestingOptionsRecord as restingRecord,
-  HOST_TEST_RESTING_OPTIONS_CREATED_LINKS as created,
-  hostTestRestingOptionsJournal as restingJournal,
-  hostTestOptionsReadStore
-} from './structured-agent-session-host-test-data'
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
-import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
 import {
-  AgentModelCatalogStore,
-  type AgentModelCatalogSuccess
-} from '../agent-model-catalog/agent-model-catalog-store'
+  createAgentModelCatalogService,
+  type AgentModelCatalogService
+} from '../agent-model-catalog/agent-model-catalog-service'
+import { AgentModelCatalogStore } from '../agent-model-catalog/agent-model-catalog-store'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import {
   readStructuredAgentSessionOptions,
   recordStructuredAgentSessionOptionIntent
 } from './structured-agent-session-options-read'
-import { AcpStructuredOptions } from '../../acp/acp-structured-options'
-import { GROK_CONFIG_OPTIONS } from '../../acp/acp-structured-adapter.test-support'
-import { SessionConfigOptionSchema } from '../../acp/generated/acp-protocol.generated'
 import { withLiveCatalogListing } from '../agent-model-catalog/agent-model-catalog-entry'
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import { agentModelCatalogFingerprintForRecord } from '../agent-model-catalog/agent-model-catalog-fingerprint'
@@ -67,169 +66,6 @@ type RestingFacts = Pick<
   'options' | 'provider' | 'providerHandleChain' | 'rewind'
 >
 
-describe('options at rest', () => {
-  it('keeps the account model for an older client when the starting child has no folder default', async () => {
-    const record = restingRecord()
-    const read = vi.fn(async (params: { inSessionWorkspace?: true }) => ({
-      origin: 'probe' as const,
-      models: [
-        {
-          id: params.inSessionWorkspace ? 'gpt-folder' : 'gpt-account',
-          label: 'Model',
-          isDefault: !params.inSessionWorkspace,
-          efforts: []
-        }
-      ],
-      fetchedAt: 1
-    }))
-    const starting = {
-      child: { phase: 'starting' },
-      params: { provider: 'codex' },
-      journal: restingJournal()
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read touches only the declared context fields.
-    const context = {
-      deps: {
-        adapter: {},
-        agents: NO_STRUCTURED_AGENTS,
-        store: hostTestOptionsReadStore(() => record),
-        modelCatalog: { read }
-      },
-      serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
-      openConversation: async () => starting,
-      conversation: async () => starting
-    } as unknown as StructuredAgentSessionMutationContext
-
-    const current = await readStructuredAgentSessionOptions(context, SESSION, {
-      readsWithoutModel: true
-    })
-    expect(current.current).toEqual({ defaulted: [], permissionMode: 'ask' })
-    expect(read).toHaveBeenCalledTimes(2)
-    const older = await readStructuredAgentSessionOptions(context, SESSION, {
-      readsWithoutModel: false
-    })
-    expect(older.current).toEqual({
-      model: 'gpt-account',
-      defaulted: [],
-      permissionMode: 'ask'
-    })
-    expect(read).toHaveBeenCalledWith({
-      agent: 'codex',
-      sessionId: SESSION,
-      savedOnly: true,
-      legacyOptionsDisplay: true,
-      workspacePath: null
-    })
-  })
-
-  it('keeps a saved Codex model when the host listing drops it', async () => {
-    const record = { ...restingRecord(), options: { model: 'gpt-unlisted', effort: 'high' } }
-    const listed = { id: 'gpt-5.5', label: 'GPT-5.5', isDefault: true, efforts: [] }
-    let live = false
-    const conversation = () => ({
-      child: live ? { fence: 7 } : null,
-      params: { provider: 'codex' },
-      journal: restingJournal()
-    })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read touches only the declared context fields.
-    const context = {
-      deps: {
-        adapter: {
-          readOptions: async () => ({
-            models: [listed, { ...listed, id: 'gpt-unlisted', isDefault: false }],
-            current: { model: 'gpt-5.5', effort: 'high', defaulted: ['model'] }
-          })
-        },
-        agents: NO_STRUCTURED_AGENTS,
-        store: hostTestOptionsReadStore(() => record),
-        modelCatalog: { read: async () => ({ origin: 'probe', models: [listed], fetchedAt: 1 }) }
-      },
-      serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
-      openConversation: async () => conversation(),
-      conversation: async () => conversation()
-    } as unknown as StructuredAgentSessionMutationContext
-    const read = () =>
-      readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
-    const resting = await read()
-    live = true
-    const running = await read()
-    expect(running.listedModelIds).toEqual(resting.listedModelIds)
-    expect(resting.listedModelIds).toEqual(['gpt-5.5'])
-    expect(resting.current).toMatchObject({ model: 'gpt-unlisted', defaulted: [] })
-    expect(running.current).toMatchObject({ model: 'gpt-unlisted', defaulted: [] })
-  })
-
-  it.each(['omp', 'grok', 'opencode'] as const)(
-    '%s keeps an unknown model and learns menus from qualified reports',
-    async (provider) => {
-      const record = { ...restingRecord(), provider }
-      const probe = vi.fn(() => new Promise<AgentModelCatalogSuccess>(() => {}))
-      const modelCatalog = createAgentModelCatalogService({
-        store: new AgentModelCatalogStore(),
-        ...hostTestOptionsReadStore(() => record),
-        drivesRecord: () => true,
-        resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/homes/a' }),
-        probes: { codex: probe }
-      })
-      let live = false
-      const reader = new AcpStructuredOptions()
-      const configOptions = SessionConfigOptionSchema.array().parse(GROK_CONFIG_OPTIONS)
-      const resting = {
-        child: null,
-        params: { provider: 'codex' },
-        journal: restingJournal()
-      }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: options reads touch only these context members.
-      const context = {
-        deps: {
-          adapter: { readOptions: async () => withLiveCatalogListing(reader.read()) },
-          agents: NO_STRUCTURED_AGENTS,
-          store: hostTestOptionsReadStore(() => record),
-          modelCatalog
-        },
-        serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
-        openConversation: async () => (live ? { ...resting, child: { fence: 7 } } : resting),
-        conversation: async () => resting
-      } as unknown as StructuredAgentSessionMutationContext
-
-      const read = () =>
-        readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
-      const result = await read()
-      expect(probe).not.toHaveBeenCalled()
-      expect(result.models).toEqual([])
-      expect(result.current).not.toHaveProperty('model')
-      record.options = { model: 'later-model', effort: 'off' }
-      // Unregistered agents must not report a permission mode.
-      expect((await read()).current).toEqual({
-        model: 'later-model',
-        effort: 'off',
-        defaulted: []
-      })
-      for (const emptyStart of [false, true]) {
-        modelCatalog.recordLiveListing(SESSION, {
-          models: [{ id: 'old', label: 'Old', isDefault: true, efforts: [] }]
-        })
-        reader.adoptSession(emptyStart ? {} : { configOptions })
-        modelCatalog.recordLiveListing(SESSION, reader.startListing())
-        reader.adoptConfigOptions(
-          configOptions.map((option) =>
-            option.type === 'select' && option.category === 'model'
-              ? { ...option, currentValue: 'grok-4.6' }
-              : option
-          )
-        )
-        record.options = { model: 'grok-4.6', effort: 'high' }
-        live = true
-        await read()
-        modelCatalog.recordLiveListing(SESSION, { models: reader.read().models })
-        live = false
-        const answer = await read()
-        expect(answer.models).toEqual(reader.read().models)
-      }
-    }
-  )
-})
-
 describe('a chat at rest, read by the host', () => {
   const turn: AgentJournalItemBody = { kind: 'turn', turnId: 'turn-1', state: 'completed' }
   const fast = [{ value: 'priority', label: 'Fast' }]
@@ -239,6 +75,7 @@ describe('a chat at rest, read by the host', () => {
     { id: 'gpt-flex', label: 'Flex', isDefault: false, efforts: [], serviceTiers: flex }
   ]
   const catalog = (models: AgentSessionModelOption[] | null = listed, verified = true) => ({
+    captureRead: hostTestCatalogReadOperation,
     read: async (params?: { verifiedOnly?: boolean }) =>
       models === null || (!verified && params?.verifiedOnly)
         ? { origin: 'unknown' as const }
@@ -250,7 +87,8 @@ describe('a chat at rest, read by the host', () => {
     wroteBeforeOpen = false,
     models: AgentSessionModelOption[] | null = listed,
     verified = true,
-    liveOptions?: StructuredAgentSessionLiveOptions
+    liveOptions?: StructuredAgentSessionLiveOptions,
+    modelCatalog: Pick<AgentModelCatalogService, 'read' | 'captureRead'> = catalog(models, verified)
   ) {
     const record = { ...restingRecord(), ...facts }
     const resting = {
@@ -264,7 +102,7 @@ describe('a chat at rest, read by the host', () => {
         adapter: liveOptions ? { readOptions: async () => liveOptions } : {},
         agents: claudeAndCodexAgents(),
         store: hostTestOptionsReadStore(() => record),
-        modelCatalog: catalog(models, verified)
+        modelCatalog
       },
       serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
       openConversation: async () => resting,
@@ -304,7 +142,63 @@ describe('a chat at rest, read by the host', () => {
   ])('%s', async (_name, facts, items, wroteBeforeOpen, defaulted) => {
     const read = await readAtRest(facts, items, wroteBeforeOpen)
     expect(read.current).toMatchObject({ model: 'gpt-account', defaulted })
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+      CODEX_SESSION_OPTION_CATALOG,
+      read,
+      { newLaunch: true, coherentCatalog: true }
+    )
+    expect(read.current.acceptedInputSources).toEqual(defaulted.length ? {} : { model: 'policy' })
+    expect(structuredAgentSessionMessageSelection(state)).toEqual(
+      defaulted.length ? {} : { model: 'gpt-account' }
+    )
   })
+
+  it.each([
+    ['unknown', {}, {}, {}],
+    ['known report only', { model: 'gpt-account' }, {}, {}],
+    [
+      'unknown with saved literal',
+      {},
+      { model: 'retired-alias', effort: 'high' },
+      { model: 'retired-alias', effort: 'high' }
+    ]
+  ] as const)(
+    'keeps %s live Codex input source-qualified through metadata refresh',
+    async (_name, applied, saved, selection) => {
+      const native = optionSession(vi.fn())
+      native.appliedTurnOptions = applied
+      const provider = await readLiveCodexSessionOptions(native, undefined)
+      expect(provider.current.model).toBe('model' in applied ? applied.model : undefined)
+      const answer = await readAtRest({ options: saved }, [], false, listed, true, provider)
+      expect(answer.current).toMatchObject({
+        model: 'model' in saved ? saved.model : 'gpt-account',
+        defaulted: 'model' in applied || 'model' in saved ? [] : ['model']
+      })
+      let state = applyStructuredAgentSessionOptions(
+        createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+        CODEX_SESSION_OPTION_CATALOG,
+        answer,
+        { newLaunch: true, coherentCatalog: true }
+      )
+      expect(answer.current.acceptedInputSources).toEqual(
+        'model' in saved ? { model: 'saved', effort: 'saved' } : {}
+      )
+      expect(structuredAgentSessionMessageSelection(state)).toEqual(selection)
+      state = applyStructuredAgentSessionModelCatalog(
+        state,
+        CODEX_SESSION_OPTION_CATALOG,
+        {
+          origin: 'probe',
+          fetchedAt: 1,
+          models: listed,
+          listingNamesConfiguredModel: true
+        },
+        { newLaunch: true, coherentCatalog: true }
+      )
+      expect(structuredAgentSessionMessageSelection(state)).toEqual(selection)
+    }
+  )
 
   it('preserves sparse Codex knowledge from an actual turn through host and shared desktop/phone values', async () => {
     const pending = Promise.withResolvers<unknown>()
@@ -431,7 +325,7 @@ describe('a chat at rest, read by the host', () => {
       [{ id: 'opus[1m]', label: 'Opus', isDefault: true, efforts: [] }],
       'opus[1m]'
     ],
-    ['unknown list', null, 'sonnet'],
+    ['unknown list', null, undefined],
     ['known empty', [], undefined],
     [
       'known without default',
@@ -504,10 +398,11 @@ describe('a chat at rest, read by the host', () => {
         efforts: [{ value: 'high', label: 'High' }]
       }
     ]
-    for (const [reported, saved, shown] of [
-      ['claude-opus-current', {}, 'opus[1m]'],
-      ['unknown-model', {}, 'unknown-model'],
-      ['claude-opus-current', { model: 'claude-opus-current' }, 'claude-opus-current']
+    const currentModel = 'claude-opus-current'
+    for (const [reported, saved, shown, label] of [
+      [currentModel, {}, 'opus[1m]', 'Installed Opus'],
+      ['unknown-model', {}, 'unknown-model', 'Unknown Model'],
+      [currentModel, { model: currentModel }, currentModel, 'Claude Opus Current']
     ] as const) {
       const result = await readAtRest(
         { provider: 'claude', options: saved },
@@ -521,7 +416,7 @@ describe('a chat at rest, read by the host', () => {
       expect(result.models.find((row) => row.id === shown)).toMatchObject(
         shown === 'opus[1m]'
           ? { label: 'Installed Opus', efforts: installed[0]!.efforts }
-          : { label: shown, efforts: [] }
+          : { label, description: shown, efforts: [] }
       )
     }
   })
@@ -757,75 +652,4 @@ describe('a chat at rest, read by the host', () => {
       catalog.stop()
     }
   })
-})
-
-it('projects held Claude reports through the full reader while actual controls and Send proceed', async () => {
-  const events: ClaudeStructuredSessionEvent[] = []
-  const native = fakeClaude()
-  const adapter = await acquired(native, {}, events)
-  await claudeOpened(adapter, SESSION)
-  const connection = native.connections[0]!
-  const pending = Promise.withResolvers<unknown>()
-  const settings = vi.spyOn(connection, 'getSettings').mockReturnValueOnce(pending.promise)
-  const queue = new StructuredAgentSessionTaskQueue()
-  const record = { ...restingRecord(), provider: 'claude', options: {} }
-  const live = { child: { fence: 7 }, params: { provider: 'claude' }, journal: restingJournal() }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the full reader uses only these context members; provider operations use the actual adapter.
-  const context = {
-    deps: {
-      adapter,
-      agents: claudeAndCodexAgents(),
-      store: hostTestOptionsReadStore(() => record)
-    },
-    serialize: (id: string, task: () => Promise<unknown>) => queue.serialize(id, task),
-    openConversation: async () => live,
-    conversation: async () => live
-  } as unknown as StructuredAgentSessionMutationContext
-  const read = () =>
-    readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
-  try {
-    claudeFrame(connection, { type: 'result', subtype: 'success', result: 'done', is_error: false })
-    await vi.waitFor(() => expect(settings).toHaveBeenCalledOnce())
-    expect((await read()).current.effort).toBe('high')
-    await queue.serialize(SESSION, () =>
-      adapter.dispatch({
-        sessionId: SESSION,
-        fence: 7,
-        clientMessageId: 'while-reporting',
-        body: USER_MESSAGE
-      })
-    )
-    expect(connection.sent.length).toBeGreaterThan(0)
-    await queue.serialize(SESSION, () =>
-      adapter.setOption({ sessionId: SESSION, fence: 7, key: 'model', value: 'claude-opus-5' })
-    )
-    pending.resolve({
-      applied: { model: 'old', effort: 'max' },
-      effective: { effortLevel: 'max', fastMode: true }
-    })
-    await Promise.resolve()
-    await Promise.resolve()
-    expect((await read()).current).toMatchObject({ model: 'claude-opus-5', effort: 'high' })
-    settings.mockResolvedValueOnce({
-      applied: { model: 'claude-opus-5', effort: 'low' },
-      effective: { effortLevel: 'low', fastMode: true }
-    })
-    claudeFrame(connection, {
-      type: 'result',
-      subtype: 'success',
-      result: 'later',
-      is_error: false
-    })
-    await vi.waitFor(async () =>
-      expect((await read()).current).toMatchObject({ effort: 'low', fastMode: true })
-    )
-    expect(
-      events.some(
-        (event) => event.type === 'options-reported' && event.reportedOptions.effort === 'max'
-      )
-    ).toBe(false)
-  } finally {
-    pending.resolve(null)
-    await adapter.closeSession(SESSION)
-  }
 })

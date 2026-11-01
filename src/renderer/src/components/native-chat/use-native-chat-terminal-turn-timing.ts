@@ -17,9 +17,6 @@ export function useNativeChatTerminalTurnTiming(
   messages: readonly NativeChatMessage[],
   turnActive: boolean
 ): { workingStartedAt: number | null; settledTurns: NativeChatSettledTurns } {
-  // Freshness is time-based: re-read when the scheduler says a silent row aged out.
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-  void agentStatusEpoch
   const turnStartedAt = useAppStore((s) =>
     nativeChatHookTurnStartedAt(s.agentStatusByPaneKey[paneKey])
   )

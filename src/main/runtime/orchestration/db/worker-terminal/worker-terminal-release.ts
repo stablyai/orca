@@ -78,7 +78,7 @@ export function requestWorkerTerminalRelease(
                WHEN release_state = 'releasing' THEN 'releasing'
                ELSE 'requested'
              END,
-             retained_reason = NULL,
+             retained_reason = NULL, auto_release_at = NULL,
              release_requested_at = COALESCE(release_requested_at, datetime('now')),
              release_error = NULL, updated_at = datetime('now')
          WHERE id = ? AND ${WORKER_TERMINAL_RELEASABLE_ROW_SQL}`

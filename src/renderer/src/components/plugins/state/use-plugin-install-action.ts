@@ -7,6 +7,8 @@ import type {
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { translate } from '@/i18n/i18n'
 import { pluginInstallErrorMessage } from '../presentation/plugin-error-presentation'
+import { catalogInstallTrustPrompt } from '../presentation/plugin-install-trust'
+import { confirmPluginInstallTrust } from '@/store/plugin-install-trust-request'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
 import { applyPluginThemesNow } from './plugin-theme-apply'
 import { pluginTryAction } from './plugin-try-action'
@@ -52,11 +54,14 @@ const downloadFailed = (): string =>
  */
 export function usePluginInstallAction({
   fetchPreview,
-  onInstalled
+  onInstalled,
+  isFromInstallLink
 }: {
   fetchPreview: (listing: PluginMarketplaceHostListing) => Promise<PluginPagePreview>
   /** Reloads the list; opens review on the page for any plugin still waiting for it. */
   onInstalled: (pluginKey: string) => Promise<void>
+  /** Whether this install is on the page an install link opened; only labels telemetry. */
+  isFromInstallLink?: (pluginKey: string) => boolean
 }): {
   phaseOf: (pluginKey: string) => PluginInstallPhase | null
   install: (
@@ -117,6 +122,15 @@ export function usePluginInstallAction({
         })
         return
       }
+      // Why here: the card, the page and every link-opened page install through this one gate.
+      const trustPrompt = catalogInstallTrustPrompt(listing, preview)
+      if (trustPrompt) {
+        setPhase(pluginKey, null)
+        if (!(await confirmPluginInstallTrust(trustPrompt))) {
+          return
+        }
+        setPhase(pluginKey, { kind: 'installing' })
+      }
       const execution = listing.release?.execution ?? pluginExecutionProfile(preview.manifest)
       try {
         const result = await window.api.plugins.installMarketplacePlugin({
@@ -124,6 +138,7 @@ export function usePluginInstallAction({
           marketplaceCommit: preview.marketplaceCommit,
           pluginKey,
           resolvedCommit: preview.resolvedCommit,
+          ...(isFromInstallLink?.(pluginKey) ? { fromInstallLink: true as const } : {}),
           // Why the fingerprint: main turns on only the exact bytes this preview showed.
           ...(execution === 'data'
             ? { enableIfData: true as const, expectedFingerprint: preview.consentFingerprint }
@@ -183,7 +198,7 @@ export function usePluginInstallAction({
         setPhase(pluginKey, { kind: 'error', message: catalogInstallErrorMessage(cause) })
       }
     },
-    [dismiss, fetchPreview, onInstalled, setPhase]
+    [dismiss, fetchPreview, isFromInstallLink, onInstalled, setPhase]
   )
 
   const phaseOf = useCallback(
