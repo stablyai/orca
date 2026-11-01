@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { reconcileChatTabIdentities } from '../agent-session/agent-session-tab-identity'
 import { preserveTerminalRetirementProofs } from '../mobile-session-terminal-retirement-proof'
+import { stampMobileSnapshotVersion } from '../mobile-session-snapshot-version'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
@@ -137,11 +138,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       snapshot = merged
     }
     snapshot = preserveTerminalRetirementProofs(snapshot, existing)
-    const snapshotVersion = existing
-      ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
-      : snapshot.snapshotVersion
-    const stamped =
-      snapshotVersion === snapshot.snapshotVersion ? snapshot : { ...snapshot, snapshotVersion }
+    const stamped = stampMobileSnapshotVersion(snapshot, existing)
     this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
     return stamped
   }
