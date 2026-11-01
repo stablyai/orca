@@ -4436,6 +4436,13 @@
             },
             "mainWorktree": "主工作树",
             "detached": "分离状态"
+          },
+          "CopilotStatusSegment": {
+            "badge": "Copilot",
+            "signedInAs": "GitHub Copilot",
+            "signIn": "点击登录 GitHub Copilot",
+            "deviceCode": "已复制 Copilot 登录代码 {{code}}，请在浏览器中粘贴。",
+            "signInFailed": "Copilot 登录失败"
           }
         }
       },

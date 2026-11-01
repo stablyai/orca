@@ -4436,6 +4436,13 @@
             },
             "mainWorktree": "メインワークツリー",
             "detached": "分離状態"
+          },
+          "CopilotStatusSegment": {
+            "badge": "Copilot",
+            "signedInAs": "GitHub Copilot",
+            "signIn": "クリックして GitHub Copilot にサインイン",
+            "deviceCode": "Copilot のサインインコード {{code}} をコピーしました。ブラウザーに貼り付けてください。",
+            "signInFailed": "Copilot へのサインインに失敗しました"
           }
         }
       },
