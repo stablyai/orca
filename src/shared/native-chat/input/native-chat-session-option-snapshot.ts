@@ -5,7 +5,7 @@ import type {
   CatalogMidSessionApply,
   CatalogModel,
   CatalogOption
-} from '../../agent-session-option-catalog-types'
+} from '../../agent-session/options/agent-session-option-catalog-types'
 import type {
   NativeChatLiveOptionTransport,
   SessionOptionDescriptor,

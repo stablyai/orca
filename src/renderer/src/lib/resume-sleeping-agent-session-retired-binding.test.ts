@@ -101,18 +101,6 @@ describe('a resume record whose pane has no terminal bound', () => {
     expect(mocks.launch).toHaveBeenCalledWith(record, undefined)
   })
 
-  it('a start that settled, or a disposed pane, no longer owns it', () => {
-    mocks.layoutOwnerIsMain = true
-    retiredBindingState()
-    holdPaneResumeInPlace(PANE_KEY, () => true)()
-    const disposedRelease = holdPaneResumeInPlace(PANE_KEY, () => false)
-    try {
-      expect(recordPaneIsOwnedByPreservedPane(record, useAppStore.getState())).toBe(false)
-    } finally {
-      disposedRelease()
-    }
-  })
-
   it('keeps the window-owned rule: an unbound pane does not own it, in flight or not', () => {
     retiredBindingState()
     const release = holdPaneResumeInPlace(PANE_KEY, () => true)

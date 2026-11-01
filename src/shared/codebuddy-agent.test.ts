@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
 import { normalizeAndAccept } from './agent-hook-listener-test-harness'
 import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
-import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
+import { getAgentSessionOptionCatalog } from './agent-session/options/agent-session-option-catalog'
 import { getAgentResumeArgv } from './agent-session-resume'
 
 describe('CodeBuddy harness', () => {

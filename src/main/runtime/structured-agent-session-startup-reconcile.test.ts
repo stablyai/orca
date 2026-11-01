@@ -127,20 +127,32 @@ it('closes a chat tab over records a newer Orca wrote, reporting the index it ca
   await runtime.prepareStructuredAgentSessionStartupRestoration()
   const host = getStructuredAgentSessionHost()
   const close = vi.spyOn(host!, 'close')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime's own protected close path, reached with the one field it reads.
-  const internal = runtime as unknown as {
-    closeStructuredAgentSessionTab(tab: { sessionId: string }, cause: 'user-close'): Promise<void>
+  vi.spyOn(runtime, 'captureStructuredAgentSessionPresentation').mockReturnValue({
+    raw: null,
+    saved: []
+  })
+  vi.spyOn(runtime, 'currentLocalStructuredSessionPresentation').mockReturnValue(null)
+  const { captureStructuredSessionSurface, closeCapturedStructuredSession } =
+    await import('./agent-session/structured-agent-session-close')
+  expect(host).not.toBeNull()
+  if (!host) {
+    throw new Error('Expected installed host')
   }
-
   await expect(
-    internal.closeStructuredAgentSessionTab({ sessionId }, 'user-close')
-  ).resolves.toBeUndefined()
+    closeCapturedStructuredSession(
+      host,
+      sessionId,
+      'user-close',
+      captureStructuredSessionSurface(host, sessionId, runtime),
+      runtime
+    )
+  ).resolves.toBe(false)
 
   expect(log.entries).toContainEqual({
     level: 'warn',
     message: 'recording a closed chat tab failed',
     fields: {
-      scope: 'tab-visibility-close',
+      scope: 'tab-close-hide',
       sessionId,
       error: expect.objectContaining({
         refusal: expect.objectContaining({ details: { reason: 'journalWrittenByNewerOrca' } })

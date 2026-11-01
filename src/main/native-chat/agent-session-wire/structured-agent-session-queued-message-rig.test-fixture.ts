@@ -3,14 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import { activeProviderContext } from '../../../shared/agent-session-provider-context'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuePause } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
+import { agentSessionMessagePayload } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import {
@@ -30,6 +30,7 @@ import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
+import { seedQueuedRigLegacyJournal } from './structured-agent-session-queued-legacy-journal.test-fixture'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   createQueuedRigProvider,
@@ -53,6 +54,7 @@ export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessage
 export async function createQueuedMessageTestRig(
   options: QueuedRigProviderOptions & {
     sessionId?: string
+    legacyInputs?: true
     idleSweep?: { idleMs: number; intervalMs: number }
     now?: () => number
     /** Teardown records its restart offers, which `restartOffers` lists. */
@@ -100,7 +102,11 @@ export async function createQueuedMessageTestRig(
         } as const)
       : {})
   })
+  const pinLegacy = options.legacyInputs && seedQueuedRigLegacyJournal(root, SESSION, options.agent)
   expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
+  if (pinLegacy) {
+    pinLegacy(host)
+  }
 
   function envelope(
     fields: Record<string, unknown>,

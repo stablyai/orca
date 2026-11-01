@@ -1,14 +1,20 @@
 // Derive cut-turn notices from durable journal turns for desktop/mobile, including old journals and mid-settle quits.
 // Do not duplicate host-written stop explanations; derived rows are never stored.
 
-import { agentSessionFailureFact, readAgentSessionFailureFact } from '../../agent-session-failure'
+import {
+  agentSessionFailureFact,
+  readAgentSessionFailureFact
+} from '../../agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
-} from '../../agent-session-failure-words'
-import { agentJournalItemKey, parseAgentJournalItemKey } from '../../agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../agent-session-journal-producer'
-import type { AgentJournalRenderItem } from '../../agent-session-journal-types'
+} from '../../agent-session/failures/agent-session-failure-words'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../agent-session/journal/agent-session-journal-producer'
+import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from '../../agent-session-turn-record'
 import { agentTurnVerdict } from '../../agent-turn-outcome'
 import {
@@ -16,8 +22,8 @@ import {
   RESTART_CONTINUATION_ROW_PREFIX,
   STALE_SESSION_ROW_PREFIX
 } from '../../agent-session-stop-row-identity'
-import { isStructuredAgentSessionStartFailureRow } from '../../structured-agent-session-start-failure-row-key'
-import { hostStatesTurnScopes } from '../../native-chat-turn-membership'
+import { isStructuredAgentSessionStartFailureRow } from '../../agent-session/failures/structured-agent-session-start-failure-row-key'
+import { hostStatesTurnScopes } from './native-chat-turn-membership'
 
 const CUT_TURN_NOTICE_ROW = 'cut-turn-notice:'
 

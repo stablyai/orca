@@ -1,5 +1,5 @@
-import type { AgentJournalSubmission } from './agent-session-journal-types'
-import { hasUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
+import type { AgentJournalSubmission } from './agent-session/journal/agent-session-journal-types'
+import { hasUnansweredStructuredAgentSessionDispatch } from './agent-session/requests/structured-agent-session-unanswered-dispatch'
 
 /** Host operational projections scope current generations; clients without scope retain legacy running-turn/pending-prompt/unanswered-send reads. */
 export type StructuredAgentSessionWorkScope = {

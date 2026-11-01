@@ -3,7 +3,7 @@ import {
   aggregateAsyncQuestions,
   scanPendingAsks
 } from '../../../../shared/native-chat/input/native-chat-ask'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { nativeChatPromptDismissals as dismissals } from './native-chat-prompt-dismissals'
 
 export function useNativeChatAsyncQuestions({

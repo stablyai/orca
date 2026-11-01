@@ -3,7 +3,7 @@ import { memo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/native-chat-visual-directive'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
@@ -82,6 +82,7 @@ function WorktreeAgentRowComponent({
   )
   return childRow ? (
     <Pressable
+      style={({ pressed }) => pressed && pressedStyle}
       disabled={isReadOnly || !onPress}
       accessibilityRole="button"
       onPress={(event) => {

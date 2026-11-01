@@ -18,15 +18,10 @@ const pageScroller = vi.hoisted(() => ({
 
 export async function reactNativeStub() {
   const React = await import('react')
+  const { reactNativeMotionStub } = await import('../test-support/react-native-motion-stub')
   return {
+    ...reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
-    Animated: {
-      Value: class {
-        constructor(readonly value: number) {}
-      },
-      timing: () => ({ start: () => {}, stop: () => {} }),
-      View: 'Animated.View'
-    },
     FlatList: React.forwardRef((props, ref) => {
       const handle = { scrollToEnd, scrollToOffset, getScrollableNode: () => pageScroller }
       React.useImperativeHandle(ref, () => handle, [])

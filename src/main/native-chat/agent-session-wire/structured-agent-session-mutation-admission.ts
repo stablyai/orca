@@ -14,10 +14,12 @@ import type {
 } from '../../../shared/agent-session-operation-ledger'
 import type {
   AgentSessionMutationEnvelope,
-  AgentSessionMutationResult,
-  AgentSessionWireRefusal
+  AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import {
+  type AgentSessionWireRefusal,
+  isAgentSessionRefusalError
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type {
   AgentSessionMutationOperationAdmission,
   AgentSessionMutationOperationDecision

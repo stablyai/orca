@@ -6,7 +6,7 @@ import type {
 import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
 
 export async function newChatCatalogKey(
-  deps: AgentModelCatalogServiceDeps,
+  deps: Pick<AgentModelCatalogServiceDeps, 'resolveAccountHome'>,
   agent: string,
   folder?: string
 ): Promise<{ fingerprint: string; accountHome: AgentSessionAccountHome } | null> {

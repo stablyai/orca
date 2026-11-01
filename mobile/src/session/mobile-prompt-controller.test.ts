@@ -5,7 +5,7 @@ import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import {
   visible,

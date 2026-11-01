@@ -2,14 +2,14 @@ import {
   agentJournalItemKey,
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { nativeChatRowRendersContent } from '../../shared/native-chat-row-content'
-import { projectNativeChatTranscriptMessages } from '../../shared/native-chat-transcript-projection'
+import { nativeChatRowRendersContent } from '../../shared/native-chat/transcript/native-chat-row-content'
+import { projectNativeChatTranscriptMessages } from '../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
 import { usableJournalHistoryOrigin } from '../native-chat/agent-session-journal/journal-history-origin'
 import {

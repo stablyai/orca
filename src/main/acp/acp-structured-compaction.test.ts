@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentJournalTurnBody, readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,

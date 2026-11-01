@@ -15,8 +15,8 @@ import { settledWithin } from '../codex/codex-structured-dispatch-test-support'
 import { CODEX_TURN_OPEN_WAIT_MS } from '../codex/codex-structured-turn-open-wait'
 import type * as CodexTurnOpenWait from '../codex/codex-structured-turn-open-wait'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
-import { classifyDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
+import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { classifyDispatchRejection } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { owesStructuredAgentSessionWork } from '../../shared/structured-agent-session-owed-work'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session-goal-control-copy'
@@ -518,6 +518,8 @@ describe("a queued card's Send-now while a Codex turn runs", () => {
       expect(verdictOf((await settled()).submissions, sent)).toBe('accepted')
     )
     expect((await settled()).owesWork).toBe(false)
+    // Delivered once: the turn's end neither steers it again nor starts a turn with it.
+    expect([steers, answers]).toEqual([1, 1])
   })
 
   it('is settled when a Stop ends that turn, on a Codex that names a steered start falsely', async () => {

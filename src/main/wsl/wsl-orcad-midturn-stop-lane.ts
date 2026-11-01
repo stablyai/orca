@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { expect, vi } from 'vitest'
 import { z } from 'zod'
 import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../shared/agent-session-continue-interrupted-capability'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type {
   AgentSessionHistoryResult,

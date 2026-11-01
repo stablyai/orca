@@ -1,6 +1,6 @@
 import { expect } from 'vitest'
 import { z } from 'zod'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionProviderHandleKey } from '../../shared/agent-session-provider-handle'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'

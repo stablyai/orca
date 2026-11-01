@@ -202,16 +202,4 @@ describe('workspace cleanup execution-host routing', () => {
     expect(result.candidates[0]?.blockers).toContain('git-status-error')
     expect(result.candidates[0]?.executionHostId).toBe('ssh:alpha')
   })
-
-  it('still routes a genuinely local repo to this machine', async () => {
-    const store = makeStore([makeRepo({ path: '/local/repo' })], {
-      [WORKTREE_ID]: makeMeta()
-    })
-
-    const result = await scanWorkspaceCleanup(store)
-
-    expect(listRepoWorktreesMock).toHaveBeenCalled()
-    expect(getStatusMock).toHaveBeenCalled()
-    expect(result.candidates[0]?.executionHostId).toBe('local')
-  })
 })

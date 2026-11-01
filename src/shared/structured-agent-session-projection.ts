@@ -10,12 +10,12 @@ import {
   type AgentJournalMessageSendMode,
   type AgentJournalRenderItem,
   type AgentJournalSubmission
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
 import { agentJournalToolCallLifecycle } from './agent-journal-tool-call-lifecycle'
-import { agentJournalLinkageFields } from './agent-session-journal-producer'
+import { agentJournalLinkageFields } from './agent-session/journal/agent-session-journal-producer'
 import { structuredAgentSessionStatusBlock } from './structured-agent-session-status-block'
-import { agentJournalItemRowOrigin } from './agent-session-journal-position'
+import { agentJournalItemRowOrigin } from './agent-session/journal/agent-session-journal-position'
 import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH
@@ -28,13 +28,13 @@ import {
   latestStructuredAgentSessionPrompt,
   latestStructuredAgentSessionRequest,
   type StructuredAgentSessionLatestRequest
-} from './structured-agent-session-latest-request'
+} from './agent-session/requests/structured-agent-session-latest-request'
 import {
   isStructuredAgentSessionToolAction,
   structuredAgentSessionToolCallBlock
-} from './structured-agent-session-tool-call-block'
+} from './agent-session/structured-agent-session-tool-call-block'
 
-import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from './native-chat/native-chat-types'
 import { sha256 } from './sha256'
 import { readAgentMessageSource } from './agent-session/agent-session-message-source'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
@@ -43,12 +43,10 @@ import type { StructuredAgentSessionWorkScope } from './structured-agent-session
 import { agentSessionCurrentContextRows } from './agent-session-context-clear'
 import { nativeChatStatusTurnOutcome } from './native-chat/native-chat-orca-stop-cut'
 
-// Keep existing live-turn/unanswered-send consumers on one import path.
 export {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn
 } from './structured-agent-session-live-turn'
-export { hasUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 
 /** Only transport-clipped output has a fetchable remainder; older saved truncations have none. */
 function toolResult(

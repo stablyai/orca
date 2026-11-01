@@ -25,9 +25,12 @@ export function structuredAgentSessionTurnCompletionFeedKey(target: RuntimeClien
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
-function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
-  const listeners = new Set<StructuredAgentSessionTurnCompletionListener>()
+function createOwner(target: RuntimeClientTarget, key: string): OwnedTurnCompletionFeed {
+  const listeners = new Map<StructuredAgentSessionTurnCompletionListener, symbol>()
   const activations = new Set<symbol>()
+  // Pending probes, opens and retries belong to this epoch until deferred stop runs.
+  let live = false
+  let pendingFlush = false
   let generation = 0
   let handle: { unsubscribe: () => void } | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -35,7 +38,7 @@ function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
 
   const deliver = (edge: AgentSessionAttentionEdge): void => {
     // A copy, so a listener that unsubscribes mid-fanout does not skip its neighbour.
-    for (const listener of Array.from(listeners)) {
+    for (const listener of Array.from(listeners.keys())) {
       try {
         listener(edge)
       } catch (error) {
@@ -43,7 +46,7 @@ function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
       }
     }
   }
-  const active = (candidate: number): boolean => activations.size > 0 && candidate === generation
+  const active = (candidate: number): boolean => live && candidate === generation
   const clearReconnect = (): void => {
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
@@ -70,7 +73,7 @@ function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
   }
   // Reconnect starts empty; host retains no missed-edge history to request.
   const loseConnection = (candidate: number): void => {
-    if (candidate !== generation) {
+    if (!active(candidate)) {
       return
     }
     generation += 1
@@ -90,7 +93,7 @@ function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
         }
         reconnectAttempt = 0
         // An arm this build cannot name is dropped, not handed on half-read.
-        if (event.type === 'completion' || event.type === 'prompt') {
+        if (activations.size > 0 && (event.type === 'completion' || event.type === 'prompt')) {
           deliver(event)
         }
       },
@@ -144,44 +147,86 @@ function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
       .catch(() => loseConnection(candidate))
   }
   const stop = (): void => {
+    live = false
     generation += 1
     clearReconnect()
     dropHandle()
     reconnectAttempt = 0
   }
 
-  return {
+  const flush = (): void => {
+    if (pendingFlush) {
+      return
+    }
+    pendingFlush = true
+    queueMicrotask(() => {
+      pendingFlush = false
+      if (owners.get(key) !== owner) {
+        return
+      }
+      if (activations.size === 0) {
+        stop()
+      }
+      if (activations.size === 0 && listeners.size === 0) {
+        owners.delete(key)
+      }
+    })
+  }
+  const owner: OwnedTurnCompletionFeed = {
     activate: () => {
       const token = Symbol('turn-completion-feed')
       activations.add(token)
-      if (activations.size === 1) {
+      if (!live) {
+        live = true
         open()
       }
       return () => {
-        activations.delete(token)
-        if (activations.size === 0) {
-          stop()
+        if (activations.delete(token) && activations.size === 0) {
+          flush()
         }
       }
     },
     subscribe: (listener) => {
-      listeners.add(listener)
-      return () => listeners.delete(listener)
+      const registration = listeners.get(listener) ?? Symbol('turn-completion-listener')
+      listeners.set(listener, registration)
+      return () => {
+        if (listeners.get(listener) !== registration) {
+          return
+        }
+        listeners.delete(listener)
+        flush()
+      }
     },
-    stop
+    stop: () => {
+      stop()
+      listeners.clear()
+      activations.clear()
+      pendingFlush = false
+    }
   }
+  return owner
 }
 
 export function getStructuredAgentSessionTurnCompletionFeed(
   target: RuntimeClientTarget
 ): StructuredAgentSessionTurnCompletionFeedOwner {
   const key = structuredAgentSessionTurnCompletionFeedKey(target)
-  let owner = owners.get(key)
-  if (!owner) {
-    owner = createOwner(target)
-    owners.set(key, owner)
+  const acquire = (): OwnedTurnCompletionFeed => {
+    let owner = owners.get(key)
+    if (!owner) {
+      owner = createOwner(target, key)
+      owners.set(key, owner)
+    }
+    return owner
   }
-  return owner
+  return {
+    activate: () => acquire().activate(),
+    subscribe: (listener) => acquire().subscribe(listener)
+  }
+}
+
+export function structuredAgentSessionTurnCompletionFeedCountForTests(): number {
+  return owners.size
 }
 
 export function resetStructuredAgentSessionTurnCompletionFeedsForTests(): void {

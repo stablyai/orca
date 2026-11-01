@@ -74,6 +74,24 @@ export function resolveBaselineReleaseRef(): string {
   return latest
 }
 
+/** The newest `count` stable desktop releases, newest first: the ones a downgrade can reach. */
+export function resolveRecentStableReleaseRefs(count: number): string[] {
+  let tags = git(['tag', '--list', 'v[0-9]*']).split('\n').filter(Boolean)
+  const recent: string[] = []
+  while (recent.length < count) {
+    const latest = selectLatestStableReleaseTag(tags)
+    if (!latest) {
+      throw new Error(
+        `Cross-version harness found ${recent.length} of ${count} stable desktop release tags; ` +
+          'a shallow CI clone needs `fetch-depth: 0`.'
+      )
+    }
+    recent.push(latest)
+    tags = tags.filter((tag) => tag !== latest)
+  }
+  return recent
+}
+
 function resolveCommit(ref: string): string {
   try {
     return git(['rev-parse', `${ref}^{commit}`])

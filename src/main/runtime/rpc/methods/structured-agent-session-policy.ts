@@ -7,7 +7,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
-import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session/options/agent-session-optional-model-capability'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { readAgentLaunchModeSettings } from '../../../agent-launch/agent-launch-mode'

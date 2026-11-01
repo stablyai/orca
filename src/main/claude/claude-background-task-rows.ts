@@ -1,4 +1,4 @@
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
 import { isSettledBackgroundTaskState } from '../../shared/native-chat/input/native-chat-background-task-row'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { record, taskAliasId } from './claude-background-task-frames'

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitPullRequestArrow, Link2, RefreshCw } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc-client'
@@ -194,7 +194,11 @@ export function PrSidebarCreateEmptyState({
             <RefreshCw size={16} color={colors.textSecondary} strokeWidth={2.2} />
           </Pressable>
           <Pressable
-            style={[styles.createButton, (!canCreate || loading) && styles.createButtonDisabled]}
+            style={({ pressed }) => [
+              styles.createButton,
+              (!canCreate || loading) && styles.createButtonDisabled,
+              pressed && pressedStyle
+            ]}
             onPress={() => void openComposer()}
             disabled={!canCreate || loading}
             accessibilityRole="button"

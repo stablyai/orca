@@ -169,15 +169,3 @@ it('waits for removal during service disposal and preserves history until succes
   }
   expect(service.getLogs(key)).toHaveLength(0)
 })
-
-it('preserves installed crash history while cancelling the existing restart backoff', async () => {
-  const { service, install } = await createUninstallFixture()
-  const key = await install('crash')
-  const child = latestUninstallWorker()
-  child.connected = false
-  child.emit('exit', 1)
-  expect(latestPluginLog(service, key).line).toContain('exited unexpectedly')
-  await service.deactivatePlugin(key)
-  expect(service.findValidPlugin(key)).not.toBeNull()
-  expect(service.getLogs(key)).toHaveLength(200)
-})

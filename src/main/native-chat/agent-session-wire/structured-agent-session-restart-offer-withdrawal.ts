@@ -3,7 +3,7 @@
 
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { isRestartContinuationOf } from './structured-agent-session-restart-continuation-envelope'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'

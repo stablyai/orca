@@ -4,7 +4,10 @@ import type {
   AgentSessionContextUsage,
   AgentSessionContextWindow
 } from './agent-session-context-usage'
-import type { AgentJournalItemBody, AgentJournalRenderItem } from './agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalRenderItem
+} from './agent-session/journal/agent-session-journal-types'
 import {
   latestStructuredAgentContextFacts,
   selectStructuredAgentContextUsage

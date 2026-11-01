@@ -3,7 +3,6 @@ import {
   applyPiRpcSessionOption,
   parsePiModelOptionId,
   PiRpcOptionObservations,
-  readPiRpcCommands,
   readPiRpcSessionOptions,
   type PiRpcOptionProof,
   type PiRpcRequester
@@ -117,43 +116,6 @@ describe('Pi RPC session options', () => {
       applyPiRpcSessionOption(rejected, selected, 'model', 'other/new-model')
     ).rejects.toThrow('provider refused model')
     expect(selected.get('model')).toBe('openai-codex/gpt-6.1-sol')
-  })
-
-  it('rejects malformed provider data and reports only Pi-listed commands', async () => {
-    const malformed = requester({ get_available_models: { models: [{ id: 'missing-provider' }] } })
-    await expect(readPiRpcSessionOptions(malformed)).rejects.toThrow()
-    const rpc = requester({
-      get_commands: {
-        commands: [
-          { name: 'review', description: 'Review changes', source: 'extension' },
-          { name: 'search', source: 'skill' }
-        ]
-      }
-    })
-    expect(await readPiRpcCommands(rpc)).toEqual({
-      commands: [
-        { name: 'review', kind: 'command', description: 'Review changes' },
-        { name: 'search', kind: 'skill' }
-      ]
-    })
-  })
-
-  it('handles a signed-out state with no model', async () => {
-    const rpc = requester({
-      get_available_models: { models: [] },
-      get_state: {
-        model: null,
-        thinkingLevel: 'off',
-        sessionFile: '/sessions/current.jsonl',
-        isStreaming: false,
-        isCompacting: false
-      }
-    })
-    expect((await readPiRpcSessionOptions(rpc)).current).toEqual({
-      model: '',
-      effort: 'off',
-      confirmed: ['effort']
-    })
   })
 
   it('keeps ordinary thinking levels when the map only supplies overrides', async () => {

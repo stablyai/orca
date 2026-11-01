@@ -14,7 +14,7 @@ import {
   type WireClaudeModel
 } from './claude-structured-catalog-listing'
 import type { StructuredAgentSessionLiveOptions } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from '../../shared/agent-session/options/structured-agent-session-option-codec'
 
 /** Effort comes from settings; system/init omits it. */
 export function readClaudeSettingsEffort(settings: unknown): string | null {

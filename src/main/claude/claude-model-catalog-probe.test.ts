@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { PROVIDER_STDIN_END_GRACE_MS } from '../provider-process/provider-process-supervisor'
 import { createClaudeModelCatalogProbe } from './claude-model-catalog-probe'
-import { discoveredModel } from '../../shared/structured-agent-session-discovered-model'
+import { discoveredModel } from '../../shared/agent-session/options/structured-agent-session-discovered-model'
 import { resolveClaudeStructuredInvocation } from './claude-structured-launch-resolution'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
 import {

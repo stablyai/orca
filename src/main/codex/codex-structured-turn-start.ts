@@ -7,11 +7,14 @@ import { reportedCodexPermissionMode } from './codex-structured-thread-open'
 import { admitCodexTurnPermission } from './codex-structured-turn-permission'
 import type { CodexSkillReport } from './codex-structured-skill-report'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
-import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentJournalMessageItem,
   AgentJournalTurnJoin
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
@@ -29,13 +32,6 @@ import {
   codexDispatchRejection,
   codexTurnEndRejection
 } from './codex-structured-turn-end-settlement'
-
-/** Allowlist turn overrides so saved options cannot replace the thread's permission policy. */
-const CODEX_TURN_OPTION_KEYS = new Set(['model', 'effort', 'personality', 'serviceTier'])
-
-export function isCodexTurnOptionKey(key: string): boolean {
-  return CODEX_TURN_OPTION_KEYS.has(key)
-}
 
 function checkDispatchAuthority(
   host: CodexTurnHost,

@@ -204,7 +204,10 @@ export function NativeChatResumeOccurrenceModal({
     // Opening is read-only; the user’s send settles the record. Clear the dialog so the chat is visible.
     consumeNativeChatResumeOnRestartDialogRequest()
     releaseFinishedNativeChatRestartRun()
-    const session = { structuredSession: { workspaceId: failure.workspaceId, sessionId } }
+    const session = {
+      agent: failure.agent,
+      structuredSession: { workspaceId: failure.workspaceId, sessionId }
+    }
     await (remote
       ? activateAiVaultStructuredSession(session, undefined, store.target)
       : activateAiVaultStructuredSession(session))

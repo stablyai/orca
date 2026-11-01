@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import { isAgentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { isAgentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,

@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import type { PRState } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { GitHubPrRepoSlug } from '../../session/github-pr-rpc'
-import { colors } from '../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -186,7 +186,11 @@ export function PRCommentsSection({
                       return (
                         <Pressable
                           key={tab.value}
-                          style={[styles.audienceTab, active && styles.audienceTabActive]}
+                          style={({ pressed }) => [
+                            styles.audienceTab,
+                            active && styles.audienceTabActive,
+                            pressed && pressedStyle
+                          ]}
                           onPress={() => selectFilter(tab.value)}
                           accessibilityRole="button"
                           accessibilityState={{ selected: active }}
@@ -220,7 +224,7 @@ export function PRCommentsSection({
                     ))}
                     {remaining > 0 ? (
                       <Pressable
-                        style={styles.showMore}
+                        style={({ pressed }) => [styles.showMore, pressed && pressedStyle]}
                         onPress={() => setLimit((l) => l + COMMENT_PAGE)}
                         accessibilityRole="button"
                       >
@@ -302,7 +306,10 @@ function CommentGroupView({
   return (
     <View style={styles.group}>
       <Pressable
-        style={styles.resolvedHeader}
+        style={({ pressed }) => [
+          styles.resolvedHeader,
+          pressed && { backgroundColor: colors.translucentFill }
+        ]}
         onPress={() => setExpanded((v) => !v)}
         accessibilityRole="button"
       >

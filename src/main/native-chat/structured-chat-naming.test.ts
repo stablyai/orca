@@ -21,7 +21,7 @@ import { agentSessionCurrentContextRows } from '../../shared/agent-session-conte
 import {
   firstStructuredAgentSessionPrompt,
   STRUCTURED_CHAT_NAME_PROMPT_LIMIT
-} from '../../shared/structured-agent-session-first-prompt'
+} from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
 import {
   type AgentSessionUserNameWrite,
   compareAndSetAgentSessionRecordName,

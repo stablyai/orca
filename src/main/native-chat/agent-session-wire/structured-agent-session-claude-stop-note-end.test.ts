@@ -1,5 +1,5 @@
 import { structuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 
 import { mkdtemp, rm } from 'node:fs/promises'

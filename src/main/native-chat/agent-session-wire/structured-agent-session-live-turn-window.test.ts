@@ -5,12 +5,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemIdentity,
-  AgentJournalTurnLifecycle,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnLifecycle } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import {
   activeStructuredAgentSessionTurnId,

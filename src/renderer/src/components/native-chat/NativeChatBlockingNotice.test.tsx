@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'

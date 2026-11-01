@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ArrowRight, ExternalLink, Pencil } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
@@ -191,7 +191,7 @@ function PRTitle({
 
   return (
     <Pressable
-      style={styles.titleRow}
+      style={({ pressed }) => [styles.titleRow, pressed && pressedStyle]}
       onPress={editable ? startEdit : undefined}
       disabled={!editable}
       accessibilityRole={editable ? 'button' : undefined}

@@ -114,6 +114,7 @@ it.each(['stacked', 'side-by-side'] as const)(
     }
     const controller = mountFixture<Parameters<typeof MobileSessionActiveContent>[0]['controller']>(
       {
+        sessionTabs: [],
         terminals: ['a', 'b', 'c'].map((handle) => ({ handle, title: handle })),
         activeHandle: 'a',
         terminalSplitActive: true,

@@ -37,7 +37,7 @@ vi.mock('@/runtime/use-managed-runtime-install', () => ({
 }))
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
-import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
+import { agentSessionRefusalFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
 import {

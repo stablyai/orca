@@ -12,7 +12,7 @@ import {
   providerContextBoundaryForClear,
   type AgentSessionConversationClear
 } from './agent-session-conversation-command-record'
-import { isAgentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { isAgentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'

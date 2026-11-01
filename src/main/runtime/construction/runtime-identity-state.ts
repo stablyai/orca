@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { reconcileChatTabIdentities } from '../agent-session/agent-session-tab-identity'
 import { preserveTerminalRetirementProofs } from '../mobile-session-terminal-retirement-proof'
+import { stampMobileSnapshotVersion } from '../mobile-session-snapshot-version'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
@@ -44,7 +46,11 @@ import type {
   PtyControllerInventory,
   RuntimePtyController
 } from '../runtime-pty-controller-contract'
-import type { RuntimeLeafRecord, PtyRegistrationClaim } from '../runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  PtyRegistrationClaim,
+  RuntimeWorktreeTerminalSleepState
+} from '../runtime-terminal-state-records'
 import type { TerminalHandleRecord } from '../runtime-terminal-contracts'
 import type { PtyIncarnationHandleRecord } from '../orca-runtime-core'
 import { MailPointerRepointScheduler } from '../orchestration/mail-pointer-repoint-scheduler'
@@ -68,6 +74,7 @@ import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualif
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
+  protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
   protected readonly runtimeId = randomUUID()
 
   protected readonly startedAt = Date.now()
@@ -120,6 +127,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot {
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    snapshot = reconcileChatTabIdentities(snapshot, existing)
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       const merged = startedMainTerminalSurfaces(this)?.withMainOrder(snapshot) ?? snapshot
       // Main-order-only rebuilds are no-ops unless occupant/publication/retirement evidence changed.
@@ -134,11 +142,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       snapshot = merged
     }
     snapshot = preserveTerminalRetirementProofs(snapshot, existing)
-    const snapshotVersion = existing
-      ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
-      : snapshot.snapshotVersion
-    const stamped =
-      snapshotVersion === snapshot.snapshotVersion ? snapshot : { ...snapshot, snapshotVersion }
+    const stamped = stampMobileSnapshotVersion(snapshot, existing)
     this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
     return stamped
   }
@@ -204,14 +208,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   protected terminalSleepStateByHostWorktree = new Map<
     HostScopedWorktreeKey,
-    {
-      worktreeId: string
-      generation: number
-      phase: 'stopping' | 'partial' | 'sleeping'
-      ptyIds: string[]
-      terminalHandles: string[]
-      terminalHandlesByPtyId: Record<string, string[]>
-    }
+    RuntimeWorktreeTerminalSleepState
   >()
 
   protected terminalSleepGeneration = 0
@@ -332,7 +329,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     (ptyId) => this.getPtyAgent(ptyId),
     (ptyId, data, inputKind) =>
       this.ptyController?.writeWithSettlement?.(ptyId, data, inputKind) ??
-      writeRefused('provider_cannot_settle')
+      writeRefused('provider_cannot_settle'),
+    (ptyId) => this.claimIdleShellPromptForPty(ptyId)
   )
 
   // Every tui-idle site must rank the same pane evidence identically.
@@ -370,7 +368,10 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     {
       ...this.tuiIdleEvidenceSource,
       defaultTimeoutMs: TUI_IDLE_DEFAULT_TIMEOUT_MS,
-      getTerminalPty: (handle) => this.getTerminalPtyForHandle(handle),
+      getTerminalPty: (handle, condition) =>
+        condition === 'exit'
+          ? this.getExitWaitPtyForHandle(handle)
+          : this.getTerminalPtyForHandle(handle),
       exitUnsettled: (pty) =>
         pty.lastExitCode === null &&
         mainBindsUnendedTerminal(this, pty.ptyId, this.ptyLivenessVerdictByPtyId.get(pty.ptyId)),

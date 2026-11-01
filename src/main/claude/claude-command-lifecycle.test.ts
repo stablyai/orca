@@ -3,14 +3,14 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { DISPATCH_REJECTED_CANCELLED } from '../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_CANCELLED } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
   DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED,
   DISPATCH_DOUBT_PROVIDER_IDLE
 } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { ClaudeControlRequestError } from './claude-agent-sdk-control-requests'
 import { claudeDispatchRejection } from './claude-structured-dispatch-content'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'

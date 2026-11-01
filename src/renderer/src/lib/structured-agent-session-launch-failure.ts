@@ -3,13 +3,13 @@
 import {
   readAgentSessionRefusalReference,
   type AgentSessionRefusalReference
-} from '../../../shared/agent-session-wire-refusals'
-import type { AgentSessionConversationOwner } from '../../../shared/agent-session-refusal-details'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionConversationOwner } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import {
   agentSessionRefusalFailure,
   readAgentSessionErrorRefusal,
   type AgentSessionWriteRefusal
-} from '../../../shared/agent-session-write-failure'
+} from '../../../shared/agent-session/failures/agent-session-write-failure'
 import { wslHostsAvailable } from '@/components/sidebar/use-wsl-hosts-enabled'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'

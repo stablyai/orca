@@ -98,6 +98,10 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             onAddNote={controller.openComposer}
             onEditNote={controller.openEditComposer}
             onRetry={controller.retryAction ?? undefined}
+            offline={controller.connState !== 'connected'}
+            onShowAll={
+              controller.filter === 'all' ? undefined : () => controller.selectFilter('all')
+            }
           />
           {controller.currentItem ? (
             <MobileDiffReviewFooter

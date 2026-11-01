@@ -1,14 +1,13 @@
 import { useCallback, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Text } from 'react-native'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
+import { MobileStateView } from '../components/MobileStateView'
 import { voiceSettingsStyles as styles } from './voice-settings-styles'
-import { ChevronLeft, ChevronRight } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { BottomDrawer } from '../components/BottomDrawer'
+import { ListRow } from '../components/list/ListGroup'
 import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { VoiceModelList } from '../components/VoiceModelList'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
@@ -18,6 +17,7 @@ import {
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
 import { MobileSwitch } from '../components/MobileSwitch'
+import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
 
 const POLL_INTERVAL_MS = 1500
 
@@ -60,16 +60,18 @@ function voiceSettingsErrorMessage(t: Translate, error: VoiceSettingsError | nul
 
 export default function VoiceSettingsScreen({
   operations,
+  connecting = false,
   focused,
   onBack
 }: {
   operations: VoiceSettingsOperations | null
+  /** A paired desktop is still dialing, so the screen is loading rather than unpaired. */
+  connecting?: boolean
   focused: boolean
   onBack: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const insets = useSafeAreaInsets()
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [loading, setLoading] = useState(true)
   // A read clears only its own failure, so a background re-read cannot hide why a change failed.
@@ -246,145 +248,111 @@ export default function VoiceSettingsScreen({
   const loadErrorMessage = voiceSettingsErrorMessage(t, loadError)
   const errorMessage = voiceSettingsErrorMessage(t, error)
 
+  const showLoading = operations ? loading && setup === null : connecting
+  const footerError = errorMessage ?? loadErrorMessage
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back', 'Back')}
-          style={styles.backButton}
-          onPress={onBack}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>{t('settings.voiceSettingsScreen.title', 'Voice')}</Text>
-      </View>
-
-      {!operations ? (
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <Text style={styles.emptyText}>
-            {t(
-              'settings.voiceSettingsScreen.connectDesktop',
-              'Connect to a desktop to manage voice settings.'
-            )}
+    <SettingsScreen
+      title={t('settings.voiceSettingsScreen.title', 'Voice')}
+      onBack={onBack}
+      fillContent={showLoading}
+      overlays={
+        <BottomDrawer visible={modelDrawerOpen} onClose={() => setModelDrawerOpen(false)}>
+          <Text style={styles.drawerTitle}>
+            {t('settings.voiceSettingsScreen.speechModel', 'Speech Model')}
           </Text>
-        </View>
-      ) : loading && setup === null ? (
-        <View style={styles.loading}>
-          <ActivityIndicator color={colors.textSecondary} />
-        </View>
+          {setup ? (
+            <VoiceModelList
+              setup={setup}
+              disabled={false}
+              busyAction={busyAction}
+              onUseModel={(m) => void handleUseModel(m)}
+              onDownload={(m) => void handleDownload(m)}
+              onDelete={(m) => void handleDelete(m)}
+            />
+          ) : null}
+        </BottomDrawer>
+      }
+    >
+      {showLoading ? (
+        <MobileStateView
+          loading
+          title={t('settings.voiceSettingsScreen.loading', 'Loading voice settings…')}
+        />
+      ) : !operations ? (
+        <SettingsNote>
+          {t(
+            'settings.voiceSettingsScreen.connectDesktop',
+            'Connect to a desktop to manage voice settings.'
+          )}
+        </SettingsNote>
       ) : setup === null ? (
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <Text style={styles.errorText}>
-            {loadErrorMessage ??
-              t('settings.voiceSettingsScreen.loadFailedMessage', 'Failed to load voice settings.')}
-          </Text>
-        </View>
+        <SettingsNote error>
+          {loadErrorMessage ??
+            t('settings.voiceSettingsScreen.loadFailedMessage', 'Failed to load voice settings.')}
+        </SettingsNote>
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.groupHeading}>
-            {t('settings.voiceSettingsScreen.dictationHeading', 'DICTATION')}
-          </Text>
-          <View style={[styles.section, styles.sectionTopGap]}>
-            <View style={styles.row}>
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>
-                  {t('settings.voiceSettingsScreen.enableDictation', 'Enable Voice Dictation')}
-                </Text>
-                <Text style={styles.rowSublabel}>
-                  {t(
-                    'settings.voiceSettingsScreen.dictationDescription',
-                    'Dictate text into any focused pane on your desktop.'
+        <>
+          <SettingsSection
+            first
+            title={t('settings.voiceSettingsScreen.dictationHeading', 'DICTATION')}
+            // The segmented control leaves the mode row no room for two lines of explanation.
+            footer={t(
+              'settings.voiceSettingsScreen.dictationModeDescription',
+              'Toggle: press once to start, again to stop. Hold: dictate while held.'
+            )}
+          >
+            <ListRow
+              key="enabled"
+              title={t('settings.voiceSettingsScreen.enableDictation', 'Enable Voice Dictation')}
+              subtitle={t(
+                'settings.voiceSettingsScreen.dictationDescription',
+                'Dictate text into any focused pane on your desktop.'
+              )}
+              accessory={
+                <MobileSwitch
+                  testID="voice-enabled"
+                  accessibilityLabel={t(
+                    'settings.voiceSettingsScreen.enableDictation',
+                    'Enable Voice Dictation'
                   )}
-                </Text>
-              </View>
-              <MobileSwitch
-                testID="voice-enabled"
-                accessibilityLabel={t(
-                  'settings.voiceSettingsScreen.enableDictation',
-                  'Enable Voice Dictation'
-                )}
-                value={enabled}
-                onValueChange={(enabled) => void configure({ enabled })}
-              />
-            </View>
+                  value={enabled}
+                  onValueChange={(enabled) => void configure({ enabled })}
+                />
+              }
+            />
+            <ListRow
+              key="mode"
+              title={t('settings.voiceSettingsScreen.dictationMode', 'Dictation Mode')}
+              disabled={!enabled}
+              accessory={
+                <MobileSegmentedControl
+                  segments={dictationModes(t)}
+                  selected={setup.dictationMode}
+                  onSelect={(dictationMode) => void configure({ dictationMode })}
+                  testIDPrefix="voice-mode-"
+                  disabled={!enabled}
+                />
+              }
+            />
+          </SettingsSection>
 
-            <View style={styles.separator} />
-
-            <View
-              style={[styles.row, !enabled && styles.disabled]}
-              pointerEvents={enabled ? 'auto' : 'none'}
-            >
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>
-                  {t('settings.voiceSettingsScreen.dictationMode', 'Dictation Mode')}
-                </Text>
-                <Text style={styles.rowSublabel}>
-                  {t(
-                    'settings.voiceSettingsScreen.dictationModeDescription',
-                    'Toggle: press once to start, again to stop. Hold: dictate while held.'
-                  )}
-                </Text>
-              </View>
-              <MobileSegmentedControl
-                segments={dictationModes(t)}
-                selected={setup.dictationMode}
-                onSelect={(dictationMode) => void configure({ dictationMode })}
-                testIDPrefix="voice-mode-"
-              />
-            </View>
-          </View>
-
-          <Text style={[styles.groupHeading, styles.inputGroupGap]}>
-            {t('settings.voiceSettingsScreen.speechModelHeading', 'SPEECH MODEL')}
-          </Text>
-          <View style={[styles.section, styles.sectionTopGap]}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.row,
-                !enabled && styles.disabled,
-                pressed && styles.rowPressed
-              ]}
+          <SettingsSection
+            title={t('settings.voiceSettingsScreen.speechModelHeading', 'SPEECH MODEL')}
+            footer={footerError ? <SettingsNote error>{footerError}</SettingsNote> : undefined}
+          >
+            <ListRow
+              key="model"
+              title={t('settings.voiceSettingsScreen.speechModel', 'Speech Model')}
+              subtitle={selectedModelLabel}
+              navigates
               disabled={!enabled}
               testID="voice-model-picker"
               onPress={() => setModelDrawerOpen(true)}
-            >
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>
-                  {t('settings.voiceSettingsScreen.speechModel', 'Speech Model')}
-                </Text>
-                <Text style={styles.rowSublabel} numberOfLines={1}>
-                  {selectedModelLabel}
-                </Text>
-              </View>
-              <ChevronRight size={18} color={colors.textMuted} />
-            </Pressable>
-          </View>
-
-          {(errorMessage ?? loadErrorMessage) ? (
-            <Text style={styles.error}>{errorMessage ?? loadErrorMessage}</Text>
-          ) : null}
-        </ScrollView>
+            />
+          </SettingsSection>
+        </>
       )}
-
-      <BottomDrawer visible={modelDrawerOpen} onClose={() => setModelDrawerOpen(false)}>
-        <Text style={styles.drawerTitle}>
-          {t('settings.voiceSettingsScreen.speechModel', 'Speech Model')}
-        </Text>
-        {setup ? (
-          <VoiceModelList
-            setup={setup}
-            disabled={false}
-            busyAction={busyAction}
-            onUseModel={(m) => void handleUseModel(m)}
-            onDownload={(m) => void handleDownload(m)}
-            onDelete={(m) => void handleDelete(m)}
-          />
-        ) : null}
-      </BottomDrawer>
-    </View>
+    </SettingsScreen>
   )
 }

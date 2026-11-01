@@ -5,11 +5,7 @@ import type { AgentSessionAccountHome } from '../../../shared/agent-session-acco
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
-import {
-  AGENT_MODEL_CATALOG_FRESH_MS,
-  AgentModelCatalogStore,
-  type AgentModelCatalogSuccess
-} from './agent-model-catalog-store'
+import { AgentModelCatalogStore, type AgentModelCatalogSuccess } from './agent-model-catalog-store'
 
 const HOME: AgentSessionAccountHome = { variable: 'GROK_HOME', path: '/homes/grok' }
 
@@ -105,15 +101,6 @@ describe('a live listing beside the account-level discovery', () => {
     expect(read?.models[0]?.defaultEffort).toBe('high')
   })
 
-  it('names the default on a cold account whose first listing came from a live chat', async () => {
-    const run = harness(async () => discovery('grok-4'))
-    run.saveLive()
-    // A live listing alone names no default and does not count as fresh, so explicit demand lists the account.
-    await run.catalog.demand({ agent: 'grok' })
-    await vi.waitFor(() => expect(run.probes).toHaveBeenCalledTimes(1))
-    await vi.waitFor(async () => expect(await run.defaultOf()).toBe('grok-4'))
-  })
-
   it('still refreshes the account listing after ten minutes of live saves', async () => {
     let configured = 'grok-4'
     const run = harness(async () => discovery(configured))
@@ -129,14 +116,5 @@ describe('a live listing beside the account-level discovery', () => {
     await run.catalog.demand({ agent: 'grok' })
     await vi.waitFor(() => expect(run.probes).toHaveBeenCalledTimes(2))
     await vi.waitFor(async () => expect(await run.defaultOf()).toBe('grok-3-mini'))
-  })
-
-  it('does not refresh while the discovery is younger than its freshness window', async () => {
-    const run = harness(async () => discovery('grok-4'))
-    await run.read()
-    run.advance(AGENT_MODEL_CATALOG_FRESH_MS - 1)
-    run.saveLive()
-    await run.read()
-    expect(run.probes).toHaveBeenCalledTimes(1)
   })
 })

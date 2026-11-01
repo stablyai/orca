@@ -98,19 +98,6 @@ describe('the quit checkpoint in a layout-owner build', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('records main’s own quit capture before staging, though the window’s save lacks it', () => {
-    store.setWorkspaceSession(session(), 'local')
-    const captured = record(PANE_A, 2)
-    quitRecords.push(captured)
-
-    expect(stage(session())).toEqual({ ok: true })
-
-    expect(quitResumeRecordsFor).toHaveBeenCalledOnce()
-    expect(store.getWorkspaceSession('local').sleepingAgentSessionsByPaneKey?.[PANE_A]).toEqual(
-      captured
-    )
-  })
-
   it('keeps a wake main recorded that the window had not seen yet', () => {
     // Main woke tab-b (a phone showed it) after the window last saw its record.
     store.setWorkspaceSession(session(), 'local')

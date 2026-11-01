@@ -25,7 +25,7 @@ import type {
   NotificationDispatchRequest,
   StructuredNotificationRead
 } from '../../src/shared/notification-settings-types'
-import type { AgentJournalRenderItem } from '../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionPromptAttentionKey,
   agentSessionAttentionSubjectPrefix,

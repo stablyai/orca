@@ -23,7 +23,7 @@ vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
 const SESSION_ID = 'notice-card-session'

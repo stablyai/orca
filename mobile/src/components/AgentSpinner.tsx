@@ -1,12 +1,12 @@
 import { Activity } from 'lucide-react-native'
-import { Animated, View } from 'react-native'
+import { View } from 'react-native'
 import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useWorkingRingRotation } from './use-working-ring-rotation'
+import { WorkingRing } from './AgentStateDot'
 
 // Match desktop sidebar StatusIndicator colors/sizes for the worktree rollup; palette distinguishes moving/alive/completed states.
 export const agentStatusColors = (): Record<WorktreeStatus, string> => ({
@@ -32,7 +32,6 @@ export function AgentSpinner({
   useMobileColorScheme()
   const monitoring =
     status === 'monitoring' || (status === 'working' && workingMode === 'monitoring')
-  const rotate = useWorkingRingRotation(status === 'working' && !monitoring)
 
   const palette = agentStatusColors()
   const color = palette[status] ?? palette.inactive
@@ -62,7 +61,7 @@ export function AgentSpinner({
   if (status === 'working') {
     return (
       <View style={styles.wrapper}>
-        <Animated.View style={[styles.spinner, { borderColor: color, transform: [{ rotate }] }]} />
+        <WorkingRing color={color} style={styles.spinner} />
       </View>
     )
   }

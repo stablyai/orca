@@ -1,3 +1,6 @@
+import { agentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import { CLAUDE_STRUCTURED_AGENT } from '../claude-structured-agent-definition'
+import { randomUUID } from 'node:crypto'
 import { refreshClaudeStructuredSessionOptions } from '../claude-structured-session-options'
 import type {
   AgentSessionAcquisition,
@@ -6,13 +9,12 @@ import type {
 import { claudeProviderHandleLink } from './claude-structured-owner-identity'
 import type { ClaudePromptRegistry } from '../claude-prompt-registry'
 import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
-import {
-  mintClaudeAcquisitionGeneration,
-  type ClaudeSession,
-  type ClaudeAcquisitionAttempt,
-  type ClaudeAcquireCallbacks,
-  type ClaudeStructuredSessionEvent,
-  type ClaudeStructuredSessionAdapterDeps
+import type {
+  ClaudeSession,
+  ClaudeAcquisitionAttempt,
+  ClaudeAcquireCallbacks,
+  ClaudeStructuredSessionEvent,
+  ClaudeStructuredSessionAdapterDeps
 } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from '../claude-child-work-decoder'
@@ -63,6 +65,7 @@ function claudeSessionInitialization(input: {
     proof,
     ...(facts ? { facts } : {}),
     account: launch.account,
+    ...(launch.accountRecipe ? { accountRecipe: launch.accountRecipe } : {}),
     resumesTranscript: launch.resumesTranscript,
     claudeConfigDir: launch.claudeConfigDir,
     cwd: launch.cwd,
@@ -74,6 +77,9 @@ function claudeSessionInitialization(input: {
     onLateRefusal
   }
 }
+
+const mintClaudeAcquisitionGeneration = (deps: ClaudeStructuredSessionAdapterDeps) =>
+  deps.mintAcquisitionGeneration?.() ?? randomUUID()
 
 export function createClaudeSessionPublication(input: {
   connection: ClaudeSession['connection']
@@ -104,7 +110,9 @@ export function createClaudeSessionPublication(input: {
   return {
     acquisition: {
       process: input.process,
-      acquisitionGeneration
+      acquisitionGeneration,
+      ...(input.launch.accountRecipe ? { accountRecipe: input.launch.accountRecipe } : {}),
+      accountHome: agentSessionAccountHome(CLAUDE_STRUCTURED_AGENT, input.launch.claudeConfigDir)
     },
     session: {
       connection: input.connection,

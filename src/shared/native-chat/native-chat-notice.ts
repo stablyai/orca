@@ -6,7 +6,7 @@ import {
 } from '../agent-session-host-status-rows'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../agent-session-orca-stop'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from './native-chat-stopped-before-start'
-import type { NativeChatBlock, NativeChatTextBlock } from '../native-chat-types'
+import type { NativeChatBlock, NativeChatTextBlock } from './native-chat-types'
 
 export const NATIVE_CHAT_NOTICE_COPY = {
   compaction: 'Context compacted',

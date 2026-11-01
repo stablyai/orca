@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises'
 import {
   agentSessionRefusalError,
   isAgentSessionRefusalError
-} from '../../shared/agent-session-wire-refusals'
+} from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import { prepareCodexAdoption } from '../native-chat/codex-adoption-preparation'
 import type { NativeCodexResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import type { StructuredAgentSessionResumeSource } from '../../shared/structured-agent-session-create'
@@ -11,12 +11,14 @@ import type {
   StructuredAgentCliSourceLocator
 } from '../native-chat/structured-agent-cli-source'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import type {
   AgentSessionProviderHandle,
   StructuredAgentId
 } from '../../shared/agent-session-provider-handle'
-import { agentSessionExecutionLocationsEqual } from '../../shared/agent-session-record'
+import {
+  type AgentSessionExecutionLocation,
+  agentSessionExecutionLocationsEqual
+} from '../../shared/agent-session-record'
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { listStructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'

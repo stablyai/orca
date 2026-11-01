@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { AgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
 import { agentSessionContextFloorSequence } from '../../../../shared/agent-session-context-clear'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'

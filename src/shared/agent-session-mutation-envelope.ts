@@ -8,8 +8,11 @@ import type {
 import { agentSessionLeaseAdmitsWriter } from './agent-session-lease-adjudication'
 import type { AgentSessionLease } from './agent-session-record'
 import { terminalOwnerRefusalMessage } from './agent-session-legacy-handoff-lease'
-import type { AgentSessionMutationEnvelope, AgentSessionWireRefusal } from './agent-session-wire'
-import { refuse } from './agent-session-wire-refusals'
+import type { AgentSessionMutationEnvelope } from './agent-session-wire'
+import {
+  type AgentSessionWireRefusal,
+  refuse
+} from './agent-session/failures/agent-session-wire-refusals'
 
 /** Sort keys recursively and omit undefined fields so both peers hash equivalent request fields identically. */
 export function computeAgentSessionPayloadFingerprint(input: {

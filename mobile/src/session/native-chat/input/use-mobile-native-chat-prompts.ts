@@ -10,7 +10,7 @@ import {
   type ChatApproval
 } from '../../../../../src/shared/native-chat-interactive-prompt'
 import { nativeChatPromptWaitStartedAt } from '../../../../../src/shared/native-chat-prompt-dismiss-key'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   useMobileStructuredAsyncQuestion,
   type MobileStructuredAskSession

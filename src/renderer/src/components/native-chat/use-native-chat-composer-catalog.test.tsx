@@ -9,7 +9,7 @@ import {
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
+import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat/native-chat-agent-profiles'
 import {
   dispatchStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionComposerCommand,

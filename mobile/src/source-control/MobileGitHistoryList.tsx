@@ -1,7 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { ChevronDown, ChevronRight, GitCommitHorizontal } from 'lucide-react-native'
+import {
+  MobileLoadErrorState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/MobileStateView'
+import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { translate } from '../i18n/mobile-i18n'
@@ -187,7 +192,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
                   <Text style={styles.empty}>{filesState.error}</Text>
                   {connected || retryAction ? (
                     <Pressable
-                      style={styles.retryButton}
+                      style={({ pressed }) => [styles.retryButton, pressed && pressedStyle]}
                       accessibilityLabel={t(
                         'sourceControl.gitHistoryList.retryFiles',
                         'Retry commit files'
@@ -243,40 +248,28 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
 
   const view = resolveMobileHistoryScreenView({ connected, rows: commitRows, error })
 
-  if (view.kind === 'error' || view.kind === 'waiting') {
-    return (
-      <View style={styles.state}>
-        <Text style={styles.stateText}>
-          {view.kind === 'waiting'
-            ? t('sourceControl.gitHistoryList.waitingForDesktop', 'Waiting for desktop...')
-            : view.message}
-        </Text>
-        {retry ? (
-          <Pressable
-            style={styles.retryButton}
-            onPress={retry}
-            accessibilityLabel={t('common.retry', 'Retry')}
-          >
-            <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-    )
+  if (view.kind === 'waiting') {
+    return <MobileOfflineState onReconnect={retry} bottomInset={bottomInset} />
+  }
+  if (view.kind === 'error') {
+    return <MobileLoadErrorState error={view.message} onRetry={retry} bottomInset={bottomInset} />
   }
   if (view.kind === 'loading') {
     return (
-      <View style={styles.state}>
-        <ActivityIndicator color={colors.textSecondary} />
-      </View>
+      <MobileStateView
+        loading
+        title={t('sourceControl.gitHistoryList.loading', 'Loading commits…')}
+        bottomInset={bottomInset}
+      />
     )
   }
   if (view.kind === 'empty') {
     return (
-      <View style={styles.state}>
-        <Text style={styles.stateText}>
-          {t('sourceControl.gitHistoryList.noCommits', 'No commits.')}
-        </Text>
-      </View>
+      <MobileStateView
+        icon={GitCommitHorizontal}
+        title={t('sourceControl.gitHistoryList.noCommits', 'No commits.')}
+        bottomInset={bottomInset}
+      />
     )
   }
   return (
@@ -291,8 +284,6 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
 })
 
 const styles = themedStyleSheet(() => ({
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
-  stateText: { color: colors.textMuted, fontSize: typography.bodySize },
   retryButton: {
     marginTop: spacing.md,
     paddingHorizontal: spacing.lg,

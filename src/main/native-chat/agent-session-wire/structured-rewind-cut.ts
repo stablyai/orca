@@ -2,12 +2,12 @@
 
 import { savedRewindKeys, isAgentSessionRewindTarget } from '../../../shared/agent-session-rewind'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 

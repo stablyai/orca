@@ -2,7 +2,7 @@
 
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { classifyStoreFailure } from './structured-agent-session-attach'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'

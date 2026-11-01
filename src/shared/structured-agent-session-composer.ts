@@ -1,4 +1,4 @@
-import { getTextDrivenNativeChatCommands } from './native-chat-agent-profiles'
+import { getTextDrivenNativeChatCommands } from './native-chat/native-chat-agent-profiles'
 import type { AgentType } from './agent-status-types'
 import type {
   SessionOptionDescriptor,
@@ -131,6 +131,14 @@ export function isStructuredAgentSessionComposerCommand(
   const command = commandParts(text)
   return Boolean(
     command && structuredRecognizedCommands().some((entry) => entry.name === command.name)
+  )
+}
+
+/** Host actions send no message; /goal is an action only on hosts that set goals. */
+export function isStructuredAgentSessionHostCommand(text: string, hostSetsGoals: boolean): boolean {
+  return (
+    isStructuredAgentSessionComposerCommand(text) ||
+    (hostSetsGoals && isStructuredAgentSessionGoalCommand(text))
   )
 }
 

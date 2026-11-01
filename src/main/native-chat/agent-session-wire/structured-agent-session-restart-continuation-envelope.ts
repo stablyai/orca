@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { restartContinuationMessage } from '../../../shared/agent-session-restart-continuation'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'

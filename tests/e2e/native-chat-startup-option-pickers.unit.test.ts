@@ -10,12 +10,12 @@ import { StructuredAgentSessionStartupAttempts } from '../../src/main/native-cha
 import { createScriptedClaudeRuntime } from '../../src/main/runtime/structured-claude-scripted-runtime-test-support'
 import { TooltipProvider } from '../../src/renderer/src/components/ui/tooltip'
 import { NativeChatSessionOptionPickers } from '../../src/renderer/src/components/native-chat/NativeChatSessionOptionPickers'
-import { structuredAgentSessionSeedCatalog } from '../../src/shared/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../src/shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionOptions,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot
-} from '../../src/shared/structured-agent-session-options'
+  createStructuredAgentSessionOptionState
+} from '../../src/shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>

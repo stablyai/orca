@@ -1,5 +1,5 @@
 import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk'
-import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from '../../shared/agent-session/options/structured-agent-session-option-codec'
 import type {
   ClaudeStructuredLaunch,
   ClaudeStructuredSdkOptions

@@ -7,13 +7,14 @@ import {
   Search,
   colors,
   Pressable,
-  Check,
   ActivityIndicator,
   Pencil
 } from './mobile-tasks-dependencies'
 import { TASK_SECONDARY_DRAWER_Z_INDEX } from './mobile-tasks-legacy-foundation'
+import { ListGroup, ListRow } from '../components/list/ListGroup'
 import { styles } from './mobile-tasks-legacy-styles'
 import { translate } from '../i18n/mobile-i18n'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPresentationModel) {
   const {
@@ -48,7 +49,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
             )}
           </Text>
         </View>
-        <View style={styles.detailGroup}>
+        <View style={styles.pickerStack}>
           <TextField
             value={workspaceBaseBranchQuery}
             onChangeText={setWorkspaceBaseBranchQuery}
@@ -60,27 +61,41 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <Pressable
-            style={styles.pickerRow}
-            onPress={() => {
-              clearWorkspaceBaseBranch()
-            }}
-          >
-            <View style={styles.pickerCheck}>
-              {workspaceBaseBranch === null ? <Check size={16} color={colors.textPrimary} /> : null}
-            </View>
-            <View style={styles.pickerContent}>
-              <Text style={styles.pickerLabel}>
-                {translate('tasks.workspaceOptionPickers.defaultBranch', 'Default branch')}
-              </Text>
-              <Text style={styles.pickerSubtitle}>
-                {translate(
-                  'tasks.workspaceOptionPickers.defaultBranchSubtitle',
-                  "Use this repository's configured base"
-                )}
-              </Text>
-            </View>
-          </Pressable>
+          <ListGroup>
+            <ListRow
+              key="default"
+              title={translate('tasks.workspaceOptionPickers.defaultBranch', 'Default branch')}
+              subtitle={translate(
+                'tasks.workspaceOptionPickers.defaultBranchSubtitle',
+                "Use this repository's configured base"
+              )}
+              selected={workspaceBaseBranch === null}
+              onPress={() => {
+                clearWorkspaceBaseBranch()
+              }}
+            />
+            {workspaceBaseBranchResults.map((branch) => (
+              <ListRow
+                key={`${branch.refName}:${branch.localBranchName}`}
+                title={branch.refName}
+                subtitle={
+                  branch.localBranchName !== branch.refName
+                    ? translate(
+                        'tasks.workspaceOptionPickers.branchName',
+                        'Branch name: {{name}}',
+                        {
+                          name: branch.localBranchName
+                        }
+                      )
+                    : undefined
+                }
+                selected={workspaceBaseBranch?.refName === branch.refName}
+                onPress={() => {
+                  selectWorkspaceBaseBranch(branch)
+                }}
+              />
+            ))}
+          </ListGroup>
           {workspaceBaseBranchLoading ? (
             <View style={styles.drawerLoadingRow}>
               <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -92,39 +107,6 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
               {translate('tasks.workspaceOptionPickers.noBranches', 'No branches match.')}
             </Text>
           ) : null}
-          {workspaceBaseBranchResults.map((branch) => (
-            <View key={`${branch.refName}:${branch.localBranchName}`}>
-              <View style={styles.groupSeparator} />
-              <Pressable
-                style={styles.pickerRow}
-                onPress={() => {
-                  selectWorkspaceBaseBranch(branch)
-                }}
-              >
-                <View style={styles.pickerCheck}>
-                  {workspaceBaseBranch?.refName === branch.refName ? (
-                    <Check size={16} color={colors.textPrimary} />
-                  ) : null}
-                </View>
-                <View style={styles.pickerContent}>
-                  <Text style={[styles.pickerLabel, styles.monoText]} numberOfLines={1}>
-                    {branch.refName}
-                  </Text>
-                  {branch.localBranchName !== branch.refName ? (
-                    <Text style={styles.pickerSubtitle} numberOfLines={1}>
-                      {translate(
-                        'tasks.workspaceOptionPickers.branchName',
-                        'Branch name: {{name}}',
-                        {
-                          name: branch.localBranchName
-                        }
-                      )}
-                    </Text>
-                  ) : null}
-                </View>
-              </Pressable>
-            </View>
-          ))}
         </View>
       </View>
     </BottomDrawer>
@@ -157,58 +139,29 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
             {translate('tasks.workspaceOptionPickers.sparseCheckoutTitle', 'Sparse Checkout')}
           </Text>
         </View>
-        <View style={styles.detailGroup}>
-          <Pressable
-            style={styles.pickerRow}
+        <ListGroup>
+          <ListRow
+            key="full"
+            title={translate('tasks.workspaceOptionPickers.fullCheckout', 'Full checkout')}
+            subtitle={translate(
+              'tasks.workspaceOptionPickers.fullCheckoutSubtitle',
+              'Use the whole repository'
+            )}
+            selected={workspaceSparsePresetId === null}
             onPress={() => {
               setWorkspaceSparsePresetId(null)
               setShowWorkspaceSparsePicker(false)
             }}
-          >
-            <View style={styles.pickerCheck}>
-              {workspaceSparsePresetId === null ? (
-                <Check size={16} color={colors.textPrimary} />
-              ) : null}
-            </View>
-            <View style={styles.pickerContent}>
-              <Text style={styles.pickerLabel}>
-                {translate('tasks.workspaceOptionPickers.fullCheckout', 'Full checkout')}
-              </Text>
-              <Text style={styles.pickerSubtitle}>
-                {translate(
-                  'tasks.workspaceOptionPickers.fullCheckoutSubtitle',
-                  'Use the whole repository'
-                )}
-              </Text>
-            </View>
-          </Pressable>
+          />
           {workspaceSparsePresets.map((preset) => (
-            <View key={preset.id}>
-              <View style={styles.groupSeparator} />
-              <View style={styles.pickerRowWithAction}>
+            <ListRow
+              key={preset.id}
+              title={preset.name}
+              subtitle={preset.directories.join(', ')}
+              selected={workspaceSparsePresetId === preset.id}
+              accessory={
                 <Pressable
-                  style={styles.pickerRowMain}
-                  onPress={() => {
-                    setWorkspaceSparsePresetId(preset.id)
-                    setShowWorkspaceSparsePicker(false)
-                  }}
-                >
-                  <View style={styles.pickerCheck}>
-                    {workspaceSparsePresetId === preset.id ? (
-                      <Check size={16} color={colors.textPrimary} />
-                    ) : null}
-                  </View>
-                  <View style={styles.pickerContent}>
-                    <Text style={styles.pickerLabel} numberOfLines={1}>
-                      {preset.name}
-                    </Text>
-                    <Text style={styles.pickerSubtitle} numberOfLines={2}>
-                      {preset.directories.join(', ')}
-                    </Text>
-                  </View>
-                </Pressable>
-                <Pressable
-                  style={styles.iconActionButton}
+                  style={({ pressed }) => [styles.iconActionButton, pressed && pressedStyle]}
                   accessibilityRole="button"
                   accessibilityLabel={translate(
                     'tasks.workspaceOptionPickers.editPreset',
@@ -221,16 +174,21 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
                 >
                   <Pencil size={15} color={colors.textMuted} />
                 </Pressable>
-              </View>
-            </View>
+              }
+              onPress={() => {
+                setWorkspaceSparsePresetId(preset.id)
+                setShowWorkspaceSparsePicker(false)
+              }}
+            />
           ))}
-        </View>
+        </ListGroup>
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.inlineSaveButton,
             !workspaceSparsePresetsLoaded || workspaceSparsePresetsLoading
               ? styles.fieldButtonDisabled
-              : undefined
+              : undefined,
+            pressed && pressedStyle
           ]}
           disabled={!workspaceSparsePresetsLoaded || workspaceSparsePresetsLoading}
           onPress={startNewWorkspaceSparsePreset}

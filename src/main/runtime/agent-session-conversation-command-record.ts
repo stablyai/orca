@@ -1,5 +1,5 @@
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import { createHash } from 'node:crypto'
 import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
 import type { AgentSessionStoreState } from './agent-session-store-state'

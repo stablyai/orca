@@ -30,14 +30,14 @@ afterEach(() => {
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../../shared/agent-session-journal-item-key'
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from '../../../../shared/agent-session-journal-types'
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
 
 import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
 
@@ -51,7 +51,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 {
   const THREAD: AgentJournalTurnScope = { kind: 'thread' }

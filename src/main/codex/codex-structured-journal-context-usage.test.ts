@@ -2,10 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { selectStructuredAgentContextUsage } from '../../shared/structured-agent-session-context-usage'

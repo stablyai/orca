@@ -30,7 +30,7 @@ import { listUnfinishedWslMoves } from '../persistence/moving-wsl-projects/wsl-m
 import { runTrackedWslMove } from '../telemetry/wsl-move-telemetry'
 import { runTrackedWslMoveUndo } from '../telemetry/wsl-move-undo-telemetry'
 import { isAnyWslMoveRunning } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
-import { wslHostsGateOpen, wslHostsServing } from '../wsl/wsl-host-gate'
+import { wslHostsAcceptNewWork, wslHostsGateOpen, wslHostsServing } from '../wsl/wsl-host-gate'
 import type { WslMoveUndoPorts } from './wsl-move-undo-wiring'
 import { releaseWslMovedProjectHere } from './wsl-move-release-here'
 
@@ -96,9 +96,13 @@ function registerWslMoveDriverHandlers(
   isMainWindowRenderer: (senderId: number) => boolean,
   driverDeps: (() => WslMoveDriverDeps) | undefined
 ): void {
-  // Gate first: with it closed, no dependency is built and nothing is read.
-  const refuseUnlessOpen = (event: RendererEvent): WslMoveRefusal | null => {
-    if (!wslHostsGateOpen() || !driverDeps) {
+  // Gate first: with it closed, no dependency is built and nothing is read. A new move also needs
+  // no block learned this run; cancelling a running one never does.
+  const refuseUnlessOpen = (
+    event: RendererEvent,
+    gate: () => boolean = wslHostsAcceptNewWork
+  ): WslMoveRefusal | null => {
+    if (!gate() || !driverDeps) {
       return { outcome: 'refused', code: 'wsl_move_unavailable' }
     }
     const sender = event.sender
@@ -136,7 +140,9 @@ function registerWslMoveDriverHandlers(
   ipcMain.handle(
     'wslMove:cancel',
     (event: RendererEvent, distro: unknown): boolean =>
-      refuseUnlessOpen(event) === null && typeof distro === 'string' && cancelWslMove(distro)
+      refuseUnlessOpen(event, wslHostsGateOpen) === null &&
+      typeof distro === 'string' &&
+      cancelWslMove(distro)
   )
 }
 

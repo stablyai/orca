@@ -1,4 +1,4 @@
-import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
+import type { RuntimeMobileTerminalTheme as MobileTerminalTheme } from '../../../src/shared/runtime-types'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
 import { browserLoadErrorsEqual } from '../../../src/shared/browser-load-failure'

@@ -24,7 +24,7 @@ import { publishJournalSessionEpoch } from '../native-chat/agent-session-journal
 import { createQueuedRigProvider } from '../native-chat/agent-session-wire/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { createStructuredSessionObservationClock } from '../native-chat/agent-session-wire/structured-agent-session-observation-clock.test-fixture'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { mintAgentSessionOperationId } from './orchestration/structured-pointer-operation-id'
 import { journalIdentityFor } from '../native-chat/agent-session-wire/structured-agent-session-attach'

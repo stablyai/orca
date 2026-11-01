@@ -22,9 +22,15 @@ it('projects the serving record before returning paired-host row identity', asyn
   record.providerHandleChain = [
     { ...record.providerHandleChain[0]!, handle: claudeProviderHandle('provider-session', null) }
   ]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection only reads this record-list member.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection reads only `listConversations`, `getRecord` and `hostId`.
   setStructuredAgentSessionHost({
-    deps: { store: { listConversations: () => [agentSessionConversationView(record)] } }
+    deps: {
+      store: {
+        hostId: 'local',
+        getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null),
+        listConversations: () => [agentSessionConversationView(record)]
+      }
+    }
   } as never)
   const row: AiVaultSession = {
     id: 'local:claude:provider-session',
@@ -94,9 +100,15 @@ it('owns indexed search hits only for a client that can open the native chat', a
   record.providerHandleChain = [
     { ...record.providerHandleChain[0]!, handle: claudeProviderHandle('provider-session', null) }
   ]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection only reads this record-list member.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection reads only `listConversations`, `getRecord` and `hostId`.
   setStructuredAgentSessionHost({
-    deps: { store: { listConversations: () => [agentSessionConversationView(record)] } }
+    deps: {
+      store: {
+        hostId: 'local',
+        getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null),
+        listConversations: () => [agentSessionConversationView(record)]
+      }
+    }
   } as never)
   const hit = {
     agent: 'claude' as const,

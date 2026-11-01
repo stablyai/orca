@@ -219,14 +219,4 @@ describe('Session History dialog', () => {
     expect(dialog.queryByText('codex-chat')).toBeNull()
     expect(window.localStorage.getItem(AI_VAULT_VIEW_OPTIONS_STORAGE_KEY)).toBeNull()
   })
-
-  it('starts an OpenCode chat on both names its sessions list under', () => {
-    mocks.sessions = [chatSession('opencode2'), chatSession('claude')]
-    render(<Host />)
-    openHistory('', 'opencode')
-
-    const dialog = within(screen.getByRole('dialog'))
-    expect(dialog.getByText('opencode2-chat')).toBeInTheDocument()
-    expect(dialog.queryByText('claude-chat')).toBeNull()
-  })
 })

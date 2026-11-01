@@ -1,4 +1,5 @@
-import type { AgentJournalCursor, AgentJournalTurnOutcome } from './agent-session-journal-types'
+import type { AgentJournalCursor } from './agent-session-journal-identity'
+import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { AgentSessionExecutionLocation } from './agent-session-record'
 
 // Turn completion feed: the per-turn EDGE beside the status feed's STATE.

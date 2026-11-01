@@ -1,4 +1,4 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -49,6 +49,9 @@ export class StructuredAgentSessionConversations extends Map<
   ) {
     super()
   }
+
+  loadedSessionIds = (): string[] =>
+    [...this].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
 
   override set(sessionId: string, session: StructuredAgentSessionHostSession): this {
     const { journal } = session

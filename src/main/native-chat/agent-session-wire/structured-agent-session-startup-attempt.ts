@@ -1,11 +1,12 @@
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import { randomUUID } from 'node:crypto'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import {
   waitForStructuredAgentSessionStart,
   type StructuredAgentSessionStartReadiness
 } from './structured-agent-session-start-readiness'
 export type { StructuredAgentSessionStartReadiness } from './structured-agent-session-start-readiness'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
@@ -22,6 +23,7 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
   identity: AgentSessionJournalIdentity
   spawnToken: string
   permissionMode?: AgentChatPermissionChoice
+  accountRecipe?: ClaudeAccountRecipe
   events?: StructuredAgentSessionEventSink
   signal?: AbortSignal
   startupOptions?: Readonly<Record<string, string>>
@@ -42,6 +44,7 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
     },
     ...(options ? { options } : {}),
     ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
+    ...(input.accountRecipe ? { accountRecipe: input.accountRecipe } : {}),
     ...(input.events ? { events: input.events } : {}),
     ...(input.signal ? { signal: input.signal } : {})
   }

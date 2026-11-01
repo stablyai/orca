@@ -9,6 +9,7 @@ import type { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from '../s
 import type { OrcaRuntimeWithGetPtyRecordForPaneKey } from '../orchestration/terminal-pane-mail-routing'
 import { OrcaRuntimeWithStartTuiIdleVisibleReadProbe } from '../terminal/wait/terminal-wait-visible-probe'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { Repo } from '../../../shared/repo-types'
 import { escalateChatWorkerError } from '../orchestration/chat-worker-error-escalation'
 import type { StructuredAgentSessionRequestFailure } from '../../native-chat/agent-session-wire/structured-agent-session-request-failures'
 
@@ -56,6 +57,13 @@ export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeW
   ): ReturnType<
     OrcaRuntimeWithGetStructuredAgentSessionCreateSupport['resolveStructuredAgentAccountHome']
   >
+  abstract resolveStructuredAgentLaunchAccountHome(
+    ...args: Parameters<
+      OrcaRuntimeWithGetStructuredAgentSessionCreateSupport['resolveStructuredAgentLaunchAccountHome']
+    >
+  ): ReturnType<
+    OrcaRuntimeWithGetStructuredAgentSessionCreateSupport['resolveStructuredAgentLaunchAccountHome']
+  >
   abstract onStructuredSessionStatusForMail(
     ...args: Parameters<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionStatusForMail']>
   ): ReturnType<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionStatusForMail']>
@@ -65,6 +73,10 @@ export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeW
   abstract onStructuredSessionTabHidden(
     ...args: Parameters<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionTabHidden']>
   ): ReturnType<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionTabHidden']>
+
+  listRepos(): Repo[] {
+    return this.store?.getRepos() ?? []
+  }
 
   /** A chat worker whose request settled failed tells the Run that dispatched it. */
   onStructuredRequestFailureForErrorMail(failure: StructuredAgentSessionRequestFailure): void {

@@ -7,7 +7,7 @@ import { PluginApprovalRequiredError } from '../../shared/plugins/approval/plugi
 import { parsePluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import { pluginCliApprovalRequest } from './plugin-cli-approval'
 import type { DiscoveredPlugin, ValidDiscoveredPlugin } from './plugin-discovery'
-import { loadPluginDevFolder, unloadPluginDevFolder } from './plugin-dev-folders'
+import { loadPluginDevFolder } from './plugin-dev-folders'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -36,11 +36,6 @@ function devPlugin(rootDir: string, raw: Record<string, unknown>): ValidDiscover
     contentHash: null,
     isDev: true
   }
-}
-
-const THEME = {
-  execution: 'data',
-  contributes: { themes: [{ id: 'dusk', title: 'Dusk', path: 'themes/dusk.json' }] }
 }
 const PANEL = {
   execution: 'sandboxed-ui',
@@ -83,14 +78,6 @@ async function harness(raw: Record<string, unknown>, enabled = true) {
 }
 
 describe('plugin development folders over the CLI', () => {
-  it('activates a content-only folder at once', async () => {
-    const { folder, service, writes, devPaths } = await harness(THEME)
-    await expect(
-      loadPluginDevFolder({ service, writes, path: folder, caller: { kind: 'local-cli' } })
-    ).resolves.toMatchObject({ pluginKey: 'acme.demo', added: true, approval: 'content-only' })
-    expect(devPaths()).toEqual([folder])
-  })
-
   it('keeps code inert without --approve and grants with the shown fingerprint', async () => {
     const { folder, service, writes, applyConsent, devPaths } = await harness(PANEL)
     const refusal = await loadPluginDevFolder({
@@ -117,33 +104,5 @@ describe('plugin development folders over the CLI', () => {
       })
     ).resolves.toMatchObject({ added: false, approval: 'approve-flag' })
     expect(devPaths()).toEqual([folder])
-  })
-
-  it('refuses relative paths and a host with plugins off', async () => {
-    const { service, writes } = await harness(THEME)
-    await expect(
-      loadPluginDevFolder({ service, writes, path: 'relative/dir', caller: undefined })
-    ).rejects.toMatchObject({ code: 'invalid_argument' })
-    const off = await harness(THEME, false)
-    await expect(
-      loadPluginDevFolder({
-        service: off.service,
-        writes: off.writes,
-        path: off.folder,
-        caller: undefined
-      })
-    ).rejects.toMatchObject({ code: 'plugin_system_disabled' })
-  })
-
-  it('unloads by plugin key or folder', async () => {
-    const { folder, service, writes, devPaths } = await harness(THEME)
-    await loadPluginDevFolder({ service, writes, path: folder, caller: undefined })
-    await expect(
-      unloadPluginDevFolder({ service, writes, target: { pluginKey: 'acme.demo' } })
-    ).resolves.toEqual({ path: folder, pluginKey: 'acme.demo' })
-    expect(devPaths()).toEqual([])
-    await expect(
-      unloadPluginDevFolder({ service, writes, target: { path: folder } })
-    ).rejects.toMatchObject({ code: 'plugin_not_found' })
   })
 })

@@ -59,7 +59,8 @@ function element(cards: QueuedMessageCard[], agentName = 'Agent') {
     edit: async () => {},
     clear: async () => false,
     resume: async () => false,
-    steerNewest: () => false
+    steerHead: () => false,
+    isWorking: true
   }
   return (
     <TooltipProvider>

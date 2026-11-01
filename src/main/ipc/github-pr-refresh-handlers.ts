@@ -69,6 +69,7 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
         currentHeadOid?: string | null
         /** A manual refresh: a user act that may start a stopped WSL distro. */
         wakeWslDistro?: boolean
+        userRefresh?: boolean
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
@@ -82,9 +83,14 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
           : null
       const lookupOptions: GitHubPRBranchLookupOptions | undefined = hostedReviewOptions
         ? { ...hostedReviewOptions }
-        : args.acceptMergedFallbackPR === true || currentHeadOid !== null
+        : args.acceptMergedFallbackPR === true ||
+            currentHeadOid !== null ||
+            args.userRefresh === true
           ? {}
           : undefined
+      if (lookupOptions && args.userRefresh === true) {
+        lookupOptions.userRefresh = true
+      }
       if (lookupOptions && args.acceptMergedFallbackPR === true) {
         lookupOptions.acceptMergedFallbackPR = true
       }
@@ -125,12 +131,17 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
     'gh:refreshPRNow',
     async (
       _event,
-      args: { candidate: GitHubPRRefreshCandidate; reason?: GitHubPRRefreshReason }
+      args: {
+        candidate: GitHubPRRefreshCandidate
+        reason?: GitHubPRRefreshReason
+        userRefresh?: boolean
+      }
     ) => {
       const repo = assertRegisteredPRRefreshCandidateRepo(args.candidate, store)
       const outcome = await refreshPRNow(
         applyRegisteredRepoToPRRefreshCandidate(store, repo, args.candidate),
-        args.reason
+        args.reason,
+        ...(args.userRefresh === true ? ([{ userRefresh: true }] as const) : [])
       )
       recordPRIfNeeded(repo, outcome)
       return outcome

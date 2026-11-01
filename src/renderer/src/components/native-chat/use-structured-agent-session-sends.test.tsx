@@ -12,7 +12,14 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
 
-const QUEUEING = { capability: 'supported', enabled: true } as const
+const QUEUEING = {
+  capability: 'supported',
+  followUpsQueue: true,
+  isWorking: true,
+  stopping: false,
+  session: { queuedMessages: [] },
+  prompts: []
+} as const
 
 afterEach(() => {
   resetStructuredAgentSessionSendsForTests()
@@ -21,7 +28,7 @@ afterEach(() => {
 it.each([
   ['a text follow-up while the agent works', QUEUEING, true, [], 'queued'],
   ['the same follow-up when the agent is idle', QUEUEING, false, [], true],
-  ['with the queue setting off', { capability: 'supported', enabled: false }, true, [], true],
+  ['with the queue setting off', { ...QUEUEING, followUpsQueue: false }, true, [], true],
   [
     'an image follow-up, which queues like text',
     QUEUEING,
@@ -40,7 +47,7 @@ it.each([
         fence: 1,
         submissions: [],
         queuedMessageIds: [],
-        queue,
+        queue: { ...queue, isWorking },
         historyLoaded: false,
         isWorking
       })

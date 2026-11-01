@@ -12,12 +12,14 @@ import type { Tab } from '../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/terminal-tab-types'
 import type { OrchestrationDb } from './orchestration/db'
 import {
+  observeOrchestrationSender,
+  orchestrationSenderAgent,
   orchestrationSenderName,
   structuredChatNaming,
   type SenderNamingSources,
   type TerminalSenderNaming
 } from './orchestration/orchestration-sender-name'
-import { agentMessageSender } from './orchestration/agent-message-sender'
+import { agentMessageSender, type SenderSnapshot } from './orchestration/agent-message-sender'
 import { readAgentSessionRecordStore } from './orchestration/structured-session-lineage'
 import { terminalHostConnectionMatches } from './orchestration/worker-provider-session'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
@@ -84,22 +86,38 @@ export class RuntimeOrchestrationSenderNames {
     return agentMessageSender(
       address,
       this.deps.getDb(),
-      (party, reported) => this.nameOf(party, reported),
+      (party, reported) => this.snapshotOf(party, reported),
       reportedDispatchId
     )
   }
 
   nameOf(party: AgentMessageSender['party'], reportedDispatchId?: string): string | null {
-    return orchestrationSenderName(
-      party,
-      {
-        ...this.chatSources(),
-        db: this.deps.getDb(),
-        terminal: (handle) => this.terminalNaming(handle),
-        generatedTitlesEnabled: this.deps.getGeneratedTitlesEnabled()
+    return orchestrationSenderName(party, this.namingSources(), reportedDispatchId)
+  }
+
+  /** Name and agent share one current chat or terminal observation. */
+  snapshotOf(party: AgentMessageSender['party'], reportedDispatchId?: string): SenderSnapshot {
+    const sources = this.namingSources()
+    const observation = observeOrchestrationSender(party, sources, reportedDispatchId)
+    return {
+      name: orchestrationSenderName(party, sources, reportedDispatchId, observation),
+      agent: orchestrationSenderAgent(sources, observation)
+    }
+  }
+
+  private namingSources(): SenderNamingSources {
+    const terminals = new Map<string, TerminalSenderNaming | null>()
+    return {
+      ...this.chatSources(),
+      db: this.deps.getDb(),
+      terminal: (handle) => {
+        if (!terminals.has(handle)) {
+          terminals.set(handle, this.terminalNaming(handle))
+        }
+        return terminals.get(handle) ?? null
       },
-      reportedDispatchId
-    )
+      generatedTitlesEnabled: this.deps.getGeneratedTitlesEnabled()
+    }
   }
 
   /** Names one worktree.ps pass's rows as desktop's compact row does; null keeps the phone's message fallback. */

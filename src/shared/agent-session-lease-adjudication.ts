@@ -16,10 +16,8 @@ import type {
   AgentSessionHandoffStage,
   AgentSessionLease
 } from './agent-session-record'
-import type {
-  AgentSessionOwnerVerdict,
-  AgentSessionRefusalDetailsByCode
-} from './agent-session-wire-refusals'
+import type { AgentSessionOwnerVerdict } from './agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRefusalDetailsByCode } from './agent-session/failures/agent-session-refusal-details'
 
 /** What a PID probe can compare against the recorded owner. */
 export type AgentSessionProcessIdentityField = 'process-start-time' | 'spawn-token'

@@ -18,6 +18,7 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 
 const HUB = 'app/h/[hostId]/source-control/[worktreeId].tsx'
 const REVIEW = 'app/h/[hostId]/review/[worktreeId].tsx'
+const FILE_PREVIEW = 'app/h/[hostId]/files/preview/[worktreeId].tsx'
 // The pages' inputs take their size from the chat composer's shared styles.
 const COMPOSER_INPUT_STYLES = 'src/components/composer-input/composer-input-styles.ts'
 
@@ -424,14 +425,17 @@ describe('a style module with a platform sibling', () => {
 })
 
 describeClosure(
-  'the text inputs the source-control and review pages reach',
+  'the text inputs the source-control, review and file preview pages reach',
   () => {
-    it.each([HUB, REVIEW])('takes every input size through the seam: %s', async (route) => {
-      const closure = await mobileWebAppRouteClosure(route)
-      expect(textInputFontSizeOffenders(mobileDir, closure)).toEqual([])
-    })
+    it.each([HUB, REVIEW, FILE_PREVIEW])(
+      'takes every input size through the seam: %s',
+      async (route) => {
+        const closure = await mobileWebAppRouteClosure(route)
+        expect(textInputFontSizeOffenders(mobileDir, closure)).toEqual([])
+      }
+    )
 
-    it.each([HUB, REVIEW])(
+    it.each([HUB, REVIEW, FILE_PREVIEW])(
       'reads every input it found, so the list above is complete: %s',
       async (route) => {
         const closure = await mobileWebAppRouteClosure(route)

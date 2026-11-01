@@ -4,7 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MessageRow } from './NativeChatMessageRow'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 const confirm = vi.hoisted(() => vi.fn())
 vi.mock('@/components/confirmation-dialog-context', () => ({

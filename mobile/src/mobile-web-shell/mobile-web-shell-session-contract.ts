@@ -18,6 +18,8 @@ export type MobileWebShellGates = {
   // Unreadable includes absent/undecodable replies; their empty capabilities must not masquerade as bundle-unavailable.
   readonly statusReadable: boolean
   readonly reachability: MobileWebShellReachability
+  // Unreachable, but still redialing within the attempts the UI calls connecting; absent reads as false.
+  readonly retrying?: boolean
   readonly hostCapabilities: readonly string[]
   readonly hostStatus: MobileWebBundleHostStatus
 }

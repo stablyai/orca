@@ -8,7 +8,7 @@ import {
   isToolResultBlock,
   type NativeChatBlock,
   type NativeChatMessage
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 
 // Keep physical row keys when older messages join a folded run; the folded message id alone would remount it.
 export type MobileNativeChatRowKeys = {

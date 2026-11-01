@@ -8,9 +8,9 @@ import type {
   AgentJournalApprovalItem,
   AgentJournalItemBody,
   AgentJournalProducerLinkage,
-  AgentJournalQuestionItem,
-  AgentJournalTurnOutcome
-} from '../../../shared/agent-session-journal-types'
+  AgentJournalQuestionItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnOutcome } from '../../../shared/agent-turn-outcome'
 import type { StructuredAgentSessionTurnVerdict } from '../agent-session-wire/structured-agent-session-stale-turn-verdict'
 
 /** The assembler owns turn rows; prompts travel as requests. */

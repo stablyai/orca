@@ -18,11 +18,11 @@ import { structuredAgentRuntimeMetadata } from '../runtime/structured-agent-runt
 import { readPiSessionHeader } from '../pi/rpc-launch-resolution'
 import { copyStructuredChatRecordConversation } from './structured-chat-conversation-copy'
 import { isAiVaultAgent } from './session-list-result-validation'
-import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
 
 function assertNativeConversationContent(snapshot: AgentJournalSnapshot): void {
   const submissions = new Map(

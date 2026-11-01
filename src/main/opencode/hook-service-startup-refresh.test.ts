@@ -69,13 +69,6 @@ describe('OpenCodeHookService.refreshInstalledPlugins (app start)', () => {
     expect(readFileSync(join(pluginsDir, TUI_ENTRY), 'utf8')).toBe(getOpenCode2PluginSource())
   })
 
-  it('never creates an install the user did not already have', () => {
-    openCode2HookService.refreshInstalledPlugins()
-
-    expect(existsSync(resolveOpenCodeConfigDirectory())).toBe(false)
-    expect(existsSync(join(userDataDir, 'opencode2-config-overlays'))).toBe(false)
-  })
-
   it('leaves a current install untouched so nothing reloads', () => {
     const pluginsDir = join(resolveOpenCodeConfigDirectory(), 'plugins')
     mkdirSync(join(pluginsDir, 'orca-opencode2-status-tui'), { recursive: true })

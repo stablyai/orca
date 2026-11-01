@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-optional-model-capability'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../src/shared/agent-session/options/agent-session-optional-model-capability'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../src/shared/electron-remote-runtime-client-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime/remote-runtime-client-capabilities'
@@ -29,7 +29,7 @@ afterEach(async () => {
 })
 
 describe('selected model reports across released client and host versions', () => {
-  it('refuses an absent model only for an older client against the new host', async () => {
+  it('projects a labelled empty observation for an older client against the new host', async () => {
     const host = structuredHostStub(SESSION, 'folder-options')
     const report = { models: [], current: { effort: 'off' } }
     host.readOptions.mockResolvedValue(report)
@@ -50,7 +50,15 @@ describe('selected model reports across released client and host versions', () =
           clientCapabilities: legacy
         }
       )
-    ).toMatchObject([{ ok: false, error: { message: 'structured_agent_session_unsupported' } }])
+    ).toMatchObject([
+      {
+        ok: true,
+        result: {
+          current: { model: '', effort: 'off' },
+          models: [{ id: '', label: 'Model not reported', isDefault: false, efforts: [] }]
+        }
+      }
+    ])
     expect(
       await callBuild(
         current,

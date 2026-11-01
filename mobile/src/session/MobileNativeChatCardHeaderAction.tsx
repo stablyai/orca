@@ -1,6 +1,6 @@
 import { Keyboard, Pressable, StyleSheet } from 'react-native'
 import { ChevronDown, X } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -30,7 +30,7 @@ export function MobileNativeChatCardHeaderAction<Prompt>({
       }
       accessibilityState={onCancel ? undefined : { expanded: true }}
       hitSlop={8}
-      style={styles.action}
+      style={({ pressed }) => [styles.action, pressed && pressedStyle]}
       onPress={() => {
         if (onCancel) {
           void onCancel(prompt)

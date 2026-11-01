@@ -6,12 +6,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalProducerLinkage,
   AgentJournalRenderItem,
   AgentJournalResolution
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { AgentStatusStructuredSessionSubject } from '../../shared/agent-status-subject'
 import { AgentHookServer } from '../agent-hooks/server'

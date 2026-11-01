@@ -1,5 +1,5 @@
-import type { AgentSessionCurrentRequestsMarker } from './agent-session-current-requests-wire'
-import type { AgentSessionQueuePublicationFields } from './agent-session-queued-message-wire'
+import type { AgentSessionCurrentRequestsMarker } from './agent-session/requests/agent-session-current-requests-wire'
+import type { AgentSessionQueuePublicationFields } from './agent-session/requests/agent-session-queued-message-wire'
 
 /** Published-frame host wall clock (epoch ms per AgentSessionHistoryPage) and queuedMessages companions. */
 export type AgentSessionFrameFields = {

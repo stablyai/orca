@@ -206,10 +206,12 @@ export function FileExplorerRow({
                 <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
               ) : showLoadError ? (
                 <CircleAlert className="size-3 shrink-0 text-destructive" />
-              ) : isExpanded ? (
-                <FolderIcon open className="size-3 shrink-0 text-muted-foreground" />
               ) : (
-                <FolderIcon open={false} className="size-3 shrink-0 text-muted-foreground" />
+                <FolderIcon
+                  folderPath={node.name}
+                  open={isExpanded}
+                  className="size-3 shrink-0 text-muted-foreground"
+                />
               )}
             </>
           ) : (

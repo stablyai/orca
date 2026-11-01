@@ -101,6 +101,27 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca plugin disable acme.notes']
   },
   {
+    path: ['plugin', 'system', 'on'],
+    summary: 'Turn plugins on for the Orca host',
+    usage: 'orca plugin system on [--json]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'The same switch as "Turn on plugins" in Settings → Plugins, for a host with no window such as `orca serve`.',
+      'Approves nothing: only plugins approved earlier start; anything else still needs its own --approve.'
+    ],
+    examples: ['orca plugin system on', 'orca plugin system on --environment build-box --json']
+  },
+  {
+    path: ['plugin', 'system', 'off'],
+    summary: 'Turn plugins off for the Orca host',
+    usage: 'orca plugin system off [--json]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'Stops every plugin and keeps installs, approvals and development folders. Never needs approval.'
+    ],
+    examples: ['orca plugin system off']
+  },
+  {
     path: ['plugin', 'dev', 'load'],
     summary: 'Load a plugin folder into Orca as a development plugin',
     usage: 'orca plugin dev load <dir> [--approve <fingerprint>] [--json]',

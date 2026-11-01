@@ -69,8 +69,8 @@ vi.mock('./NativeChatMessageList', async () => {
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
-import { agentJournalItemKey } from '../../../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const TURN = agentJournalItemKey({ provider: 'codex', threadId: 't', turnId: 'cut', ordinal: 1 })
 

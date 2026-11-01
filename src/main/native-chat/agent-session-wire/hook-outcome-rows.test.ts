@@ -5,12 +5,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   claudeProviderHandle,
   codexProviderHandle
 } from '../../../shared/agent-session-provider-handle-encoding'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import {
@@ -21,7 +21,7 @@ import {
   nativeChatTurnFold,
   nativeChatTurnFoldRow
 } from '../../../shared/native-chat/transcript/native-chat-turn-fold'
-import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
+import { nativeChatTurnMembership } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import { selectStructuredAgentTurnBars } from '../../../shared/structured-agent-session-turn-timing'
 import { GROK_ACP_DIALECT } from '../../acp/acp-dialects/grok-dialect'

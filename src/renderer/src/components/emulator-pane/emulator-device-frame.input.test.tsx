@@ -91,12 +91,14 @@ afterEach(() => {
 function renderFrame(props?: {
   onGesture?: (points: unknown[]) => void
   onTap?: (x: number, y: number) => void
+  previewUrl?: string
+  wsUrl?: string
 }): void {
   act(() => {
     root.render(
       <EmulatorDeviceFrame
-        previewUrl="http://127.0.0.1:3100/stream.mjpeg"
-        wsUrl="ws://127.0.0.1:3100/ws"
+        previewUrl={props?.previewUrl ?? 'http://127.0.0.1:3100/stream.mjpeg'}
+        wsUrl={props?.wsUrl ?? 'ws://127.0.0.1:3100/ws'}
         loading={false}
         isLive={true}
         visualOrientation="portrait"
@@ -222,6 +224,30 @@ describe('EmulatorDeviceFrame input', () => {
       { type: 'end', x: 0.5, y: 0.2 }
     ])
     expect(onGesture).not.toHaveBeenCalled()
+  })
+
+  it('streams Android pointer phases to main for the scrcpy control socket', () => {
+    const sendScrcpyTouch = vi.fn()
+    vi.stubGlobal('api', { emulator: { sendScrcpyTouch } })
+    const onGesture = vi.fn()
+    const onTap = vi.fn()
+    renderFrame({ onGesture, onTap, previewUrl: 'scrcpy://serial-1', wsUrl: '' })
+    const screen = getScreen()
+
+    act(() => {
+      screen.dispatchEvent(pointerEvent('pointerdown', { clientX: 50, clientY: 160 }))
+      screen.dispatchEvent(pointerEvent('pointermove', { clientX: 50, clientY: 100 }))
+      screen.dispatchEvent(pointerEvent('pointerup', { clientX: 50, clientY: 40 }))
+    })
+
+    expect(sendScrcpyTouch.mock.calls.map(([touch]) => touch)).toEqual([
+      { deviceId: 'serial-1', type: 'begin', x: 0.5, y: 0.8 },
+      { deviceId: 'serial-1', type: 'move', x: 0.5, y: 0.5 },
+      { deviceId: 'serial-1', type: 'end', x: 0.5, y: 0.2 }
+    ])
+    expect(onGesture).not.toHaveBeenCalled()
+    expect(onTap).not.toHaveBeenCalled()
+    expect(FakeWebSocket.instances).toEqual([])
   })
 
   it('marks bottom-origin pointer drags as serve-sim edge gestures', () => {

@@ -3,7 +3,7 @@ import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
 } from '../../../shared/agent-session-record.test-fixture'
-import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { classifyStoreFailure } from './structured-agent-session-attach'
 import {
   AgentSessionAcquisitionExitProvenError,
@@ -20,7 +20,10 @@ import {
   withMissingProviderExecutable,
   withProviderSpawnAbsence
 } from '../../provider-process/provider-executable-missing'
-import { providerDiagnostic, withProviderDiagnostic } from '../../../shared/agent-session-failure'
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../../shared/agent-session/failures/agent-session-failure'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 
 const CLAUDE_CREATE = {

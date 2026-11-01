@@ -3,10 +3,8 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'

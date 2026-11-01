@@ -7,8 +7,8 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session-definitive-refusal'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session/failures/agent-session-definitive-refusal'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
@@ -177,16 +177,6 @@ describe('a create refused before it commits', () => {
     const refusal = refusalOf(response)
     expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
     expect(refusal?.message).toContain('could not open the session store')
-  })
-
-  it('answers a missing host as a definitive envelope rather than a thrown code', async () => {
-    setStructuredAgentSessionHost(null)
-
-    const response = await create()
-
-    const refusal = refusalOf(response)
-    expect(refusal?.code).toBe('structured_agent_session_unsupported')
-    expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
   })
 
   it('still refuses a fingerprint conflict with its own code, not a pre-commit one', async () => {

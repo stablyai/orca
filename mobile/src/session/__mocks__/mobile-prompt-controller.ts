@@ -1,7 +1,7 @@
 import './mobile-prompt-render-mocks'
 import { createElement } from 'react'
 import { Pressable } from 'react-native'
-import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatSendOutcome } from '../native-chat/mobile-native-chat-send'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse, ConnectionState } from '../../transport/types'
@@ -156,7 +156,7 @@ function Harness(props: HarnessProps) {
     controller: current,
     onOpenFile: vi.fn(),
     images: {
-      sendNativeChat: controller.handleNativeChatSend,
+      sendNativeChat: (text: string) => controller.handleNativeChatSend(text),
       attachments: [],
       isAttaching: false,
       attachImage: async () => {},

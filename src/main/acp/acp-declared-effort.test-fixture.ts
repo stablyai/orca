@@ -19,6 +19,7 @@ import {
   agentModelCatalogResultFromEntry,
   entryWithConfiguredDefault
 } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
+import { hostTestCatalogReadOperation } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
 import { openStructuredAgentSessionConversationJournal } from '../native-chat/agent-session-wire/structured-agent-session-conversation-open'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -174,6 +175,7 @@ export async function readRecordedAcpOptions(
       journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'test-key',
       modelCatalog: {
+        captureRead: hostTestCatalogReadOperation,
         read: async () => catalog,
         snapshot: () => catalog,
         prepareSaved: async () => catalog,

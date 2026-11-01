@@ -14,6 +14,8 @@ export const PLUGIN_HANDLER_GROUPS: readonly HandlerGroup[] = [
       'plugin logs',
       'plugin enable',
       'plugin disable',
+      'plugin system on',
+      'plugin system off',
       'plugin dev load',
       'plugin dev reload',
       'plugin dev unload'

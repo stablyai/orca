@@ -11,10 +11,10 @@ import {
   answerReplay
 } from './acp-history-catch-up.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT,
   closeProviderTimelineRigs,

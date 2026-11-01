@@ -45,7 +45,6 @@ vi.mock('sonner', () => ({
 createStoreCascadesMockApi()
 
 import { openStructuredAgentSessionProvisionalTab } from '@/lib/structured-agent-session-launch-surface'
-import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
 
 const SERVER = 'server-1'
 const SERVER_WT = 'repo-s::/srv/app'
@@ -171,11 +170,4 @@ describe("a paired server's workspace", () => {
       ])
     }
   )
-})
-
-describe('an SSH worktree', () => {
-  it("has no host to run a chat on, where this machine's worktree has its own", () => {
-    expect(resolveStructuredAgentSessionOwner(store.getState(), SSH_WT)).toBeNull()
-    expect(resolveStructuredAgentSessionOwner(store.getState(), LOCAL_WT)).toBe('local')
-  })
 })

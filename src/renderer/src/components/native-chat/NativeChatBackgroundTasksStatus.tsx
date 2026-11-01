@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Activity, Bot, ChevronDown, CircleHelp, SquareTerminal, Workflow } from 'lucide-react'
-import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import type {
   AgentChildRowContext,
   AgentChildRowModel

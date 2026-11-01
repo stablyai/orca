@@ -15,7 +15,7 @@ import { AGENT_SESSION_ATTACHMENT_PART_FILE } from './agent-session-attachment-r
 import { removeQuietly, type AgentSessionAttachmentStore } from './agent-session-attachment-store'
 
 export const ABANDONED_PART_MAX_AGE_MS = 60 * 60 * 1000
-export const UNCLAIMED_ATTACHMENT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+export const UNCLAIMED_ATTACHMENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export type AgentSessionAttachmentSweepFacts = {
   /** Without a writable journal, only unfinished part files may be removed. */

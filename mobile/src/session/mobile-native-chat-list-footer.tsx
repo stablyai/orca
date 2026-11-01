@@ -1,5 +1,5 @@
 import { Fragment, type ReactElement } from 'react'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 
 type MobileNativeChatListRow = { item: NativeChatMessage; index: number }
 

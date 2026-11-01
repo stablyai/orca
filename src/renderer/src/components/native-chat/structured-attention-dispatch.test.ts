@@ -6,7 +6,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session-wire'
 import { agentSessionAttentionKey } from '../../../../shared/agent-session-attention'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import {
   createTestStore,

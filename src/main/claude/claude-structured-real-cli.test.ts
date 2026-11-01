@@ -5,7 +5,7 @@ import { basename, join, relative } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
 import * as claudeConnection from './claude-stream-json-connection'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import {
   CLAUDE_STRUCTURED_BASE_OPTIONS,

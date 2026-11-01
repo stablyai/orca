@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { queuedMessageUpdateDecision } from './queued-message-update'
 import type { QueuedMessageRow } from './queued-message-table'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { MAX_PROMPT_BYTES } from '../../../shared/rpc-contract/structured-agent-session-params'
 
 export function registerQueuedMessageUpdateTests(): void {

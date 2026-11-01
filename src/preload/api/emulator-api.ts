@@ -25,6 +25,12 @@ export type EmulatorApi = {
       meta: { codecId: string; width: number; height: number }
     }) => void
   ) => () => void
+  sendScrcpyTouch: (touch: {
+    deviceId: string
+    type: 'begin' | 'move' | 'end'
+    x: number
+    y: number
+  }) => void
   onVideoStreamFrame: (
     callback: (data: {
       streamId: string

@@ -30,9 +30,9 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 import type {
   AgentJournalItemBody,
-  AgentJournalRenderItem,
-  AgentJournalTurnScope
-} from '../../../../shared/agent-session-journal-types'
+  AgentJournalRenderItem
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
 
 // The turn record this host writes, and the legacy status row an older host sends.
 const turnItem: AgentJournalItemBody = { kind: 'turn', turnId: 'turn-1', state: 'running' }

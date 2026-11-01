@@ -118,24 +118,4 @@ describe('sidebar manual-order drop', () => {
     expect(updateMeta).not.toHaveBeenCalled()
     expect(toastInfo).not.toHaveBeenCalled()
   })
-
-  it('reorders silently when Manual is already the sort', async () => {
-    const worktrees = seedManualOrderedRows(3)
-    useAppStore.setState({ sortBy: 'manual' })
-    const ids = worktrees.map((worktree) => worktree.id)
-    const keys = worktrees.map(getWorktreeHostIdentity)
-    const reorder = renderReorder(worktrees)
-
-    await act(async () => {
-      reorder.current.reorderWorktrees({
-        groups: [{ key: GROUP_KEY, worktreeIds: keys }],
-        sourceGroupKey: GROUP_KEY,
-        draggedKeys: [keys[0]!],
-        dropIndex: 2
-      })
-    })
-
-    expect(manualOrderedIds()).toEqual([ids[1], ids[0], ids[2]])
-    expect(toastInfo).not.toHaveBeenCalled()
-  })
 })

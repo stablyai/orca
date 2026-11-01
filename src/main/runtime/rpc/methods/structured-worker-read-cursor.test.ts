@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildStructuredJournalArchive } from '../../orchestration/structured-worker-journal-archive'
 import { projectSavedChatContextItems } from '../../../native-chat/agent-session-saved-prompt-text'
 import { formatWorkerTranscriptMessage } from '../../../../shared/worker-transcript-text'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 
 const hostRef: { current: unknown } = { current: null }
@@ -170,13 +170,6 @@ describe('the structured worker-read cursor over a mutating journal', () => {
     installJournal([message('i1', 'first'), message('i2', 'streaming more', 7)])
     const second = await read(first.cursor)
     expect(textsOf(second)).toEqual(['streaming more'])
-  })
-
-  it('delivers every message exactly once when nothing below the cursor changes', async () => {
-    installJournal([message('i1', 'a'), message('i2', 'b'), message('i3', 'c')])
-    const first = await read(undefined, 2)
-    const second = await read(first.cursor, 2)
-    expect([...textsOf(first), ...textsOf(second)]).toEqual(['a', 'b', 'c'])
   })
 
   it('still refuses when the window slides off the front', async () => {

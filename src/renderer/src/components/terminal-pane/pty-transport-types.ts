@@ -236,6 +236,11 @@ export type PtyTransport = {
   getRecoveryState?: () => PtyTransportRecoveryState
   /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
   retryRecovery?: () => boolean
+  /**
+   * The host the pane met stopped is running again: reopen a pane whose connect or attach was
+   * refused and left it idle (no retry armed), the way it opened. False when there is none to reopen.
+   */
+  reopenAfterHostReturned?: () => boolean
   /** True while the transport has a retry armed or parked; pane-level remounts must defer to it. */
   ownsRecovery?: () => boolean
   /** Typed input the host has not applied yet, which a remount would discard. */

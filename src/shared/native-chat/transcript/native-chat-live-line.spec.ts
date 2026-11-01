@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { nativeChatLiveLine } from './native-chat-live-line'
-import type { NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatMessage } from '../native-chat-types'
 
 const prompt: NativeChatMessage = {
   id: 'user-1',

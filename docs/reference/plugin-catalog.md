@@ -55,7 +55,8 @@ The exact release the catalog vouches for. Orca refuses bytes that differ.
 | `types` | (`"interface-language"` \| `"app-theme"` \| `"terminal-theme"` \| `"icon-theme"` \| `"syntax"` \| `"instructions"` \| `"panel"` \| `"editor"` \| `"worker"`)[] | no | 1.4.245 | Optional; Orca derives it from `contributes` and `execution`. When present, every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `declarative` profile or higher, `panel` and `editor` need `sandboxed-ui`, and `worker` needs `trusted-worker`. Example: `["syntax"]` |
 | `name` | string | no | 1.4.245 | The manifest's `name`, so Orca can suggest the plugin before downloading it. Example: `"Gleam"` |
 | `license` | string | no | 1.4.245 | SPDX license expression. Example: `"MIT"` |
-| `repository` | string | no | 1.4.245 | Source repository page, https only. Example: `"https://github.com/acme/orca-gleam-syntax"` |
+| `repository` | string | no | 1.4.245 | Source repository page, https only. Orca links it when it is a github.com or gitlab.com repository of the plugin's publisher. Example: `"https://github.com/acme/orca-gleam-syntax"` |
+| `sourceUnavailable` | `true` | no | 1.4.246 | Set when the release's `repository` is gone and `source` serves an archived copy, so Orca links `source` instead. Example: `true` |
 | `homepage` | string | no | 1.4.245 | Project homepage, https only. Example: `"https://example.com/gleam"` |
 | `updatedAt` | string | no | 1.4.245 | When this release was published, as an ISO 8601 date or date-time. Example: `"2026-10-20"` |
 | `changelog` | string | no | 1.4.245 | What changed in this release, as plain text. At most 2000 characters. Example: `"Adds highlighting for use expressions."` |

@@ -3,11 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentJournalToolCallLifecycle } from '../../../shared/agent-journal-tool-call-lifecycle'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'

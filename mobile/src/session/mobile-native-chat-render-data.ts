@@ -1,7 +1,8 @@
 import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
+import { describeLoadError } from '../components/load-error-description'
 import type { NativeChatEmptyStateCopy } from '../../../src/shared/native-chat/native-chat-empty-state'
-import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
-import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
+import { isRootAgentJournalItem } from '../../../src/shared/agent-session/journal/agent-session-journal-producer'
+import { stripNoiseMessages } from '../../../src/shared/native-chat/native-chat-noise'
 import { nativeChatStreamingMessage } from '../../../src/shared/native-chat/native-chat-streaming'
 import { isWordlessProviderFrameMessage } from '../../../src/shared/native-chat/native-chat-provider-frame-summary'
 import {
@@ -13,9 +14,9 @@ import { foldSubagentItems } from '../../../src/shared/native-chat/transcript/na
 import { prepareNativeChatMessages } from '../../../src/shared/native-chat/transcript/native-chat-message-preparation'
 import {
   isImageRefBlock,
-  type AgentType,
   type NativeChatMessage
-} from '../../../src/shared/native-chat-types'
+} from '../../../src/shared/native-chat/native-chat-types'
+import type { AgentType } from '../../../src/shared/agent-status-types'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import { translate } from '../i18n/mobile-i18n'
 
@@ -78,7 +79,7 @@ export function mobileNativeChatEmptyState(
       return mobileNativeChatEmptyStateCopy('empty', agentLabel)
     case 'error': {
       const copy = mobileNativeChatEmptyStateCopy('error', agentLabel)
-      return error ? { ...copy, subtitle: error } : copy
+      return error ? { ...copy, subtitle: describeLoadError(error, translate).message } : copy
     }
     default:
       return null

@@ -1,4 +1,4 @@
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import {
   agentSessionProviderHandleKey,
   type AgentSessionProviderHandleLink

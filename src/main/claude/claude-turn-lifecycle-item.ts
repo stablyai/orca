@@ -1,9 +1,7 @@
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalTurnItem,
-  AgentJournalTurnOutcome
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnOutcome } from '../../shared/agent-turn-outcome'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { claudeResultOutcome } from './claude-result-outcome'

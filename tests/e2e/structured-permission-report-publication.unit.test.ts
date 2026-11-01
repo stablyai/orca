@@ -47,7 +47,7 @@ import { GROK_CONFIG_OPTIONS } from '../../src/main/acp/acp-structured-adapter.t
 import { closeProviderTimelineRigs } from '../../src/main/native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 
-import { agentSessionRefusalFailure } from '../../src/shared/agent-session-write-failure'
+import { agentSessionRefusalFailure } from '../../src/shared/agent-session/failures/agent-session-write-failure'
 import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 
 beforeEach(() => vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW))

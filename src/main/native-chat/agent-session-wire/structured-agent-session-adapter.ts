@@ -1,3 +1,4 @@
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
@@ -10,11 +11,13 @@ import type {
 
 import type {
   AgentJournalAnsweredTurnIdentity,
-  AgentJournalItemIdentity,
   AgentJournalMessageItem,
-  AgentJournalTurnItem,
+  AgentJournalTurnItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
 import type {
   AgentSessionAccountHome,
@@ -24,8 +27,8 @@ import type {
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
-import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session/agent-session-thread-goal-wire'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentSessionCloseObserver,
   StructuredAgentSessionAdapterStop
@@ -35,8 +38,8 @@ export type {
   StructuredAgentSessionChildEndCause,
   StructuredAgentSessionStopCause
 } from './structured-agent-session-stop-cause'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
 import type {
   StructuredAgentSessionStartupAttempt,
@@ -71,11 +74,14 @@ export {
 } from './structured-agent-session-acquisition-errors'
 
 export type AgentSessionAcquisition = {
+  accountRecipe?: ClaudeAccountRecipe
   process: AgentSessionProcessIdentity
   /** Spawn-time handles only; protocol handles come from open. */
   link?: AgentSessionProviderHandleLink
   /** Exact host-local child identity, even when acquisitions reuse a durable fence. */
   acquisitionGeneration: string
+  /** The account home this child launched under, when its launch follows the selection. */
+  accountHome?: AgentSessionAccountHome
 }
 
 /** The host creates the command’s running turn; the child translator ends it and writes its result. */

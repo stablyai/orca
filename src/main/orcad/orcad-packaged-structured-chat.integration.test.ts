@@ -17,7 +17,7 @@ import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { spawnProcess } from '@orca/process-host'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { parsePairingCode } from '../../shared/pairing'
 import {
   pairedRuntimeConnectionFromOffer,

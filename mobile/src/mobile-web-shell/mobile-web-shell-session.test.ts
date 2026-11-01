@@ -611,6 +611,30 @@ describe('a gates change that says nothing new starts nothing', () => {
     expect(again.session.flow).toBe(checking.session.flow)
   })
 
+  it('keeps a first open checking while the dial retries, then says offline when it stops', () => {
+    const retrying = gates({ reachability: 'unreachable', retrying: true })
+    const waiting = run(started(retrying).session, { type: 'cache-read', generation: null })
+    expect(waiting.session.state).toEqual({ kind: 'checking' })
+
+    const gaveUp = run(waiting.session, {
+      type: 'gates-changed',
+      gates: gates({ reachability: 'unreachable' })
+    })
+    expect(gaveUp.effects).toEqual([{ kind: 'open-cache' }])
+    const offline = run(gaveUp.session, { type: 'cache-read', generation: null })
+    expect(offline.session.state).toEqual({ kind: 'offline' })
+  })
+
+  it('still opens a cached page at once while the dial retries', () => {
+    const retrying = gates({ reachability: 'unreachable', retrying: true })
+    const step = run(started(retrying).session, { type: 'cache-read', generation: CACHED })
+    const offline = gates({ reachability: 'unreachable' })
+    const unretried = run(started(offline).session, { type: 'cache-read', generation: CACHED })
+    expect(step.session.state).toEqual(unretried.session.state)
+    expect(step.effects).toEqual(unretried.effects)
+    expect(step.session.state.kind).toBe('activating')
+  })
+
   it('holds the offline screen through a reconnect cycle that never reaches the host', () => {
     const offline = run(started({ reachability: 'unreachable' }).session, {
       type: 'cache-read',

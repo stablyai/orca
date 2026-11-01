@@ -1,10 +1,8 @@
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { expect, vi } from 'vitest'
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers

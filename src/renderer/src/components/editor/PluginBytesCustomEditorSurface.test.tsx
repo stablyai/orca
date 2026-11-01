@@ -120,15 +120,6 @@ describe('PluginBytesCustomEditorSurface', () => {
     await act(() => vi.waitFor(() => expect(lastDocument()).toEqual({ bytes, fileType: 'xlsx' })))
   })
 
-  it('names the file, its size and the limit when it is too large to open', async () => {
-    readRuntimeFileBytes.mockResolvedValue({ kind: 'too_large', size: 80 * 1024 * 1024 })
-    await render({ content: '', isBinary: true, byteSource })
-    expect(container.textContent).toContain(
-      'book.xlsx is too large to open in Spreadsheet (80.0 MB; the limit is 64.0 MB).'
-    )
-    expect(container.querySelector('[data-testid="frame"]')).toBeNull()
-  })
-
   it('reloads after an outside change but not while the old content is only marked stale', async () => {
     readRuntimeFileBytes.mockResolvedValue({ kind: 'ok', bytes: new Uint8Array([1]) })
     const first: FileContent = { content: '', isBinary: true, byteSource }

@@ -4,7 +4,7 @@ import type {
   AskQuestion,
   InteractiveQuestionParser
 } from './native-chat-ask-types'
-import { isInterruptedStatusMessage, type NativeChatMessage } from '../../native-chat-types'
+import { isInterruptedStatusMessage, type NativeChatMessage } from '../native-chat-types'
 import {
   CODEX_ASYNC_QUESTION_TOOL,
   parseCodexAsyncQuestionsInput

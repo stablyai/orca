@@ -4,12 +4,12 @@ import { describe, expect, it } from 'vitest'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
-import { structuredAgentSessionSeedCatalog } from '../../shared/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot
-} from '../../shared/structured-agent-session-options'
+  createStructuredAgentSessionOptionState
+} from '../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { AcpStructuredOptions } from '../acp/acp-structured-options'
 import { GROK_ACP_DIALECT } from '../acp/acp-dialects/grok-dialect'
 import { grokModelCatalogFromState } from '../acp/acp-dialects/grok-model-catalog'

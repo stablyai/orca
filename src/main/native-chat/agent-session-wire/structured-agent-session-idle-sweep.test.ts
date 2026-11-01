@@ -1,4 +1,4 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'

@@ -3,14 +3,24 @@
 
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { isAgentSessionContextClear } from '../../../shared/agent-session-context-clear'
 
 export class JournalDerivedTurnScope {
   private openTurnItemId: string | null = null
+
+  snapshot(): string | null {
+    return this.openTurnItemId
+  }
+
+  static restore(openTurnItemId: string | null): JournalDerivedTurnScope {
+    const scope = new JournalDerivedTurnScope()
+    scope.openTurnItemId = openTurnItemId
+    return scope
+  }
 
   scopeFor(body: AgentJournalItemBody): AgentJournalTurnScope {
     return this.openTurnItemId === null || readAgentJournalTurn(body)

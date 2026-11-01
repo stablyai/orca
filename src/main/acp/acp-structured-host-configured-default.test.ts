@@ -3,12 +3,12 @@ import { agentSessionConversationView } from '../../shared/agent-session-convers
 
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentSessionModelCatalogResult } from '../../shared/agent-session-wire'
-import { structuredAgentSessionSeedCatalog } from '../../shared/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot
-} from '../../shared/structured-agent-session-options'
+  createStructuredAgentSessionOptionState
+} from '../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
   HOST_TEST_SESSION as SESSION,

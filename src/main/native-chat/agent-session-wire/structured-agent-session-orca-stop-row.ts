@@ -1,4 +1,4 @@
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import {
   AGENT_SESSION_ORCA_STOP_PRESENTATION,
   isAgentSessionOrcaStopCause
@@ -7,13 +7,13 @@ import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-re
 import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
-} from '../../../shared/agent-session-failure-words'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+} from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type {
   AgentJournalRenderItem,
   AgentJournalStatusItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome

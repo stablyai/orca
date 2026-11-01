@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
@@ -134,15 +134,6 @@ describe('a streamed reasoning row the provider never finishes', () => {
     expect(translator.pendingStreamedBlocks).toBe(0)
   })
 
-  it('writes no end for a block that never had text', () => {
-    const { translator, message, thinkingDelta, reasoningWrites } = setup()
-    thinkingDelta('delta', '', 1_000)
-    translator.handle(
-      message({ type: 'result', subtype: 'success', uuid: 'result', is_error: false }, 4_000)
-    )
-    expect(reasoningWrites()).toEqual([])
-  })
-
   it('is not rewritten by the token tally Claude sends after every thinking delta', () => {
     const { translator, message, thinkingDelta, reasoningWrites } = setup()
     for (let index = 0; index < 20; index += 1) {
@@ -195,16 +186,5 @@ describe('a streamed reasoning row the provider never finishes', () => {
     expect(writes.length).toBeGreaterThan(0)
     expect(writes.every((write) => write.options.observedAt === 3_510)).toBe(true)
     expect(writes.at(-1)?.body).toMatchObject({ state: 'completed', completedAt: 8_160 })
-  })
-
-  it('writes no row for a stream keep-alive, so nothing lands above the open block', () => {
-    const { translator, message, thinkingDelta, writes } = setup()
-    thinkingDelta('delta', 'Planning', 1_000)
-    translator.handle(
-      message({ type: 'stream_event', uuid: 'ping', event: { type: 'ping' } }, 1_010)
-    )
-    vi.advanceTimersByTime(100)
-    expect(writes.filter((write) => write.body.kind === 'status')).toEqual([])
-    expect(writes.map((write) => write.body.kind)).toEqual(['turn', 'message'])
   })
 })

@@ -1,8 +1,8 @@
 import type {
-  AgentSessionBackgroundTaskState,
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import {
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY

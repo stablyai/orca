@@ -1,4 +1,4 @@
-import type { AgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionRefusalReference } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 export class StructuredAgentSessionCreateError extends Error {
   constructor(

@@ -2,7 +2,7 @@ import {
   agentSessionConversationView,
   type AgentSessionConversationView
 } from '../../shared/agent-session-conversation-view'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionOrcaStopCause } from '../../shared/agent-session-orca-stop'

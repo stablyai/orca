@@ -2,7 +2,7 @@ import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
   type NativeChatMessage
-} from '../../shared/native-chat-types'
+} from '../../shared/native-chat/native-chat-types'
 import { NATIVE_CHAT_NOTICE_COPY } from '../../shared/native-chat/native-chat-notice'
 import {
   asRecord,

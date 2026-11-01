@@ -242,7 +242,7 @@ export function SourceControlAgentActionDialogForm({
             rows={7}
             value={commandTemplate}
             onChange={(event) => onCommandTemplateChange(event.target.value)}
-            className="box-border min-h-[6.5rem] min-w-0 w-full max-w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+            className="box-border min-h-[6.5rem] min-w-0 w-full max-w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
             spellCheck={false}
           />
           <SourceControlActionVariableChips

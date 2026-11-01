@@ -3,11 +3,11 @@
 // gone reads as failed (with its refusal) and Retry starts it again; any other verdict stays unknown.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import type {
-  AgentSessionMutationEnvelope,
   AgentSessionOwnerVerdict,
   AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn<

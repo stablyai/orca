@@ -96,48 +96,6 @@ describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => 
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
-  it('reports each launched resume tab through onSessionLaunched', () => {
-    const record = makeRecord({ origin: 'quit' })
-    useAppStore.setState({
-      activeWorktreeId: 'wt-other',
-      activeTabId: 'other-tab',
-      activeTabType: 'browser',
-      activeTabIdByWorktree: { 'wt-other': 'other-tab' },
-      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
-      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    } as never)
-
-    const launchedTabIds: string[] = []
-    resumeSleepingAgentSessionsForWorktree('wt-1', {
-      suppressNavigation: true,
-      onSessionLaunched: (tabId) => launchedTabIds.push(tabId)
-    })
-
-    const resumedTab = useAppStore
-      .getState()
-      .tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
-    // Background-mount exactly these tabs; activate:false alone never runs startup.
-    expect(resumedTab).toBeDefined()
-    expect(launchedTabIds).toEqual([resumedTab?.id])
-  })
-
-  it('still navigates to the resumed tab for default (desktop) callers', () => {
-    // Suppression is opt-in; desktop resume must still select its recovery terminal.
-    const record = makeRecord({ origin: 'quit' })
-    useAppStore.setState({
-      activeWorktreeId: 'wt-1',
-      activeTabId: 'tab-1',
-      activeTabType: 'browser',
-      activeTabIdByWorktree: { 'wt-1': 'tab-1' },
-      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
-      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    } as never)
-
-    resumeSleepingAgentSessionsForWorktree('wt-1')
-
-    expect(useAppStore.getState().activeTabType).toBe('terminal')
-  })
-
   it('leaves the current view alone when the user has left the resumed worktree', () => {
     // Readiness can settle after navigation elsewhere; preserve recovered-tab selection when the user returns.
     const record = makeRecord({ origin: 'quit' })

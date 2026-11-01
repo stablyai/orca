@@ -3,7 +3,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalToolCallState
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import { describeToolInput } from './native-chat/tools/native-chat-tool-summary'
 import {
   projectStructuredAgentSessionStatusSummary,

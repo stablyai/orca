@@ -1,5 +1,5 @@
 import { useCallback, type MutableRefObject } from 'react'
-import { nativeChatAskRequiresTerminal } from '../../../../../src/shared/native-chat-agent-support'
+import { nativeChatAskRequiresTerminal } from '../../../../../src/shared/native-chat/native-chat-agent-support'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { sendMobileNativeChatMessageWithOutcome } from '../mobile-native-chat-send'
 

@@ -1,10 +1,10 @@
 // Withhold image cards only at RPC for older readers whose copy-text/delete edits would lose images; keep the canonical queue intact.
 
+import type { AgentSessionHistoryResult } from '../../../../shared/agent-session-wire'
 import type {
-  AgentSessionHistoryResult,
   AgentSessionQueuedMessage,
   AgentSessionQueuePublicationFields
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { QueuePublication } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-publication'
 import { AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RpcContext } from '../core'

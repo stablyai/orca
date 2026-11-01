@@ -7,6 +7,9 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { PluginDevelopmentDialog } from '../plugins/dialogs/PluginDevelopmentDialog'
 import { PluginInstallDialog } from '../plugins/dialogs/PluginInstallDialog'
+import { PluginInstallTrustDialogHost } from '../plugins/dialogs/PluginInstallTrustDialog'
+import { sourceInstallTrustPrompt } from '../plugins/presentation/plugin-install-trust'
+import { confirmPluginInstallTrust } from '@/store/plugin-install-trust-request'
 import { PluginRemoveDialog } from '../plugins/dialogs/PluginRemoveDialog'
 import { PluginRollbackDialog } from '../plugins/dialogs/PluginRollbackDialog'
 import { PluginsHeaderActions } from '../plugins/list/PluginSettingsMenu'
@@ -202,6 +205,9 @@ export function PluginsSettingsSection({
   const removePlugin = plugins.find((plugin) => plugin.pluginKey === removePluginId) ?? null
 
   const install = async (source: PluginHostInstallSource): Promise<void> => {
+    if (!(await confirmPluginInstallTrust(sourceInstallTrustPrompt(source)))) {
+      return
+    }
     const result = await window.api.plugins.install(source)
     if (!result.ok) {
       throw new Error(result.error)
@@ -396,6 +402,7 @@ export function PluginsSettingsSection({
         busy={devPathsBusy}
         onChange={updateDevPaths}
       />
+      <PluginInstallTrustDialogHost />
       <PluginRemoveDialog
         plugin={removePlugin}
         busy={Boolean(removePlugin && busyPluginKeys.has(removePlugin.pluginKey))}

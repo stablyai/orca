@@ -17,9 +17,9 @@ import {
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog,
-  getAgentSessionOptionCatalog,
-  type CatalogOption
-} from './agent-session-option-catalog'
+  getAgentSessionOptionCatalog
+} from './agent-session/options/agent-session-option-catalog'
+import type { CatalogOption } from './agent-session/options/agent-session-option-catalog-types'
 import {
   renderSourceControlActionCommandTemplate,
   type SourceControlActionRecipe

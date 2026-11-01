@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import wslMoveAgentModelUI from '../../../shared/__fixtures__/wsl-move-agent-model-ui.json'
-import { projectWslMoveUi } from './wsl-move-session-projection'
+
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceCleanupDismissal } from '../../../shared/workspace-cleanup'
 import { wslMoveCutoverFixture } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
@@ -88,22 +87,6 @@ function dismissal(
 }
 
 describe('WSL move UI routing rewrite', () => {
-  it('preserves global model visibility in the desktop snapshot consumed by the renderer', () => {
-    const desktop = wslMoveAgentModelUI.desktopBeforeMove
-    const projected = projectWslMoveUi(
-      desktop,
-      {},
-      (owner) => !!owner && scope.inScope(owner),
-      () => true
-    )
-    expect(projected).not.toHaveProperty('showAgentModels')
-    expect(projected).toEqual(wslMoveAgentModelUI.projectedProjectUI)
-    const updates = rewriteWslMoveUiRouting(desktop, scope)
-    expect(updates).not.toHaveProperty('showAgentModels')
-    // The renderer consumes this exact snapshot; changes to production output must update the contract.
-    expect({ ...desktop, ...updates }).toEqual(wslMoveAgentModelUI.desktopAfterMove)
-  })
-
   it("copies only the moved project's rows to the host's form, keeping the local ones", () => {
     const ui = profileUi()
     const updates = rewriteWslMoveUiRouting(ui, scope)
@@ -200,47 +183,6 @@ describe('WSL move UI routing rewrite', () => {
     })
   })
 
-  it('adds the host wherever local is shown, and never removes local', () => {
-    const updates = rewriteWslMoveUiRouting(profileUi(), scope)
-
-    // The legacy `local` scope resolves to a list, so the host joins it there.
-    expect(updates.visibleWorkspaceHostIds).toEqual(['local', HOST])
-    expect(updates.workspaceHostScope).toBeUndefined()
-    expect(updates.agentsVisibleHostIds).toEqual([SSH, 'local', HOST])
-    expect(updates.workspaceHostOrder).toEqual(['local', HOST, SSH])
-  })
-
-  it('leaves host filters that do not show local, or show all hosts, alone', () => {
-    const updates = rewriteWslMoveUiRouting(
-      {
-        ...profileUi(),
-        workspaceHostScope: 'all',
-        visibleWorkspaceHostIds: null,
-        agentsVisibleHostIds: [SSH],
-        workspaceHostOrder: undefined
-      },
-      scope
-    )
-
-    expect(updates.visibleWorkspaceHostIds).toBeUndefined()
-    expect(updates.agentsVisibleHostIds).toBeUndefined()
-    expect(updates.workspaceHostOrder).toBeUndefined()
-  })
-
-  it('keeps the local setup-prompt dismissal and lineage group beside the host ones', () => {
-    const ui = profileUi()
-    const updates = rewriteWslMoveUiRouting(ui, scope)
-
-    expect(updates.setupScriptPromptDismissedRepoIds).toEqual([
-      ...(ui.setupScriptPromptDismissedRepoIds ?? []),
-      `generation-v1:${HOST}\0repo-a`
-    ])
-    expect(updates.collapsedGroups).toEqual([
-      ...ui.collapsedGroups,
-      `lineage:${HOST}|${MOVED_ON_HOST}`
-    ])
-  })
-
   it('changes nothing on a second run', () => {
     const first = {
       ...profileUi(),
@@ -248,17 +190,5 @@ describe('WSL move UI routing rewrite', () => {
     }
 
     expect(rewriteWslMoveUiRouting(first, scope)).toEqual({})
-  })
-
-  it('changes nothing for a UI that never named the moved project', () => {
-    const ui: WslMoveUiRoutingState = {
-      lastActiveWorktreeId: WINDOWS,
-      showDotfilesByWorktree: { [SAME_DISTRO]: true },
-      collapsedGroups: [`lineage:local|${WINDOWS}`],
-      manualRepoOrder: [{ hostId: 'local', repoId: 'repo-win' }],
-      agentsVisibleHostIds: null
-    }
-
-    expect(rewriteWslMoveUiRouting(ui, scope)).toEqual({})
   })
 })

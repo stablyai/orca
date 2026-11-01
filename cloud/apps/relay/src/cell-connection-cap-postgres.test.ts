@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ASSIGNMENT_CONNECTION_HEADROOM_QUERY } from './assignment-connection-headroom-query.js'
+import { ASSIGNMENT_CONNECTION_HEADROOM_QUERY } from './assignment/assignment-connection-headroom-query.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayCellConfig } from './config.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'

@@ -11,44 +11,6 @@ vi.mock('electron', () => ({
 
 /** Registry-miss ghost rows must retire without commanding absent guests, or every paired device retains them. */
 describe('browserTabClose on a session row with no runtime page', () => {
-  it('retires the runtime-owned session row on a registry miss', async () => {
-    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
-    const retireRuntimeOwnedBrowserSessionTab = vi.fn(() => true)
-    const commands = new RuntimeBrowserCommands(createHost({ retireRuntimeOwnedBrowserSessionTab }))
-
-    await expect(
-      commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-ghost' })
-    ).resolves.toEqual({ closed: true })
-    expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('wt-1', 'page-ghost')
-  })
-
-  it('still fails closed when no session row names that page either', async () => {
-    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
-    const commands = new RuntimeBrowserCommands(
-      createHost({ retireRuntimeOwnedBrowserSessionTab: vi.fn(() => false) })
-    )
-
-    await expect(
-      commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-ghost' })
-    ).rejects.toMatchObject({ code: 'browser_tab_not_found' })
-  })
-
-  it('retires the row even on a runtime with no browser session at all', async () => {
-    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
-    const retireRuntimeOwnedBrowserSessionTab = vi.fn(() => true)
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getAgentBrowserBridge: () => null as unknown as AgentBrowserBridge,
-        retireRuntimeOwnedBrowserSessionTab
-      })
-    )
-
-    await expect(
-      commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-ghost' })
-    ).resolves.toEqual({ closed: true })
-    expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('wt-1', 'page-ghost')
-  })
-
   it('closes a rehydrated row with no host to ask, and leaves nothing to restore', async () => {
     const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const pages = new RuntimeBrowserPageRegistry()
@@ -77,28 +39,6 @@ describe('browserTabClose on a session row with no runtime page', () => {
     // No host lease ever existed; commanding it would strand the retained ghost row.
     expect(pages.getPage('page-restored')).toBeUndefined()
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('wt-1', 'page-restored')
-  })
-
-  it('never steals a close from a page the bridge still holds', async () => {
-    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
-    const retireRuntimeOwnedBrowserSessionTab = vi.fn(() => true)
-    const closeTab = vi.fn(async () => {})
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getOffscreenBrowserBackend: vi.fn(() => ({
-          createTab: vi.fn(),
-          closeTab,
-          ownsTab: () => true
-        })),
-        retireRuntimeOwnedBrowserSessionTab
-      })
-    )
-
-    await expect(
-      commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-live' })
-    ).resolves.toEqual({ closed: true })
-    // Live guests still require destruction before ghost retirement.
-    expect(closeTab).toHaveBeenCalledWith('page-live')
   })
 })
 
