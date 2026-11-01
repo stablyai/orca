@@ -1,12 +1,6 @@
+import { describePluginErrorForLog } from './declarative-error-location'
 import { PLUGIN_DECLARATIVE_MESSAGES } from '../plugin-declarative-message-names'
-import {
-  hostAtom,
-  read,
-  subscribeAtom,
-  trackAtomReads,
-  watchPersistedAtoms,
-  type OrcaAtom
-} from './declarative-atoms'
+import { hostAtom, read, subscribeAtom, trackAtomReads, type OrcaAtom } from './declarative-atoms'
 import type { OrcaComponent } from './declarative-elements'
 import type {
   OrcaDeclarativeRuntime,
@@ -15,7 +9,6 @@ import type {
   OrcaTheme
 } from './declarative-runtime-types'
 import { evaluateOrcaTree, type OrcaCallback } from './declarative-evaluate'
-import { createPersistQueue } from './declarative-persist-queue'
 import { createMemoryRetention } from './declarative-memory-retention'
 import {
   defaultSchedule,
@@ -28,6 +21,7 @@ import {
 } from './declarative-renderer-support'
 import { readHostMessage } from './declarative-host-messages'
 import { createPanelContext } from './declarative-panel-context'
+import { createDeclarativePersistence } from './declarative-storage-sync'
 
 export type { OrcaWireNode } from './declarative-evaluate'
 export type {
@@ -92,8 +86,8 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
   }
 
   function report(error: unknown): void {
-    // Why the stack text: main routes guest console errors to `orca plugin logs`, file:line included.
-    console.error(error instanceof Error && error.stack ? error.stack : String(error))
+    // Main routes guest console errors to `orca plugin logs`; this text is located like the banner.
+    console.error(describePluginErrorForLog(error))
     const stack = error instanceof Error && error.stack ? error.stack.slice(0, 8192) : undefined
     post(PLUGIN_DECLARATIVE_MESSAGES.error, {
       document,
@@ -192,12 +186,12 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
     }
   }
 
-  const persistQueue = createPersistQueue({
+  const persistence = createDeclarativePersistence({
+    bridge,
     report,
     post: (entries) => post(PLUGIN_DECLARATIVE_MESSAGES.persist, { document, entries })
   })
-  const flushPersist = persistQueue.flush
-  watchPersistedAtoms(persistQueue.add)
+  const flushPersist = persistence.flush
 
   const bridgeSubscriptions: OrcaDisposable[] = bridge?.on
     ? [
@@ -237,6 +231,7 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
     document,
     async boot(module) {
       await panel.hydrated
+      await persistence.loaded()
       if (isCallable(module.setup)) {
         const cleanup = module.setup(context)
         setupCleanup = isCallable(cleanup) ? () => void cleanup() : null
@@ -297,7 +292,7 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
       component = null
       scheduled = false
       unsubscribeAll()
-      watchPersistedAtoms(null)
+      persistence.dispose()
       for (const subscription of [...bridgeSubscriptions, ...context.subscriptions]) {
         try {
           subscription.dispose()

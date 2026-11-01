@@ -83,15 +83,26 @@ export function installPluginDesktopFrameServices(
         throw new Error('url must be an http:, https: or mailto: URL')
       }
       const window = callingWindow(scope)
-      admit(window, pluginId)
       const pluginName = scope.pluginName ?? pluginId
-      if (!(await confirmPluginExternalOpen({ window, store, pluginId, pluginName, url }))) {
-        return false
+      const consent = await confirmPluginExternalOpen({
+        window,
+        store,
+        pluginId,
+        pluginName,
+        url,
+        log: scope.log,
+        admit: () => admit(window, pluginId)
+      })
+      if (consent !== 'allowed') {
+        return {
+          opened: false,
+          reason: consent === 'cancelled' ? 'cancelled' : 'consent-unavailable'
+        }
       }
       // The prompt may have stayed open while the plugin was disabled or removed.
       scope.assertActive()
       await shell.openExternal(url)
-      return true
+      return { opened: true }
     },
     async saveFile(pluginId, input, scope) {
       const parent = callingWindow(scope)

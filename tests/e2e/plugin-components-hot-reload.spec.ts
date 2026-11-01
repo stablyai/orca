@@ -100,6 +100,14 @@ test('a dev components panel hot reloads with its memory atoms and survives a br
     await expect(orcaPage.getByRole('heading', { name: 'Panel v2' })).toBeVisible()
     await expect(orcaPage.getByText('Draft: kept across saves')).toBeVisible()
 
+    // A throw is located at the source column (as `orca plugin check` reports), not the
+    // type-stripped one Chromium's stack names.
+    await writeFile(
+      panelFile,
+      "import { atom } from 'orca'\n\nconst n: number = Number('1'); if (n) throw new Error('boom')\n"
+    )
+    await expect(loadError).toContainText('src/panel.tsx:3:45: boom', { timeout: 15_000 })
+
     await writeFile(panelFile, panelSource('v3'))
     await expect(orcaPage.getByRole('heading', { name: 'Panel v3' })).toBeVisible({
       timeout: 15_000

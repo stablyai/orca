@@ -3,7 +3,7 @@ import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-sessio
 import {
   claudeFrame as frame,
   claudeWasSent as wrote
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage

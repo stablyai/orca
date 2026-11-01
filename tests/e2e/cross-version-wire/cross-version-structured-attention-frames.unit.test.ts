@@ -141,7 +141,8 @@ async function framesFor(
   const feed = new host.StructuredAgentSessionTurnCompletionFeed({
     sessions,
     now: () => 10,
-    readStatusState: () => host.projectStructuredAgentSessionStatusState(items, [])
+    readStatusState: () => host.projectStructuredAgentSessionStatusState(items, []),
+    readChildWork: () => undefined
   })
   const hostCalls = structuredHostStub(SESSION, WORKSPACE)
   hostCalls.subscribeTurnCompletions = vi.fn((subscriber: unknown) => feed.subscribe(subscriber))

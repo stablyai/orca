@@ -12,7 +12,7 @@ import type {
 import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
 import { personStopDecidesTurn } from '../native-chat/agent-session-journal/journal-stop-turn-end'
 import type { ClaudeContextReportTarget } from './claude-context-facts'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { claudeTurnLifecycleIdentity } from './claude-turn-lifecycle-item'
 
 export function journal({ deferred = false } = {}) {

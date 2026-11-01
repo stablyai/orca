@@ -29,6 +29,7 @@ function wire(host: StructuredAgentSessionHost, controller: RuntimeMobileNotific
     readNotificationSettings: () => ({
       enabled: true,
       agentTaskComplete: true,
+      agentNeedsInput: true,
       terminalBell: true,
       suppressWhenFocused: false,
       customSoundId: 'system',

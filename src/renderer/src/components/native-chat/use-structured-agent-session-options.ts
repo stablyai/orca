@@ -16,7 +16,7 @@ import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
 import {
   flushStructuredSessionSelectionOptions,
   holdStructuredAgentSessionLaunchOption
-} from '@/lib/structured-agent-session-launch-options'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 
 export type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 

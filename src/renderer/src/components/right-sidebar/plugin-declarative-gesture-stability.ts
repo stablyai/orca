@@ -8,12 +8,18 @@ import { pluginDeclarativeGestureId } from '@/components/plugins/declarative/plu
  * A control must sit unchanged this long (same place in the tree, same type, label and target, and,
  * tracked by the renderer, the same on-screen rect) before a press on it counts, so a plugin cannot
  * slide one under the pointer just before the click. One rule for every control that grants:
- * Button, IconButton, ListItem, Link.
+ * Button, IconButton, ListItem, Link, and the links in a Markdown block.
  */
 export const PLUGIN_DECLARATIVE_SETTLE_MS = 500
 
 type SettleRecord = { signature: string; since: number }
-const GRANTING: ReadonlySet<string> = new Set(['Button', 'IconButton', 'ListItem', 'Link'])
+const GRANTING: ReadonlySet<string> = new Set([
+  'Button',
+  'IconButton',
+  'ListItem',
+  'Link',
+  'Markdown'
+])
 
 export type PluginDeclarativeGestureStability = {
   /** Records every granting control in a newly accepted tree. */
@@ -32,7 +38,7 @@ function textOf(children: PluginDeclarativeChild[]): string {
 /** What the person sees and what a press does; any change restarts the settle window. */
 function signatureOf(node: PluginDeclarativeNode, path: string): string {
   const props: Record<string, unknown> = node.props
-  const visible = ['label', 'title', 'description', 'icon', 'href', 'variant', 'tone']
+  const visible = ['label', 'title', 'description', 'icon', 'href', 'variant', 'tone', 'content']
     .map((name) => String(props[name] ?? ''))
     .join('\u0000')
   return `${path}\u0001${node.type}\u0001${visible}\u0001${textOf(node.children)}`
@@ -55,6 +61,10 @@ export function pluginDeclarativeGestureIdOf(node: PluginDeclarativeNode): strin
   }
   if (node.type === 'Link' && node.props.href) {
     return pluginDeclarativeGestureId.href(node.props.href)
+  }
+  // Its links never grant the guest a gesture; they open only once the block has settled.
+  if (node.type === 'Markdown') {
+    return pluginDeclarativeGestureId.markdown(node.props.content)
   }
   const callback = callbackOf(node)
   return callback === null ? null : pluginDeclarativeGestureId.callback(callback)

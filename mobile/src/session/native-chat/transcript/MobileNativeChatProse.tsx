@@ -1,10 +1,12 @@
+import { useCallback } from 'react'
 import { Text } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
 import {
   isImageRefBlock,
   isTextBlock,
-  type NativeChatBlock
+  type NativeChatBlock,
+  type NativeChatImageRefBlock
 } from '../../../../../src/shared/native-chat/native-chat-types'
 import { isAgentSessionHostStatusPresentation } from '../../../../../src/shared/agent-session/view/agent-session-host-status-rows'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
@@ -19,6 +21,34 @@ import type { MobileNativeChatVisualRender } from '../visual/mobile-native-chat-
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { nativeChatHostStatusCopy } from './native-chat-notice-copy'
+import { routeNativeChatHref } from '../../../../../src/shared/native-chat/native-chat-href-routing'
+import { isRuntimePathAbsolute } from '../../../../../src/shared/cross-platform-path'
+import { isRasterImagePath } from '../../../../../src/shared/file-preview-kind'
+import { isKnownRasterImageMimeType } from '../../../../../src/shared/raster-image-preview-limits'
+import { isSvgFilePath } from '../../../../../src/shared/svg-document'
+
+/** Raster https, data and absolute-path images draw on the phone (paths through the chat's host); anything else stays a link.
+ *  The shell's CSP refuses plain http, and React Native's Image cannot draw SVG. */
+function markdownImageBlock(href: string, alt: string): NativeChatImageRefBlock | null {
+  const label = alt.trim() ? { alt } : {}
+  const source = href.trim()
+  if (/^data:/i.test(source)) {
+    return isKnownRasterImageMimeType(source.slice(5).split(/[;,]/, 1)[0])
+      ? { type: 'image-ref', url: source, ...label }
+      : null
+  }
+  const route = routeNativeChatHref(source)
+  if (route.kind === 'web') {
+    return /^https:/i.test(route.url) && !isSvgFilePath(route.url.split(/[?#]/, 1)[0] ?? '')
+      ? { type: 'image-ref', url: route.url, ...label }
+      : null
+  }
+  return route.kind === 'file' &&
+    isRuntimePathAbsolute(route.pathText) &&
+    isRasterImagePath(route.pathText)
+    ? { type: 'image-ref', path: route.pathText, ...label }
+    : null
+}
 
 export function Prose({
   block,
@@ -46,6 +76,19 @@ export function Prose({
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const renderImage = useCallback(
+    (href: string, alt: string): React.ReactNode => {
+      const image = markdownImageBlock(href, alt)
+      return image ? (
+        <MobileNativeChatImageAttachment
+          block={image}
+          fontScale={fontScale}
+          onLongPress={onLongPress}
+        />
+      ) : null
+    },
+    [fontScale, onLongPress]
+  )
   if (isTextBlock(block)) {
     if (isAgentSessionHostStatusPresentation(block.presentation)) {
       return (
@@ -66,6 +109,7 @@ export function Prose({
           textScale={CHAT_PROSE_SCALE * fontScale}
           onOpenFile={onOpenFile}
           onLongPress={onLongPress}
+          renderImage={renderImage}
         />
       )
     }
@@ -82,6 +126,7 @@ export function Prose({
         textScale={CHAT_PROSE_SCALE * fontScale}
         onOpenFile={onOpenFile}
         onLongPress={onLongPress}
+        renderImage={renderImage}
       />
     )
   }

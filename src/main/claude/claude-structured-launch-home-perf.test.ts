@@ -5,7 +5,7 @@ import { dirname, join, sep } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ClaudeProfileRouter } from '../claude-accounts/claude-profile-router'
-import { claudeLaunchResumesTranscript } from './claude-structured-launch-home'
+import { claudeLaunchResumesTranscript } from './structured/launch/claude-structured-launch-home'
 
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof fs>()

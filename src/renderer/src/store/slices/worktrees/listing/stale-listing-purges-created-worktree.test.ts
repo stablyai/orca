@@ -20,7 +20,7 @@ import {
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
 } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/structured-agent-session-local-launch-cancel'
+import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/agent-session/launch/structured-agent-session-local-launch-cancel'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   resetStructuredAgentLaunchRegistryForTests

@@ -8,7 +8,7 @@ import { MAX_PROVIDER_DIAGNOSTIC_CHARS } from '../../shared/agent-session/failur
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase

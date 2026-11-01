@@ -100,6 +100,15 @@ describe('a background Stop acts on the host child records', () => {
           task_id: 'agent-1',
           patch: { status: 'completed' }
         }
+      },
+      {
+        at: 7_000,
+        frame: {
+          type: 'system',
+          subtype: 'task_notification',
+          task_id: 'agent-1',
+          status: 'completed'
+        }
       }
     ])
 

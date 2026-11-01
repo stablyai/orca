@@ -51,6 +51,7 @@ export const REMOTE_TARGET = { kind: 'environment', environmentId: 'relay-host' 
 export const NOTIFICATION_SETTINGS: NotificationSettings = {
   enabled: true,
   agentTaskComplete: true,
+  agentNeedsInput: true,
   terminalBell: true,
   suppressWhenFocused: true,
   customSoundId: 'system',
@@ -227,6 +228,7 @@ beforeEach(() => {
       ]
     ]),
     readStatusState: () => projectStructuredAgentSessionStatusState(fixture.items),
+    readChildWork: () => undefined,
     now: hostClock
   })
   fixture = {

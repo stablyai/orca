@@ -21,13 +21,16 @@ export const PLUGIN_APPROVAL_STALE_CODE = 'approval_stale'
 export const PLUGIN_NOT_FOUND_CODE = 'plugin_not_found'
 export const PLUGIN_INVALID_CODE = 'plugin_invalid'
 export const PLUGIN_SYSTEM_DISABLED_CODE = 'plugin_system_disabled'
+/** `orca plugin dev request`: the worker's own error code rides in `data.requestCode`. */
+export const PLUGIN_REQUEST_FAILED_CODE = 'plugin_request_failed'
 /** Codes the runtime passes through to CLI callers with their `data`. */
 export const PLUGIN_CLI_ERROR_CODES = [
   PLUGIN_APPROVAL_REQUIRED_CODE,
   PLUGIN_APPROVAL_STALE_CODE,
   PLUGIN_NOT_FOUND_CODE,
   PLUGIN_INVALID_CODE,
-  PLUGIN_SYSTEM_DISABLED_CODE
+  PLUGIN_SYSTEM_DISABLED_CODE,
+  PLUGIN_REQUEST_FAILED_CODE
 ] as const
 
 /** A plugin CLI refusal whose `data` carries `nextSteps` for the caller. */

@@ -19,21 +19,20 @@ import {
   type TreeSnapshot
 } from './testing-tree'
 import { createValueControls } from './testing-value-controls'
+import { createTestingPanelFacades } from './testing-panel-facades'
+import { seedPersisted } from './testing-persisted'
+
+export { stored, type StoredValue } from './testing-persisted'
+import { createPanelActions, type Target } from './testing-panel-actions'
+import { visibleElements } from './testing-visibility'
 
 export type PanelIssue = { kind: 'plugin' | 'refused'; message: string; stack?: string }
 type Stored = { version: number; value: unknown }
-export type PersistedState = { plugin: Record<string, unknown>; workspace: Record<string, unknown> }
-
-const STORED = Symbol.for('orca.testing.stored')
-export type StoredValue = { readonly [STORED]: true; version: number; value: unknown }
-
-/** A persisted value written by an older version of the panel, for testing `migrate`. */
-export function stored(value: unknown, version: number): StoredValue {
-  return Object.freeze({ [STORED]: true as const, version, value })
-}
-
-function isStoredValue(value: unknown): value is StoredValue {
-  return typeof value === 'object' && value !== null && STORED in value
+export type PersistedState = {
+  plugin: Record<string, unknown>
+  workspace: Record<string, unknown>
+  /** The plugin's storage (`persist: 'storage'` atoms and `storage.set`), on the mock host. */
+  storage: Record<string, unknown>
 }
 
 export type MountOptions = {
@@ -45,8 +44,6 @@ export type MountOptions = {
   /** Values persisted by an earlier run: plain values are stored at version 1; see `stored()`. */
   persisted?: { plugin?: Record<string, unknown>; workspace?: Record<string, unknown> }
 }
-
-type Target = TestElement | TestQuery
 
 function isElement(target: Target): target is TestElement {
   return 'path' in target
@@ -80,16 +77,7 @@ export async function mountPanel(
     plugin: new Map(),
     workspace: new Map()
   }
-  for (const scope of ['plugin', 'workspace'] as const) {
-    for (const [key, value] of Object.entries(options.persisted?.[scope] ?? {})) {
-      storage[scope].set(
-        key,
-        isStoredValue(value)
-          ? { version: value.version, value: value.value }
-          : { version: 1, value }
-      )
-    }
-  }
+  seedPersisted(storage, options.persisted)
   let visible = options.visible ?? true
   let shown: { document: string; revision: number; tree: PluginDeclarativeNode | null } = {
     document: '',
@@ -97,6 +85,8 @@ export async function mountPanel(
     tree: null
   }
   const controls = createValueControls()
+  const data = createTestingPanelFacades(host.bridge.call)
+  const stopDataChanges = host.onDataChange(data.changed)
 
   function post(event: string, payload: unknown): void {
     if (event === PLUGIN_DECLARATIVE_MESSAGES.ready) {
@@ -160,6 +150,7 @@ export async function mountPanel(
       api: host.bridge.api,
       locale: options.locale ?? 'en',
       host: { call: host.bridge.call, has: host.bridge.has },
+      ...data.facades,
       on(event, handler) {
         const set = listeners.get(event) ?? new Set()
         set.add(handler)
@@ -186,12 +177,15 @@ export async function mountPanel(
     throw new Error('the panel did not settle: it keeps re-rendering (an update loop?)')
   }
 
+  // What Orca draws: no content of unselected tabs or closed Collapsibles.
+  const elements = (): TestElement[] =>
+    visibleElements(listElements(shown.tree), (element) => controls.valueOf(element))
   const findAll = (query: TestQuery): TestElement[] =>
-    innermost(listElements(shown.tree).filter((element) => matchesQuery(element, query)))
+    innermost(elements().filter((element) => matchesQuery(element, query)))
 
   function resolve(target: Target, verb: string): TestElement {
     const found = isElement(target)
-      ? listElements(shown.tree).find((element) => element.path === target.path)
+      ? elements().find((element) => element.path === target.path)
       : findAll(target)[0]
     if (!found) {
       throw new Error(
@@ -233,6 +227,7 @@ export async function mountPanel(
       })
     )
   await settled()
+  const actions = createPanelActions({ host, controls, resolve, elements, dispatch, settled })
 
   return {
     host,
@@ -240,62 +235,29 @@ export async function mountPanel(
     errors,
     /** Props and components Orca would drop, as it would warn about them. */
     warnings,
+    /** Host calls Orca would refuse (missing capability, no press, ...), even ones the panel caught. */
+    get refusals() {
+      return host.refusals
+    },
     find: (query: TestQuery): TestElement | null => findAll(query)[0] ?? null,
     findAll,
     tree: (): TreeSnapshot | string | null => (shown.tree ? snapshotTree(shown.tree) : null),
     get persisted(): PersistedState {
       const read = (scope: 'plugin' | 'workspace') =>
         Object.fromEntries([...storage[scope]].map(([key, entry]) => [key, entry.value]))
-      return { plugin: read('plugin'), workspace: read('workspace') }
+      return { plugin: read('plugin'), workspace: read('workspace'), storage: host.data().storage }
     },
     settled,
-    async press(target: Target): Promise<void> {
-      const element = resolve(target, 'press')
-      const { href, onPress } = element.props
-      if (element.type === 'Link' && typeof href === 'string') {
-        // Orca opens a Link's href itself, spending the press; onPress then runs without one.
-        host.grantGesture()
-        void host.bridge.call('shell.openExternal', { url: href }).catch(() => undefined)
-      } else if (onPress === undefined) {
-        throw new Error(`press: the ${element.type} has no onPress`)
-      } else {
-        host.grantGesture()
-      }
-      dispatch(onPress, [])
-      await settled()
-    },
-    async type(target: Target, text: string, typing: { replace?: boolean; submit?: boolean } = {}) {
-      const element = resolve(target, 'type')
-      for (const edit of controls.typeInto(element, text, typing.replace === true)) {
-        dispatch(element.props.onChange, [edit.value], edit.id)
-        await settled()
-      }
-      if (typing.submit) {
-        dispatch(element.props.onSubmit, [controls.valueOf(element)])
-        await settled()
-      }
-    },
-    async submit(target: Target): Promise<void> {
-      const element = resolve(target, 'submit')
-      dispatch(element.props.onSubmit, [controls.valueOf(element)])
-      await settled()
-    },
-    async toggle(target: Target): Promise<void> {
-      const element = resolve(target, 'toggle')
-      const edit = controls.toggle(element)
-      dispatch(element.props.onChange, [edit.value], edit.id)
-      await settled()
-    },
-    async select(target: Target, value: string): Promise<void> {
-      const element = resolve(target, 'select')
-      const edit = controls.select(element, value)
-      dispatch(element.props.onChange, [edit.value], edit.id)
-      await settled()
-    },
+    ...actions,
     /** What Orca shows in a value control (what the person typed, until the panel resets it). */
     valueOf: (target: Target): unknown => controls.valueOf(resolve(target, 'valueOf')),
     async emit(event: string, payload: unknown): Promise<void> {
       emit(event, payload)
+      await settled()
+    },
+    /** What the plugin's worker posts with `orca.panels.post`; `plugin.on` handlers hear it. */
+    async post(event: string, payload: unknown): Promise<void> {
+      data.post(event, payload)
       await settled()
     },
     async setVisible(next: boolean): Promise<void> {
@@ -310,6 +272,7 @@ export async function mountPanel(
     async unmount(): Promise<void> {
       runtime.dispose()
       listeners.clear()
+      stopDataChanges()
     }
   }
 }

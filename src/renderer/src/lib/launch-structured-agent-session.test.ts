@@ -11,7 +11,7 @@ import {
   StructuredAgentSessionCreateUnknownOutcomeError,
   StructuredAgentSessionOwnerUnresolvedError
 } from './launch-structured-agent-session'
-import { admitStructuredLaunchOnHost } from './structured-agent-session-host-admission'
+import { admitStructuredLaunchOnHost } from './agent-session/launch/structured-agent-session-host-admission'
 import {
   clearWebSessionFocusIntent,
   peekWebSessionFocusIntent

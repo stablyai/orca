@@ -17,15 +17,15 @@ import {
 import {
   claudeStructuredSessionPublicationOptions,
   prepareClaudeStructuredSessionAcquisitionOptions
-} from '../claude-structured-session-acquisition-options'
+} from './launch/claude-structured-session-acquisition-options'
 import {
   claudeStructuredSessionOptionsFrom,
   observeClaudeSettingsApplied,
   readClaudeSettingsApplied,
   readClaudeFastModeFacts,
   readClaudeSettingsEffort
-} from '../claude-structured-session-options'
-import { claudeExecutionObservations } from '../claude-structured-execution-observations'
+} from './launch/claude-structured-session-options'
+import { claudeExecutionObservations } from './claude-structured-execution-observations'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeSession,
