@@ -225,7 +225,6 @@ test.describe('terminal link menu file preview', () => {
       orcaPage,
       seededRepoPath
     }, testInfo) => {
-      test.setTimeout(120_000)
       const filePath = path.join(seededRepoPath, 'package.json')
       const { ptyId, mouseLogPath, target } = await startFileLinkFixture(
         orcaPage,

@@ -36,10 +36,11 @@ process.stdout.write(
 )
 
 process.stdin.on('data', (chunk) => {
-  if (chunk.includes('\x03')) {
+  const text = String(chunk)
+  if (text.includes('\x03')) {
     cleanup()
   }
-  pending += chunk
+  pending += text
   const tokens = [...pending.matchAll(INPUT_PATTERN)]
   for (const { 0: token } of tokens) {
     if (token === 'q') {
