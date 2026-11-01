@@ -1,7 +1,7 @@
 qa-with-lb: removed 29 inherited ORCA_* variables; added ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN; exec /Users/m4air/.local/bin/claude as PID 26663
 7[r8[?25h[?25l[?2004h[?2031h[?1004h]0;✳ ultracode[38;2;215;119;87m ▐[48;2;0;0;0m▛███▛█[12G[39m[49m[1mClaude[19GCode[24G[22m[38;2;153;153;153mv2.1.316[39m
 [38;2;215;119;87m▝▜[48;2;0;0;0m█████[49m█▀[12G[38;2;153;153;153mOpus[17G5.5[21G·[23GAPI[27GUsage[33GBilling[39m
-[38;2;215;119;87m ▝▝[7G▝▝[12G[38;2;153;153;153m@ultracode[23G·[25G/…/m4air/orca/workspaces/orca/qa-composer-labelled-1101-focus-posix-qg[39m
+[38;2;215;119;87m ▝▝[7G▝▝[12G[38;2;153;153;153m@ultracode[23G·[25G/…/m4air/orca/workspaces/orca/qa.composer-labelled-1101-focus-posix-qg[39m
 
 
 [38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────[90Gultracode[100G─[39m

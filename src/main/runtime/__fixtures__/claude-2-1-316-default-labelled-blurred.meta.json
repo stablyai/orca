@@ -15,6 +15,6 @@
   },
   "cols": 100,
   "rows": 30,
-  "note": "Claude Code 2.1.316; real PTY in a throwaway home; default simulated cursor (no CLAUDE_CODE_NATIVE_CURSOR), so the native cursor is hidden and parked at the painted caret. No prompt submitted. Custom main-agent label. Caret moved mid-draft, then a focus-out report (ESC[O) sent as PTY input: Claude drops the inverse caret paint while the hidden cursor stays parked at the caret in the normal buffer.",
+  "note": "Claude Code 2.1.316; real PTY in a throwaway home; default simulated cursor (no CLAUDE_CODE_NATIVE_CURSOR), so the native cursor is hidden and parked at the painted caret. No prompt submitted. Custom main-agent label. Caret moved mid-draft, then a focus-out report (ESC[O) sent as PTY input: Claude drops the inverse caret paint while the hidden cursor stays parked at the caret in the normal buffer. The QA worktree directory name in the status-line path was scrubbed (one character changed, same length).",
   "exitCode": -9
 }
