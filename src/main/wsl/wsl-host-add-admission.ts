@@ -51,7 +51,6 @@ export function wslHostRemovalPendingMessage(distro: string): string {
   return `Orca didn’t finish removing the WSL host ${distro}. Remove it again in Settings → Remote Orca Servers, or connect it to keep it.`
 }
 
-/** Why no WSL host may run at all right now; null when they may. */
 /**
  * Why a saved host can't run now. The WSL hosts setting governs new work only (Stage 1): with it
  * off, saved hosts keep serving their projects, as in serve-only.
