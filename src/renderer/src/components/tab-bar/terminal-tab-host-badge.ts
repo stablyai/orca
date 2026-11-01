@@ -1,3 +1,4 @@
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import {
   isDisconnectedRuntimeHostState,
@@ -27,9 +28,11 @@ export function selectTerminalTabHostBadgeLabel(
   if (!alias) {
     return label
   }
-  const entry = state.runtimeStatusByEnvironmentId.get(
-    alias.executionHostId.slice('runtime:'.length)
-  )
+  const host = parseExecutionHostId(alias.executionHostId)
+  const entry =
+    host?.kind === 'runtime'
+      ? state.runtimeStatusByEnvironmentId.get(host.environmentId)
+      : undefined
   const gone = state.tabsByWorktree[worktreeId]?.find(
     (row) => row.id === tab.entityId
   )?.hostTerminalAliasGone

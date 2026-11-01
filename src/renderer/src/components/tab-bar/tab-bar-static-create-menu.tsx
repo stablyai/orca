@@ -116,7 +116,7 @@ export function TabBarStaticCreateMenu({
       onNewHostTerminal={(option) => {
         void createTerminalTabOnHost({
           worktreeId: props.worktreeId,
-          groupId: props.groupId,
+          groupId,
           executionHostId: option.hostId,
           projectHostSetupId: option.id
         }).catch((error: unknown) => {

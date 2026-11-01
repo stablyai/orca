@@ -1,3 +1,4 @@
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   captureRuntimeEnvironmentRequestRevision,
@@ -126,17 +127,22 @@ export function startTerminalHostAliasRetirement(
   if (!alias) {
     return
   }
-  const close = aliasRow.hostTerminalAliasGone
-    ? Promise.resolve('unknown-tab' as const)
-    : import('@/runtime/web-runtime-session-tab-lifecycle').then(({ closeWebRuntimeSessionTab }) =>
-        closeWebRuntimeSessionTab({
-          worktreeId: alias.worktreeId,
-          tabId: alias.tabId,
-          environmentId: alias.executionHostId.slice('runtime:'.length),
-          reason: 'user',
-          ...(opts?.force ? { force: true } : {})
-        })
-      )
+  const host = parseExecutionHostId(alias.executionHostId)
+  const close =
+    host?.kind !== 'runtime'
+      ? Promise.resolve('failed' as const)
+      : aliasRow.hostTerminalAliasGone
+        ? Promise.resolve('unknown-tab' as const)
+        : import('@/runtime/web-runtime-session-tab-lifecycle').then(
+            ({ closeWebRuntimeSessionTab }) =>
+              closeWebRuntimeSessionTab({
+                worktreeId: alias.worktreeId,
+                tabId: alias.tabId,
+                environmentId: host.environmentId,
+                reason: 'user',
+                ...(opts?.force ? { force: true } : {})
+              })
+          )
   void close
     .then((outcome) => {
       const current = get().tabsByWorktree[aliasRow.worktreeId]?.find(

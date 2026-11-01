@@ -111,46 +111,58 @@ export async function createTerminalTabOnHost({
     { timeoutMs: 15_000 }
   )
   const tab = created.tab
-  if (!isValidHostTerminalTabId(tab.parentTabId) || !isTerminalLeafId(tab.leafId)) {
-    throw new Error('invalid_host_reply')
-  }
-  await callRuntimeRpc(target, 'session.tabs.activate', {
-    worktree: toRuntimeWorktreeSelector(hostWorktreeId),
-    tabId: tab.parentTabId,
-    leafId: tab.leafId,
-    navigation: 'host'
-  })
-  const latest = useAppStore.getState()
-  if (!isLocalHostTerminalSource(latest, worktreeId)) {
-    throw new Error('source_worktree_not_local')
-  }
-  const localTabId = toWebTerminalSurfaceTabId(tab.parentTabId)
-  if (!latest.tabsByWorktree[worktreeId]?.some((row) => row.id === localTabId)) {
-    latest.createTab(worktreeId, groupId, undefined, {
-      id: localTabId,
-      initialLeafId: tab.leafId,
-      mirroredHostTab: true,
-      hostTerminalAlias: {
-        executionHostId: host.id,
-        worktreeId: hostWorktreeId,
-        tabId: tab.parentTabId,
-        leafId: tab.leafId
-      }
+  try {
+    if (!isValidHostTerminalTabId(tab.parentTabId) || !isTerminalLeafId(tab.leafId)) {
+      throw new Error('invalid_host_reply')
+    }
+    await callRuntimeRpc(target, 'session.tabs.activate', {
+      worktree: toRuntimeWorktreeSelector(hostWorktreeId),
+      tabId: tab.parentTabId,
+      leafId: tab.leafId,
+      navigation: 'host'
     })
-  }
-  latest.setActiveTab(localTabId)
-  latest.setActiveTabType('terminal', worktreeId)
-  focusTerminalTabSurface(localTabId)
-  await refreshWebRuntimeSessionTabsSnapshot(host.environmentId, hostWorktreeId, {
-    afterCurrentInFlight: true,
-    acceptCurrentSnapshot: true
-  })
-  return {
-    executionHostId: host.id,
-    hostWorktreeId,
-    tabId: tab.parentTabId,
-    leafId: tab.leafId,
-    handle: tab.terminal,
-    title: tab.title
+    const latest = useAppStore.getState()
+    if (!isLocalHostTerminalSource(latest, worktreeId)) {
+      throw new Error('source_worktree_not_local')
+    }
+    const localTabId = toWebTerminalSurfaceTabId(tab.parentTabId)
+    if (!latest.tabsByWorktree[worktreeId]?.some((row) => row.id === localTabId)) {
+      latest.createTab(worktreeId, groupId, undefined, {
+        id: localTabId,
+        initialLeafId: tab.leafId,
+        mirroredHostTab: true,
+        hostTerminalAlias: {
+          executionHostId: host.id,
+          worktreeId: hostWorktreeId,
+          tabId: tab.parentTabId,
+          leafId: tab.leafId
+        }
+      })
+    }
+    latest.setActiveTab(localTabId)
+    latest.setActiveTabType('terminal', worktreeId)
+    focusTerminalTabSurface(localTabId)
+    await refreshWebRuntimeSessionTabsSnapshot(host.environmentId, hostWorktreeId, {
+      afterCurrentInFlight: true,
+      acceptCurrentSnapshot: true
+    })
+    return {
+      executionHostId: host.id,
+      hostWorktreeId,
+      tabId: tab.parentTabId,
+      leafId: tab.leafId,
+      handle: tab.terminal,
+      title: tab.title
+    }
+  } catch (error) {
+    try {
+      await callRuntimeRpc(target, 'session.tabs.close', {
+        worktree: toRuntimeWorktreeSelector(hostWorktreeId),
+        tabId: tab.parentTabId
+      })
+    } catch {
+      // Preserve the creation failure if host cleanup also fails.
+    }
+    throw error
   }
 }

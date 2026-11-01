@@ -1,3 +1,4 @@
+import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { buildMirroredTerminalTabs } from './web-session-tabs-sync/terminal-build'
@@ -11,11 +12,15 @@ export function reconcileTerminalHostAliases(
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   const aliases = Object.values(state.tabsByWorktree)
     .flat()
-    .filter(
-      (tab) =>
-        tab.hostTerminalAlias?.executionHostId === `runtime:${environmentId}` &&
-        tab.hostTerminalAlias.worktreeId === snapshot.worktree
-    )
+    .filter((tab) => {
+      const alias = tab.hostTerminalAlias
+      const host = parseExecutionHostId(alias?.executionHostId)
+      return (
+        host?.kind === 'runtime' &&
+        host.environmentId === environmentId &&
+        alias?.worktreeId === snapshot.worktree
+      )
+    })
   if (!aliases.length) {
     return patch
   }
