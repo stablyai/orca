@@ -87,6 +87,7 @@ describe('host prompt delivery and retirement', () => {
           readNotificationSettings: () => ({
             enabled: true,
             agentTaskComplete: true,
+            agentNeedsInput: true,
             terminalBell: true,
             suppressWhenFocused: false,
             customSoundId: 'system',
@@ -113,6 +114,7 @@ describe('host prompt delivery and retirement', () => {
             ]
           ]),
           readStatusState: () => projectStructuredAgentSessionStatusState(items),
+          readChildWork: () => undefined,
           now: () => 42
         })
         feed.subscribe({ id: 'legacy', emit: (event) => legacy.push(event) })

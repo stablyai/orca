@@ -5,7 +5,7 @@ import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionSendSelection
 } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
-import { getStructuredAgentSessionLaunchSelection } from '@/lib/structured-agent-session-launch-options'
+import { getStructuredAgentSessionLaunchSelection } from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
 import type { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
 

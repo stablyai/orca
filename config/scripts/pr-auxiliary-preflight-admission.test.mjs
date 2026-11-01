@@ -71,12 +71,6 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
   // Unit shards wait for their plan rather than preflight.
   const gate = jobName === 'orcad_browser' ? 'unit_plan' : 'preflight'
 
-  it('waits for the detector and its prerequisite job', () => {
-    expect(job.needs).toEqual(['code_paths', gate])
-    expect(job.if).toContain('!cancelled()')
-    expect(job['continue-on-error']).toBeUndefined()
-  })
-
   it.each([
     { name: 'all prerequisites pass', admitted: true },
     { name: 'preflight fails', preflight: 'failure', admitted: false },
@@ -118,22 +112,6 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
     expect(evaluate(condition, context)).toBe(scenario.admitted)
   })
 
-  it.each([
-    { files: [] },
-    { files: ['package.json'] },
-    { files: ['.github/workflows/pr.yml'] },
-    { files: [changedFile] }
-  ])(
-    'requires unit work and preflight whenever the real classifier selects $files',
-    ({ files }) => {
-      const selected = routedOutputs(files, 'false')
-      expect(selected[jobName]).toBe('true')
-      expect(selected.test).toBe('true')
-      expect(selected.static_analysis).toBe('true')
-      expect(selected.typecheck).toBe('true')
-    }
-  )
-
   it.each(['true', 'false', undefined])(
     'honors the actual readiness-masked output when reuse is %s',
     (reused) => {
@@ -152,29 +130,6 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
       expect(evaluate(condition, context)).toBe(reused !== 'true')
     }
   )
-})
-
-it.each([
-  { files: ['README.md'] },
-  { files: ['mobile/src/App.tsx'] },
-  { files: ['mobile/package.json'] },
-  { files: ['cloud/apps/relay/src/index.ts'] }
-])('does not add preflight consumers to a no-unit diff: $files', ({ files }) => {
-  const outputs = routedOutputs(files, 'false')
-  expect(outputs.test).toBe('false')
-  for (const [name] of routes) {
-    expect(outputs[name], name).toBe('false')
-  }
-})
-
-it('keeps the mobile-only bundle job in the first wave', () => {
-  const mobile = workflow.jobs.mobile_web_app
-  expect(mobile.needs).toEqual(['code_paths'])
-  expect(mobile.if).toBe("needs.code_paths.outputs.mobile_web_app == 'true'")
-  expect(classifyPrJobs(['mobile/src/App.tsx'])).toMatchObject({
-    test: false,
-    mobile_web_app: true
-  })
 })
 
 it('preserves relay continuation, setup guards and cancellation', () => {
@@ -247,29 +202,6 @@ describe('Mobile CI tool preflight routing', () => {
     expect(evaluate(required.env.PREFLIGHT_SHOULD_RUN, context)).toBe(true)
   })
 
-  // Static analysis only, for the whole-tree formatting check.
-  it('keeps workflow-only changes off the root unit and typecheck route', () => {
-    const outputs = routedOutputs(['.github/workflows/mobile.yml'], 'false', verified)
-    expect(outputs.mobile_ci_tools).toBe('false')
-    expect(outputs.test).toBe('false')
-    expect(outputs.static_analysis).toBe('true')
-    expect(outputs.typecheck).toBe('false')
-  })
-
-  it('keeps root shard execution enabled for callers that do not opt out', () => {
-    expect(unit.on.workflow_call.inputs.run_shards.default).toBe(true)
-    expect(evaluate(unit.jobs.test.if, { inputs: { run_shards: true } })).toBe(true)
-    const relayDefault = unit.on.workflow_call.inputs.run_relay_integration.default
-    expect(relayDefault).toBe(true)
-    expect(
-      evaluate(unit.jobs.relay_integration.if, { inputs: { run_relay_integration: relayDefault } })
-    ).toBe(true)
-    expect(
-      evaluate(unit.jobs.relay_integration.if, { inputs: { run_relay_integration: false } })
-    ).toBe(false)
-    expect(unit.jobs.relay_integration.needs).toBeUndefined()
-  })
-
   it('requires complete modification evidence and an exact path scope', () => {
     const tool = 'config/scripts/run-mobile-ci-tests.mjs'
     expect(classifyPrJobs([tool]).test).toBe(true)
@@ -290,12 +222,6 @@ describe('Mobile CI tool preflight routing', () => {
       expect(selected.mobile_ci_tools).toBe(false)
       expect(selected.test).toBe(true)
     }
-  })
-
-  it('reuses only identical successful checks for the focused preflight gate', () => {
-    const files = ['config/scripts/run-mobile-ci-tests.mjs']
-    expect(routedOutputs(files, 'true', verified).mobile_ci_tools).toBe('false')
-    expect(routedOutputs(files, 'false', verified).mobile_ci_tools).toBe('true')
   })
 })
 

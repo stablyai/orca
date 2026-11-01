@@ -11,8 +11,8 @@ import {
   nativeChatSendFollowUp
 } from '../../../../shared/native-chat-follow-up-behavior'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
-import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-legacy-launch-stop'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
+import { useStructuredLegacyLaunchStop } from '@/lib/agent-session/launch/structured-agent-session-legacy-launch-stop'
 import {
   useStructuredAgentSessionHostQueuesCommands,
   useStructuredAgentSessionHostQueuesMessagesState

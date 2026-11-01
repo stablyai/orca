@@ -14,7 +14,7 @@ import {
   CAPTURED_COMPACT_SUCCEEDS,
   type CapturedCompactEvent
 } from './claude-captured-compact-frames.test-fixture'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 
 const COMMAND_IDENTITY: AgentJournalItemIdentity = {
   provider: 'orca',

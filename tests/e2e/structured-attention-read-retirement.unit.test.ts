@@ -179,6 +179,7 @@ describe('Explicit desktop read acknowledgements', () => {
         ]
       ]),
       readStatusState: () => projectStructuredAgentSessionStatusState(otherItems),
+      readChildWork: () => undefined,
       now: () => 42
     })
     const delivery = createStructuredAttentionMobileDelivery({

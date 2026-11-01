@@ -7,7 +7,7 @@ import {
   type AgentSessionAccountHome
 } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { acquiredAgentSessionAccount } from '../../shared/agent-session-acquired-account'
-import { CLAUDE_STRUCTURED_AGENT } from '../claude/claude-structured-agent-definition'
+import { CLAUDE_STRUCTURED_AGENT } from '../claude/structured/claude-structured-agent-definition'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import { agentSessionOwnerObservationIsLive } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'

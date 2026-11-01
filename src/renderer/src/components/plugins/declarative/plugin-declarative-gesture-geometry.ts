@@ -1,4 +1,4 @@
-import { createContext } from 'react'
+import { createContext, useContext } from 'react'
 
 /**
  * Where each granting control sits on screen, in panel-content coordinates (so the person
@@ -15,10 +15,21 @@ export type PluginDeclarativeGestureGeometry = {
   isSettled: (id: string, now: number, settleMs: number) => boolean
 }
 
-/** Ids a granting control is tracked under: its press callback, or a Link's href. */
+/** 32-bit FNV-1a: a short id for long content. */
+function contentHash(text: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < text.length; index++) {
+    hash = Math.imul(hash ^ text.charCodeAt(index), 0x01000193)
+  }
+  return (hash >>> 0).toString(36)
+}
+
+/** Ids a control is tracked under: its press callback, a Link's href, or a Markdown block (its
+ *  links open only once the block itself has settled). */
 export const pluginDeclarativeGestureId = {
   callback: (callback: string): string => `cb:${callback}`,
-  href: (href: string): string => `href:${href}`
+  href: (href: string): string => `href:${href}`,
+  markdown: (content: string): string => `md:${content.length}:${contentHash(content)}`
 }
 
 type Placement = { id: string; rect: string; since: number }
@@ -96,3 +107,8 @@ export function createPluginDeclarativeGestureGeometry(
 
 export const PluginDeclarativeGestureContext =
   createContext<PluginDeclarativeGestureGeometry | null>(null)
+
+/** The ref that tracks an element's placement under `id`, when the view tracks gestures. */
+export function useGestureTrackRef(id: string): ((element: Element | null) => void) | undefined {
+  return useContext(PluginDeclarativeGestureContext)?.refFor(id)
+}

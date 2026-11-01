@@ -4,6 +4,7 @@ import {
   createPluginDeclarativeGestureStability,
   PLUGIN_DECLARATIVE_SETTLE_MS as SETTLE
 } from './plugin-declarative-gesture-stability'
+import { pluginDeclarativeGestureId } from '@/components/plugins/declarative/plugin-declarative-gesture-geometry'
 
 const link = (href: string, key: string): PluginDeclarativeNode => ({
   type: 'Link',
@@ -25,6 +26,26 @@ const stack = (...children: PluginDeclarativeNode[]): PluginDeclarativeNode => (
 })
 
 describe('declarative gesture settling', () => {
+  it('lets Markdown links open only once their block sat unchanged', () => {
+    const controls = createPluginDeclarativeGestureStability()
+    const markdown = (content: string): PluginDeclarativeNode => ({
+      type: 'Markdown',
+      key: 'md',
+      props: { content },
+      children: []
+    })
+    const first = '[docs](https://example.com)'
+    const id = pluginDeclarativeGestureId.markdown(first)
+    controls.observe(stack(markdown(first)), 0)
+    expect(controls.isSettled(id, SETTLE - 1)).toBe(false)
+    expect(controls.isSettled(id, SETTLE)).toBe(true)
+    // New text is a new block: its links wait again.
+    const second = '[docs](https://attacker.example)'
+    controls.observe(stack(markdown(second)), SETTLE)
+    expect(controls.isSettled(pluginDeclarativeGestureId.markdown(second), SETTLE + 1)).toBe(false)
+    expect(controls.isSettled(id, SETTLE + 1)).toBe(false)
+  })
+
   it('grants a press only once its control sat unchanged for the settle window', () => {
     const controls = createPluginDeclarativeGestureStability()
     controls.observe(stack(button('Save', 'a')), 0)

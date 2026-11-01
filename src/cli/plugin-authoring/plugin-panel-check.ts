@@ -1,10 +1,11 @@
-import { realpathSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { runProcess } from '@orca/process-host'
 import { z } from 'zod'
 import { parsePluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
+import { PLUGIN_PANEL_CHECK_SCRIPT } from './plugin-panel-check-script'
 import { selectPluginTestNode } from './plugin-test-node'
 import { pluginTestingFiles } from './plugin-test-runner'
 
@@ -17,6 +18,8 @@ export type PluginPanelCheckIssue = {
 export type PluginPanelCheck = {
   panel: string
   entry: string
+  /** The `<entry>.check.ts` scenario this render used, when the panel has one. */
+  scenario?: string
   /** Elements drawn on the first render; 0 when it never rendered. */
   elements: number
   issues: PluginPanelCheckIssue[]
@@ -27,6 +30,7 @@ const checkReportSchema = z.array(
   z.object({
     panel: z.string(),
     entry: z.string(),
+    scenario: z.string().optional(),
     elements: z.number(),
     issues: z.array(
       z.object({
@@ -38,33 +42,6 @@ const checkReportSchema = z.array(
     warnings: z.array(z.string())
   })
 )
-
-// Runs inside the plugin's Node process with the test hooks: mount each panel once, report back.
-const CHECK_SCRIPT = `
-const { mount, mockHost } = await import('orca/testing')
-const panels = JSON.parse(process.env.ORCA_PLUGIN_CHECK_PANELS)
-const results = []
-let stray = []
-process.on('unhandledRejection', (error) => stray.push(error))
-for (const { panel, entry, url } of panels) {
-  const result = { panel, entry, elements: 0, issues: [], warnings: [] }
-  stray = []
-  try {
-    const mounted = await mount(await import(url), { host: mockHost(), panelId: panel })
-    result.elements = mounted.findAll({}).length
-    result.issues.push(...mounted.errors)
-    result.warnings.push(...mounted.warnings)
-    await mounted.unmount()
-  } catch (error) {
-    stray.push(error)
-  }
-  for (const error of stray) {
-    result.issues.push({ kind: 'plugin', message: String(error?.message ?? error), stack: error?.stack })
-  }
-  results.push(result)
-}
-process.stdout.write('\\n__ORCA_CHECK__' + JSON.stringify(results))
-`
 
 /** The first stack frame inside the plugin folder, as `path:line:column`. */
 export function pluginStackLocation(dir: string, stack: string | undefined): string | undefined {
@@ -80,7 +57,41 @@ export function pluginStackLocation(dir: string, stack: string | undefined): str
   return undefined
 }
 
-/** Renders every components panel once against a stand-in host, in a Node process. */
+// `src/panel.tsx:4:7: Unexpected token`, as Orca's loaders word transpile and import errors.
+const LOCATED_MESSAGE = /^([^\n:]+\.[a-z]+:\d+:\d+): ([\s\S]*)$/i
+
+/** One issue per distinct problem, located from its message or else its first plugin frame. */
+export function pluginPanelCheckIssues(
+  dir: string,
+  reported: readonly { kind: PluginPanelCheckIssue['kind']; message: string; stack?: string }[]
+): PluginPanelCheckIssue[] {
+  const issues = new Map<string, PluginPanelCheckIssue>()
+  for (const { stack, ...issue } of reported) {
+    const located = LOCATED_MESSAGE.exec(issue.message)
+    const location = located?.[1] ?? pluginStackLocation(dir, stack)
+    const message = located?.[2] ?? issue.message
+    const key = JSON.stringify([issue.kind, location, message])
+    if (!issues.has(key)) {
+      issues.set(key, location ? { ...issue, message, location } : { ...issue, message })
+    }
+  }
+  return [...issues.values()]
+}
+
+const FIXTURE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.js', '.mjs']
+
+/** `src/panel.check.ts` beside `src/panel.tsx`: the scenarios check renders the panel in. */
+export function pluginCheckFixturePath(dir: string, entry: string): string | null {
+  const stem = entry.replace(/\.[^./]+$/, '')
+  return (
+    FIXTURE_EXTENSIONS.map((extension) => `${stem}.check${extension}`).find((path) =>
+      existsSync(join(dir, ...path.split('/')))
+    ) ?? null
+  )
+}
+
+/** Renders every components panel once per scenario against a stand-in host, in a Node process;
+ *  a plugin with a worker (`main`) runs it on the same host, so panel requests reach it. */
 export async function checkPluginPanels(
   dir: string,
   appRoot?: string
@@ -91,13 +102,21 @@ export async function checkPluginPanels(
   if (!parsed.ok) {
     return []
   }
+  const fileUrl = (path: string): string => pathToFileURL(join(dir, ...path.split('/'))).href
   const panels = parsed.manifest.contributes.panels
     .filter((panel) => panel.ui === 'components')
-    .map((panel) => ({
-      panel: panel.id,
-      entry: panel.entry,
-      url: pathToFileURL(join(dir, ...panel.entry.split('/'))).href
-    }))
+    .map((panel) => {
+      const fixture = pluginCheckFixturePath(dir, panel.entry)
+      return {
+        panel: panel.id,
+        entry: panel.entry,
+        url: fileUrl(panel.entry),
+        ...(fixture ? { fixture: { path: fixture, url: fileUrl(fixture) } } : {})
+      }
+    })
+  const main = parsed.manifest.main
+    ? { path: parsed.manifest.main, url: fileUrl(parsed.manifest.main) }
+    : null
   if (panels.length === 0) {
     return []
   }
@@ -111,14 +130,14 @@ export async function checkPluginPanels(
       pathToFileURL(testing.register).href,
       '--input-type=module',
       '--eval',
-      CHECK_SCRIPT
+      PLUGIN_PANEL_CHECK_SCRIPT
     ],
     cwd: dir,
     env: {
       ...process.env,
       ...node.env,
       ORCA_PLUGIN_TEST_ROOT: dir,
-      ORCA_PLUGIN_CHECK_PANELS: JSON.stringify(panels)
+      ORCA_PLUGIN_CHECK_PANELS: JSON.stringify({ panels, main })
     },
     timeoutMs: 60_000
   })
@@ -141,16 +160,14 @@ export async function checkPluginPanels(
   const realDir = realpathSync(dir)
   return reported.map((check) => ({
     ...check,
-    issues: check.issues.map(({ stack, ...issue }) => {
-      const location = pluginStackLocation(realDir, stack)
-      return location ? { ...issue, location } : issue
-    })
+    issues: pluginPanelCheckIssues(realDir, check.issues),
+    warnings: [...new Set(check.warnings)]
   }))
 }
 
 /** Lines for one panel: what it drew, or each issue at its plugin location. */
 export function formatPluginPanelCheck(check: PluginPanelCheck): string[] {
-  const head = `${check.panel} (${check.entry}): `
+  const head = `${check.panel} (${check.entry}${check.scenario ? `, scenario "${check.scenario}"` : ''}): `
   if (check.issues.length === 0) {
     return [
       `${head}rendered ${check.elements} element(s)`,

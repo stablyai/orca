@@ -5,7 +5,7 @@ import type { CommandMenuRendererFixtureModule } from '../../../shared/agent-ses
 
 import { OMP } from '../../acp/acp-command-discovery.test-fixture'
 import { acpStructuredAgentDefinition } from '../../acp/acp-structured-agent-definitions'
-import { CLAUDE_STRUCTURED_AGENT } from '../../claude/claude-structured-agent-definition'
+import { CLAUDE_STRUCTURED_AGENT } from '../../claude/structured/claude-structured-agent-definition'
 import { StructuredAgentRegistry } from './structured-agent-registry'
 import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-adapter-router'
 import { structuredAgentsDeclaringNothing } from './structured-agent-session-adapter-router-test-support'
