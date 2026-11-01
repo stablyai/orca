@@ -11,7 +11,7 @@ import {
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 it('preserves existing queuedAt across two live replacements despite an older original receipt', async () => {
   const rewind = vi.fn(async () => ({ ok: true as const }))

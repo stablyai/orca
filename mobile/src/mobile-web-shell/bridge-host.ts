@@ -133,6 +133,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           granted,
           host,
           ownsHostArea: options.ownsHostArea === true,
+          hostStatus: options.readHostStatus?.() ?? null,
           ...pageStorageForReader(options.readStorage(), pageStorageKeys),
           refreshTerminalShortcuts
         })

@@ -1,4 +1,4 @@
-import type { AgentSessionProviderContextBoundary } from '../agent-session-provider-context'
+import type { AgentSessionProviderContextBoundary } from '../agent-session/agent-session-provider-context'
 // IPC-serializable conversation contract: plain JSON only, no classes/Maps/Dates. Sources prefer transcripts, then hooks,
 // then degraded scrollback; docs/plans/2026-06-17-001-feat-native-chat-view-plan.md (KTD2).
 
@@ -6,9 +6,9 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
 } from '../agent-session/agent-session-background-task-wire'
-import type { AgentSessionTokenUsage } from '../agent-session-context-usage'
-import type { AgentSessionOrcaStop } from '../agent-session-orca-stop'
-import type { AgentSessionFailureFact } from '../agent-session-failure'
+import type { AgentSessionTokenUsage } from '../agent-session/agent-session-context-usage'
+import type { AgentSessionOrcaStop } from '../agent-session/lifecycle/agent-session-orca-stop'
+import type { AgentSessionFailureFact } from '../agent-session/failures/agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
   AgentJournalMessageState,
@@ -16,7 +16,7 @@ import type {
   AgentJournalProducerLinkage,
   AgentJournalToolCallEnding,
   AgentJournalToolCallState
-} from '../agent-session-journal-types'
+} from '../agent-session/journal/agent-session-journal-types'
 import type { AgentType } from '../agent-status-types'
 import type { NativeChatToolMetadata } from './tools/native-chat-tool-identity'
 import type { AgentMessageSource } from '../agent-session/agent-session-message-source'
@@ -233,6 +233,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   from?: AgentMessageSource
   /** Projected creation fact, never a user turn or provider input. */
   agentStart?: true
+  /** On a creation fact: the agent was launched on its own, not started as a supervised worker. */
+  agentHandoff?: true
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
   queued?: true
   /** Unsent rows belong to no turn. Draw at journal position, or after the conversation when unplaced. */

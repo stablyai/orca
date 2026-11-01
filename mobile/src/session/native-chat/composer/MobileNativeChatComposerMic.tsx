@@ -10,6 +10,7 @@ import {
   composerInputStyles as inputStyles
 } from '../../../components/composer-input/composer-input-styles'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
+import { MobileNativeChatControlSwap } from '../input/mobile-native-chat-control-swap'
 
 export type MobileNativeChatMicProps = {
   onMicPress?: () => void
@@ -68,19 +69,24 @@ export function MobileNativeChatComposerMic({
       >
         {/* The icon swaps on press; as the page's touch target, its removal would send
             touchend to a detached node and lose the release. */}
-        {micProcessing ? (
-          <ActivityIndicator pointerEvents="none" size="small" color={colors.textSecondary} />
-        ) : micActive ? (
-          <Square
-            pointerEvents="none"
-            size={16}
-            color={colors.statusRed}
-            strokeWidth={2.4}
-            fill={colors.statusRed}
-          />
-        ) : (
-          <Mic pointerEvents="none" size={19} color={colors.textSecondary} strokeWidth={2} />
-        )}
+        <MobileNativeChatControlSwap
+          swapKey={micProcessing ? 'processing' : micActive ? 'active' : 'idle'}
+          icon
+        >
+          {micProcessing ? (
+            <ActivityIndicator pointerEvents="none" size="small" color={colors.textSecondary} />
+          ) : micActive ? (
+            <Square
+              pointerEvents="none"
+              size={16}
+              color={colors.statusRed}
+              strokeWidth={2.4}
+              fill={colors.statusRed}
+            />
+          ) : (
+            <Mic pointerEvents="none" size={19} color={colors.textSecondary} strokeWidth={2} />
+          )}
+        </MobileNativeChatControlSwap>
       </Pressable>
     </>
   )

@@ -203,6 +203,10 @@ vi.mock('react-native-reanimated', async () => {
       return { setActive: probe.frameActive }
     },
     withSpring: probe.spring,
+    withTiming: (value: number) => value,
+    interpolateColor: (value: number, _input: number[], output: string[]) =>
+      value >= 1 ? output[1] : output[0],
+    Easing: { out: (easing: unknown) => easing, cubic: 'cubic' },
     runOnJS:
       (fn: (...args: unknown[]) => unknown) =>
       (...args: unknown[]) => {

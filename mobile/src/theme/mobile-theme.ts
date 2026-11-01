@@ -207,3 +207,6 @@ export const feedback = {
   pressedOpacity: 0.7,
   disabledOpacity: 0.4
 } as const
+
+/** The pressed look for a button: `style={({ pressed }) => [styles.button, pressed && pressedStyle]}`. */
+export const pressedStyle = { opacity: feedback.pressedOpacity } as const

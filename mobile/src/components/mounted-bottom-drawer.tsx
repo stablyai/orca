@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Pressable,
@@ -9,22 +9,12 @@ import {
   Platform
 } from 'react-native'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  runOnJS
-} from 'react-native-reanimated'
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
-import {
-  BOTTOM_DRAWER_EASING,
-  BOTTOM_DRAWER_HIDE_DURATION_MS,
-  BOTTOM_DRAWER_SHOW_DURATION_MS
-} from './bottom-drawer-constants'
 import { AutoHeight } from './AutoHeight'
 import {
   bottomDrawerOffset,
@@ -41,10 +31,9 @@ import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../platform/keyboard-occlusion'
 import { hostOs } from '../platform/host-os'
-import { useBottomDrawerDrag } from './use-bottom-drawer-drag'
+import { hideDrawer, showDrawer, useBottomDrawerDrag } from './use-bottom-drawer-drag'
+import { useDrawerReducedMotion } from './bottom-drawer-constants'
 
-const SHOW_TIMING = { duration: BOTTOM_DRAWER_SHOW_DURATION_MS, easing: BOTTOM_DRAWER_EASING }
-const HIDE_TIMING = { duration: BOTTOM_DRAWER_HIDE_DURATION_MS, easing: BOTTOM_DRAWER_EASING }
 // The grabber row above the content: its padding plus the 5 pt bar.
 const HANDLE_AREA_HEIGHT = spacing.sm + 5 + spacing.md
 
@@ -58,6 +47,8 @@ export type MountedBottomDrawerProps = {
   fillAvailable?: boolean
   // Pinned-under sheet preserves size but must not receive touches, backdrop or keyboard lift.
   interactive?: boolean
+  /** False holds the sheet up while it works: Back, the backdrop and drags leave it in place. */
+  dismissible?: boolean
   zIndex?: number
   /** When this changes to a non-null value the content scrolls back to its top, e.g. a new page. */
   scrollResetKey?: string | null
@@ -72,12 +63,16 @@ export function MountedBottomDrawer({
   contentScrollable = true,
   fillAvailable = false,
   interactive = true,
+  dismissible = true,
   zIndex = 1000,
   scrollResetKey = null
 }: MountedBottomDrawerProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const progress = useSharedValue(0)
+  const fade = useSharedValue(0)
+  const reducedMotion = useDrawerReducedMotion()
+  const motion = useMemo(() => ({ progress, fade, reducedMotion }), [progress, fade, reducedMotion])
   const keyboardOffset = useSharedValue(0)
   const scrollOffsetY = useSharedValue(0)
   const scrollRef = useRef<ScrollView>(null)
@@ -114,7 +109,7 @@ export function MountedBottomDrawer({
     if (!tookWindowBack) {
       return
     }
-    progress.value = withTiming(1, SHOW_TIMING)
+    showDrawer(motion)
     // Pages have no native binding to heal, and a remount there paints one empty frame of the sheet.
     if (Platform.OS !== 'web') {
       setWindowEpoch((epoch) => epoch + 1)
@@ -125,15 +120,11 @@ export function MountedBottomDrawer({
     // Both directions run from wherever the sheet is, so a reopen mid-close never jumps.
     if (visible) {
       scrollOffsetY.value = 0
-      progress.value = withTiming(1, SHOW_TIMING)
+      showDrawer(motion)
     } else {
       Keyboard.dismiss()
       setKeyboardInset(0)
-      progress.value = withTiming(0, HIDE_TIMING, (finished) => {
-        if (finished) {
-          runOnJS(onHidden)()
-        }
-      })
+      hideDrawer(motion, onHidden)
     }
   }, [onHidden, visible])
 
@@ -188,16 +179,12 @@ export function MountedBottomDrawer({
 
   const dismiss = useCallback(() => {
     // Never restart hide mid-close: cancellation prevents onHidden and leaves invisible Modal swallowing taps (Android Back).
-    if (!visible) {
+    if (!visible || !dismissible) {
       return
     }
     Keyboard.dismiss()
-    progress.value = withTiming(0, HIDE_TIMING, (finished) => {
-      if (finished) {
-        runOnJS(onClose)()
-      }
-    })
-  }, [onClose, progress, visible])
+    hideDrawer(motion, onClose)
+  }, [dismissible, onClose, motion, visible])
 
   // Top interactive sheet claims native/shell Back so Android closes drawer rather than screen; pinned-under sheet never owns key.
   useBackClaim(
@@ -211,7 +198,7 @@ export function MountedBottomDrawer({
   useBottomDrawerModalHostBackClaim(visible && interactive ? dismiss : null)
 
   const { scrollHandler, scrollGesture, handlePanGesture, contentPanGesture } = useBottomDrawerDrag(
-    { progress, sheetHeight, screenHeight, scrollOffsetY, onDismiss: onClose }
+    { ...motion, sheetHeight, screenHeight, scrollOffsetY, onDismiss: onClose, dismissible }
   )
 
   const drawerStyle = useAnimatedStyle(() => {
@@ -219,14 +206,15 @@ export function MountedBottomDrawer({
     const keyboardShift = fillAvailable ? 0 : keyboardOffset.value
     const travel = bottomDrawerTravel(sheetHeight.value, screenHeight)
     return {
+      opacity: fade.value,
       transform: [{ translateY: bottomDrawerOffset(progress.value, travel) - keyboardShift }]
     }
-  }, [progress, keyboardOffset, screenHeight, fillAvailable, sheetHeight])
+  }, [progress, fade, keyboardOffset, screenHeight, fillAvailable, sheetHeight])
 
   const backdropStyle = useAnimatedStyle(() => {
     const travel = bottomDrawerTravel(sheetHeight.value, screenHeight)
-    return { opacity: bottomDrawerScrim(progress.value, travel, sheetHeight.value) }
-  }, [progress, sheetHeight, screenHeight])
+    return { opacity: fade.value * bottomDrawerScrim(progress.value, travel, sheetHeight.value) }
+  }, [progress, fade, sheetHeight, screenHeight])
 
   // Use full-screen native Modal (own/shared) to escape nested ScrollView clipping; progress drives animationType:none so exit finishes before unmount.
   const handle = (

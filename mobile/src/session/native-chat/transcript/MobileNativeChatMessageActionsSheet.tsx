@@ -6,7 +6,7 @@ import { ActionSheetContent } from '../../../components/ActionSheetModal'
 import { BottomDrawer } from '../../../components/BottomDrawer'
 import { useClipboardWriter } from '../../../platform/clipboard'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { translate } from '../../../i18n/mobile-i18n'
@@ -111,7 +111,7 @@ function SelectTextScreen({
             hitSlop={12}
             accessibilityLabel={t('common.close', 'Close')}
             accessibilityRole="button"
-            style={styles.close}
+            style={({ pressed }) => [styles.close, pressed && pressedStyle]}
           >
             <X size={20} color={colors.textSecondary} />
           </Pressable>

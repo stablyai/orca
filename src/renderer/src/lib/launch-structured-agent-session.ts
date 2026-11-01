@@ -6,7 +6,7 @@ import {
   type StructuredAgentSessionCreateParams,
   type StructuredAgentSessionFirstMessage,
   type StructuredAgentSessionResumeSource
-} from '../../../shared/structured-agent-session-create'
+} from '../../../shared/agent-session/structured-agent-session-create'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'
@@ -27,7 +27,7 @@ import {
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError,
   StructuredAgentSessionOwnerUnresolvedError
-} from '@/lib/structured-agent-session-launch-errors'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 
 export {
   StructuredAgentSessionCreateRefusalError,
@@ -229,4 +229,4 @@ export function abandonStructuredAgentSessionLaunchIntent(
 export {
   launchStructuredAgentSession,
   type StructuredLaunchHostSeedListener
-} from './structured-agent-session-launch-create-call'
+} from './agent-session/launch/structured-agent-session-launch-create-call'

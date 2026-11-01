@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { toGitLabJobLogExcerptResult } from '../../shared/gitlab-job-log-excerpt'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { getJobTrace, retryJob } from '../gitlab/client'
 import type { ProjectRef } from '../gitlab/gl-utils'
 import type { GitLabRepoSelectorArgs } from './gitlab-repo-access'

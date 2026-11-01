@@ -9,7 +9,7 @@ import {
 } from 'lucide-react-native'
 import type { SmartNameSelection } from '../tasks/mobile-composer-source-types'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -83,7 +83,7 @@ export function SmartWorkspaceSourceField({
               <View style={styles.actions}>
                 {selection.url ? (
                   <Pressable
-                    style={styles.action}
+                    style={({ pressed }) => [styles.action, pressed && pressedStyle]}
                     accessibilityRole="link"
                     accessibilityLabel={t(
                       'components.smartWorkspaceSourceField.openSelectedSource',
@@ -100,7 +100,7 @@ export function SmartWorkspaceSourceField({
                   </Pressable>
                 ) : null}
                 <Pressable
-                  style={styles.action}
+                  style={({ pressed }) => [styles.action, pressed && pressedStyle]}
                   accessibilityRole="button"
                   accessibilityLabel={t(
                     'components.smartWorkspaceSourceField.clearSelectedSource',

@@ -3,17 +3,17 @@ import { hostTestAttachParams } from './structured-agent-session-host-test-data'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { withAcquiredAgentSessionAccount } from '../../../shared/agent-session-acquired-account'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem,
   type AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentJournalSubmissionKey,
   agentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isOrcaSessionId } from '../../../shared/orca-session-address'
 import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -21,7 +21,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import {
   seedTestAgentSessionRecordStore,
   openTestAgentSessionRecordStore
-} from '../../runtime/agent-session-record-store-test-harness'
+} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { OrchestrationDb } from '../../runtime/orchestration/db'
 import { structuredNativeWorkReaders } from '../../runtime/structured-native-work-readers'
 import { structuredMailNotice } from '../../runtime/orchestration/structured-mail-source'

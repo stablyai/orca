@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { PersistedOpenFile } from '../../../shared/workspace-session-state-types'

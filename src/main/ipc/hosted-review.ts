@@ -7,7 +7,7 @@ import type {
   HostedReviewForBranchArgs
 } from '../../shared/hosted-review'
 import type { Repo } from '../../shared/repo-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
 import {
   createHostedReview,
@@ -43,7 +43,10 @@ function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): 
   return repo
 }
 
-function assertRegisteredRepoForBranch(args: HostedReviewForBranchArgs, store: Store): Repo {
+function assertRegisteredRepoForBranch(
+  args: Pick<HostedReviewForBranchArgs, 'repoPath' | 'repoId' | 'repoOwnerExecutionHostId'>,
+  store: Store
+): Repo {
   if (!args.repoOwnerExecutionHostId) {
     return assertRegisteredRepo(args.repoPath, store, args.repoId)
   }
@@ -152,7 +155,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   ipcMain.handle(
     'hostedReview:getCreationEligibility',
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
-      const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
+      const repo = assertRegisteredRepoForBranch(args, store)
       const localGitOptions = getLocalProjectGhExecOptions(store, repo)
       // Source Control asks on mount; only the user's Create PR may start a stopped distro (E9).
       return guardWslUncPathAccess(

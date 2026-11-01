@@ -1,4 +1,4 @@
-import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
 import { describe, expect, it } from 'vitest'
 import { parseRuntimeClientCapabilities } from '../../../src/main/runtime/rpc/runtime-client-capabilities'
 import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from './mobile-runtime-client-capabilities'

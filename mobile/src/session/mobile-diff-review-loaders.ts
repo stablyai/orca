@@ -5,11 +5,11 @@ import {
   normalizeMobileDiffReviewState
 } from './mobile-diff-review-state'
 import { normalizeMobileDiffComments } from './mobile-diff-comments'
-import { buildMobileDiffHunks } from './mobile-diff-hunks'
 import { highlightMobileDiffLines, resolveMobileSyntaxLanguage } from './mobile-file-syntax'
 import {
   reviewBranchCompareRead,
   reviewBranchFileDiffRead,
+  reviewCommitFileDiffRead,
   reviewFileDiffRead,
   reviewWorktreeMetadataRead
 } from './mobile-diff-review-operations'
@@ -28,7 +28,11 @@ import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
-import type { ReviewDiffState, ReviewScreenState } from './mobile-diff-review-screen-model'
+import type {
+  MobileDiffReviewCommit,
+  ReviewDiffState,
+  ReviewScreenState
+} from './mobile-diff-review-screen-model'
 import { reviewDescriptorFromItem } from './mobile-diff-review-screen-model'
 import { translate } from '../i18n/mobile-i18n'
 
@@ -42,6 +46,7 @@ type DiffLoadInput = {
   worktreeId: string
   item: MobileDiffReviewQueueItem
   branchCompare: MobileGitBranchCompareResult | null
+  commit: MobileDiffReviewCommit | null
   ignoreTrimWhitespace?: boolean
   signal?: AbortSignal
 }
@@ -183,18 +188,20 @@ export async function loadMobileDiffReviewSnapshot(
     comments,
     reviewState: mergeMobileDiffReviewState(
       normalizedReviewState,
-      queue.map(reviewDescriptorFromItem),
+      queue.flatMap((item) => reviewDescriptorFromItem(item) ?? []),
       Date.now()
     )
   }
 }
 
 export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<ReviewDiffState> {
-  const { client, worktreeId, item, branchCompare } = input
+  const { client, worktreeId, item, branchCompare, commit } = input
   const pending =
-    item.scope === 'branch'
-      ? await requestBranchFileDiff(client, worktreeId, item, branchCompare)
-      : await requestWorktreeFileDiff(client, worktreeId, item)
+    item.scope === 'commit'
+      ? await requestCommitFileDiff(client, worktreeId, item, commit)
+      : item.scope === 'branch'
+        ? await requestBranchFileDiff(client, worktreeId, item, branchCompare)
+        : await requestWorktreeFileDiff(client, worktreeId, item)
   if (input.signal?.aborted) {
     return { kind: 'idle' }
   }
@@ -232,7 +239,6 @@ export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<Re
     kind: 'ready',
     itemKey: item.key,
     lines: highlightMobileDiffLines(diff.lines, language),
-    hunks: buildMobileDiffHunks(diff.lines),
     truncated: diff.truncated
   }
 }
@@ -278,4 +284,25 @@ async function requestBranchFileDiff(
     }
   })
   return { reply, interpret: (settled) => reviewBranchFileDiffRead.interpret(settled) }
+}
+
+async function requestCommitFileDiff(
+  client: RpcClient,
+  worktreeId: string,
+  item: MobileDiffReviewQueueItem,
+  commit: MobileDiffReviewCommit | null
+): Promise<PendingFileDiff> {
+  if (!commit) {
+    throw new Error(
+      translate('session.diffReviewLoaders.commitDiffUnavailable', 'Commit diff is unavailable')
+    )
+  }
+  const reply = await reviewCommitFileDiffRead.request(client, {
+    worktree: `id:${worktreeId}`,
+    filePath: item.filePath,
+    commitOid: commit.commitOid,
+    ...(commit.parentOid ? { parentOid: commit.parentOid } : {}),
+    ...(item.oldPath ? { oldPath: item.oldPath } : {})
+  })
+  return { reply, interpret: (settled) => reviewCommitFileDiffRead.interpret(settled) }
 }

@@ -80,19 +80,24 @@ describe('WSL host focus entries (E9)', () => {
     unsubs.forEach((unsub) => unsub())
   })
 
-  it('records no focus while WSL hosts are off, and reports the focused host when turned on', () => {
-    seed(false, WSL_WORKTREE)
+  // Stage 1: the setting governs new work only, so a saved host keeps serving with it off.
+  it('reports the focused saved host even with the WSL hosts setting off', () => {
+    seed(false, LOCAL_WORKTREE)
     const unsubs: (() => void)[] = []
     registerWslHostIpcBridge(unsubs)
-    useAppStore.setState({ activeWorktreeId: LOCAL_WORKTREE })
+    useAppStore.setState({ activeWorktreeId: WSL_WORKTREE })
+    expect(api.focusHost).toHaveBeenCalledWith({ environmentId: WSL_ENV })
+    unsubs.forEach((unsub) => unsub())
+  })
+
+  it('records no focus with the setting off and no saved host to serve', () => {
+    seed(false, LOCAL_WORKTREE)
+    useAppStore.setState({ runtimeEnvironments: [] })
+    const unsubs: (() => void)[] = []
+    registerWslHostIpcBridge(unsubs)
     useAppStore.setState({ activeWorktreeId: WSL_WORKTREE })
     expect(api.focusHost).not.toHaveBeenCalled()
     expect(api.setVisibleWork).not.toHaveBeenCalled()
-
-    useAppStore.setState({
-      settings: { ...getDefaultSettings('/tmp'), experimentalWslHosts: true }
-    })
-    expect(api.focusHost).toHaveBeenCalledExactlyOnceWith({ environmentId: WSL_ENV })
     unsubs.forEach((unsub) => unsub())
   })
 })

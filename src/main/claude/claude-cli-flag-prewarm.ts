@@ -1,12 +1,12 @@
 import { homedir } from 'node:os'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import type { ClaudeCliFlagSupport } from './claude-cli-flag-support'
 import {
   claudeProbeEnv,
   resolveClaudeChildEnvSources,
   type ClaudeEnvDeps
-} from './claude-structured-child-env'
+} from './structured/launch/claude-structured-child-env'
 
 const MAX_PREWARMED_FOLDERS = 4
 

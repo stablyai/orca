@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import {
   classifyConnection,
   isConnectionOutage,
@@ -9,8 +10,12 @@ import { useInitialSessionTerminalAutoCreate } from './use-initial-session-termi
 import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
 import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
 import { hostOs } from '../platform/host-os'
+import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
 import { useCalmConnectionState } from '../transport/calm-connection-state'
+
+// The toast rises this far as it fades in; Reduce Motion keeps the fade alone.
+const TOAST_RISE_PX = 8
 
 export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
   const t = useMobileTranslation()
@@ -112,9 +117,20 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
       terminalFrameRef.current?.height ??
       0
   })
+  const reducedMotion = useReducedMotionEnabled()
+  const toastRise = useMemo(
+    () =>
+      reducedMotion === false
+        ? toastOpacityRef.current.interpolate({
+            inputRange: [0, 1],
+            outputRange: [TOAST_RISE_PX, 0]
+          })
+        : 0,
+    [reducedMotion, toastOpacityRef]
+  )
   const toastAnimatedStyle = {
     opacity: toastOpacityRef.current,
-    transform: [{ translateY: -keyboardLift }]
+    transform: [{ translateY: -keyboardLift }, { translateY: toastRise }]
   }
   return {
     presentedConnState,

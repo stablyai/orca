@@ -11,7 +11,7 @@ import {
   XCircle,
   AlertTriangle
 } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
@@ -71,7 +71,7 @@ export function TroubleshootView({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('common.back', 'Back')}
-          style={styles.backButton}
+          style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
           onPress={onBack}
         >
           <ChevronLeft size={22} color={colors.textSecondary} />

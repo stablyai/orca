@@ -1,14 +1,43 @@
 // @vitest-environment happy-dom
 
+import type * as LaunchRegistry from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
-const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
-  (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
+const { mocks, moduleFactories, resetStructuredSessionMocks, launchModule } = await vi.hoisted(
+  async () => {
+    const setup = (
+      await import('./NativeChatStructuredSession.test-harness')
+    ).createStructuredSessionMocks()
+    return {
+      ...setup,
+      launchModule: setup.moduleFactories.structuredAgentSessionLaunch()
+    }
+  }
 )
 
-vi.mock('@/lib/structured-agent-session-launch', () =>
-  moduleFactories.structuredAgentSessionLaunch()
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
+  retryStructuredAgentSessionLaunch: launchModule.retryStructuredAgentSessionLaunch,
+  relaunchFailedStructuredAgentSessionForMessage:
+    launchModule.relaunchFailedStructuredAgentSessionForMessage
+}))
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof LaunchRegistry>()),
+    getStructuredAgentSessionLaunchLifecycle: launchModule.getStructuredAgentSessionLaunchLifecycle,
+    getStructuredAgentSessionLaunchResumes: launchModule.getStructuredAgentSessionLaunchResumes,
+    useStructuredAgentSessionLaunchLifecycle: launchModule.useStructuredAgentSessionLaunchLifecycle,
+    useStructuredAgentSessionLaunchFailure: launchModule.useStructuredAgentSessionLaunchFailure
+  })
+)
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-options',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof LaunchOptions>()),
+    useStructuredAgentSessionLaunchSelection: launchModule.useStructuredAgentSessionLaunchSelection
+  })
 )
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
@@ -23,7 +52,7 @@ vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
 const SESSION_ID = 'notice-card-session'

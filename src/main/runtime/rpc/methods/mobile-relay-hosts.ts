@@ -19,15 +19,10 @@ export const MOBILE_RELAY_HOSTS_METHODS = [
     params: MobileRelayHostWorktreesParamsSchema,
     handler: async (params, ctx) => {
       const result = (await ctx.mobileRelayHosts?.worktrees(params.hostId)) ?? { worktrees: null }
-      // Why: callers that send neither field, and servers without rows yet, get the plain reply.
-      if (!result.worktrees || (params.afterSnapshotId === undefined && !params.acceptRowDelta)) {
-        return result
-      }
-      return resolveWorktreeCatalogSnapshot(
-        { worktrees: result.worktrees },
-        params.afterSnapshotId ?? null,
-        { acceptRowDelta: params.acceptRowDelta === true }
-      )
+      // Why: a server without rows yet gets the plain reply.
+      return result.worktrees
+        ? resolveWorktreeCatalogSnapshot({ worktrees: result.worktrees }, params)
+        : result
     }
   })
 ]

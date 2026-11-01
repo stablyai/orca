@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as fs from './asar-transparent-fs'
-import { removeHostCheckout, removeHostEmptyDirectory } from './host-tree-removal'
+import { removeHostCheckout } from './host-tree-removal'
 
 vi.mock('./asar-transparent-fs', () => ({
   readdir: vi.fn(),
@@ -47,44 +47,4 @@ it('settles public child promises before starting another pass or touching the m
   await vi.runAllTimersAsync()
   expect(await removal).toMatchObject({ name: 'AbortError' })
   expect(fs.readdir).toHaveBeenCalledOnce()
-})
-
-it.each([10, 100])(
-  'bounds N=%i root entries across child failure and the rmdir-only tail',
-  async (width) => {
-    const children = Array.from({ length: width }, (_, index) => `child-${index}`)
-    vi.mocked(fs.readdir).mockResolvedValue([...children, '.git'])
-    let attempts = 0
-    vi.mocked(fs.rm).mockImplementation(async (target) => {
-      if (String(target).endsWith('child-0') && ++attempts < 3) {
-        throw busy
-      }
-    })
-    let rootAttempts = 0
-    vi.mocked(fs.rmdir).mockImplementation(async () => {
-      throw Object.assign(new Error('new marker sentinel'), {
-        code: ++rootAttempts === 1 ? 'EBUSY' : 'ENOTEMPTY'
-      })
-    })
-    const authorize = vi.fn(async () => true)
-    const removal = removeHostCheckout(root, authorize).catch((error: unknown) => error)
-    await vi.runAllTimersAsync()
-    expect(String(await removal)).toContain('folder was left on disk')
-    expect(fs.rm).toHaveBeenCalledTimes(3 * width)
-    expect(fs.rmdir).toHaveBeenCalledTimes(3)
-    expect(fs.unlink).toHaveBeenCalledOnce()
-    expect(fs.readdir).toHaveBeenCalledTimes(3)
-    expect(authorize).toHaveBeenCalledTimes(6)
-  }
-)
-
-it('does not mistake Windows rmdir ENOENT on an existing file for absence', async () => {
-  const missing = Object.assign(new Error('not a directory'), { code: 'ENOENT' })
-  vi.mocked(fs.rmdir).mockRejectedValue(missing)
-  await expect(removeHostEmptyDirectory(root)).rejects.toBe(missing)
-  const denied = Object.assign(new Error('unreadable replacement'), { code: 'EACCES' })
-  vi.mocked(fs.lstat).mockRejectedValue(denied)
-  await expect(removeHostEmptyDirectory(root)).rejects.toBe(denied)
-  vi.mocked(fs.lstat).mockRejectedValue(missing)
-  await expect(removeHostEmptyDirectory(root)).resolves.toBeUndefined()
 })

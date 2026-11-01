@@ -5,13 +5,12 @@ import {
 import type { BrowserNetworkTunnelResourceBudget } from './browser-network-tunnel-resource-budget'
 import { createBrowserNetworkTunnelStream } from './browser-network-tunnel-stream-lifecycle'
 import {
+  BROWSER_NETWORK_TUNNEL_MAX_STREAMS,
   reserveBrowserNetworkTunnelStreamId,
   type BrowserNetworkTunnelSessionOptions,
   type BrowserNetworkTunnelSocket,
   type BrowserNetworkTunnelStream
 } from './browser-network-tunnel-stream-state'
-
-const BROWSER_NETWORK_TUNNEL_MAX_STREAMS = 128
 
 type BrowserNetworkTunnelOpenAdmissionContext = {
   openedStreamIds: Set<number>
@@ -46,23 +45,16 @@ export function admitBrowserNetworkTunnelOpen(
     context.sendError(frame.streamId, 'invalid_open_target')
     return null
   }
-  const releasePendingOpen = context.resourceBudget.claimPendingOpen()
-  if (!releasePendingOpen) {
-    context.sendError(frame.streamId, 'pending_open_limit_exceeded')
-    return null
-  }
   let socket: BrowserNetworkTunnelSocket
   try {
     socket = context.connect(target)
   } catch {
-    releasePendingOpen()
     context.sendError(frame.streamId, 'destination_connect_failed')
     return null
   }
   return createBrowserNetworkTunnelStream({
     id: frame.streamId,
     socket,
-    releasePendingOpen,
     onConnectTimeout: context.onConnectTimeout
   })
 }

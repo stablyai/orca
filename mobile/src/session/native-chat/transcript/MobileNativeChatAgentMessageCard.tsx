@@ -11,7 +11,8 @@ import {
   agentMessageSenderCanOpen,
   agentMessageOverflows,
   agentMessageFoldLabel,
-  agentMessageCanCopy
+  agentMessageCanCopy,
+  type AgentMessageHeading
 } from '../../../../../src/shared/agent-session/agent-message-presentation'
 import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
@@ -21,7 +22,7 @@ import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButt
 import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { styles as markdownStyles } from '../../../components/mobile-markdown-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import {
@@ -65,13 +66,16 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   const height = measured ? measurement.height : 0
   const lineHeight = markdownStyles.paragraph.lineHeight * CHAT_PROSE_SCALE * fontScale
   const overflows = agentMessageOverflows(height, lineHeight)
-  const heading = {
+  const headings: Record<AgentMessageHeading, string> = {
     started: t('chat.agentMessage.startedWorker', 'Started worker'),
+    'handed-off': t('chat.agentMessage.handedOffToAgent', 'Handed off to agent'),
+    'started-agent': t('chat.agentMessage.startedAgent', 'Started agent'),
     task: t('chat.agentMessage.taskFromCoordinator', 'Task from coordinator'),
     coordinator: t('chat.agentMessage.messageFromCoordinator', 'Message from coordinator'),
     worker: t('chat.agentMessage.updateFromWorker', 'Update from worker'),
     generic: t('chat.agentMessage.messageFrom', 'Message from')
-  }[agentMessageHeading(from, message.agentStart === true)]
+  }
+  const heading = headings[agentMessageHeading(from, message)]
   return (
     <View style={styles.card} testID="agent-message-card">
       <SenderAvatar sender={agentMessagePrimarySender(from)} />
@@ -134,6 +138,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
         {status}
         {overflows ? (
           <Pressable
+            style={({ pressed }) => pressed && pressedStyle}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityState={{ expanded: open }}
@@ -214,7 +219,7 @@ function SenderName({
       disabled={!canOpen}
       accessibilityRole={canOpen ? 'button' : undefined}
       onPress={() => open?.(from, sender)}
-      style={styles.sender}
+      style={({ pressed }) => [styles.sender, pressed && pressedStyle]}
     >
       <Text style={styles.name}>{name}</Text>
       {canOpen ? <ArrowUpRight size={14} color={colors.textPrimary} /> : null}

@@ -3,18 +3,20 @@ import {
   refuse,
   refuseUnclassified,
   withAgentSessionRefusalFacts,
-  type AgentSessionAttachResult,
-  type AgentSessionMutationResult,
-  type AgentSessionRefusalDetailsByCode,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type {
+  AgentSessionAttachResult,
+  AgentSessionMutationResult
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionRefusalDetailsByCode } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import type {
   AgentSessionOperationOutcome,
   AgentSessionOperationRow
-} from '../../../shared/agent-session-operation-ledger'
-import { agentSessionLeaseOwnerVerdict } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionAcquisitionExitProof } from '../../runtime/agent-session-acquisition-failure-settlement'
+} from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import { agentSessionLeaseOwnerVerdict } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAcquisitionExitProof } from '../../runtime/agent-session/agent-session-acquisition-failure-settlement'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileLoadErrorState } from '../components/MobileStateView'
@@ -70,6 +70,7 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
         />
       ) : load.uri ? (
         <Pressable
+          style={({ pressed }) => pressed && pressedStyle}
           onPress={() => setExpanded(true)}
           accessibilityRole="button"
           accessibilityLabel={

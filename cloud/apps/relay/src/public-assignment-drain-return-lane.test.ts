@@ -3,7 +3,7 @@ import {
   RelayAssignmentRowBusyError,
   type RelayAssignment,
   type ResolvedRelayAssignment
-} from './assignment-store.js'
+} from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 
 const fakes = vi.hoisted(() => ({

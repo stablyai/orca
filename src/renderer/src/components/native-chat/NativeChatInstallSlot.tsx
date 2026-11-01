@@ -98,7 +98,7 @@ export function NativeChatInstallSlot(props: {
     return null
   }
   return (
-    <div className="min-h-0 shrink overflow-hidden bg-chat-canvas">
+    <div className="min-h-0 shrink overflow-hidden bg-chat-pane">
       <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4">
         <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
       </div>

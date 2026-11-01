@@ -22,7 +22,11 @@ export function RightSidebarPanelContent({
   rightSidebarOpen
 }: RightSidebarPanelContentProps): React.JSX.Element {
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      // `orca plugin shot` captures exactly this rect.
+      data-plugin-panel-surface={isPluginPanelTabKey(effectiveTab) ? effectiveTab : undefined}
+    >
       <Suspense fallback={null}>
         {effectiveTab === 'explorer' && <FileExplorer />}
         {effectiveTab === 'source-control' && <SourceControl />}

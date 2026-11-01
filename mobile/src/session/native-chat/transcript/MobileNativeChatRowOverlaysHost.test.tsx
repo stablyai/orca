@@ -7,11 +7,13 @@ import {
   MobileNativeChatRowOverlaysContext,
   type MobileNativeChatRowOverlays
 } from './mobile-native-chat-row-overlays'
-import type { MobileNativeChatConversation } from '../../use-mobile-native-chat-conversation-state'
+import type { MobileNativeChatConversation } from '../use-mobile-native-chat-conversation-state'
 
-vi.mock('react-native', () => ({
+vi.mock('react-native', async () => ({
+  ...(await import('../../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
   Image: 'Image',
   Modal: 'Modal',
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   View: 'View',

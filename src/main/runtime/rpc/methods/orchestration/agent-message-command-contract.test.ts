@@ -36,8 +36,8 @@ import {
 import {
   projectStructuredAgentSessionStatusSummary,
   projectStructuredItemToNativeChat
-} from '../../../../../shared/structured-agent-session-projection'
-import { latestStructuredAgentSessionPrompt } from '../../../../../shared/structured-agent-session-latest-request'
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { latestStructuredAgentSessionPrompt } from '../../../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import { isOrcaDispatchPrompt } from '../../../../../shared/agent-row-primary-text'
 import * as placement from './worker/worker-start-agent-placement'
 import * as topology from './worker/worker-topology'
@@ -49,7 +49,7 @@ import {
 import {
   agentSessionMessagePayload,
   agentSessionSendBodyFingerprint
-} from '../../../../../shared/structured-agent-session-send-mutation'
+} from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   agentMessageHeading,
   agentMessageSenderCanOpen
@@ -632,7 +632,7 @@ it.each([
     }
     expect(prompt).toContain(`Your task ID is: ${from.orchestration.taskId}`)
     if (queued) {
-      expect(agentMessageHeading(from)).toBe('task')
+      expect(agentMessageHeading(from, { blocks: [] })).toBe('task')
       expect(agentMessageSenderCanOpen(from.senders[0], true)).toBe(true)
       expect(agentSessionMessagePayload(body)).not.toHaveProperty('from')
       expect(agentSessionSendBodyFingerprint(WORKER, body)).toBe(

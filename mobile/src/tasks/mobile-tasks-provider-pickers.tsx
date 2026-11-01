@@ -24,6 +24,7 @@ import { LIST_LEADING_INSET, ListGroup, ListRow } from '../components/list/ListG
 import { styles } from './mobile-tasks-legacy-styles'
 import { normalizeJiraFilter } from './mobile-jira-issue-filters'
 import { translate as t } from '../i18n/mobile-i18n'
+import { pressedStyle } from '../theme/mobile-theme'
 
 // Restores the provider's last view and query so switching sources round-trips.
 export function selectMobileTasksProvider(model: ConnectionPresentationModel, next: TaskProvider) {
@@ -200,9 +201,10 @@ export function renderMobileTasksGitHubIssueSourcePicker(model: ConnectionPresen
                       return (
                         <Pressable
                           key={preference}
-                          style={[
+                          style={({ pressed }) => [
                             styles.issueSourceSegmentButton,
-                            selected && styles.issueSourceSegmentButtonActive
+                            selected && styles.issueSourceSegmentButtonActive,
+                            pressed && pressedStyle
                           ]}
                           accessibilityState={{ selected }}
                           onPress={() => void setGitHubIssueSourcePreference(repo, preference)}

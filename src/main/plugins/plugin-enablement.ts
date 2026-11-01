@@ -2,7 +2,7 @@ import {
   normalizePluginConsents,
   normalizePluginIdList
 } from '../../shared/plugins/approval/plugin-consent-state'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { PluginService } from './plugin-service'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import { verifyDeclarativePluginContent } from './plugin-declarative-content-integrity'

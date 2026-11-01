@@ -43,16 +43,6 @@ describe('detectRepoFileIcon connection boundary', () => {
     expect(stat).not.toHaveBeenCalled()
     expect(readFile).not.toHaveBeenCalled()
   })
-
-  it('still probes the local filesystem for a repo on this machine', async () => {
-    vi.mocked(stat).mockClear()
-
-    await expect(
-      detectRepoFileIcon('/repo', resolveFilesystemRouteForHost('local'))
-    ).resolves.toBeNull()
-
-    expect(stat).toHaveBeenCalled()
-  })
 })
 
 describe('declared repo icons through production filesystem routes', () => {

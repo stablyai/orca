@@ -5,7 +5,7 @@ import {
   MobileRichMarkdownEditor,
   type MobileRichMarkdownEditorHandle
 } from '../components/MobileRichMarkdownEditor'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   resolveMarkdownFloatingActionsBottom,
@@ -108,7 +108,11 @@ export function MobileMarkdownReader({
           <View style={styles.markdownFloatingActions}>
             {keyboardOpen ? (
               <Pressable
-                style={[styles.markdownFloatingButton, styles.markdownKeyboardDismissButton]}
+                style={({ pressed }) => [
+                  styles.markdownFloatingButton,
+                  styles.markdownKeyboardDismissButton,
+                  pressed && pressedStyle
+                ]}
                 onPress={() => editorRef.current?.dismissKeyboard()}
                 hitSlop={8}
                 accessibilityRole="button"
@@ -130,12 +134,18 @@ export function MobileMarkdownReader({
               </Pressable>
             ) : null}
             {showCopy ? (
-              <Pressable style={styles.markdownFloatingButton} onPress={onCopy}>
+              <Pressable
+                style={({ pressed }) => [styles.markdownFloatingButton, pressed && pressedStyle]}
+                onPress={onCopy}
+              >
                 <Text style={styles.markdownFloatingButtonText}>{t('common.copy', 'Copy')}</Text>
               </Pressable>
             ) : null}
             {showRefresh ? (
-              <Pressable style={styles.markdownFloatingButton} onPress={onRefresh}>
+              <Pressable
+                style={({ pressed }) => [styles.markdownFloatingButton, pressed && pressedStyle]}
+                onPress={onRefresh}
+              >
                 <RefreshCw size={13} color={colors.textPrimary} />
                 <Text style={styles.markdownFloatingButtonText}>
                   {t('common.refresh', 'Refresh')}
@@ -143,7 +153,10 @@ export function MobileMarkdownReader({
               </Pressable>
             ) : null}
             {doc.isDirty ? (
-              <Pressable style={styles.markdownFloatingButton} onPress={onDiscard}>
+              <Pressable
+                style={({ pressed }) => [styles.markdownFloatingButton, pressed && pressedStyle]}
+                onPress={onDiscard}
+              >
                 <Text style={styles.markdownFloatingButtonText}>
                   {t('session.markdownReader.discard', 'Discard')}
                 </Text>
@@ -151,10 +164,11 @@ export function MobileMarkdownReader({
             ) : null}
             {showSave ? (
               <Pressable
-                style={[
+                style={({ pressed }) => [
                   styles.markdownFloatingButton,
                   styles.markdownSaveButton,
-                  (!doc.editable || !doc.isDirty || doc.saving) && styles.markdownButtonDisabled
+                  (!doc.editable || !doc.isDirty || doc.saving) && styles.markdownButtonDisabled,
+                  pressed && pressedStyle
                 ]}
                 disabled={!doc.editable || !doc.isDirty || doc.saving}
                 onPress={onSave}

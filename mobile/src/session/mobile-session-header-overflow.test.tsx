@@ -15,6 +15,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'web' },
   StyleSheet: { create: <T,>(v: T) => v, hairlineWidth: 1, absoluteFill: {} },
   useWindowDimensions: () => ({ width: 382, height: 800 }),
+  BackHandler: { addEventListener: () => ({ remove: () => {} }) },
   AccessibilityInfo: {
     isReduceMotionEnabled: () => Promise.resolve(false),
     addEventListener: () => ({ remove: () => {} })

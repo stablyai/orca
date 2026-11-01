@@ -1,9 +1,9 @@
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
-import { agentSessionPinnedLaunchDirectory } from './agent-session-record-launch-directory'
+import { agentSessionPinnedLaunchDirectory } from './agent-session/records/agent-session-record-launch-directory'
 import { structuredAgentRuntimeMetadata } from './structured-agent-runtime-metadata'
 import type { StructuredAgentTranscriptImport } from '../native-chat/structured-agent-cli-conversations'
 

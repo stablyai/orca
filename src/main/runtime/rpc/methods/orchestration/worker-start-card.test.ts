@@ -15,7 +15,7 @@ import {
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../../../../shared/agent-session-journal-types'
+} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
@@ -212,7 +212,7 @@ it.each([
     const warn = vi.spyOn(console, 'warn').mockImplementation((message) => {
       if (
         scenario === 'logging-throws' &&
-        message === '[orchestration] recording a started worker in its caller chat failed'
+        message === '[orchestration] recording a started agent in its caller chat failed'
       ) {
         throw new Error('logger failed')
       }
@@ -326,7 +326,7 @@ it.each([
     ) {
       await eventually(() =>
         expect(warn).toHaveBeenCalledWith(
-          '[orchestration] recording a started worker in its caller chat failed',
+          '[orchestration] recording a started agent in its caller chat failed',
           expect.any(Error)
         )
       )

@@ -7,6 +7,7 @@ import {
   COMPOSER_CONTROL_HIT_SLOP,
   composerInputStyles as styles
 } from '../../../components/composer-input/composer-input-styles'
+import { MobileNativeChatControlSwap } from './mobile-native-chat-control-swap'
 
 // held tracks this phone’s in-flight Stop request, not the host’s stopping status.
 export function MobileNativeChatStopButton({
@@ -31,11 +32,18 @@ export function MobileNativeChatStopButton({
           : t('chat.stopButton.stopAgent', 'Stop the agent')
       }
     >
-      {held ? (
-        <ActivityIndicator size="small" color={colors.textPrimary} />
-      ) : (
-        <Square size={13} color={colors.textPrimary} strokeWidth={2.4} fill={colors.textPrimary} />
-      )}
+      <MobileNativeChatControlSwap swapKey={held ? 'held' : 'stop'} icon>
+        {held ? (
+          <ActivityIndicator size="small" color={colors.textPrimary} />
+        ) : (
+          <Square
+            size={13}
+            color={colors.textPrimary}
+            strokeWidth={2.4}
+            fill={colors.textPrimary}
+          />
+        )}
+      </MobileNativeChatControlSwap>
     </Pressable>
   )
 }

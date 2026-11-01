@@ -11,7 +11,7 @@ import {
   updatePRState,
   updatePRTitle
 } from '../github/client'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   assertRegisteredGitHubRepo,
   getGitHubLocalGitOptionArgs,

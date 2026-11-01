@@ -2,7 +2,7 @@ import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import { MobileNativeChatItemSourceContext } from '../../mobile-native-chat-item-read'
+import { MobileNativeChatItemSourceContext } from '../mobile-native-chat-item-read'
 import { stubRpcClient } from '../../../transport/rpc-client-test-stub'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
@@ -74,6 +74,10 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('../../../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
 // Keep the real drawer lifecycle; only native animation completion is driven by the test.
+// BottomDrawer also carries the option pager, which loads Reanimated at import.
+vi.mock('react-native-reanimated', async () =>
+  (await import('../../../test-support/reanimated-pager-stub')).reanimatedPagerStub()
+)
 vi.mock('../../../components/mounted-bottom-drawer', () => ({
   MountedBottomDrawer: 'MountedDrawer'
 }))

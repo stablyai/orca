@@ -26,9 +26,34 @@ vi.mock('./MobileSourceControlHeader', () => ({ MobileSourceControlHeader: () =>
 vi.mock('./MobileSourceControlContent', () => ({ MobileSourceControlContent: () => null }))
 vi.mock('./MobileSourceControlModals', () => ({ MobileSourceControlModals: () => null }))
 vi.mock('./MobileSourceControlBranchCard', () => ({ MobileSourceControlBranchCard: () => null }))
-vi.mock('./MobileGitHistoryList', () => ({ MobileGitHistoryList: () => null }))
-vi.mock('../components/pr-sidebar/MobilePrViewPanel', () => ({ MobilePrViewPanelBody: () => null }))
+vi.mock('./MobileSourceControlHubCommitsPage', () => ({
+  MobileSourceControlHubCommitsPage: () => null
+}))
+vi.mock('./MobileSourceControlNextStepBar', () => ({ MobileSourceControlNextStepBar: () => null }))
+vi.mock('./use-mobile-source-control-next-step', () => ({
+  useMobileSourceControlNextStep: () => ({
+    offersMerge: false,
+    view: { kind: 'hidden' },
+    notice: null,
+    agentNotice: null,
+    mergeConfirm: null
+  })
+}))
+vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+vi.mock('../components/BottomDrawer', () => ({
+  useOptionPager: () => ({ page: null, open: () => {}, close: () => {}, forget: () => {} }),
+  OptionPager: ({ main }: { main: unknown }) => main
+}))
 vi.mock('../components/mobile-pr-url', () => ({ openMobilePrUrl: () => {} }))
+vi.mock('../components/MobilePRSidebar', () => ({ MobilePrTabBody: () => null }))
+vi.mock('../components/pr-sidebar/MobilePrTabSheets', () => ({ MobilePrTabSheets: () => null }))
+vi.mock('../components/pr-sidebar/PrChecksScreen', () => ({ PrChecksScreen: () => null }))
+vi.mock('../components/pr-sidebar/PrCommentsScreen', () => ({ PrCommentsScreen: () => null }))
+vi.mock('../components/pr-sidebar/use-mobile-pr-tab', () => ({
+  useMobilePrTab: () => ({ openCreatePrSheet: () => {} })
+}))
+vi.mock('../components/pr-sidebar/use-pr-tab-menu', () => ({ usePrTabMenuGroups: () => null }))
+vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('./use-mobile-source-control-action-sheet', () => ({
   useMobileSourceControlActionSheet: () => ({})
 }))
@@ -53,8 +78,6 @@ vi.mock('./use-mobile-source-control-state', () => ({
     worktreeLabel: 'wt',
     screenState: { kind: 'error', message: 'Waiting for desktop...' },
     busyAction: null,
-    openingPath: null,
-    openingBranchPath: null,
     loadStatus: doubles.loadStatus,
     status: null,
     branchCompareResult: null,
@@ -74,8 +97,6 @@ vi.mock('./use-mobile-source-control-state', () => ({
       unstagedCount: 0,
       commitMessage: '',
       busyAction: null,
-      openingPath: null,
-      openingBranchPath: null,
       branchCompareResult: null,
       handlers: {}
     }

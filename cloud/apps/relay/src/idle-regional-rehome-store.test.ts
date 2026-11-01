@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayDatabase, RelayLockOptions } from './database.js'
 import { openIdleRehomeTestDatabase } from './idle-regional-rehome-test-database.js'
 

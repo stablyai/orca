@@ -1,6 +1,6 @@
 import { ipcMain, nativeTheme } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   acknowledgePendingTccPromptNotice,
   consumePendingTccPromptNotice,
@@ -38,9 +38,11 @@ import {
 import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { scheduleMainWindowAutoUpdaterSetup } from './main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
-import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { registerDroppedPathPreparation } from './dropped-path-preparation-ipc'
+import { isPluginFramePermissionRequest } from './host-frame-permission-policy'
+import { installPluginDesktopFrameServices } from '../plugins/panels/plugin-frame-desktop-services'
 
 export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-window-updater'
 
@@ -135,9 +137,15 @@ export function attachMainWindowServices(
   scheduleMainWindowAutoUpdaterSetup(mainWindow, store, options)
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
+  installPluginDesktopFrameServices(mainWindow, store)
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
     (_webContents, permission, callback, details) => {
+      // Plugin srcdoc frames share this session but never the app's trust.
+      if (isPluginFramePermissionRequest(details)) {
+        callback(false)
+        return
+      }
       if (permission === 'media') {
         void requestSystemMediaAccess(details).then(callback, (error: unknown) => {
           console.error('[permissions] Failed to request media access:', error)

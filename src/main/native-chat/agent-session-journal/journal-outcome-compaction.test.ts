@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   readAgentSessionHistory,
   readAgentSessionHydrationPage,
@@ -31,21 +31,21 @@ import {
   seedProjectionRows
 } from './journal-projection-test-support'
 import type { JournalRow } from './journal-row-schema'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { encodeJournalState } from './journal-state-codec'
 import { restoreJournal } from './journal-open'
 import { applyJournalRow, createJournalReducerState, renderJournalState } from './journal-reducer'
 import type { AgentSessionJournal } from './journal-store'
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryRequest,
   AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
-} from '../../../shared/structured-agent-session-reducer'
-import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
+import { projectStructuredItemsToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { StructuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
 import { CLIENT_HISTORY_READER } from '../agent-session-wire/agent-session-item-wire-form'
 import { readStructuredLineageJournalPage } from '../../runtime/orchestration/structured-worker-journal-page'

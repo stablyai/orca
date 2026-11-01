@@ -8,8 +8,10 @@ import {
   Text,
   View
 } from 'react-native'
-import { ChevronDown, ChevronRight, FolderTree, Pin } from 'lucide-react-native'
+import { ChevronRight, FolderTree, Pin } from 'lucide-react-native'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
+import { Presence } from '../components/AutoHeight'
+import { DisclosureChevron } from '../components/DisclosureChevron'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { MobileRepoIcon } from '../components/MobileRepoIcon'
@@ -114,14 +116,17 @@ export function HostWorkspaceList({
 
   return (
     <>
-      {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
-        <AuthFailedBanner
-          canRetry={!!hostId && forceReconnectHost !== null}
-          onRetry={() => hostId && forceReconnectHost && void forceReconnectHost(hostId)}
-          onRepair={() => router.push('/pair-scan')}
-          onRemove={() => state.setConfirmRemoveHost(true)}
-        />
-      )}
+      {/* Banners ease in and out; a dismissed one keeps its message while it leaves. */}
+      <Presence>
+        {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
+          <AuthFailedBanner
+            canRetry={!!hostId && forceReconnectHost !== null}
+            onRetry={() => hostId && forceReconnectHost && void forceReconnectHost(hostId)}
+            onRepair={() => router.push('/pair-scan')}
+            onRemove={() => state.setConfirmRemoveHost(true)}
+          />
+        )}
+      </Presence>
 
       {connState !== 'connected' &&
       !relayRecovery.pairingRejected &&
@@ -134,27 +139,33 @@ export function HostWorkspaceList({
         />
       ) : null}
 
-      {routeNotice && (
-        <HostRouteNoticeBanner
-          message={routeNotice}
-          onDismiss={() => setDismissedNotice(noticeParam ?? null)}
-        />
-      )}
-      {state.serverNotice ? (
-        <HostRouteNoticeBanner
-          message={state.serverNotice}
-          onDismiss={() => state.setServerNotice(null)}
-        />
-      ) : null}
+      <Presence>
+        {routeNotice && (
+          <HostRouteNoticeBanner
+            message={routeNotice}
+            onDismiss={() => setDismissedNotice(noticeParam ?? null)}
+          />
+        )}
+      </Presence>
+      <Presence>
+        {state.serverNotice ? (
+          <HostRouteNoticeBanner
+            message={state.serverNotice}
+            onDismiss={() => state.setServerNotice(null)}
+          />
+        ) : null}
+      </Presence>
 
       {/* Keep action errors above the list so the header and reopened confirm remain usable. */}
-      {state.actionError !== '' && (
-        <HostRouteNoticeBanner
-          message={state.actionError}
-          tone="failure"
-          onDismiss={() => state.setActionError('')}
-        />
-      )}
+      <Presence>
+        {state.actionError !== '' && (
+          <HostRouteNoticeBanner
+            message={state.actionError}
+            tone="failure"
+            onDismiss={() => state.setActionError('')}
+          />
+        )}
+      </Presence>
 
       {hasRows ? null : pageTitle?.element}
 
@@ -208,7 +219,7 @@ export function HostWorkspaceList({
             return (
               <>
                 <Pressable
-                  style={[
+                  style={({ pressed }) => [
                     styles.sectionHeader,
                     section.projectGroupDepth
                       ? {
@@ -216,16 +227,15 @@ export function HostWorkspaceList({
                             WORKTREE_ROW_LAYOUT.indicatorInset +
                             projectGroupHeaderIndent(section.projectGroupDepth)
                         }
-                      : null
+                      : null,
+                    pressed && { backgroundColor: colors.translucentFill }
                   ]}
                   onPress={() => settings.toggleCollapsed(collapseKey)}
                 >
                   <View style={styles.sectionChevron}>
-                    {isCollapsed ? (
+                    <DisclosureChevron expanded={!isCollapsed} collapsedDeg={0} expandedDeg={90}>
                       <ChevronRight size={12} color={colors.textMuted} />
-                    ) : (
-                      <ChevronDown size={12} color={colors.textMuted} />
-                    )}
+                    </DisclosureChevron>
                   </View>
                   {section.icon === 'pin' && (
                     <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />

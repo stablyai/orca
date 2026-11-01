@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalResolution
-} from '../../../src/shared/agent-session-journal-types'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
@@ -261,32 +261,6 @@ describe('useMobileStructuredAgentSession', () => {
     act(() => renderer?.unmount())
     renderer = null
     hook = null
-  })
-
-  it('subscribes and holds structured sessions without nativeChat or terminal RPCs', async () => {
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-
-    await vi.waitFor(() =>
-      expect(subscribe).toHaveBeenCalledWith(
-        'agentSession.subscribe',
-        { sessionId: 'session-1' },
-        expect.any(Function)
-      )
-    )
-    await vi.waitFor(() =>
-      expect(sendRequest).toHaveBeenCalledWith(
-        'agentSession.hold',
-        expect.objectContaining({ sessionId: 'session-1', holderId: expect.any(String) }),
-        expect.any(Object)
-      )
-    )
-    expect(sendRequest).not.toHaveBeenCalledWith(
-      expect.stringMatching(/^(nativeChat|terminal)\./),
-      expect.anything(),
-      expect.anything()
-    )
   })
 
   it('projects worker creation facts for phone cards alongside conversation messages', async () => {

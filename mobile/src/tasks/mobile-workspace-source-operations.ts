@@ -2,7 +2,6 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   detectedAgentIdsSchema,
-  repoBaseRefSearchSchema,
   repoSetupHooksSchema,
   repoSparsePresetListSchema,
   repoSparsePresetSaveSchema,
@@ -79,16 +78,5 @@ export const repoSparsePresetSaveRun = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('saved-sparse-preset', repoSparsePresetSaveSchema)
-  })
-)
-
-// Callers retain their refDetails-or-refs fallback; neither member is required for older hosts.
-export const repoBaseRefSearchRead = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'repo.base-ref-search',
-    method: 'repo.searchRefs',
-    acceptance: 'require-result-or-throw-message',
-    barrier: 'after-caller-barrier',
-    read: rpcResultVariant('base-ref-search', repoBaseRefSearchSchema)
   })
 )

@@ -11,7 +11,7 @@ import type {
   AiActionId,
   SourceControlActionLaunchPreferences
 } from '../../../../shared/source-control-ai-actions'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import {
   loadHostStructuredAgents,
   resetHostStructuredAgentsForTests

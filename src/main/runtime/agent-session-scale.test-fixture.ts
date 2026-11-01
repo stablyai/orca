@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, vi } from 'vitest'
 import * as views from '../../shared/agent-session-conversation-view'
-import * as handles from '../../shared/agent-session-provider-handle'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import * as handles from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabases,
@@ -18,8 +18,8 @@ import {
   seedTestAgentSessionRecordStore,
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+} from './agent-session/records/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 const roots: string[] = []

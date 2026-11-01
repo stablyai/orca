@@ -1,10 +1,10 @@
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalInputOrder } from './journal-input-order'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
@@ -12,8 +12,7 @@ import {
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
-import { parseJournalRow } from './journal-row-schema'
-import type { JournalRow } from './journal-row-schema'
+import { parseJournalRow, type JournalRow } from './journal-row-schema'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import {
   projectionBase as base,
@@ -97,7 +96,9 @@ it("keeps an existing chat's rows byte for byte, starts its records after one ap
 
   // Catch-up pages the prefix rows, then the record groups, each sequence once.
   const read = (after: number, limit?: number) =>
-    readJournalRowsAfterCursor(database.db, sessionId, epoch, after, limit).map((row) => row.seq)
+    readJournalRowsAfterCursor(database.db, sessionId, epoch, after, limit).rows.map(
+      (row) => row.seq
+    )
   expect(read(0)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
   expect(read(3, 4)).toEqual([4, 5, 6, 7])
   expect(read(5, 2)).toEqual([6, 7])

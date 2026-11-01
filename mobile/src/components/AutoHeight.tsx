@@ -9,6 +9,8 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { BOTTOM_DRAWER_EASING, BOTTOM_DRAWER_HEIGHT_DURATION_MS } from './bottom-drawer-constants'
+// The same 200 ms as Reduce Motion's cross-fade: content fades while its box eases.
+import { REDUCED_MOTION_FADE_MS as CONTENT_FADE_MS } from './sheet-motion-values'
 
 const HEIGHT_TIMING = { duration: BOTTOM_DRAWER_HEIGHT_DURATION_MS, easing: BOTTOM_DRAWER_EASING }
 
@@ -78,6 +80,45 @@ export function AutoHeight({ children, maxHeight, open = true }: AutoHeightProps
       </View>
     </Animated.View>
   )
+}
+
+/**
+ * A banner that comes and goes: pass it as the child, or nothing to hide it. Its box eases open
+ * and closed while the content fades, and the last banner stays drawn while it leaves.
+ * `animateHeight={false}` resizes once instead, for content above a terminal or page whose every
+ * resize refits it.
+ */
+export function Presence({
+  children,
+  animateHeight = true
+}: {
+  children: ReactNode
+  animateHeight?: boolean
+}) {
+  const shown = children !== null && children !== undefined && children !== false
+  const [last, setLast] = useState<ReactNode>(shown ? children : null)
+  if (shown && last !== children) {
+    setLast(children)
+  }
+  const [present, setPresent] = useState(shown)
+  if (shown && !present) {
+    setPresent(true)
+  }
+  const opacity = useSharedValue(shown ? 1 : 0)
+  useEffect(() => {
+    opacity.value = withTiming(shown ? 1 : 0, { duration: CONTENT_FADE_MS }, (finished) => {
+      if (finished && !shown) {
+        runOnJS(setPresent)(false)
+      }
+    })
+  }, [opacity, shown])
+  // The page bundle has no worklet plugin, so web mappers read only the dependency list.
+  const fadeStyle = useAnimatedStyle(() => ({ opacity: opacity.value }), [opacity])
+  const content = <Animated.View style={fadeStyle}>{shown ? children : last}</Animated.View>
+  if (animateHeight) {
+    return <AutoHeight open={shown}>{content}</AutoHeight>
+  }
+  return present ? content : null
 }
 
 function easeHeight(

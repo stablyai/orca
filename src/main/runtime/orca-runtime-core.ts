@@ -16,11 +16,11 @@ import type { RuntimeReviewCommandSurface } from './runtime-review-command-surfa
 import type { RuntimeServiceCommandSurface } from './runtime-service-command-surface'
 import type { RuntimeSkillCommandSurface } from './runtime-skill-command-contract'
 
-export type PtyIncarnationHandleRecord = {
+export type PtyIncarnationHandleRecord = Readonly<{
   handle: string
   incarnationId: string | null
   leafKey: string
-}
+}>
 
 export type RuntimeWorktreeScanCache = {
   generation: number

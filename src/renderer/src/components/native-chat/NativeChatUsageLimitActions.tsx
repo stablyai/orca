@@ -23,7 +23,7 @@ import { ClaudeSwitcherMenu } from '@/components/status-bar/ClaudeSwitcherMenu'
 import { ProviderAccountChatButton } from '@/components/status-bar/ProviderAccountChatButton'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
 import {
   NativeChatOrcaStopContext,

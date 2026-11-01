@@ -10,7 +10,7 @@ import {
   createQueuedMessageTestRig,
   eventually
 } from '../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { openTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionJournalProjections } from '../../../../native-chat/agent-session-wire/structured-agent-session-status-journal-projection'
 import { installSqlVisitCounters } from '../../../dispatch-predicate-visits.test-fixture'
@@ -61,7 +61,7 @@ it.each([10, 100])(
           existingTabCount: index
         })
       )
-      runtime.handles.set(handle, {
+      runtime.seedTerminalHandle(handle, {
         handle,
         runtimeId: runtime.getRuntimeId(),
         rendererGraphEpoch: 1,
@@ -233,7 +233,7 @@ it.each([10, 100])(
     await Promise.allSettled(append.mock.results.map((result) => result.value))
     await eventually(() =>
       expect(warn).toHaveBeenCalledWith(
-        '[orchestration] recording a started worker in its caller chat failed',
+        '[orchestration] recording a started agent in its caller chat failed',
         expect.any(Error)
       )
     )

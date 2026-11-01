@@ -138,7 +138,7 @@ export function applyTerminalAppearance(
   const theme = composeActiveTerminalTheme(appearance.theme, settings)
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
-  // Why: over a theme image the split root is the one translucent paint; xterm's viewport,
+  // Why: over a window backdrop the split root is the one translucent paint; xterm's viewport,
   // scrollable element and canvas each repainting it compounded 0.82 to ~0.99 (#36196).
   const backdropActive = windowBackdropActive()
   const xtermTheme = backdropActive

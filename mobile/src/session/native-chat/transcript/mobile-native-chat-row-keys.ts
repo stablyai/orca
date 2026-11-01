@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import {
   mobileNativeChatRunDescriptors,
   type MobileNativeChatRunPresentation
-} from '../../mobile-native-chat-run-descriptors'
+} from '../mobile-native-chat-run-descriptors'
 import {
   isSubagentGroupBlock,
   isToolResultBlock,
