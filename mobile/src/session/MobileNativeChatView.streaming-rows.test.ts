@@ -1,27 +1,28 @@
 import { createElement, useMemo, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import { agentJournalTurnBody } from '../../../src/shared/agent-session-turn-record'
-import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { projectStructuredAgentSessionMessages } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import { agentJournalTurnBody } from '../../../src/shared/agent-session/lifecycle/agent-session-turn-record'
+import { foldMobileNativeChatMessages } from './native-chat/mobile-native-chat-render-data'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
-import { MobileNativeChatPageList } from './MobileNativeChatPageList'
+import { MobileNativeChatPageList } from './native-chat/transcript/MobileNativeChatPageList'
 import type {
   NativeChatMessage,
   NativeChatToolResultBlock
-} from '../../../src/shared/native-chat-types'
-import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
-import type * as MobileNativeChatItemReadModule from './mobile-native-chat-item-read'
+} from '../../../src/shared/native-chat/native-chat-types'
+import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
+import type * as MobileNativeChatItemReadModule from './native-chat/mobile-native-chat-item-read'
 import type * as MobileNativeChatRowPropsModule from './native-chat/transcript/use-mobile-native-chat-row-props'
 import type * as MobileNativeChatRowProjectionModule from './native-chat/transcript/mobile-native-chat-row-projection'
 import type * as MobileNativeChatMessageDetailModule from './native-chat/transcript/use-mobile-native-chat-message-detail'
-import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
+import type { MobileNativeChatController } from './native-chat/mobile-native-chat-controller-contract'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
-import { MobileNativeChatView } from './MobileNativeChatView'
+import { MobileNativeChatView } from './native-chat/MobileNativeChatView'
 import { MobileNativeChatRowContent } from './native-chat/transcript/MobileNativeChatRowItemSource'
 
 vi.mock('react-native', async () => ({
+  ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
   ActivityIndicator: 'ActivityIndicator',
   ScrollView: 'ScrollView',
   Platform: { OS: 'web' },
@@ -51,7 +52,7 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 const itemReads = vi.hoisted(() => vi.fn())
-vi.mock('./mobile-native-chat-item-read', async (importOriginal) => ({
+vi.mock('./native-chat/mobile-native-chat-item-read', async (importOriginal) => ({
   ...(await importOriginal<typeof MobileNativeChatItemReadModule>()),
   readMobileNativeChatItem: itemReads
 }))
@@ -119,7 +120,7 @@ const rendered = vi.hoisted(() => new Map<string, number>())
 vi.mock('./native-chat/transcript/MobileNativeChatMessage', async () => {
   const React = await import('react')
   const { useMobileNativeChatFullMessage, MobileNativeChatToolOutput } =
-    await import('./MobileNativeChatFullContent')
+    await import('./native-chat/MobileNativeChatFullContent')
   const { MobileNativeChatGroupedThought } =
     await import('./native-chat/transcript/MobileNativeChatReasoningRow')
   return {

@@ -4,42 +4,98 @@
 
 Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md)). Any other key is refused. An omitted token falls back as listed; when that source is omitted too, it falls back the same way in turn.
 
-| Token | Required | When omitted |
-| --- | --- | --- |
-| `--background` | yes |  |
-| `--editor-surface` | no | same as `--background` |
-| `--foreground` | yes |  |
-| `--card` | no | same as `--background` |
-| `--card-foreground` | no | same as `--foreground` |
-| `--popover` | no | same as `--card` |
-| `--popover-foreground` | no | same as `--card-foreground` |
-| `--primary` | no | same as `--foreground` |
-| `--primary-foreground` | no | same as `--background` |
-| `--secondary` | no | same as `--muted` |
-| `--secondary-foreground` | no | same as `--foreground` |
-| `--muted` | no | same as `--secondary` |
-| `--muted-foreground` | no | `--foreground` mixed 70% into `--background` |
-| `--accent` | no | `--foreground` mixed 12% into `--background` |
-| `--accent-foreground` | no | same as `--foreground` |
-| `--border` | no | `--foreground` mixed 16% into `--background` |
-| `--input` | no | same as `--border` |
-| `--ring` | no | same as `--primary` |
-| `--chart-1` | no | same as `--primary` |
-| `--chart-2` | no | Orca's built-in color |
-| `--chart-3` | no | Orca's built-in color |
-| `--chart-4` | no | Orca's built-in color |
-| `--chart-5` | no | Orca's built-in color |
-| `--sidebar` | no | `--foreground` mixed 8% into `--background` |
-| `--sidebar-foreground` | no | same as `--foreground` |
-| `--sidebar-primary` | no | same as `--primary` |
-| `--sidebar-primary-foreground` | no | same as `--primary-foreground` |
-| `--sidebar-accent` | no | same as `--accent` |
-| `--sidebar-accent-foreground` | no | same as `--accent-foreground` |
-| `--sidebar-border` | no | same as `--border` |
-| `--sidebar-ring` | no | same as `--ring` |
-| `--worktree-sidebar` | no | same as `--sidebar` |
-| `--worktree-sidebar-foreground` | no | same as `--sidebar-foreground` |
-| `--worktree-sidebar-accent` | no | same as `--sidebar-accent` |
-| `--worktree-sidebar-accent-foreground` | no | same as `--sidebar-accent-foreground` |
-| `--worktree-sidebar-border` | no | same as `--sidebar-border` |
-| `--worktree-sidebar-ring` | no | same as `--sidebar-ring` |
+| Token | Paints | Required | When omitted |
+| --- | --- | --- | --- |
+| `--background` | App canvas | yes |  |
+| `--editor-surface` | Code editor and notebook background | no | same as `--background` |
+| `--foreground` | Body text | yes |  |
+| `--card` | Cards and panels | no | same as `--background` |
+| `--card-foreground` | Text on `--card` | no | same as `--foreground` |
+| `--popover` | Menus, popovers and dialogs | no | same as `--card` |
+| `--popover-foreground` | Text on `--popover` | no | same as `--card-foreground` |
+| `--primary` | Primary buttons | no | same as `--foreground` |
+| `--primary-foreground` | Text on `--primary` | no | same as `--background` |
+| `--secondary` | Secondary buttons | no | same as `--muted` |
+| `--secondary-foreground` | Text on `--secondary` | no | same as `--foreground` |
+| `--muted` | Quiet fills | no | same as `--secondary` |
+| `--muted-foreground` | Secondary text | no | `--foreground` mixed 70% into `--background` |
+| `--accent` | Hover and selected fills | no | `--foreground` mixed 12% into `--background` |
+| `--accent-foreground` | Text on `--accent` | no | same as `--foreground` |
+| `--border` | Borders and separators | no | `--foreground` mixed 16% into `--background` |
+| `--input` | Input borders | no | same as `--border` |
+| `--ring` | Focus rings | no | same as `--primary` |
+| `--chart-1` | Chart series 1 | no | same as `--primary` |
+| `--chart-2` | Chart series 2 | no | Orca's built-in color |
+| `--chart-3` | Chart series 3 | no | Orca's built-in color |
+| `--chart-4` | Chart series 4 | no | Orca's built-in color |
+| `--chart-5` | Chart series 5 | no | Orca's built-in color |
+| `--sidebar` | Right sidebar and settings navigation | no | `--foreground` mixed 8% into `--background` |
+| `--sidebar-foreground` | Text on `--sidebar` | no | same as `--foreground` |
+| `--sidebar-primary` | Primary controls in sidebars | no | same as `--primary` |
+| `--sidebar-primary-foreground` | Text on `--sidebar-primary` | no | same as `--primary-foreground` |
+| `--sidebar-accent` | Hover and selected rows in sidebars | no | same as `--accent` |
+| `--sidebar-accent-foreground` | Text on `--sidebar-accent` | no | same as `--accent-foreground` |
+| `--sidebar-border` | Sidebar borders | no | same as `--border` |
+| `--sidebar-ring` | Focus rings in sidebars | no | same as `--ring` |
+| `--worktree-sidebar` | Left workspace sidebar | no | same as `--sidebar` |
+| `--worktree-sidebar-foreground` | Text on `--worktree-sidebar` | no | same as `--sidebar-foreground` |
+| `--worktree-sidebar-accent` | Hover and multi-selected rows in the workspace sidebar | no | same as `--sidebar-accent` |
+| `--worktree-sidebar-accent-foreground` | Text on `--worktree-sidebar-accent` | no | same as `--sidebar-accent-foreground` |
+| `--worktree-sidebar-border` | Workspace sidebar borders | no | same as `--sidebar-border` |
+| `--worktree-sidebar-ring` | Focus rings in the workspace sidebar | no | same as `--sidebar-ring` |
+| `--worktree-sidebar-active` | The current workspace row; may be translucent, it paints over `--worktree-sidebar` | no | a translucent wash of `--worktree-sidebar-foreground` |
+| `--worktree-sidebar-active-border` | Border of the current workspace row | no | a mix of `--worktree-sidebar-border` |
+| `--host-badge` | Execution-host badge on workspaces (for example `Local`, an SSH host) | no | light: same as `--accent`; dark: `--accent` at 80% opacity |
+| `--host-badge-foreground` | Text on `--host-badge` | no | same as `--muted-foreground` |
+| `--tab-bar` | Strip behind tabs, including the title bar when tabs sit in it | no | same as `--card` |
+| `--tab-active` | Active tab | no | light: same as `--tab-bar`; dark: `--foreground` mixed 6% into `--tab-bar` |
+| `--tab-active-foreground` | Active tab text, and inactive tab text on hover | no | same as `--foreground` |
+| `--tab-active-indicator` | Line under the active tab | no | same as `--tab-active-foreground` |
+| `--tab-inactive` | Inactive tabs | no | light: `--foreground` mixed 4% into `--tab-bar`; dark: same as `--tab-bar` |
+| `--tab-inactive-foreground` | Inactive tab text | no | same as `--muted-foreground` |
+| `--split-divider` | Divider between split tab groups | no | Orca's built-in color |
+| `--split-divider-hover` | Split divider while hovered or dragged | no | Orca's built-in color |
+| `--chat-user-message` | Your messages in chat; may be translucent, it paints over the chat | no | `--foreground` mixed lightly into the chat background |
+| `--text-link` | Links in Markdown previews and editors | no | Orca's built-in color |
+| `--diff-added` | Added-line hue: Monaco overview ruler and chat diff text | no | same as `--git-decoration-added` |
+| `--diff-added-background` | Added lines in diffs | no | light: `--diff-added` at 13% opacity; dark: `--diff-added` at 16% opacity |
+| `--diff-added-emphasis` | Added characters within a changed line | no | light: `--diff-added` at 15% opacity; dark: `--diff-added` at 20% opacity |
+| `--diff-added-gutter` | Gutter beside added lines | no | light: `--diff-added` at 26% opacity; dark: `--diff-added` at 30% opacity |
+| `--diff-removed` | Removed-line hue: Monaco overview ruler and chat diff text | no | same as `--git-decoration-deleted` |
+| `--diff-removed-background` | Removed lines in diffs | no | light: `--diff-removed` at 11% opacity; dark: `--diff-removed` at 18% opacity |
+| `--diff-removed-emphasis` | Removed characters within a changed line | no | light: `--diff-removed` at 15% opacity; dark: `--diff-removed` at 20% opacity |
+| `--diff-removed-gutter` | Gutter beside removed lines | no | light: `--diff-removed` at 22% opacity; dark: `--diff-removed` at 32% opacity |
+| `--git-decoration-added` | Added files in the file explorer and source control | no | Orca's built-in color |
+| `--git-decoration-modified` | Modified files | no | Orca's built-in color |
+| `--git-decoration-deleted` | Deleted files | no | Orca's built-in color |
+| `--git-decoration-renamed` | Renamed files | no | Orca's built-in color |
+| `--git-decoration-untracked` | Untracked files | no | Orca's built-in color |
+| `--git-decoration-copied` | Copied files | no | Orca's built-in color |
+| `--git-decoration-ignored` | Git-ignored files | no | Orca's built-in color |
+
+## Frame CSS variables
+
+Panel and custom editor frames get these stable variables, set from Orca's active theme and updated in place when it changes. Other tokens are not exposed to frames.
+
+| Variable | Orca token |
+| --- | --- |
+| `--orca-background` | `--background` |
+| `--orca-foreground` | `--foreground` |
+| `--orca-card` | `--card` |
+| `--orca-card-foreground` | `--card-foreground` |
+| `--orca-popover` | `--popover` |
+| `--orca-popover-foreground` | `--popover-foreground` |
+| `--orca-primary` | `--primary` |
+| `--orca-primary-foreground` | `--primary-foreground` |
+| `--orca-secondary` | `--secondary` |
+| `--orca-secondary-foreground` | `--secondary-foreground` |
+| `--orca-muted` | `--muted` |
+| `--orca-muted-foreground` | `--muted-foreground` |
+| `--orca-accent` | `--accent` |
+| `--orca-accent-foreground` | `--accent-foreground` |
+| `--orca-destructive` | `--destructive` |
+| `--orca-destructive-foreground` | `--destructive-foreground` |
+| `--orca-border` | `--border` |
+| `--orca-input` | `--input` |
+| `--orca-ring` | `--ring` |
+| `--orca-radius` | `--radius` |

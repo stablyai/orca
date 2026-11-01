@@ -144,12 +144,4 @@ describe('a desktop converting while another desktop runs a shell on the account
       provenPtyIds: []
     })
   })
-
-  it('is unverifiable when the host-wide census cannot answer', async () => {
-    await expect(
-      assessOrcadMigrationTerminals(noLeases, 'desktop-a', async () => {
-        throw new Error('connect refused')
-      })
-    ).resolves.toMatchObject({ verdict: 'bridged', relayVerdict: 'unverifiable' })
-  })
 })

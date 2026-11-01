@@ -37,12 +37,15 @@ import {
 } from './use-mobile-structured-agent-session-queued.test-fixture'
 
 const picker = vi.hoisted(() => ({ pickFiles: vi.fn(), pickImages: vi.fn() }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('../platform/media-picker', () => ({ useMediaPicker: () => picker }))
 vi.mock('../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
   const { useRef } = await import('react')
+  const { reanimatedPagerStub } = await import('../test-support/reanimated-pager-stub')
   return {
-    default: { ScrollView: 'ScrollView' },
+    ...reanimatedPagerStub(),
+    default: { ScrollView: 'ScrollView', View: 'AnimatedView' },
     useAnimatedRef: () => useRef(null),
     useSharedValue: (value: unknown) => useRef({ value }).current
   }

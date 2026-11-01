@@ -5,7 +5,10 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { createElement } from 'react'
 import { AgentLaunchSetupPanel } from '../components/agent/AgentLaunchSetupPanel'
 import { TooltipProvider } from '../components/ui/tooltip'
-import { useAgentLaunchPickerInventory } from '../components/agent/use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from '../components/agent/use-agent-launch-picker-inventory'
 import type { NewTabAgentMenuModel } from '../components/tab-bar/new-tab-agent-menu-model'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../shared/agent-launch-picker'
 import {
@@ -43,7 +46,10 @@ vi.mock('../components/settings/agent-launch-settings-transport', async (importO
   ...(await importOriginal<typeof SettingsTransport>()),
   readHostAgentLaunchSettings: inventory.settings
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: inventory.legacy }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: inventory.legacy,
+  runtimeEnvironmentSupportsCapability: async () => false
+}))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: inventory.session
 }))
@@ -116,6 +122,7 @@ describe('picker window launch contract', () => {
   it.each(['local', 'ssh', 'paired', 'older-host'] as const)(
     'keeps ordinary and configured-default launch input/failure contracts on %s',
     async (target) => {
+      inventory.settings.mockResolvedValue(null)
       const launcher = await import('./launch-agent-in-new-tab')
       const dispatch = vi.spyOn(launcher, 'launchAgentInNewTab')
       const { launchAgentInNewTab } = launcher
@@ -146,7 +153,7 @@ describe('picker window launch contract', () => {
       const host: ExecutionHostId =
         target === 'ssh' ? 'ssh:ssh-target-1' : target === 'local' ? 'local' : 'runtime:web-runtime'
       const rows = buildNewTabAgentMenuRows({
-        settings: { experimentalNativeChat: true, nativeChatProviders: { claude: false } },
+        settings: { agentDefaultSurface: 'chat', nativeChatProviders: { claude: false } },
         detectedOnHost: ['claude'],
         chatAgents: ['claude'],
         hostChatAnswer: () => (target === 'ssh' ? 'ssh' : 'yes'),
@@ -156,7 +163,8 @@ describe('picker window launch contract', () => {
         rows,
         ['claude'],
         (selected) => agentPickerChoiceSeeds(selected, store.settings),
-        () => 'Claude'
+        () => 'Claude',
+        undefined
       )[0]
       entry.catalog = {
         origin: 'probe',
@@ -202,19 +210,7 @@ describe('picker window launch contract', () => {
                   null,
                   createElement(AgentLaunchPickerMenu, {
                     entries: [entry],
-                    runLaunch,
-                    model: {
-                      state: 'settled',
-                      rows,
-                      detection: {
-                        detectedIds: ['claude'],
-                        isLoading: false,
-                        isRefreshing: false,
-                        detectionFailed: false,
-                        needsServerUpdate: false,
-                        refresh: async (): Promise<AgentPickerEntry['agent'][]> => ['claude']
-                      }
-                    }
+                    runLaunch
                   })
                 )
               )
@@ -398,7 +394,9 @@ it.each(['claude', 'codex'] as const)(
     let current: AgentPickerEntry
     const launches: AgentPickerDraft[] = []
     function Panel({ open }: { open: boolean }) {
-      const entries = useAgentLaunchPickerInventory('wt-1', menu, open)
+      const entries = useAgentPickerInventoryEntries(
+        useAgentLaunchPickerInventorySource('wt-1', menu, open)
+      )
       current = entries[0]
       return open
         ? createElement(

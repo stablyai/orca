@@ -1,13 +1,12 @@
 import { expect, vi, type Mock } from 'vitest'
-import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
+import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { JsonlRpcAgentConnectionOptions } from '../jsonl-rpc/agent-connection'
-import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
-import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
+import { type JsonlRpcRecord, JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import type { PiRpcConnection } from './rpc-session'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -35,6 +34,7 @@ export class FakeConnection implements PiRpcConnection {
   closed = false
   rootVerdict: 'live' | 'unverifiable' | 'exited' = 'live'
   processless = false
+  spawnAbsence: PiRpcConnection['spawnAbsence'] = null
   deferExit = false
   closeError?: Error
   lastCloseResult: PiRpcConnection['lastCloseResult'] = null

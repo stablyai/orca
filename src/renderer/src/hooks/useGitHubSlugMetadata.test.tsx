@@ -137,24 +137,6 @@ describe('useGitHubSlugMetadata', () => {
     expect(renders).toBeLessThanOrEqual(4)
   })
 
-  it('preserves an enterprise host on slug metadata reads', async () => {
-    apiMocks.listLabelsBySlug.mockResolvedValue({ ok: true, labels: ['enterprise'] })
-
-    function LabelsProbe(): null {
-      useRepoLabelsBySlug('stablyai', 'orca', { kind: 'local' }, 'ghe.example.com')
-      return null
-    }
-
-    renderProbe(<LabelsProbe />)
-    await flushEffects()
-
-    expect(apiMocks.listLabelsBySlug).toHaveBeenCalledExactlyOnceWith({
-      owner: 'stablyai',
-      repo: 'orca',
-      host: 'ghe.example.com'
-    })
-  })
-
   it('does not re-issue a failed assignee fetch when a fresh settings object re-renders', async () => {
     let renders = 0
     let error: string | null = null

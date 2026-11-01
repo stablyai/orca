@@ -47,22 +47,7 @@ function show(value: AgentPickerEntry, others: AgentPickerEntry[] = []) {
         <DropdownMenu defaultOpen modal={false}>
           <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
           <DropdownMenuContent>
-            <AgentLaunchPickerMenu
-              entries={entries}
-              model={{
-                state: 'settled',
-                rows: entries.flatMap((entry) => entry.rows),
-                detection: {
-                  detectedIds: entries.map((entry) => entry.agent),
-                  isLoading: false,
-                  isRefreshing: false,
-                  detectionFailed: false,
-                  needsServerUpdate: false,
-                  refresh: async () => entries.map((entry) => entry.agent)
-                }
-              }}
-              runLaunch={launch}
-            />
+            <AgentLaunchPickerMenu entries={entries} runLaunch={launch} />
           </DropdownMenuContent>
         </DropdownMenu>
       </TooltipProvider>
@@ -447,6 +432,14 @@ it('opens setup with a clicked chevron without launching, then dispatches its se
     { agent: 'codex', surface: 'terminal', choices: {} },
     entry
   ])
+})
+it('opens the setup panel on the menu layer so it stacks above the new tab menu', () => {
+  act(() => getByRole(document.body, 'button', { name: 'Configure Codex' }).click())
+  // happy-dom computes no stacking, so compare the z-index utilities the layers come from.
+  const layer = (element: HTMLElement) => element.className.match(/\bz-\[\d+\]/)?.[0]
+  const panel = layer(getByRole(document.body, 'dialog', { name: 'Configure Codex' }))
+  expect(panel).toBe(layer(getByRole(document.body, 'menu')))
+  expect(panel).not.toBe('z-[60]')
 })
 it('keeps setup open while the pointer expands and collapses Arguments', async () => {
   const user = userEvent.setup()

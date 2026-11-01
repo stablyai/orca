@@ -24,6 +24,3 @@ export const terminalAutoRestoreFitSchema = z.looseObject({ ms: z.number().nulla
 export const terminalBufferClearedSchema = z
   .looseObject({ clear: z.looseObject({ cleared: z.boolean() }) })
   .transform((reply) => reply.clear.cleared)
-
-// The worker-takeover report's `{ changed }` payload is unread; requiring it would reject hosts without affecting any consumer.
-export const terminalWriteUnreadReplySchema = z.unknown()

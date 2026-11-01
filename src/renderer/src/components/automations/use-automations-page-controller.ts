@@ -37,7 +37,12 @@ export function useAutomationsPageController() {
     list,
     base: destination
   })
-  const setup = useAutomationsPageSetupState({ store, local, list })
+  const setup = useAutomationsPageSetupState({
+    store,
+    local,
+    list,
+    draftRepos: destinationForm.dialogRepos
+  })
   const runPage = useAutomationRunPageState({ store, local, list, setup })
   const sourceAvailability = useAutomationSourceAvailability(list.visibleRows)
   const presentation = useAutomationsPagePresentationState({

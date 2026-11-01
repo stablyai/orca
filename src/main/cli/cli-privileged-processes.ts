@@ -26,7 +26,8 @@ export async function writeWindowsUserPath(value: string): Promise<void> {
   ])
 }
 
-export async function runWindowsPathCommand(args: string[]): Promise<string> {
+// Private on purpose: its timeout retry is only safe for the idempotent PATH write above.
+async function runWindowsPathCommand(args: string[]): Promise<string> {
   const run = () =>
     runProcess({ program: 'powershell', args, timeoutMs: WINDOWS_PATH_WRITE_TIMEOUT_MS })
   let result = await run()

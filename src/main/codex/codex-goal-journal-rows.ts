@@ -3,8 +3,8 @@
 import type {
   AgentJournalThreadGoal,
   AgentJournalThreadGoalState
-} from '../../shared/agent-session-journal-types'
-import { isAgentJournalThreadGoalStatus } from '../../shared/agent-session-thread-goal'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import { isAgentJournalThreadGoalStatus } from '../../shared/agent-session/agent-session-thread-goal'
 
 const GOAL_UPDATED_METHOD = 'thread/goal/updated'
 const GOAL_CLEARED_METHOD = 'thread/goal/cleared'

@@ -17,6 +17,44 @@
       "restoreAfterSeconds_other": "After {{count}}s"
     }
   },
+  "automations": {
+    "orphanIssues": {
+      "hostReselection": "Edit this automation and reselect its host before running it.",
+      "malformed": "Its stored host record is incomplete.",
+      "projectMissing": "Its project no longer exists, so its host cannot be resolved.",
+      "projectUnverified": "Its project could not be checked from here, so its host is unconfirmed.",
+      "scheduledElsewhere": "It is stored here but scheduled against a remote runtime.",
+      "targetMissing": "Its SSH host is no longer registered.",
+      "targetReplaced": "Its SSH host was removed and re-added, so it must be re-adopted.",
+      "workspaceHostAmbiguous": "Its workspace spans more than one host, so it has no single owner."
+    },
+    "runFailures": {
+      "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
+      "agentNoCompletion": "Automation agent did not report completion.",
+      "automationChanged": "The automation changed before this run could launch.",
+      "destinationChanged": "The automation destination changed before this run could launch.",
+      "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
+      "legacyTwinHosts": "This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.",
+      "missedGraceWindow": "This run was past its missed-run grace window when Orca next checked.",
+      "noDispatchHost": "No Orca window was available to launch the automation.",
+      "noRunnableHost": "This automation has no host to run on.",
+      "projectPathChanged": "Project path for the selected automation host has changed.",
+      "projectSetupMissing": "Project is not set up on the selected automation host anymore.",
+      "remoteSchedulingUnavailable": "Remote-server automation scheduling is not available from this Orca client yet. Run this automation on the remote server or update Orca when durable remote scheduling is available.",
+      "repoDetached": "Repository is no longer attached to the selected automation host.",
+      "repoUnavailable": "Repository for the selected automation host is no longer available.",
+      "targetMissing": "The automation host is no longer registered, so this automation has nowhere to run.",
+      "targetReplaced": "The automation host was removed and re-registered, so this automation must be re-adopted before it can run.",
+      "targetSetupMismatch": "Automation run target no longer matches the selected project host setup.",
+      "targetUnavailable": "Automation run target is no longer available.",
+      "unevaluableSchedule": "Orca could not evaluate this automation and skipped the occurrence.",
+      "watchTimedOut": "Orca stopped watching this run after 6h without a completion signal.",
+      "workspaceHostAmbiguous": "The automation workspace spans more than one host, so Orca cannot tell which one to run it on.",
+      "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
+      "wslMoveInProgress": "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
+      "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy."
+    }
+  },
   "chat": {
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
@@ -90,23 +128,27 @@
       "available_one": "{{count}} reset available",
       "available_other": "{{count}} resets available"
     },
+    "diffReviewBody": {
+      "unchangedLines_one": "{{count}} unchanged line",
+      "unchangedLines_other": "{{count}} unchanged lines"
+    },
     "diffReviewDrawers": {
-      "fileSummary_one": "{{fileCount}} file reviewed, {{count}} note",
-      "fileSummary_other": "{{fileCount}} file reviewed, {{count}} notes",
-      "filesSummary_one": "{{fileCount}} files reviewed, {{count}} note",
-      "filesSummary_other": "{{fileCount}} files reviewed, {{count}} notes",
-      "stageableFiles_one": "{{count}} reviewed unstaged files can be staged",
-      "stageableFiles_other": "{{count}} reviewed unstaged files can be staged",
+      "notes_one": "{{count}} note",
+      "notes_other": "{{count}} notes",
       "unsentNotes_one": "{{count}} unsent notes",
-      "unsentNotes_other": "{{count}} unsent notes"
+      "unsentNotes_other": "{{count}} unsent notes",
+      "viewedFiles_one": "{{count}} file viewed",
+      "viewedFiles_other": "{{count}} files viewed"
     },
     "diffReviewFileSummary": {
-      "notes_one": "{{count}} note",
-      "notes_other": "{{count}} notes"
+      "threadsWhenInSync_one": "Its GitHub comment shows here once this branch matches the pull request.",
+      "threadsWhenInSync_other": "Its {{count}} GitHub comments show here once this branch matches the pull request."
     },
-    "diffReviewHeader": {
-      "unsentNotes_one": "{{count}} unsent note",
-      "unsentNotes_other": "{{count}} unsent notes"
+    "worktreeAgentList": {
+      "hideChildAgents_one": "Hide {{count}} child agent",
+      "hideChildAgents_other": "Hide {{count}} child agents",
+      "showChildAgents_one": "Show {{count}} child agent",
+      "showChildAgents_other": "Show {{count}} child agents"
     },
     "worktreeListRow": {
       "children_one": "{{count}} child",
@@ -121,7 +163,7 @@
     }
   },
   "hostScreen": {
-    "hostScreenHeader": {
+    "hostBottomBar": {
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)"
     }
@@ -201,6 +243,12 @@
       "stateWorkingCount_one": "{{value0}} working",
       "stateWorkingCount_other": "{{value0}} working"
     },
+    "diffReviewScreenModel": {
+      "commitFiles_one": "{{count}} file",
+      "commitFiles_other": "{{count}} files",
+      "uncommittedFiles_one": "{{count}} uncommitted",
+      "uncommittedFiles_other": "{{count}} uncommitted"
+    },
     "fileReader": {
       "reviewNotes_one": "{{count}} review note",
       "reviewNotes_other": "{{count}} review notes"
@@ -208,10 +256,6 @@
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
-    },
-    "useDiffReviewGitActions": {
-      "reviewedFilesStaged_one": "{{count}} reviewed file staged",
-      "reviewedFilesStaged_other": "{{count}} reviewed files staged"
     }
   },
   "settings": {
@@ -240,6 +284,14 @@
       "commits_other": "{{count}} commits",
       "files_one": "{{count}} file",
       "files_other": "{{count}} files"
+    },
+    "commitDetail": {
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files"
+    },
+    "commits": {
+      "baseNewer_one": "1 newer commit",
+      "baseNewer_other": "{{count}} newer commits"
     },
     "dropdownCounts": {
       "fastForwardCount_one": "Fast-forward {{count}} commit",
@@ -282,6 +334,10 @@
     "filterPickers": {
       "teams_one": "{{count}} team",
       "teams_other": "{{count}} teams"
+    },
+    "filterSheet": {
+      "projectItems_one": "{{count}} item",
+      "projectItems_other": "{{count}} items"
     },
     "githubProjectList": {
       "moreFields_one": "+{{count}} field",

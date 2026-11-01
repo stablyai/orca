@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentRowBusyError, type RelayAssignment } from './assignment-store.js'
+import { RelayAssignmentRowBusyError, type RelayAssignment } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 import type { StickySlotSample } from './sticky-slot-statements.js'
 import {

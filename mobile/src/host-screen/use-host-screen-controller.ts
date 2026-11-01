@@ -23,7 +23,7 @@ import { useHostListSections } from './use-host-list-sections'
 import { useSwitchedHostSidebarFeed } from './use-host-sidebar-feed'
 import { useHostProjectSections } from './use-host-project-sections'
 import { useHostRepoMetadata, type FetchHostRepoMetadata } from './use-host-repo-metadata'
-import { useHostScreenIdentity } from './use-host-screen-identity'
+import { peekStoredHost, useHostScreenIdentity } from './use-host-screen-identity'
 import { useHostScreenState } from './use-host-screen-state'
 import { useHostViewSettings } from './use-host-view-settings'
 import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
@@ -37,15 +37,12 @@ export type HostScreenProps = {
   // Layout-mounted sidebars lack route params; receive them explicitly.
   hostId?: string
   onHideSidebar?: () => void
-  // The detail pane is empty, so a side rail beside it may carry the sidebar's actions.
-  actionsInRail?: boolean
 }
 
 export function useHostScreenController({
   embedded = false,
   hostId: hostIdProp,
-  onHideSidebar,
-  actionsInRail = false
+  onHideSidebar
 }: HostScreenProps = {}) {
   useMobileTranslation()
   const params = useLocalSearchParams<{ hostId: string; notice?: string }>()
@@ -66,7 +63,7 @@ export function useHostScreenController({
   const forceReconnectHost = useForceReconnect()
   const now = useNow(30_000)
   const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
-  const state = useHostScreenState(hostId)
+  const state = useHostScreenState(hostId, peekStoredHost(hostId))
   const settings = useHostViewSettings({ client, connState, state })
   const connectionVerdict = classifyConnection({
     state: connState,
@@ -182,7 +179,6 @@ export function useHostScreenController({
     noticeParam,
     now,
     onHideSidebar,
-    actionsInRail,
     reconnectAttempts,
     relayRecovery,
     routeNotice,

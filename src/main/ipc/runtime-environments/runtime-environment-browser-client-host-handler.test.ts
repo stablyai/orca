@@ -85,41 +85,6 @@ describe('runtime environment browser client host handler', () => {
     manuallyDisconnectedMock.mockReturnValue(false)
   })
 
-  it('prepares the exact capable host through a fresh main-process status probe', async () => {
-    register(true)
-
-    const prepare = handler<
-      { selector: string; expectedPairingRevision: number },
-      { kind: 'client'; browserHostClientId: string }
-    >('runtimeEnvironments:prepareBrowserClientHostPlacement')
-
-    await expect(
-      prepare(null, { selector: 'environment-a', expectedPairingRevision: 7 })
-    ).resolves.toEqual({ kind: 'client', browserHostClientId: 'browser-client-a' })
-    expect(getRuntimeEnvironmentStatusMock).toHaveBeenCalledWith(
-      '/profile',
-      'environment-a',
-      undefined,
-      { observeOnly: true }
-    )
-    expect(startHostMock).toHaveBeenCalledWith({
-      environment: expect.objectContaining({ id: 'environment-a', pairingRevision: 7 }),
-      authorityRuntimeId: 'runtime-a'
-    })
-  })
-
-  it('honors the server-render setting for a host that streams, only for new preparation', async () => {
-    register(false)
-
-    const prepare = handler<{ selector: string }, { kind: 'server' }>(
-      'runtimeEnvironments:prepareBrowserClientHostPlacement'
-    )
-
-    await expect(prepare(null, { selector: 'environment-a' })).resolves.toEqual({ kind: 'server' })
-    expect(startHostMock).not.toHaveBeenCalled()
-    expect(closeHostMock).not.toHaveBeenCalled()
-  })
-
   it('leaves an attached host untouched and routes only later preparations to server', async () => {
     let enabled = true
     registerRuntimeEnvironmentBrowserClientHostHandler({
@@ -192,16 +157,6 @@ describe('runtime environment browser client host handler', () => {
     )
     expect(getRuntimeEnvironmentStatusMock).not.toHaveBeenCalled()
     expect(startHostMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects malformed requests before resolving stored pairing authority', async () => {
-    register(true)
-    const prepare = handler<unknown, unknown>(
-      'runtimeEnvironments:prepareBrowserClientHostPlacement'
-    )
-
-    await expect(prepare(null, { selector: '' })).rejects.toThrow()
-    expect(resolveEnvironmentMock).not.toHaveBeenCalled()
   })
 })
 

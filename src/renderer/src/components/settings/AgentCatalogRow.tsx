@@ -77,7 +77,6 @@ export type AgentCatalogRowProps = {
   defaultCmd: string
   defaultArgs: string
   defaultEnv: Record<string, string>
-  hasDefaultEnv?: boolean
   isDetected: boolean
   isEnabled: boolean
   isDefault: boolean
@@ -102,6 +101,7 @@ export type AgentCatalogRowProps = {
   opensAs?: AgentOpensAs
   /** The downloaded chat program's install and sign-in, shown in the row's details. */
   chatRuntime?: React.ReactNode
+  launchChoiceEditor?: (permissionControlRef: React.Ref<HTMLDivElement>) => React.ReactNode
 }
 
 export function AgentCatalogRow({
@@ -111,7 +111,6 @@ export function AgentCatalogRow({
   defaultCmd,
   defaultArgs,
   defaultEnv,
-  hasDefaultEnv,
   isDetected,
   isEnabled,
   isDefault,
@@ -126,6 +125,7 @@ export function AgentCatalogRow({
   sessionSourceHome,
   environmentNames,
   environmentEditor,
+  launchChoiceEditor,
   permission,
   permissionChoice,
   launchArgs = argsOverride,
@@ -159,7 +159,8 @@ export function AgentCatalogRow({
     isDetected ||
     permission !== undefined ||
     permissionChoice !== undefined ||
-    chatRuntime !== undefined
+    chatRuntime !== undefined ||
+    launchChoiceEditor !== undefined
 
   return (
     <div className={cn('py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}>
@@ -287,7 +288,7 @@ export function AgentCatalogRow({
       {expandable && cmdOpen && (
         <div className="mt-3 space-y-3 pl-10">
           {chatRuntime}
-          {permissionChoice && (
+          {!launchChoiceEditor && permissionChoice && (
             <div ref={permissionRef}>
               <AgentPermissionMenu agentId={agentId} label={label} permission={permissionChoice} />
             </div>
@@ -299,6 +300,7 @@ export function AgentCatalogRow({
               controlRef={permissionRef}
             />
           )}
+          {!isDetected && launchChoiceEditor?.(permissionRef)}
           {isDetected && (
             <div>
               <AgentCommandOverrideInput
@@ -308,44 +310,45 @@ export function AgentCatalogRow({
                 onSaveOverride={onSaveOverride}
               />
               <div className="mt-2">
-                <AgentDefaultArgsInput
-                  key={agentId}
-                  defaultArgs={defaultArgs}
-                  argsOverride={argsOverride}
-                  onSaveArgs={onSaveArgs}
-                  choiceChips={
-                    permissionChoice?.flag && !permissionChoice.argsSetPermission
-                      ? [
-                          {
-                            key: 'permissionMode',
-                            label,
-                            flag: permissionChoice.flag,
-                            onRemove: (text) => {
-                              const lifted = liftAgentPermissionArgs(agentId, text)
-                              permissionChoice.onSelect('own')
-                              return lifted.choice !== null ? lifted.args : text
+                {launchChoiceEditor?.(permissionRef) ?? (
+                  <AgentDefaultArgsInput
+                    key={agentId}
+                    defaultArgs={defaultArgs}
+                    argsOverride={argsOverride}
+                    onSaveArgs={onSaveArgs}
+                    choiceChips={
+                      permissionChoice?.flag && !permissionChoice.argsSetPermission
+                        ? [
+                            {
+                              key: 'permissionMode',
+                              label,
+                              flag: permissionChoice.flag,
+                              onRemove: (text) => {
+                                const lifted = liftAgentPermissionArgs(agentId, text)
+                                permissionChoice.onSelect('own')
+                                return lifted.choice !== null ? lifted.args : text
+                              }
                             }
-                          }
-                        ]
-                      : undefined
-                  }
-                  note={
-                    permissionChoice?.argsSetPermission
-                      ? translate(
-                          'settings.agents.permissionArgsTerminalOnly',
-                          'These arguments may control {{agent}}’s terminal permissions, so Orca adds no flag. Chats use the Permissions choice above.',
-                          { agent: label }
-                        )
-                      : undefined
-                  }
-                />
+                          ]
+                        : undefined
+                    }
+                    note={
+                      permissionChoice?.argsSetPermission
+                        ? translate(
+                            'settings.agents.permissionArgsTerminalOnly',
+                            'These arguments may control {{agent}}’s terminal permissions, so Orca adds no flag. Chats use the Permissions choice above.',
+                            { agent: label }
+                          )
+                        : undefined
+                    }
+                  />
+                )}
               </div>
               {environmentEditor ?? (
                 <div className="mt-2">
                   <AgentDefaultEnvInput
                     key={agentId}
                     defaultEnv={defaultEnv}
-                    showEmpty={hasDefaultEnv}
                     envOverride={envOverride}
                     onSaveEnv={onSaveEnv}
                   />

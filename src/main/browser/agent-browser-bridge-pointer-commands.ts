@@ -109,7 +109,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName, target) =>
@@ -133,7 +133,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
   }
 
   async mouseDown(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName, target) =>
@@ -158,7 +158,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
   }
 
   async mouseUp(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName, target) =>
@@ -189,7 +189,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName, target) =>

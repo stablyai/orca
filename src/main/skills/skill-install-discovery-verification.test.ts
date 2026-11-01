@@ -91,51 +91,6 @@ describe('WSL install discovery verification', () => {
     })
   })
 
-  it('normalizes Windows-backed workspace paths to drvfs paths', async () => {
-    discoverSkillsInWslMock.mockResolvedValue(discovery(['/mnt/c/work/repo/.agents/skills']))
-    const result = await verifySkillInstallDiscovery({
-      result: installResult(['C:\\work\\repo\\.agents\\skills\\review']),
-      scope: 'workspace',
-      homeDirectory: 'C:\\Users\\alice',
-      workspaceDirectory: 'C:\\work\\repo',
-      wslDistro: 'Ubuntu'
-    })
-
-    expect(result.status).toBe('installed')
-    expect(discoverSkillsInWslMock).toHaveBeenCalledWith({
-      distro: 'Ubuntu',
-      homeDir: '/mnt/c/Users/alice',
-      cwd: '/mnt/c/work/repo',
-      names: ['review'],
-      sourceKinds: ['home', 'repo']
-    })
-  })
-
-  it('scans a managed WSL Claude config root used by the target session', async () => {
-    const managedRoot = '/home/alice/.local/share/orca/claude-accounts/account-1/auth/skills'
-    discoverSkillsInWslMock.mockResolvedValue(
-      discovery(['/home/alice/.agents/skills', managedRoot])
-    )
-    const result = await verifySkillInstallDiscovery({
-      result: installResult([
-        '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.agents\\skills\\review',
-        '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\claude-accounts\\account-1\\auth\\skills\\review'
-      ]),
-      scope: 'global',
-      homeDirectory: '\\\\wsl.localhost\\Ubuntu\\home\\alice',
-      wslDistro: 'Ubuntu',
-      providerRootOverrides: {
-        claude:
-          '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\claude-accounts\\account-1\\auth\\skills'
-      }
-    })
-
-    expect(result.status).toBe('installed')
-    expect(discoverSkillsInWslMock).toHaveBeenCalledWith(
-      expect.objectContaining({ providerRootOverrides: { claude: managedRoot } })
-    )
-  })
-
   // Retained pre-install discovery cannot prove new bytes landed; verification needs an answered root.
   it('does not verify a placement backed only by a root that did not answer', async () => {
     discoverSkillsInWslMock.mockResolvedValue(

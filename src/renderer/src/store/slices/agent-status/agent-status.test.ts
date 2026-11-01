@@ -14,7 +14,7 @@ import type { RetainedAgentEntry } from './agent-status-contract'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../../../shared/structured-agent-session-projection'
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
 import { drawTabsFromMain } from '../tabs-drawn-from-main.test-fixture'
 

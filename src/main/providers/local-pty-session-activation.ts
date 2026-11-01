@@ -1,3 +1,6 @@
+import { createGitBashConsoleCapacityDetector } from '../../shared/git-bash-console-capacity'
+import { withInitialOutputDiagnostic } from '../../shared/terminal-start-failure'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type * as pty from 'node-pty'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
@@ -103,13 +106,16 @@ export function activateLocalPtySession(args: {
       )
     }
   }
+  const ownerBackend = resolvePtyOwnerBackend({
+    platform: process.platform,
+    shellPath: plan.shellPath,
+    wslDistro: spawnedWslDistro
+  })
+  const initialOutput =
+    ownerBackend === 'windows-conpty' ? createGitBashConsoleCapacityDetector(4096) : null
   const startupIngress = new PtyStartupIngress({
     ...(spawn.startupIngress ? { intent: spawn.startupIngress } : {}),
-    ownerBackend: resolvePtyOwnerBackend({
-      platform: process.platform,
-      shellPath: plan.shellPath,
-      wslDistro: spawnedWslDistro
-    }),
+    ownerBackend,
     write: (data) => proc.write(data),
     onEmission: emitIngressData
   })
@@ -125,6 +131,7 @@ export function activateLocalPtySession(args: {
   })
   const disposables: { dispose: () => void }[] = []
   const onDataDisposable = proc.onData((rawData) => {
+    initialOutput?.observe(rawData)
     readiness.acceptData(rawData)
   })
   if (onDataDisposable) {
@@ -133,12 +140,13 @@ export function activateLocalPtySession(args: {
   ptyDisposables.set(id, disposables)
 
   let exitedBeforeSpawnReply = false
+  let exitCause: TerminalExitCause | undefined
   let staging: StartupCommandStaging | undefined
   const onExitDisposable = proc.onExit(({ exitCode, signal }) => {
     exitedBeforeSpawnReply = true
     discardStagedStartupCommand(staging)
     // node-pty may pair exitCode 0 with a fatal signal; classify while signal and spawn provenance are available.
-    const cause = resolveProcessExitCause({
+    let cause = resolveProcessExitCause({
       exitCode,
       signal,
       hostReportsChildExitStatus: ptyReportsChildExitStatus.get(id)
@@ -152,6 +160,11 @@ export function activateLocalPtySession(args: {
     readiness.prepareForExit()
     clearPtyState(id)
     startupIngress.drainAndClose()
+    cause = withInitialOutputDiagnostic(
+      wasTerminationRequested ? { kind: 'operator_close' } : cause,
+      initialOutput?.detected() === true
+    )
+    exitCause = cause
     startupIngressByPty.delete(id)
     // Release the natural-exit ptmx fd now instead of waiting for GC (docs/fix-pty-fd-leak.md).
     destroyPtyProcess(proc, { alreadyKilled: wasTerminationRequested })
@@ -220,7 +233,7 @@ export function activateLocalPtySession(args: {
     incarnationId,
     pid,
     startupCwdSource: 'request',
-    ...(exitedBeforeSpawnReply ? { exitedBeforeSpawnReply: true } : {}),
+    ...(exitedBeforeSpawnReply ? { exitedBeforeSpawnReply: true, exitCause } : {}),
     ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {})
   }
 }

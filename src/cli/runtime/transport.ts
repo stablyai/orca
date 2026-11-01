@@ -3,10 +3,11 @@ import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import type {
   ExpectedRuntimeSource,
-  RuntimeOrchestrationEnvelope
+  RuntimeOrchestrationEnvelope,
+  RuntimeRequestSelection
 } from '../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
-import { RuntimeClientError, type RuntimeRpcResponse } from './types'
+import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
 
@@ -17,8 +18,13 @@ export async function sendRequest<TResult>(
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
   // Federation forwards envelopes; the runtime fence must stay local.
-  expectedRuntimeSource?: ExpectedRuntimeSource
+  expectedRuntimeSource?: ExpectedRuntimeSource,
+  options: {
+    classifySocketError?: (error: Error) => RuntimeClientError | null
+    requestSelection?: RuntimeRequestSelection
+  } = {}
 ): Promise<RuntimeRpcResponse<TResult>> {
+  const { classifySocketError = runtimeAccessDeniedError, requestSelection } = options
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -40,6 +46,9 @@ export async function sendRequest<TResult>(
     let lineSegments: string[] = []
     let settled = false
     const requestId = randomUUID()
+    const statusRequestId = requestSelection ? randomUUID() : null
+    let awaitingStatus = statusRequestId !== null
+    let selectedParams = params
 
     const timeout = setTimeout(() => {
       if (settled) {
@@ -79,10 +88,11 @@ export async function sendRequest<TResult>(
         ok: false,
         // Access denial does not establish that the app is dead.
         error:
-          runtimeAccessDeniedError(error, metadata.pid) ??
+          classifySocketError(error) ??
           new RuntimeClientError(
             'runtime_unavailable',
-            'Could not connect to the running Orca app. Restart Orca and try again.'
+            'This terminal could not connect to Orca.',
+            { nextSteps: ['Check that Orca is open and that this terminal can access it.'] }
           )
       })
     })
@@ -92,7 +102,8 @@ export async function sendRequest<TResult>(
         ok: false,
         error: new RuntimeClientError(
           'runtime_unavailable',
-          'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+          'Orca closed the connection before responding.',
+          { nextSteps: ['Check that Orca is open and that this terminal can access it.'] }
         )
       })
     })
@@ -156,7 +167,7 @@ export async function sendRequest<TResult>(
         }
 
         const response = frame as RuntimeRpcResponse<TResult>
-        if (response.id !== requestId) {
+        if (response.id !== (awaitingStatus ? statusRequestId : requestId)) {
           finish({
             ok: false,
             error: new RuntimeClientError(
@@ -171,22 +182,37 @@ export async function sendRequest<TResult>(
             ok: false,
             error: new RuntimeClientError(
               'runtime_unavailable',
-              'The Orca runtime changed while the request was in flight. Retry the command.'
+              'The Orca runtime changed while the request was in flight.',
+              { nextSteps: ['Retry the command.'] }
             )
           })
           return
+        }
+        if (awaitingStatus) {
+          try {
+            if (frame.ok === false) {
+              throw new RuntimeRpcFailureError(frame)
+            }
+            selectedParams = requestSelection?.paramsForStatus(frame.result)
+          } catch (error) {
+            finish({ ok: false, error: error instanceof Error ? error : new Error(String(error)) })
+            return
+          }
+          awaitingStatus = false
+          send(requestId, method, selectedParams)
+          continue
         }
         finish({ ok: true, response })
         return
       }
     })
-    socket.on('connect', () => {
-      socket.write(
-        `${JSON.stringify({
-          id: requestId,
+    const send = (id: string, requestedMethod: string, requestedParams: unknown): void => {
+      try {
+        const serialized = `${JSON.stringify({
+          id,
           authToken: metadata.authToken,
-          method,
-          params,
+          method: requestedMethod,
+          params: requestedParams,
           orchestrationCapability: envelope?.orchestrationCapability,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
@@ -194,6 +220,19 @@ export async function sendRequest<TResult>(
           orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
           expectedRuntimeSource
         })}\n`
+        if (id === requestId) {
+          requestSelection?.onDispatch?.()
+        }
+        socket.write(serialized)
+      } catch (error) {
+        finish({ ok: false, error: error instanceof Error ? error : new Error(String(error)) })
+      }
+    }
+    socket.on('connect', () => {
+      send(
+        statusRequestId ?? requestId,
+        statusRequestId ? 'status.get' : method,
+        statusRequestId ? undefined : params
       )
     })
   })

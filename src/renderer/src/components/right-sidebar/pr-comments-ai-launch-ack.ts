@@ -246,6 +246,7 @@ async function postInThreadFixingReply(
 
 /** Pin resolve targets at queue time; prRepo remains optional so degraded PR cache entries can still acknowledge threads. */
 export type PendingPRCommentAiAckGithubResolveTarget = {
+  ownerHostId?: string
   repoPath: string
   repoId: string
   prNumber: number

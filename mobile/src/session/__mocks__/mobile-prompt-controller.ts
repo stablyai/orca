@@ -1,21 +1,30 @@
 import './mobile-prompt-render-mocks'
 import { createElement } from 'react'
 import { Pressable } from 'react-native'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
+import type { MobileNativeChatSendOutcome } from '../native-chat/mobile-native-chat-send'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse, ConnectionState } from '../../transport/types'
 import type { MobileNativeChatTab } from '../native-chat/mobile-native-chat-eligibility'
-import type { MobileNativeChatController } from '../mobile-native-chat-controller-contract'
+import type { MobileNativeChatController } from '../native-chat/mobile-native-chat-controller-contract'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { vi } from 'vitest'
-import { useMobileNativeChatController } from '../use-mobile-native-chat-controller'
-import { MobileNativeChatOverlay } from '../MobileNativeChatOverlay'
+import { useMobileNativeChatController } from '../native-chat/use-mobile-native-chat-controller'
+import { MobileNativeChatOverlay } from '../native-chat/MobileNativeChatOverlay'
 import { MobileNativeChatAsk } from '../native-chat/input/MobileNativeChatAsk'
 import type { AskAnswerSelection } from '../../../../src/shared/native-chat-ask-answer'
 import { mobileNativeChatPromptDismissals } from '../native-chat/input/mobile-native-chat-prompt-dismissals'
 import { setMobileNativeChatDraftText } from '../native-chat/composer/mobile-native-chat-draft-store'
 export const visible = { value: true }
-const session = { messages: [], folded: [], status: 'ready', transcriptLoading: false }
-const structuredSession = {
+const messages: NativeChatMessage[] = []
+export const session = {
+  messages,
+  folded: [],
+  status: 'ready',
+  transcriptLoading: false
+}
+export const structuredSession = {
+  asyncQuestionSourceScope: 'journal/host/session/epoch',
   session,
   isWorking: false,
   turnId: null,
@@ -29,7 +38,7 @@ const structuredSession = {
   respondPermission: vi.fn(async () => true),
   respondQuestion: vi.fn(async () => true),
   cancelPrompt: vi.fn(async () => true),
-  sendWithOutcome: vi.fn(async () => 'accepted'),
+  sendWithOutcome: vi.fn<() => Promise<MobileNativeChatSendOutcome>>(async () => 'accepted'),
   cancel: vi.fn(),
   setStructuredOption: vi.fn(),
   invokeStructuredOption: vi.fn()
@@ -43,7 +52,7 @@ vi.mock('../use-mobile-session-view-mode', () => ({
     toggleTabChatView: () => Object.assign(visible, { value: !visible.value })
   })
 }))
-vi.mock('../use-mobile-native-chat-session-lane', () => ({
+vi.mock('../native-chat/use-mobile-native-chat-session-lane', () => ({
   useMobileNativeChatSessionLane: () => ({ session, structuredSession, sessionCommands })
 }))
 setMobileNativeChatDraftText('draft', 'ordinary message')
@@ -124,12 +133,13 @@ type HarnessProps = {
   tab?: MobileNativeChatTab
   tabId?: string
   connState?: ConnectionState
+  hostId?: string
 }
 function Harness(props: HarnessProps) {
-  const { tab = baseTab, tabId = 'tab-1', connState = 'connected' } = props
+  const { tab = baseTab, tabId = 'tab-1', connState = 'connected', hostId = 'host' } = props
   const current = useMobileNativeChatController({
     client,
-    hostId: 'host',
+    hostId,
     worktreeId: 'folder:work',
     activeSessionTab: tab,
     activeSessionTabId: tabId,
@@ -146,7 +156,7 @@ function Harness(props: HarnessProps) {
     controller: current,
     onOpenFile: vi.fn(),
     images: {
-      sendNativeChat: controller.handleNativeChatSend,
+      sendNativeChat: (text: string) => controller.handleNativeChatSend(text),
       attachments: [],
       isAttaching: false,
       attachImage: async () => {},
@@ -197,6 +207,9 @@ export function reset(rpcClient: RpcClient) {
   visible.value = true
   handleRef.current = 'term-1'
   lastProps = null
+  session.messages = []
+  structuredSession.asyncQuestionSourceScope = 'journal/host/session/epoch'
+  structuredSession.sendWithOutcome.mockReset().mockResolvedValue('accepted')
   sendError.mockReset()
   resolved.mockReset()
   mobileNativeChatPromptDismissals.clearForTests()

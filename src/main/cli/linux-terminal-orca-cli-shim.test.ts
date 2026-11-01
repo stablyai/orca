@@ -13,7 +13,7 @@ import { resolveAppImageLauncherEndpointPath } from './appimage-stable-launcher'
 import { ensureLinuxTerminalOrcaCliShimDir } from './linux-terminal-orca-cli-shim'
 
 const created: string[] = []
-const canFenceAppImageRuntime = process.platform === 'linux' && existsSync('/proc/self/stat')
+const canFenceAppImageRuntime = process.platform === 'linux'
 
 async function makeFixture(): Promise<{ userDataPath: string; resourcesPath: string }> {
   const root = await mkdtemp(join(tmpdir(), 'orca-terminal-cli-shim-'))
@@ -82,8 +82,7 @@ describe('ensureLinuxTerminalOrcaCliShimDir', () => {
       const shimPath = join(shimDir!, 'orca')
       const content = readFileSync(shimPath, 'utf8')
       expect(content).toContain(liveLauncherPath)
-      expect(content).toContain('runtime_pid=')
-      expect(content).toContain('/proc/$runtime_pid/stat')
+      expect(content).not.toContain('/proc/')
       expect(existsSync(resolveAppImageLauncherEndpointPath(cacheRootPath, 'live'))).toBe(false)
       await expect(
         runProcess({ program: shimPath, args: [], timeoutMs: 3_000 })
@@ -152,34 +151,6 @@ describe('ensureLinuxTerminalOrcaCliShimDir', () => {
       await writeFile(liveLauncher, '#!/usr/bin/env bash\nprintf replaced-by-another-mount', {
         mode: 0o755
       })
-
-      await expect(
-        runProcess({ program: shimPath, args: [], timeoutMs: 3_000 })
-      ).resolves.toMatchObject({ code: 1, stdout: '' })
-    }
-  )
-
-  it.skipIf(!canFenceAppImageRuntime)(
-    'rejects a shim after its owning AppImage process generation changes',
-    async () => {
-      const { userDataPath, resourcesPath } = await makeFixture()
-      const appImagePath = join(userDataPath, 'Orca.AppImage')
-      await mkdir(userDataPath, { recursive: true })
-      await writeFile(appImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
-      const liveLauncher = join(resourcesPath, 'bin', 'orca-ide')
-      writeFileSync(liveLauncher, '#!/usr/bin/env bash\nprintf original', { mode: 0o755 })
-      const shimDir = ensureLinuxTerminalOrcaCliShimDir({
-        userDataPath,
-        resourcesPath,
-        appImagePath,
-        appImageCacheRootPath: join(userDataPath, 'cache')
-      })
-      const shimPath = join(shimDir!, 'orca')
-      const staleContent = readFileSync(shimPath, 'utf8').replace(
-        /runtime_start_time='[^']*'/,
-        "runtime_start_time='stale-process'"
-      )
-      writeFileSync(shimPath, staleContent, { mode: 0o755 })
 
       await expect(
         runProcess({ program: shimPath, args: [], timeoutMs: 3_000 })

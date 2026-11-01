@@ -139,8 +139,6 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
       : selectedHostedRepos.length === 1
         ? selectedHostedRepos[0]!.displayName
         : repoCountLabel(selectedHostedRepos.length, t)
-  const repoPickerSelectedRepo =
-    effectiveRepoIds.size > 0 && selectedHostedRepos.length === 1 ? selectedHostedRepos[0]! : null
   const workspaceRepoOptions = useMemo<PickerOption<string>[]>(
     () =>
       workspaceRepos.map((repo) => ({
@@ -183,20 +181,6 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     t('tasks.pickerProjection.updatedSort', 'Updated')
   const githubProjectFields = githubProjectTable?.selectedView.fields ?? []
   const githubProjectViewSort = githubProjectTable?.selectedView.sortByFields?.[0] ?? null
-  const githubProjectSortField = githubProjectSortOverride
-    ? githubProjectFields.find((field) => field.id === githubProjectSortOverride.fieldId)
-    : githubProjectViewSort?.field
-  const githubProjectSortDirection =
-    githubProjectSortOverride?.direction ?? githubProjectViewSort?.direction ?? null
-  const githubProjectSortLabel = githubProjectSortField
-    ? githubProjectSortDirection === 'DESC'
-      ? t('tasks.pickerProjection.fieldDescending', '{{field}} desc', {
-          field: githubProjectSortField.name
-        })
-      : t('tasks.pickerProjection.fieldAscending', '{{field}} asc', {
-          field: githubProjectSortField.name
-        })
-    : t('tasks.pickerProjection.viewOrder', 'View order')
   const githubProjectFieldsLabel =
     githubProjectAvailableSummaryFields.length > 0
       ? t('tasks.pickerProjection.selectedFields', '{{selected}}/{{total}} fields', {
@@ -264,16 +248,12 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     githubIssueSourceRows,
     githubIssueSourceLabel,
     repoPickerLabel,
-    repoPickerSelectedRepo,
     workspaceRepoOptions,
     sortedItems,
     displayedEntries,
     sortLabel,
     githubProjectFields,
     githubProjectViewSort,
-    githubProjectSortField,
-    githubProjectSortDirection,
-    githubProjectSortLabel,
     githubProjectFieldsLabel,
     githubProjectSortOptions,
     githubProjectViewOptions

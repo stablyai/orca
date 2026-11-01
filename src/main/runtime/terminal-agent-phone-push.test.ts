@@ -47,6 +47,8 @@ function harness(
     settings?: Partial<NotificationSettings>
     muted?: boolean
     hookRow?: AgentStatusIpcPayload | null
+    dispatched?: boolean
+    title?: string
   } = {}
 ) {
   const clock = { now: 10_000 }
@@ -62,6 +64,7 @@ function harness(
     readNotificationSettings: () => ({
       enabled: true,
       agentTaskComplete: true,
+      agentNeedsInput: true,
       terminalBell: true,
       suppressWhenFocused: true,
       customSoundId: 'system',
@@ -73,6 +76,11 @@ function harness(
     }),
     readWorkspaceLabels: () => ({ repoLabel: 'orca', worktreeLabel: 'feature' }),
     isWorkspaceMuted: () => state.muted,
+    readOrchestration: () =>
+      options.dispatched
+        ? { taskId: 'task_1', dispatchId: 'ctx_1', parentTerminalHandle: 'term_coordinator' }
+        : undefined,
+    readTerminalTitle: () => options.title ?? null,
     readHookRow: () => state.hookRow,
     dispatch: (event) => sent.push(event),
     setTimer: (run, delayMs) => {
@@ -231,6 +239,26 @@ describe('TerminalAgentPhonePush', () => {
     expect(sent).toEqual([])
   })
 
+  it('leaves a dispatched worker’s finish to its coordinator, and still pushes its prompt', () => {
+    const { push, sent, state, advance, finish } = harness({ dispatched: true })
+    finish()
+    advance(AGENT_DONE_QUIET_MS)
+    expect(sent).toEqual([])
+    state.hookRow = row({ state: 'waiting', stateStartedAt: 6_000 })
+    push.observe(moved('needs-input', 'needs-you'))
+    expect(sent.map((event) => event.agentState)).toEqual(['waiting'])
+  })
+
+  it('pushes a dispatched worker’s finish whose title still waits for approval, as the window does', () => {
+    const { sent, advance, finish } = harness({
+      dispatched: true,
+      title: 'Codex - waiting for approval'
+    })
+    finish()
+    advance(AGENT_DONE_QUIET_MS)
+    expect(sent).toHaveLength(1)
+  })
+
   it('marks the push not desktop-allowed when agent notifications are off', () => {
     const { sent, finish } = harness({ settings: { agentTaskComplete: false } })
     finish()
@@ -294,6 +322,7 @@ describe('TerminalAgentPhonePush', () => {
       readNotificationSettings: () => ({
         enabled: false,
         agentTaskComplete: true,
+        agentNeedsInput: true,
         terminalBell: true,
         suppressWhenFocused: true,
         customSoundId: 'system',

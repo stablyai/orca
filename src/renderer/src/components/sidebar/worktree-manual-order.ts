@@ -7,6 +7,7 @@ export type { WorktreeManualOrderUpdate } from './worktree-manual-order-ranks'
 
 export type WorktreeDragGroup = {
   key: string
+  /** Host identities: same-id copies on two hosts are separate cards. */
   worktreeIds: readonly string[]
 }
 

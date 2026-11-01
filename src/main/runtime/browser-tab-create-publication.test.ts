@@ -32,6 +32,10 @@ vi.mock('../ipc/browser-tab-registration-wait', () => ({
   waitForWorktreeTabRegistration: vi.fn()
 }))
 
+vi.mock('../browser/browser-main-window-readiness', () => ({
+  whenBrowserMainWindowReady: async () => null
+}))
+
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: {
     getDefaultProfile: () => ({ id: 'default', partition: 'persist:orca-browser' }),
@@ -237,6 +241,23 @@ describe('publishCreatedBrowserSessionTab', () => {
     })
 
     expect(setActiveTab).not.toHaveBeenCalled()
+  })
+
+  it('announces a tab no one picked without moving the agent to it', () => {
+    const { host, setActiveTab, notifyHeadlessBrowserSessionTabsChanged } = createPublicationHost([
+      ['page-1', 101]
+    ])
+
+    publishCreatedBrowserSessionTab(host, {
+      placementKind: 'offscreen',
+      browserPageId: 'page-1',
+      worktreeId: 'wt-1',
+      focus: resolveBrowserTabCreateFocus({ activate: false }),
+      opensPageLink: true
+    })
+
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(notifyHeadlessBrowserSessionTabsChanged).toHaveBeenCalledWith('wt-1')
   })
 
   it('skips the worktree-scoped announcement for an unscoped create', () => {

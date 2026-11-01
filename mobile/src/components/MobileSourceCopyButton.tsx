@@ -136,7 +136,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   partial: { width: 128, height: 32, paddingHorizontal: spacing.sm },
   pressed: { backgroundColor: colors.bgRaised },

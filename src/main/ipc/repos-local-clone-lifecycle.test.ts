@@ -129,7 +129,7 @@ describe('repos:add + repos:clone', () => {
       Promise.resolve({
         stdout:
           args[0] === 'config' && args.includes('.gitmodules') && cloned
-            ? 'submodule.lib.path vendor/lib\n'
+            ? 'submodule.lib.path\nvendor/lib\0'
             : '',
         stderr: ''
       })

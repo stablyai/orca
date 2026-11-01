@@ -8,7 +8,7 @@ import { trackRunningAgentLaunchPane } from '../../../agent-launch/agent-launch-
 import { agentLaunchTokenFor } from '../../../agent-launch/agent-launch-token'
 import { resolveUnlaunchedIntent } from '../../../runtime/rpc/methods/agent-launch-intent-resolution'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import { resolveEarlyPaneKey } from './spawn-begin'
 import type { PtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcArgs } from './spawn-types'

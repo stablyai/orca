@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
     emitted,
     requestDownloadFilename: vi.fn(),
     requestDownloadSavePath: vi.fn(),
+    markExtensionDownload: vi.fn(),
     chooseSavePath: vi.fn(async (): Promise<string | null> => null)
   }
 })
@@ -18,7 +19,8 @@ vi.mock('../../browser-manager', () => ({
   browserManager: {
     getTabIdForWebContentsId: () => 'tab-1',
     requestDownloadFilename: mocks.requestDownloadFilename,
-    requestDownloadSavePath: mocks.requestDownloadSavePath
+    requestDownloadSavePath: mocks.requestDownloadSavePath,
+    markExtensionDownload: mocks.markExtensionDownload
   }
 }))
 vi.mock('../browser-extension-api-host', () => ({

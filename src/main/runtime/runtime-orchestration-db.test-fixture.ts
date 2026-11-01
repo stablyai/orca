@@ -39,6 +39,8 @@ export function dispatchContextRow(fields: Partial<DispatchContextRow>): Dispatc
     creator_handle: null,
     creator_pane_key: null,
     creator_orca_session_id: null,
+    follow_up_of_dispatch_id: null,
+    follow_up_mail_at: null,
     host_scope: null,
     status: 'dispatched',
     failure_count: 0,

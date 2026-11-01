@@ -2,10 +2,10 @@ import { readFile } from 'node:fs/promises'
 import { expect, it } from 'vitest'
 import { readAgentSessionHistory } from '../../src/main/native-chat/agent-session-wire/agent-session-history-page.ts'
 import { projectStructuredAgentSessionMessages } from '../../src/renderer/src/components/native-chat/structured-agent-session-message-projection.ts'
-import { nativeChatTurnMembership } from '../../src/shared/native-chat-turn-membership.ts'
+import { nativeChatTurnMembership } from '../../src/shared/native-chat/transcript/native-chat-turn-membership.ts'
 import { nativeChatRowsInDrawOrder } from '../../src/shared/native-chat/transcript/native-chat-turn-grouping.ts'
-import { selectNativeChatTurnStatuses } from '../../src/shared/native-chat-turn-status.ts'
-import { selectStructuredAgentSettledTurns } from '../../src/shared/structured-agent-session-turn-timing.ts'
+import { selectNativeChatTurnStatuses } from '../../src/shared/native-chat/transcript/native-chat-turn-status.ts'
+import { selectStructuredAgentSettledTurns } from '../../src/shared/agent-session/view/structured-agent-session-turn-timing.ts'
 import { buildNativeChatTranscriptSlots } from '../../src/renderer/src/components/native-chat/native-chat-transcript-slots.ts'
 
 async function snapshotWithLaterHistory() {

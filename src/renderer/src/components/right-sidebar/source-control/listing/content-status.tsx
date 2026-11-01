@@ -6,6 +6,8 @@ import { ConflictSummaryCard, OperationBanner } from './conflict-status-cards'
 import { EmptyState } from './empty-state'
 import { StatusRetryButton } from './status-retry-button'
 import { TooManyChangesBanner } from './too-many-changes-banner'
+import { useStoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
+import { WslHostStoppedNotice } from '../../../wsl-host-stopped/WslHostStoppedNotice'
 
 export function SourceControlContentStatus({
   unresolvedConflictCount,
@@ -56,8 +58,17 @@ export function SourceControlContentStatus({
   hasFilteredBranchEntries: boolean
   filterQuery: string
 }): React.JSX.Element {
+  // Why: a stopped host can't answer git, so its read error or "clean" result is not the workspace's.
+  const stoppedWslHost = useStoppedWslHost(worktreeId)
   return (
     <>
+      {stoppedWslHost && (
+        <WslHostStoppedNotice
+          environmentId={stoppedWslHost.environmentId}
+          distro={stoppedWslHost.distro}
+          className="py-6 text-xs"
+        />
+      )}
       {unresolvedConflictCount > 0 && (
         <div className="px-3 pb-2">
           <ConflictSummaryCard
@@ -98,7 +109,7 @@ export function SourceControlContentStatus({
           />
         </div>
       )}
-      {statusReadError !== undefined && (
+      {statusReadError !== undefined && !stoppedWslHost && (
         <div className="px-3 pb-2">
           <div className="flex flex-col gap-1 rounded-md border border-status-warning-border bg-status-warning-background px-3 py-2">
             <div className="flex items-start gap-2">
@@ -119,7 +130,7 @@ export function SourceControlContentStatus({
           </div>
         </div>
       )}
-      {showGenericEmptyState && !normalizedFilter ? (
+      {showGenericEmptyState && !normalizedFilter && !stoppedWslHost ? (
         <EmptyState
           heading={translate(
             'auto.components.right.sidebar.source.control.content.status.3f425c239c',

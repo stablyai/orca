@@ -93,11 +93,15 @@ export function AgentDefaultArgsInput({
   onDraftChange,
   placeholder,
   onResetArgs,
-  hideLabel = false
+  hideLabel = false,
+  onDiscardArgs,
+  containsFocus
 }: {
   defaultArgs: string
   placeholder?: string
   onResetArgs?: () => void | Promise<void>
+  containsFocus?: (target: EventTarget | null) => boolean
+  onDiscardArgs?: () => void
   argsOverride: string
   onSaveArgs: (value: string) => void | Promise<void>
   choiceChips?: readonly AgentArgsChoice[]
@@ -160,7 +164,11 @@ export function AgentDefaultArgsInput({
         <div
           className="scrollbar-sleek relative max-h-[calc(var(--spacing)*41+2px)] min-h-7 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-md border border-input px-3 py-0.5 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
           onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget)) {
+            if (
+              !(containsFocus
+                ? containsFocus(event.relatedTarget)
+                : event.currentTarget.contains(event.relatedTarget))
+            ) {
               commitArgs()
             }
           }}
@@ -223,6 +231,7 @@ export function AgentDefaultArgsInput({
               }
               if (event.key === 'Escape') {
                 setDraft(null)
+                onDiscardArgs?.()
               }
             }}
             placeholder={
@@ -269,16 +278,14 @@ export function AgentDefaultArgsInput({
 }
 
 export function AgentDefaultEnvInput({
-  showEmpty = false,
   defaultEnv,
   envOverride,
   onSaveEnv
 }: {
-  showEmpty?: boolean
   defaultEnv: Record<string, string>
   envOverride: Record<string, string>
   onSaveEnv: (value: Record<string, string>) => void | Promise<void>
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const defaultEnvText = stringifyAgentDefaultEnvDraft(defaultEnv)
   const draftSeed = stringifyAgentDefaultEnvDraft(envOverride)
   const [draft, setDraft] = useState<string | null>(null)
@@ -306,9 +313,6 @@ export function AgentDefaultEnvInput({
     }
   }
 
-  if (!showEmpty && !defaultEnvText && !draftSeed && draft === null && !pending) {
-    return null
-  }
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs text-muted-foreground">

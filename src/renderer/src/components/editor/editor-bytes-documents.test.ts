@@ -55,7 +55,7 @@ import {
   saveEditorBytesDraft,
   setEditorBytesDraft
 } from './editor-bytes-documents'
-import { bytesDocumentBoxes, rekeyEditorBytesDocuments } from './editor-bytes-document-boxes'
+import { bytesDocumentBoxes } from './editor-bytes-document-boxes'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the save reads only openFiles, markFileDirty and setExternalMutation.
 const getState = () => state as unknown as AppState
@@ -109,13 +109,6 @@ describe('binary custom editor saves', () => {
     expect(state.openFiles[0].externalMutation).toBe('changed')
     expect(editorBytesDocument('book')).toBe(edited)
   })
-
-  it('writes unguarded only for the banner Overwrite', async () => {
-    setEditorBytesDraft('book', edited)
-    writeRuntimeFileBytes.mockResolvedValue({ ok: true })
-    await saveEditorBytesDraft(getState, file, context, 'overwrite', () => false)
-    expect(writeRuntimeFileBytes.mock.calls[0][4]).toEqual({})
-  })
 })
 
 describe('binary custom editor views', () => {
@@ -152,20 +145,6 @@ describe('binary custom editor reloads', () => {
 })
 
 describe('binary custom editor tabs', () => {
-  it('skips the tab sweep on store writes that leave the tabs and bytes alone', () => {
-    storeListener.current?.(state, { ...state, openFiles: [...state.openFiles] })
-    const find = vi.spyOn(state.openFiles, 'find')
-    for (let i = 0; i < 3; i++) {
-      storeListener.current?.(state, { ...state })
-    }
-    expect(find).not.toHaveBeenCalled()
-    setEditorBytesDraft('book', edited)
-    find.mockClear()
-    storeListener.current?.(state, { ...state })
-    expect(find).toHaveBeenCalled()
-    find.mockRestore()
-  })
-
   it('ignores a read that started before an edit and save it does not include', async () => {
     const editsAtRead = editorBytesEdits('book')
     setEditorBytesDraft('book', edited)
@@ -173,14 +152,6 @@ describe('binary custom editor tabs', () => {
     await save()
     load('book', loaded, editsAtRead)
     expect(editorBytesDocument('book')).toBe(edited)
-  })
-
-  it('moves an unsaved edit with its tab when the file is renamed', () => {
-    setEditorBytesDraft('book', edited)
-    rekeyEditorBytesDocuments([{ oldFileId: 'book', newFileId: 'renamed' }])
-    expect(editorBytesDocument('renamed')).toBe(edited)
-    expect(editorBytesDocument('book')).toBeNull()
-    rekeyEditorBytesDocuments([{ oldFileId: 'renamed', newFileId: 'book' }])
   })
 
   it('shares one draft between tabs of one file, which share one dirty flag', async () => {

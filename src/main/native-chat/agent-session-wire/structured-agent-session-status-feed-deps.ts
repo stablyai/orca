@@ -2,7 +2,7 @@ import type { AgentSessionConversationView } from '../../../shared/agent-session
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   StructuredChatNamingFailure,

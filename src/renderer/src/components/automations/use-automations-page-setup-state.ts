@@ -1,17 +1,11 @@
 import { useCallback, useMemo } from 'react'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
-import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { getAutomationHostTargetFromKey, type AutomationHostTarget } from './automation-host-client'
-import { getAutomationCreateRepos } from './automation-create-projects'
-import {
-  getRepoExecutionHostId,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { findAutomationRepo } from '../../../../shared/automation-repo-target'
 import { getVisibleAutomationSetupDecision } from './automation-setup-decision'
-import { capturedAutomationOwner, capturedAutomationOwnerKey } from './automation-captured-owner'
 import type { AutomationsPageListState } from './use-automations-page-list-state'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
@@ -20,14 +14,15 @@ import type { AutomationsPageStoreState } from './use-automations-page-store-sta
 export function useAutomationsPageSetupState({
   store,
   local,
-  list
+  list,
+  draftRepos = store.repos
 }: {
   store: AutomationsPageStoreState
   local: AutomationsPageLocalState
   list: AutomationsPageListState
+  draftRepos?: AutomationsPageStoreState['repos']
 }) {
-  const { repos, settings, projectHostSetups, worktreesByRepo, pendingAutomationRunNavigation } =
-    store
+  const { repos, projectHostSetups, worktreesByRepo, pendingAutomationRunNavigation } = store
   const {
     automationYamlHooksByRepoKey,
     automationHookCheckPromisesRef,
@@ -39,66 +34,39 @@ export function useAutomationsPageSetupState({
     automationHostTargetKey,
     selectedAutomationRunPageId
   } = local
-  const {
-    selected,
-    selectedRow,
-    selectedAutomationRunsWithWorkspaceNames,
-    capturedAutomationOwners
-  } = list
+  const { selected, selectedRow, selectedAutomationRunsWithWorkspaceNames: historyRuns } = list
 
   const getDraftSetupDecisionDefault = useCallback(
     (
       candidate: Pick<AutomationDraft, 'projectId' | 'workspaceMode'>
     ): AutomationDraft['setupDecision'] => {
-      // Derive edit setup from the selected destination; ambient repo-ID lookup can collide across authorities.
-      const selectedEditEntry =
-        local.editingAutomationId !== null && local.editingHostStableKey
-          ? list.hostCatalog.entries.find((entry) => entry.stableKey === local.editingHostStableKey)
-          : null
-      const selectedEditAuthority = selectedEditEntry?.stableRef.authority
-      const setupHostId =
-        selectedEditAuthority?.kind === 'runtime'
-          ? toRuntimeExecutionHostId(selectedEditAuthority.environmentId)
-          : undefined
-      const setupRepos =
-        selectedEditAuthority?.kind === 'runtime'
-          ? getAutomationCreateRepos(repos, {
-              kind: 'environment',
-              environmentId: selectedEditAuthority.environmentId
-            })
-          : repos
+      const owners = draftRepos.filter((repo) => repo.id === candidate.projectId)
+      const setupHostId = owners.length === 1 ? getRepoExecutionHostId(owners[0]) : undefined
       const setupProjectHostSetups = setupHostId
         ? projectHostSetups.filter(
             (setup) => setup.repoId !== candidate.projectId || setup.hostId === setupHostId
           )
         : projectHostSetups
-      const hookKey = `${setupHostId ?? getRuntimeEnvironmentIdForRepo({ repos, settings }, candidate.projectId) ?? 'local'}:${candidate.projectId}`
+      const hookKey = `${setupHostId ?? 'unresolved'}:${candidate.projectId}`
       return getVisibleAutomationSetupDecision({
         workspaceMode: candidate.workspaceMode,
         repoId: candidate.projectId,
-        repos: setupRepos,
+        repos: draftRepos,
         projectHostSetups: setupProjectHostSetups,
         yamlHooks: automationYamlHooksByRepoKey[hookKey]
       })
     },
-    [
-      automationYamlHooksByRepoKey,
-      list.hostCatalog.entries,
-      local.editingAutomationId,
-      local.editingHostStableKey,
-      projectHostSetups,
-      repos,
-      settings
-    ]
+    [automationYamlHooksByRepoKey, draftRepos, projectHostSetups]
   )
   const getAutomationHooksCacheKey = useCallback(
     (repoId: string, hostId?: string): string => {
       if (hostId) {
         return `${hostId}:${repoId}`
       }
-      return `${getRuntimeEnvironmentIdForRepo({ repos, settings }, repoId) ?? 'local'}:${repoId}`
+      const owner = findAutomationRepo(repos, repoId)
+      return `${owner ? getRepoExecutionHostId(owner) : 'unresolved'}:${repoId}`
     },
-    [repos, settings]
+    [repos]
   )
   const loadAutomationYamlHooksForRepo = useCallback(
     async (
@@ -163,10 +131,8 @@ export function useAutomationsPageSetupState({
   }, [setupDecisionTouchedRef])
 
   const selectedRunsMatchSelection =
-    selectedRow !== null &&
-    selectedAutomationRuns.rowKey === selectedRow.key &&
-    selectedAutomationRuns.ownerKey ===
-      capturedAutomationOwnerKey(capturedAutomationOwner(capturedAutomationOwners, selectedRow.key))
+    selectedAutomationRuns.automationId === (selected?.id ?? store.selectedId) &&
+    selectedAutomationRuns.rowKey === (selectedRow?.key ?? local.selectedRowKey)
   const selectedRunsReady =
     selectedRunsMatchSelection &&
     selectedAutomationRuns.reloadToken === runHistoryReloadToken &&
@@ -175,10 +141,10 @@ export function useAutomationsPageSetupState({
   const selectedRunsNotice = selectedRunsReady ? selectedAutomationRuns.notice : null
   const selectedRuns = useMemo(
     () =>
-      selected && selectedRunsMatchSelection
-        ? selectedAutomationRunsWithWorkspaceNames.filter((run) => run.automationId === selected.id)
+      selectedRunsMatchSelection
+        ? historyRuns.filter((run) => run.automationId === selectedAutomationRuns.automationId)
         : [],
-    [selected, selectedRunsMatchSelection, selectedAutomationRunsWithWorkspaceNames]
+    [selectedAutomationRuns.automationId, selectedRunsMatchSelection, historyRuns]
   )
   const selectedAutomationRunPage = selectedAutomationRunPageId
     ? (selectedRuns.find((run) => run.id === selectedAutomationRunPageId) ?? null)

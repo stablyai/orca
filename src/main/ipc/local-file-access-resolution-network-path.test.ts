@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
 import type * as NodePath from 'node:path'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 // Use Windows paths on every host to prove UNC credential-leak rejection happens before filesystem access.
 vi.mock('node:path', async () => {

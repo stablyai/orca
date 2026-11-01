@@ -35,8 +35,8 @@ vi.mock('./browser-extension-api-host', () => ({
     mocks.emitted.push({ session: target.session, event })
 }))
 vi.mock('./browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => false }))
-vi.mock('./browser-extension-main-window-readiness', () => ({
-  watchBrowserExtensionMainWindowReadiness: () => {}
+vi.mock('../browser-main-window-readiness', () => ({
+  watchBrowserMainWindowReadiness: () => {}
 }))
 
 const { BrowserWindow } = await import('electron')

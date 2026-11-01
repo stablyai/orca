@@ -4,7 +4,10 @@ import { useKeyboardOcclusion } from '../../../platform/keyboard-occlusion'
 import { useTextInputContentHeight } from '../../../platform/text-input-content-height'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { mobileNativeChatInputStyles as inputStyles } from './mobile-native-chat-input-styles'
+import {
+  composerInputStyles,
+  MESSAGE_MIN_HEIGHT
+} from '../../../components/composer-input/composer-input-styles'
 import type { MobileNativeChatComposerFieldProps } from './mobile-native-chat-composer-field-skill'
 import { MobileNativeChatComposerFieldCopy } from './MobileNativeChatComposerFieldCopy'
 
@@ -46,13 +49,15 @@ export function MobileNativeChatComposerField({
     ? `${dictationPreview.before}${dictationPreview.text}${dictationPreview.after}`
     : value || placeholder || ''
   const contentHeight = useTextInputContentHeight(input, shown)
+  // Reserve the placeholder's lines so the first keystroke cannot shrink the box and drop the transcript.
+  const placeholderHeight = useTextInputContentHeight(input, placeholder ?? '')
   const windowHeight = useWindowDimensions().height
   const keyboardHeight = useKeyboardOcclusion()
   // RN Web already shrinks browser dimensions; shell WebViews report the keyboard separately.
   const visibleHeight = Math.min(windowHeight, window.innerHeight - keyboardHeight)
   const sizing = {
-    height: contentHeight,
-    maxHeight: Math.max(inputStyles.input.minHeight, Math.round(visibleHeight * MAX_HEIGHT_SHARE))
+    height: Math.max(contentHeight ?? 0, placeholderHeight ?? 0) || undefined,
+    maxHeight: Math.max(MESSAGE_MIN_HEIGHT, Math.round(visibleHeight * MAX_HEIGHT_SHARE))
   }
   const copied = Boolean(skillToken || dictationPreview)
   // Keep one tree so adding/removing a skill or dictation cannot remount the field and drop focus.
@@ -73,7 +78,7 @@ export function MobileNativeChatComposerField({
       <TextInput
         ref={input}
         value={value}
-        style={[inputStyles.input, sizing, copied ? clearText().field : null]}
+        style={[composerInputStyles.messageText, sizing, copied ? clearText().field : null]}
         onScroll={skillToken ? (event) => setScrollTop(scrollTopOf(event)) : undefined}
         placeholder={dictationPreview ? undefined : placeholder}
         {...props}

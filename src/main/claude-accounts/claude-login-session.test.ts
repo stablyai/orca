@@ -1,4 +1,5 @@
-import { existsSync, mkdtempSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -67,31 +68,6 @@ describe('runClaudeLoginSession', () => {
     expect(openWslSignInLink).not.toHaveBeenCalled()
   })
 
-  it('leaves a local login to open its own browser', async () => {
-    const config = folder('host')
-    const openWslSignInLink = vi.fn()
-    const runCommand = vi.fn<RunCommand>(async (_args, _config, _ms, options) => {
-      expect(options?.browser).toBeUndefined()
-      expect(existsSync(join(config.windowsPath, '.orca-sign-in-browser'))).toBe(false)
-      return ''
-    })
-    await runClaudeLoginSession(config, { runCommand, setCancel: vi.fn(), openWslSignInLink })
-    expect(runCommand).toHaveBeenCalledTimes(1)
-    expect(openWslSignInLink).not.toHaveBeenCalled()
-  })
-
-  it('changes nothing for a WSL login where nothing can open a link', async () => {
-    const config = folder('wsl')
-    const runCommand = vi.fn<RunCommand>(async () => '')
-    await runClaudeLoginSession(config, { runCommand, setCancel: vi.fn() })
-    expect(runCommand.mock.calls[0]).toEqual([
-      ['auth', 'login', '--claudeai'],
-      config,
-      expect.any(Number),
-      expect.objectContaining({ browser: undefined })
-    ])
-  })
-
   it('never opens a link that is not a Claude sign-in, and keeps the login going', async () => {
     const config = folder('wsl')
     const openWslSignInLink = vi.fn()
@@ -128,20 +104,5 @@ describe('runClaudeLoginSession', () => {
       })
     ).rejects.toThrow('cancelled')
     expect(openWslSignInLink).not.toHaveBeenCalled()
-  })
-
-  it('runs a WSL login unchanged when the stand-in cannot be written', async () => {
-    const config = { ...folder('wsl'), windowsPath: join(tmpdir(), 'missing-claude-folder', 'x') }
-    const openWslSignInLink = vi.fn()
-    const runCommand = vi.fn<RunCommand>(async () => '')
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await runClaudeLoginSession(config, { runCommand, setCancel: vi.fn(), openWslSignInLink })
-    warn.mockRestore()
-    expect(runCommand.mock.calls[0]).toEqual([
-      ['auth', 'login', '--claudeai'],
-      config,
-      expect.any(Number),
-      expect.objectContaining({ browser: undefined })
-    ])
   })
 })

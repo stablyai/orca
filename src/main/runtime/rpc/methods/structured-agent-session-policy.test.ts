@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   createSupportFollowsHostSetting,
+  isStructuredNativeChatDefaultFor,
   structuredAgentsReadBy,
   clientRendersStructuredAgent,
   supportsStructuredAgentSessions
@@ -117,3 +120,22 @@ describe.each([
     expect(clientRendersStructuredAgent(clientCapabilities, agent)).toBe(true)
   })
 })
+
+it.each(['chat', 'terminal'] as const)(
+  'legacy phone admission reads host default %s and its override',
+  (agentDefaultSurface) => {
+    const runtime = {
+      requireStore: () => ({
+        getSettings: () => ({
+          agentDefaultSurface,
+          nativeChatProviders: { codex: agentDefaultSurface !== 'chat' }
+        })
+      })
+    }
+    expect(
+      createSupportFollowsHostSetting({ clientKind: 'mobile', clientCapabilities: CAPABLE })
+    ).toBe(true)
+    expect(isStructuredNativeChatDefaultFor(runtime, 'claude')).toBe(agentDefaultSurface === 'chat')
+    expect(isStructuredNativeChatDefaultFor(runtime, 'codex')).toBe(agentDefaultSurface !== 'chat')
+  }
+)

@@ -95,11 +95,11 @@ const styles = themedStyleSheet(() => ({
   button: {
     flex: 1,
     paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   cancelButton: {
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.sheetGroup
   },
   confirmButton: {
     backgroundColor: colors.textPrimary

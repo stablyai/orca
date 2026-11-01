@@ -1,4 +1,4 @@
-import { splitPathSegments } from './path-tree'
+import { splitPathSegments } from '../../../../shared/cross-platform-path'
 import { fileExplorerListingToDirCache } from './file-explorer-dir-pages'
 import { refreshFileExplorerExpandedDirs } from './file-explorer-expanded-dirs-refresh'
 import { fileExplorerRefreshConcurrency } from './file-explorer-refresh-concurrency'

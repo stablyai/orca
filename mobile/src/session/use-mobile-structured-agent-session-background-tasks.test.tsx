@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentChildWorkView } from '../../../src/shared/agent-status-child-work-view'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   backgroundTaskRowMeta,
@@ -61,7 +61,9 @@ describe('mobile structured session background tasks', () => {
   const client: RpcClient = {
     sendRequest,
     subscribe: (_method, _params, onData) => {
-      listener = onData
+      if (_method === 'agentSession.subscribe') {
+        listener = onData
+      }
       return vi.fn()
     },
     updateTerminalSubscriptionViewport: () => {},

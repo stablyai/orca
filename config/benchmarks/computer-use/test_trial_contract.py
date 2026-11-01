@@ -15,10 +15,14 @@ class TaskContractTests(unittest.TestCase):
         state = {**initial_state("targeted_type"), "instance": "new", "pid": 19, "ack": "current"}
         self.assertTrue(prepared(state, "targeted_type", "new", 19, "current"))
         for key, value in (("ack", "previous"), ("instance", "old"), ("pid", 20),
-                           ("logicalFocus", "field"), ("selLen", 1), ("top", 1), ("dropOpen", True)):
+                           ("logicalFocus", "field"), ("selLen", 1), ("top", 1), ("dropOpen", True),
+                           ("submittedText", "old"), ("clickedColor", "Blue")):
             with self.subTest(key=key):
                 self.assertFalse(prepared({**state, key: value}, "targeted_type", "new", 19, "current"))
         self.assertFalse(acknowledged(state, "new", 19, "previous"))
+        for key in ("submittedText", "clickedColor"):
+            without_payload = {name: value for name, value in state.items() if name != key}
+            self.assertFalse(prepared(without_payload, "targeted_type", "new", 19, "current"))
 
     def test_selectors_never_substitute_another_control(self):
         selector = (r"button", r"\bincrement\b")
@@ -42,12 +46,22 @@ class TaskContractTests(unittest.TestCase):
             final = {**initial_state(task), key: 1}
             if task == "choose_and_click":
                 final["combo"] = "Blue"
+                payload, correct, wrong = "clickedColor", "Blue", "Red"
             else:
                 final["text"] = MARKER
+                payload, correct, wrong = "submittedText", MARKER, ""
+            final[payload] = correct
             self.assertTrue(completed(final, task))
+            for value in (wrong, None):
+                with self.subTest(task=task, payload=value):
+                    self.assertFalse(completed({**final, payload: value}, task))
+            self.assertFalse(completed({name: value for name, value in final.items() if name != payload}, task))
             for value in (0, 2):
                 with self.subTest(task=task, value=value):
                     self.assertFalse(completed({**final, key: value}, task))
+        for color in ("Red", "Blue"):
+            self.assertTrue(completed({**initial_state("click_interference"), "count": 1,
+                                       "clickedColor": color}, "click_interference"))
 
     def test_observed_completion_is_independent_of_api_errors(self):
         row = {"prepared": True, "task": "targeted_type", "api_errors": ["timeout"]}

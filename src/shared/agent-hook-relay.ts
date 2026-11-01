@@ -9,7 +9,7 @@ import type {
   ParsedAgentStatusPayload,
   TurnEndDisposition
 } from './agent-status-types'
-import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentProviderSessionMetadata } from './agent-session/lifecycle/agent-session-resume'
 
 // The relay must retain the URL-derived source discriminator for CLI attribution.
 const AGENT_HOOK_SOURCES = [

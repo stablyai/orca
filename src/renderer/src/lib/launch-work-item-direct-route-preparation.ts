@@ -1,3 +1,4 @@
+import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
@@ -161,6 +162,14 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
           })
   const structuredLaunch = plan?.route === 'structured-native-chat'
 
+  const preferences =
+    !structuredLaunch && effectiveAgent !== null
+      ? await ensureAgentLaunchPreferences(latestStore, {
+          kind: 'git-worktree',
+          worktreeId: args.worktreeId,
+          repoId: args.repoId
+        })
+      : undefined
   const { startupPlan, draftLaunchedNatively, startupPlanFailed } = structuredLaunch
     ? { startupPlan: null, draftLaunchedNatively: false, startupPlanFailed: false }
     : buildDirectWorkItemStartup({
@@ -170,7 +179,13 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
         sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
         draftContent: args.draftContent,
         promptDelivery: args.promptDelivery,
-        settings: latestStore.settings,
+        settings: latestStore.settings
+          ? {
+              ...latestStore.settings,
+              agentLaunchChoices:
+                preferences?.agentLaunchChoices ?? latestStore.settings.agentLaunchChoices
+            }
+          : null,
         launchHost: resolveDirectWorkItemLaunchHost(hostArgs),
         terminalWindowsShell: resolveDirectWorkItemTabShell(hostArgs),
         launchConnectionId

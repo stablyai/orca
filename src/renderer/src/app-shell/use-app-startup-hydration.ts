@@ -1,4 +1,4 @@
-import { restoreStructuredLaunchSurfaces } from '@/lib/structured-agent-session-launch-surface'
+import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { useEffect, useRef } from 'react'
 import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'

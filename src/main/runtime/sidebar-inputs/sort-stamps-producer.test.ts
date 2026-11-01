@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../agent-hooks/server'
 import type { AgentStatusStoreView } from './workspace-activity-facts-producer'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { TerminalSideEffectFact } from '../../../shared/terminal-side-effect-facts'

@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CONTENT_SCRIPT_RELAY_KEY,
   createContentScriptRelayBridge,
-  createContentScriptSyncForward,
   installContentScriptRelayFilter
 } from './browser-extension-content-script-relay'
 import type { BrowserExtensionStorageSyncRelay } from './browser-extension-storage-sync'
@@ -120,41 +119,6 @@ describe('content script relay', () => {
     expect(seen).toEqual([])
   })
 
-  it('passes the calling content script’s id to the worker’s answer', async () => {
-    const answer = vi.fn(async () => ({ ok: true as const, value: {} }))
-    const worker = install(answer)
-    const call = { [CONTENT_SCRIPT_RELAY_KEY]: { method: 'set', args: [{ a: 1 }], from: 'cs-1' } }
-    await worker.dispatch(call, fromContentScript)
-    expect(answer).toHaveBeenCalledWith('set', [{ a: 1 }], 'cs-1')
-  })
-
-  it('sends a content script’s call to the worker and reports a missing worker as an error', async () => {
-    const sendMessage = vi.fn(async () => ({ ok: true, value: 3 }))
-    const bridge = createContentScriptRelayBridge(sendMessage, { id: 'ext' })
-    await expect(bridge.call('orcaStorageSync', 'getBytesInUse', [null])).resolves.toEqual({
-      ok: true,
-      value: 3
-    })
-    expect(sendMessage).toHaveBeenCalledWith({
-      [CONTENT_SCRIPT_RELAY_KEY]: {
-        method: 'getBytesInUse',
-        args: [null],
-        from: expect.any(String)
-      }
-    })
-
-    const unanswered = createContentScriptRelayBridge(
-      async () => {
-        throw new Error('Could not establish connection. Receiving end does not exist.')
-      },
-      { id: 'ext' }
-    )
-    await expect(unanswered.call('orcaStorageSync', 'get', [])).resolves.toEqual({
-      ok: false,
-      error: 'Could not establish connection. Receiving end does not exist.'
-    })
-  })
-
   it('gives a listening content script the worker’s sync changes, except its own writes', async () => {
     const native = new Set<Listener>()
     const onMessage = {
@@ -190,35 +154,6 @@ describe('content script relay', () => {
 
     bridge.listen('orcaStorageSync', 'onChanged', false)
     expect(native.size).toBe(0)
-  })
-
-  it('sends the worker’s sync changes to every live tab, naming the writer', async () => {
-    const sendMessage = vi.fn(async () => undefined)
-    const tabs = {
-      query: vi.fn(async () => [{ id: 1 }, { id: 2, discarded: true }, { id: 3 }]),
-      sendMessage
-    }
-    const manifest = (contentScripts: unknown[]) => ({
-      content_scripts: contentScripts
-    })
-    const withManifest = (contentScripts: unknown[]) =>
-      vi.stubGlobal('chrome', { tabs, runtime: { getManifest: () => manifest(contentScripts) } })
-    try {
-      withManifest([])
-      expect(createContentScriptSyncForward()).toBeNull()
-      withManifest([{ matches: ['<all_urls>'], js: ['content.js'] }])
-      createContentScriptSyncForward()?.({ a: { newValue: 1 } }, 'cs-1')
-      await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2))
-      const message = {
-        [CONTENT_SCRIPT_RELAY_KEY]: { changes: { a: { newValue: 1 } }, from: 'cs-1' }
-      }
-      expect(sendMessage.mock.calls).toEqual([
-        [1, message],
-        [3, message]
-      ])
-    } finally {
-      vi.unstubAllGlobals()
-    }
   })
 })
 

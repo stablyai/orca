@@ -9,10 +9,15 @@ import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-own
 export function activateTerminalTabOnOwner(
   worktreeId: string,
   tabId: string,
-  leafId: string | null
+  leafId: string | null,
+  ownerEnvironmentId?: string | null,
+  expectedPairingRevision?: number
 ): void {
   const state = useAppStore.getState()
-  const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+  const environmentId =
+    ownerEnvironmentId === undefined
+      ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+      : ownerEnvironmentId
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return
   }
@@ -21,6 +26,7 @@ export function activateTerminalTabOnOwner(
     tabId,
     environmentId,
     leafId,
+    expectedPairingRevision,
     expectedCurrentLocalTabId: resolveWebSessionVisibleTabId(state, worktreeId)
   })
 }

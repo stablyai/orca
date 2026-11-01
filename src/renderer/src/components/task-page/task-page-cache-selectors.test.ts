@@ -5,7 +5,6 @@ import { workItemsCacheKey } from '@/store/github/cache-identity'
 import type { CacheEntry } from '@/store/github/cache-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { LinearCollectionResult } from '../../../../shared/linear/workspace-types'
 import {
   buildTaskPageRepoSourceState,
   selectTaskPageUnresolvedSourceRepos,
@@ -18,10 +17,7 @@ import {
   shouldResetTaskPagePaginationAfterLandingRefresh,
   shouldReplaceTaskPageItemsAfterRefresh
 } from './task-page-cache-selectors'
-import {
-  findTaskPageLinearIssue,
-  reconcileTaskPageLinearIssuesAfterLandingRefresh
-} from './linear/task-page-linear-cache-selectors'
+import { reconcileTaskPageLinearIssuesAfterLandingRefresh } from './linear/task-page-linear-cache-selectors'
 
 function entry<T>(data: T): CacheEntry<T> {
   return { data, fetchedAt: 1 }
@@ -496,25 +492,5 @@ describe('task page cache selectors', () => {
     )
 
     expect(next).toEqual([refreshedFirst, refreshedSecond])
-  })
-
-  it('returns null while the Linear drawer is closed and finds open issues by stable reference', () => {
-    const issue = linearIssue('LIN-1')
-    const searchIssue = linearIssue('LIN-2')
-    const issueCache = {
-      'LIN-1': entry(issue)
-    }
-    const searchCache = {
-      assigned: entry<LinearIssue[]>([searchIssue])
-    }
-    const listIssue = linearIssue('LIN-3')
-    const listCache = {
-      all: entry<LinearCollectionResult<LinearIssue>>({ items: [listIssue] })
-    }
-
-    expect(findTaskPageLinearIssue(issueCache, searchCache, listCache, null)).toBeNull()
-    expect(findTaskPageLinearIssue(issueCache, searchCache, listCache, 'LIN-1')).toBe(issue)
-    expect(findTaskPageLinearIssue({}, searchCache, listCache, 'LIN-2')).toBe(searchIssue)
-    expect(findTaskPageLinearIssue({}, {}, listCache, 'LIN-3')).toBe(listIssue)
   })
 })

@@ -2,7 +2,7 @@ import {
   programStatusFacetsEqual,
   type ProgramStatusFacet
 } from '../../../../shared/program-status/facet'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 
 // Bound retained facets across long sessions; evict the least recently changed first.
 const MAX_PROGRAM_STATUS_FACETS = 1024
@@ -13,6 +13,12 @@ type StoredProgramStatus = {
   working?: boolean
   /** New working evidence can supersede a hook-settled turn. */
   workingSince?: number
+  /** A prompt hook claimed the latest working run. */
+  promptClaimed?: boolean
+  /** The user typed since the run began: an interrupt, or the next prompt, which the rest cannot be. */
+  inputSinceWorking?: boolean
+  /** The agent the latest ordered state came from. */
+  agentType?: string
 }
 
 /** Runtime-only facets are stitched at publication; noteState requires the chunk's facet first. */
@@ -43,16 +49,53 @@ export class ProgramStatusFacetStore {
   }
 
   /** Return the latest working transition time while consuming states in report order. */
-  noteState(paneKey: string, state: AgentStatusState, at: number): number | undefined {
+  noteState(
+    paneKey: string,
+    { state, agentType }: Pick<ParsedAgentStatusPayload, 'state' | 'agentType'>,
+    at: number
+  ): number | undefined {
     const stored = this.byPaneKey.get(paneKey)
     if (stored === undefined) {
       return undefined
     }
+    stored.agentType = agentType
     if (state === 'working' && stored.working !== true) {
       stored.workingSince = at
+      stored.promptClaimed = false
+      stored.inputSinceWorking = false
     }
     stored.working = state === 'working'
     return stored.workingSince
+  }
+
+  /** A submitted prompt claims the latest working run unless one already did, in which case the
+   *  prompt belongs to a run not yet reported. The run may already have rested. */
+  claimPrompt(paneKey: string): boolean {
+    const stored = this.byPaneKey.get(paneKey)
+    if (stored?.workingSince === undefined || stored.promptClaimed) {
+      return false
+    }
+    stored.promptClaimed = true
+    return true
+  }
+
+  noteInput(paneKey: string): void {
+    const stored = this.byPaneKey.get(paneKey)
+    if (stored?.workingSince !== undefined) {
+      stored.inputSinceWorking = true
+    }
+  }
+
+  /** The agent's claimed run went idle with no result and no input: a prompt hook blocked the prompt. */
+  claimedRunRestedWithoutResult(paneKey: string, agentType: string): boolean {
+    const stored = this.byPaneKey.get(paneKey)
+    return (
+      stored?.promptClaimed === true &&
+      stored.inputSinceWorking !== true &&
+      stored.agentType === agentType &&
+      stored.working === false &&
+      stored.facet.state === 'idle'
+    )
   }
 
   delete(paneKey: string): void {

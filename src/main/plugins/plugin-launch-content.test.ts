@@ -58,7 +58,7 @@ describe('Phase 1 launch plugin content', () => {
       const inspection = await inspectPluginInstallTree({
         rootDir: join(launchRoot, listing.id),
         hostVersion: '1.4.0',
-        expectedPluginKey: listing.id
+        identity: { pluginKey: listing.id }
       })
       expect(inspection, `${listing.id} must pass the production install inspection`).toMatchObject(
         {

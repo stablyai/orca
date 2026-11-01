@@ -5,7 +5,7 @@ import type {
   CreateStackedHostedReviewResult,
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
-  HostedReviewInfo
+  HostedReviewForBranchReply
 } from '../../shared/hosted-review'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type {
@@ -21,7 +21,8 @@ import {
 } from '../github/client'
 import { admissionTierForRefreshReason } from '../github/pr-refresh-candidate-policy'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
-import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import { hostedReviewForBranchReply } from '../../shared/hosted-review'
+import { readHostedReviewForBranch } from '../source-control/hosted-review'
 import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import {
@@ -72,7 +73,8 @@ export class RuntimeHostedReviewCommands {
     fallbackPRNumber?: number | null,
     acceptMergedFallbackPR?: boolean,
     currentHeadOid?: string | null,
-    reason?: GitHubPRRefreshReason
+    reason?: GitHubPRRefreshReason,
+    userRefresh?: boolean
   ): Promise<PRRefreshOutcome> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const lookupOptions: GitHubPRBranchLookupOptions = {
@@ -80,6 +82,9 @@ export class RuntimeHostedReviewCommands {
         repo,
         reason ? admissionTierForRefreshReason(reason) : undefined
       )
+    }
+    if (userRefresh === true) {
+      lookupOptions.userRefresh = true
     }
     if (acceptMergedFallbackPR === true) {
       lookupOptions.acceptMergedFallbackPR = true
@@ -106,22 +111,25 @@ export class RuntimeHostedReviewCommands {
     currentHeadOid?: string | null
     active?: boolean
     force?: boolean
+    userRefresh?: boolean
+    reportReadOutcome?: boolean
     linkedGitHubPR?: number | null
     fallbackGitHubPR?: number | null
     linkedGitLabMR?: number | null
     linkedBitbucketPR?: number | null
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
-  }): Promise<HostedReviewInfo | null> {
+  }): Promise<HostedReviewForBranchReply> {
     const repo = await this.deps.resolveRepo(args.repoSelector)
     const executionOptions = this.deps.getExecutionOptions(repo, args.admissionTier ?? 'background')
-    const review = await getHostedReviewForBranch({
+    const read = await readHostedReviewForBranch({
       repoPath: repo.path,
       executionHostId: getStoredRepoExecutionHostId(repo),
       branch: args.branch,
       currentHeadOid: args.currentHeadOid ?? null,
       ...(args.active === true ? { active: true } : {}),
       ...(args.force === true ? { force: true } : {}),
+      ...(args.userRefresh === true ? { userRefresh: true } : {}),
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
@@ -130,10 +138,11 @@ export class RuntimeHostedReviewCommands {
       linkedGiteaPR: args.linkedGiteaPR ?? null,
       ...executionOptions
     })
+    const review = read.review
     if (review?.provider === 'github') {
       this.deps.recordCreated(repo.id, review.number, review.url)
     }
-    return review
+    return hostedReviewForBranchReply(read, args.reportReadOutcome)
   }
 
   async getHostedReviewCreationEligibility(

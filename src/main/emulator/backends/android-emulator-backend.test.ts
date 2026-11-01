@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
 import { AndroidEmulatorBackend } from './android-emulator-backend'
+import { scrcpyVideoRegistry } from '../scrcpy-video-registry'
 import type { AndroidCommandResult, AndroidCommandRunner } from '../android/android-command-runner'
 import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
 
@@ -148,6 +149,102 @@ describe('AndroidEmulatorBackend', () => {
       'keyevent',
       '4'
     ])
+  })
+
+  describe('with a live scrcpy session', () => {
+    const sent: Buffer[] = []
+    const sendControl = vi.fn((message: Buffer) => {
+      sent.push(message)
+      return true
+    })
+
+    beforeEach(() => {
+      sent.length = 0
+      sendControl.mockClear()
+      scrcpyVideoRegistry.register('emulator-5554', () => {})
+      scrcpyVideoRegistry.attachControl('emulator-5554', {
+        videoSize: () => ({ width: 600, height: 1280 }),
+        sendControl
+      })
+    })
+
+    afterEach(() => {
+      scrcpyVideoRegistry.stop('emulator-5554')
+    })
+
+    const touches = (): [number, number, number][] =>
+      sent
+        .filter((message) => message[0] === 2)
+        .map((message) => [message[1], message.readInt32BE(10), message.readInt32BE(14)])
+
+    it('sends input over the control socket in video pixels without adb', async () => {
+      const sleep = vi.fn(async () => {})
+      const android = new AndroidEmulatorBackend({
+        runner: runner as unknown as AndroidCommandRunner,
+        sdk: SDK,
+        sleep
+      })
+
+      await android.tap('emulator-5554', 0.5, 0.5)
+      expect(touches()).toEqual([
+        [0, 300, 640],
+        [1, 300, 640]
+      ])
+      expect(sent[0].readUInt16BE(18)).toBe(600)
+      expect(sent[0].readUInt16BE(20)).toBe(1280)
+
+      sent.length = 0
+      await android.gesture(
+        'emulator-5554',
+        [
+          { type: 'begin', x: 0.5, y: 0.75 },
+          { type: 'end', x: 0.5, y: 0.25 }
+        ],
+        null
+      )
+      const swipe = touches()
+      expect(swipe[0]).toEqual([0, 300, 960])
+      expect(swipe.at(-1)).toEqual([1, 300, 320])
+      expect(swipe.slice(1, -1).every(([action]) => action === 2)).toBe(true)
+      expect(sleep.mock.calls.length * 16).toBeGreaterThanOrEqual(300)
+
+      sent.length = 0
+      await android.type('emulator-5554', 'héllo wörld')
+      await android.button('emulator-5554', 'back')
+      expect(sent[0][0]).toBe(1)
+      expect(sent[0].subarray(5).toString('utf8')).toBe('héllo wörld')
+      expect(
+        sent.slice(1).map((message) => [message[0], message[1], message.readInt32BE(2)])
+      ).toEqual([
+        [0, 0, 4],
+        [0, 1, 4]
+      ])
+
+      expect(runner).not.toHaveBeenCalled()
+    })
+
+    it('finds the session by serial when input names the AVD', async () => {
+      await backend(runner).tap('Pixel_7', 0, 0)
+      expect(touches()).toEqual([
+        [0, 0, 0],
+        [1, 0, 0]
+      ])
+      expect(runner.mock.calls.some(([, args]) => args.includes('input'))).toBe(false)
+    })
+
+    it('falls back to adb input once the control socket is gone', async () => {
+      sendControl.mockReturnValueOnce(false)
+      await backend(runner).tap('emulator-5554', 0.5, 0.5)
+      expect(runner).toHaveBeenCalledWith(SDK.adb, [
+        '-s',
+        'emulator-5554',
+        'shell',
+        'input',
+        'tap',
+        '540',
+        '1200'
+      ])
+    })
   })
 
   it('rotates via user_rotation and forgets the cached screen size', async () => {

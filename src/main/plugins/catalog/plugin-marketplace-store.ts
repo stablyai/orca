@@ -50,6 +50,13 @@ export type PluginMarketplaceCachedSnapshot =
   | z.infer<typeof cachedSnapshotSchema>
   | z.infer<typeof legacySnapshotSchema>
 
+// Why a separate file: sources.json is parsed strictly by older builds, so it can't gain fields.
+const seededDefaultsSchema = z.object({
+  schemaVersion: z.literal(1),
+  seeded: z.array(z.string().max(64)).max(16)
+})
+export type PluginMarketplaceDefaultSource = 'community'
+
 const SOURCE_FILE_MAX_BYTES = 2 * 1024 * 1024
 const SNAPSHOT_FILE_MAX_BYTES = 16 * 1024 * 1024
 
@@ -63,6 +70,7 @@ export function marketplaceSourceId(source: PluginMarketplaceGitSource): string 
 
 export class PluginMarketplaceStore {
   private readonly sourcesPath: string
+  private readonly seededDefaultsPath: string
   private readonly snapshotDirectory: string
   private sources: PluginMarketplaceRegisteredSource[] | null = null
   private writeChain: Promise<void> = Promise.resolve()
@@ -71,6 +79,7 @@ export class PluginMarketplaceStore {
   constructor(pluginsDataDir: string) {
     const root = join(pluginsDataDir, 'marketplaces')
     this.sourcesPath = join(root, 'sources.json')
+    this.seededDefaultsPath = join(root, 'seeded-defaults.json')
     this.snapshotDirectory = join(root, 'snapshots')
   }
 
@@ -115,6 +124,35 @@ export class PluginMarketplaceStore {
       await rm(this.legacySnapshotPath(parsedId), { force: true })
     }
     return removed
+  }
+
+  /** Whether Orca already added this default source once; a user's later removal must stick. */
+  async hasSeededDefault(name: PluginMarketplaceDefaultSource): Promise<boolean> {
+    return (await this.readSeededDefaults()).includes(name)
+  }
+
+  async markDefaultSeeded(name: PluginMarketplaceDefaultSource): Promise<void> {
+    const seeded = await this.readSeededDefaults()
+    if (!seeded.includes(name)) {
+      await writeAtomicJson(this.seededDefaultsPath, {
+        schemaVersion: 1,
+        seeded: [...seeded, name]
+      })
+    }
+  }
+
+  private async readSeededDefaults(): Promise<string[]> {
+    try {
+      return seededDefaultsSchema.parse(
+        JSON.parse(await readBoundedText(this.seededDefaultsPath, SOURCE_FILE_MAX_BYTES))
+      ).seeded
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        return []
+      }
+      // Why seeded on corruption: re-adding a source the user removed is worse than not adding it.
+      return ['community']
+    }
   }
 
   async writeSnapshot(input: {

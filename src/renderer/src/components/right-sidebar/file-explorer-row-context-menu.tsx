@@ -1,3 +1,4 @@
+import { preventSecondaryMenuSelection } from '@/components/ui/prevent-secondary-menu-selection'
 import React, { useCallback } from 'react'
 import {
   Copy,
@@ -35,6 +36,7 @@ import {
 } from '@/lib/reveal-in-file-manager'
 import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { OpenInContextSubmenu } from './open-in-context-submenu'
 import type { FileExplorerRowProps } from './FileExplorerRow'
 import {
   shouldShowCollapseFolderAction,
@@ -48,15 +50,6 @@ import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-f
 import { fileExplorerNodeTabRelativePath } from './file-explorer-directory-listing'
 
 const isMac = navigator.userAgent.includes('Mac')
-
-function stopRightButtonMenuSelection(event: React.PointerEvent): void {
-  if (event.button !== 2) {
-    return
-  }
-  // Right-button release can hit Radix's first menu item on macOS/Electron; suppress accidental selection.
-  event.preventDefault()
-  event.stopPropagation()
-}
 
 type FileExplorerRowContextMenuProps = Pick<
   FileExplorerRowProps,
@@ -152,7 +145,7 @@ export function FileExplorerRowContextMenu({
   return (
     <ContextMenuContent
       className="min-w-64"
-      onPointerUpCapture={stopRightButtonMenuSelection}
+      onPointerUpCapture={preventSecondaryMenuSelection}
       onCloseAutoFocus={(e) => e.preventDefault()}
     >
       <ContextMenuItem
@@ -283,6 +276,7 @@ export function FileExplorerRowContextMenu({
           ) : null}
         </ContextMenuItem>
       )}
+      <OpenInContextSubmenu path={node.path} workspaceId={activeWorktreeId} owner={revealOwner} />
       <ContextMenuItem
         disabled={revealBlocked}
         onSelect={() => void revealInFileManager(node.path, revealOwner)}

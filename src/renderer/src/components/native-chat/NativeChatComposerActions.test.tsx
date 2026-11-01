@@ -191,7 +191,9 @@ describe('NativeChatComposerActions', () => {
         dictationDisabled={false}
         sendDisabled
         sendBlockedReason="An image couldn't be brought back. Remove it to send."
-        isWorking={false}
+        hasDraft
+        alternateSend="steer"
+        isWorking
         isDictating={false}
         isDictationHoldMode={false}
         onAttach={vi.fn()}
@@ -208,6 +210,7 @@ describe('NativeChatComposerActions', () => {
       name: "An image couldn't be brought back. Remove it to send."
     })
     expect(send.hasAttribute('disabled')).toBe(true)
+    expect(screen.queryByText('⌘ Enter to steer')).toBeNull()
   })
 
   it('marks a draft that could not be saved only after storage refused it', () => {

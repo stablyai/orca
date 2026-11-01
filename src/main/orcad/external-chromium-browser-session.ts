@@ -10,6 +10,11 @@ import {
   parseAgentBrowserJsonOutput
 } from '../browser/agent-browser-batch-command'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
+import { Screenshot } from '../../shared/rpc-contract/browser-observation-params'
+import {
+  agentBrowserScreenshotArgs,
+  readAgentBrowserScreenshot
+} from '../browser/agent-browser-screenshot-arguments'
 import { runProcess } from '@orca/process-host'
 
 const COMMAND_TIMEOUT_MS = 90_000
@@ -29,7 +34,16 @@ const AgentBrowserTab = z.object({
   url: z.string()
 })
 const AgentBrowserTabsResult = z.object({ tabs: z.array(AgentBrowserTab).optional() })
-const AgentBrowserScreenshotResult = z.object({ path: z.string().min(1) })
+const AgentBrowserStep = z.object({
+  success: z.boolean(),
+  result: z.unknown().optional(),
+  error: z.string().nullable().optional()
+})
+const AgentBrowserBatch = z.object({
+  success: z.boolean().optional(),
+  data: z.array(AgentBrowserStep).optional(),
+  error: z.string().nullable().optional()
+})
 const AgentBrowserEnvelope = z.object({
   success: z.boolean(),
   data: z.unknown().optional(),
@@ -37,6 +51,7 @@ const AgentBrowserEnvelope = z.object({
 })
 
 export type AgentBrowserTab = z.infer<typeof AgentBrowserTab>
+export type AgentBrowserStep = z.infer<typeof AgentBrowserStep>
 
 function classifyAgentBrowserError(message: string): string {
   if (isAgentBrowserStaleRefError(message)) {
@@ -138,6 +153,10 @@ export class ExternalChromiumBrowserSession {
   }
 
   async selectPage(agentPageId: string): Promise<void> {
+    // Selecting any tab, even the active one, discards the refs of the last snapshot.
+    if ((await this.readTabs()).some((tab) => tab.tabId === agentPageId && tab.active)) {
+      return
+    }
     await this.run(['tab', agentPageId])
   }
 
@@ -146,12 +165,14 @@ export class ExternalChromiumBrowserSession {
   }
 
   async screenshot(params: Record<string, unknown>, full: boolean): Promise<unknown> {
-    const format = params.format === 'jpeg' ? 'jpeg' : 'png'
-    const command = ['screenshot', ...(full ? ['--full'] : []), '--screenshot-format', format]
-    const result = AgentBrowserScreenshotResult.parse(await this.run(command, { cliArgv: true }))
-    const data = (await readFile(result.path)).toString('base64')
-    await rm(result.path, { force: true }).catch(() => undefined)
-    return { data, format }
+    const options = Screenshot.parse(params)
+    const raw = await this.run(
+      agentBrowserScreenshotArgs(options, { outputDir: this.profilePath, fullPage: full }),
+      { cliArgv: true }
+    )
+    return readAgentBrowserScreenshot(raw, options.format ?? 'png', (bytes) =>
+      bytes.toString('base64')
+    )
   }
 
   async pdf(): Promise<unknown> {
@@ -171,13 +192,48 @@ export class ExternalChromiumBrowserSession {
       cliArgv?: boolean
     } = {}
   ): Promise<unknown> {
-    const { timeoutMs = COMMAND_TIMEOUT_MS, signal } = options
+    const { envelope, stderr } = await this.execute(
+      options.cliArgv ? [...command, '--json'] : AGENT_BROWSER_BATCH_ARGS,
+      options.cliArgv ? undefined : agentBrowserBatchInput(command),
+      options,
+      (stdout) => AgentBrowserEnvelope.parse(parseAgentBrowserJsonOutput(stdout, options))
+    )
+    if (!envelope.success) {
+      throw agentBrowserError(envelope.error ?? stderr)
+    }
+    return envelope.data
+  }
+
+  /** Runs commands in one helper process; `bail` stops at the first failed step. */
+  async runSteps(
+    commands: readonly (readonly string[])[],
+    { bail = false }: { bail?: boolean } = {}
+  ): Promise<AgentBrowserStep[]> {
+    const { envelope, stderr } = await this.execute(
+      [...AGENT_BROWSER_BATCH_ARGS, ...(bail ? ['--bail'] : [])],
+      agentBrowserBatchInput(...commands),
+      {},
+      (stdout) => AgentBrowserBatch.parse(parseAgentBrowserJsonOutput(stdout, { cliArgv: true }))
+    )
+    // A launch or daemon failure answers the whole batch with one envelope.
+    if (!envelope.success || !envelope.data) {
+      throw agentBrowserError(envelope.error ?? stderr)
+    }
+    return envelope.data
+  }
+
+  private async execute<T>(
+    command: readonly string[],
+    input: string | undefined,
+    { timeoutMs = COMMAND_TIMEOUT_MS, signal }: { timeoutMs?: number; signal?: AbortSignal },
+    read: (stdout: string) => T
+  ): Promise<{ envelope: T; stderr: string }> {
     signal?.throwIfAborted()
     const args = ['--session', this.sessionName, '--profile', this.profilePath]
     if (this.launch.browserArgs?.length) {
       args.push('--args', this.launch.browserArgs.join('\n'))
     }
-    args.push(...(options.cliArgv ? [...command, '--json'] : AGENT_BROWSER_BATCH_ARGS))
+    args.push(...command)
     const env = externalChromiumAgentBrowserEnvironment({
       inheritedEnv: process.env,
       executablePath: this.launch.executablePath,
@@ -188,7 +244,7 @@ export class ExternalChromiumBrowserSession {
     const result = await runProcess({
       program: this.agentBrowserPath,
       args,
-      input: options.cliArgv ? undefined : agentBrowserBatchInput(command),
+      input,
       env,
       timeoutMs,
       signal,
@@ -198,17 +254,21 @@ export class ExternalChromiumBrowserSession {
     if (result.timedOut) {
       throw new BrowserError('browser_timeout', 'Browser command timed out.')
     }
-    let envelope: z.infer<typeof AgentBrowserEnvelope>
     try {
-      envelope = AgentBrowserEnvelope.parse(parseAgentBrowserJsonOutput(result.stdout))
+      return { envelope: read(result.stdout), stderr: result.stderr }
     } catch {
       const detail = result.stderr.trim() || `exit ${String(result.code)}`
       throw new BrowserError('browser_error', `Browser command failed: ${detail.slice(0, 1000)}`)
     }
-    if (!envelope.success) {
-      const message = envelope.error ?? (result.stderr.trim() || 'Unknown browser error.')
-      throw new BrowserError(classifyAgentBrowserError(message), message)
-    }
-    return envelope.data
   }
+}
+
+export function agentBrowserError(error: string | null | undefined): BrowserError {
+  const message = error?.trim() || 'Unknown browser error.'
+  return new BrowserError(classifyAgentBrowserError(message), message)
+}
+
+export function agentBrowserEvalCommand(script: string): string[] {
+  // eval reads a leading -b or --stdin as its own option; base64 never starts with "-".
+  return ['eval', '-b', Buffer.from(script).toString('base64')]
 }

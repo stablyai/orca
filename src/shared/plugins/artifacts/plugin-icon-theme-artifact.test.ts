@@ -8,25 +8,43 @@ import {
 const parse = (value: unknown) => parsePluginIconThemeArtifact(JSON.stringify(value), 'strict')
 
 describe('plugin icon theme artifacts', () => {
-  it('lowercases name and extension keys', () => {
+  it('lowercases name, extension and folder keys', () => {
     expect(
       parse({
         schemaVersion: 1,
         icons: { folder: 'icons/folder.svg' },
         fileNames: { 'README.md': 'icons/readme.svg' },
-        fileExtensions: { TS: 'icons/ts.svg' }
+        fileExtensions: { TS: 'icons/ts.svg' },
+        folderNames: { Src: 'icons/src.svg', '.github': 'icons/github.svg' },
+        folderNamesExpanded: { SRC: 'icons/src-open.svg' }
       })
     ).toEqual({
       icons: { folder: 'icons/folder.svg' },
       fileNames: { 'readme.md': 'icons/readme.svg' },
-      fileExtensions: { ts: 'icons/ts.svg' }
+      fileExtensions: { ts: 'icons/ts.svg' },
+      folderNames: { src: 'icons/src.svg', '.github': 'icons/github.svg' },
+      folderNamesExpanded: { src: 'icons/src-open.svg' }
     })
+  })
+
+  it('counts folder mappings toward the mapping limit', () => {
+    const folderNames = Object.fromEntries(
+      Array.from({ length: 257 }, (_, index) => [`dir${index}`, 'a.svg'])
+    )
+    expect(() =>
+      parse({ schemaVersion: 1, folderNames, folderNamesExpanded: folderNames })
+    ).toThrow(/mappings/)
   })
 
   it.each([
     ['a case-only duplicate', { schemaVersion: 1, fileExtensions: { ts: 'a.svg', TS: 'b.svg' } }],
     ['an unknown slot', { schemaVersion: 1, icons: { 'sidebar.search': 'a.svg' } }],
     ['a path in a file name', { schemaVersion: 1, fileNames: { 'a/b': 'a.svg' } }],
+    ['a path in a folder name', { schemaVersion: 1, folderNames: { 'a\\b': 'a.svg' } }],
+    [
+      'a case-only duplicate folder',
+      { schemaVersion: 1, folderNamesExpanded: { src: 'a.svg', Src: 'b.svg' } }
+    ],
     ['an escaping icon path', { schemaVersion: 1, icons: { file: '../a.svg' } }]
   ])('rejects %s', (_label, value) => {
     expect(() => parse(value)).toThrow()
@@ -92,7 +110,9 @@ describe('isPluginIconThemeRegistration', () => {
     label: 'Minimal',
     svgs: ['<svg/>'],
     icons: {},
-    fileExtensions: {}
+    fileExtensions: {},
+    folderNames: {},
+    folderNamesExpanded: {}
   }
 
   it.each([
@@ -109,6 +129,12 @@ describe('isPluginIconThemeRegistration', () => {
     expect(
       isPluginIconThemeRegistration({ ...base, fileNames: JSON.parse('{"__proto__":0}') })
     ).toBe(true)
+  })
+
+  it('checks folder indexes too', () => {
+    expect(
+      isPluginIconThemeRegistration({ ...base, fileNames: {}, folderNamesExpanded: { src: 1 } })
+    ).toBe(false)
   })
 
   it('accepts in-range indexes', () => {

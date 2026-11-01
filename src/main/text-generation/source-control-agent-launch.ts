@@ -1,7 +1,7 @@
 import { wslDistroForCommand } from '../../shared/wsl-paths'
 import { spawnProcess } from '@orca/process-host'
-import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
-import { resolveCliCommand } from '../codex-cli/command'
+import { pathEnvRelativeTo, withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import { resolveCliCommand, resolveGuestNativeAgentCommand } from '../codex-cli/command'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
 import { SOURCE_CONTROL_KILL_SITE } from './source-control-agent-termination'
@@ -98,14 +98,19 @@ function spawnSupervisedAgent(
   input: SourceControlAgentSpawnInput,
   spawnEnv: NodeJS.ProcessEnv
 ): SpawnedSourceControlAgentProcess {
+  // On a WSL-host orcad, a missing CLI must fail rather than run a Windows shim found via PATH.
+  const env = guestNativeSpawnEnv(spawnEnv)
+  const cwd = input.useCwdForNative ? input.cwd : undefined
+  // Match native chats' install discovery from the agent's cwd, not Orca's.
+  const binary = input.binary.includes('/')
+    ? input.binary
+    : resolveGuestNativeAgentCommand(input.binary, {
+        pathEnv: pathEnvRelativeTo(env.PATH, cwd ?? process.cwd()),
+        homePath: env.HOME
+      })
   const spec = createProviderSpawnSpec(
-    {
-      command: input.binary,
-      args: input.args,
-      ...(input.useCwdForNative && input.cwd !== undefined ? { cwd: input.cwd } : {})
-    },
-    // On a WSL-host orcad, a missing CLI must fail rather than run a Windows shim found via PATH.
-    withCliRuntimeOnPath(input.binary, guestNativeSpawnEnv(spawnEnv)),
+    { command: binary, args: input.args, ...(cwd !== undefined ? { cwd } : {}) },
+    withCliRuntimeOnPath(binary, env),
     process.platform,
     { lifetime: 'one-shot' }
   )

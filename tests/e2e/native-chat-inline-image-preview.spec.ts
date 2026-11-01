@@ -4,10 +4,15 @@ import os from 'node:os'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 import {
   claudeTranscriptLines,
-  enableNativeChatSetting,
   seedClaudeProviderSession,
   toggleTerminalTabToChatView
 } from './helpers/native-chat-transcript-fixture'
@@ -56,10 +61,13 @@ test('opens a native-chat Markdown table image in the image dialog without a fil
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage)
+    const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+    expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
     const [tabId] = descriptor.paneKey.split(':')
     writeFileSync(transcriptPath, transcript(sessionId, imagePath))
-    await enableNativeChatSetting(orcaPage)
     await orcaPage.evaluate(async () => {
       await window.__store?.getState().updateSettings({ terminalLinkClickBehavior: 'actions' })
     })
@@ -148,6 +156,31 @@ test('opens a native-chat Markdown table image in the image dialog without a fil
     )
     expect(windows.length).toBeGreaterThan(0)
     expect(windows.every((window) => !window.visible && !window.focused)).toBe(true)
+    const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    expect(finalPane.tabId).toBe(boundPane.tabId)
+    expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+    expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+    expect(
+      await orcaPage.evaluate(
+        ({ worktreeId, tabId, leafId }) => {
+          const state = window.__store?.getState()
+          const tab = state?.unifiedTabsByWorktree[worktreeId]?.find(
+            (candidate) => candidate.contentType === 'terminal' && candidate.entityId === tabId
+          )
+          return Boolean(
+            leafId &&
+            tab?.viewMode === 'chat' &&
+            state?.terminalLayoutsByTabId[tabId]?.chatLeafId === leafId
+          )
+        },
+        {
+          worktreeId: descriptor.worktreeId,
+          tabId: boundPane.tabId,
+          leafId: boundPane.activeLeafId
+        }
+      )
+    ).toBe(true)
+    await expect(chat).toBeAttached()
   } finally {
     rmSync(imagePath, { force: true })
     rmSync(scratchDir, { recursive: true, force: true })

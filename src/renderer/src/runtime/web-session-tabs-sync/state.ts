@@ -1,4 +1,5 @@
 import type { AppState } from '../../store'
+import type { RetiredTerminalTabSweepState } from '../../store/slices/retired-terminal-tab-state-sweep'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
@@ -225,26 +226,17 @@ export type WebSessionTabsSyncState = Pick<
   | 'unreadTerminalTabs'
   | 'sortEpoch'
 > &
+  Partial<RetiredTerminalTabSweepState> &
   Partial<
     Pick<
       AppState,
-      | 'acknowledgedAgentsByPaneKey'
-      | 'activityClearedAtByPaneKey'
-      | 'agentLaunchConfigByPaneKey'
       | 'automaticAgentResumeClaimsByTabId'
       // Client draft proves dirty-flag ownership (#21392); without one, follow host save state.
       | 'editorDrafts'
       // Why: the live index carries sticky detachments; absent here, views resolve by identity.
       | 'editorBufferIdOf'
       | 'localOnlyScrollbackByTabId'
-      | 'migrationUnsupportedByPtyId'
-      | 'manuallyUnreadTurnsByPaneKey'
-      | 'paneForegroundAgentByPaneKey'
       | 'pendingStartupByTabId'
-      | 'recentlyClosedAgentStatusTabIds'
-      | 'recentlyRetiredAgentStatusPaneKeys'
-      | 'retainedAgentsByPaneKey'
-      | 'retentionSuppressedPaneKeys'
       | 'runtimePaneTitlesByTabId'
     >
   >

@@ -2,6 +2,7 @@ import { buildProcessBoundaryGround } from '../../shared/terminal-mode-reset-pro
 import { closesAppOsc133Zone } from '../../shared/terminal-osc133-command-finished'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import { TerminalArmedInputModes } from './terminal-armed-input-modes'
+import { TerminalShellPromptPhase } from './terminal-shell-prompt-phase'
 
 // Retain split DECSET/OSC payloads across PTY or SSH chunks without unbounded memory.
 const SCAN_TAIL_LIMIT = 4096
@@ -46,6 +47,7 @@ export class TerminalShellLifecycleScanner {
   private altActive = false
   private commandEnteredAlternateScreen = false
   private adjacentMarkers = ''
+  private readonly promptPhase = new TerminalShellPromptPhase()
   private readonly inputModes = new TerminalArmedInputModes()
 
   get owner(): TerminalOwner | undefined {
@@ -58,6 +60,16 @@ export class TerminalShellLifecycleScanner {
 
   get isAlternateScreenActive(): boolean {
     return this.altActive
+  }
+
+  /** Markers suggest an idle shell prompt; a hint only, since any program can print them. */
+  get isIdleAtPrompt(): boolean {
+    return this.promptPhase.atPrompt && !this.altActive
+  }
+
+  /** Input was just submitted: no prompt is idle until the next clean cycle. */
+  forgetIdlePrompt(): void {
+    this.promptPhase.reset()
   }
 
   trySetOwner(generation: number): boolean {
@@ -79,6 +91,7 @@ export class TerminalShellLifecycleScanner {
   seedOwner(owner: TerminalOwner | undefined, opts: { alternateScreen?: boolean } = {}): void {
     this.generationState += 1
     this.ownerState = owner
+    this.promptPhase.reset()
     if (opts.alternateScreen !== undefined) {
       // Restored bytes bypass scan(), so seed alternate-screen state to retain death detection.
       this.altActive = opts.alternateScreen
@@ -111,12 +124,14 @@ export class TerminalShellLifecycleScanner {
       if (match[0] === '\x1bc') {
         this.revoke()
         this.inputModes.reset()
+        this.promptPhase.reset()
         this.altActive = false
         this.commandEnteredAlternateScreen = false
         continue
       }
       if (oscPayload !== undefined) {
         const marker = oscPayload[0]
+        this.promptPhase.observe(oscPayload, markersBefore)
         if (marker === 'C') {
           this.revoke()
           this.inputModes.markCommandStart()
