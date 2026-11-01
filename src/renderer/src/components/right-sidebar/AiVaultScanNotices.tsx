@@ -49,7 +49,9 @@ export function AiVaultScanNotices({ issues }: { issues: AiVaultScanIssue[] }) {
               className="space-y-1 py-1 break-words [overflow-wrap:anywhere]"
             >
               <div className="font-medium">
-                {aiVaultAgentLabel(issue.agent)} · {issue.executionHostId ?? 'local'}
+                {aiVaultAgentLabel(issue.agent)} ·{' '}
+                {issue.executionHostId ??
+                  translate('sessionHistory.settings.thisComputer', 'This computer')}
               </div>
               <p>{aiVaultScanIssueDisplayText(issue)}</p>
               {issue.path ? <p className="font-mono text-2xs">{issue.path}</p> : null}
