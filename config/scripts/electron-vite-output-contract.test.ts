@@ -1,6 +1,7 @@
 import { verifyPreloadSource, verifyPreloadOutput } from './preload-output-contract.mjs'
 import * as nodeFs from 'node:fs'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import * as nodePath from 'node:path'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { EventEmitter } from 'node:events'
@@ -8,6 +9,7 @@ import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { PreloadConfigFactory } from 'electron-vite'
 import { resolveConfig } from 'vite'
+import { electronViteConfig } from '../../electron.vite.config'
 import {
   BOOTSTRAP_FATAL_LOG_ENV_VAR,
   BOOTSTRAP_FATAL_LOG_FILE_NAME,

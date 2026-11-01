@@ -152,9 +152,17 @@ it('lands catalog reads in subscribers only, replacing just the entry whose cata
   expect(beforeClaude).toBeDefined()
   expect(afterCodex.find((entry) => entry.agent === 'claude')).toBe(beforeClaude)
 
-  // A failed read changes nothing, so it must not publish a new snapshot.
+  // A failed read changes only that entry's read state, without re-rendering the owner.
   await act(async () => reads.get('claude')!.reject(new Error('listing unavailable')))
-  expect(subscriber.result.current).toBe(afterCodex)
+  const afterFailure = subscriber.result.current
+  expect(afterFailure).not.toBe(afterCodex)
+  expect(afterFailure.find((entry) => entry.agent === 'codex')).toBe(
+    afterCodex.find((entry) => entry.agent === 'codex')
+  )
+  expect(afterFailure.find((entry) => entry.agent === 'claude')).toEqual({
+    ...beforeClaude,
+    catalogRead: 'failed'
+  })
   expect(ownerRenders).toBe(ownerRendersBeforeReads)
 })
 
