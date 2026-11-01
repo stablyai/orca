@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { MessageSquarePlus, SquareSplitVertical, X } from 'lucide-react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
@@ -99,16 +100,21 @@ export function NativeChatPaneHeader({
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
             <span className="inline-flex items-center gap-1.5">
-              <span>{split}</span>
+              <span>
+                {split}
+                {splitShortcutCombos.length > 0 ? ': ' : null}
+              </span>
               {splitShortcutCombos.map((shortcut, index) => (
-                <ShortcutKeyCombo
-                  key={`${shortcut.keys.join('-')}-${index}`}
-                  keys={shortcut.keys}
-                  doubleTap={shortcut.doubleTap}
-                  className="gap-0.5"
-                  keyCapClassName="min-w-0 border-background/30 bg-background/10 px-1 py-0 text-3xs text-background shadow-none"
-                  separatorClassName="mx-0 text-3xs text-background/70"
-                />
+                <Fragment key={JSON.stringify([shortcut.keys, shortcut.doubleTap])}>
+                  {index > 0 ? <span>{', '}</span> : null}
+                  <ShortcutKeyCombo
+                    keys={shortcut.keys}
+                    doubleTap={shortcut.doubleTap}
+                    className="gap-0.5"
+                    keyCapClassName="min-w-0 border-background/30 bg-background/10 px-1 py-0 text-3xs text-background shadow-none"
+                    separatorClassName="mx-0 text-3xs text-background/70"
+                  />
+                </Fragment>
               ))}
             </span>
           </TooltipContent>

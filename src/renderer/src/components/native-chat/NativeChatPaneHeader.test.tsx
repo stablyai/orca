@@ -97,8 +97,23 @@ it('shows the effective split-right shortcut in the Split Chat Right tooltip', a
   useAppStore.setState({ keybindings: { 'terminal.splitRight': ['Mod+Alt+K'] } })
   renderHeader()
   const shortcut = navigator.userAgent.includes('Mac') ? '⌘⌥K' : 'Ctrl+Alt+K'
-  expect(await splitTooltipText()).toBe(`Split Chat Right${shortcut}`)
+  expect(await splitTooltipText()).toBe(`Split Chat Right: ${shortcut}`)
   expect(screen.getByRole('button', { name: 'Split Chat Right' })).toBeTruthy()
+})
+
+it.each([
+  ['Mac', '⌘D, ⌘K'],
+  ['Windows', 'Ctrl+D, Ctrl+K'],
+  ['Linux', 'Ctrl+D, Ctrl+K']
+])('separates alternative split shortcuts on %s', async (userAgent, shortcuts) => {
+  const userAgentSpy = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent)
+  try {
+    useAppStore.setState({ keybindings: { 'terminal.splitRight': ['Mod+D', 'Mod+K'] } })
+    renderHeader()
+    expect(await splitTooltipText()).toBe(`Split Chat Right: ${shortcuts}`)
+  } finally {
+    userAgentSpy.mockRestore()
+  }
 })
 
 it('omits the shortcut from the Split Chat Right tooltip when split-right is unbound', async () => {
