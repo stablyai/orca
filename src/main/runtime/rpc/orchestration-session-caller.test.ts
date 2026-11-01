@@ -59,6 +59,7 @@ const NAMES_NO_RESOLVED_PARTY: Readonly<Record<string, string>> = {
   'orchestration.workerAutoClose sessionId': 'names the worker session, as its terminal does',
   'orchestration.workerKeepOpen terminal': 'names the worker terminal',
   'orchestration.workerKeepOpen sessionId': 'names the worker session, as its terminal does',
+  'orchestration.workerLaunchPreflight terminal': 'names the worker terminal for launch planning',
   'orchestration.workerChatTouch terminal': 'names the worker terminal',
   'orchestration.workerChatTouch sessionId': 'names the worker session, as its terminal does'
 }

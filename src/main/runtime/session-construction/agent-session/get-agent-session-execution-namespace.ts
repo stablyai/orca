@@ -74,14 +74,16 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
 
   protected toAgentSessionOptions(
     preferences: AgentLaunchPreferences | undefined
-  ): Record<string, string> | undefined {
+  ): Record<string, string | boolean> | undefined {
     if (!preferences) {
       return undefined
     }
     const options = {
       ...(preferences.model ? { model: preferences.model } : {}),
       ...(preferences.effort ? { effort: preferences.effort } : {}),
-      ...(preferences.mode ? { mode: preferences.mode } : {})
+      ...(preferences.mode ? { mode: preferences.mode } : {}),
+      ...(preferences.fastMode !== undefined ? { fastMode: preferences.fastMode } : {}),
+      ...(preferences.serviceTier !== undefined ? { serviceTier: preferences.serviceTier } : {})
     }
     return Object.keys(options).length > 0 ? options : undefined
   }

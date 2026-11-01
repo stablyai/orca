@@ -161,6 +161,7 @@ export function buildDefaultSettings(args: {
     artifactSharingEnabled: false,
     agentSkillSharingEnabled: false,
     nestedWorkerMaxDepth: 1,
+    orchestrationWorkerRoles: {},
     orchestrationWorkerAutoReleaseEnabled: true,
     showArtifactsButton: false,
     showSkillsButton: false,

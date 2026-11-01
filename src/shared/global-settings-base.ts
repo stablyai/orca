@@ -11,6 +11,7 @@ import type { PluginUpdatePolicySettings } from './plugins/catalog/plugin-update
 import type { PluginSystemSettings } from './plugins/plugin-system-settings'
 import type { WorktreeDeletionPreferences } from './worktree-deletion-preferences'
 import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choice'
+import type { WorkerRoleSettings } from './orchestration-worker-roles'
 import type { TerminalColorOverrideGlobalSettings } from './terminal-color-overrides'
 import type { WindowMaterialSettings } from './window-material'
 
@@ -22,6 +23,7 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   AgentPermissionGlobalSettings &
   ExternalConversationSettings &
   BrowserLinkOpeningSettings &
+  WorkerRoleSettings &
   BrowserExtensionGlobalSettings &
   PluginAppearanceSettings &
   EditorTypographySettings &

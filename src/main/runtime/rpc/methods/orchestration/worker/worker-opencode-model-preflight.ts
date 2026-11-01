@@ -32,5 +32,17 @@ export async function prepareFederationWorkerLaunchOnHost(
     (await probeWorkerOpenCodeModelLaunchSupport(args.runtime, params, {
       worktree: params.worktree
     }))
-  return prepareFederationConfiguredWorkerStart({ ...args, params, openCodeModelLaunchSupported })
+  const prepared = await prepareFederationConfiguredWorkerStart({
+    ...args,
+    params,
+    openCodeModelLaunchSupported
+  })
+  if (prepared.agent && (params.role || params.fastMode !== undefined)) {
+    await args.runtime.preflightOrchestrationWorkerLaunch(
+      prepared.agent,
+      prepared.launch.preferences,
+      args.createsWorktree ? { repo: params.repo } : { worktree: params.worktree }
+    )
+  }
+  return prepared
 }
