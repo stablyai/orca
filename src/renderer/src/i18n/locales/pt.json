@@ -2685,7 +2685,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Arquivos fora do espaço de trabalho ainda não podem ser pré-visualizados em um servidor pareado.",
           "webClientUnavailable": "Prévias de documentos não estão disponíveis no cliente web."
         }
       },
@@ -20702,6 +20701,8 @@
         "unnamedSender": "um agente",
         "messageFromCoordinator": "Mensagem do coordenador",
         "startedWorker": "Worker iniciado",
+        "handedOffToAgent": "Entregue a um agente",
+        "startedAgent": "Agente iniciado",
         "taskFromCoordinator": "Tarefa do coordenador",
         "updateFromWorker": "Atualização do worker"
       },
@@ -23366,6 +23367,7 @@
       "androidDeviceNotRunning": "O dispositivo Android \"{{device}}\" não está em execução. Inicie-o primeiro.",
       "unknownDeviceOrAvd": "\"{{device}}\" não é um dispositivo em execução nem um AVD conhecido.",
       "avdBootTimeout": "O AVD \"{{avdName}}\" não terminou de inicializar a tempo.",
+      "avdExitedBeforeBoot": "O AVD \"{{avdName}}\" parou antes de terminar de inicializar: {{detail}}",
       "scrcpyDownloadFailed": "Não foi possível baixar o servidor scrcpy: {{detail}}",
       "scrcpyServerInvalid": "O servidor scrcpy baixado era inválido ou estava incompleto."
     },

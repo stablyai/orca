@@ -4,7 +4,6 @@ import type { PluginFrameGuest } from '../../../../shared/plugins/frames/plugin-
 import { pluginEvent } from '../../../../shared/plugins/frames/plugin-protocol'
 import { PLUGIN_FRAME_USER_METHODS } from '../../../../shared/plugins/workers/plugin-host-api'
 import { PluginDeclarativeView } from '@/components/plugins/declarative/PluginDeclarativeView'
-import { pluginDeclarativeGestureId } from '@/components/plugins/declarative/plugin-declarative-gesture-geometry'
 import type { PluginDeclarativeEmit } from '@/components/plugins/declarative/PluginDeclarativeControls'
 import { callPanelActionViaPreload } from './plugin-frame-host'
 import {
@@ -15,6 +14,9 @@ import {
 import { usePluginFrameHost } from './use-plugin-frame-host'
 import { usePluginDeclarativeTree } from './use-plugin-declarative-tree'
 import { usePluginDeclarativeState } from './use-plugin-declarative-state'
+import { useReportDeclarativePanelDraw } from './use-plugin-panel-draw-report'
+import { usePluginDeclarativeImages } from './use-plugin-declarative-images'
+import { usePluginPanelActDriver } from './plugin-panel-act-driver'
 import { useAppStore } from '@/store'
 import {
   PluginDeclarativeIssueNotice,
@@ -22,6 +24,7 @@ import {
 } from './PluginDeclarativePanelNotices'
 
 type PluginDeclarativePanelProps = {
+  tabKey: string
   panelId: string
   title: string
   guest: PluginFrameGuest
@@ -44,6 +47,7 @@ function subscribeDocumentVisibility(onChange: () => void): () => void {
  * ends the guest, and only persisted atoms carry over.
  */
 export function PluginDeclarativePanel({
+  tabKey,
   panelId,
   title,
   guest,
@@ -89,20 +93,13 @@ export function PluginDeclarativePanel({
     frame?.addEventListener('did-start-loading', resetDocument)
     return () => frame?.removeEventListener('did-start-loading', resetDocument)
   }, [frameKey, resetDocument])
+  const loadImage = usePluginDeclarativeImages(sessionToken)
   const sessionTokenRef = useRef(sessionToken)
   useLayoutEffect(() => {
     sessionTokenRef.current = sessionToken
   })
 
-  usePluginFrameHost({
-    surface: 'panel',
-    frameRef,
-    frameKey,
-    sessionToken,
-    declarative: channel,
-    consumeHostActivation: consumePress,
-    onUnresponsive
-  })
+  useReportDeclarativePanelDraw(tabKey, guest.url, rendered?.document ?? null, issue)
 
   const shownDocument = rendered?.document ?? ''
   const revision = rendered?.revision ?? 0
@@ -123,11 +120,28 @@ export function PluginDeclarativePanel({
     },
     [admitPress, revision, sendToGuest, shownDocument]
   )
-  // A click on Orca's own Link: no frame-activation check, but the Link must have settled, and
-  // main keeps the URL allowlist and rate limit.
-  const onOpenLink = (href: string): void => {
+  const { viewEpoch, trackHostCall } = usePluginPanelActDriver({
+    tabKey,
+    tree: rendered?.tree ?? null,
+    document: rendered?.document ?? null,
+    send: onEvent,
+    sendToGuest
+  })
+  usePluginFrameHost({
+    surface: 'panel',
+    frameRef,
+    frameKey,
+    sessionToken,
+    declarative: channel,
+    consumeHostActivation: consumePress,
+    trackHostCall,
+    onUnresponsive
+  })
+  // A click on Orca's own Link (or a Markdown link): no frame-activation check, but its control
+  // must have settled, and main keeps the URL allowlist and rate limit.
+  const onOpenLink = (href: string, gestureId: string): void => {
     const token = sessionTokenRef.current
-    if (token && isGestureSettled(pluginDeclarativeGestureId.href(href))) {
+    if (token && isGestureSettled(gestureId)) {
       void callPanelActionViaPreload({
         sessionToken: token,
         action: PLUGIN_FRAME_USER_METHODS.openExternal,
@@ -159,11 +173,12 @@ export function PluginDeclarativePanel({
       ) : null}
       {reloads > 0 ? <PluginDeclarativeReloadedNotice key={reloads} /> : null}
       <PluginDeclarativeView
-        // A new guest document starts its value controls' edit counts over.
-        key={shownDocument}
+        // A new guest document starts its value controls' edit counts over; so does a --act restore.
+        key={`${shownDocument}:${viewEpoch}`}
         tree={rendered?.tree ?? null}
         onEvent={onEvent}
         onOpenLink={onOpenLink}
+        onLoadImage={loadImage}
         gestures={gestures}
       />
     </div>

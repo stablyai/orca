@@ -1320,7 +1320,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "워크스페이스 외부의 파일은 아직 페어링된 서버에서 미리 볼 수 없습니다.",
           "webClientUnavailable": "문서 미리보기는 웹 클라이언트에서 사용할 수 없습니다."
         }
       },
@@ -19019,6 +19018,8 @@
         "unnamedSender": "Agent",
         "messageFromCoordinator": "코디네이터의 메시지",
         "startedWorker": "워커 시작됨",
+        "handedOffToAgent": "에이전트에게 넘김",
+        "startedAgent": "에이전트 시작됨",
         "taskFromCoordinator": "코디네이터의 작업",
         "updateFromWorker": "워커의 업데이트"
       },
@@ -22691,6 +22692,7 @@
       "androidDeviceNotRunning": "\"{{device}}\" Android 장치가 실행 중이 아닙니다. 먼저 부팅하세요.",
       "unknownDeviceOrAvd": "\"{{device}}\" 항목은 실행 중인 장치도, 알려진 AVD도 아닙니다.",
       "avdBootTimeout": "AVD \"{{avdName}}\"의 부팅이 제한 시간 내에 완료되지 않았습니다.",
+      "avdExitedBeforeBoot": "AVD \"{{avdName}}\"이(가) 부팅을 마치기 전에 중지되었습니다: {{detail}}",
       "scrcpyDownloadFailed": "scrcpy 서버를 다운로드하지 못했습니다: {{detail}}",
       "scrcpyServerInvalid": "다운로드한 scrcpy 서버가 유효하지 않거나 불완전했습니다."
     },

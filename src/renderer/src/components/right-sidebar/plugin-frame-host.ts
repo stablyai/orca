@@ -89,6 +89,8 @@ export type PluginFrameHostOptions = {
   renderBudget?: PanelMessageBudget
   /** One-shot activation from a press on Orca's own controls (declarative panels). */
   consumeHostActivation?: () => boolean
+  /** Called as a host call (`plugin.request` included) starts; the result runs when it settles. */
+  trackHostCall?: () => () => void
   now?: () => number
 }
 
@@ -278,6 +280,7 @@ export function createPluginFrameEnvelopeHandler(
       respond(pluginFailure(request.id, pluginError('unavailable', 'plugin session is not ready')))
       return
     }
+    const settled = options.trackHostCall?.()
     callHostMethod({ sessionToken, action: request.method, params: request.params })
       .then((outcome) => respond(pluginOutcomeResponse(request.id, outcome)))
       .catch((error: unknown) =>
@@ -288,5 +291,6 @@ export function createPluginFrameEnvelopeHandler(
           )
         )
       )
+      .finally(() => settled?.())
   }
 }

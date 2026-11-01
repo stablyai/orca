@@ -87,7 +87,7 @@ function renderFloatingOverSplit() {
     <>
       <PaneHarness id="a" scope="focused" spies={split} />
       <div data-floating-terminal-panel>
-        <PaneHarness id="floating" scope="owned-target" spies={floating} />
+        <PaneHarness id="floating" scope="owned-target-focused" spies={floating} />
       </div>
     </>
   )

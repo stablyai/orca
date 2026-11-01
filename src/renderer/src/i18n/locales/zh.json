@@ -1320,7 +1320,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "工作区之外的文件尚无法在配对服务器上预览。",
           "webClientUnavailable": "文档预览在 Web 客户端中不可用。"
         }
       },
@@ -18989,6 +18988,8 @@
         "unnamedSender": "一个智能体",
         "messageFromCoordinator": "来自协调者的消息",
         "startedWorker": "已启动工作者",
+        "handedOffToAgent": "已移交给智能体",
+        "startedAgent": "已启动智能体",
         "taskFromCoordinator": "来自协调者的任务",
         "updateFromWorker": "来自工作者的更新"
       },
@@ -22692,6 +22693,7 @@
       "androidDeviceNotRunning": "Android 设备“{{device}}”未运行。请先启动它。",
       "unknownDeviceOrAvd": "“{{device}}”不是正在运行的设备，也不是已知的 AVD。",
       "avdBootTimeout": "AVD “{{avdName}}”未能及时完成启动。",
+      "avdExitedBeforeBoot": "AVD “{{avdName}}”在完成启动前已停止：{{detail}}",
       "scrcpyDownloadFailed": "无法下载 scrcpy 服务器：{{detail}}",
       "scrcpyServerInvalid": "下载的 scrcpy 服务器无效或不完整。"
     },

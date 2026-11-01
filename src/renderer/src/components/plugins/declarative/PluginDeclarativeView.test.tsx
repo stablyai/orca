@@ -162,7 +162,10 @@ describe('PluginDeclarativeView', () => {
     const link = screen.getByRole('link', { name: 'docs' })
     expect(link.getAttribute('href')).toBeNull()
     fireEvent.click(link)
-    expect(onOpenLink).toHaveBeenCalledWith('https://example.com/docs')
+    expect(onOpenLink).toHaveBeenCalledWith(
+      'https://example.com/docs',
+      'href:https://example.com/docs'
+    )
     fireEvent.click(screen.getByRole('link', { name: 'help' }))
     expect(onEvent.mock.calls).toEqual([
       [

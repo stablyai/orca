@@ -28,7 +28,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime,
   waitForStructuredAgentSessionRecovery
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 

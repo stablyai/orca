@@ -144,6 +144,19 @@ const SPECIFIC_PLUGIN_ROUTES = [
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
   ),
+  // The component catalog: Orca draws each component, so the gallery exercises every one.
+  pluginRoute(
+    'plugins.components-catalog',
+    ['plugin-components-gallery'],
+    [
+      `${UI}declarative\\/`,
+      'src\\/shared\\/plugins\\/declarative\\/plugin-declarative-(?:catalog|[a-z]+-props|prop-schemas|tree)',
+      'resources\\/plugins\\/declarative\\/orca-components',
+      'src\\/main\\/plugins\\/panels\\/plugin-panel-image',
+      'examples\\/plugins\\/components-gallery\\/'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke'
+  ),
   // Build-less TS/TSX: the frame protocol transpiles source modules and resolves their imports.
   pluginRoute(
     'plugins.buildless-tsx',
@@ -169,6 +182,46 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'resources\\/plugins\\/declarative\\/'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
+  ),
+  // Agents and workspace changes in panels: agents.list, terminal ids on agent events.
+  pluginRoute(
+    'plugins.panel-agents',
+    ['plugin-panel-agents'],
+    [
+      'src\\/main\\/plugins\\/(?:plugin-runtime-binding|plugin-agent-status-event|workers\\/plugin-workspace-projection)',
+      'src\\/shared\\/plugins\\/events\\/plugin-events'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke|agent-hook-endpoint'
+  ),
+  // A panel and its own worker: requests, posts, storage, settings and pushes.
+  pluginRoute(
+    'plugins.worker-panel',
+    ['plugin-worker-panel'],
+    [
+      'src\\/main\\/plugins\\/panels\\/plugin-panel-bridge',
+      'src\\/main\\/plugins\\/(?:plugin-declared-settings|workers\\/plugin-(?:worker-orca-api|host-panel-method-bindings|worker-requests))',
+      'src\\/main\\/ipc\\/plugin-(?:panel-push|settings)-ipc',
+      'src\\/shared\\/plugins\\/(?:workers\\/plugin-panel-bridge-protocol|frames\\/plugin-panel-shell-facades|contributions\\/plugin-settings-)',
+      'src\\/shared\\/plugins\\/declarative\\/runtime\\/declarative-(?:data-sdk|storage-sync)',
+      'src\\/renderer\\/src\\/components\\/plugins\\/(?:page\\/PluginSettingsSection|state\\/use-plugin-declared-settings)',
+      'examples\\/plugins\\/hello-worker-panel\\/'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke'
+  ),
+  // `orca plugin open` / `shot`: renderer reveal, draw wait and main's capture of the panel rect.
+  pluginRoute(
+    'plugins.view-shot',
+    ['plugin-shot'],
+    [
+      `${UI}view\\/`,
+      `${STORE}view-capture`,
+      'src\\/(?:main|shared)\\/plugins\\/view\\/',
+      'src\\/main\\/runtime\\/rpc\\/methods\\/plugin-view',
+      'src\\/cli\\/(?:handlers|specs)\\/plugin-view',
+      'src\\/renderer\\/src\\/hooks\\/(?:ipc-events\\/plugin-view-ipc-bridge|use-document-dark-theme)',
+      'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-panel-draw-status|use-plugin-panel-draw-report|right-sidebar-panel-content)'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke|compiled-orca-cli'
   ),
   pluginRoute(
     'plugins.vm-recipes',

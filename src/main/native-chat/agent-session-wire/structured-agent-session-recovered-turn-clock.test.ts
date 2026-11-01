@@ -92,7 +92,9 @@ async function sessionWithRunningTurn() {
   const completions = new StructuredAgentSessionTurnCompletionFeed({
     sessions,
     now: () => clock,
-    readStatusState: (sessionId, source) => feed.journalProjection(sessionId, source)?.state ?? null
+    readStatusState: (sessionId, source) =>
+      feed.journalProjection(sessionId, source)?.state ?? null,
+    readChildWork: (sessionId) => feed.readChildWork(sessionId)
   })
   const completionEvents: AgentSessionTurnCompletionEvent[] = []
   completions.subscribe({ id: 'dot-1', emit: (event) => completionEvents.push(event) })

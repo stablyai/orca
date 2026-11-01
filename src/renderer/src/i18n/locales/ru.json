@@ -1818,7 +1818,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Просмотр файлов за пределами рабочего пространства пока недоступен на сопряжённом сервере.",
           "webClientUnavailable": "Просмотр документов недоступен в веб-клиенте."
         }
       },
@@ -20415,6 +20414,8 @@
         "unnamedSender": "агента",
         "messageFromCoordinator": "Сообщение от координатора",
         "startedWorker": "Исполнитель запущен",
+        "handedOffToAgent": "Передано агенту",
+        "startedAgent": "Агент запущен",
         "taskFromCoordinator": "Задача от координатора",
         "updateFromWorker": "Обновление от исполнителя"
       },
@@ -23722,6 +23723,7 @@
       "androidDeviceNotRunning": "Устройство Android «{{device}}» не запущено. Сначала запустите его.",
       "unknownDeviceOrAvd": "«{{device}}» не является ни запущенным устройством, ни известным AVD.",
       "avdBootTimeout": "AVD «{{avdName}}» не завершил загрузку вовремя.",
+      "avdExitedBeforeBoot": "AVD «{{avdName}}» остановился до завершения загрузки: {{detail}}",
       "scrcpyDownloadFailed": "Не удалось скачать сервер scrcpy: {{detail}}",
       "scrcpyServerInvalid": "Скачанный сервер scrcpy оказался некорректным или неполным."
     },

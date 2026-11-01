@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
-import { getCanonicalUserDataPath } from './persistence'
+import { getCanonicalUserDataPath } from './persistence/loading-store/user-data-path'
 import { MacosTccPromptWatch } from './macos-tcc-prompt-watch'
 import { reclaimOrphanedTccLogStreams } from './macos-tcc-log-stream-orphans'
 

@@ -313,7 +313,7 @@ export function landOnEmptiedWorktree(
 /** Main opens the chat where it opens any chat this host lists: a host-kept chat comes back. */
 function reopenChatTab(worktreeId: string, sessionId: string, agent: TuiAgent): () => void {
   return () =>
-    void import('@/lib/structured-agent-session-launch-surface').then(
+    void import('@/lib/agent-session/launch/structured-agent-session-launch-surface').then(
       ({ openStructuredAgentSessionProvisionalTab }) =>
         openStructuredAgentSessionProvisionalTab({
           worktreeId,

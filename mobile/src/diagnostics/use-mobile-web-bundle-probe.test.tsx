@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
+import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
 
 const push = vi.hoisted(() => ({ attach: vi.fn(), detach: vi.fn() }))
 vi.mock('../notifications/push-registration', () => ({ attachPushRegistration: push.attach }))
@@ -26,7 +26,7 @@ vi.mock('../transport/connection-revival-triggers', () => ({
 vi.mock('../transport/connection-log-background-flush', () => ({
   subscribeConnectionLogBackgroundFlush: () => () => {}
 }))
-vi.mock('../transport/mobile-web-bundle-fetch', () => ({
+vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
   fetchMobileWebBundle: (...args: unknown[]) => fetchMock(...args)
 }))
 

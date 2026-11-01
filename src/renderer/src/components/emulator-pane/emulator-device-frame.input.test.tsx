@@ -326,6 +326,35 @@ describe('EmulatorDeviceFrame input', () => {
     ])
   })
 
+  it('sends Android keys and paste to the scrcpy control socket in order', async () => {
+    vi.mocked(toast.error).mockClear()
+    const sendScrcpyKeyboard = vi.fn<Window['api']['emulator']['sendScrcpyKeyboard']>(
+      async () => true
+    )
+    vi.stubGlobal('api', { emulator: { sendScrcpyKeyboard } })
+    renderFrame({ previewUrl: 'scrcpy://serial-1', wsUrl: '' })
+    const screen = getScreen()
+    const paste = pasteEvent('hi\r\nyou')
+
+    await act(async () => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(keyEvent('keydown', { key: 'a' }))
+      screen.dispatchEvent(keyEvent('keydown', { key: 'ArrowLeft', shiftKey: true }))
+      screen.dispatchEvent(paste)
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+    })
+
+    expect(paste.defaultPrevented).toBe(true)
+    expect(sendScrcpyKeyboard.mock.calls.map(([input]) => input)).toEqual([
+      { deviceId: 'serial-1', text: 'a' },
+      { deviceId: 'serial-1', key: 'dpad_left', shift: true },
+      { deviceId: 'serial-1', text: 'hi\nyou' },
+      { deviceId: 'serial-1', key: 'enter', shift: false }
+    ])
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(FakeWebSocket.instances).toEqual([])
+  })
+
   it('rejects oversized screen paste without scheduling keyboard frames', async () => {
     renderFrame()
     act(() => {

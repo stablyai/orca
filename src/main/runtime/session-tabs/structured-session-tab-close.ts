@@ -234,7 +234,8 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
         this.getMobileSessionTabsForWorktree(worktreeId),
         tab.id,
         options.caller.navigation,
-        options.caller.clientNavigationId
+        options.caller.clientNavigationId,
+        options.caller.follows
       )
     }
   }

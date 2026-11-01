@@ -16,12 +16,23 @@ export const FORM_MESSAGE_MIN_HEIGHT = 3 * COMPOSER_LINE_HEIGHT + 2 * MESSAGE_PA
 export const MESSAGE_MAX_HEIGHT = 7 * COMPOSER_LINE_HEIGHT
 export const FIELD_MIN_HEIGHT = 44
 
-const roundControl = {
-  width: COMPOSER_CONTROL_SIZE,
-  height: COMPOSER_CONTROL_SIZE,
+const pillControl = {
   borderRadius: radii.pill,
   alignItems: 'center',
   justifyContent: 'center'
+} as const
+
+const roundControl = {
+  ...pillControl,
+  width: COMPOSER_CONTROL_SIZE,
+  height: COMPOSER_CONTROL_SIZE
+} as const
+
+const labelControl = {
+  ...pillControl,
+  flexShrink: 1,
+  minWidth: COMPOSER_CONTROL_SIZE,
+  minHeight: COMPOSER_CONTROL_SIZE
 } as const
 
 const surface = () =>
@@ -40,6 +51,22 @@ export const composerInputStyles = themedStyleSheet(() => ({
   },
   formBox: {
     borderRadius: radii.surface
+  },
+  inlineBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+    borderRadius: radii.pill,
+    paddingVertical: spacing.xs,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs
+  },
+  inlineText: {
+    flex: 1,
+    paddingVertical: (COMPOSER_CONTROL_SIZE - MESSAGE_MIN_HEIGHT) / 2
+  },
+  inlineActions: {
+    marginTop: 0
   },
   formText: {
     minHeight: FORM_MESSAGE_MIN_HEIGHT
@@ -85,6 +112,17 @@ export const composerInputStyles = themedStyleSheet(() => ({
   },
   sendButtonDisabled: {
     backgroundColor: colors.composerControl
+  },
+  // Save and Cancel hug their translated label and truncate only when the row runs out.
+  sendLabelButton: {
+    ...labelControl,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surfaceBright
+  },
+  // Unframed, so a small inset is enough and leaves a long label more room.
+  ghostLabelButton: {
+    ...labelControl,
+    paddingHorizontal: spacing.xs
   },
   pressed: {
     opacity: feedback.pressedOpacity

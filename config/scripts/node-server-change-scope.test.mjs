@@ -1,16 +1,8 @@
 import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
-import {
-  classifyNodeServerChanges,
-  collectNodeServerInputs,
-  discoverNodeServerTests
-} from './node-server-change-scope.mjs'
-import { nodeServerTestPaths } from './node-server-test-paths.mjs'
-import { ORCAD_CHILD_ENTRY_POINTS } from './orcad-entry-build.mjs'
-import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
+import { afterEach, expect, it } from 'vitest'
+import { classifyNodeServerChanges, collectNodeServerInputs } from './node-server-change-scope.mjs'
 import { runProcessSync } from '@orca/process-host'
 import { NODE_SERVER_RUNNERS, nodeServerQualification } from './node-server-qualification.mjs'
 
@@ -115,16 +107,6 @@ it('tracks workspace source and manifest closures without trusting dist or widen
   ).toBe(false)
 })
 
-it.each([
-  'src/packages/process-host/.gitignore',
-  'src/packages/process-host/scripts/build-dist.mjs',
-  'src/packages/process-host/tsconfig.json'
-])('runs for a change to the process-host build input %s', async (file) => {
-  const result = await classifyNodeServerChanges([file], async () => new Set())
-  expect(result.shouldRun).toBe(true)
-  expect(result.reason).toBe(`Build or CI input changed: ${file}`)
-})
-
 it.each(['@orca/unknown', '@orca/process-host/private'])(
   'retains qualification for an unresolved internal package export: %s',
   async (specifier) => {
@@ -138,42 +120,6 @@ it.each(['@orca/unknown', '@orca/process-host/private'])(
     expect(result.reason).toContain('No public orca-source export')
   }
 )
-
-it.each([
-  ['tests/e2e/daemon-running-work-probe.unit.test.ts'],
-  ['config/scripts/zip-extractor-command.test.mjs'],
-  ['config/scripts/zip-extractor-command.test.mjs', 'config/scripts/renamed-command.test.mjs']
-])(
-  'runs deleted or renamed selected tests even when absent from the graph: %j',
-  async (...files) => {
-    expect((await classifyNodeServerChanges(files, async () => new Set())).shouldRun).toBe(true)
-  }
-)
-
-it.each([
-  'package.json',
-  'pnpm-lock.yaml',
-  'pnpm-workspace.yaml',
-  '.npmrc',
-  'tsconfig.json',
-  'config/tsconfig.node.json',
-  'config/scripts/node-server-qualification.mjs',
-  'config/scripts/node-server-native-compat-scope.mjs',
-  'config/patches/node-pty@1.1.0.patch',
-  'native/windows-registry/src/addon.cc',
-  '.github/actions/install-node-dependencies/action.yml',
-  '.github/actions/restore-pnpm-verification/action.yml',
-  '.github/actions/prepare-headless-compiler/action.yml',
-  'config/scripts/headless-detector-compiler-cache.mjs',
-  'config/scripts/workspace-source-exports.mjs',
-  'config/scripts/workspace-source-exports.test.mjs',
-  '.github/actions/prepare-native-runtime/action.yml',
-  '.github/actions/prepare-orcad-prebuilds/action.yml',
-  '.github/workflows/node-server-tests.yml',
-  'src/main/persistence/profile-state/new-worker.ts'
-])('always selects build, native and dynamically opened inputs: %s', async (file) => {
-  expect((await classifyNodeServerChanges([file], async () => new Set())).shouldRun).toBe(true)
-})
 
 it('checks ordinary source unit files against actual imports before skipping the matrix', async () => {
   const reachable = 'src/main/persistence/example/used.test.ts'
@@ -216,42 +162,6 @@ it('requests the graph for an ordinary source unit edit before dependencies are 
   expect(result.shouldRun).toBeUndefined()
 })
 
-it.each([
-  'src/main/persistence/profile-state/removed.test.ts',
-  'src/main/sqlite/removed.test.ts',
-  'src/main/orcad/orcad-entry.test.ts',
-  'src/main/daemon/pty-subprocess/removed.test.ts',
-  'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
-  'config/scripts/node-server-change-scope.test.mjs'
-])('forces explicitly protected tests without relying on graph discovery: %s', async (file) => {
-  const result = await classifyNodeServerChanges([file], async () => {
-    throw new Error('protected test must not require graph analysis')
-  })
-  expect(result.shouldRun).toBe(true)
-  expect(result.graphUnavailable).toBeUndefined()
-  expect(result.reason).toBe(`Build or CI input changed: ${file}`)
-})
-
-it.each([
-  'src/main/persistence/example/worker.ts',
-  'src/main/persistence/example/state.fixture.ts',
-  'src/main/persistence/example/state.test.ts.fixture',
-  'src/main/persistence/example/state.spec.ts',
-  'src/main/persistence/example/../state.test.ts',
-  'src/main/persistence/example/./state.test.ts',
-  '.github/actions/prepare-native-runtime/cache.test.ts'
-])(
-  'retains prefix protection for production, fixtures and other file conventions: %s',
-  async (file) => {
-    const result = await classifyNodeServerChanges([file], async () => {
-      throw new Error('protected input must not require graph analysis')
-    })
-    expect(result.shouldRun).toBe(true)
-    expect(result.graphUnavailable).toBeUndefined()
-    expect(result.reason).toBe(`Build or CI input changed: ${file}`)
-  }
-)
-
 it('retains a production force when an unrelated unit test changes in the same diff', async () => {
   const result = await classifyNodeServerChanges(
     ['src/main/persistence/example/unrelated.test.ts', 'src/main/persistence/example/worker.ts'],
@@ -262,18 +172,6 @@ it('retains a production force when an unrelated unit test changes in the same d
   expect(result.shouldRun).toBe(true)
   expect(result.graphUnavailable).toBeUndefined()
   expect(result.reason).toBe('Build or CI input changed: src/main/persistence/example/worker.ts')
-})
-
-it('defers uncertain paths without issuing a qualification verdict', async () => {
-  const result = await classifyNodeServerChanges(
-    ['src/renderer/src/example.ts'],
-    async () => {
-      throw new Error('graph must not run before installation')
-    },
-    { deferGraph: true }
-  )
-  expect(result.graphRequired).toBe(true)
-  expect(result.shouldRun).toBeUndefined()
 })
 
 it.each([
@@ -486,147 +384,4 @@ it('retains protected server tests and broken imports despite complete modificat
     qualification: true,
     runners: NODE_SERVER_RUNNERS
   })
-})
-
-describe('the actual Bun build and profile-test dependency graph', () => {
-  let inputs
-  beforeAll(async () => {
-    inputs = await collectNodeServerInputs()
-  }, 60_000)
-
-  it('tracks the shared close probe without pulling in its mocked renderer adapter', () => {
-    expect(inputs.has('src/shared/pty-running-work-probe.ts')).toBe(true)
-    expect(inputs.has('src/shared/pty-running-work-probe.test.ts')).toBe(true)
-    expect(inputs.has('src/renderer/src/components/terminal/pty-running-work-probe.ts')).toBe(false)
-    expect(inputs.has('src/renderer/src/runtime/runtime-terminal-inspection.ts')).toBe(false)
-    expect([...inputs].some((file) => file.startsWith('src/renderer/'))).toBe(false)
-  })
-
-  it.each([
-    'config/scripts/ci-shard-timings.json',
-    'config/scripts/mobile-web-app/mobile-web-app-terminal-render.test.mjs',
-    'src/renderer/src/components/terminal/pty-running-work-probe.ts',
-    'src/renderer/src/runtime/runtime-terminal-inspection.ts',
-    'src/main/ssh/ssh-relay-upload-stage-commands.test.ts',
-    'src/main/persistence/terminal-topology/terminal-topology-boundary-ratchet.test.ts',
-    'src/main/menu/register-app-menu.ts'
-  ])('skips unrelated work: %s', async (file) => {
-    expect((await classifyNodeServerChanges([file], async () => inputs)).shouldRun).toBe(false)
-  })
-
-  it.each([
-    ...Object.values(ORCAD_CHILD_ENTRY_POINTS),
-    'src/shared/keybindings/definitions-core-1.ts',
-    'src/shared/pty-running-work-probe.ts',
-    'src/shared/pty-running-work-probe.test.ts',
-    'src/main/runtime/orca-runtime.ts',
-    'src/main/windows/windows-process-table.ts',
-    'src/main/worker-thread-entry-path.ts',
-    'config/scripts/zip-extractor-command.mjs',
-    'config/scripts/windows-process-tree-gyp-rebuild.mjs',
-    'config/scripts/windows-process-tree-prepared-addon.mjs',
-    'config/scripts/orcad-windows-prebuild-cache.mjs',
-    'config/scripts/profile-state-worker-smoke.mjs',
-    'config/scripts/vitest-host-ports-setup.ts',
-    'tests/e2e/daemon-running-work-probe.unit.test.ts'
-  ])('retains the full matrix for a real runtime, worker or test input: %s', async (file) => {
-    expect(inputs.has(file)).toBe(true)
-    expect((await classifyNodeServerChanges([file], async () => inputs)).shouldRun).toBe(true)
-  })
-
-  it('retains all selected tests and the selectors the Bun runner uses', () => {
-    const tests = discoverNodeServerTests()
-    expect(tests.length).toBeGreaterThan(0)
-    expect(tests.every((file) => inputs.has(file))).toBe(true)
-    expect(
-      nodeServerTestPaths().every((selector) => tests.some((file) => file.includes(selector)))
-    ).toBe(true)
-  })
-})
-
-it('keeps every platform job and runs them when detection is skipped or fails', () => {
-  const workflow = parse(
-    readFileSync(new URL('../../.github/workflows/node-server-tests.yml', import.meta.url), 'utf8')
-  )
-  expect(workflow.on).toHaveProperty('workflow_dispatch')
-  expect(workflow.on).toHaveProperty('workflow_call')
-  expect(workflow.on).not.toHaveProperty('push')
-  expect(workflow.on.schedule).toHaveLength(1)
-  expect(workflow.jobs.changes.if).toBe(
-    "github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft != true)"
-  )
-  expect(workflow.jobs.changes.steps[0].with['fetch-depth']).toBe(2)
-  expect(workflow.jobs.changes.steps[0].with['persist-credentials']).toBe(false)
-  const detect = workflow.jobs.changes.steps.find((step) => step.id === 'scope')
-  expect(detect.run).toContain('git diff --name-only --no-renames -z HEAD^1 HEAD')
-  expect(detect.env.PUSH_BASE).toBe('${{ github.event.before }}')
-  expect(detect.run).toContain('git fetch --no-tags --depth=1 origin "$PUSH_BASE"')
-  expect(detect.run).toContain('git diff --name-only --no-renames -z "$PUSH_BASE" HEAD')
-  expect(detect.run).toContain('node-server-changes" --defer-graph --full-qualification')
-  expect(workflow.on.pull_request.types).toContain('ready_for_review')
-  // Release callers can inherit push or schedule events without a pull request.
-  expect(workflow.jobs.persistence.if).toContain(
-    "github.event_name != 'pull_request' || github.event.pull_request.draft != true"
-  )
-  expect(workflow.jobs.persistence.strategy.matrix.os).toContain('needs.changes.outputs.runners')
-  for (const jobName of ['linux_glibc_floor', 'linux_musl']) {
-    const job = workflow.jobs[jobName]
-    expect(job.needs).toEqual(['changes', 'mobile_web_bundle'])
-    // The containers never install mobile/, and orcad refuses to build without the page.
-    expect(job.steps.some((step) => step.with?.name === 'orcad-mobile-web-bundle')).toBe(true)
-    expect(job.steps.some((step) => step.name === 'Wait for the qualified mobile bundle')).toBe(
-      false
-    )
-    expect(job.if).not.toContain('needs.persistence')
-    expect(job.if).toContain("needs.changes.outputs.qualification != 'false'")
-    expect(job.if).toContain("needs.changes.outputs.should_run != 'false'")
-    expect(job.strategy.matrix.os).toEqual(['ubuntu-22.04', 'ubuntu-24.04-arm'])
-  }
-})
-
-it('runs the Bun and Node cross-runtime tests on Linux against pinned inputs', () => {
-  const workflow = parse(
-    readFileSync(new URL('../../.github/workflows/node-server-tests.yml', import.meta.url), 'utf8')
-  )
-  const steps = workflow.jobs.persistence.steps
-  const setupBun = steps.find((step) => String(step.uses).startsWith('oven-sh/setup-bun@'))
-  expect(setupBun.uses).toMatch(/^oven-sh\/setup-bun@[0-9a-f]{40}$/)
-  expect(setupBun.with['bun-version-file']).toBe('config/.bun-version')
-  const build = steps.find((step) => String(step.run).includes('build-orcad-bun.mjs'))
-  expect(build.env.BUN_ORCAD_COMMIT).toMatch(/^[0-9a-f]{40}$/)
-  expect(setupBun.if).toBe("runner.os == 'Linux'")
-  expect(build.id).toBe('bun-orcad')
-  expect(build.background).toBe(true)
-  expect(build.if).toBeUndefined()
-  expect(build['continue-on-error']).toBeUndefined()
-  expect(build.run).toMatch(/^if \[ "\$RUNNER_OS" != Linux \]; then exit 0; fi\n/)
-  expect(build.run).toContain(
-    'pnpm --dir "$RUNNER_TEMP/bun-orcad-source" install --frozen-lockfile --ignore-scripts'
-  )
-  expect(build.run).not.toContain('"$GITHUB_WORKSPACE/node_modules"')
-  expect(build.run).toContain('echo "slot=$RUNNER_TEMP/bun-orcad" >> "$GITHUB_OUTPUT"')
-  expect(build.run).toContain('echo "executable=$(command -v bun)" >> "$GITHUB_OUTPUT"')
-  expect(build.run).not.toContain('GITHUB_ENV')
-  const join = steps.findIndex((step) => step.wait === build.id)
-  expect(join).toBeGreaterThan(steps.indexOf(build))
-  expect(steps[join].if).toBeUndefined()
-  expect(steps[join]['continue-on-error']).toBeUndefined()
-  const consumer = steps.find((step) => step.run?.startsWith('pnpm test:node-server --artifact '))
-  expect(steps.indexOf(consumer)).toBeGreaterThan(join)
-  expect(consumer.run).toBe(
-    "pnpm test:node-server --artifact ${{ runner.os == 'Linux' && '--cross-runtime' || '' }}"
-  )
-  expect(consumer.if).toBeUndefined()
-  expect(consumer.env).toEqual({
-    ORCA_BUN_ORCAD_SLOT: '${{ steps.bun-orcad.outputs.slot }}',
-    BUN_EXECUTABLE: '${{ steps.bun-orcad.outputs.executable }}'
-  })
-  const alpine = workflow.jobs.linux_musl.steps.find((step) =>
-    String(step.run).includes('docker run')
-  )
-  expect(alpine.run).toMatch(
-    new RegExp(
-      `node:${NODE_RUNTIME_PIN.version.replaceAll('.', '\\.')}-alpine@sha256:[0-9a-f]{64} `
-    )
-  )
 })

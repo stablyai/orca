@@ -8,7 +8,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { CompatVerdict } from '../transport/protocol-compat'
-import type { MobileWebBundleCompatVerdict } from '../transport/mobile-web-bundle-compat'
+import type { MobileWebBundleCompatVerdict } from '../transport/web-bundle/mobile-web-bundle-compat'
 import type { PageRouteRefusalVerdict } from '../mobile-web-shell/page-route-policy'
 
 const RELEASES_URL = 'https://github.com/stablyai/orca/releases'

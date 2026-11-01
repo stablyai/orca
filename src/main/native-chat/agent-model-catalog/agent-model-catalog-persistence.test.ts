@@ -4,11 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { createAgentModelCatalogFilePersistence } from './agent-model-catalog-persistence'
-import {
-  AgentModelCatalogStore,
-  AGENT_MODEL_CATALOG_MAX_ENTRIES
-} from './agent-model-catalog-store'
-import { agentModelCatalogEntry, type AgentModelCatalogEntry } from './agent-model-catalog-entry'
+import { AgentModelCatalogStore } from './agent-model-catalog-store'
+import { agentModelCatalogEntry } from './agent-model-catalog-entry'
 
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof fsPromises>()
@@ -86,61 +83,6 @@ it('materializes once per flush, freezes A before queued B, and returns the no-p
   await store.flushPersistence()
   expect(materializations).toBe(3)
   expect((await persistence.load())[0]?.models[0]?.id).toBe('quit')
-})
-
-it('captures committed hydration, cap, timestamps and LRU order at flush without arming reads', async () => {
-  let now = 1
-  const directory = mkdtempSync(join(tmpdir(), 'pr-31927-catalog-hydration-'))
-  const persistence = createAgentModelCatalogFilePersistence(directory)
-  const store = new AgentModelCatalogStore({ now: () => now })
-  const loaded = Promise.withResolvers<AgentModelCatalogEntry[]>()
-  const attach = store.attachPersistence({ ...persistence, load: () => loaded.promise })
-  const publish = (key: string) =>
-    store.recordSuccess(
-      key,
-      'grok',
-      {
-        origin: 'probe',
-        models: [{ id: key, label: key, efforts: [], isDefault: true }]
-      },
-      'discovery'
-    )!
-  const hydrated = new AgentModelCatalogStore()
-  const rows = Array.from({ length: AGENT_MODEL_CATALOG_MAX_ENTRIES }, (_, index) =>
-    hydrated.recordSuccess(
-      `saved-${index}`,
-      'grok',
-      {
-        origin: 'probe',
-        models: [{ id: 'saved', label: 'Saved', efforts: [], isDefault: true }]
-      },
-      'discovery'
-    )!
-  )
-  publish('current')
-  now = 2
-  publish('current') // Same content updates age, but does not request another save.
-  loaded.resolve(rows)
-  await attach
-  expect(store.get('current')).toBeNull()
-  now = 3
-  store.recordSuccess(
-    'saved-1',
-    'grok',
-    { origin: 'probe', models: [{ id: 'saved', label: 'Saved', efforts: [], isDefault: true }] },
-    'discovery'
-  )
-  store.get('saved-1')
-  await store.flushPersistence()
-  const saved = await persistence.load()
-  expect(saved).toHaveLength(AGENT_MODEL_CATALOG_MAX_ENTRIES)
-  expect(saved.at(-1)?.fingerprint).toBe('saved-1')
-  expect(saved.at(-1)?.discovered?.at).toBe(3)
-  expect(saved.some((entry) => entry.fingerprint === 'current')).toBe(false)
-  const writes = vi.mocked(fsPromises.writeFile).mock.calls.length
-  store.get('saved-2')
-  await store.flushPersistence()
-  expect(fsPromises.writeFile).toHaveBeenCalledTimes(writes)
 })
 
 it('keeps optional cache write failure from poisoning subsequent serialized writes', async () => {

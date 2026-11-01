@@ -1,4 +1,8 @@
 import { useState } from 'react'
+import {
+  usePluginDeclarativeActTarget,
+  type PluginDeclarativeDrawnProps
+} from './plugin-declarative-act-targets'
 
 type HostValueState<T> = {
   local: T
@@ -23,6 +27,8 @@ export function usePluginDeclarativeHostValue<T>(options: {
   acked: number | undefined
   callback: string | undefined
   send: (callback: string, value: T, edit: number) => void
+  /** The drawn node's props, so `orca plugin shot --act` can edit this control as a person would. */
+  actTarget?: PluginDeclarativeDrawnProps
 }): { value: T; change: (next: T) => void; readOnly: boolean } {
   const { value, callback, send } = options
   const acked = options.acked ?? 0
@@ -43,11 +49,11 @@ export function usePluginDeclarativeHostValue<T>(options: {
     }
     setState(current)
   }
-  return {
+  const result = {
     value: current.local,
     // A controlled value with no handler is the guest's to set: the person cannot edit it.
     readOnly: value !== undefined && callback === undefined,
-    change: (next) => {
+    change: (next: T) => {
       // Discrete input events re-render synchronously, so `current` is fresh for each edit.
       const edit = current.sent + 1
       setState((previous) => ({ ...previous, local: next, sent: Math.max(previous.sent, edit) }))
@@ -56,4 +62,6 @@ export function usePluginDeclarativeHostValue<T>(options: {
       }
     }
   }
+  usePluginDeclarativeActTarget(options.actTarget, options.fallback, result)
+  return result
 }

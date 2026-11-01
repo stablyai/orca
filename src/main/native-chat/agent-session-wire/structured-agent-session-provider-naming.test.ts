@@ -4,7 +4,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { createStructuredChatNamingHandler } from '../structured-chat-naming'
-import { setAgentSessionRecordUserName } from '../../runtime/agent-session-record-conversation-name'
+import { setAgentSessionRecordUserName } from '../../runtime/agent-session/records/agent-session-record-conversation-name'
 import {
   createStructuredAgentSessionProviderNaming,
   withProviderNaming
