@@ -33,6 +33,21 @@ function renderDotClassNames(state: AgentDotState): string[] {
 }
 
 describe('AgentStateDot', () => {
+  it('uses a context label for accessibility and preserves a separate explanatory tooltip', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(AgentStateDot, {
+        state: 'done',
+        label: 'Turn ended',
+        title: 'An agent turn ended. Task acceptance has not been verified.'
+      })
+    )
+
+    expect(markup).toContain('aria-label="Turn ended"')
+    expect(markup).toContain(
+      'data-state-indicator-tooltip="An agent turn ended. Task acceptance has not been verified."'
+    )
+  })
+
   it('renders working as a yellow spinner', () => {
     const markup = renderMarkup('working')
 

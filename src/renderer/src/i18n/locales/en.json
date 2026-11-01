@@ -20818,7 +20818,8 @@
       "working": "Working",
       "idle": "Idle",
       "empty": "None",
-      "done": "Done"
+      "doneDescription": "An agent turn ended. Task acceptance has not been verified.",
+      "done": "Turn ended"
     },
     "title": "Agents",
     "total": "{{count}} total",

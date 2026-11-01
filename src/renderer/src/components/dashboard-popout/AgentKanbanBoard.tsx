@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { XIcon } from 'lucide-react'
 import {
   DASHBOARD_BUCKET_ORDER,
@@ -21,6 +21,10 @@ import {
 import './agent-board-transitions.css'
 import { translate } from '@/i18n/i18n'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
+import {
+  dashboardBucketLabel,
+  dashboardTurnEndedDescription
+} from '@/components/dashboard/dashboard-bucket-labels'
 
 /** Relay acknowledgments to the main renderer; optional calls tolerate dev-HMR preload skew until restart. */
 function ackAgentViaPopoutRelay(paneKey: string, intent: AgentSubjectReadIntent): void {
@@ -30,19 +34,6 @@ function ackAgentViaPopoutRelay(paneKey: string, intent: AgentSubjectReadIntent)
 /** Reveal via main-window IPC; optional calls tolerate the same dev-HMR preload skew as acknowledgments. */
 function revealAgentViaPopoutRelay(args: AgentRevealArgs): void {
   void window.api.dashboard.revealAgent?.(args)
-}
-
-function bucketLabel(bucket: DashboardBucket): string {
-  switch (bucket) {
-    case 'attention':
-      return translate('dashboardPopout.bucket.attention', 'Needs You')
-    case 'working':
-      return translate('dashboardPopout.bucket.working', 'Working')
-    case 'done':
-      return translate('dashboardPopout.bucket.done', 'Done')
-    case 'idle':
-      return translate('dashboardPopout.bucket.idle', 'Idle')
-  }
 }
 
 function groupByBucket(cards: DashboardCard[]): Record<DashboardBucket, DashboardCard[]> {
@@ -75,12 +66,15 @@ function KanbanColumn({
   now: number
   onOpenTerminal: (card: DashboardCard) => void
 }): React.JSX.Element {
-  const label = bucketLabel(bucket)
+  const label = dashboardBucketLabel(bucket)
+  const descriptionId = useId()
+  const description = bucket === 'done' ? dashboardTurnEndedDescription() : undefined
 
   return (
     // Cards carry attention color; keep the column neutral to avoid duplicate signaling.
     <section
       aria-label={label}
+      aria-describedby={description ? descriptionId : undefined}
       className="flex min-w-[264px] flex-1 flex-col rounded-xl border border-border/60 bg-muted/30"
     >
       <header className="flex items-center gap-2 px-3 py-2">
@@ -91,6 +85,11 @@ function KanbanColumn({
           {cards.length}
         </span>
       </header>
+      {description ? (
+        <p id={descriptionId} className="px-3 pb-2 text-[11px] text-muted-foreground">
+          {description}
+        </p>
+      ) : null}
       <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
         {cards.length === 0 ? (
           <p className="px-1 py-2 text-[11px] text-muted-foreground">
