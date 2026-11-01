@@ -51,6 +51,41 @@ describe('Claude background task status', () => {
     ).toBe('working')
   })
 
+  it('does not hold a finished turn for an artifact live-updates watch', () => {
+    const artifactWatch = {
+      id: 'sq1ebubjo',
+      type: 'monitor',
+      status: 'running',
+      description: 'live updates for artifact https://claude.ai/artifact/abc123 (watch requested)'
+    }
+    expect(readClaudeBackgroundAgentTasks({ background_tasks: [artifactWatch] })).toMatchObject({
+      hasRunningNonAgentTask: false,
+      runningNonAgentTaskIds: []
+    })
+    expect(
+      readClaudeBackgroundAgentTasks({
+        background_tasks: [{ id: 'ws-1', type: 'monitor', status: 'running', ambient: true }]
+      }).hasRunningNonAgentTask
+    ).toBe(false)
+    // A model-started websocket Monitor is still live work.
+    expect(
+      readClaudeBackgroundAgentTasks({
+        background_tasks: [
+          { id: 'ws-2', type: 'monitor', status: 'running', description: 'Watch deploy events' }
+        ]
+      }).hasRunningNonAgentTask
+    ).toBe(true)
+
+    const state = createHookListenerState()
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'publish it' })
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        background_tasks: [artifactWatch]
+      })?.state
+    ).toBe('done')
+  })
+
   it('fails unknown, partial, or malformed task entries active but ignores terminal entries', () => {
     for (const status of ['queued', undefined]) {
       expect(
