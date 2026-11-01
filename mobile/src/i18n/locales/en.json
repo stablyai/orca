@@ -292,7 +292,20 @@
       "loadingAccounts": "Loading accounts…",
       "manageAccountsHint": "Add or re-authenticate accounts from desktop Settings → Accounts.",
       "useReset": "Use reset",
-      "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts."
+      "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts.",
+      "antigravity": "Antigravity",
+      "antigravityChanged": "The native account changed. Select a saved account again before launching.",
+      "signedIn": "Signed in on this host",
+      "antigravitySaved": "Saved Google account",
+      "antigravityNative": "Native account",
+      "grokUsage": "Usage",
+      "grokMonthlyUsage": "Monthly usage",
+      "grokWeeklyCredits": "Weekly credits",
+      "grokMonthlyHint": "Included monthly usage for this Grok account.",
+      "grokWeeklyHint": "Weekly credits from the Grok CLI sign-in on this host.",
+      "planTotal": "Plan",
+      "mcpMonthly": "MCP monthly",
+      "fable": "Fable"
     }
   },
   "agentHistory": {
