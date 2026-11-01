@@ -25,6 +25,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
+import { TerminalContextMenuLinkActions } from './TerminalContextMenuLinkActions'
+import type { TerminalContextMenuLinkTarget } from './terminal-context-menu-link-target'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -48,6 +50,10 @@ type TerminalContextMenuProps = {
   closePaneLabel: string
   canExpandPane: boolean
   menuPaneIsExpanded: boolean
+  linkTarget?: TerminalContextMenuLinkTarget | null
+  onOpenLinkTarget?: () => void
+  onCopyLinkTarget?: () => void
+  onRevealLinkTarget?: () => void
   onCopy: () => void
   onSelectAll: () => void
   onPaste: () => void
@@ -128,6 +134,14 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
           }
         }}
       >
+        {props.linkTarget ? (
+          <TerminalContextMenuLinkActions
+            linkTarget={props.linkTarget}
+            onOpenLinkTarget={props.onOpenLinkTarget}
+            onCopyLinkTarget={props.onCopyLinkTarget}
+            onRevealLinkTarget={props.onRevealLinkTarget}
+          />
+        ) : null}
         <TerminalContextMenuItems {...props} />
       </DropdownMenuContent>
     </DropdownMenu>
