@@ -155,11 +155,15 @@ internal final class MobileWebShellBridgeMessageTooLargeException: GenericExcept
   }
 }
 
-final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate {
+final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate,
+  UIGestureRecognizerDelegate {
   let onLoadState = EventDispatcher()
   let onBridgeMessage = EventDispatcher()
   let onExternalNavigation = EventDispatcher()
+  let onBackEdgeSwipe = EventDispatcher()
 
+  // The page's own Back: the stack's swipe is off while the page claims Back, and a strip overlay would eat taps.
+  private let backEdgePan = UIPanGestureRecognizer()
   private let schemeHandler = MobileWebShellSchemeHandler()
   private let bridgeReceiver = MobileWebShellBridgeReceiver()
   private let bridgeGate = MobileWebShellBridgeGate()
@@ -208,6 +212,36 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       webView.trailingAnchor.constraint(equalTo: trailingAnchor)
     ])
     installNetworkBlock(into: configuration.userContentController)
+    backEdgePan.isEnabled = false
+    backEdgePan.addTarget(self, action: #selector(handleBackEdgePan(_:)))
+    backEdgePan.delegate = self
+    addGestureRecognizer(backEdgePan)
+    webView.scrollView.panGestureRecognizer.require(toFail: backEdgePan)
+  }
+
+  func setBackEdgeSwipe(_ value: Bool) {
+    backEdgePan.isEnabled = value
+  }
+
+  /// Only touches that start at the screen's left edge, like the stack's own swipe.
+  func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+    recognizer !== backEdgePan || touch.location(in: nil).x <= 20
+  }
+
+  override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+    guard recognizer === backEdgePan else { return super.gestureRecognizerShouldBegin(recognizer) }
+    let velocity = backEdgePan.velocity(in: self)
+    return velocity.x > abs(velocity.y)
+  }
+
+  /// Commit like the stack's own swipe: past half the width, or a rightward flick.
+  @objc private func handleBackEdgePan(_ pan: UIPanGestureRecognizer) {
+    guard pan.state == .ended else { return }
+    let travel = pan.translation(in: self).x
+    let speed = pan.velocity(in: self).x
+    if speed > 300 || (speed > -300 && travel > bounds.width / 2) {
+      onBackEdgeSwipe()
+    }
   }
 
   func setGenerationDirectory(_ value: String) {

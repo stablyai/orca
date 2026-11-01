@@ -28,8 +28,14 @@ function Screen(props: {
   claimed: boolean
   sendBack: () => boolean
   setOptions: (options: { gestureEnabled: boolean }) => void
+  setParentOptions?: (options: { gestureEnabled: boolean }) => void
 }): null {
-  useShellPageBack({ ...props, isFocused: () => true })
+  useShellPageBack({
+    ...props,
+    isFocused: () => true,
+    isStackRoot: () => props.setParentOptions !== undefined,
+    setParentOptions: props.setParentOptions ?? (() => {})
+  })
   return null
 }
 
@@ -53,6 +59,7 @@ function render(props: {
   claimed: boolean
   sendBack: () => boolean
   setOptions: (options: { gestureEnabled: boolean }) => void
+  setParentOptions?: (options: { gestureEnabled: boolean }) => void
 }): ReactTestRenderer {
   let tree!: ReactTestRenderer
   act(() => {
@@ -133,6 +140,30 @@ describe('the shell taking the device Back key for a page that claimed it', () =
       tree.update(createElement(Screen, { claimed: false, sendBack: () => true, setOptions }))
     })
     expect(setOptions).toHaveBeenLastCalledWith({ gestureEnabled: true })
+  })
+
+  // The host list document is its stack's only screen, so the parent screen's swipe would pop it to Home.
+  it("takes the parent screen's swipe too while it is its stack's first screen", () => {
+    native.platform.os = 'ios'
+    const setParentOptions = vi.fn()
+    const tree = render({
+      claimed: true,
+      sendBack: () => true,
+      setOptions: vi.fn(),
+      setParentOptions
+    })
+    expect(setParentOptions).toHaveBeenCalledWith({ gestureEnabled: false })
+    act(() => {
+      tree.update(
+        createElement(Screen, {
+          claimed: false,
+          sendBack: () => true,
+          setOptions: vi.fn(),
+          setParentOptions
+        })
+      )
+    })
+    expect(setParentOptions).toHaveBeenLastCalledWith({ gestureEnabled: true })
   })
 
   it('writes no gesture option on Android, where the stack has no swipe to take', () => {
