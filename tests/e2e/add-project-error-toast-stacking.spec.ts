@@ -135,11 +135,6 @@ for (const theme of ['dark', 'light'] as const) {
           }
         }
         await pathField.click()
-        await clickToastControl(customToast.getByRole('button', { name: 'Later', exact: true }))
-        await expect(customToast).toBeVisible()
-        await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
-        await expect(pathField).toHaveValue(missingPath)
-        expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
         await clickToastControl(customToast.getByRole('button', { name: 'Dismiss', exact: true }))
         await expect(customToast).toBeHidden()
         await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
@@ -162,12 +157,9 @@ for (const theme of ['dark', 'light'] as const) {
         .filter({ hasText: 'A device tried to connect but is not paired' })
       const action = actionToast.getByRole('button', { name: 'Open Mobile Settings' })
       await expect(action).toBeVisible()
-      await action.click()
       await actionToast.locator('[data-title]').click()
       await expect(actionToast).toBeVisible()
       await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
-      await expect(page.getByPlaceholder('Search settings')).toBeHidden()
-      await expect(pathField).toHaveValue(missingPath)
       expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
 
       // Credential prompts deliberately use a higher tier; this visibility fix does not cross it.
@@ -199,6 +191,14 @@ for (const theme of ['dark', 'light'] as const) {
         window.__store?.getState().removeSshCredentialRequest('toast-layer-fixture')
       )
       await expect(pathField).toHaveValue(missingPath)
+      // Toast actions run above a modal without closing it or taking its focus.
+      await pathField.click()
+      await action.click()
+      await expect(page.getByPlaceholder('Search settings')).toBeVisible()
+      await expect(actionToast).toBeHidden()
+      await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
+      await expect(pathField).toHaveValue(missingPath)
+      expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
       await page
         .getByRole('dialog', { name: /Open host project/i })
         .getByRole('button', { name: 'Close', exact: true })
@@ -223,8 +223,6 @@ for (const theme of ['dark', 'light'] as const) {
       await page.evaluate(() => document.body.setAttribute('data-scroll-locked', '1'))
       await expect(toaster).toHaveCSS('z-index', '47')
       await page.evaluate(() => document.body.removeAttribute('data-scroll-locked'))
-      await action.click()
-      await expect(page.getByPlaceholder('Search settings')).toBeVisible()
       await assertHiddenIsolation(client.app, testInfo, 'client-final-isolation')
       await assertHiddenIsolation(electronApp, testInfo, 'host-final-isolation')
       expect(await client.getDirectSshAttemptTargetIds()).toEqual([])

@@ -5,7 +5,7 @@ import {
   OctagonXIcon,
   TriangleAlertIcon
 } from 'lucide-react'
-import { useRef, type SyntheticEvent } from 'react'
+import { useRef, type PointerEvent } from 'react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 import { useAppStore } from '@/store'
 import { MODAL_OVERLAY_CHILD_SELECTOR } from '@/lib/body-overlay-attributes'
@@ -24,12 +24,13 @@ function isModalOverlayOpen(element: Element): boolean {
   return element.ownerDocument.body.querySelector(MODAL_OVERLAY_CHILD_SELECTOR) !== null
 }
 
-function blockModalToastInteraction(event: SyntheticEvent): void {
+// Why: Radix dismisses or refocuses on pointerdown outside the modal; swallowing only that keeps
+// the modal open with focus intact while the toast's click still runs its action.
+function shieldModalFromToastPointerDown(event: PointerEvent<HTMLDivElement>): void {
   const target = event.target
   if (
     target instanceof Element &&
     target.closest('[data-sonner-toast]') !== null &&
-    target.closest('[data-close-button]') === null &&
     isModalOverlayOpen(target)
   ) {
     event.preventDefault()
@@ -49,25 +50,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
   useNotificationCardLayoutVarReader(wrapperRef)
 
   return (
-    <div
-      ref={wrapperRef}
-      onPointerDownCapture={(event) => {
-        if (
-          event.target instanceof Element &&
-          event.target.closest('[data-close-button]') &&
-          isModalOverlayOpen(event.target)
-        ) {
-          // Toast interactions must not reach the backdrop or move modal focus.
-          event.preventDefault()
-          event.stopPropagation()
-        } else {
-          blockModalToastInteraction(event)
-        }
-      }}
-      onClickCapture={blockModalToastInteraction}
-      onAuxClickCapture={blockModalToastInteraction}
-      onContextMenuCapture={blockModalToastInteraction}
-    >
+    <div ref={wrapperRef} onPointerDownCapture={shieldModalFromToastPointerDown}>
       <Sonner
         theme={theme as ToasterProps['theme']}
         position="bottom-right"
