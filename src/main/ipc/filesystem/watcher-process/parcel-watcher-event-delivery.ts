@@ -34,25 +34,6 @@ async function statWatcherEventPath(eventPath: string, signal?: AbortSignal): Pr
   }
 }
 
-async function mapWatcherEvent(
-  event: ParcelWatcherEvent,
-  includeDirectoryMetadata: boolean,
-  signal?: AbortSignal
-): Promise<WatcherProcessEvent> {
-  signal?.throwIfAborted()
-  if (!includeDirectoryMetadata || event.type === 'delete') {
-    return { type: event.type, path: event.path }
-  }
-  let isDirectory = false
-  try {
-    isDirectory = await statWatcherEventPath(event.path, signal)
-  } catch {
-    signal?.throwIfAborted()
-    // Vanished paths still need parent invalidation; unknown metadata remains file-like.
-  }
-  return { type: event.type, path: event.path, isDirectory }
-}
-
 export async function prepareWatcherProcessEvents(
   events: readonly ParcelWatcherEvent[],
   delivery: WatcherProcessDeliveryOptions | undefined,
@@ -65,9 +46,30 @@ export async function prepareWatcherProcessEvents(
   if (delivery?.includeDirectoryMetadata !== true) {
     return events.map((event) => ({ type: event.type, path: event.path }))
   }
-  return mapWithConcurrency(events, DIRECTORY_STAT_CONCURRENCY, (event) =>
-    mapWatcherEvent(event, true, signal)
-  )
+  const finalTypeByPath = new Map<string, ParcelWatcherEvent['type']>()
+  for (const event of events) {
+    finalTypeByPath.set(event.path, event.type)
+  }
+  const statCache = new Map<string, Promise<boolean>>()
+  const getIsDirectory = (path: string): Promise<boolean> => {
+    if (finalTypeByPath.get(path) === 'delete') {
+      return Promise.resolve(false)
+    }
+    let cached = statCache.get(path)
+    if (!cached) {
+      cached = statWatcherEventPath(path, signal).catch(() => false)
+      statCache.set(path, cached)
+    }
+    return cached
+  }
+  return mapWithConcurrency(events, DIRECTORY_STAT_CONCURRENCY, async (event) => {
+    signal?.throwIfAborted()
+    if (event.type === 'delete') {
+      return { type: event.type, path: event.path }
+    }
+    const isDirectory = await getIsDirectory(event.path)
+    return { type: event.type, path: event.path, isDirectory }
+  })
 }
 
 /** Keep at most one active and one bounded pending batch per subscription. */
