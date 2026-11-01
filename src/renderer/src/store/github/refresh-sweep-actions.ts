@@ -8,6 +8,7 @@ import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import { issueCacheKey } from './cache-identity'
 import { CACHE_TTL, evictStaleEntries } from './cache-policy'
 import { pruneExpiredPRRefreshStates } from './pr-refresh-state'
+import { pruneExpiredPRRefreshStartedEntries } from './pr-result-cache'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
@@ -16,6 +17,7 @@ export const createRefreshSweepActions = (
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'refreshAllGitHub' | 'refreshGitHubForWorktree'> => ({
   refreshAllGitHub: () => {
+    pruneExpiredPRRefreshStartedEntries()
     // Clear comments cache; evict stale entries to bound long-session growth across repos/branches.
     set((s) => {
       const next = {

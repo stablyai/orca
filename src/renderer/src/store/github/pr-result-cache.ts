@@ -6,7 +6,11 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getHostedReviewCacheKey } from '../slices/hosted-review-cache-identity'
 import type { GitHubPRFallbackSource } from './cache-model'
 import { withBoundedCacheEntry } from './cache-policy'
-import { prRefreshStartedHostedReviewEntries } from './request-coordination'
+import {
+  prRefreshStartedHostedReviewEntries,
+  prRefreshStartedLinkedReviewScopes
+} from './request-coordination'
+import { PR_REFRESH_ACTIVE_STALE_MS } from './pr-refresh-state'
 import {
   shouldWritePRCacheForHostedReviewSync,
   syncHostedReviewCacheFromGitHubPRResult
@@ -70,20 +74,44 @@ export function prRefreshStartedEntryKey(sequence: number, cacheKey: string): st
 export function deletePRRefreshStartedEntry(sequence: number | undefined, cacheKey: string): void {
   if (sequence !== undefined && sequence > 0) {
     prRefreshStartedHostedReviewEntries.delete(prRefreshStartedEntryKey(sequence, cacheKey))
+    if (prRefreshStartedLinkedReviewScopes.get(cacheKey)?.sequence === sequence) {
+      prRefreshStartedLinkedReviewScopes.delete(cacheKey)
+    }
   }
 }
 
-export function setPRRefreshStartedHostedReviewEntry(
-  key: string,
+export function pruneExpiredPRRefreshStartedEntries(now = performance.now()): void {
+  for (const [cacheKey, request] of prRefreshStartedLinkedReviewScopes) {
+    // Monotonic expiry order avoids scanning live aliases on every refresh event.
+    if (now <= request.expiresAt) {
+      break
+    }
+    deletePRRefreshStartedEntry(request.sequence, cacheKey)
+  }
+}
+
+export function setPRRefreshStartedEntry(
+  sequence: number,
+  cacheKey: string,
   entry: AppState['hostedReviewCache'][string] | undefined,
   clearScope?: LinkedReviewClearScope
 ): void {
-  if (entry === undefined && clearScope === undefined) {
+  // Ownership evidence must survive advisory cache eviction for every accepted alias.
+  prRefreshStartedLinkedReviewScopes.delete(cacheKey)
+  if (clearScope) {
+    prRefreshStartedLinkedReviewScopes.set(cacheKey, {
+      sequence,
+      scope: clearScope,
+      expiresAt: performance.now() + PR_REFRESH_ACTIVE_STALE_MS
+    })
+  }
+  const key = prRefreshStartedEntryKey(sequence, cacheKey)
+  if (entry === undefined) {
     prRefreshStartedHostedReviewEntries.delete(key)
     return
   }
   prRefreshStartedHostedReviewEntries.delete(key)
-  prRefreshStartedHostedReviewEntries.set(key, { entry, clearScope })
+  prRefreshStartedHostedReviewEntries.set(key, entry)
   while (prRefreshStartedHostedReviewEntries.size > PR_REFRESH_STARTED_HOSTED_REVIEW_ENTRY_MAX) {
     const oldest = prRefreshStartedHostedReviewEntries.keys().next()
     if (oldest.done) {

@@ -170,25 +170,28 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         pr.headSha
       )
       const previousReaction = comment.reactions?.find((reaction) => reaction.content === content)
-      setComments((current) => setReactionOnSubject(current, reactionSubjectId, content, reacted))
-      const ok = await setPRCommentReaction(
-        repo.path,
-        prNumber,
-        reactionSubjectId,
-        content,
-        reacted,
-        {
+      let optimisticApplied = false
+      let ok: boolean
+      try {
+        const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+        setComments((current) => setReactionOnSubject(current, reactionSubjectId, content, reacted))
+        optimisticApplied = true
+        ok = await setPRCommentReaction(repo.path, prNumber, reactionSubjectId, content, reacted, {
           repoId: repo.id,
-          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+          repoOwnerExecutionHostId,
           prRepo: pr.prRepo
-        }
-      )
+        })
+      } catch {
+        ok = false
+      }
       if (!isCurrentAsyncResult(requestKey) || ok) {
         return ok
       }
-      setComments((current) =>
-        restoreReactionOnSubject(current, reactionSubjectId, content, previousReaction)
-      )
+      if (optimisticApplied) {
+        setComments((current) =>
+          restoreReactionOnSubject(current, reactionSubjectId, content, previousReaction)
+        )
+      }
       toast.error(
         translate(
           'auto.components.right.sidebar.ChecksPanel.updateReactionFailed',

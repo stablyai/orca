@@ -52,7 +52,11 @@ export const inflightProjectViewRequests = new Map<string, InflightProjectView>(
 export const prRequestGenerations = new Map<string, number>()
 export const prRefreshStartedHostedReviewEntries = new Map<
   string,
-  { entry: AppState['hostedReviewCache'][string] | undefined; clearScope?: LinkedReviewClearScope }
+  AppState['hostedReviewCache'][string]
+>()
+export const prRefreshStartedLinkedReviewScopes = new Map<
+  string,
+  { sequence: number; scope: LinkedReviewClearScope; expiresAt: number }
 >()
 
 let providerRequestSequence = 0
@@ -82,6 +86,7 @@ export function _getGitHubPRRefreshStartedEntryCountForTest(): number {
 
 export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
   prRefreshStartedHostedReviewEntries.clear()
+  prRefreshStartedLinkedReviewScopes.clear()
 }
 
 const PROVIDER_REQUEST_CONCURRENCY = 8

@@ -12,9 +12,13 @@ import {
   applyGitHubPRResultToCaches,
   deletePRRefreshStartedEntry,
   prRefreshStartedEntryKey,
-  setPRRefreshStartedHostedReviewEntry
+  pruneExpiredPRRefreshStartedEntries,
+  setPRRefreshStartedEntry
 } from './pr-result-cache'
-import { prRefreshStartedHostedReviewEntries } from './request-coordination'
+import {
+  prRefreshStartedHostedReviewEntries,
+  prRefreshStartedLinkedReviewScopes
+} from './request-coordination'
 import {
   captureLinkedReviewClearScope,
   clearLinkedReview,
@@ -34,6 +38,7 @@ export const createRefreshEventActions = (
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'applyGitHubPRRefreshEvent'> => ({
   applyGitHubPRRefreshEvent: (event) => {
+    pruneExpiredPRRefreshStartedEntries()
     // Why: local-repo sidebar refresh routes through the main PR coordinator, so run the same guarded diverged-merged-PR clear.
     const divergedLinkedPRClears: {
       worktreeId: string
@@ -60,7 +65,10 @@ export const createRefreshEventActions = (
 
       for (const alias of event.aliases) {
         const aliasExecutionHostId = getRefreshAliasExecutionHostId(alias)
-        const previousSequence = nextSequences[alias.cacheKey] ?? 0
+        const previousSequence = Math.max(
+          nextSequences[alias.cacheKey] ?? 0,
+          prRefreshStartedLinkedReviewScopes.get(alias.cacheKey)?.sequence ?? 0
+        )
         if (
           event.outcome ? event.sequence < previousSequence : event.sequence <= previousSequence
         ) {
@@ -76,9 +84,9 @@ export const createRefreshEventActions = (
 
         if (event.outcome) {
           const startedEntryKey = prRefreshStartedEntryKey(event.sequence, alias.cacheKey)
-          const requestStart = prRefreshStartedHostedReviewEntries.get(startedEntryKey)
-          const requestStartedEntry = requestStart?.entry
-          prRefreshStartedHostedReviewEntries.delete(startedEntryKey)
+          const requestStartedEntry = prRefreshStartedHostedReviewEntries.get(startedEntryKey)
+          const requestScope = prRefreshStartedLinkedReviewScopes.get(alias.cacheKey)
+          deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
           if (previousSequence !== event.sequence) {
             deletePRRefreshStartedEntry(previousSequence, alias.cacheKey)
           }
@@ -126,8 +134,9 @@ export const createRefreshEventActions = (
           if (event.outcome.kind === 'found' && alias.worktreeId) {
             const requestHeadOid = alias.currentHeadOid ?? null
             const scope =
-              requestStart?.clearScope?.workspace.id === alias.worktreeId
-                ? requestStart.clearScope
+              requestScope?.sequence === event.sequence &&
+              requestScope.scope.workspace.id === alias.worktreeId
+                ? requestScope.scope
                 : undefined
             const worktree = scope?.workspace
             // Why: only the sequence-gate winner owns metadata side effects; late outcomes must not unlink a newer PR.
@@ -212,8 +221,9 @@ export const createRefreshEventActions = (
               aliasExecutionHostId,
               true
             )
-            setPRRefreshStartedHostedReviewEntry(
-              prRefreshStartedEntryKey(event.sequence, alias.cacheKey),
+            setPRRefreshStartedEntry(
+              event.sequence,
+              alias.cacheKey,
               s.hostedReviewCache[hostedReviewCacheKey],
               alias.linkedPRNumber != null
                 ? captureLinkedReviewClearScope(
