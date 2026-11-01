@@ -44,6 +44,30 @@ describe('prepareWatcherProcessEvents', () => {
     expect(statMock).toHaveBeenCalledTimes(128)
     expect(maxActiveStats).toBe(8)
   })
+
+  it('stats each path once and skips paths deleted later in the same batch', async () => {
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    const events = [
+      { type: 'create' as const, path: '/repo/dir' },
+      { type: 'update' as const, path: '/repo/dir' },
+      { type: 'update' as const, path: '/repo/gone' },
+      { type: 'delete' as const, path: '/repo/gone' },
+      { type: 'update' as const, path: '/repo/file' }
+    ]
+
+    const prepared = await prepareWatcherProcessEvents(events, { includeDirectoryMetadata: true })
+
+    expect(statMock).toHaveBeenCalledTimes(2)
+    expect(statMock).toHaveBeenCalledWith('/repo/dir')
+    expect(statMock).toHaveBeenCalledWith('/repo/file')
+    expect(prepared).toEqual([
+      { type: 'create', path: '/repo/dir', isDirectory: true },
+      { type: 'update', path: '/repo/dir', isDirectory: true },
+      { type: 'update', path: '/repo/gone' },
+      { type: 'delete', path: '/repo/gone' },
+      { type: 'update', path: '/repo/file', isDirectory: true }
+    ])
+  })
 })
 
 describe('watcher event queue flush', () => {

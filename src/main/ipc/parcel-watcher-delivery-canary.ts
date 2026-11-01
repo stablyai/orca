@@ -18,27 +18,46 @@ export const CANARY_STALL_BACKOFF_INITIAL_MS = 30_000
 export const CANARY_STALL_BACKOFF_MAX_MS = 5 * 60_000
 // Even an apparent OS stall may hide a deadlock; bound it with a crash-fuse-limited restart.
 export const CANARY_STALL_RESTART_AFTER_MS = 15 * 60_000
+export const MAX_CRAWL_DURATION_MS = 60_000
+export const CANARY_CPU_STORM_THRESHOLD = 0.85
+export const CANARY_OVERFLOW_STORM_THRESHOLD = 20
+export const CANARY_STORM_MAX_STRIKES = 6
 
 export type WatcherCanaryActivity = {
   revision: number
   liveSubscriptions: number
   /** Start time of the in-flight native subscribe, or null when none is running. */
   pendingCrawlStartedAt: number | null
+  /** Subscription ID of the in-flight crawl, if any. */
+  activeCrawlSubscriptionId?: number | null
   /** Last time any native subscription callback fired in this process. */
   lastNativeCallbackAt: number
+  /** Monotonic count of overflow events observed across subscriptions. */
+  overflowCount?: number
+  /** Subscription ID with the highest callback/overflow churn in the current window. */
+  topSubscriptionId?: number | null
 }
 
 /** 'unknown': the canary disarmed (no live roots, or a crawl) after a stall. */
 export type WatcherDeliveryHealth = 'healthy' | 'stalled' | 'unknown'
 
+export type WatcherCanarySubscriptionFault = {
+  kind: 'crawl-wedged' | 'storm'
+  subscriptionId: number | null
+}
+
 /** Returns the revision a probe is valid for, or null when the canary is disarmed. */
 export function armedCanaryRevision(
   activity: WatcherCanaryActivity,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  now = Date.now()
 ): number | null {
   if (activity.pendingCrawlStartedAt !== null) {
-    // macOS subscribe does not crawl; elsewhere a legitimate crawl holds the backend mutex, so restarting would repeat it.
-    return platform === 'darwin' ? activity.revision : null
+    // macOS subscribe does not crawl; a crawl past the limit is wedged and must not stay disarmed.
+    if (platform === 'darwin' || now - activity.pendingCrawlStartedAt > MAX_CRAWL_DURATION_MS) {
+      return activity.revision
+    }
+    return null
   }
   return activity.liveSubscriptions > 0 ? activity.revision : null
 }
@@ -54,7 +73,8 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 export async function startWatcherDeliveryCanary(
   getActivity: () => WatcherCanaryActivity,
-  onHealthChange: (health: WatcherDeliveryHealth) => void = () => undefined
+  onHealthChange: (health: WatcherDeliveryHealth) => void = () => undefined,
+  onSubscriptionFault: (fault: WatcherCanarySubscriptionFault) => void = () => undefined
 ): Promise<void> {
   const configuredCanaryDir = process.env.ORCA_WATCHER_CANARY_DIR
   let canaryDir: string
@@ -180,7 +200,52 @@ export async function startWatcherDeliveryCanary(
     process.exit(2)
   }
 
+  let lastCpuUsage = process.cpuUsage()
+  let lastCpuSampleAt = Date.now()
+  let lastOverflowCount = 0
+  let stormStrikes = 0
+
   const tick = async (): Promise<void> => {
+    const currentActivity = getActivity()
+    const sampledAt = Date.now()
+    // A busy callback stream still counts as healthy, so a long crawl or a hot process has to stop itself.
+    if (
+      currentActivity.pendingCrawlStartedAt !== null &&
+      process.platform !== 'darwin' &&
+      sampledAt - currentActivity.pendingCrawlStartedAt > MAX_CRAWL_DURATION_MS
+    ) {
+      onSubscriptionFault({
+        kind: 'crawl-wedged',
+        subscriptionId: currentActivity.activeCrawlSubscriptionId ?? null
+      })
+      restart('subscription crawl timed out')
+      return
+    }
+    const elapsedMs = sampledAt - lastCpuSampleAt
+    const cpuDelta = process.cpuUsage(lastCpuUsage)
+    const cpuRatio = elapsedMs > 0 ? (cpuDelta.user + cpuDelta.system) / (elapsedMs * 1_000) : 0
+    const overflowCount = currentActivity.overflowCount ?? 0
+    const overflowDelta = overflowCount - lastOverflowCount
+    lastCpuUsage = process.cpuUsage()
+    lastCpuSampleAt = sampledAt
+    lastOverflowCount = overflowCount
+    if (
+      currentActivity.liveSubscriptions > 0 &&
+      (cpuRatio >= CANARY_CPU_STORM_THRESHOLD || overflowDelta >= CANARY_OVERFLOW_STORM_THRESHOLD)
+    ) {
+      stormStrikes++
+      if (stormStrikes >= CANARY_STORM_MAX_STRIKES) {
+        onSubscriptionFault({
+          kind: 'storm',
+          subscriptionId: currentActivity.topSubscriptionId ?? null
+        })
+        restart('watcher resource storm detected')
+        return
+      }
+    } else {
+      stormStrikes = 0
+    }
+
     const activityRevision = stableRevision()
     if (activityRevision === null) {
       misses = 0
