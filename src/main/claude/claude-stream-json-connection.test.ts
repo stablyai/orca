@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { providerDiagnosticOf } from '../../shared/agent-session-failure'
+import { providerDiagnosticOf } from '../../shared/agent-session/failures/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import type { SpawnedProcess, ProcessSpec } from '@orca/process-host/process-spec'
@@ -18,7 +18,10 @@ import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/ag
 import { claudeAuthDiagnostic } from './structured/claude-structured-init-proof'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
@@ -47,6 +50,7 @@ afterEach(async () => {
   }
   await Promise.all(childClosures.splice(0))
   for (const dir of scratchDirs.splice(0)) {
+    await closeTestJournalHostDatabases()
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   }
   spawned.splice(0)

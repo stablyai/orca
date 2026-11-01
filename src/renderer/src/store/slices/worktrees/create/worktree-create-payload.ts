@@ -7,7 +7,10 @@ import type {
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
-import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/types'
+import type {
+  ClientAutomationWorkspaceProvenance,
+  WorkspaceLinkedItem
+} from '../../../../../../shared/worktree/types'
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
 export type CreateWorktreeCallOptions = {
@@ -15,6 +18,8 @@ export type CreateWorktreeCallOptions = {
   /** Captured before background preparation so navigation cannot retarget creation. */
   executionHostId?: ExecutionHostId
   automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
+  /** This desktop's own run, offered to a runtime host that records it as a label. */
+  clientAutomationProvenance?: ClientAutomationWorkspaceProvenance
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */

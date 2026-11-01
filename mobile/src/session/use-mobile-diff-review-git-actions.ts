@@ -5,8 +5,10 @@ import type { RpcClient } from '../transport/rpc-client'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import {
   MOBILE_DIFF_REVIEW_GIT_MUTATIONS,
+  reviewGitBulkUnstage,
   reviewGitStageRun
 } from './mobile-diff-review-git-operations'
+import { getUnstageablePaths } from '../source-control/mobile-git-status'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { GitMutationMethod } from './mobile-diff-review-screen-model'
@@ -36,15 +38,33 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
       setBusyAction(`${method}:${item.filePath}`)
       setActionError(null)
       try {
-        const mutation = MOBILE_DIFF_REVIEW_GIT_MUTATIONS[method]
-        const response = await mutation.request(client, {
-          worktree: `id:${worktreeId}`,
-          filePath: item.filePath
-        })
-        interpretOrThrowRefusalMessage(
-          () => mutation.interpret(response),
-          translate('session.useDiffReviewGitActions.actionFailed', 'Source control action failed')
+        const failureMessage = translate(
+          'session.useDiffReviewGitActions.actionFailed',
+          'Source control action failed'
         )
+        const filePaths =
+          method === 'git.unstage' && item.area === 'staged'
+            ? getUnstageablePaths([
+                { path: item.filePath, oldPath: item.oldPath, status: item.status, area: item.area }
+              ])
+            : []
+        if (filePaths.length > 1) {
+          const response = await reviewGitBulkUnstage.request(client, {
+            worktree: `id:${worktreeId}`,
+            filePaths
+          })
+          interpretOrThrowRefusalMessage(
+            () => reviewGitBulkUnstage.interpret(response),
+            failureMessage
+          )
+        } else {
+          const mutation = MOBILE_DIFF_REVIEW_GIT_MUTATIONS[method]
+          const response = await mutation.request(client, {
+            worktree: `id:${worktreeId}`,
+            filePath: item.filePath
+          })
+          interpretOrThrowRefusalMessage(() => mutation.interpret(response), failureMessage)
+        }
         triggerSuccess()
         await loadReviewData()
       } catch (err) {

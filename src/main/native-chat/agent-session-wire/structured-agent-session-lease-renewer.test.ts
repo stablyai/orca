@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -68,6 +69,7 @@ async function liveStore(): Promise<AgentSessionRecordStore> {
 }
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 

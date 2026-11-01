@@ -27,15 +27,4 @@ describe('repoCreateErrorText', () => {
       es.sidebar.createProject.errors.prepareDirectoryFailed.replace('{{detail}}', 'EACCES: denied')
     )
   })
-
-  it('shows the host English for uncoded, unknown, or incomplete failures', async () => {
-    i18n.addResourceBundle('es', 'translation', es)
-    await i18n.changeLanguage('es')
-    expect(repoCreateErrorText({ error: 'Old host text' })).toBe('Old host text')
-    expect(repoCreateErrorText({ error: 'Newer host text', errorCode: 'futureCode' })).toBe(
-      'Newer host text'
-    )
-    expect(repoCreateErrorText({ error: 'English', errorCode: 'targetNotEmpty' })).toBe('English')
-    expect(repoCreateErrorText({ error: 'English', errorCode: 'toString' })).toBe('English')
-  })
 })

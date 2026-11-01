@@ -72,7 +72,7 @@ export const createPullRequestActions = (
     const lookupHintKey = prLookupHintKey(linkedPRNumber, fallbackPRNumber)
     const linkedRefetch =
       cached?.data === null && (linkedPRNumber !== null || fallbackPRNumber !== null)
-    if (!options?.force && !linkedRefetch && isFresh(cached)) {
+    if (!options?.force && !options?.userRefresh && !linkedRefetch && isFresh(cached)) {
       // Why: even a fresh cache hit carries the head-scoped divergence signal; if a prior clear was declined for a mid-request head move and we're back on that head, clear the durable link.
       if (
         options?.worktreeId &&
@@ -107,6 +107,7 @@ export const createPullRequestActions = (
 
     const inflightRequest = inflightPRRequests.get(cacheKey)
     if (
+      !options?.userRefresh &&
       inflightRequest &&
       (!options?.force || inflightRequest.force) &&
       inflightRequest.lookupHintKey === lookupHintKey &&

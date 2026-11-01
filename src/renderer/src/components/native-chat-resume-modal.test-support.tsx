@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act } from 'react'
 import { toast } from 'sonner'
 import { createRoot, type Root } from 'react-dom/client'
@@ -208,7 +209,7 @@ export function createResumeModalFixture(rpc: Mock<RestartRpc>, statusStream: Re
     vi.mocked(toast).mockClear()
     useAppStore.setState(useAppStore.getInitialState(), true)
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalNativeChat: true },
+      settings: { ...getDefaultSettings(''), nativeChatProviders: EVERY_AGENT_CHAT },
       updateSettings: async (changes) => {
         useAppStore.setState((state) => ({
           settings: { ...getDefaultSettings(''), ...state.settings, ...changes }

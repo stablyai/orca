@@ -93,6 +93,86 @@ describe('startWslDriveUncConversion', () => {
     expect(run.restart).toHaveBeenCalledOnce()
   })
 
+  const savedMeta = {
+    instanceId: 'saved',
+    displayName: 'feature',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    hostId: 'local' as const
+  }
+  const ubuntu = String.raw`\\wsl.localhost\Ubuntu\mnt\c`
+  it.each([
+    { shape: 'inside its folder', parent: UNC, nested: `${UNC}\\nested`, savedWorktree: null },
+    { shape: 'at a drive root', parent: ubuntu, nested: `${ubuntu}\\src`, savedWorktree: null },
+    {
+      shape: 'inside its saved worktree',
+      parent: UNC,
+      nested: `${ubuntu}\\feature\\nested`,
+      savedWorktree: `${ubuntu}\\feature`
+    }
+  ])(
+    'converts a project nested $shape with its parent',
+    async ({ parent, nested, savedWorktree }) => {
+      const value = state()
+      value.repos[0].path = parent
+      value.repos.push({ id: 'repo-b', path: nested, displayName: 'b', badgeColor: '', addedAt: 0 })
+      value.projects.push({ ...value.projects[0], id: 'repo-b', sourceRepoIds: ['repo-b'] })
+      if (savedWorktree) {
+        value.worktreeMeta = { [`repo-a::${savedWorktree}`]: savedMeta }
+      }
+      const run = deps({ readProfileState: async () => value })
+      expect(await startWslDriveUncConversion(run, REQUEST)).toMatchObject({
+        outcome: 'restarting'
+      })
+      expect(listWslDriveUncConversions(root)).toEqual([
+        expect.objectContaining({ repoIds: ['repo-a', 'repo-b'] })
+      ])
+    }
+  )
+
+  /** A Windows project and the UNC spelling of its folder, which the scope refuses as a duplicate. */
+  const withDuplicate = (windowsPath: string, duplicate: string): PersistedState => {
+    const value = state()
+    value.repos.push(
+      { id: 'windows', path: windowsPath, displayName: 'win', badgeColor: '', addedAt: 0 },
+      { id: 'repo-dup', path: duplicate, displayName: 'dup', badgeColor: '', addedAt: 0 }
+    )
+    return value
+  }
+
+  it('refuses when a duplicate inside the folder would move without its ids', async () => {
+    const value = withDuplicate(String.raw`C:\src\app\sub`, `${UNC}\\sub`)
+    const run = deps({ readProfileState: async () => value })
+    expect(await startWslDriveUncConversion(run, REQUEST)).toMatchObject({
+      blockers: [{ kind: 'not-convertible', id: 'repo-dup', reason: 'overlaps-refused-project' }]
+    })
+    expect(run.pause).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      shape: 'another spelling of the folder',
+      windowsPath: String.raw`C:\src\app\sub`,
+      duplicate: String.raw`\\wsl$\Ubuntu\mnt\c\src\app`
+    },
+    {
+      shape: 'a folder around it',
+      windowsPath: String.raw`C:\src`,
+      duplicate: String.raw`\\wsl$\Ubuntu\mnt\c\src`
+    }
+  ])('converts beside a duplicate of $shape', async ({ windowsPath, duplicate }) => {
+    const value = withDuplicate(windowsPath, duplicate)
+    const run = deps({ readProfileState: async () => value })
+    expect(await startWslDriveUncConversion(run, REQUEST)).toMatchObject({ outcome: 'restarting' })
+  })
+
   it('refuses, pausing nothing, when the distro does not show /mnt/c as drive C:', async () => {
     for (const mounts of [null, [{ mountPoint: '/mnt/c', windowsRoot: null }]]) {
       const run = deps({ readDriveMounts: async () => mounts })

@@ -8,7 +8,7 @@ import type { TaskPageLinearCollectionEffectsModel } from './task-page/linear/us
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { useTaskPageJiraSavedFilters } from './use-task-page-jira-saved-filters'
 import { useTaskPageJiraListEffects } from './use-task-page-jira-list-effects'
-import type { JiraStatusCatalogItem } from './task-page-jira-status-catalog'
+import type { JiraStatusCatalogItem } from './task-page/jira/task-page-jira-status-catalog'
 
 const runtime = vi.hoisted(() => ({
   capability: vi.fn(),

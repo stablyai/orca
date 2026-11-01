@@ -139,7 +139,7 @@ describe('useStructuredAgentSession provisional launch gate', () => {
         agent: 'codex',
         isVisible: true,
         transportEnabled: false,
-        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' }, heldOptions: {} }
+        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' } }
       })
     )
 
@@ -180,7 +180,7 @@ describe('useStructuredAgentSession provisional launch gate', () => {
           agent: 'grok',
           isVisible: true,
           transportEnabled: false,
-          launch: { kind: 'new', heldOptions: {} }
+          launch: { kind: 'new' }
         })
       )
     expect(render().result.current.canStop).toBe(false)
@@ -207,18 +207,6 @@ describe('useStructuredAgentSession provisional launch gate', () => {
     expect(methodsCalled().filter((method) => method === 'agentSession.cancel')).toEqual([])
   })
 
-  it('shows no stored selection for a chat this view did not launch', () => {
-    const { result } = renderHook(() =>
-      useStructuredAgentSession({
-        sessionId: 'session-1',
-        target: LOCAL_TARGET,
-        agent: 'codex',
-        isVisible: true
-      })
-    )
-    expect(currentModel(result.current.optionSnapshot)).toBeUndefined()
-  })
-
   it('activates provider surfaces after publication without repeating option discovery', async () => {
     const { rerender } = renderHook(
       ({ transportEnabled }: { transportEnabled: boolean }) =>
@@ -236,9 +224,14 @@ describe('useStructuredAgentSession provisional launch gate', () => {
     rerender({ transportEnabled: true })
 
     await waitFor(() =>
-      expect(mocks.call).toHaveBeenCalledWith(LOCAL_TARGET, 'agentSession.options', {
-        sessionId: 'session-1'
-      })
+      expect(mocks.call).toHaveBeenCalledWith(
+        LOCAL_TARGET,
+        'agentSession.options',
+        {
+          sessionId: 'session-1'
+        },
+        {}
+      )
     )
     expect(methodsCalled().filter((method) => method === 'agentSession.options')).toHaveLength(1)
     expect(mocks.hold).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true }))

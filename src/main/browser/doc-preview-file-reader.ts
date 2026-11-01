@@ -2,9 +2,15 @@ import { extname } from 'node:path'
 import type { RuntimeFilePreviewResult } from '../../shared/runtime-file-contracts'
 import type { DocPreviewFileFailureReason } from '../../shared/doc-preview-scheme'
 import { FONT_FILE_MIME_TYPES } from '../../shared/font-file-extensions'
+import { isBinaryBuffer } from '../../shared/binary-buffer'
+import {
+  DOC_PREVIEW_FILE_CHANGED_MESSAGE,
+  type DocPreviewFileChunk
+} from '../../shared/doc-preview-file-access'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 import {
+  getDocPreviewGrant,
   resolveDocPreviewAuthorityPaths,
   resolveDocPreviewCandidatePath,
   resolveDocPreviewTargetPath,
@@ -15,6 +21,8 @@ import {
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
 
 const DOC_PREVIEW_READ_TIMEOUT_MS = 15_000
+// Why: under files.readDocPreviewChunk's 512 KiB cap, and a multiple of 3 so its base64 has no padding.
+const DOC_PREVIEW_CHUNK_BYTES = 384 * 1024
 
 const UNSERVABLE_ASSET_PREVIEW_MESSAGE = 'This workspace cannot send this file type to a preview.'
 
@@ -70,9 +78,23 @@ type PreviewFileBytes = {
   mimeType?: string
 }
 
+const TOO_LARGE_OUTCOME: DocPreviewReadOutcome = {
+  ok: false,
+  status: 413,
+  reason: 'too-large',
+  message: TRUNCATED_PREVIEW_MESSAGE
+}
+
+const UNSUPPORTED_ASSET_OUTCOME: DocPreviewReadOutcome = {
+  ok: false,
+  status: 415,
+  reason: 'unsupported-asset',
+  message: UNSERVABLE_ASSET_PREVIEW_MESSAGE
+}
+
 function toOutcome(source: PreviewFileBytes, contentType: string): DocPreviewReadOutcome {
   if (source.truncated) {
-    return { ok: false, status: 413, reason: 'too-large', message: TRUNCATED_PREVIEW_MESSAGE }
+    return TOO_LARGE_OUTCOME
   }
   if (!source.isBinary) {
     return { ok: true, bytes: Buffer.from(source.content, 'utf8'), contentType }
@@ -83,34 +105,26 @@ function toOutcome(source: PreviewFileBytes, contentType: string): DocPreviewRea
   // Older hosts use empty binary content without a MIME type to signal an unsupported format.
   return source.mimeType
     ? { ok: true, bytes: Buffer.alloc(0), contentType }
-    : {
-        ok: false,
-        status: 415,
-        reason: 'unsupported-asset',
-        message: UNSERVABLE_ASSET_PREVIEW_MESSAGE
-      }
+    : UNSUPPORTED_ASSET_OUTCOME
+}
+
+type RuntimeDocPreviewReadParams = {
+  worktree: string
+  relativePath: string
+  entryRelativePath: string
+  implicitRootRelativePath: string | null
+  authorizedRootRelativePaths: string[]
 }
 
 async function readRuntimeDocPreviewFile(
   environmentId: string,
-  worktreeSelector: string,
-  relativePath: string,
-  entryRelativePath: string,
-  implicitRootRelativePath: string | null,
-  authorizedRootRelativePaths: string[]
+  params: RuntimeDocPreviewReadParams
 ): Promise<PreviewFileBytes> {
-  const userDataPath = getRuntimeEnvironmentRegistryRoot()
   const response = await callRuntimeEnvironment(
-    userDataPath,
+    getRuntimeEnvironmentRegistryRoot(),
     environmentId,
     'files.readDocPreview',
-    {
-      worktree: worktreeSelector,
-      relativePath,
-      entryRelativePath,
-      implicitRootRelativePath,
-      authorizedRootRelativePaths
-    },
+    params,
     DOC_PREVIEW_READ_TIMEOUT_MS
   )
   if (!response.ok) {
@@ -127,6 +141,71 @@ async function readRuntimeDocPreviewFile(
     isBinary: preview.isBinary,
     ...(preview.mimeType ? { mimeType: preview.mimeType } : {})
   }
+}
+
+function isDocPreviewFileChunk(value: unknown): value is DocPreviewFileChunk {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const chunk: Partial<Record<keyof DocPreviewFileChunk, unknown>> = value
+  return (
+    typeof chunk.contentBase64 === 'string' &&
+    typeof chunk.size === 'number' &&
+    typeof chunk.mtimeMs === 'number' &&
+    typeof chunk.ctimeMs === 'number' &&
+    (chunk.mimeType === undefined || typeof chunk.mimeType === 'string')
+  )
+}
+
+/** A file too large for one reply, read by range under the same grant checks as a whole read. */
+async function readRuntimeDocPreviewFileInChunks(
+  grant: DocPreviewGrant,
+  environmentId: string,
+  params: RuntimeDocPreviewReadParams
+): Promise<{ bytes: Buffer; mimeType?: string }> {
+  const chunks: Buffer[] = []
+  let first: DocPreviewFileChunk | null = null
+  let offset = 0
+  do {
+    // Why: a closed preview revokes its grant; stop paging a file nobody will see.
+    if (!getDocPreviewGrant(grant.id)) {
+      throw new Error('Not found')
+    }
+    const response = await callRuntimeEnvironment(
+      getRuntimeEnvironmentRegistryRoot(),
+      environmentId,
+      'files.readDocPreviewChunk',
+      { ...params, offset, length: DOC_PREVIEW_CHUNK_BYTES },
+      DOC_PREVIEW_READ_TIMEOUT_MS
+    )
+    if (!response.ok) {
+      // Hosts before ranged preview reads keep the one-reply size refusal.
+      throw new Error(
+        response.error.code === 'method_not_found'
+          ? RUNTIME_TOO_LARGE_ERROR
+          : response.error.message
+      )
+    }
+    if (!isDocPreviewFileChunk(response.result)) {
+      throw new Error('The paired machine returned an unreadable file chunk.')
+    }
+    const chunk = response.result
+    first ??= chunk
+    const bytes = Buffer.from(chunk.contentBase64, 'base64')
+    // Why: every chunk reports the opened file's version, so a rewrite between chunks is never spliced.
+    if (
+      bytes.length === 0 ||
+      offset + bytes.length > first.size ||
+      chunk.size !== first.size ||
+      chunk.mtimeMs !== first.mtimeMs ||
+      chunk.ctimeMs !== first.ctimeMs
+    ) {
+      throw new Error(DOC_PREVIEW_FILE_CHANGED_MESSAGE)
+    }
+    chunks.push(bytes)
+    offset += bytes.length
+  } while (offset < first.size)
+  return { bytes: Buffer.concat(chunks), mimeType: first.mimeType }
 }
 
 function notFoundOutcome(message = 'Not found'): DocPreviewReadOutcome {
@@ -177,20 +256,35 @@ export async function readDocPreviewFile(
       // Runtime file reads cannot address documents outside the worktree.
       return notFoundOutcome()
     }
-    return toOutcome(
-      await readRuntimeDocPreviewFile(
+    const params: RuntimeDocPreviewReadParams = {
+      worktree: runtimeOwner.worktreeSelector,
+      relativePath: worktreeRelativePath,
+      entryRelativePath,
+      implicitRootRelativePath,
+      authorizedRootRelativePaths
+    }
+    try {
+      return toOutcome(
+        await readRuntimeDocPreviewFile(runtimeOwner.environmentId, params),
+        contentType
+      )
+    } catch (error) {
+      if (!isTooLargeReadError(error)) {
+        throw error
+      }
+      const paged = await readRuntimeDocPreviewFileInChunks(
+        grant,
         runtimeOwner.environmentId,
-        runtimeOwner.worktreeSelector,
-        worktreeRelativePath,
-        entryRelativePath,
-        implicitRootRelativePath,
-        authorizedRootRelativePaths
-      ),
-      contentType
-    )
+        params
+      )
+      // The sniff the host applies to a whole text read.
+      return !paged.mimeType && isBinaryBuffer(paged.bytes)
+        ? UNSUPPORTED_ASSET_OUTCOME
+        : { ok: true, bytes: paged.bytes, contentType }
+    }
   } catch (error) {
     return isTooLargeReadError(error)
-      ? { ok: false, status: 413, reason: 'too-large', message: TRUNCATED_PREVIEW_MESSAGE }
+      ? TOO_LARGE_OUTCOME
       : notFoundOutcome(error instanceof Error ? error.message : undefined)
   }
 }

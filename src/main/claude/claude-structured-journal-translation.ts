@@ -34,7 +34,7 @@ import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeChildToolQueries } from './claude-child-tool-queries'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
 import { journalClaudeResult, type ClaudeResultJournalContext } from './claude-result-journaling'
-import { ClaudeAuthenticationFailures } from './claude-authentication-failures'
+import { ClaudeAssistantFailures } from './claude-assistant-failures'
 import { ClaudeUsageLimits } from './claude-usage-limits'
 import { ClaudeThreadGoal } from './claude-thread-goal'
 import { createClaudeFinalOutputCoverage } from './claude-final-output-coverage'
@@ -162,7 +162,7 @@ export function createClaudeJournalTranslator(
     providerFallback,
     corrections,
     turn,
-    authenticationFailures: new ClaudeAuthenticationFailures(deps.account),
+    assistantFailures: new ClaudeAssistantFailures(deps.account, deps.model),
     usageLimits: new ClaudeUsageLimits(),
     threadGoal: new ClaudeThreadGoal(() => deps.sink.journalLinkage?.()?.threadGoalSource())
   }

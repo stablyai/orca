@@ -1,3 +1,4 @@
+import * as leaseRelease from './structured-agent-session-lease-release'
 // All provider operations join close; proven exit ends the child record, unproven close refuses dependent work.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -16,7 +17,10 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
@@ -64,6 +68,7 @@ beforeEach(async () => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      cliFlag: async () => 'supported' as const,
       continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {
@@ -111,6 +116,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -373,12 +379,9 @@ it('sends after a proven exit whose resume-point write and lease release both fa
   await openTurn(connection)
   refuseWritesOnceClosed(connection)
   persistHandle.mockRejectedValueOnce(new Error('resume point not written'))
-  const transition = store.transitionHandoff.bind(store)
-  vi.spyOn(store, 'transitionHandoff')
-    .mockImplementationOnce(async () => {
-      throw new Error('store unavailable')
-    })
-    .mockImplementation(transition)
+  vi.spyOn(leaseRelease, 'releaseStoredStructuredAgentSessionOwnerAfterExit').mockRejectedValueOnce(
+    new Error('store unavailable')
+  )
   await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
   frame(connection, INTERRUPTED_RESULT)
   await eventually(() => expect(child()).toBeNull())
@@ -652,3 +655,94 @@ it('runs the stop again for every ask after a close that came back unproven', as
   await resumedWith(connection, 'Third.')
   expect(connection.closeCount).toBe(4)
 })
+
+it('keeps model selection at rest after delivered Stop and resumes on the next send', async () => {
+  const connection = claude.connections[0]!
+  await openTurn(connection)
+  vi.spyOn(connection, 'close').mockImplementation(async () => {
+    connection.closed = true
+    connection.exitVerdict = { root: 'live', tree: 'unverifiable', killDelivered: true }
+    return true
+  })
+  await expect(stop()).resolves.toMatchObject({ ok: true })
+  await laneDrained()
+  expect(child()).toBeNull()
+  expect(await setModel('claude-opus-5')).toMatchObject({ ok: true })
+  expect(store.getRecord(SESSION)?.options?.model).toBe('claude-opus-5')
+  expect(claude.connections).toHaveLength(1)
+  await send('Continue after the kill.')
+  await resumedWith(connection, 'Continue after the kill.')
+})
+
+it.each([true, false])(
+  'journal failure retains its fault when kill delivery is %s',
+  async (delivered) => {
+    const connection = claude.connections[0]!
+    await openTurn(connection)
+    connection.exitVerdict = {
+      root: 'live',
+      tree: 'unverifiable',
+      ...(delivered ? { killDelivered: true } : {})
+    }
+    vi.spyOn(connection, 'close').mockImplementation(async () => {
+      connection.closed = true
+      return delivered
+    })
+    host['eventRecovery'].recoverAfterSinkFailure(SESSION, new Error('journal unavailable'))
+    await laneDrained()
+    if (!delivered) {
+      expect(child()?.close?.failure).toEqual({ kind: 'hostFault' })
+      connection.exitVerdict = { root: 'exited', tree: 'exited' }
+      connection.handlers.onExit?.(new Error('late exit after failed journal'), { expected: true })
+      await eventually(() => expect(child()).toBeNull())
+    } else {
+      expect(child()).toBeNull()
+      expect(lease()?.deathEvidence?.kind).toBe('kill-delivered')
+    }
+    expect(host['sessions'].get(SESSION)?.lastEndedChild?.failure).toEqual({ kind: 'hostFault' })
+    const snapshot = await host.journalSnapshot(SESSION)
+    expect(activeStructuredAgentSessionTurnId(snapshot.items)).toBeNull()
+    expect(snapshot.items).toContainEqual(
+      expect.objectContaining({
+        body: expect.objectContaining({ kind: 'status', failure: { kind: 'hostFault' } })
+      })
+    )
+  }
+)
+
+it.each(['idle', 'tab-close', 'sleep'] as const)(
+  'retires delivered/no-report writer through the %s consumer and delivers after reopen',
+  async (entry) => {
+    const connection = claude.connections[0]!
+    const old = child()!
+    vi.spyOn(connection, 'close').mockImplementation(async () => {
+      connection.closed = true
+      connection.exitVerdict = { root: 'live', tree: 'unverifiable', killDelivered: true }
+      return true
+    })
+    const before = await host.journalSnapshot(SESSION)
+    if (entry === 'idle') {
+      await host['lifetime'].idleSweep.tick()
+    } else if (entry === 'tab-close') {
+      await host.close(SESSION, 'user-close')
+    } else {
+      const result = await host.sleepWorkspace('workspace-1')
+      expect(JSON.stringify(result)).toContain(SESSION)
+    }
+    await laneDrained()
+    expect(connection.close).toHaveBeenCalledOnce()
+    expect(lease()).toMatchObject({
+      claimStatus: 'released',
+      ownerProcess: null,
+      deathEvidence: { kind: 'kill-delivered', ownerFence: old.fence }
+    })
+    const history = await host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(history.ok).toBe(true)
+    expect((await host.journalSnapshot(SESSION)).items).toEqual(
+      expect.arrayContaining(before.items)
+    )
+    await send(`Continue after ${entry}.`)
+    await resumedWith(connection, `Continue after ${entry}.`)
+    expect(claude.connections).toHaveLength(2)
+  }
+)

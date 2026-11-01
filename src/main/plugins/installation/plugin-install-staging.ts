@@ -3,11 +3,14 @@ import { cp, mkdir, rm } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
 import {
   PLUGIN_MANIFEST_FILENAME,
-  parsePluginManifest,
+  parseHostPluginManifest,
   qualifiedPluginKey,
   satisfiesOrcaEngineRange,
-  type PluginManifest
+  type PluginManifest,
+  type PluginManifestWithPublisher
 } from '../../../shared/plugins/manifest/plugin-manifest'
+import { withPluginPublisher } from '../../../shared/plugins/installation/plugin-publisher-derivation'
+import { splitQualifiedPluginKey } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { pluginManifestCompatibilityError } from '../../../shared/plugins/manifest/plugin-manifest-compatibility'
 import { fingerprintPluginConsent } from '../../../shared/plugins/approval/plugin-consent-fingerprint'
 import {
@@ -43,7 +46,7 @@ export type PluginInstallResult =
 export type PluginInstallInspection =
   | {
       ok: true
-      manifest: PluginManifest
+      manifest: PluginManifestWithPublisher
       pluginKey: string
       contentHash: string
       consentFingerprint: string
@@ -71,7 +74,7 @@ async function readInstallManifest(
       error: `unreadable ${PLUGIN_MANIFEST_FILENAME}: ${error instanceof Error ? error.message : String(error)}`
     }
   }
-  const parsed = parsePluginManifest(raw)
+  const parsed = parseHostPluginManifest(raw)
   if (!parsed.ok) {
     const incompatible = pluginManifestCompatibilityError(raw, hostVersion)
     return { ok: false, error: incompatible ?? `invalid manifest: ${parsed.error}` }
@@ -85,11 +88,20 @@ async function readInstallManifest(
   return { ok: true, manifest: parsed.manifest }
 }
 
+/** Who names the install: a listing's exact key, or a publisher derived from the source. */
+export type PluginInstallIdentity = { pluginKey: string } | { publisher: string }
+
+function identityPublisher(identity: PluginInstallIdentity): string {
+  return 'pluginKey' in identity
+    ? (splitQualifiedPluginKey(identity.pluginKey)?.publisher ?? '')
+    : identity.publisher
+}
+
 /** Preview and install share tree verification so reviewed bytes obey install policy. */
 export async function inspectPluginInstallTree(input: {
   rootDir: string
   hostVersion: string
-  expectedPluginKey?: string
+  identity: PluginInstallIdentity
   /** Catalog-pinned release these bytes must match exactly. */
   release?: { record: PluginCatalogRelease; resolvedCommit: string | null }
 }): Promise<PluginInstallInspection> {
@@ -97,14 +109,16 @@ export async function inspectPluginInstallTree(input: {
   if (!sourceManifest.ok) {
     return sourceManifest
   }
-  const pluginKey = qualifiedPluginKey(sourceManifest.manifest)
-  if (input.expectedPluginKey && pluginKey !== input.expectedPluginKey) {
+  // Why the listing's publisher: catalogs derive it, so a manifest's own `publisher` is ignored.
+  const manifest = withPluginPublisher(sourceManifest.manifest, identityPublisher(input.identity))
+  const pluginKey = qualifiedPluginKey(manifest)
+  if ('pluginKey' in input.identity && pluginKey !== input.identity.pluginKey) {
     return {
       ok: false,
-      error: `plugin manifest identity ${pluginKey} does not match marketplace listing ${input.expectedPluginKey}`
+      error: `plugin manifest id ${manifest.id} does not match marketplace listing ${input.identity.pluginKey}`
     }
   }
-  const declaredArtifacts = await validatePluginInstallTree(input.rootDir, sourceManifest.manifest)
+  const declaredArtifacts = await validatePluginInstallTree(input.rootDir, manifest)
   if (!declaredArtifacts.ok) {
     return { ok: false, error: `invalid declared artifact: ${declaredArtifacts.error}` }
   }
@@ -116,7 +130,7 @@ export async function inspectPluginInstallTree(input: {
     input.release &&
     pluginCatalogReleaseError({
       release: input.release.record,
-      manifest: sourceManifest.manifest,
+      manifest,
       resolvedCommit: input.release.resolvedCommit,
       contentHash: treeHash.hash
     })
@@ -125,10 +139,10 @@ export async function inspectPluginInstallTree(input: {
   }
   return {
     ok: true,
-    manifest: sourceManifest.manifest,
+    manifest,
     pluginKey,
     contentHash: treeHash.hash,
-    consentFingerprint: fingerprintPluginConsent(sourceManifest.manifest, treeHash.hash)
+    consentFingerprint: fingerprintPluginConsent(manifest, treeHash.hash)
   }
 }
 
@@ -138,7 +152,7 @@ export async function installStagedPluginTree(input: {
   hostVersion: string
   source: PluginInstallSource
   resolvedCommit: string | null
-  expectedPluginKey?: string
+  identity: PluginInstallIdentity
   release?: PluginCatalogRelease
   /** Trusted bundled bytes may restore an immutable directory damaged on disk. */
   repairCorruptedVersion?: boolean
@@ -149,7 +163,7 @@ export async function installStagedPluginTree(input: {
   const sourceInspection = await inspectPluginInstallTree({
     rootDir: input.stagingDir,
     hostVersion: input.hostVersion,
-    ...(input.expectedPluginKey ? { expectedPluginKey: input.expectedPluginKey } : {}),
+    identity: input.identity,
     ...(input.release
       ? { release: { record: input.release, resolvedCommit: input.resolvedCommit } }
       : {})
@@ -209,10 +223,10 @@ export async function installStagedPluginTree(input: {
       if (!copiedManifest.ok) {
         return { ok: false, error: `copied ${copiedManifest.error}` }
       }
-      if (qualifiedPluginKey(copiedManifest.manifest) !== pluginKey) {
+      if (copiedManifest.manifest.id !== manifest.id) {
         return { ok: false, error: 'plugin manifest identity changed while it was being staged' }
       }
-      manifest = copiedManifest.manifest
+      manifest = withPluginPublisher(copiedManifest.manifest, manifest.publisher)
       const copiedArtifacts = await validatePluginInstallTree(stagedVersionDir, manifest)
       if (!copiedArtifacts.ok) {
         return { ok: false, error: `copied artifact validation failed: ${copiedArtifacts.error}` }
@@ -238,10 +252,10 @@ export async function installStagedPluginTree(input: {
     if (!existingManifest.ok) {
       return { ok: false, error: `installed ${existingManifest.error}` }
     }
-    if (qualifiedPluginKey(existingManifest.manifest) !== pluginKey) {
+    if (existingManifest.manifest.id !== manifest.id) {
       return { ok: false, error: 'installed plugin manifest identity does not match its directory' }
     }
-    manifest = existingManifest.manifest
+    manifest = withPluginPublisher(existingManifest.manifest, manifest.publisher)
     const existingArtifacts = await validatePluginInstallTree(versionDir, manifest)
     if (!existingArtifacts.ok) {
       return {

@@ -210,7 +210,7 @@ it.each([513, 5_130])(
       }
     })
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalNativeChat: false },
+      settings: { ...getDefaultSettings(''), nativeChatProviders: {} },
       runtimeEnvironments: [pairedEnvironment('ssh')],
       runtimeStatusByEnvironmentId: new Map([['ssh', ready('r1')]])
     })
@@ -753,7 +753,7 @@ it.each(['available', 'unavailable', 'other-desktop'])(
       settings: {
         ...getDefaultSettings(''),
         ...useAppStore.getState().settings,
-        experimentalNativeChat: false
+        nativeChatProviders: {}
       },
       runtimeEnvironments: [pairedEnvironment('ssh')],
       runtimeStatusByEnvironmentId: new Map([['ssh', ready('r1')]])

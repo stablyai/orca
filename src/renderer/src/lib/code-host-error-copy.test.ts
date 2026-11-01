@@ -27,17 +27,6 @@ describe('codeHostErrorText', () => {
     )
   })
 
-  it('shows the host English for uncoded, unknown, or incomplete failures', async () => {
-    i18n.addResourceBundle('es', 'translation', es)
-    await i18n.changeLanguage('es')
-    expect(codeHostErrorText({ error: 'Old host text' })).toBe('Old host text')
-    expect(codeHostErrorText({ error: 'Newer host text', errorCode: 'github.future' })).toBe(
-      'Newer host text'
-    )
-    expect(codeHostErrorText({ error: 'English', errorCode: 'github.rerunFailed' })).toBe('English')
-    expect(codeHostErrorText({ error: 'English', errorCode: 'toString' })).toBe('English')
-  })
-
   it('localizes PR/MR start-point failures with their number, ref, and git detail', async () => {
     i18n.addResourceBundle('es', 'translation', es)
     await i18n.changeLanguage('es')

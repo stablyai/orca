@@ -66,7 +66,7 @@ async function seedChatRecord(userDataDir: string, worktreeId: string): Promise<
     records: [{ ...record, location: { ...record.location, workspaceId: worktreeId } }],
     sessionTabs: [{ tabId: CHAT, sessionId: CHAT_SESSION }]
   })
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
 }
 
 /** A terminal and a native chat in the moved project, as a session saved before the move. */

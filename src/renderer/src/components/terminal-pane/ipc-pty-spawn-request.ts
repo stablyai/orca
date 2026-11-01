@@ -137,6 +137,7 @@ export async function spawnIpcPty(
     ...(leafId ? { leafId } : {}),
     ...(placement && !admittedSessionId ? { placement } : {}),
     ...(spawnIntent ? { spawnIntent } : {}),
+    ...(connectOptions.wslPassiveRestore ? { wslPassiveRestore: true as const } : {}),
     ...(replacesPtyId ? { replacesPtyId } : {}),
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),

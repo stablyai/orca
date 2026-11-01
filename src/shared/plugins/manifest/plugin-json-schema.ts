@@ -14,9 +14,7 @@ import {
 export const PLUGIN_SCHEMA_DIRECTORY = 'docs/schemas/plugins'
 export const PLUGIN_MANIFEST_SCHEMA_FILE = 'orca-plugin.v2.schema.json'
 export const PLUGIN_CATALOG_SCHEMA_FILE = 'orca-catalog.v2.schema.json'
-/** Git ref the published `$id` points at. Why `main` for now: no release ships v2 yet; switch to
- *  the release tag that does, so editors only offer fields a shipped Orca reads. A test enforces
- *  the switch once that tag exists. */
+/** Git ref for published schemas; switch to the first v2 release tag when it ships. */
 export const PLUGIN_SCHEMA_GIT_REF = 'main'
 export const PLUGIN_SCHEMA_BASE_URL = `https://raw.githubusercontent.com/stablyai/orca/${PLUGIN_SCHEMA_GIT_REF}/${PLUGIN_SCHEMA_DIRECTORY}/`
 /** The starter plugin authors copy; it carries the schema so completion works offline. */
@@ -58,8 +56,7 @@ export function pluginCatalogJsonSchema(): PluginJsonSchema {
   )
 }
 
-/** Every generated file, keyed by repo-relative path. One list keeps the writer and the drift
- *  test from disagreeing about what is generated. */
+/** Every generated file, keyed by repo-relative path, for the schema writer. */
 export function pluginSchemaGeneratedFiles(): Record<string, string> {
   const manifest = pluginManifestJsonSchema()
   const catalog = pluginCatalogJsonSchema()

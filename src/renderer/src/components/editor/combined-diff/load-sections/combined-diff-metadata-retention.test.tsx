@@ -20,7 +20,15 @@ import { useCombinedDiffSectionRetry } from './use-combined-diff-section-retry'
 import { useCombinedDiffSectionRevalidation } from './use-combined-diff-section-revalidation'
 
 const sectionFetch = vi.hoisted(() => vi.fn())
-vi.mock('./fetch-combined-diff-section', () => ({ fetchCombinedDiffSection: sectionFetch }))
+vi.mock('./fetch-combined-diff-section', () => ({
+  fetchCombinedDiffSection: async (args: { operation: unknown }) => ({
+    result: await sectionFetch(args),
+    operation: args.operation
+  })
+}))
+vi.mock('./combined-diff-section-connection', () => ({
+  acquireCombinedDiffSectionOperation: () => ({ assertCurrent: () => undefined })
+}))
 import { useCombinedDiffSectionLoader } from './use-combined-diff-section-loader'
 
 const mocks = { fetch: sectionFetch }

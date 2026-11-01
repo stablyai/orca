@@ -1,6 +1,9 @@
 import type { PluginHostImages } from '../../shared/plugins/images/plugin-image-url'
 import type { PluginUpdateAccessGrowth } from '../../shared/plugins/approval/plugin-update-access-growth'
-import type { PluginAutoUpdateState } from '../../shared/plugins/catalog/plugin-update-policy'
+import type {
+  PluginAutoUpdateState,
+  PluginUpdateReviewNotice
+} from '../../shared/plugins/catalog/plugin-update-policy'
 import type {
   PluginIconThemeMetadata,
   PluginIconThemeRegistration
@@ -11,8 +14,15 @@ import type {
   PluginSyntaxPayload
 } from '../../shared/plugins/artifacts/plugin-syntax-artifact'
 import type { PluginTerminalThemeRegistration } from '../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
-import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
+import type {
+  PluginFrameEntry,
+  PluginFrameTheme
+} from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
+import type {
+  PluginPanelStateRequest,
+  PluginPanelStateResult
+} from '../../shared/plugins/declarative/plugin-declarative-panel-state'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
@@ -22,6 +32,7 @@ import type {
   PluginMarketplaceGitSource
 } from '../../shared/plugins/catalog/plugin-marketplace'
 import type { PluginCatalogRelease } from '../../shared/plugins/catalog/plugin-catalog-release'
+import type { PluginGitSourceResolution } from '../../shared/plugins/installation/plugin-git-resolution'
 
 export type {
   PluginHostCustomEditor,
@@ -40,7 +51,7 @@ export type PluginHostLogLine = {
 
 export type PluginHostInstallSource =
   | { kind: 'local-path'; path: string }
-  | { kind: 'git'; url: string; ref: string }
+  | { kind: 'git'; url: string; ref: string; expectedCommit?: string }
 
 export type PluginHostInstallResult =
   | {
@@ -143,11 +154,17 @@ export type PluginsApi = {
   consent: (args: PluginConsentRequest) => Promise<PluginHostListEntry[]>
   setEnabled: (args: { pluginKey: string; enabled: boolean }) => Promise<PluginHostListEntry[]>
   /** CSP-wrapped HTML for a sandboxed iframe; null if missing or disabled. */
-  readPanelEntry: (args: { pluginKey: string; panelId: string }) => Promise<PluginFrameEntry | null>
+  /** `theme`: the host's current one, baked into an isolated guest's first paint. */
+  readPanelEntry: (args: {
+    pluginKey: string
+    panelId: string
+    theme?: PluginFrameTheme
+  }) => Promise<PluginFrameEntry | null>
   /** CSP-wrapped custom editor HTML and its host-call session; null if missing or disabled. */
   readCustomEditorEntry?: (args: {
     pluginKey: string
     editorId: string
+    theme?: PluginFrameTheme
   }) => Promise<PluginFrameEntry | null>
   /** A new file's starting text (its template, or empty); null if the plugin is off or lacks it. */
   readNewFileTemplate?: (args: { pluginKey: string; newFileId: string }) => Promise<string | null>
@@ -162,6 +179,10 @@ export type PluginsApi = {
     action: string
     params?: unknown
   }) => Promise<PluginHostCallOutcome>
+  /** A components panel's persisted atoms (desktop only); see plugin-panel-state.ts. */
+  panelState?: (args: PluginPanelStateRequest) => Promise<PluginPanelStateResult>
+  /** Pins a Git install input to an exact commit without downloading it. */
+  resolveGitSource: (args: { url: string; ref: string }) => Promise<PluginGitSourceResolution>
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>
   listMarketplaces: () => Promise<PluginMarketplaceHostSourceState[]>
   addMarketplace: (source: PluginMarketplaceGitSource) => Promise<PluginMarketplaceHostSourceState>
@@ -189,6 +210,8 @@ export type PluginsApi = {
       enableIfData?: true
       /** The preview's consentFingerprint; with it, main approves only those exact bytes. */
       expectedFingerprint?: string
+      /** The page was opened from an install link; only labels telemetry. */
+      fromInstallLink?: true
     }
   ) => Promise<PluginHostInstallResult>
   previewMarketplaceUpdate: (args: {
@@ -206,6 +229,11 @@ export type PluginsApi = {
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
   /** What automatic updates last did. Older hosts reject the call; treat that as nothing. */
   getAutoUpdateState: () => Promise<PluginAutoUpdateState>
+  /** Held updates not yet told to the user, each returned once per version; never approves. */
+  takeUpdateReviewNotices: () => Promise<PluginUpdateReviewNotice[]>
+  /** Public install counts by plugin key, display only; empty when unknown. Older hosts reject. */
+  getInstallCounts: () => Promise<Record<string, number>>
+  onInstallCountsChanged: (callback: () => void) => () => void
   /** Fires after each automatic update pass, with the plugins it just updated. */
   onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
 }

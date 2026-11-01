@@ -13,6 +13,7 @@ import {
   browserImportStateForHostUpdate,
   retainCookieImportExecutionHost
 } from './browser-host-state'
+import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
 
 export function createBrowserCookieImportActions(
   set: BrowserSliceSet,
@@ -73,7 +74,7 @@ export function createBrowserCookieImportActions(
                 profileId,
                 status: 'error',
                 summary: null,
-                error: result.reason
+                error: browserCookieImportFailureText(result)
               })
             )
           }
@@ -136,7 +137,7 @@ export function createBrowserCookieImportActions(
               profileId,
               status: 'error',
               summary: null,
-              error: result.reason
+              error: browserCookieImportFailureText(result)
             })
           )
         }

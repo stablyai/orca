@@ -11,7 +11,7 @@ export const WSL_CHAT_DECOY_MARKER = 'orca-lane-claude-decoy-ran'
 export const WSL_CHAT_WINDOWS_DECOY_DIR = 'windows-claude-install'
 
 /** Windows-side installs of each agent the lane chats with; a guest install must shadow every one. */
-export const WSL_CHAT_WINDOWS_DECOY_AGENTS = ['claude', 'codex', 'grok'] as const
+export const WSL_CHAT_WINDOWS_DECOY_AGENTS = ['claude', 'codex', 'grok', 'opencode'] as const
 
 /** A Windows install as WSL interop exposes it: an npm-style sh shim on the Windows PATH. */
 export const WSL_CHAT_WINDOWS_DECOY = [

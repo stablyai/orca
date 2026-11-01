@@ -1,7 +1,7 @@
 // Resolve credential homes and transcripts from host-owned facts, never client-supplied paths.
 
 import { chatAgentsShareConversations } from '../../shared/structured-agent-cli-conversation-adoption'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
 import type {
   AgentSessionProviderHandle,
@@ -112,6 +112,7 @@ export function structuredAdoptionConflictError(
 export async function resolveStructuredAgentSessionAdoption(input: {
   providerSessionId: string
   candidateAccountHomes: readonly AgentSessionAccountHome[]
+  exhaustionReason?: 'transcriptNotFound' | 'transcriptUnreadable'
   resolveTranscript: (args: {
     providerSessionId: string
     accountHome: AgentSessionAccountHome
@@ -139,6 +140,6 @@ export async function resolveStructuredAgentSessionAdoption(input: {
   }
   // Wrong-home fallback silently turns resume into a blank chat under the old name.
   throw agentSessionRefusalError('agent_session_identity_required', {
-    reason: 'transcriptNotFound'
+    reason: input.exhaustionReason ?? 'transcriptNotFound'
   })
 }

@@ -1,5 +1,5 @@
 import { getRuntimePathBasename } from './cross-platform-path'
-import type { NativeChatImageRefBlock } from './native-chat-types'
+import type { NativeChatImageRefBlock } from './native-chat/native-chat-types'
 
 export type NativeChatImageLabelCopy = {
   pastedImage: string

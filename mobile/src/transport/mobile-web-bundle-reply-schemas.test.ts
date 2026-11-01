@@ -127,6 +127,26 @@ describe('mobile web bundle manifest reply reader', () => {
     ).toBe(true)
   })
 
+  it.each([undefined, true, false, 'true', 1, null])(
+    'reads cross-layout host ownership %s without upgrading legacy or malformed declarations',
+    (value) => {
+      const route = {
+        pathname: '/h/[hostId]',
+        grants: ['navigate'],
+        canOwnHostArea: true,
+        ...(value === undefined ? {} : { canOwnHostAreaAcrossLayouts: value })
+      }
+      const parsed = MobileWebBundleManifestReadSchema.safeParse(
+        manifestReply({ routes: [route] }).manifest
+      )
+      expect(parsed.success).toBe(true)
+      expect(parsed.data?.routes?.[0]?.canOwnHostArea).toBe(true)
+      expect(parsed.data?.routes?.[0]?.canOwnHostAreaAcrossLayouts).toBe(
+        typeof value === 'boolean' ? value : undefined
+      )
+    }
+  )
+
   it('reads a route pattern with a trailing rest segment, which no field has to change for', () => {
     // Keep catch-all routes readable on both phone and host so later desktop route additions can reach page policy.
     const pathname = '/h/[hostId]/[...page]'

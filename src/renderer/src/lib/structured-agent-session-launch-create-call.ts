@@ -1,3 +1,4 @@
+import { AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
@@ -6,12 +7,13 @@ import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import {
   isAgentSessionCreateAdmissionRefusal,
   isDefinitiveAgentSessionCreateRefusal
-} from '../../../shared/agent-session-definitive-refusal'
-import { readAgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
-import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
+} from '../../../shared/agent-session/failures/agent-session-definitive-refusal'
+import { readAgentSessionRefusalReference } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from '../../../shared/agent-session/failures/agent-session-write-failure'
 import {
   callStructuredAgentSession,
   supportsStructuredAgentSessionCreateOptionsMode,
+  structuredAgentSessionHostSupports,
   supportsStructuredAgentSessionCreateMessage
 } from '@/runtime/structured-agent-session-client'
 import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
@@ -125,6 +127,10 @@ export async function launchStructuredAgentSession(
         supported &&
         intent.explicitLaunchOptions !== undefined &&
         (await supportsStructuredAgentSessionCreateOptionsMode(intent.target))
+      intent.sendSelectionSupport = await structuredAgentSessionHostSupports(
+        intent.target,
+        AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY
+      )
     } catch {
       // Unknown capability stays on the compatible create path.
     }

@@ -1,9 +1,24 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import {
+  agentSessionAccountHome,
+  isLegacyAgentSessionAccountHome,
+  type AgentSessionAccountHome
+} from '../../shared/agent-session-account-home'
+import { acquiredAgentSessionAccount } from '../../shared/agent-session-acquired-account'
+import { CLAUDE_STRUCTURED_AGENT } from '../claude/claude-structured-agent-definition'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import { agentSessionOwnerObservationIsLive } from '../../shared/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import { historyRowFallsBackToChatLabel } from '../../shared/structured-chat-row-name'
 import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
+import {
+  redactForTransport,
+  type SessionSearchTransport
+} from '../../shared/ai-vault-search-transport'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
@@ -54,7 +69,8 @@ export function projectStructuredAiVaultSessions(
 /** Owned search hits open their chat and omit terminal resume commands, matching history rows. */
 export function projectStructuredAiVaultSearchResponse(
   response: AiVaultSearchResponse,
-  opensChat: StructuredChatOpener
+  opensChat: StructuredChatOpener,
+  transport: SessionSearchTransport = 'ipc'
 ): AiVaultSearchResponse {
   const owner = response.kind === 'results' ? ownershipLookup() : null
   if (!owner || response.kind !== 'results') {
@@ -71,7 +87,7 @@ export function projectStructuredAiVaultSearchResponse(
         return []
       }
       const { resumeCommand: _resumeCommand, ...owned } = hit
-      return [{ ...owned, ...ownedRow(hit.agent, ownership) }]
+      return [redactForTransport({ ...owned, ...ownedRow(hit.agent, ownership) }, transport)]
     })
   }
 }
@@ -82,6 +98,7 @@ export async function searchWithStructuredOwners(
   options: {
     ensureHost?: (() => Promise<unknown>) | undefined
     opensChat: StructuredChatOpener
+    transport?: SessionSearchTransport
   }
 ): Promise<AiVaultSearchResponse> {
   const { ensureHost } = options
@@ -96,7 +113,7 @@ export async function searchWithStructuredOwners(
     : true
   const response = await search
   return (await hostReady)
-    ? projectStructuredAiVaultSearchResponse(response, options.opensChat)
+    ? projectStructuredAiVaultSearchResponse(response, options.opensChat, options.transport)
     : response
 }
 
@@ -105,10 +122,57 @@ function ownedRow(rowAgent: string, ownership: StructuredProviderSessionOwnershi
     sessionId: ownership.sessionId,
     workspaceId: ownership.workspaceId
   }
+  const account = {
+    accountHome: projectedAccountHome(ownership),
+    accountWslDistro: ownership.wslDistro
+  }
   const title =
     ownership.conversationName ??
     (historyRowFallsBackToChatLabel(rowAgent) ? defaultAgentChatLabel(ownership.provider) : null)
-  return title === null ? { structuredSession } : { title, structuredSession }
+  return title === null
+    ? { structuredSession, ...account }
+    : { title, structuredSession, ...account }
+}
+
+function projectedAccountHome(ownership: StructuredProviderSessionOwnership) {
+  const home = acquiredAccountHome(ownership.sessionId) ?? ownership.key.home
+  if (!home) {
+    return undefined
+  }
+  if (!isLegacyAgentSessionAccountHome(home)) {
+    return home
+  }
+  if (
+    ownership.provider === 'codex' &&
+    !ownership.wslDistro &&
+    normalizeRuntimePathForComparison(home.path) ===
+      normalizeRuntimePathForComparison(resolveOrcaManagedCodexHomePath())
+  ) {
+    return undefined
+  }
+  const directory =
+    ownership.provider === 'claude' && home.variable === 'CLAUDE_CONFIG_DIR'
+      ? '.claude'
+      : ownership.provider === 'codex' && home.variable === 'CODEX_HOME'
+        ? '.codex'
+        : null
+  // Only a known native default proves identity; custom and legacy shared homes do not.
+  return !ownership.wslDistro &&
+    directory &&
+    normalizeRuntimePathForComparison(home.path) ===
+      normalizeRuntimePathForComparison(join(homedir(), directory))
+    ? null
+    : home
+}
+
+/** The account the host last launched this chat under, when it observed one; the founding home otherwise. */
+function acquiredAccountHome(sessionId: string): AgentSessionAccountHome | undefined {
+  const store = getStructuredAgentSessionHost()?.deps.store
+  const record = store?.getRecord(sessionId)
+  const acquired = store && record ? acquiredAgentSessionAccount(record, store.hostId) : null
+  return acquired
+    ? agentSessionAccountHome(CLAUDE_STRUCTURED_AGENT, acquired.recipe.home)
+    : undefined
 }
 
 // Build one lookup per projection to avoid scanning all chat records for every row.

@@ -1,13 +1,13 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionProviderHandle } from '../../../shared/agent-session-provider-handle'
-import type { NativeChatMessage } from '../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import type * as TranscriptLineDecoders from '../transcript-line-decoders'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import {
@@ -491,6 +491,7 @@ describe('import failures', () => {
         type: 'user',
         uuid: `${index}-${longId}`,
         sessionId: CLAUDE_SESSION,
+        cwd: index === 0 ? '/foreign-source' : root,
         message: { role: 'user', content: 'small' }
       })
     )
@@ -513,6 +514,14 @@ describe('import failures', () => {
       provider: 'claude',
       uuid: `249-${longId}`
     })
+    // Pruning away the first row cannot erase its authoritative source cwd.
+    expect(
+      await prepareLegacyTranscriptImport({
+        agent: 'claude',
+        sessionId: CLAUDE_SESSION,
+        options: { filePath, source: { providerSessionId: CLAUDE_SESSION, workspaceCwd: root } }
+      })
+    ).toMatchObject({ ok: false, error: 'This conversation belongs to another directory.' })
   })
 
   it('imports a source past 16 MiB, keeping its newest messages', async () => {

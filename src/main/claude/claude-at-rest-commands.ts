@@ -1,3 +1,4 @@
+import type { AtRestCommandDemand } from '../native-chat/agent-session-wire/at-rest-command-demand'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -20,7 +21,7 @@ import {
 import { join } from 'node:path'
 
 export const CLAUDE_AT_REST_COMMANDS_TTL_MS = AT_REST_COMMANDS_TTL_MS
-// Each probe starts Claude; limit concurrent workspace discovery processes.
+// Older clients eagerly discover commands; retain their bounded admission.
 const MAX_PROBES_RUNNING = 2
 
 export type ClaudeAtRestCommandsDeps = {
@@ -44,8 +45,8 @@ export class ClaudeAtRestCommandCatalog extends AtRestCommandCatalog {
         isLegacyAgentSessionAccountHome(record.accountHome),
       resolveWorkspacePath: deps.resolveWorkspacePath,
       ...(deps.resolveAccountHome ? { resolveAccountHome: deps.resolveAccountHome } : {}),
-      scan: (record, cwd, isCurrent, _generation, signal, admitted) =>
-        scanClaudeAtRest(deps, probes, record, cwd, isCurrent, signal, admitted),
+      scan: (record, cwd, isCurrent, _generation, signal, admitted, demand) =>
+        scanClaudeAtRest(deps, probes, record, cwd, isCurrent, signal, admitted, demand),
       ...(deps.now ? { now: deps.now } : {})
     })
   }
@@ -58,11 +59,12 @@ async function scanClaudeAtRest(
   cwd: string,
   isCurrent: () => boolean,
   signal: AbortSignal,
-  admitted: () => void
+  admitted: () => void,
+  demand: AtRestCommandDemand
 ): Promise<AtRestCommandScan> {
   const account = requireLegacyAgentSessionAccountHome(record.accountHome).path
   if (deps.probe) {
-    const release = await probes.acquire(0, signal)
+    const release = await demand.acquire(probes, signal)
     try {
       if (!isCurrent()) {
         return { commands: undefined, fromAgent: false }

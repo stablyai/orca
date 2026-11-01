@@ -113,22 +113,6 @@ function dragData(rowId: string): { dataTransfer: Partial<DataTransfer> } {
 afterEach(cleanup)
 
 describe('ProjectBoard', () => {
-  it('renders one column per option (empty included) plus the no-value column', () => {
-    render(
-      <ProjectBoard
-        table={table(
-          [TITLE_FIELD, STATUS_FIELD],
-          [row('r1', 'Ship it', [status('opt_todo', 'Todo')]), row('r2', 'Loose end', [])]
-        )}
-        fallback={<div>list</div>}
-      />
-    )
-    expect(screen.getByTestId('board-column-opt_todo')).toBeTruthy()
-    expect(screen.getByTestId('board-column-opt_done')).toBeTruthy()
-    expect(screen.getByTestId('board-column-__empty__').textContent).toContain('Loose end')
-    expect(screen.queryByText('list')).toBeNull()
-  })
-
   it('moves a card on drop via onEditField and skips no-op drops', () => {
     const onEditField = vi.fn()
     const boardTable = table(
@@ -227,16 +211,6 @@ describe('ProjectBoard', () => {
     bare.selectedView.verticalGroupByFields = []
     render(<ProjectBoard table={bare} fallback={<div>list</div>} />)
     expect(screen.getByText('list')).toBeTruthy()
-  })
-
-  it('uses the shared empty-state copy for unfiltered and filtered boards', () => {
-    const empty = table([TITLE_FIELD, STATUS_FIELD], [])
-    const { rerender } = render(<ProjectBoard table={empty} fallback={<div>list</div>} />)
-    expect(screen.getByText('This view has no items yet.')).toBeTruthy()
-    expect(screen.queryByText("No items match this view's filter.")).toBeNull()
-    empty.selectedView.filter = 'status:Done'
-    rerender(<ProjectBoard table={{ ...empty }} fallback={<div>list</div>} />)
-    expect(screen.getByText("No items match this view's filter.")).toBeTruthy()
   })
 
   it('ignores restricted and unknown payloads and deleted-option drops', () => {

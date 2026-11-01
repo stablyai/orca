@@ -152,6 +152,26 @@ describe('browser tab creation placement', () => {
     expect(group(store, G1)?.tabOrder).toEqual(['A', 'B', 'C', n.id, m.id])
   })
 
+  it('opens Group New Browser Tab in a new split beside the invoking group', async () => {
+    seedSplit(store)
+    await drawFromMain()
+    await store.getState().openNewBrowserTabInActiveWorkspace(G1, 'right')
+    await settled()
+    const n = store
+      .getState()
+      .unifiedTabsByWorktree[WT]!.find((tab) => !['A', 'B', 'C', 'X'].includes(tab.id))!
+    expect(group(store, G1)?.tabOrder).toEqual(['A', 'B', 'C'])
+    expect(store.getState().layoutByWorktree[WT]).toMatchObject({
+      first: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: G1 },
+        second: { type: 'leaf', groupId: n.groupId }
+      },
+      second: { type: 'leaf', groupId: G2 }
+    })
+  })
+
   it('uses the invoking group workspace instead of the globally selected one', async () => {
     seedSplit(store)
     store.setState({ activeWorktreeId: 'repo1::/elsewhere' })

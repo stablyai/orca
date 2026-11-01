@@ -1,3 +1,4 @@
+import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
@@ -6,12 +7,8 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
-import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
-import {
-  isNativeChatDefaultFor,
-  isNativeChatEnabled
-} from '../../../../shared/structured-native-chat-launch-route'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session/options/agent-session-optional-model-capability'
+import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { readAgentLaunchModeSettings } from '../../../agent-launch/agent-launch-mode'
 import type { RpcContext } from '../core'
@@ -113,6 +110,9 @@ export function isStructuredNativeChatDefaultFor(
   runtime: Parameters<typeof readAgentLaunchModeSettings>[0],
   agent: string
 ): boolean {
-  const settings = readAgentLaunchModeSettings(runtime)
-  return isTuiAgent(agent) ? isNativeChatDefaultFor(settings, agent) : isNativeChatEnabled(settings)
+  return nativeChatPreferenceFor(readAgentLaunchModeSettings(runtime), agent)
+}
+
+export function clientRequestsCommands(ctx: Pick<RpcContext, 'clientCapabilities'>): boolean {
+  return ctx.clientCapabilities?.includes(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY) === true
 }

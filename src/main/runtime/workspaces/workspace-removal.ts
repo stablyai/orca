@@ -109,7 +109,8 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
       force,
       runHooks,
       allowUnverifiedPtyStop,
-      allowFailedArchiveHook
+      allowFailedArchiveHook,
+      deleteBranch: options.deleteBranch
     })
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(
       cleanupScopeKey,
@@ -212,7 +213,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
           })
         }
         const canonicalWorktreePath = registeredWorktree.path
-        const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
+        const deleteBranch = options.deleteBranch ?? removedMeta?.preserveBranchOnDelete !== true
         if (
           await isStaleLocalWorktreeRegistration(
             registeredWorktree,
@@ -259,6 +260,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
           allowFailedArchiveHook,
           allowUnverifiedPtyStop,
           deleteBranch,
+          requestedDeleteBranch: options.deleteBranch,
           acquireWatcherRemoval: this.acquireFileWatcherRemoval,
           stopPtys: () =>
             this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {

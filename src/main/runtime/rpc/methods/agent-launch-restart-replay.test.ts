@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
 /** Reopen the real ledger with no in-flight launches to test both surface and prompt writes across restart.
  * A recorded surface replays the surviving agent under its current pane handle; an unrecorded outcome remains unknown, never relaunched. */
@@ -198,6 +199,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   setAgentLaunchRecordStore(null)
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

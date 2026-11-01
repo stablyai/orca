@@ -9,6 +9,7 @@ import type { AgentSessionLease } from '../../../../shared/agent-session-record'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { WorkerTerminalResourceRow } from '../../orchestration/worker-terminal-ownership'
@@ -36,7 +37,10 @@ const HOST_SCOPE = { kind: 'local', hostId: 'local' } as const
 
 function installHost(options: { closeThrows?: boolean; lease?: Partial<AgentSessionLease> } = {}) {
   let attached = true
-  const setSessionTabVisibility = vi.fn(async () => {})
+  let visible = true
+  const setSessionTabVisibility = vi.fn(async (_id: string, show: boolean) => {
+    visible = show
+  })
   const close = vi.fn(async () => {
     if (options.closeThrows) {
       throw new Error('close is queued for retry')
@@ -44,6 +48,9 @@ function installHost(options: { closeThrows?: boolean; lease?: Partial<AgentSess
     attached = false
   })
   const { host, store } = hostTestState()
+  vi.spyOn(host, 'getSessionTabId').mockImplementation((id) =>
+    visible ? `structured-agent-session-${id}` : null
+  )
   vi.spyOn(host, 'setSessionTabVisibility').mockImplementation(setSessionTabVisibility)
   vi.spyOn(host, 'close').mockImplementation(close)
   vi.spyOn(host, 'hasSession').mockImplementation(() => attached)
@@ -77,7 +84,7 @@ async function runtimeShowingStructuredTab(): Promise<{
   runtime: OrcaRuntimeService
   emit: ReturnType<typeof vi.fn>
 }> {
-  const runtime = new OrcaRuntimeService()
+  const runtime = new OrcaRuntimeService(partialRuntimeStore())
   const internal = runtime as unknown as RuntimeInternals
   internal.ensureStructuredAgentSessionHost = async () => undefined
   internal.notifyMessageArrived = vi.fn()
@@ -131,7 +138,7 @@ describe('structured worker stop retires the chat tab', () => {
     const { runtime, emit } = await runtimeShowingStructuredTab()
     expect(await structuredTabIds(runtime)).toEqual([`agent-session:${SESSION}`])
 
-    await expect(stopStructuredWorker(identity, 'd1', runtime)).resolves.toEqual({
+    await expect(stopStructuredWorker(identity, runtime)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -149,7 +156,7 @@ describe('structured worker stop retires the chat tab', () => {
     const identity = registerIdentity()
     const { runtime } = await runtimeShowingStructuredTab()
 
-    const stop = await stopStructuredWorker(identity, 'd1', runtime)
+    const stop = await stopStructuredWorker(identity, runtime)
 
     expect(stop.stopped).toBe(false)
     expect(await structuredTabIds(runtime)).toEqual([`agent-session:${SESSION}`])
@@ -158,24 +165,37 @@ describe('structured worker stop retires the chat tab', () => {
   it('cannot turn a proven stop into a retained one when the prune throws', async () => {
     installHost()
     const identity = registerIdentity()
-    const runtime = {
+    const runtime: NonNullable<Parameters<typeof stopStructuredWorker>[1]> = {
+      captureStructuredAgentSessionPresentation: () => ({
+        raw: { worktreeId: WORKTREE, tabId: 'agent-session:session-1' },
+        saved: []
+      }),
+      currentLocalStructuredSessionPresentation: () => ({
+        worktreeId: WORKTREE,
+        tabId: 'agent-session:session-1'
+      }),
+      removeCapturedStructuredSessionSavedTabs: vi.fn(),
       forgetStructuredSessionMail: vi.fn(),
       retireStructuredAgentSessionTabFromSnapshot: vi.fn(() => {
         throw new Error('snapshot is wedged')
       })
-    } as unknown as OrcaRuntimeService
+    }
 
-    await expect(stopStructuredWorker(identity, 'd1', runtime)).resolves.toEqual({
+    await expect(stopStructuredWorker(identity, runtime)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
-    expect(runtime.retireStructuredAgentSessionTabFromSnapshot).toHaveBeenCalledWith(SESSION)
+    expect(runtime.retireStructuredAgentSessionTabFromSnapshot).toHaveBeenCalledWith(
+      SESSION,
+      'agent-session:session-1',
+      WORKTREE
+    )
   })
 
   it('settles a runtime that has no tab surface at all', async () => {
     installHost()
     const identity = registerIdentity()
-    await expect(stopStructuredWorker(identity, 'd1')).resolves.toEqual({
+    await expect(stopStructuredWorker(identity)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -273,14 +293,10 @@ describe('structured worker release retires the chat tab', () => {
       })
     } as unknown as OrchestrationDb
 
+    const { runtime } = await runtimeShowingStructuredTab()
     await expect(
       completeWorkerTerminalRelease({
-        runtime: {
-          ensureStructuredAgentSessionHost: async () => {},
-          notifyMessageArrived: vi.fn(),
-          forgetStructuredSessionMail: vi.fn(),
-          retireStructuredAgentSessionTabFromSnapshot: vi.fn()
-        } as unknown as OrcaRuntimeService,
+        runtime,
         db,
         dispatchId: 'd2',
         resource
@@ -294,7 +310,7 @@ describe('structured worker release retires the chat tab', () => {
 describe('structured worker discard retires the chat tab', () => {
   it('prunes the tab a half-started worker published', async () => {
     const { close } = installHost()
-    const runtime = new OrcaRuntimeService()
+    const runtime = new OrcaRuntimeService(partialRuntimeStore())
     const internal = runtime as unknown as RuntimeInternals
     internal.ensureStructuredAgentSessionHost = async () => undefined
     let createdSessionId = ''
@@ -320,7 +336,7 @@ describe('structured worker discard retires the chat tab', () => {
       })
     ).rejects.toThrow(/was refused/)
 
-    expect(close).toHaveBeenCalledWith(createdSessionId, 'evict')
+    expect(close).toHaveBeenCalledWith(createdSessionId, 'evict', undefined)
     expect(await structuredTabIds(runtime)).toEqual([])
   })
 })

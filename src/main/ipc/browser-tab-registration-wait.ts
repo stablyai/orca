@@ -125,3 +125,24 @@ export function resolveTabRegistrationWaiters(browserPageId: string, worktreeId:
   pendingAnyTabRegistrations.clear()
   resolvePendingRegistrations(pendingAnyResolves)
 }
+
+/** Resolves once a registered page's first navigation stops, or after the timeout; never rejects. */
+export function waitForTabFirstLoad(browserPageId: string, timeoutMs = 10_000): Promise<void> {
+  const id = browserManager.getGuestWebContentsId(browserPageId)
+  const guest = id == null ? null : webContents.fromId(id)
+  // Why the URL: a guest that registered before its src applied reports '' and is not loading yet.
+  if (!guest || guest.isDestroyed() || (!guest.isLoading() && guest.getURL() !== '')) {
+    return Promise.resolve()
+  }
+  return new Promise<void>((resolve) => {
+    const done = (): void => {
+      clearTimeout(timer)
+      guest.off('did-stop-loading', done)
+      guest.off('destroyed', done)
+      resolve()
+    }
+    const timer = setTimeout(done, timeoutMs)
+    guest.on('did-stop-loading', done)
+    guest.on('destroyed', done)
+  })
+}

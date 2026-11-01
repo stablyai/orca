@@ -1,4 +1,9 @@
 import { z } from 'zod'
+import {
+  safePluginDisplayText,
+  UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE,
+  unsafePluginDisplayTextPaths
+} from './plugin-display-text'
 import { pluginCapabilitySchema } from '../capabilities/plugin-capabilities'
 import { orcaEngineRangeSchema } from './plugin-manifest-engine-range'
 import {
@@ -10,13 +15,17 @@ import { pluginManifestDetailFields } from '../catalog/plugin-detail-fields'
 import { PLUGIN_ICON_RULE_TEXT, pluginManifestImageFields } from '../images/plugin-image-fields'
 import { validatePluginManifestContributions } from './plugin-manifest-contribution-validation'
 import { validatePluginEngineFloor } from './plugin-engine-floor'
-import { validatePluginManifestV2Rules } from './plugin-manifest-v2-rules'
+import {
+  validateOmittedPublisherFloor,
+  validatePluginManifestV2Rules
+} from './plugin-manifest-v2-rules'
 import { upgradePluginManifestV1Names } from './plugin-manifest-v1-names'
 import { formatPluginSchemaIssues } from './plugin-schema-issues'
 import { pluginApiMajorSchema } from '../workers/plugin-host-api-major'
 import {
   pluginFieldDoc,
   pluginPathFieldDoc,
+  PLUGIN_DERIVED_PUBLISHER_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
 } from './plugin-schema-field-docs'
@@ -43,11 +52,9 @@ const V1 = PLUGIN_SCHEMA_SINCE_V1
 const NEXT = PLUGIN_MANIFEST_V2_SINCE
 
 const authorFields = {
-  name: z
-    .string()
-    .min(1)
-    .max(256)
-    .meta(pluginFieldDoc('Author or organization name.', V1, ['Acme'])),
+  name: safePluginDisplayText(z.string().min(1).max(256)).meta(
+    pluginFieldDoc('Author or organization name.', V1, ['Acme'])
+  ),
   url: z
     .string()
     .max(2048)
@@ -73,7 +80,7 @@ const enginesDoc = pluginFieldDoc(
 const pluginManifestFields = {
   id: pluginIdSchema.meta(
     pluginFieldDoc(
-      'Plugin id, kebab-case. The install identity is `<publisher>.<id>`. The reserved names `constructor` and `prototype` are refused.',
+      'Plugin id, kebab-case. The install identity is `<publisher>.<id>`, where Orca derives the publisher from the repository owner. The reserved names `constructor` and `prototype` are refused.',
       V1,
       ['gleam-syntax']
     )
@@ -86,18 +93,14 @@ const pluginManifestFields = {
       ['acme']
     )
   ),
-  name: z
-    .string()
-    .min(1)
-    .max(256)
-    .meta(pluginFieldDoc('Display name.', V1, ['Gleam'])),
+  name: safePluginDisplayText(z.string().min(1).max(256)).meta(
+    pluginFieldDoc('Display name.', V1, ['Gleam'])
+  ),
   version: z
     .string()
     .regex(SEMVER_RE, 'must be semver')
     .meta(pluginFieldDoc('Plugin version, semver.', V1, ['1.2.0'])),
-  description: z
-    .string()
-    .max(4096)
+  description: safePluginDisplayText(z.string().max(4096))
     .optional()
     .meta(pluginFieldDoc('One or two sentences shown in the plugin list.', V1)),
   author: z.object(authorFields).optional().meta(authorDoc),
@@ -168,6 +171,15 @@ export const pluginManifestV2Object = z
       )
     ),
     ...pluginManifestFields,
+    // Why optional: Orca derives the publisher (plugin-publisher-derivation.ts), so a value is ignored.
+    publisher: pluginIdSchema.optional().meta({
+      deprecated: true,
+      ...pluginFieldDoc(
+        `Deprecated: leave it out. Orca derives the publisher from where the plugin comes from, the way a Go module is named by its repository path: the repository owner for the official and community catalogs and for Git URL installs (\`acme\` for \`github.com/acme/gleam-syntax\`), and \`local\` for a folder. A value here is ignored for catalog and Git installs. Leaving it out needs \`engines.orca\` of at least \`>=${PLUGIN_DERIVED_PUBLISHER_SINCE}\`, because older Orca requires it; if you keep it for older Orca, it must equal the repository owner. Reserved owners (\`stablyai\`, \`official\`, \`anthropic\`, \`openai\`, \`github\` and any starting \`orca\`) and ids starting \`orca-\` install only from Orca's official catalog.`,
+        V1,
+        ['acme']
+      )
+    }),
     ...pluginManifestImageFields,
     // Why strict here too: format 2 refuses unknown keys at every level; format 1 never did.
     author: z.strictObject(authorFields).optional().meta(authorDoc),
@@ -184,20 +196,34 @@ export const pluginManifestV2Object = z
   })
   .strict()
 
-export const pluginManifestSchema = z.preprocess(
-  upgradePluginManifestV1Names,
-  z.discriminatedUnion('manifestVersion', [
-    pluginManifestV1Object.superRefine(validatePluginManifestContributions),
-    pluginManifestV2Object.superRefine((manifest, ctx) => {
-      validatePluginManifestContributions(manifest, ctx)
-      validatePluginExecutionProfile(manifest, ctx)
-      validatePluginManifestV2Rules(manifest, ctx)
-      validatePluginEngineFloor(pluginManifestV2Object, manifest, ctx)
-    })
-  ])
-)
+function buildPluginManifestSchema(enforceEngineFloor: boolean) {
+  return z.preprocess(
+    upgradePluginManifestV1Names,
+    z.discriminatedUnion('manifestVersion', [
+      pluginManifestV1Object.superRefine(validatePluginManifestContributions),
+      pluginManifestV2Object.superRefine((manifest, ctx) => {
+        validatePluginManifestContributions(manifest, ctx)
+        validatePluginExecutionProfile(manifest, ctx)
+        validatePluginManifestV2Rules(manifest, ctx)
+        if (enforceEngineFloor) {
+          validatePluginEngineFloor(pluginManifestV2Object, manifest, ctx)
+          validateOmittedPublisherFloor(manifest, ctx)
+        }
+      })
+    ])
+  )
+}
 
+/** Authoring schema: also refuses an engines.orca below the newest field it uses. */
+export const pluginManifestSchema = buildPluginManifestSchema(true)
+// Why no floor at runtime: the floor only lets older hosts say "requires Orca X"; a host that
+// parses every field and meets engines.orca runs the plugin fine, so refusing it strands installs.
+const hostPluginManifestSchema = buildPluginManifestSchema(false)
+
+/** The manifest file as written; format 2 may leave `publisher` out. */
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
+/** A manifest whose `publisher` Orca derived from its source (withPluginPublisher). */
+export type PluginManifestWithPublisher = PluginManifest & { publisher: string }
 export {
   PLUGIN_PANEL_LIMIT,
   type PluginPanelContribution
@@ -221,8 +247,9 @@ export {
 
 export const PLUGIN_MANIFEST_FILENAME = 'orca-plugin.json'
 
-/** Canonical install identity: `<publisher>.<id>` (also the install dir name). */
-export function qualifiedPluginKey(manifest: Pick<PluginManifest, 'publisher' | 'id'>): string {
+/** Canonical install identity: `<publisher>.<id>` (also the install dir name). The publisher
+ *  must be the derived one, never the file's own. */
+export function qualifiedPluginKey(manifest: { publisher: string; id: string }): string {
   return `${manifest.publisher}.${manifest.id}`
 }
 
@@ -230,12 +257,31 @@ export type PluginManifestParseResult =
   | { ok: true; manifest: PluginManifest }
   | { ok: false; error: string }
 
-export function parsePluginManifest(raw: unknown): PluginManifestParseResult {
-  const parsed = pluginManifestSchema.safeParse(raw)
+function parseWith(schema: typeof pluginManifestSchema, raw: unknown): PluginManifestParseResult {
+  const parsed = schema.safeParse(raw)
   if (parsed.success) {
     return { ok: true, manifest: parsed.data }
   }
   return { ok: false, error: formatPluginSchemaIssues(parsed.error.issues, raw) }
+}
+
+/** Strict authoring check (`validate:plugin`, catalog CI, dev folders). */
+export function parsePluginManifest(raw: unknown): PluginManifestParseResult {
+  const parsed = parseWith(pluginManifestSchema, raw)
+  // Why only here: hosts strip these characters so installed plugins keep loading.
+  const unsafe = parsed.ok ? unsafePluginDisplayTextPaths(raw) : []
+  return unsafe.length > 0
+    ? {
+        ok: false,
+        error: unsafe.map((path) => `${path}: ${UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE}`).join('; ')
+      }
+    : parsed
+}
+
+/** Runtime read for install, discovery and update. Callers must still check engines.orca
+ *  against the host, which is what actually gates loading. */
+export function parseHostPluginManifest(raw: unknown): PluginManifestParseResult {
+  return parseWith(hostPluginManifestSchema, raw)
 }
 
 export {

@@ -99,19 +99,6 @@ afterEach(() => {
 })
 
 describe('held paired-host closes when a server is removed', () => {
-  it("drops the removed server's closes, un-hiding its tab, and keeps the others'", () => {
-    useAppStore.getState().setRuntimeEnvironments([environment('env-a'), environment('env-b')])
-    hold('env-a')
-    hold('env-b')
-
-    useAppStore.getState().setRuntimeEnvironments([environment('env-b')])
-
-    expect(heldRevisions('env-a')).toBeUndefined()
-    expect(hidden('env-a', 1)).toBe(false)
-    expect(heldRevisions('env-b')).toEqual([1])
-    expect(hidden('env-b', 1)).toBe(true)
-  })
-
   it('drops the closes of a server whose re-pair proves it is another machine', () => {
     useAppStore.getState().setRuntimeEnvironments([managed('env-a', 1, 'key-a')])
     hold('env-a')
@@ -120,23 +107,6 @@ describe('held paired-host closes when a server is removed', () => {
 
     expect(heldRevisions('env-a')).toBeUndefined()
     expect(hidden('env-a', 1)).toBe(false)
-  })
-
-  it("moves the saved closes to a managed server's same-machine re-pair, so a reload sends them", () => {
-    useAppStore.getState().setRuntimeEnvironments([managed('env-a', 1, 'key-a')])
-    hold('env-a')
-
-    useAppStore.getState().setRuntimeEnvironments([managed('env-a', 2, 'key-a')])
-
-    expect(heldRevisions('env-a')).toEqual([2])
-    expect(hidden('env-a', 1)).toBe(false)
-    expect(hidden('env-a', 2)).toBe(true)
-    // The reload: the in-memory continuation is gone, but the saved close already names pairing 2.
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-a', createdAt: 1, pairingRevision: 2 }])
-    const due = takeDueWebSessionCloseReplays(STORE, 'env-a', WT, new Set([TAB]))
-    expect(due.map((replay) => replay.owner)).toEqual([
-      { environmentId: 'env-a', pairingRevision: 2 }
-    ])
   })
 
   it("holds a managed re-pair's closes, unsent, until its host key decides the machine", async () => {

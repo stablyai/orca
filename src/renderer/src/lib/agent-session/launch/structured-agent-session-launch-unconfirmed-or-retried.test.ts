@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { sourceControlActionRecipeEntry } from '../../../../../shared/source-control-action-selection'
 import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
@@ -230,7 +231,7 @@ describe('a new start beside an unconfirmed or retried chat', () => {
     const started = await runSourceControlAgentActionStart({
       selectedAgent: 'codex',
       trimmedCommandInput: 'Fix the failing check',
-      recipe: { commandInputTemplate: '{basePrompt}' },
+      recipe: sourceControlActionRecipeEntry({ commandInputTemplate: '{basePrompt}' }),
       saveTargetValue: 'none',
       actionId: 'resolveComments',
       settings: null,

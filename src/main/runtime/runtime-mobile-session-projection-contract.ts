@@ -17,6 +17,7 @@ export type RuntimeMobileSessionProjectionHost = {
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
   leaves: ReadonlyMap<string, RuntimeLeafRecord>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
+  getPtyAvailability(ptyId: string): boolean | null
   getLiveBrowserTabs(worktreeId: string): Map<string, BrowserTabInfo>
   isRendererOwnedMobileBrowserTab(
     snapshot: RuntimeMobileSessionTabsSnapshot,

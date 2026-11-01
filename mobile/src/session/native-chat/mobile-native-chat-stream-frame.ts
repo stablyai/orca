@@ -1,10 +1,10 @@
-import { applyAppend, replaceList } from '../../../../src/shared/native-chat-merge'
+import { applyAppend, replaceList } from '../../../../src/shared/native-chat/native-chat-merge'
 import { translate } from '../../i18n/mobile-i18n'
-import type { NativeChatMerger } from '../../../../src/shared/native-chat-merge'
+import type { NativeChatMerger } from '../../../../src/shared/native-chat/native-chat-merge'
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
-} from '../../../../src/shared/native-chat-types'
+} from '../../../../src/shared/native-chat/native-chat-types'
 
 export type MobileNativeChatStreamFrame = {
   type?: string

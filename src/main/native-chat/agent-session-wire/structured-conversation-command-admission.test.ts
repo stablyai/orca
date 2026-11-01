@@ -7,8 +7,8 @@ import {
   type ConversationCommandAdmissionContext
 } from './structured-conversation-command-admission'
 import type { AgentSessionBackgroundTaskStops } from '../../../shared/agent-child-work-stop-targets'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-unanswered-dispatch'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 
 const TARGETED: AgentSessionBackgroundTaskStops = { supportsTaskStop: true, supportsStopAll: true }
 const UNTARGETED: AgentSessionBackgroundTaskStops = {

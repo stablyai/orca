@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ProjectedAgentMenuItems } from './QuickLaunchButton'
-import TabBarCreateEntry from './TabBarCreateEntry'
+import { TabBarAgentPickerEntry } from './TabBarAgentPickerEntry'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { TabStripTooltipProvider } from './TabStripTooltipProvider'
 import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
@@ -75,7 +75,8 @@ export function renderTabBarSurface({
   } = runtime
   const {
     agentMenu,
-    agentLaunchOptions,
+    agentPickerInventory,
+    selectPickerAgent,
     launchAgentRow,
     newTabMenuOpen,
     setNewTabMenuOpen,
@@ -232,12 +233,12 @@ export function renderTabBarSurface({
         >
           {!terminalOnly && onOpenEntry ? (
             <>
-              <TabBarCreateEntry
+              <TabBarAgentPickerEntry
+                inventory={agentPickerInventory}
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
                 menuOpen={newTabMenuOpen}
                 menuOptions={createMenuOptions}
-                agentOptions={agentLaunchOptions}
                 onLaunchAgentOption={launchAgentFromNewTabEntry}
                 onOpenDefaultTerminal={() => {
                   queueNewActiveTerminalFocusAfterNewTabMenuClose()
@@ -278,7 +279,13 @@ export function renderTabBarSurface({
           {showStaticCreateMenuItems && showAgentLaunchItems ? (
             <>
               <DropdownMenuSeparator />
-              <ProjectedAgentMenuItems model={agentMenu} runLaunch={launchAgentRow} />
+              <ProjectedAgentMenuItems
+                model={agentMenu}
+                pickerInventory={agentPickerInventory}
+                onSelectPickerAgent={selectPickerAgent}
+                hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
+                runLaunch={launchAgentRow}
+              />
             </>
           ) : null}
         </DropdownMenuContent>

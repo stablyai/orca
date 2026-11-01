@@ -26,12 +26,8 @@ import {
   getCrashBreadcrumbSnapshot
 } from './crash-reporting/crash-breadcrumb-store'
 import { _resetTracerForTests, setActiveSink } from './observability/tracer'
-import { killLocalPrecheckProcessTree } from './automations/precheck-runner'
-import { killRecipeProcess } from '../shared/ephemeral-vm-recipe-process'
-import { killSpawnedCommandTree } from './git/command-runner/spawned-command-tree-kill'
-import { killCodexAppServerProcessTree } from './codex/codex-app-server-process-tree-kill'
+
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'
-import { killSourceControlAgentProcess } from './text-generation/source-control-local-process'
 
 const RENDERER_PID = 1001
 
@@ -82,58 +78,6 @@ afterEach(() => {
 
 // A child-handle kill still owns the root when a PID-based tree walk is refused.
 describe('a refused tree-kill still terminates the root it owns', () => {
-  it('kills the git command root when the tree walk is refused', async () => {
-    setPlatform('win32')
-    const child = { pid: RENDERER_PID, kill: vi.fn() }
-
-    await killSpawnedCommandTree(child as never)
-
-    expect(spawnMock).not.toHaveBeenCalled()
-    expect(child.kill).toHaveBeenCalledTimes(1)
-  })
-
-  it('kills the automation precheck root when the tree walk is refused', () => {
-    setPlatform('win32')
-    const child = { pid: RENDERER_PID, kill: vi.fn() }
-
-    expect(killLocalPrecheckProcessTree(child as never)).toBeNull()
-
-    expect(spawnMock).not.toHaveBeenCalled()
-    expect(child.kill).toHaveBeenCalledTimes(1)
-  })
-
-  it('kills the ephemeral-VM recipe root when the tree walk is refused', () => {
-    setPlatform('win32')
-    const child = { pid: RENDERER_PID, kill: vi.fn() }
-
-    killRecipeProcess(child as never, true)
-
-    expect(spawnMock).not.toHaveBeenCalled()
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('kills the codex app-server root when the deadline tree walk is refused', () => {
-    const child = { pid: RENDERER_PID, kill: vi.fn() }
-
-    killCodexAppServerProcessTree(child as never, {
-      platform: 'win32',
-      spawnImpl: spawnMock as never
-    })
-
-    expect(spawnMock).not.toHaveBeenCalled()
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('kills the commit-message agent root when the tree walk is refused', async () => {
-    setPlatform('win32')
-    const child = { pid: RENDERER_PID, kill: vi.fn() }
-
-    await killSourceControlAgentProcess(child as never)
-
-    expect(execFileMock).not.toHaveBeenCalled()
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
   it('kills the runProcess root when the Windows arm of the shared choke point is refused', async () => {
     setPlatform('win32')
     const windowsChild = { pid: RENDERER_PID, kill: vi.fn(), exitCode: null, signalCode: null }

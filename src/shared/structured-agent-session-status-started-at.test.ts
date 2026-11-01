@@ -3,7 +3,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import { projectStructuredAgentSessionStatusSummary } from './structured-agent-session-projection'
 import { structuredAgentSessionRowStateStartedAt } from './structured-agent-session-status-started-at'
 
@@ -99,9 +99,9 @@ describe('when the session entered its status', () => {
     expect(summaryOf([ask, unverifiable]).statusStartedAt).toBe(7_000)
   })
 
-  it('leaves an idle state undated when the journal records no end for it', () => {
+  it('dates an older turn end by its own publication, leaving message-only history undated', () => {
     const undated = item('turn', 2, { kind: 'turn', turnId: 't1', state: 'unverifiable' })
-    expect(summaryOf([ask, undated])).not.toHaveProperty('statusStartedAt')
+    expect(summaryOf([ask, undated]).statusStartedAt).toBe(undated.observedAt)
     expect(summaryOf([ask])).not.toHaveProperty('statusStartedAt')
   })
 

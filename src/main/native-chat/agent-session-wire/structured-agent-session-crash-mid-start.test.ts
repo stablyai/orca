@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 // Persist spawn identity before handshake so relaunch can stop the exact orphan instead of guessing.
 
 import { cp, mkdtemp, rm } from 'node:fs/promises'
@@ -25,9 +26,13 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import * as journalFactory from '../agent-session-journal/journal-store-factory'
 
 const CALLER = { callerKey: 'client-1' }
 const CHILD_PID = 4321
@@ -40,6 +45,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -143,7 +149,13 @@ describe('a host that dies while its Codex child is starting', () => {
         stopOwnerProcess
       }
     )
-    await relaunched.restoreReadableSessions()
+    const openJournal = vi.spyOn(journalFactory, 'openAgentSessionJournal')
+    openJournal.mockClear()
+    await relaunched.reconcileRestartLeases()
+    await relaunched.seedSessionTabs([SESSION])
+    expect(openJournal).not.toHaveBeenCalled()
+    expect(relaunched.hasSession(SESSION)).toBe(false)
+    expect(await relaunched.revealSession(SESSION)).toMatchObject({ readable: true })
 
     expect(stopOwnerProcess).toHaveBeenCalledWith(CHILD_PID, 'SIGTERM')
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -210,7 +222,7 @@ describe('a create replayed after the host that ran it died', () => {
         now: () => NOW + elapsedMs
       }
     )
-    await relaunched.restoreReadableSessions()
+    await openTestChats(relaunched)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
@@ -254,7 +266,7 @@ describe('a create answered before the host that ran it died', () => {
       Object.assign(adapterFor(restarted), { supportsCreate: () => true }),
       { mintSpawnToken: () => 'spawn-b', probeOwner: async () => ({ outcome: 'pid-absent' }) }
     )
-    await relaunched.restoreReadableSessions()
+    await openTestChats(relaunched)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'released' })
 
     await expect(relaunched.attach(CALLER, params)).resolves.toMatchObject({

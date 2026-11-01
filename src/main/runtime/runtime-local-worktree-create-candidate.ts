@@ -1,4 +1,3 @@
-import { selectWorktreeCreateBranchSeed } from '../worktree-create-branch-seed'
 import type { Repo } from '../../shared/repo-types'
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
@@ -56,7 +55,6 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   settings: ReturnType<typeof getWorktreePathSettings> & {
     branchPrefix: string
     branchPrefixCustom?: string
-    autoRenameBranchFromWork?: boolean
   }
   worktreePathSettings: ReturnType<typeof getWorktreePathSettings>
   workspaceRoot: string
@@ -68,10 +66,6 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   hostedReviewExecutionContext?: HostedReviewExecutionOptions
   pathClaim: WorktreeCreatePathClaim
 }): Promise<RuntimeLocalWorktreeCreateCandidate> {
-  const branchSeed = selectWorktreeCreateBranchSeed(
-    args.request,
-    args.settings.autoRenameBranchFromWork
-  )
   const sanitizedName = sanitizeWorktreeName(args.request.name)
   let effectiveRequestedName = args.request.name
   let effectiveSanitizedName = sanitizedName
@@ -186,7 +180,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       args.repo.path,
       selectedExistingLocalBranchName ??
         getBranchNameOverrideCandidate(args.request.branchNameOverride, suffix),
-      branchSeed ? getWorktreeCreateCandidate(branchSeed, suffix) : effectiveSanitizedName,
+      effectiveSanitizedName,
       args.settings,
       args.username,
       args.localWorktreeGitOptions

@@ -5,7 +5,7 @@ import {
   AgentSessionAcquisitionRootExitObservedError
 } from './structured-agent-session-adapter'
 import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionStopVerdict } from './structured-agent-session-host-types'
 import { endProviderChild } from './structured-agent-session-provider-child'
@@ -16,7 +16,7 @@ export async function settlePostAcquisitionAttachFailure(
   cause: unknown
 ): Promise<never> {
   let cleanupError: unknown = cause
-  let exitProof: 'exit-proven' | 'root-exit-observed' | 'unproven' = 'unproven'
+  let exitProof: 'exit-proven' | 'root-exit-observed' | 'kill-delivered' | 'unproven' = 'unproven'
   try {
     await rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, cause)
   } catch (error) {
@@ -25,10 +25,15 @@ export async function settlePostAcquisitionAttachFailure(
       error instanceof AgentSessionAcquisitionExitUnprovenError
         ? 'unproven'
         : error instanceof AgentSessionAcquisitionRootExitObservedError
-          ? 'root-exit-observed'
+          ? error.deathEvidenceKind === 'kill-delivered'
+            ? 'kill-delivered'
+            : 'root-exit-observed'
           : 'exit-proven'
   }
-  input.onAcquisitionReleased?.(cause, { rootGone: exitProof !== 'unproven' })
+  input.onAcquisitionReleased?.(cause, {
+    rootGone: exitProof !== 'unproven',
+    ...(exitProof === 'kill-delivered' ? { deathEvidenceKind: exitProof } : {})
+  })
   try {
     await input.store.settleFailedPostAcquisitionAttachment({
       sessionId: record.sessionId,

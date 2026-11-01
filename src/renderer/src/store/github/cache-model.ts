@@ -5,6 +5,7 @@ import type { GitHubProjectViewError } from '../../../../shared/github/project-r
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 export type WorkItemsCacheSources = {
+  ineligible?: true
   issues: GitHubOwnerRepo | null
   prs: GitHubOwnerRepo | null
   /** Raw origin remote, kept distinct from the effective PR source. */

@@ -1,4 +1,5 @@
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
+import { markHostShuttingDown } from '../host-shutdown-state'
 import { setDesktopBrowserBridgeHostEnabled } from '../runtime/desktop-browser-bridge/desktop-browser-bridge-registry'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 import { startOrcadBrowserProvider } from './orcad-browser-startup'
@@ -59,6 +60,7 @@ export function installOrcadShutdownSignals(
       return false
     }
     stopping = true
+    markHostShuttingDown()
     holdOrcadTerminalAdmissionUntilExit()
     exitCode = stoppedExitCode
     retractClean = onFailed
@@ -105,6 +107,8 @@ export async function startOrcadWithLifecycle<T extends object>(
   const cleanup = createIdempotentOrcadCleanup(async () => {
     // Stamp quit before awaiting teardown so dying chat agents read as restart rather than crash.
     recordAgentSessionRuntimeEnd('quit')
+    // Startup failures reach cleanup without shutdown admission while RPC may already be serving.
+    markHostShuttingDown()
     let runtimeCleanupSucceeded = false
     try {
       await runtime.stop()

@@ -6,13 +6,21 @@ import type { Page } from '@stablyai/playwright-test'
 import type { GlobalSettings } from '../../src/shared/global-settings-types'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 const TRANSCRIPT_ROWS = 650
 
 async function enableNativeChatSetting(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    const nextSettings = await window.api.settings.set({ experimentalNativeChat: true })
+    const nextSettings = await window.api.settings.set({
+      nativeChatProviders: { claude: true, codex: true }
+    })
     window.__store?.setState({ settings: nextSettings as GlobalSettings })
   })
 }
@@ -123,7 +131,11 @@ test.describe('Native chat transcript anchoring', () => {
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
+    const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+    expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
     const [tabId] = descriptor.paneKey.split(':')
     const sessionId = `e2e-prepend-anchor-${randomUUID()}`
     const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-native-chat-anchor-'))
@@ -244,6 +256,11 @@ test.describe('Native chat transcript anchoring', () => {
         `content grew ${contentGrowth}px while scrollTop adjusted ${scrollAdjustment}px`
       ).toBeLessThanOrEqual(2)
       expect(Math.abs((after?.viewportOffset ?? 0) - anchor.viewportOffset)).toBeLessThanOrEqual(3)
+      const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+      expect(finalPane.tabId).toBe(boundPane.tabId)
+      expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+      expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+      await expect(orcaPage.locator('[data-native-chat-root="true"]')).toBeVisible()
     } finally {
       rmSync(scratchDir, { recursive: true, force: true })
     }
@@ -255,7 +272,11 @@ test.describe('Native chat transcript anchoring', () => {
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
+    const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+    expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
     const [tabId] = descriptor.paneKey.split(':')
     const sessionId = `e2e-hidden-scroll-${randomUUID()}`
     const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-native-chat-hidden-'))
@@ -327,6 +348,11 @@ test.describe('Native chat transcript anchoring', () => {
         Math.abs((await scroll.evaluate((element) => element.scrollTop)) - readingAt)
       ).toBeLessThanOrEqual(2)
       await expect(jump).toBeVisible()
+      const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+      expect(finalPane.tabId).toBe(boundPane.tabId)
+      expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+      expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+      await expect(root).toBeVisible()
     } finally {
       rmSync(scratchDir, { recursive: true, force: true })
     }

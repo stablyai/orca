@@ -1,7 +1,7 @@
 // Last-surface close may release this host's provider root on observed exit, even with unverifiable descendants.
 // This proves root exit, not tree death; advance the fence to reject the stopped owner's late effects.
 
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   MAX_AGENT_SESSION_DEATH_DETAIL_CHARS,
   type AgentSessionRecord
@@ -26,6 +26,7 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   expectedFence: number
   now: number
   /** Exit receipt can precede a delayed journal settlement and lease release. */
+  deathEvidenceKind?: 'kill-delivered'
   exitObservedAt?: number
   exitReason?: string
 }): AgentSessionRecord {
@@ -43,7 +44,7 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
     handoffStage: null,
     lastRenewedAt: args.now,
     deathEvidence: {
-      kind: 'exit-observed',
+      kind: args.deathEvidenceKind ?? 'exit-observed',
       // A provider's exit reason can carry kilobytes of stderr; a longer detail fails the write.
       detail: args.exitReason
         ? args.exitReason.slice(0, MAX_AGENT_SESSION_DEATH_DETAIL_CHARS)
@@ -60,6 +61,7 @@ export function releaseStoredAgentSessionOwnerAfterSurfaceClose(
     sessionId: string
     expectedFence: number
     now: number
+    deathEvidenceKind?: 'kill-delivered'
     exitObservedAt?: number
     exitReason?: string
   }

@@ -1,3 +1,4 @@
+import { AtRestCommandDemand } from './at-rest-command-demand'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
 import {
@@ -5,7 +6,10 @@ import {
   type AgentSessionAccountHome
 } from '../../../shared/agent-session-account-home'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-launch-directory'
-import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
+import type {
+  AtRestCommandChange,
+  StructuredAgentSessionAtRestCommands
+} from './structured-agent-session-at-rest-commands'
 import { atRestCommandContextReady } from './at-rest-command-context'
 import { stat } from 'node:fs/promises'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
@@ -36,7 +40,8 @@ export type AtRestCommandSource = {
     isCurrent: () => boolean,
     generation: number,
     signal: AbortSignal,
-    admitted: () => void
+    admitted: () => void,
+    demand: AtRestCommandDemand
   ) => Promise<AtRestCommandScan>
   scanTimeoutMs?: number
   maxFailedScans?: number | null
@@ -60,6 +65,7 @@ type Entry = {
   scannedAt: number
   failures: number
   scanning: boolean
+  demand?: AtRestCommandDemand
   attempt?: AbortController
   lastReadAt: number
   settled: Set<() => void>
@@ -68,7 +74,7 @@ type Entry = {
 /** Cache commands from each resting chat’s launch folder; publish changed scan results. */
 export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommands {
   private readonly entries = new Map<string, Entry>()
-  private readonly listeners = new Set<() => void>()
+  private readonly listeners = new Set<(change?: AtRestCommandChange) => void>()
   private generation = 0
   private nextEviction = Number.NEGATIVE_INFINITY
   private disposed = false
@@ -87,7 +93,13 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
     }
     queueMicrotask(() => {
       if (!this.disposed) {
-        this.listeners.forEach((listener) => listener())
+        this.listeners.forEach((listener) =>
+          listener({
+            retired: (record) =>
+              this.source.accepts(record) &&
+              (workspaceId === undefined || record.location.workspaceId === workspaceId)
+          })
+        )
       }
     })
   }
@@ -102,10 +114,24 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
   read = (record: AgentSessionRecord): AgentSessionSlashCommand[] | undefined =>
     this.readEntry(record)?.commands
 
-  settled = async (record: AgentSessionRecord, budgetMs: number) => {
+  snapshot = (record: AgentSessionRecord) => {
+    const entry = this.source.accepts(record) ? this.entries.get(this.key(record)) : undefined
+    return {
+      commands: entry?.commands,
+      commandsPending: entry?.scanning ?? false,
+      retryableFailure:
+        entry !== undefined &&
+        !entry.scanning &&
+        entry.commands === undefined &&
+        entry.failures > 0 &&
+        this.canRetry(entry)
+    }
+  }
+
+  settled = async (record: AgentSessionRecord, budgetMs: number, independent = false) => {
     const deadline = Date.now() + budgetMs
     for (;;) {
-      const entry = this.readEntry(record)
+      const entry = this.readEntry(record, independent)
       if (!entry) {
         return undefined
       }
@@ -130,18 +156,14 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
     }
   }
 
-  onChange = (listener: () => void): (() => void) => {
+  onChange = (listener: (change?: AtRestCommandChange) => void): (() => void) => {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
 
   // Folder pins and accounts can expose different skills.
-  private readEntry(record: AgentSessionRecord): Entry | undefined {
-    if (this.disposed || !this.source.accepts(record)) {
-      return undefined
-    }
-    const now = this.now()
-    const key = JSON.stringify([
+  private key(record: AgentSessionRecord): string {
+    return JSON.stringify([
       record.provider,
       // A selected account changes through retireContext, not per chat.
       this.source.resolveAccountHome
@@ -150,6 +172,14 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
       record.location.workspaceId,
       agentSessionPinnedLaunchDirectory(record)
     ])
+  }
+
+  private readEntry(record: AgentSessionRecord, independent = false): Entry | undefined {
+    if (this.disposed || !this.source.accepts(record)) {
+      return undefined
+    }
+    const now = this.now()
+    const key = this.key(record)
     let entry = this.entries.get(key)
     if (!entry) {
       entry = {
@@ -167,7 +197,10 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
     entry.lastReadAt = now
     this.evictUnread(now)
     if (!entry.scanning && now - entry.scannedAt >= AT_REST_COMMANDS_TTL_MS) {
-      this.scanInto(entry, record)
+      this.scanInto(entry, record, independent)
+    }
+    if (independent) {
+      entry.demand?.request()
     }
     return entry
   }
@@ -185,7 +218,9 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
     }
   }
 
-  private scanInto(entry: Entry, record: AgentSessionRecord): void {
+  private scanInto(entry: Entry, record: AgentSessionRecord, independent: boolean): void {
+    const demand = new AtRestCommandDemand(independent)
+    entry.demand = demand
     const attempt = new AbortController()
     entry.attempt = attempt
     const owns = (): boolean => !this.disposed && this.entries.get(entry.key) === entry
@@ -223,7 +258,7 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
         return { commands: undefined, fromAgent: false }
       }
       const answer = await wait(
-        this.source.scan(chat, cwd, isCurrent, entry.generation, attempt.signal, admitted)
+        this.source.scan(chat, cwd, isCurrent, entry.generation, attempt.signal, admitted, demand)
       )
       attempt.signal.throwIfAborted()
       return answer
@@ -253,11 +288,9 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
             return
           }
           entry.failures += 1
-          const limit = this.source.maxFailedScans
-          entry.scannedAt =
-            limit === null || entry.failures < (limit ?? MAX_FAILED_SCANS)
-              ? this.now() - AT_REST_COMMANDS_TTL_MS + FAILED_SCAN_RETRY_MS
-              : this.now()
+          entry.scannedAt = this.canRetry(entry)
+            ? this.now() - AT_REST_COMMANDS_TTL_MS + FAILED_SCAN_RETRY_MS
+            : this.now()
           console.warn(`[${this.source.label}] reading the at-rest \`/\` commands failed:`, error)
         }
       )
@@ -271,5 +304,10 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
 
   private now(): number {
     return this.source.now?.() ?? Date.now()
+  }
+
+  private canRetry(entry: Entry): boolean {
+    const limit = this.source.maxFailedScans
+    return limit === null || entry.failures < (limit ?? MAX_FAILED_SCANS)
   }
 }

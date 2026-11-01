@@ -20,6 +20,7 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'skills/bundled-skill-install/cli-entry',
   'macos-tree-clone',
   'orcad/orcad-stale-lock-reclaim',
+  'plugins/plugin-authoring-checks',
   ...[
     'access',
     'active-location',

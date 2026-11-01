@@ -1,3 +1,5 @@
+import type { AgentLaunchChoices } from '../../shared/agent-launch-choices'
+import { prepareStructuredAgentSessionCreateForWorktree } from './rpc/methods/structured-agent-session-create'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { prepareAdoptedTranscript } from '../native-chat/agent-session-wire/structured-agent-session-adopted-import'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -54,7 +56,7 @@ function createCodexIntentRuntime(
       worktree: `id:${workspaceId}`,
       agent: 'codex'
     })
-  return { prepareCodexStructuredLaunch, createIntent }
+  return { prepareCodexStructuredLaunch, createIntent, runtime }
 }
 
 describe('structured Codex folder trust', () => {
@@ -103,6 +105,58 @@ describe('structured Codex folder trust', () => {
 })
 
 describe('structured agent-session create intent', () => {
+  it.each([true, false])(
+    'preserves remembered Fast=%s through defaults and full create, including explicit false and clear',
+    async (fastMode) => {
+      const remembered = {
+        codex: {
+          model: 'gpt-5.6-sol',
+          valuesByModel: { 'gpt-5.6-sol': { effort: 'medium', fastMode } }
+        }
+      }
+      const settings: {
+        nativeChatSessionOptions: typeof remembered
+        agentLaunchChoices: AgentLaunchChoices
+      } = {
+        nativeChatSessionOptions: remembered,
+        agentLaunchChoices: { codex: { model: 'gpt-5.6-sol', options: { effort: 'high' } } }
+      }
+      const { createIntent, runtime } = createCodexIntentRuntime(settings)
+      expect((await createIntent()).options).toMatchObject({
+        model: 'gpt-5.6-sol',
+        effort: 'high',
+        fastMode: String(fastMode)
+      })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preparation only carries this host through before attachment; no host methods run.
+      const host = { deps: {} } as unknown as StructuredAgentSessionHost
+      const explicit = await prepareStructuredAgentSessionCreateForWorktree({
+        runtime,
+        ensureHost: async () => host,
+        envelope: {
+          sessionId: 'explicit',
+          clientOperationId: 'explicit',
+          expectedRuntimeFence: null,
+          payloadFingerprint: ''
+        },
+        worktree: 'id:workspace-1',
+        agent: 'codex',
+        caller: { callerKey: 'test' },
+        options: { model: 'gpt-5.6-sol', fastMode: 'false' }
+      })
+      expect(explicit.attachParams.options).toMatchObject({ fastMode: 'false' })
+      settings.agentLaunchChoices = { codex: { model: 'different', options: { effort: 'low' } } }
+      expect((await createIntent()).options).toMatchObject({ model: 'different', effort: 'low' })
+      expect((await createIntent()).options).not.toHaveProperty('fastMode')
+      settings.agentLaunchChoices = {}
+      expect((await createIntent()).options).toMatchObject({
+        model: 'gpt-5.6-sol',
+        effort: 'medium',
+        fastMode: String(fastMode)
+      })
+      expect(settings.nativeChatSessionOptions).toEqual(remembered)
+    }
+  )
+
   it('returns the recorded owner, once no terminal still runs it, before launch support or account preparation', async () => {
     const record = agentSessionRecordFixture()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: early ownership admission only reads the host's record list.
@@ -133,7 +187,7 @@ describe('structured agent-session create intent', () => {
       }
     })
     expect(support).not.toHaveBeenCalled()
-    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1', undefined)
+    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1')
   })
 
   it('refuses a switch out of a live terminal before naming the chat that owns the conversation', async () => {
@@ -163,10 +217,7 @@ describe('structured agent-session create intent', () => {
     await expect(intent()).rejects.toMatchObject({
       refusal: { details: { owner: { sessionId: record.sessionId } } }
     })
-    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1', {
-      workspaceId: 'another-workspace',
-      paneKey: 'pane-1'
-    })
+    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1')
   })
 
   it('pins the selected Codex launch home after normal launch preparation', async () => {
@@ -409,6 +460,7 @@ describe('adopting a conversation recorded outside Orca', () => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create intent only reads getSettings from the store.
         {
           getSettings: () => ({
+            agentLaunchChoices: { omp: { model: 'fresh-only', options: { effort: 'high' } } },
             agentDefaultEnv: {
               omp: {
                 PI_CODING_AGENT_DIR: accountHome,
@@ -443,6 +495,8 @@ describe('adopting a conversation recorded outside Orca', () => {
         resumeFrom: { providerSessionId: sessionId }
       })
 
+      expect(intent.options ?? {}).not.toHaveProperty('model')
+      expect(intent.options ?? {}).not.toHaveProperty('effort')
       expect(intent.adopt?.transcriptPath).toBe(sessionFile)
       expect(intent.accountHome).toEqual({ variable: 'PI_CODING_AGENT_DIR', path: accountHome })
     } finally {

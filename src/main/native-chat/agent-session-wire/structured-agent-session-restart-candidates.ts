@@ -1,9 +1,9 @@
 // Recheck stored offers against live journals and the same launch support used by startup.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
-import { latestStructuredAgentSessionPrompt } from '../../../shared/structured-agent-session-latest-request'
+import { latestStructuredAgentSessionPrompt } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { hostCanStartRecord } from './structured-agent-session-provider-support'
@@ -21,7 +21,7 @@ export type StructuredAgentSessionRestartCandidateReader = (
 ) => StructuredAgentSessionResumableSet
 
 export function createStructuredAgentSessionRestartCandidateReader(deps: {
-  /** Listing reveals marker chats before these map reads. */
+  /** Only explicit actions open marker chats; passive listings use saved previews. */
   sessions: ReadonlyMap<string, StructuredAgentSessionRestartJournalSource>
   getRecord: (sessionId: string) => AgentSessionRecord | null
   adapter: StructuredAgentSessionAdapter
@@ -36,10 +36,12 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
       supportsRecord: (record) => hostCanStartRecord(deps, record),
       movedOn: deps.movedOn,
       savedByNewerOrca: deps.savedByNewerOrca,
-      latestPrompt: (sessionId) =>
-        latestStructuredAgentSessionPrompt(
-          deps.sessions.get(sessionId)?.journal.snapshot().items ?? []
-        ),
+      latestPrompt: (sessionId) => {
+        const session = deps.sessions.get(sessionId)
+        return session
+          ? latestStructuredAgentSessionPrompt(session.journal.snapshot().items)
+          : (deps.getRecord(sessionId)?.lastTurn?.prompt ?? '')
+      },
       leaseState
     })
 }

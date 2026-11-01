@@ -14,7 +14,7 @@ import {
   type WireClaudeModel
 } from './claude-structured-catalog-listing'
 import type { StructuredAgentSessionLiveOptions } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from '../../shared/agent-session/options/structured-agent-session-option-codec'
 
 /** Effort comes from settings; system/init omits it. */
 export function readClaudeSettingsEffort(settings: unknown): string | null {
@@ -179,6 +179,9 @@ function observeClaudeSettingsReadback(
   }
 }
 
+/** Effort and Fast change through a control this CLI never answers. */
+const CLAUDE_CLI_UPDATE_REQUIRED = { supported: false, reason: 'cli-update-required' }
+
 /** Reuse the initialize catalog and held options without another CLI request. */
 export function claudeStructuredSessionOptionsFrom(
   session: ClaudeSession,
@@ -192,6 +195,7 @@ export function claudeStructuredSessionOptionsFrom(
     ...row,
     resolvedModel: null
   }))
+  const changesLive = session.flagSettingsControl !== 'unsupported'
   const effort =
     session.options.get('effort') ??
     session.reportedOptions.effort ??
@@ -202,7 +206,9 @@ export function claudeStructuredSessionOptionsFrom(
     desiredFastMode ??
     session.reportedOptions.fastMode ??
     (session.fastModeState === undefined ? undefined : session.fastModeState !== 'off')
-  const support = claudeFastModeSupport([], session.fastModeDisabledReason)
+  const support = changesLive
+    ? claudeFastModeSupport([], session.fastModeDisabledReason)
+    : CLAUDE_CLI_UPDATE_REQUIRED
   const confirmed = [
     ...(current.confirmed ? ['model'] : []),
     ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : []),
@@ -214,6 +220,7 @@ export function claudeStructuredSessionOptionsFrom(
   return {
     models: wireClaudeModels(models),
     ...(support ? { fastModeSupport: support } : {}),
+    ...(changesLive ? {} : { effortFixed: true as const }),
     current: {
       model,
       reportedPermissionMode: session.reportedOptions.reportedPermissionMode,

@@ -22,6 +22,11 @@ import {
 import { execOrcadRemote } from '../managed-server/install/orcad-remote-runtime-control'
 import { probeInstallLockExistsCommand } from '../managed-server/install/remote-install-lock-commands'
 import { ORCAD_LOCK_FILE_NAME } from '../orcad/orcad-instance-lock'
+import {
+  parseWslGuestIdentity,
+  wslGuestIdentityShellCommand,
+  type WslGuestIdentity
+} from './wsl-guest-process-identity'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import {
@@ -34,7 +39,12 @@ import {
 const RECORD_MAX_BYTES = 64 * 1024
 const SECTION_END = '__ORCA_WSL_CONNECT_STATE_END__'
 
-export type WslOrcadInstanceLockRead = { state: 'absent' } | { state: 'present'; raw: string }
+/** The guest's identity read for the pid the lock named, so liveness needs no second exec. */
+export type WslOrcadLockHolderIdentity = { pid: number; guest: WslGuestIdentity }
+
+export type WslOrcadInstanceLockRead =
+  | { state: 'absent' }
+  | { state: 'present'; raw: string; holder?: WslOrcadLockHolderIdentity }
 
 export type WslOrcadConnectStateSnapshot = {
   activation: OrcadActivationReadResult
@@ -75,10 +85,18 @@ export function wslOrcadConnectStateCommand(
       `printf '\\n%s\\n' ${SECTION_END}`
     )
   }
+  const lock = quotePosixShell(paths.instanceLock)
+  // The pid as digits only; the parser drops the identity unless it matches the parsed lock.
+  const holderIdentity =
+    `orca_lock_pid=$(sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p' ${lock} 2>/dev/null | head -n 1); ` +
+    `if [ -n "$orca_lock_pid" ]; then printf 'PID %s\\n' "$orca_lock_pid"; ` +
+    `${wslGuestIdentityShellCommand('"$orca_lock_pid"')}; else printf '%s' NONE; fi; ` +
+    `printf '\\n%s\\n' ${SECTION_END}`
   return [
     read(paths.activation),
     read(paths.transaction),
     read(paths.instanceLock),
+    holderIdentity,
     probeInstallLockExistsCommand(host, paths.fence)
   ].join('; ')
 }
@@ -95,14 +113,27 @@ function parseSection(text: string): Section | null {
   return text.startsWith('PRESENT\n') ? { state: 'present', raw: text.slice(8) } : null
 }
 
+function withHolderIdentity(
+  lock: { state: 'present'; raw: string },
+  section: string
+): WslOrcadInstanceLockRead {
+  const match = /^PID (\d+)\n([\s\S]*)$/.exec(section)
+  if (!match) {
+    return lock
+  }
+  const pid = Number(match[1])
+  const guest = parseWslGuestIdentity(match[2] ?? '')
+  return guest && Number.isSafeInteger(pid) ? { ...lock, holder: { pid, guest } } : lock
+}
+
 /** Null unless the output has exactly the shape the command prints. */
 export function parseWslOrcadConnectState(output: string): WslOrcadConnectStateSnapshot | null {
   const parts = output.split(`\n${SECTION_END}\n`)
-  if (parts.length !== 4) {
+  if (parts.length !== 5) {
     return null
   }
   const [activation, transaction, instanceLock] = parts.slice(0, 3).map(parseSection)
-  const fence = parts[3]?.trim()
+  const fence = parts[4]?.trim()
   if (!activation || !transaction || !instanceLock || (fence !== 'LOCKED' && fence !== 'OPEN')) {
     return null
   }
@@ -115,7 +146,12 @@ export function parseWslOrcadConnectState(output: string): WslOrcadConnectStateS
       transaction.state !== 'unreadable' &&
       parseOrcadActivationTransaction(transaction.state === 'present' ? transaction.raw : null)
         .state === 'absent',
-    instanceLock: instanceLock.state === 'unreadable' ? null : instanceLock,
+    instanceLock:
+      instanceLock.state === 'unreadable'
+        ? null
+        : instanceLock.state === 'present'
+          ? withHolderIdentity(instanceLock, parts[3] ?? '')
+          : instanceLock,
     fenceOpen: fence === 'OPEN'
   }
 }

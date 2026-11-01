@@ -249,7 +249,9 @@ describe('OpenCode ACP launch resolution', () => {
     const launch = await resolver(openCodeRecord(UNMANAGED), {
       probeVersion: async (input) => (asked.push(input), { version: '1.18.31' })
     })({ identity })
-    expect(asked).toEqual([{ program: launch.command, cwd: launch.cwd, env: launch.env }])
+    expect(asked).toEqual([
+      { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env }
+    ])
   })
 })
 

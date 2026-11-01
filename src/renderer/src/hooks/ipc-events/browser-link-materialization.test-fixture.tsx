@@ -93,8 +93,11 @@ export function installBrowserLinkMaterializationProbe() {
     })
   useAppStore.setState({
     activeWorktreeId: worktreeId,
-    settings: { ...settings, activeRuntimeEnvironmentId: null },
-    defaultBrowserSessionProfileId: 'other-profile',
+    settings: {
+      ...settings,
+      activeRuntimeEnvironmentId: null,
+      browserDefaultProfileIdByHostId: { local: 'other-profile' }
+    },
     browserSessionProfiles: [
       {
         id: 'isolated-profile',

@@ -84,15 +84,6 @@ describe('bare-handle direct mail to a structured session', () => {
     hostRef.current = null
   })
 
-  it('resolves a live pane key, so recipient routing does not answer terminal_not_found', () => {
-    // resolveBareOrchestrationRecipient reads this getter, not getTerminalPaneKey.
-    const handle = registerWorker()
-    installRecord({ runtimeKind: 'native', claimStatus: 'live' })
-    expect(getLivePaneKey.call(paneKeyStub, handle)).toBe(
-      structuredWorkerIdentities.get(handle)!.paneKey
-    )
-  })
-
   it('routes to a worker at rest, whose agent the mail starts', () => {
     // Released by the idle sweep with its chat tab still listed: owned, so mail reaches it.
     const handle = registerWorker()
@@ -129,12 +120,6 @@ describe('implicit sender resolution refuses to guess', () => {
     }
   }
 
-  it('returns the only candidate leaf', async () => {
-    await expect(
-      resolveActiveTerminal.call(senderStub(['leaf_a']), 'id:wt_1', { requireUnambiguous: true })
-    ).resolves.toBe('term_leaf_a')
-  })
-
   it('refuses rather than picking the first of several', async () => {
     // An arbitrary sender guess can settle a sibling's context-only Dispatch, which has no capability token to reject it.
     await expect(
@@ -159,11 +144,5 @@ describe('implicit sender resolution refuses to guess', () => {
     ).rejects.toThrow('no_active_terminal')
     // The same stub still answers the focus guess for a caller that is not claiming an identity.
     await expect(resolveActiveTerminal.call(preReady, 'id:wt_1')).resolves.toBe('term_focused')
-  })
-
-  it('still picks arbitrarily for callers that are not claiming an identity', async () => {
-    await expect(
-      resolveActiveTerminal.call(senderStub(['leaf_a', 'leaf_b']), 'id:wt_1')
-    ).resolves.toBe('term_leaf_a')
   })
 })

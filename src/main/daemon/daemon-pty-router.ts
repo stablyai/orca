@@ -138,6 +138,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
   }
 
+  getPtyAvailability(id: string): boolean | null {
+    return this.adapterFor(id).getPtyAvailability(id)
+  }
+
   async probePtyLiveness(id: string): Promise<boolean | null> {
     return await this.ownerResolver.probe(id)
   }

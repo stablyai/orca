@@ -6,11 +6,6 @@ import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 
-const reportWorkerTerminalUserInput = vi.fn()
-vi.mock('../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: (...args: unknown[]) => reportWorkerTerminalUserInput(...args)
-}))
-
 describe('useMobileNativeChatStop', () => {
   let renderer: ReactTestRenderer | null = null
   let stop: (() => Promise<boolean>) | null = null
@@ -24,7 +19,6 @@ describe('useMobileNativeChatStop', () => {
       result: { send: { accepted: true } }
     })
     onSendError.mockReset()
-    reportWorkerTerminalUserInput.mockReset()
     agent = 'opencode'
   })
 
@@ -220,31 +214,5 @@ describe('useMobileNativeChatStop', () => {
     })
 
     expect(onSendError).not.toHaveBeenCalled()
-  })
-
-  it('reports the takeover once an Escape is accepted', async () => {
-    await render(true, 'stream-1')
-
-    act(() => void stop?.())
-    await act(async () => {
-      await vi.runAllTimersAsync()
-    })
-
-    expect(reportWorkerTerminalUserInput).toHaveBeenCalledWith(
-      expect.objectContaining({ sendRequest }),
-      'terminal-1'
-    )
-  })
-
-  it('does not report a Stop the host rejected', async () => {
-    sendRequest.mockResolvedValue({ ok: true, result: { send: { accepted: false } } })
-    await render(true, 'stream-1')
-
-    act(() => void stop?.())
-    await act(async () => {
-      await vi.runAllTimersAsync()
-    })
-
-    expect(reportWorkerTerminalUserInput).not.toHaveBeenCalled()
   })
 })

@@ -4,12 +4,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AgentJournalSubmissionSchema } from '../../../shared/agent-session-journal-submission-schema'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { AgentJournalSubmissionSchema } from '../../../shared/agent-session/journal/agent-session-journal-submission-schema'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { createJournalReducerState, applyJournalRow } from './journal-reducer'
 import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'

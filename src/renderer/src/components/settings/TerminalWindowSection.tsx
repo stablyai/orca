@@ -1,6 +1,11 @@
 import { useRef, useState } from 'react'
 import { RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import {
+  TERMINAL_COLOR_OVERRIDES_SETTING,
+  terminalColorOverridesForSlot,
+  type TerminalThemeSlot
+} from '../../../../shared/terminal-color-overrides'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
@@ -10,18 +15,23 @@ import { clampNumber } from '@/lib/terminal-theme'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
+import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'
+
 type TerminalWindowSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  /** Theme slot the Color Overrides editor writes, following the theme catalog's Dark/Light target. */
+  colorOverrideSlot: TerminalThemeSlot
 }
-
-import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'
 
 export function TerminalWindowSection({
   settings,
-  updateSettings
+  updateSettings,
+  colorOverrideSlot
 }: TerminalWindowSectionProps): React.JSX.Element {
   const [colorOverridesExpanded, setColorOverridesExpanded] = useState(false)
+  const colorOverridesSetting = TERMINAL_COLOR_OVERRIDES_SETTING[colorOverrideSlot]
+  const colorOverrides = terminalColorOverridesForSlot(settings, colorOverrideSlot)
   // Blur is a startup window option on macOS/Windows; compare against mount state to request restart only after changes.
   const blurAtMountRef = useRef<boolean>(settings.windowBackgroundBlur ?? false)
   const blurPendingRestart = (settings.windowBackgroundBlur ?? false) !== blurAtMountRef.current
@@ -283,6 +293,17 @@ export function TerminalWindowSection({
               }`}
             >
               <div className="min-h-0 space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  {colorOverrideSlot === 'light'
+                    ? translate(
+                        'auto.components.settings.TerminalWindowSection.color_overrides_light_description',
+                        'Override individual colors of the light terminal theme.'
+                      )
+                    : translate(
+                        'auto.components.settings.TerminalWindowSection.color_overrides_dark_description',
+                        'Override individual colors of the dark terminal theme.'
+                      )}
+                </p>
                 {COLOR_OVERRIDE_GROUPS.map((group) => (
                   <div key={group.label} className="space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground">{group.label}</p>
@@ -292,12 +313,12 @@ export function TerminalWindowSection({
                           key={item.key}
                           label={item.label}
                           description={item.description}
-                          value={settings.terminalColorOverrides?.[item.key] ?? ''}
+                          value={colorOverrides?.[item.key] ?? ''}
                           fallback=""
                           onChange={(value) =>
                             updateSettings({
-                              terminalColorOverrides: {
-                                ...settings.terminalColorOverrides,
+                              [colorOverridesSetting]: {
+                                ...colorOverrides,
                                 [item.key]: value || undefined
                               }
                             })
@@ -310,12 +331,17 @@ export function TerminalWindowSection({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => updateSettings({ terminalColorOverrides: undefined })}
+                  onClick={() => updateSettings({ [colorOverridesSetting]: undefined })}
                 >
-                  {translate(
-                    'auto.components.settings.TerminalWindowSection.03c855d15f',
-                    'Reset all color overrides'
-                  )}
+                  {colorOverrideSlot === 'light'
+                    ? translate(
+                        'auto.components.settings.TerminalWindowSection.reset_light_color_overrides',
+                        'Reset light color overrides'
+                      )
+                    : translate(
+                        'auto.components.settings.TerminalWindowSection.reset_dark_color_overrides',
+                        'Reset dark color overrides'
+                      )}
                 </Button>
               </div>
             </div>

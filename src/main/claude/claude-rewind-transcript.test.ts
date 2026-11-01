@@ -144,7 +144,7 @@ describe('durable Claude rewind transcripts', () => {
           store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
           resolveLaunchArgs: () => [],
           resolveWorkspacePath: async () => project,
-          resolveCommand: () => '/usr/local/bin/claude',
+          resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
           resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
           resolveAuthPolicy: () => ({ account: 'system' })
         })

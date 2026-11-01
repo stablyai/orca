@@ -1,7 +1,7 @@
 // Preserve event order across journal backpressure; hold later events until the sink accepts.
 
 import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   createProviderTimelineAssembler,
   type ProviderTimelineAssembler

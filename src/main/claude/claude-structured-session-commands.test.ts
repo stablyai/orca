@@ -1,3 +1,4 @@
+import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { describe, expect, it, vi } from 'vitest'
 import {
   agentSessionLeaseFixture,
@@ -167,5 +168,59 @@ it("lists a resting chat's `/` menu from the account it would start on, followin
     expect(await catalog.settled(chat, 1000)).toEqual([{ name: '/accounts/a', kind: 'skill' }])
   } finally {
     release()
+  }
+})
+
+it('withdraws a queued legacy acquisition for modern demand without duplicating its attempt', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  const acquiring = vi.spyOn(PrioritySemaphore.prototype, 'acquire')
+  const starts: string[] = []
+  const held = Promise.withResolvers<void>()
+  let active = 0,
+    peak = 0
+  const catalog = new ClaudeAtRestCommandCatalog({
+    resolveWorkspacePath: async () => process.cwd(),
+    probe: async ({ cwd, signal }) => {
+      starts.push(cwd)
+      peak = Math.max(peak, ++active)
+      try {
+        await new Promise<void>((resolve) => {
+          held.promise.then(resolve)
+          signal?.addEventListener('abort', () => held.promise.then(resolve), { once: true })
+        })
+        return [{ name: 'fast', kind: 'command' }]
+      } finally {
+        active--
+      }
+    }
+  })
+  const record = agentSessionRecordFixture()
+  const chat = (workspaceId: string) => ({
+    ...record,
+    location: { ...record.location, workspaceId }
+  })
+  try {
+    for (const id of ['one', 'two']) {
+      catalog.read(chat(id))
+    }
+    await vi.waitFor(() => expect(starts).toHaveLength(2))
+    catalog.read(chat('queued'))
+    await vi.waitFor(() => expect(acquiring).toHaveBeenCalledTimes(3))
+    const menu = catalog.settled(chat('queued'), 10_000, true)
+    const joined = catalog.settled(chat('queued'), 10_000, true)
+    await vi.waitFor(() => expect(starts).toHaveLength(3))
+    expect(peak).toBe(3)
+    catalog.dispose()
+    // Logical retirement does not make held physical work disappear.
+    expect(active).toBe(3)
+    held.resolve()
+    await Promise.all([menu, joined])
+    await vi.waitFor(() => expect(active).toBe(0))
+    expect(starts).toHaveLength(3)
+  } finally {
+    held.resolve()
+    catalog.dispose()
+    acquiring.mockRestore()
+    vi.useRealTimers()
   }
 })

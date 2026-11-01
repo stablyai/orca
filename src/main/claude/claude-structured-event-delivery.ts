@@ -1,8 +1,4 @@
 import { claudePromptCardWritten } from './claude-child-work-evidence'
-import {
-  resetClaudeRetiredModel,
-  retireClaudeLaunchedModel
-} from './claude-structured-retired-model'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps,
@@ -41,11 +37,6 @@ export function emitClaudeStructuredSessionEvent({
   }
   session?.translator?.handle(event)
   deps.onEvent?.(event)
-  const retired =
-    event.type === 'message' && session ? retireClaudeLaunchedModel(session, event.message) : null
-  if (session && retired !== null) {
-    resetClaudeRetiredModel(session, deps, event.sessionId, retired)
-  }
   publishChildWork(event.sessionId, session, event.type === 'message' ? event.message : null)
   // Child waiting requires the card to be durable.
   void claudePromptCardWritten(session, event)?.then(() => publishChildWork(event.sessionId))

@@ -98,7 +98,8 @@ export function installedPluginPresentation(
   plugin: PluginHostListEntry,
   updateVersion: string | null,
   busy: boolean,
-  autoUpdate: { updatedTo: string | null; needsReview: boolean }
+  autoUpdate: { updatedTo: string | null; needsReview: boolean },
+  reinstallVersion: string | null = null
 ) {
   const kind = pluginStatusKind(plugin)
   const removable = !plugin.bundled && !plugin.isDev
@@ -109,6 +110,7 @@ export function installedPluginPresentation(
     [pluginNeedsReview(plugin), 'review'],
     [kind === 'error', 'restart'],
     [Boolean(updateVersion), 'update'],
+    [kind === 'invalid' && Boolean(reinstallVersion), 'reinstall'],
     [kind === 'invalid', 'error']
   ] as const
   const primary = primaryRules.find(([applies]) => applies)?.[1] ?? null

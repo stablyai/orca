@@ -2,7 +2,25 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
+export function getTerminalLimitSearchKeywords(): string[] {
+  return [
+    ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+    ...translateSearchKeyword('settings.terminal.limit.search.limit', 'limit'),
+    ...translateSearchKeyword('settings.terminal.limit.search.maximum', 'maximum'),
+    ...translateSearchKeyword('settings.terminal.limit.search.pty', 'pty'),
+    ...translateSearchKeyword('settings.terminal.limit.search.capacity', 'capacity')
+  ]
+}
+
 export const getTerminalAdvancedSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.terminal.limit.label', 'Maximum running terminals'),
+    description: translate(
+      'settings.terminal.limit.description',
+      'Limits your running terminals across projects on this host.'
+    ),
+    keywords: getTerminalLimitSearchKeywords()
+  },
   {
     title: translate('auto.components.settings.terminal.search.7674e758e1', 'Scrollback Rows'),
     description: translate(

@@ -14,38 +14,61 @@ import { RuntimeLinearTeamWriteCommands } from './runtime-linear-team-write-comm
 export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCommands {
   public async resolveLinearCreateProject(
     input: string,
-    team: { id: string; workspaceId: string }
+    team: { id: string; workspaceId: string },
+    signal?: AbortSignal
   ): Promise<LinearProjectSummary> {
+    signal?.throwIfAborted()
     const trimmed = input.trim()
     if (!trimmed) {
       throw linearError('linear_invalid_project', 'Pass a non-empty Linear project id or name.')
     }
     const byId = isLinearUuid(trimmed)
-      ? await this.readLinearProjectByIdForCreate(trimmed, team.workspaceId)
+      ? await this.readLinearProjectByIdForCreate(trimmed, team.workspaceId, signal)
       : null
     if (byId) {
-      await this.assertLinearProjectIncludesTeam(byId, team.id, team.workspaceId, trimmed)
+      await this.assertLinearProjectIncludesTeam(byId, team.id, team.workspaceId, trimmed, signal)
       return byId
     }
-    const searchCandidates = await this.readLinearProjectsForCreate(trimmed, team.workspaceId)
+    const searchCandidates = await this.readLinearProjectsForCreate(
+      trimmed,
+      team.workspaceId,
+      signal
+    )
     const normalized = trimmed.toLowerCase()
     const idMatch = searchCandidates.find((project) => project.id.toLowerCase() === normalized)
     if (idMatch) {
-      await this.assertLinearProjectIncludesTeam(idMatch, team.id, team.workspaceId, trimmed)
+      await this.assertLinearProjectIncludesTeam(
+        idMatch,
+        team.id,
+        team.workspaceId,
+        trimmed,
+        signal
+      )
       return idMatch
     }
     const slugMatch = searchCandidates.find(
       (project) => project.slugId?.toLowerCase() === normalized
     )
     if (slugMatch) {
-      await this.assertLinearProjectIncludesTeam(slugMatch, team.id, team.workspaceId, trimmed)
+      await this.assertLinearProjectIncludesTeam(
+        slugMatch,
+        team.id,
+        team.workspaceId,
+        trimmed,
+        signal
+      )
       return slugMatch
     }
-    const nameMatches = await this.readLinearProjectsByExactNameForCreate(trimmed, team.workspaceId)
+    const nameMatches = await this.readLinearProjectsByExactNameForCreate(
+      trimmed,
+      team.workspaceId,
+      signal
+    )
     const compatibleNameMatches = await this.filterLinearProjectsForTeam(
       nameMatches,
       team.id,
-      team.workspaceId
+      team.workspaceId,
+      signal
     )
     if (compatibleNameMatches.length === 1) {
       return compatibleNameMatches[0]
@@ -65,7 +88,13 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
       )
     }
     if (nameMatches.length > 0) {
-      await this.assertLinearProjectIncludesTeam(nameMatches[0], team.id, team.workspaceId, trimmed)
+      await this.assertLinearProjectIncludesTeam(
+        nameMatches[0],
+        team.id,
+        team.workspaceId,
+        trimmed,
+        signal
+      )
     }
     throw linearError('linear_invalid_project', `No Linear project exactly matched "${trimmed}".`, {
       projects: searchCandidates.map((project) => ({
@@ -79,10 +108,12 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
 
   public async readLinearProjectByIdForCreate(
     id: string,
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<LinearProjectSummary | null> {
+    signal?.throwIfAborted()
     try {
-      return await getLinearProject(id, workspaceId, true)
+      return await getLinearProject(id, workspaceId, true, signal)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
@@ -90,10 +121,13 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
 
   public async readLinearProjectsForCreate(
     query: string,
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<LinearProjectSummary[]> {
+    signal?.throwIfAborted()
     try {
-      return (await listLinearProjects(query, LINEAR_SEARCH_MAX_LIMIT, workspaceId, true)).items
+      return (await listLinearProjects(query, LINEAR_SEARCH_MAX_LIMIT, workspaceId, true, signal))
+        .items
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
@@ -101,10 +135,12 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
 
   public async readLinearProjectsByExactNameForCreate(
     name: string,
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<LinearProjectSummary[]> {
+    signal?.throwIfAborted()
     try {
-      return await listLinearProjectsByExactName(name, workspaceId, true)
+      return await listLinearProjectsByExactName(name, workspaceId, true, signal)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
@@ -114,15 +150,17 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
     project: LinearProjectSummary,
     teamId: string,
     workspaceId: string,
-    input: string
+    input: string,
+    signal?: AbortSignal
   ): Promise<void> {
+    signal?.throwIfAborted()
     if (this.linearProjectIncludesTeam(project, teamId)) {
       return
     }
     let teams: NonNullable<LinearProjectSummary['teams']> = []
     try {
       // Summary team lists are capped; page membership before refusing cross-team creates.
-      teams = await listLinearProjectTeams(project.id, workspaceId, true)
+      teams = await listLinearProjectTeams(project.id, workspaceId, true, signal)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
@@ -142,8 +180,10 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
   public async filterLinearProjectsForTeam(
     projects: LinearProjectSummary[],
     teamId: string,
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<LinearProjectSummary[]> {
+    signal?.throwIfAborted()
     const compatible: LinearProjectSummary[] = []
     for (const project of projects) {
       if (this.linearProjectIncludesTeam(project, teamId)) {
@@ -151,7 +191,7 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
         continue
       }
       try {
-        const teams = await listLinearProjectTeams(project.id, workspaceId, true)
+        const teams = await listLinearProjectTeams(project.id, workspaceId, true, signal)
         if (teams.some((team) => team.id === teamId)) {
           compatible.push({ ...project, teams })
         }
@@ -167,10 +207,12 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
   }
 
   public async getLinearViewerForWrite(
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<{ id: string; displayName?: string | null; avatarUrl?: string | null }> {
+    signal?.throwIfAborted()
     try {
-      return await getLinearViewerForWorkspaceOrThrow(workspaceId)
+      return await getLinearViewerForWorkspaceOrThrow(workspaceId, signal)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }

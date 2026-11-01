@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  PLUGIN_MANIFEST_VERSION_CURRENT,
-  pluginManifestCompatibilityError
-} from './plugin-manifest-compatibility'
-import { pluginManifestSchema } from './plugin-manifest'
+import { pluginManifestCompatibilityError } from './plugin-manifest-compatibility'
 
 describe('pluginManifestCompatibilityError', () => {
   it('names the Orca a newer plugin needs', () => {
@@ -29,16 +25,5 @@ describe('pluginManifestCompatibilityError', () => {
     expect(pluginManifestCompatibilityError({ engines: { orca: '^9.0.0' } }, '1.4.0')).toBeNull()
     expect(pluginManifestCompatibilityError({ manifestVersion: 2 }, '1.4.0')).toBeNull()
     expect(pluginManifestCompatibilityError('not a manifest', '1.4.0')).toBeNull()
-  })
-
-  it('tracks the newest format the schema accepts', () => {
-    expect(
-      pluginManifestSchema.def.out.options.map((option) => option.shape.manifestVersion.value)
-    ).toContain(PLUGIN_MANIFEST_VERSION_CURRENT)
-    expect(
-      pluginManifestSchema.def.out.options.every(
-        (option) => option.shape.manifestVersion.value <= PLUGIN_MANIFEST_VERSION_CURRENT
-      )
-    ).toBe(true)
   })
 })

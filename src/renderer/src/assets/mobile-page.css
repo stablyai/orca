@@ -48,6 +48,7 @@
   --m-status-green: #22c55e;
   --m-status-amber: #f59e0b;
   --m-status-red: #ef4444;
+  --m-agent-done: #10b981;
   --m-mono: 'Menlo', 'SF Mono', monospace;
 
   position: relative;
@@ -1084,6 +1085,7 @@
   /* Paint containment prevents transformed slides leaking past Chromium’s rounded overflow clipping. */
   contain: paint;
   isolation: isolate;
+  container: mp-phone-screen / inline-size;
 }
 
 .mobile-page-root .mp-screen-slide {
@@ -1191,115 +1193,122 @@
   padding: 0 16px 16px;
 }
 
-.mobile-page-root .mp-greeting {
-  padding: 6px 4px 10px;
-}
-
-.mobile-page-root .mp-greeting-title {
+.mobile-page-root .mp-home-heading {
+  margin: 20px 0 7px;
+  padding: 0 4px;
   color: var(--m-text-primary);
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: 0;
-}
-
-.mobile-page-root .mp-stat-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.mobile-page-root .mp-stat-card {
-  border: 1px solid var(--m-border);
-  border-radius: 10px;
-  background: rgba(26, 26, 26, 0.6);
-  padding: 8px 10px;
-}
-
-.mobile-page-root .mp-stat-value {
-  color: var(--m-text-primary);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 0;
-}
-
-.mobile-page-root .mp-stat-label {
-  margin-top: 1px;
-  color: var(--m-text-muted);
-  font-size: 10px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.mobile-page-root .mp-section-label {
-  margin: 0 0 6px;
-  padding-left: 4px;
-  color: var(--m-text-muted);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
-.mobile-page-root .mp-host-card {
-  display: flex;
-  align-items: center;
-  min-height: 60px;
-  padding: 10px 12px;
-  gap: 12px;
-  border: 1px solid var(--m-border);
-  border-radius: 14px;
+.mobile-page-root .mp-home-heading.is-first {
+  margin-top: 4px;
+}
+
+.mobile-page-root .mp-home-group {
+  overflow: hidden;
+  border-radius: 16px;
   background: var(--m-bg-panel);
 }
 
-.mobile-page-root .mp-host-card + .mp-host-card {
-  margin-top: 6px;
+.mobile-page-root .mp-home-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  padding-left: 14px;
 }
 
-.mobile-page-root .mp-host-icon {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: 11px;
-  background: var(--m-bg-raised);
-  color: var(--m-text-primary);
+.mobile-page-root .mp-home-row + .mp-home-row::before,
+.mobile-page-root .mp-home-row + .mp-home-action-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 34px;
+  border-top: 1px solid var(--m-border);
 }
 
-.mobile-page-root .mp-host-icon svg {
-  width: 18px;
+.mobile-page-root .mp-home-row + .mp-home-action-row::before {
+  left: 14px;
+}
+
+/* Status column; separators inset to the text after it. */
+.mobile-page-root .mp-home-status {
+  display: flex;
+  width: 20px;
   height: 18px;
-  stroke-width: 1.75;
+  margin-top: 10px;
+  align-items: center;
+  flex: 0 0 auto;
 }
 
-.mobile-page-root .mp-host-icon.is-dim {
-  color: var(--m-text-secondary);
-}
-
-.mobile-page-root .mp-host-main {
+.mobile-page-root .mp-home-text {
   flex: 1;
   min-width: 0;
+  padding: 10px 0;
 }
 
-.mobile-page-root .mp-host-name {
+.mobile-page-root .mp-home-title,
+.mobile-page-root .mp-home-subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-page-root .mp-home-title {
   color: var(--m-text-primary);
   font-size: 14px;
-  font-weight: 600;
   line-height: 18px;
 }
 
-.mobile-page-root .mp-host-name.is-dim {
+.mobile-page-root .mp-home-subtitle {
+  margin-top: 1px;
   color: var(--m-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
 }
 
-.mobile-page-root .mp-host-meta {
+.mobile-page-root .mp-home-subtitle .is-waiting {
+  color: var(--m-status-red);
+}
+
+.mobile-page-root .mp-home-subtitle .is-done {
+  color: var(--m-agent-done);
+}
+
+.mobile-page-root .mp-home-trailing {
   display: flex;
+  height: 18px;
+  margin-top: 10px;
+  padding: 0 10px 0 8px;
   align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  color: var(--m-text-secondary);
-  font-size: 11px;
-  white-space: nowrap;
+  gap: 4px;
+  color: var(--m-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-page-root .mp-home-trailing svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
+.mobile-page-root .mp-home-action-row {
+  position: relative;
+  display: flex;
+  min-height: 42px;
+  padding: 0 14px;
+  align-items: center;
+  gap: 8px;
+  color: var(--m-accent-blue);
+  font-size: 14px;
+}
+
+.mobile-page-root .mp-home-action-row svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.2;
 }
 
 .mobile-page-root .mp-status-dot {
@@ -1321,69 +1330,6 @@
   background: var(--m-text-muted);
 }
 
-.mobile-page-root .mp-chevron-right {
-  color: var(--m-text-muted);
-}
-
-.mobile-page-root .mp-chevron-right svg {
-  width: 16px;
-  height: 16px;
-  stroke-width: 1.75;
-}
-
-.mobile-page-root .mp-resume-card {
-  display: flex;
-  align-items: center;
-  padding: 10px 12px;
-  gap: 12px;
-  border: 1px solid var(--m-border);
-  border-radius: 14px;
-  background: var(--m-bg-panel);
-}
-
-.mobile-page-root .mp-resume-icon {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: 11px;
-  background: var(--m-bg-raised);
-  color: var(--m-text-secondary);
-}
-
-.mobile-page-root .mp-resume-icon svg {
-  width: 16px;
-  height: 16px;
-  stroke-width: 1.75;
-}
-
-.mobile-page-root .mp-resume-title {
-  color: var(--m-text-primary);
-  font-size: 13px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mobile-page-root .mp-resume-sub {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  color: var(--m-text-secondary);
-  font-size: 11px;
-  min-width: 0;
-}
-
-/* Why: keep long repo/branch labels inside the phone frame (matches RN numberOfLines={1}). */
-.mobile-page-root .mp-resume-sub > span:not(.mp-repo-dot) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
 .mobile-page-root .mp-repo-dot {
   width: 7px;
   height: 7px;
@@ -1391,183 +1337,61 @@
   flex: 0 0 auto;
 }
 
-.mobile-page-root .mp-quick-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.mobile-page-root .mp-quick-action {
+/* Pinned like the phone's bottom bar; the bright fill marks the primary action. */
+.mobile-page-root .mp-home-bottom-bar {
   display: flex;
+  gap: 8px;
+  padding: 8px 12px 22px;
+  border-top: 1px solid var(--m-border);
+  background: var(--m-bg-base);
+}
+
+.mobile-page-root .mp-home-bar-button {
+  display: flex;
+  min-height: 40px;
+  flex: 1;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--m-border);
-  border-radius: 14px;
-  background: var(--m-bg-panel);
-}
-
-.mobile-page-root .mp-quick-action-icon {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--m-text-secondary);
-}
-
-.mobile-page-root .mp-quick-action-icon svg {
-  width: 16px;
-  height: 16px;
-  stroke-width: 1.75;
-}
-
-.mobile-page-root .mp-quick-action-label {
-  color: var(--m-text-secondary);
-  font-size: 12px;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 8px;
+  gap: 5px;
+  border-radius: 12px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
 }
 
-.mobile-page-root .mp-task-home-card {
-  display: flex;
-  align-items: center;
-  padding: 10px 12px;
-  gap: 12px;
-  border: 1px solid var(--m-border);
-  border-radius: 14px;
-  background: var(--m-bg-panel);
+.mobile-page-root .mp-home-bar-button svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.2;
 }
 
-.mobile-page-root .mp-task-home-icon {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: 11px;
-  background: var(--m-bg-raised);
-  color: var(--m-text-secondary);
-}
-
-.mobile-page-root .mp-task-home-icon svg {
-  width: 16px;
-  height: 16px;
-  stroke-width: 1.75;
-}
-
-.mobile-page-root .mp-task-home-title {
-  color: var(--m-text-primary);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.mobile-page-root .mp-task-home-subtitle {
-  margin-top: 2px;
-  color: var(--m-text-secondary);
-  font-size: 11px;
-}
-
-.mobile-page-root .mp-task-home-providers {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 8px;
-}
-
-.mobile-page-root .mp-task-home-provider-button {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 6px;
-  color: var(--m-text-secondary);
-}
-
-.mobile-page-root .mp-task-home-provider-button svg {
-  width: 22px;
-  height: 22px;
-  stroke-width: 1.75;
-}
-
-.mobile-page-root .mp-accounts-card {
-  background: var(--m-bg-panel);
-  border: 1px solid var(--m-border);
-  border-radius: 14px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.mobile-page-root .mp-accounts-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.mobile-page-root .mp-accounts-icon {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: 9px;
-  background: var(--m-bg-raised);
-  color: var(--m-text-primary);
-}
-
-.mobile-page-root .mp-accounts-icon svg {
-  width: 18px;
-  height: 18px;
-}
-
-.mobile-page-root .mp-accounts-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.mobile-page-root .mp-accounts-email {
-  color: var(--m-text-primary);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.mobile-page-root .mp-accounts-bars {
-  display: flex;
-  gap: 12px;
-  margin-top: 4px;
-}
-
-.mobile-page-root .mp-usage-bar {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.mobile-page-root .mp-usage-bar-label {
-  color: var(--m-text-muted);
-  font-size: 11px;
-  font-weight: 600;
-  min-width: 16px;
-}
-
-.mobile-page-root .mp-usage-bar-track {
-  flex: 1;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--m-bg-raised);
+.mobile-page-root .mp-home-bar-button > span {
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.mobile-page-root .mp-usage-bar-fill {
-  height: 100%;
-  background: var(--m-text-secondary);
-  border-radius: inherit;
+/* The narrow-layout frame can't fit icon and label in half its width. */
+@container mp-phone-screen (max-width: 320px) {
+  .mobile-page-root .mp-home-bar-button {
+    padding: 0 4px;
+    font-size: 12px;
+  }
+
+  .mobile-page-root .mp-home-bar-button svg {
+    display: none;
+  }
+}
+
+.mobile-page-root .mp-home-bar-button.is-secondary {
+  background: var(--m-bg-raised);
+  color: var(--m-text-primary);
+}
+
+.mobile-page-root .mp-home-bar-button.is-primary {
+  background: var(--m-text-primary);
+  color: var(--m-bg-base);
 }
 
 .mobile-page-root .mp-wl-chrome {
@@ -1730,7 +1554,7 @@
 }
 
 .mobile-page-root .mp-wl-dot.is-green {
-  background: #10b981;
+  background: var(--m-agent-done);
 }
 
 .mobile-page-root .mp-wl-dot.is-muted {

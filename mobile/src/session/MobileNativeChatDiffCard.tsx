@@ -14,7 +14,7 @@ import { nativeChatToolRowVerbCopy } from './native-chat/transcript/native-chat-
 import { nativeChatDiffCardCopy } from './native-chat-diff-card-copy'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileNativeChatOpenedDetail } from './native-chat/visual/mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './native-chat/transcript/mobile-native-chat-disclosure-store'
@@ -155,7 +155,7 @@ export function MobileNativeChatDiffCard({
     <View>
       <View style={styles.cardHeader}>
         <Pressable
-          style={[styles.line, styles.cardToggle]}
+          style={({ pressed }) => [styles.line, styles.cardToggle, pressed && pressedStyle]}
           onPress={() => hasBody && setExpanded(!expanded)}
           disabled={!hasBody}
           accessibilityRole="button"

@@ -6,11 +6,13 @@ import { getWorkspaceStatusFromGroupKey } from '../workspace-statuses'
 import type { PRGroupKey } from './group-keys'
 import type { NoticeHostContext } from './host-labels'
 import {
+  getHostWorktreeIds,
   getLaneHostWorktreeCounts,
   getLaneHostWorktreeIds,
-  getMixedHostContextLabels
+  getMixedHostContextLabels,
+  getProjectHeaderHostRepos
 } from './host-labels'
-import type { OrderedGroupEntry } from './worktree-group-entry'
+import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
 import type { ProjectGroupingIndex } from '../project-section-grouping'
 import {
   appendWorktreeRows,
@@ -23,6 +25,7 @@ import type {
   ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
   PendingCreationRef,
+  GroupHeaderRow,
   RepoOfWorktree,
   Row,
   WorktreeGroupBy
@@ -45,6 +48,35 @@ export type SectionAppendContext = {
   mixedWorktreeHostContextLabels: Map<string, string> | undefined
   noticeHostContextLabelByRepoId: Map<string, NoticeHostContext> | undefined
   occurrencePlan: WorktreeOccurrencePlan<Worktree>
+}
+
+function getProjectHeaderHostScope(
+  ctx: SectionAppendContext,
+  group: WorktreeGroupEntry
+): Pick<GroupHeaderRow, 'hostRepos' | 'hostWorktreeCounts' | 'hostWorktreeIds'> {
+  const hostRepos = getProjectHeaderHostRepos({
+    group,
+    repoMap: ctx.repoMap,
+    repoOf: ctx.repoOf,
+    noticeRepoOf: (repoId) =>
+      [
+        ctx.importedWorktreesByRepo.get(repoId)?.repo,
+        ctx.newExternalWorktreesInboxByRepo.get(repoId)?.repo
+      ].filter((repo) => repo !== undefined),
+    hasPendingCreation: (repoId) => ctx.pendingByRepo.has(repoId),
+    defaultHostId: ctx.defaultHostId
+  })
+  if (!hostRepos) {
+    return {}
+  }
+  const hostWorktreeIds = getHostWorktreeIds(group.items, ctx.repoOf, ctx.defaultHostId)
+  return {
+    hostRepos,
+    hostWorktreeCounts: hostWorktreeIds
+      ? new Map([...hostWorktreeIds].map(([hostId, ids]) => [hostId, ids.length]))
+      : undefined,
+    hostWorktreeIds
+  }
 }
 
 export function appendOrderedGroups(
@@ -81,7 +113,8 @@ export function appendOrderedGroups(
             count: group.items.length,
             icon: { kind: 'project' as const },
             repo,
-            projectGroupDepth
+            projectGroupDepth,
+            ...getProjectHeaderHostScope(ctx, group)
           }
         : groupBy === 'workspace-status'
           ? (() => {

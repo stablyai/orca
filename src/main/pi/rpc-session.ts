@@ -1,8 +1,3 @@
-import {
-  agentSessionFailureFact,
-  providerDiagnostic,
-  providerDiagnosticOf
-} from '../../shared/agent-session-failure'
 import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionLifecycleEvent,
@@ -16,11 +11,10 @@ import {
   type JsonlRpcAgentConnectionOptions
 } from '../jsonl-rpc/agent-connection'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
+import { piExitFailure } from './rpc-exit-classification'
 import { PiRpcTurns } from './rpc-turns'
 import { PiRpcDialogCallbacks } from './rpc-dialog-callbacks'
 import { PiRpcOptionObservations, type PiRpcOptionWrite } from './rpc-options'
-import type { AgentSessionOptionsResult } from '../../shared/agent-session-wire'
 import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
@@ -38,6 +32,7 @@ export type PiRpcConnection = Pick<
   | 'closed'
   | 'rootVerdict'
   | 'processless'
+  | 'spawnAbsence'
   | 'lastCloseResult'
   | 'onExit'
 >
@@ -176,8 +171,7 @@ export class PiRpcSession {
     this.heldSends.add(clientMessageId)
     let outcome: AgentSessionDispatchOutcome | undefined
     try {
-      outcome = await this.turns.submit(...args)
-      return outcome
+      return (outcome = await this.turns.submit(...args))
     } finally {
       if (outcome?.state !== 'admitted') {
         this.heldSends.delete(clientMessageId)
@@ -194,14 +188,18 @@ export class PiRpcSession {
   }
 
   /** A read projects this child's held observations and successful controls. */
-  async readOptions(): Promise<AgentSessionOptionsResult> {
+  async readOptions() {
     return this.optionObservations.read()
   }
 
   async close(requested = true): ReturnType<PiRpcConnection['close']> {
     this.requestedClose ||= requested
     this.dialogs.cancelAll()
-    return this.connection.close()
+    const result = await this.connection.close()
+    if (result.killDelivered && result.root !== 'exited') {
+      await this.exit(new Error('Pi writer killed'))
+    }
+    return result
   }
 
   fail(error: Error): void {
@@ -216,7 +214,7 @@ export class PiRpcSession {
     }
     void this.close(false)
       .then((result) => {
-        if (result.root !== 'exited') {
+        if (result.root !== 'exited' && !result.killDelivered) {
           this.deps.logger.warn('Pi process exit is unverifiable', {
             scope: 'pi-stop',
             sessionId: this.input.identity.sessionId
@@ -258,7 +256,7 @@ export class PiRpcSession {
     this.publishedExit = true
     const observedAt = Date.now()
     this.input.events?.observeExit?.(this.heldSends, observedAt)
-    this.failedCause ??= error
+    const cause = (this.failedCause ??= error)
     this.dialogs.cancelAll()
     this.turns.end()
     // The lane is sealed once finalized, so the end event travels with the final transfer.
@@ -267,40 +265,31 @@ export class PiRpcSession {
       verdict: { state: 'interrupted', completedAt: observedAt }
     })
     let timer: ReturnType<typeof setTimeout> | undefined
-    try {
-      await Promise.race([
-        this.lane.drained(),
-        new Promise<void>((resolve) => {
-          timer = setTimeout(() => {
-            this.deps.logger.warn('Pi final timeline did not drain before exit publication', {
-              scope: 'pi-exit-drain',
-              sessionId: this.input.identity.sessionId
-            })
-            resolve()
-          }, 2_000)
-          timer.unref()
-        })
-      ])
-    } finally {
-      clearTimeout(timer)
-    }
-    const cause = this.failedCause ?? error
+    await Promise.race([
+      this.lane.drained(),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(() => {
+          this.deps.logger.warn('Pi final timeline did not drain before exit publication', {
+            scope: 'pi-exit-drain',
+            sessionId: this.input.identity.sessionId
+          })
+          resolve()
+        }, 2_000)
+        timer.unref()
+      })
+    ]).finally(() => clearTimeout(timer))
     this.deps.onLifecycle({
       type: 'ended',
+      ...(this.connection.lastCloseResult?.killDelivered && this.connection.rootVerdict !== 'exited'
+        ? { deathEvidenceKind: 'kill-delivered' as const }
+        : {}),
       sessionId: this.input.identity.sessionId,
       fence: this.input.fence,
       acquisitionGeneration: this.generation,
       observedAt,
       cause: this.requestedClose ? 'requested-close' : 'unexpected-exit',
       reason: cause.message,
-      failure: agentSessionFailureFact('providerExited', {
-        detail:
-          providerDiagnosticOf(cause) ??
-          providerDiagnosticOf(error) ??
-          (cause instanceof JsonlRpcResponseError
-            ? providerDiagnostic(cause.message, 'person')
-            : undefined)
-      })
+      failure: piExitFailure(error, cause)
     })
   }
 

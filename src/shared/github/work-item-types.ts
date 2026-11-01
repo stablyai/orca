@@ -34,6 +34,8 @@ export type GitHubWorkItem = {
   additions?: number
   deletions?: number
   changedFiles?: number
+  /** Issue-only; older hosts omit it. */
+  commentCount?: number
   reviewDecision?: PRReviewDecision | null
   reviewRequests?: GitHubAssignableUser[]
   latestReviews?: GitHubPRReviewSummary[]
@@ -81,6 +83,8 @@ export type GitHubWorkItemDetails = {
 export type ListWorkItemsResult<T> = {
   items: T[]
   sources: {
+    /** Affirmative other-forge identity; absent on unresolved or legacy results. */
+    ineligible?: true
     issues: GitHubOwnerRepo | null
     prs: GitHubOwnerRepo | null
     /** Raw origin independent of preferences; compare candidates without inferring from effective PR source. */

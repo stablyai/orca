@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
@@ -9,7 +10,8 @@ import {
 } from './agent-launch-caller-profiles-test-harness'
 import {
   createLaunchFunnelStore,
-  queuedStartupCommand,
+  createdTabOptions,
+  hostLaunchRequest,
   resetLaunchFunnelStore
 } from './agent-launch-funnel-test-harness'
 
@@ -75,7 +77,7 @@ function serverReports(capabilities: readonly string[] | null): void {
 }
 
 const CHAT_DEFAULT_SETTINGS = {
-  experimentalNativeChat: true
+  nativeChatProviders: EVERY_AGENT_CHAT
 }
 
 const cases = callerProfileCases()
@@ -108,7 +110,11 @@ describe('agent launch caller routing', () => {
       settlement: new Promise(() => undefined),
       cancel: vi.fn()
     })
-    mockLaunchAgentInWebHostTab.mockResolvedValue({ delivered: true, failureNotified: false })
+    mockLaunchAgentInWebHostTab.mockResolvedValue({
+      delivered: true,
+      failureNotified: false,
+      outcome: { status: 'created' }
+    })
   })
 
   it.each(cases)('routes %s to a local terminal under default settings', async (_id, profile) => {
@@ -223,7 +229,7 @@ describe('agent launch caller routing', () => {
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
-    await expect(result?.promptDeliveryResult).resolves.toEqual({
+    await expect(result?.promptDeliveryResult).resolves.toMatchObject({
       delivered: true,
       failureNotified: false
     })
@@ -262,7 +268,21 @@ describe('agent launch caller routing', () => {
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
     expect(store.createTab).toHaveBeenCalledOnce()
     expect(store.createTab.mock.calls[0]?.slice(0, 2)).toEqual(['wt-1', 'group-1'])
-    expect(queuedStartupCommand(store)).toBe("claude '--model' 'sonnet'")
+    expect(hostLaunchRequest(store)).toMatchObject({
+      agent: 'claude',
+      target: { kind: 'existing', worktree: 'id:wt-1' },
+      agentArgs: '--model sonnet'
+    })
+    const options = createdTabOptions(store)
+    const tabId = options?.id
+    if (typeof tabId !== 'string') {
+      throw new Error('Expected an allocated terminal tab id')
+    }
+    expect(options).toMatchObject({
+      id: store.createTab.mock.results[0]?.value.id,
+      initialLeafId: expect.any(String),
+      agentLaunchPane: { leafId: options?.initialLeafId }
+    })
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: true,
       failureNotified: false
@@ -270,7 +290,10 @@ describe('agent launch caller routing', () => {
     const { pasteDraftWhenAgentReady } = await import('@/lib/agent-paste-draft')
     expect(pasteDraftWhenAgentReady).toHaveBeenCalledOnce()
     expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith(
-      expect.objectContaining({ content: 'fix the flaky test' })
+      expect.objectContaining({ tabId, content: 'fix the flaky test' })
+    )
+    await expect(vi.mocked(pasteDraftWhenAgentReady).mock.calls[0]?.[0].launchPty).resolves.toBe(
+      `${tabId}-pty`
     )
     expect(mockToastInfo).not.toHaveBeenCalled()
     expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()

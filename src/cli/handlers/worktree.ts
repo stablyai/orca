@@ -285,6 +285,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       worktree,
       hostId,
       force: flags.get('force') === true,
+      deleteBranch: flags.get('delete-branch') === true,
       runHooks: flags.get('run-hooks') === true,
       // Archive failure waivers protect user data separately from --force's PTY-stop waiver.
       allowFailedArchiveHook: flags.get('allow-failed-archive-hook') === true
@@ -295,7 +296,9 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       // Hosts that predate waiting answer on acceptance.
       value.removing
         ? 'removed: false\nOrca is still deleting the checkout in the background.'
-        : `removed: ${value.removed}`
+        : value.removed === true
+          ? 'removed: true'
+          : 'Removal is not confirmed.'
     )
   }
 }

@@ -58,7 +58,7 @@ export function createCodexModelCatalogProbe(
     const overlay = { ...deps.resolveEnv?.() }
     const readEnvironment =
       lookup === 'saved' ? deps.resolveSavedEnvironment : deps.resolveEnvironment
-    const { command, environment } = await resolveCodexStructuredInvocation({
+    const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
       ...deps,
       operation,
       resolveEnvironment: async () => ({ ...(await readEnvironment?.()), ...overlay }),
@@ -67,6 +67,7 @@ export function createCodexModelCatalogProbe(
     })
     assertStructuredAgentResolutionCurrent(operation)
     const args = [
+      ...prefixArgs,
       ...(cwd ? codexStructuredLaunchArgs((await deps.resolveLaunchArgs?.()) ?? []) : []),
       ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
     ]

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { PtyTransport } from './pty-transport-types'
 import { useWslHostUnavailableReason } from './use-wsl-host-unavailable-reason'
@@ -14,9 +14,12 @@ import {
 } from './remote-server-notice-claims'
 import { RemoteServerOutageNotice } from './RemoteServerOutageNotice'
 import { WslHostStoppedCard } from './WslHostStoppedCard'
+import { useRetryPanesWhenWslHostReturns } from './use-wsl-host-return-retry'
 import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
 import { useAppStore } from '@/store'
-import { paneShowsWslHostStoppedCard, selectStoppedWslDistro } from '@/lib/wsl-host-stopped-status'
+import { paneShowsWslHostStoppedCard } from '@/lib/wsl-host-stopped-status'
+import { withoutWslHostStoppedLines } from '../../../../shared/wsl-host-stopped-message'
+import { mapPaneTerminalErrors } from './terminal-error-accumulation'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 
 /** Reconnect pairs refused servers, signs in SSH hosts awaiting credentials, or otherwise retries the pane. */
@@ -64,7 +67,29 @@ export function TerminalPaneRecoveryPortals({
   const wslHostUnavailable = useWslHostUnavailableReason(controller.worktreeId)
   const pairingRefusedEnvironmentId = useManagedPairingRefusedEnvironmentId(controller.worktreeId)
   const ownerEnvironmentId = useWorkspaceRuntimeEnvironmentId(controller.worktreeId)
-  const stoppedWslDistro = useAppStore((state) => selectStoppedWslDistro(state, ownerEnvironmentId))
+  // One subscription for both the card and the retry: one listener per mounted surface.
+  const ownerWslHost = useAppStore((state) =>
+    ownerEnvironmentId ? state.wslHostStatuses[ownerEnvironmentId] : undefined
+  )
+  const stoppedWslDistro = ownerWslHost?.state === 'distro-stopped' ? ownerWslHost.distro : null
+  const { setTerminalError, setTerminalErrorsByPaneId } = controller
+  const ownerWslDistro = ownerWslHost?.distro ?? null
+  // Why scoped to this host's distro: a pane on another, still-stopped host keeps its line.
+  const clearStoppedHostErrors = useCallback(() => {
+    if (!ownerWslDistro) {
+      return
+    }
+    const strip = (error: string): string | null =>
+      withoutWslHostStoppedLines(error, ownerWslDistro)
+    setTerminalError((current) => (current === null ? null : strip(current)))
+    setTerminalErrorsByPaneId((current) => mapPaneTerminalErrors(current, strip))
+  }, [ownerWslDistro, setTerminalError, setTerminalErrorsByPaneId])
+  useRetryPanesWhenWslHostReturns(
+    ownerEnvironmentId,
+    ownerWslHost?.state,
+    paneTransportsRef,
+    clearStoppedHostErrors
+  )
   const retryingOutageEnvironmentId = useRetryingOutageEnvironmentId(controller.worktreeId)
   const isolated = controller.isolatedPaneKey !== null
   // Why: a pane waiting for SSH sign-in says so itself; "reconnecting" over it would be false.

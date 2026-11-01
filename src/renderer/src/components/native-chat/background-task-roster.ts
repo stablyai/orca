@@ -3,7 +3,7 @@
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-background-task-wire'
 import {
   backgroundTaskGroupLabel as groupLabel,
   backgroundTaskStateReason as stateReason,

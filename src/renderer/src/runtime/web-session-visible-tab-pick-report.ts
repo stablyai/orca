@@ -18,6 +18,7 @@ import {
 } from './web-session-focus-intent'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
 import { isServerFrameDrawnWorkspace } from './web-session-tabs-sync/frame-drawn-server-workspaces'
+import { isWebSessionTabsWorktreeRemovalFrame } from './web-session-tabs-sync/session-tabs-inventory-absence'
 
 /** The pane last reported per connection and workspace. Reporting again only when the desktop's own
  *  pane changes keeps two windows sharing one device id from steering the pick back and forth. */
@@ -93,7 +94,11 @@ export function reportVisibleTabPickToHost(
 ): void {
   const frameKey = `${environmentId}\0${snapshot.worktree}`
   // Only servers that keep a pick per device project it; an older one would move the host instead.
-  if (!snapshot.publicationEpoch.endsWith(CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX)) {
+  // A removal frame has nothing to pick, and caching it would outlive the workspace.
+  if (
+    !snapshot.publicationEpoch.endsWith(CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX) ||
+    isWebSessionTabsWorktreeRemovalFrame(snapshot)
+  ) {
     latestFrameByWorkspace.delete(frameKey)
     return
   }
@@ -269,6 +274,22 @@ function visibleTerminalPane(
   }
 }
 
+function forgetVisibleTabPicks(matches: (frameKey: string) => boolean): void {
+  for (const map of [reportedPaneByWorkspace, latestFrameByWorkspace]) {
+    for (const key of map.keys()) {
+      if (matches(key)) {
+        map.delete(key)
+      }
+    }
+  }
+  for (const [key, timer] of pendingCheckByWorkspace) {
+    if (matches(key)) {
+      clearTimeout(timer)
+      pendingCheckByWorkspace.delete(key)
+    }
+  }
+}
+
 /** Mirror teardown for an environment drops everything recorded for it. */
 export function forgetVisibleTabPicksForEnvironment(environmentId: string): void {
   teardownEpochByEnvironment.set(
@@ -276,19 +297,13 @@ export function forgetVisibleTabPicksForEnvironment(environmentId: string): void
     (teardownEpochByEnvironment.get(environmentId) ?? 0) + 1
   )
   const prefix = `${environmentId}\0`
-  for (const map of [reportedPaneByWorkspace, latestFrameByWorkspace]) {
-    for (const key of map.keys()) {
-      if (key.startsWith(prefix)) {
-        map.delete(key)
-      }
-    }
-  }
-  for (const [key, timer] of pendingCheckByWorkspace) {
-    if (key.startsWith(prefix)) {
-      clearTimeout(timer)
-      pendingCheckByWorkspace.delete(key)
-    }
-  }
+  forgetVisibleTabPicks((key) => key.startsWith(prefix))
+}
+
+/** A removed workspace drops its record, so later workspace switches never scan it. */
+export function forgetVisibleTabPicksForWorktree(environmentId: string, worktreeId: string): void {
+  const frameKey = `${environmentId}\0${worktreeId}`
+  forgetVisibleTabPicks((key) => key === frameKey)
 }
 
 export function resetReportedVisibleTabPicksForTests(): void {

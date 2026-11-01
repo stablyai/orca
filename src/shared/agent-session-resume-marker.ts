@@ -10,7 +10,7 @@ import {
   AGENT_SESSION_RESTART_ACTIVITY_MAX_TASKS
 } from './agent-session-restart-activity'
 import type { AgentSessionRestartActivity } from './agent-session-restart-activity'
-import type { AgentJournalCursor } from './agent-session-journal-types'
+import type { AgentJournalCursor } from './agent-session-journal-identity'
 
 /** Why the app went away. Recorded because an update install is a restart the user did not choose,
  *  and the surface that offers the resume says so. */

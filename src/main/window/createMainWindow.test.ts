@@ -18,6 +18,9 @@ vi.mock('../browser/browser-route-session-runtime', async () => ({
     attachGuest: (await import('./createMainWindow-test-harness')).attachRouteGuestMock
   }
 }))
+vi.mock('../browser/browser-javascript-dialogs', () => ({
+  installBrowserJavaScriptDialogs: vi.fn()
+}))
 vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
   return {

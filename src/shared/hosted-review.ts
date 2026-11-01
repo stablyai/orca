@@ -53,6 +53,8 @@ export type HostedReviewInfo = {
 
 export type HostedReviewForBranchArgs = {
   force?: boolean
+  /** Only a manual click invalidates pre-click work; force also serves automatic polling. */
+  userRefresh?: boolean
   repoPath: string
   repoId?: string
   admissionTier?: 'interactive' | 'status' | 'background'
@@ -71,6 +73,37 @@ export type HostedReviewForBranchArgs = {
   active?: boolean
   /** Desktop IPC only: an explicit Refresh, which may start a stopped WSL distro (E9). */
   wakeWslDistro?: boolean
+  /** Ask for a HostedReviewForBranchOutcome; older hosts drop it and answer with the bare review. */
+  reportReadOutcome?: boolean
+}
+
+/** 'provider' only when this caller's own request started the provider read the host stored as current; cache hits, joined lookups and last-good fallbacks are 'cached'. */
+export type HostedReviewForBranchOutcome = {
+  review: HostedReviewInfo | null
+  readOutcome: 'provider' | 'cached'
+}
+
+export type HostedReviewForBranchReply = HostedReviewInfo | null | HostedReviewForBranchOutcome
+
+export function cachedHostedReviewOutcome(
+  review: HostedReviewInfo | null
+): HostedReviewForBranchOutcome {
+  return { review, readOutcome: 'cached' }
+}
+
+/** Callers that asked for it learn whether a provider read the host stored as current answered them. */
+export function hostedReviewForBranchReply(
+  read: HostedReviewForBranchOutcome,
+  reportReadOutcome: boolean | undefined
+): HostedReviewForBranchReply {
+  return reportReadOutcome === true ? read : read.review
+}
+
+/** An older host drops reportReadOutcome and answers bare; that answer proves nothing about the provider. */
+export function hostedReviewForBranchOutcome(
+  reply: HostedReviewForBranchReply
+): HostedReviewForBranchOutcome {
+  return reply !== null && 'readOutcome' in reply ? reply : cachedHostedReviewOutcome(reply)
 }
 
 export type HostedReviewSummary = {
@@ -121,6 +154,8 @@ export type CreateHostedReviewFailureReason =
   | 'review_lookup_unavailable'
   | 'provider_not_supported'
   | 'same_base_branch'
+  /** Bitbucket, Azure DevOps and Gitea need a base branch, head branch and title. */
+  | 'base_head_title_required'
   | 'rejected'
   | 'repository_not_found'
   | 'create_failed'
@@ -220,6 +255,8 @@ export type HostedReviewCreationEligibilityArgs = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  /** The user's Create PR: it may start the repo's stopped WSL distro (E9). */
+  wakeWslDistro?: boolean
 }
 
 export type HostedReviewDecision = 'approved' | 'changes_requested' | 'review_required' | null

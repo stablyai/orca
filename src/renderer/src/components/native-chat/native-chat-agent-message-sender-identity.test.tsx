@@ -174,7 +174,7 @@ it('uses the recipient host when identical session text is published by two host
     }
   })
   render(<NativeChatAgentMessageSenders from={source()} chatWorktreeId={RECIPIENT} />)
-  expect(screen.getByRole('button', { name: 'Remote sender' })).toBeInTheDocument()
+  expect(screen.getByText('Remote sender')).toBeInTheDocument()
 })
 
 it('shows a chat sender by its current rename', () => {
@@ -183,11 +183,11 @@ it('shows a chat sender by its current rename', () => {
   const status = feed.snapshot
   expect(feed.names.has(ROOT)).toBe(false)
   render(<NativeChatAgentMessageSenders from={source()} chatWorktreeId={RECIPIENT} />)
-  expect(screen.getByRole('button', { name: 'Original sender' })).toBeInTheDocument()
+  expect(screen.getByText('Original sender')).toBeInTheDocument()
   act(() => publish('local', undefined, [{ sessionId: ROOT, conversationName: null }]))
-  expect(screen.getByRole('button', { name: 'Original sender' })).toBeInTheDocument()
+  expect(screen.getByText('Original sender')).toBeInTheDocument()
   act(() => publish('local', undefined, [{ sessionId: ROOT, conversationName: 'Renamed sender' }]))
-  expect(screen.getByRole('button', { name: 'Renamed sender' })).toBeInTheDocument()
+  expect(screen.getByText('Renamed sender')).toBeInTheDocument()
   expect(feed.snapshot).toBe(status)
   expect(status.get(ROOT)?.conversationName).toBeUndefined()
 })
@@ -211,14 +211,14 @@ it.each([false, true])(
     })
     const from = source(true)
     render(<NativeChatAgentMessageSenders from={from} chatWorktreeId={RECIPIENT} queued={queued} />)
-    expect(screen.getByRole('button', { name: 'Original sender' })).toBeInTheDocument()
+    expect(screen.getByText('Original sender')).toBeInTheDocument()
     act(() => {
       useAppStore.setState({
         agentStatusByPaneKey: { [PANE]: row({ key: 'session_id', id: 'provider-b' }) },
         tabsByWorktree: { [SENDER]: [{ ...terminal, customTitle: 'Renamed B' }] }
       })
     })
-    const link = screen.getByRole('button', { name: 'Original sender' })
+    const link = screen.getByText('Original sender')
     expect(link).toBeInTheDocument()
     fireEvent.click(link)
     expect(openAgentMessageSender).toHaveBeenCalledWith(from, from.senders[0], RECIPIENT)

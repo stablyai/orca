@@ -6,6 +6,13 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { RuntimeStore } from '../../../../runtime-store-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import {
+  getAppEnvironment,
+  hasAppEnvironment,
+  setAppEnvironment,
+  type AppEnvironment
+} from '../../../../../../shared/app-environment'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
 
 type WorkerStartOptions = { terminal?: string; agent?: TuiAgent }
 
@@ -29,7 +36,9 @@ export function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => voi
 }
 
 export type OrchestrationWorkerReleaseHarness = {
-  setup: () => void
+  setup: (options?: { userDataDir?: string }) => void
+  /** Close the database and open it again from a fresh runtime; file-backed setups only. */
+  restart: () => void
   cleanup: () => void
   call: (name: string, params: Record<string, unknown>) => Promise<unknown>
   startWorker: (options?: WorkerStartOptions) => Promise<{ taskId: string; dispatchId: string }>
@@ -76,15 +85,58 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
   let ctx: RpcContext
   let activeRunId: string
   let inspectProcessLiveness: ReturnType<typeof vi.fn>
+  let userDataDir: string | undefined
+  let previousEnvironment: AppEnvironment | null = null
 
   const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   const workerPaneKey = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
-  function setup(): void {
-    db = new OrchestrationDb(':memory:')
-    dbOpen = true
+  function setup(options: { userDataDir?: string } = {}): void {
+    userDataDir = options.userDataDir
+    if (userDataDir) {
+      const path = userDataDir
+      previousEnvironment = hasAppEnvironment() ? getAppEnvironment() : null
+      setAppEnvironment({
+        getPath: () => path,
+        getAppPath: () => path,
+        getVersion: () => '0.0.0-test',
+        isPackaged: () => false,
+        onWillQuit: () => {},
+        exit: () => {},
+        getAppMetrics: () => []
+      })
+    }
+    startRuntime()
+    activeRunId = db.createRun({
+      objective: 'Release test Run',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey
+    }).id
+  }
+
+  // A file-backed runtime opens its database itself, as startup does, so armed deadlines recover.
+  function startRuntime(): void {
     runtime = new OrcaRuntimeService(ORCA_LAYOUT_OWNER_IS_MAIN ? workerReleaseLayoutStore() : null)
-    runtime.setOrchestrationDb(db)
+    if (userDataDir) {
+      db = runtime.getOrchestrationDb()
+    } else {
+      db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+    }
+    dbOpen = true
+    configureRuntime()
+    ctx = { runtime }
+  }
+
+  function restart(): void {
+    getWorkerTerminalAutoReleaseScheduler(runtime).clear()
+    db.close()
+    dbOpen = false
+    vi.restoreAllMocks()
+    startRuntime()
+  }
+
+  function configureRuntime(): void {
     inspectProcessLiveness = vi.fn().mockResolvedValue('live')
     ;(
       runtime as unknown as {
@@ -151,12 +203,6 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
       ptyKilled: true
     } as never)
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-    activeRunId = db.createRun({
-      objective: 'Release test Run',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey
-    }).id
-    ctx = { runtime }
   }
 
   function cleanup(): void {
@@ -165,6 +211,10 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
       db.close()
     }
     vi.restoreAllMocks()
+    if (previousEnvironment) {
+      setAppEnvironment(previousEnvironment)
+      previousEnvironment = null
+    }
   }
 
   function findMethod(name: string) {
@@ -218,6 +268,7 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
 
   return {
     setup,
+    restart,
     cleanup,
     call,
     startWorker,

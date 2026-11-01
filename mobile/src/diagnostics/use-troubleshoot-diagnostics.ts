@@ -1,8 +1,8 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { View } from 'react-native'
 import { Platform } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { loadHosts } from '../transport/host-store'
+import { loadHostCatalog, loadHosts } from '../transport/host-store'
 import {
   startDiagnosticFetchTimeout,
   type DiagnosticFetchTimeout
@@ -14,9 +14,28 @@ export function useTroubleshootDiagnostics() {
   const t = useMobileTranslation()
   const [diagnosticStatus, setDiagnosticStatus] = useState<DiagnosticStatus>('idle')
   const [checks, setChecks] = useState<CheckResult[]>([])
+  const [hostEndpoints, setHostEndpoints] = useState<string[]>([])
   const abortRef = useRef(false)
   const diagnosticRunRef = useRef(0)
   const activeInternetCheckRef = useRef<DiagnosticFetchTimeout | null>(null)
+
+  useEffect(() => {
+    let disposed = false
+    const initialRunId = diagnosticRunRef.current
+    void loadHostCatalog().then(
+      (hosts) => {
+        if (!disposed && diagnosticRunRef.current === initialRunId) {
+          setHostEndpoints(hosts.map((host) => host.endpoint))
+        }
+      },
+      () => {
+        // Keep default advice when the saved host catalog cannot be read.
+      }
+    )
+    return () => {
+      disposed = true
+    }
+  }, [])
 
   const rootRef = useCallback((node: View | null): void => {
     if (node !== null) {
@@ -42,7 +61,11 @@ export function useTroubleshootDiagnostics() {
     const isCurrentRun = () => !abortRef.current && diagnosticRunRef.current === runId
 
     try {
-      const hosts = await loadHosts()
+      const [hosts, catalog] = await Promise.all([loadHosts(), loadHostCatalog()])
+      if (!isCurrentRun()) {
+        return
+      }
+      setHostEndpoints(catalog.map((host) => host.endpoint))
       results.push(
         hosts.length > 0
           ? {
@@ -166,5 +189,5 @@ export function useTroubleshootDiagnostics() {
     setDiagnosticStatus('done')
   }, [t])
 
-  return { rootRef, diagnosticStatus, checks, runDiagnostics }
+  return { rootRef, diagnosticStatus, checks, hostEndpoints, runDiagnostics }
 }

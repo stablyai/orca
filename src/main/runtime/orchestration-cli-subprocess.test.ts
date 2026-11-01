@@ -53,7 +53,9 @@ async function runBuiltCli(
   args: string[],
   extraEnv: Record<string, string> = {}
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const child = spawn(process.execPath, [CLI_PATH, ...args], {
+  // These tests read the full receipt, not the concise agent view.
+  const fullArgs = args[0] === 'orchestration' ? [...args, '--full'] : args
+  const child = spawn(process.execPath, [CLI_PATH, ...fullArgs], {
     env: {
       ...process.env,
       ORCA_USER_DATA_PATH: userDataPath,
@@ -609,7 +611,7 @@ describeIfBuilt('native caller subprocess over durable records', () => {
         INSERT INTO agent_session_tabs (tab_id, session_id, position) VALUES (?, ?, 1)
       `)
         .run(structuredAgentSessionTabId(invalidId), invalidId)
-      closeTestJournalHostDatabase(rig.root)
+      await closeTestJournalHostDatabase(rig.root)
       store = await openTestAgentSessionRecordStore(rig.root)
       host = new StructuredAgentSessionHost({
         ...rig.host.deps,

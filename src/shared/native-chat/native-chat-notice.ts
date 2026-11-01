@@ -6,7 +6,7 @@ import {
 } from '../agent-session-host-status-rows'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../agent-session-orca-stop'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from './native-chat-stopped-before-start'
-import type { NativeChatBlock, NativeChatTextBlock } from '../native-chat-types'
+import type { NativeChatBlock, NativeChatTextBlock } from './native-chat-types'
 
 export const NATIVE_CHAT_NOTICE_COPY = {
   compaction: 'Context compacted',
@@ -26,6 +26,12 @@ export type NativeChatNoticeLook =
   | { kind: 'plan' }
   /** Faint, as a system row with no notice of its own is. */
   | { kind: 'aside' }
+  | {
+      kind: 'settled-permission'
+      decision: 'safety-review' | 'denied'
+      agent: 'Codex' | 'Claude'
+      tone: 'warning' | 'error'
+    }
   /** A boxed line with its icon when it has a tone; plain text when it has none. */
   | { kind: 'line'; tone: NativeChatNoticeTone | null }
 
@@ -62,6 +68,21 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
   // Orca stopped the reply, not the agent: stored red for clients that predate it, read as a notice.
   if (presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION) {
     return { kind: 'line', tone: 'notice' }
+  }
+  // Declared notification kinds select disclosure; prose and nested failures do not.
+  if (presentation === undefined && !block.failure && !block.orcaStop) {
+    const frame = block.providerFrame
+    if (frame?.provider === 'codex' && frame.kind === 'notification:guardianWarning') {
+      return {
+        kind: 'settled-permission',
+        decision: 'safety-review',
+        agent: 'Codex',
+        tone: 'warning'
+      }
+    }
+    if (frame?.provider === 'claude' && frame.kind === 'message:system:permission_denied') {
+      return { kind: 'settled-permission', decision: 'denied', agent: 'Claude', tone: 'error' }
+    }
   }
   const { tone } = block
   return {

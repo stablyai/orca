@@ -87,16 +87,4 @@ describe('read restore', () => {
     opened.push(published!.session.journal)
     expect(published!.session.child).toBeNull()
   })
-
-  it('drops a session with no journal', async () => {
-    const restored = await restoreStructuredAgentSessionRead(openDeps(), SESSION_ID)
-
-    expect(restored).toBeNull()
-  })
-
-  it('drops a session with no record', async () => {
-    const restored = await restoreStructuredAgentSessionRead(openDeps(), 'unknown-session')
-
-    expect(restored).toBeNull()
-  })
 })

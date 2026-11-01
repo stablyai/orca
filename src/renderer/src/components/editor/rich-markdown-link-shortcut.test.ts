@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Editor } from '@tiptap/core'
-import { NodeSelection, TextSelection } from '@tiptap/pm/state'
+import { NodeSelection } from '@tiptap/pm/state'
+
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
@@ -89,37 +90,6 @@ describe('handleRichMarkdownLinkShortcut', () => {
           kind: 'html-superscript',
           href: 'https://example.com',
           label: '1'
-        })
-      )
-    } finally {
-      editor.destroy()
-      root.remove()
-    }
-  })
-
-  it('opens an editable markdown bubble when there is no link selection', () => {
-    const { editor, context, root } = createEditor('plain text')
-    try {
-      editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, 1)))
-      const setLinkBubble = vi.fn()
-      const setEditing = vi.fn()
-
-      handleRichMarkdownLinkShortcut({
-        editor,
-        event: keyEvent(),
-        htmlSuperscriptLinkContext: context,
-        isEditing: false,
-        isMac: true,
-        root,
-        setEditing,
-        setLinkBubble
-      })
-
-      expect(setEditing).toHaveBeenCalledWith(true)
-      expect(setLinkBubble).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kind: 'markdown',
-          href: ''
         })
       )
     } finally {

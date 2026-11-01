@@ -4,7 +4,7 @@ import {
   inferRelayClaudeInterrupt,
   type RelayInterruptHost
 } from './agent-hook-interrupt-reconciliation'
-import { applyRelayHookEvent } from './agent-hook-event-admission'
+import { applyRelayHookEvent, type RelayHookAdmissionOptions } from './agent-hook-event-admission'
 import { RelayProviderHookNormalization } from './agent-hook-provider-normalization'
 import { RelayAgentHookCanonicalStatus } from './agent-hook-canonical-status'
 import type {
@@ -37,7 +37,6 @@ import {
   describeHookTransportInterference
 } from '../shared/agent-hook-transport-interference'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from '../shared/agent-hook-relay'
-import type { SpoolRecord } from '../shared/agent-hook-spool'
 import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
 import { drainRelayHookSpool, ingestRelayHookSpoolRecord } from './agent-hook-spool-ingest'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
@@ -102,7 +101,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.retryScheduler = new AgentHookResultRetryScheduler({
       state: this.state,
       env: this.env,
-      isListening: () => this.server !== null,
+      isListening: () => this.server?.listening === true,
       applyEvent: (event, source, env, version) =>
         this.applyEvent(event, source, env, version, { checkPresence: false })
     })
@@ -124,7 +123,15 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.endpointFileWritten = false
     this.portFallbackApplied = false
     await drainRelayHookSpool(this.endpointDir, (record) =>
-      this.ingestSpoolRecord(record, isCurrent)
+      ingestRelayHookSpoolRecord(record, this.state, this.env, {
+        providerNormalization: this.providerNormalization,
+        checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
+        isCurrent,
+        apply: (...args) => this.applyEvent(...args),
+        onAccepted: (row) => this.retryScheduler.observeClaudeHook(row, record.receivedAt),
+        isPaneSurfaceRetired: this.isPaneSurfaceRetired,
+        getAgentLaunchToken: this.getAgentLaunchToken
+      })
     )
     if (!isCurrent()) {
       return
@@ -143,7 +150,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
           checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
           isPaneSurfaceRetired: this.isPaneSurfaceRetired,
           getAgentLaunchToken: this.getAgentLaunchToken,
-          applyEvent: (event, source, env, version) => this.applyEvent(event, source, env, version),
+          applyEvent: (...args) => this.applyEvent(...args),
           ingestTmuxHook: (source, body) => this.ingestCanonicalTmuxHook(source, body, this.env),
           retryScheduler: this.retryScheduler,
           transportInterference: this.transportInterference
@@ -153,6 +160,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       },
       setPort: (port) => {
         this.port = port
+        this.retryScheduler.activateClaudeHelperObservations()
       },
       onFallback: () => {
         this.portFallbackApplied = true
@@ -285,7 +293,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     source: AgentHookSource,
     env?: string,
     version?: string,
-    options: { isReplay?: boolean; checkPresence?: boolean } = {}
+    options: RelayHookAdmissionOptions = {}
   ): AgentHookEventPayload | undefined {
     return applyRelayHookEvent(
       {
@@ -305,16 +313,5 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       version,
       options
     )
-  }
-
-  private ingestSpoolRecord(record: SpoolRecord, isCurrent: () => boolean): Promise<void> | void {
-    return ingestRelayHookSpoolRecord(record, this.state, this.env, {
-      providerNormalization: this.providerNormalization,
-      checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
-      isCurrent,
-      apply: (...args) => this.applyEvent(...args, { isReplay: true }),
-      isPaneSurfaceRetired: this.isPaneSurfaceRetired,
-      getAgentLaunchToken: this.getAgentLaunchToken
-    })
   }
 }

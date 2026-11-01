@@ -3,12 +3,12 @@ import { claudeProviderHandle } from '../../shared/agent-session-provider-handle
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { getAgentSessionOptionCatalog } from '../../shared/agent-session-option-catalog'
+import { getAgentSessionOptionCatalog } from '../../shared/agent-session/options/agent-session-option-catalog'
 import {
   applyStructuredAgentSessionOptions,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot
-} from '../../shared/structured-agent-session-options'
+  createStructuredAgentSessionOptionState
+} from '../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import {
   agentModelCatalogScopeFingerprint,
@@ -17,7 +17,7 @@ import {
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { StructuredAgentSessionMutationContext } from '../native-chat/agent-session-wire/structured-agent-session-host-mutations'
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
-import { structuredAgentSessionSendSelection } from '../../shared/structured-agent-session-option-view'
+import { structuredAgentSessionSendSelection } from '../../shared/agent-session/options/structured-agent-session-option-view'
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { composeCodexSessionOptionCatalog } from '../codex/codex-structured-model-catalog'
 import { listedModels } from './claude-structured-model-catalog'
@@ -109,6 +109,7 @@ async function startChild(
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false
     }),
     onEvent: (event) => events.push(event),
@@ -433,7 +434,14 @@ describe('Claude effort default at rest', () => {
     const resting = await readAtRest(new AgentModelCatalogStore(), record)
 
     expect(resting.models).toEqual([
-      { id: 'gpt-5.5', label: 'gpt-5.5', isDefault: false, efforts: [], effortsKnown: false }
+      {
+        id: 'gpt-5.5',
+        label: 'GPT 5.5',
+        description: 'gpt-5.5',
+        isDefault: false,
+        efforts: [],
+        effortsKnown: false
+      }
     ])
     expect(pickerEffort(resting, 'codex')).toBe('high')
   })
@@ -472,7 +480,13 @@ describe('Claude effort default at rest', () => {
 
     const result = await readAtRest(store, record)
 
-    expect(result.current).toEqual({ model: 'gpt-5.5', defaulted: [], permissionMode: 'ask' })
+    expect(result.current).toEqual({
+      model: 'gpt-5.5',
+      defaulted: [],
+      permissionMode: 'ask',
+      acceptedInputSources: { model: 'saved' }
+    })
+    expect(result.current?.effort).toBeUndefined()
   })
 
   it("never saves the applied effort as the chat's pick, yet shows it at rest", async () => {

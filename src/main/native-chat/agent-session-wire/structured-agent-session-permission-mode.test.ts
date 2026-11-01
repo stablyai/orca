@@ -28,9 +28,9 @@ import { retireAtRestCommandContext } from './at-rest-command-context'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
-import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
-import { structuredAgentSessionPermissionDescriptor } from '../../../shared/structured-agent-session-permission-option'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
+import { getAgentSessionOptionCatalog } from '../../../shared/agent-session/options/agent-session-option-catalog'
+import { structuredAgentSessionPermissionDescriptor } from '../../../shared/agent-session/options/structured-agent-session-permission-option'
 
 describe('a chat permission mode', () => {
   let rig: RestTestRig
@@ -361,7 +361,7 @@ describe('a chat permission mode', () => {
         resolveWorkspacePath: async () => rig.root,
         resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => ({ account: 'system' }),
-        resolveCodexCommand: () => 'codex-pr-30107-missing',
+        resolveCodexCommand: () => ({ command: 'codex-pr-30107-missing', prefixArgs: [] }),
         logger: { warn: vi.fn(), error: vi.fn() }
       }
     })

@@ -41,6 +41,17 @@ describe('setOptIn()', () => {
     expect(order).toEqual(['capture called', 'sdk enqueue', 'optOut'])
   })
 
+  it('keeps the SDK opted out and sends no consent events while DO_NOT_TRACK overrides', async () => {
+    process.env.DO_NOT_TRACK = '1'
+
+    await setOptIn('settings', true)
+    await persistBannerAcknowledgeWithoutEmitting()
+    await setOptIn('settings', false)
+
+    expect(mock.optIn).not.toHaveBeenCalled()
+    expect(mock.capture).not.toHaveBeenCalled()
+  })
+
   it('fires app_opened and telemetry_opted_in after the SDK enables settings opt-in', async () => {
     state.settings.telemetry!.optedIn = false
     const order: string[] = []

@@ -129,6 +129,8 @@ export const WorktreeCreate = z
     /** The requesting window's pending creation, so the host's in-progress entry shares its id. */
     creationId: z.string().min(1).max(128).optional(),
     automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional(),
+    // Why unknown: the label is cosmetic, so the host drops a malformed one instead of failing the create.
+    clientAutomationProvenance: z.unknown().optional(),
     cliProvenanceRequest: CliWorkspaceProvenanceRequest.optional()
   })
   .superRefine((params, ctx) => {

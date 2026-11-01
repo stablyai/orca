@@ -39,7 +39,7 @@ export function startOrcadManagedAgentHooks(
   const shouldHydrateShellPath = getAppEnvironment().isPackaged()
   startCodexHooks({
     pathReady: shouldHydrateShellPath ? hydrateAgentCliShellPath() : Promise.resolve(),
-    // WSL: finding codex stats every Windows-drive PATH entry, slow on a cold start.
+    // Every orcad host defers this; it pays off on WSL, where finding codex stats Windows-drive PATH.
     startAfter: published.promise,
     isEnabled: () => isAgentStatusHooksEnabledForAgent(getSettings(), 'codex'),
     resolveLaunchHome: () => null

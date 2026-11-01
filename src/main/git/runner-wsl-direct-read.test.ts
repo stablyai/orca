@@ -283,7 +283,6 @@ describe('WSL direct Git reads', () => {
           cwd: String.raw`C:\repo`,
           env: { GIT_CONFIG_GLOBAL: '/home/user/custom.gitconfig' },
           wslDistro: DISTRO,
-          captureWslLoginShellOutput: true,
           terminationBarrier: true
         })
       ).resolves.toEqual({ stdout: 'fork-point\n', stderr: '' })

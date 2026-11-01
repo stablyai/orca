@@ -1,5 +1,8 @@
 import { ipcRenderer } from 'electron'
-import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
+import type {
+  PluginFrameEntry,
+  PluginFrameTheme
+} from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
@@ -28,10 +31,12 @@ export const pluginsApi = {
   readPanelEntry: (args: {
     pluginKey: string
     panelId: string
+    theme?: PluginFrameTheme
   }): Promise<PluginFrameEntry | null> => ipcRenderer.invoke('plugins:readPanelEntry', args),
   readCustomEditorEntry: (args: {
     pluginKey: string
     editorId: string
+    theme?: PluginFrameTheme
   }): Promise<PluginFrameEntry | null> => ipcRenderer.invoke('plugins:readCustomEditorEntry', args),
   readNewFileTemplate: (args: { pluginKey: string; newFileId: string }): Promise<string | null> =>
     ipcRenderer.invoke('plugins:readNewFileTemplate', args),
@@ -42,6 +47,8 @@ export const pluginsApi = {
     action: string
     params?: unknown
   }): Promise<PluginHostCallOutcome> => ipcRenderer.invoke('plugins:panelAction', args),
+  panelState: (args) => ipcRenderer.invoke('plugins:panelState', args),
+  resolveGitSource: (args) => ipcRenderer.invoke('plugins:resolveGitSource', args),
   install: (source: PluginHostInstallSource): Promise<PluginHostInstallResult> =>
     ipcRenderer.invoke('plugins:install', source),
   listMarketplaces: () => ipcRenderer.invoke('plugins:listMarketplaces'),
@@ -73,6 +80,15 @@ export const pluginsApi = {
     }
   },
   getAutoUpdateState: () => ipcRenderer.invoke('plugins:getAutoUpdateState'),
+  takeUpdateReviewNotices: () => ipcRenderer.invoke('plugins:takeUpdateReviewNotices'),
+  getInstallCounts: () => ipcRenderer.invoke('plugins:getInstallCounts'),
+  onInstallCountsChanged: (callback): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('plugins:installCountsChanged', listener)
+    return () => {
+      ipcRenderer.removeListener('plugins:installCountsChanged', listener)
+    }
+  },
   onAutoUpdateChanged: (callback): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, change: PluginAutoUpdateEvent): void =>
       callback(change)

@@ -2,6 +2,7 @@ import { isBenignCheckFailure } from '../updater-fallback'
 import { ReleaseFeedPreflightError } from './updater-state'
 import type { CheckFailureSource } from './updater-state'
 import { UpdaterReleaseFeed } from './updater-release-feed'
+import { updaterCodedMessage } from '../../shared/updater-failure-copy'
 
 export abstract class UpdaterCheckFailure extends UpdaterReleaseFeed {
   protected isRetryableReleaseFeedPreflightFailure(sourceError: unknown): boolean {
@@ -81,9 +82,11 @@ export abstract class UpdaterCheckFailure extends UpdaterReleaseFeed {
           // User clicks need visible feedback distinguishing incomplete releases from transport failure.
           this.sendSettledCheckStatus({
             state: 'error',
-            message: this.isStableReleaseNotReadyFailure(sourceError)
-              ? "A newer release isn't available for this device yet. Check again later."
-              : "Couldn't reach the update server. Try again in a few minutes.",
+            ...updaterCodedMessage(
+              this.isStableReleaseNotReadyFailure(sourceError)
+                ? 'releaseNotReady'
+                : 'updateServerUnreachable'
+            ),
             userInitiated: true
           })
         } else {

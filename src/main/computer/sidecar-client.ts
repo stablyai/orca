@@ -7,7 +7,10 @@ import type {
   ComputerProviderCapabilities,
   ComputerSnapshotResult
 } from '../../shared/runtime-types'
-import { normalizeComputerActionResult } from './computer-action-verification-normalization'
+import {
+  normalizeComputerActionResult,
+  rejectContradictedComputerAction
+} from './computer-action-verification-normalization'
 import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from './computer-sidecar-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
@@ -84,8 +87,10 @@ export async function callComputerSidecarAction(
   if (validation) {
     await validation
   }
-  return normalizeComputerActionResult(
-    (await getComputerSidecar().call(method, params)) as ComputerActionResult
+  return rejectContradictedComputerAction(
+    normalizeComputerActionResult(
+      (await getComputerSidecar().call(method, params)) as ComputerActionResult
+    )
   )
 }
 

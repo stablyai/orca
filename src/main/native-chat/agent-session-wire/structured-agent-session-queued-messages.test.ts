@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
-  type AgentSessionQueuedMessage,
-  type AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+  type AgentSessionQueuedMessage
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'

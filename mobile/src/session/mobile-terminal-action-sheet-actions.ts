@@ -25,6 +25,8 @@ export function getMobileTerminalActionSheetActions<
   /** Preferred path runs host teardown and records the local tombstone. */
   onCloseSessionTab: (tab: Tab) => void
   bulkCloseActions?: (anchorTabId: string | undefined) => ActionSheetAction[]
+  /** Allow Auto-Close, on a worker the user kept open. */
+  workerActions?: ActionSheetAction[]
 }): ActionSheetAction[] {
   const { target } = args
   if (!target) {
@@ -69,6 +71,7 @@ export function getMobileTerminalActionSheetActions<
         args.onClear(target)
       }
     },
+    ...(args.workerActions ?? []),
     {
       id: 'close',
       label: translate('common.close', 'Close'),

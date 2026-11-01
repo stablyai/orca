@@ -9,8 +9,13 @@ import {
   type PluginCatalogType
 } from '../../../../../shared/plugins/catalog/plugin-catalog-release'
 import { compareAppVersions } from '../../../../../shared/app-version'
-import { gitRepositoryOwnerLabel } from '../../../../../shared/plugins/catalog/plugin-marketplace'
+import {
+  gitRepositoryOwnerLabel,
+  splitQualifiedPluginKey
+} from '../../../../../shared/plugins/catalog/plugin-marketplace'
+import { isPublicCatalogListing } from './plugin-public-catalog'
 import { pluginDisplayNameFromKey } from './plugin-display-name'
+import { sanitizePluginDisplayText } from '../../../../../shared/plugins/manifest/plugin-display-text'
 import type { PluginAutoUpdateState } from '../../../../../shared/plugins/catalog/plugin-update-policy'
 
 /** One plugin as the list and detail page show it, whether installed, listed, or both. */
@@ -28,6 +33,8 @@ export type PluginListEntry = {
   minimumOrca: string | null
   /** A newer catalog version than the installed one that this Orca can run, if any. */
   updateVersion: string | null
+  /** Catalog release to reinstall over an installed copy that can't load: same version, other bytes. */
+  reinstallVersion?: string | null
   /** Every catalog that lists this plugin, for filtering by catalog. */
   catalogIds: readonly string[]
   /** The listing comes from the catalog this plugin was installed from, so it can update it. */
@@ -40,6 +47,9 @@ export type PluginListEntry = {
   verifiedSource: PluginVerifiedSource
   /** Other catalogs listing this installed plugin; none of them can update or replace it. */
   alsoListedBy: readonly string[]
+  /** Listed by (and if installed, installed from) the official or community catalog, so a public
+   *  install count may show. Never for dev, local or Git installs. */
+  installCountEligible?: boolean
 }
 
 export type PluginVerifiedSource =
@@ -63,6 +73,11 @@ function installedVerifiedSource(
   return from
     ? { kind: 'catalog', catalog, owner: gitRepositoryOwnerLabel(from.reference) }
     : { kind: 'unverified' }
+}
+
+// Why again here: hosts sanitize these too, but the list is where every name is read.
+function listingText(value: string | undefined): string | null {
+  return (value && sanitizePluginDisplayText(value)) || null
 }
 
 type PluginEntryAutoUpdate = { updatedTo: string | null; needsReview: boolean }
@@ -116,6 +131,22 @@ function newerCatalogVersion(
   return compareAppVersions(version, plugin.version) > 0 ? version : null
 }
 
+function reinstallCatalogVersion(
+  plugin: PluginHostListEntry,
+  listing: PluginMarketplaceHostListing | null,
+  orcaVersion: string | null
+): string | null {
+  const release = listing?.release
+  if (plugin.status !== 'invalid' || plugin.source?.kind !== 'marketplace' || !release) {
+    return null
+  }
+  // Why bytes, not version: reinstalling the same bytes would fail the same way.
+  return needsNewerOrca(release.minimumOrca, orcaVersion) ||
+    release.contentHash === plugin.source.contentHash
+    ? null
+    : release.version
+}
+
 export function pluginListEntryFromInstalled(
   plugin: PluginHostListEntry,
   listing: PluginMarketplaceHostListing | null = null,
@@ -132,15 +163,16 @@ export function pluginListEntryFromInstalled(
   const updateVersion = newerCatalogVersion(plugin, listing, orcaVersion)
   return {
     pluginKey: plugin.pluginKey,
-    name: plugin.name,
+    name: sanitizePluginDisplayText(plugin.name) || pluginDisplayNameFromKey(plugin.pluginKey),
     publisher: plugin.publisher || null,
     version: plugin.version,
-    description: plugin.description ?? listing?.description ?? null,
+    description: listingText(plugin.description ?? listing?.description),
     official: plugin.official,
     categories: listing?.categories ?? [],
     types: listing?.release ? pluginCatalogReleaseTypes(listing.release) : (plugin.types ?? []),
     minimumOrca: listing?.release?.minimumOrca ?? null,
     updateVersion,
+    reinstallVersion: updateVersion ? null : reinstallCatalogVersion(plugin, listing, orcaVersion),
     catalogIds,
     updatable: plugin.source?.kind === 'marketplace' && listing !== null,
     autoUpdate: entryAutoUpdate(plugin, updateVersion, autoUpdates),
@@ -159,10 +191,14 @@ export function pluginListEntryFromListing(
   return {
     pluginKey: listing.pluginKey,
     // Why: older catalogs carry no release name; the key is the only name they have.
-    name: listing.name ?? listing.release?.name ?? pluginDisplayNameFromKey(listing.pluginKey),
-    publisher: listing.marketplaceOwner || null,
+    name:
+      listingText(listing.name ?? listing.release?.name) ??
+      pluginDisplayNameFromKey(listing.pluginKey),
+    // Why the key: it is what an install records, and a catalog's owner is not every entry's author.
+    publisher:
+      splitQualifiedPluginKey(listing.pluginKey)?.publisher || listing.marketplaceOwner || null,
     version: catalogVersion(listing),
-    description: listing.description ?? null,
+    description: listingText(listing.description),
     official: listing.official,
     categories: listing.categories,
     types: listing.release ? pluginCatalogReleaseTypes(listing.release) : [],
@@ -249,6 +285,11 @@ export function buildPluginListEntries(
         autoUpdates
       })
       const own = ownCatalog && plugin.source?.marketplace ? listing : null
+      // Why bundled too: it ships the official catalog's release, never local bytes.
+      entry.installCountEligible =
+        !plugin.isDev &&
+        ((plugin.source?.kind === 'marketplace' && isPublicCatalogListing(own, catalogById)) ||
+          (plugin.bundled && isPublicCatalogListing(listing, catalogById)))
       entry.alsoListedBy = (listingsByKey.get(plugin.pluginKey) ?? [])
         .filter((candidate) => candidate !== own)
         .map((candidate) => candidate.marketplaceName)
@@ -263,19 +304,21 @@ export function buildPluginListEntries(
         : {
             ...entry,
             updateVersion: null,
+            reinstallVersion: null,
             updatable: false,
             autoUpdate: { ...entry.autoUpdate, needsReview: false }
           }
     }),
     available: [...listingsByKey.entries()]
       .filter(([pluginKey]) => !installedKeys.has(pluginKey))
-      .map(([pluginKey, candidates]) =>
-        pluginListEntryFromListing(
+      .map(([pluginKey, candidates]) => ({
+        ...pluginListEntryFromListing(
           candidates[0],
           catalogIdsOf(pluginKey),
           catalogById.get(candidates[0].marketplaceSourceId)?.source.url ?? null
-        )
-      )
+        ),
+        installCountEligible: isPublicCatalogListing(candidates[0], catalogById)
+      }))
   }
 }
 

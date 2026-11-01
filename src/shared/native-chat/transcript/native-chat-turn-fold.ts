@@ -1,10 +1,10 @@
 // Derive settled-turn answers from the last assistant prose or system failure; the journal has no answer marker.
 // Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
 
-import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../agent-session-compaction'
+import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../agent-session/agent-session-compaction'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../agent-session-orca-stop'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../agent-session-turn-notice'
-import { nativeChatRowRendersContent } from '../../native-chat-row-content'
+import { nativeChatRowRendersContent } from './native-chat-row-content'
 import { isStoppedBeforeStartBlock } from '../native-chat-stopped-before-start'
 import { nativeChatRowRendersProse } from '../native-chat-trailing-run'
 import {
@@ -12,7 +12,7 @@ import {
   isSubagentGroupBlock,
   type NativeChatMessage,
   type NativeChatRole
-} from '../../native-chat-types'
+} from '../native-chat-types'
 
 /** Each surface supplies its own row-content results so folding sees exactly the prose it renders. */
 export type NativeChatTurnFoldRow = {
@@ -41,14 +41,16 @@ export function nativeChatTurnFoldRow(
     turnKey,
     role: message.role,
     rendersProse: nativeChatRowRendersProse(message),
-    draws: hasReceipt || nativeChatRowRendersContent(message.blocks),
+    draws: hasReceipt || message.agentStart === true || nativeChatRowRendersContent(message.blocks),
     // Use raw roster blocks: empty rosters render no block, making their plain-text twin the sole spawn record.
-    outlivesTurn: message.blocks.some(
-      (block) =>
-        isSubagentGroupBlock(block) ||
-        isBackgroundTaskBlock(block) ||
-        isStoppedBeforeStartBlock(block)
-    ),
+    outlivesTurn:
+      message.agentStart === true ||
+      message.blocks.some(
+        (block) =>
+          isSubagentGroupBlock(block) ||
+          isBackgroundTaskBlock(block) ||
+          isStoppedBeforeStartBlock(block)
+      ),
     // A row about Orca's own stop is stored red for clients that predate it; it reports no failure.
     reportsFailure: message.blocks.some(
       (block) =>

@@ -3,6 +3,7 @@ import { AgentSessionJournal } from './agent-session-journal/journal-store'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { structuredChatNamingDeps } from '../runtime/structured-chat-naming-runtime'
 import { getDefaultSettings } from '../../shared/constants'
+import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai-settings'
 import { setStructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-registry'
 import * as agentLaunch from '../text-generation/source-control-agent-launch'
 import * as homeLock from '../codex-cli/codex-home-process-lock'
@@ -61,10 +62,15 @@ function productionNaming(home: string) {
   })
   const settings = getDefaultSettings('/isolated')
   settings.defaultTuiAgent = 'codex'
+  settings.sourceControlAi = normalizeSourceControlAiSettings({
+    ...normalizeSourceControlAiSettings(settings.sourceControlAi),
+    actions: { conversationName: { agentId: 'codex' } }
+  })
   const deps = structuredChatNamingDeps(
     () => ({ getSettings: () => settings }),
     {
       resolveWorkspace: async () => ({ path: '/same-folder', executionHostId: 'local' }),
+      resolveNamingEnvironment: async () => ({ CODEX_HOME: home }),
       getAgentEnvResolvers: () => ({
         resolveBaseEnvironment: async () => ({ CODEX_HOME: home })
       }),

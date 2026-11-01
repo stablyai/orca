@@ -242,11 +242,9 @@ function ConfirmRemoveRow({
           value={hostLabel}
         />
         <span className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
-            'Last active'
-          )}{' '}
-          {formatWorkspaceCleanupRelativeTime(candidate.lastActivityAt, now)}
+          {translate('components.workspace.cleanup.browse.lastActive', 'Last active {{value0}}', {
+            value0: formatWorkspaceCleanupRelativeTime(candidate.lastActivityAt, now)
+          })}
         </span>
         {factStatuses.map((status) => (
           <StatusPill key={status.label} tone={status.tone}>

@@ -10,7 +10,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../src/shared/agent-session-record.test-fixture'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session-mutation-envelope'
 import type { AiVaultListResult, AiVaultSession } from '../../src/shared/ai-vault-types'
 import {
@@ -94,7 +94,7 @@ async function disposeHistory() {
   setStructuredAgentSessionHost(null)
   await host?.flushAllStreamedEvents()
   host = null
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   if (directory) {
     await rm(directory, { recursive: true, force: true })
   }

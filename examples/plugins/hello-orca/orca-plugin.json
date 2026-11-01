@@ -5,7 +5,7 @@
   "publisher": "your-github-user",
   "name": "Hello Orca",
   "version": "1.0.0",
-  "description": "Sample plugin combining a sandboxed panel, a worker command, and event subscriptions.",
+  "description": "Sample plugin combining a panel, a worker command, and event subscriptions.",
   "engines": { "orca": ">=1.4.245" },
   "pluginApi": 1,
   "main": "main.mjs",

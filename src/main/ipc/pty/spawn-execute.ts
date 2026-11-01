@@ -5,6 +5,7 @@ import { noteWslDistroWoken, noteWslDistrosRunning } from '../../wsl-background-
 import {
   agentSessionOwners,
   assertSpawnReplyWasLive,
+  assertSpawnRegistrationAllowed,
   reconcileAgentSessionOwnerListings
 } from './pane/agent-session-owners'
 import { resolveStablePaneOwner } from './pane/stable-owner'
@@ -128,10 +129,7 @@ export async function executePtySpawn(
             // Lower-owner success proves physical commit even when registration observes an early exit.
             facts.reportPtySpawnCommitted?.()
             assertSpawnReplyWasLive(providerResult)
-            ctx.deps.runtime?.assertPtyRegistrationAllowed?.(
-              providerResult.id,
-              providerResult.incarnationId
-            )
+            assertSpawnRegistrationAllowed(ctx.deps.runtime, providerResult)
             if (providerResult.incarnationId) {
               // In-process providers cannot list controller claims; record exact incarnation before ownership promotion.
               ptyIncarnationById.set(providerResult.id, providerResult.incarnationId)
@@ -226,7 +224,7 @@ export async function executePtySpawn(
     ) {
       throw new PaneOwnerContentionError()
     }
-    ctx.deps.runtime?.assertPtyRegistrationAllowed?.(ctx.result.id, ctx.result.incarnationId)
+    assertSpawnRegistrationAllowed(ctx.deps.runtime, ctx.result)
     if (ctx.result.providerSequence) {
       const runtimeSequenceBeforeReconcile =
         ctx.deps.runtime?.getPtyOutputSequence?.(ctx.result.id) ?? 0

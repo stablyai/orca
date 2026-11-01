@@ -1,5 +1,5 @@
 import { vi, type Mock } from 'vitest'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
 import type { ClaudeSession } from './structured/claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
@@ -30,7 +30,6 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
     reportedModelMutation: 0,
     confirmedOptions: new Set(),
     appliedInputOptions: new Map(),
-    launchedModel: null,
     fastModeAtStart: false,
     capabilities: [],
     events: undefined,

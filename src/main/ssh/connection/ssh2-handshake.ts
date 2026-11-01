@@ -1,5 +1,5 @@
-import { Client as SshClient } from 'ssh2'
-import type { ConnectConfig, KeyboardInteractiveCallback, Prompt } from 'ssh2'
+import type { Client as SshClient, ConnectConfig, KeyboardInteractiveCallback, Prompt } from 'ssh2'
+import { loadSsh2 } from '../ssh2-module-load'
 import { CONNECT_TIMEOUT_MS, SSH_CREDENTIAL_TIMEOUT_MS } from './ssh-connection-timing'
 import { createCancelledConnectAttemptError } from '../ssh-connect-attempt-cancellation'
 import type { HostKeyVerificationError } from '../ssh-host-key-decision'
@@ -34,7 +34,7 @@ type Ssh2HandshakeHost = {
 /** Dials `config` with ssh2 and settles once the session authenticates or fails. */
 export function runSsh2Handshake(config: ConnectConfig, host: Ssh2HandshakeHost): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    const client = new SshClient()
+    const client = new (loadSsh2().Client)()
     host.pendingClients.add(client)
     let settled = false
     let startupTimer: ReturnType<typeof setTimeout> | null = null

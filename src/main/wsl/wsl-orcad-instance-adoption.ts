@@ -34,7 +34,11 @@ import {
 } from '../managed-server/install/remote-install-model'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
-import { readWslGuestIdentity, wslGuestOrcadIncarnation } from './wsl-guest-process-identity'
+import {
+  readWslGuestIdentity,
+  wslGuestOrcadIncarnation,
+  type WslGuestIdentity
+} from './wsl-guest-process-identity'
 import type { WslOrcadInstanceLockRead } from './wsl-orcad-connect-state-snapshot'
 
 const LOCK_RECORD_MAX_BYTES = 64 * 1024
@@ -67,7 +71,10 @@ async function readLiveLockHolder(
     return null
   }
   // Adopt only proven-live holders; otherwise let the host's instance lock arbitrate launch.
-  return (await lockHolderLiveness(slot, lock)) === 'live'
+  // The snapshot's identity counts only if it was read for this same pid.
+  const known =
+    preRead?.state === 'present' && preRead.holder?.pid === lock.pid ? preRead.holder.guest : null
+  return (await lockHolderLiveness(slot, lock, known)) === 'live'
     ? { pid: lock.pid, version: lock.version }
     : null
 }
@@ -77,9 +84,10 @@ type LockHolderLiveness = 'live' | 'unverifiable' | 'exited'
 /** A PID is no identity after a distro restart reuses it: the lock's boot id and start ticks are. */
 async function lockHolderLiveness(
   slot: OrcadSlotOptions,
-  lock: OrcadLockRecord
+  lock: OrcadLockRecord,
+  known: WslGuestIdentity | null = null
 ): Promise<LockHolderLiveness> {
-  const guest = await readWslGuestIdentity(slot.conn, lock.pid)
+  const guest = known ?? (await readWslGuestIdentity(slot.conn, lock.pid))
   if (!guest) {
     return 'unverifiable'
   }

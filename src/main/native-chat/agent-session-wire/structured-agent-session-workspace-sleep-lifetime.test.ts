@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
@@ -156,7 +157,7 @@ it.each(['persist', 'root-exit', 'retry', 'successor', 'root-successor'] as cons
       kind: 'exit-observed',
       ownerFence: 1
     })
-    await restarted.restoreReadableSessions()
+    await openTestChats(restarted)
     expect(await restarted.sleepWorkspace('workspace-1')).toEqual({
       stoppedSessionIds: ['session-alpha']
     })
@@ -379,7 +380,7 @@ it('sleeps only proven ended chats after idle eviction or restart', async () => 
     expect(await rig.host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [SESSION] })
     expect(rig.store.getRecord(SESSION)?.sleptAt).toBeUndefined()
     await rig.restart()
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     expect(await rig.host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [SESSION] })
     const getRecord = rig.store.getRecord.bind(rig.store)
     vi.spyOn(rig.store, 'getRecord').mockImplementation((id) => {

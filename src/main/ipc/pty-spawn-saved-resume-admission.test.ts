@@ -64,7 +64,7 @@ describe('a pane restore of a conversation a native chat continues', () => {
       claimStatus: 'released',
       ownerProcess: null,
       reservedSpawnToken: null,
-      deathEvidence: { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
+      deathEvidence: { kind: 'kill-delivered', detail: 'writer terminated', observedAt: 1 }
     })
   )
   const C = 'provider-session-alpha-1'

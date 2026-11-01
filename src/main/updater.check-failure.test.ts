@@ -288,6 +288,7 @@ describe('updater check failure handling', () => {
         expect(sendMock).toHaveBeenCalledWith('updater:status', {
           state: 'error',
           message: RELEASE_NOT_READY_MESSAGE,
+          messageCode: 'releaseNotReady',
           userInitiated: true
         })
       })

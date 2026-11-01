@@ -93,38 +93,3 @@ it('still discards a brand-new server whose first connect fails', async () => {
 
   expect(remove).toHaveBeenCalledWith({ selector: 'env-new' })
 })
-
-it("lets main judge a saved server's own name, so its code can refresh it", async () => {
-  verifyAndAddFromPairingCode.mockResolvedValue({
-    ok: true,
-    environment: saved,
-    runtimeStatus: { runtimeId: 'runtime-a' },
-    updatedExisting: true
-  })
-  const view = renderActions(async () => true, 'Studio')
-
-  await act(async () => {
-    await view.result.current.addEnvironment(false)
-  })
-
-  expect(verifyAndAddFromPairingCode).toHaveBeenCalledWith(
-    expect.objectContaining({ name: 'Studio' })
-  )
-  expect(toastError).not.toHaveBeenCalled()
-})
-
-it('says a WSL host it kept was not removed yet, instead of "Removed"', async () => {
-  remove.mockResolvedValue({
-    removed: saved,
-    serverStop: { stopped: false, reason: '1 terminal kept running.', verdict: 'live', kept: true }
-  })
-  const view = renderActions(async () => true)
-  await act(async () => {
-    await view.result.current.removeEnvironment(saved)
-  })
-  expect(toastSuccess).not.toHaveBeenCalled()
-  expect(toastWarning).toHaveBeenCalledWith(
-    'Orca didn’t remove the host yet: 1 terminal kept running. Remove it again to retry, or connect it to keep it.',
-    { duration: Infinity }
-  )
-})

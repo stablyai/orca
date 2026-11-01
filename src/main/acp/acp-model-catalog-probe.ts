@@ -74,15 +74,19 @@ export function createAcpModelCatalogProbe(
     }
     // Start in home; only explicit chat-folder discovery reads project config.
     const cwd = deps.homePath ?? homedir()
-    const { command, env, envToDelete } = await resolveAcpLaunchInvocation(spec, accountHome, {
-      ...deps,
-      operation,
-      resolveWorkingDirectory: () => cwd
-    })
+    const { command, prefixArgs, env, envToDelete } = await resolveAcpLaunchInvocation(
+      spec,
+      accountHome,
+      {
+        ...deps,
+        operation,
+        resolveWorkingDirectory: () => cwd
+      }
+    )
     assertStructuredAgentResolutionCurrent(operation)
     const release = await checkAcpLaunchVersion(
       spec,
-      { command, cwd, env },
+      { command, prefixArgs, cwd, env },
       discovery.kind === 'command' && discovery.supportsVersion !== undefined,
       deps.probeVersion
     )
@@ -96,7 +100,7 @@ export function createAcpModelCatalogProbe(
     }
     const launch = {
       command,
-      args: spec.args({ fullAccess: false, pluginDir: null }),
+      args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDir: null })],
       cwd,
       env,
       envToDelete
@@ -105,7 +109,13 @@ export function createAcpModelCatalogProbe(
     let models: AgentSessionModelOption[]
     if (listing.kind === 'command') {
       const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
-        { command, args: [...listing.args], cwd: workspace ?? cwd, env, envToDelete },
+        {
+          command,
+          args: [...prefixArgs, ...listing.args],
+          cwd: workspace ?? cwd,
+          env,
+          envToDelete
+        },
         { site: `${spec.agent}-model-catalog-probe`, signal: options?.signal }
       )
       models = listing.parse(stdout)

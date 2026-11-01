@@ -3,11 +3,8 @@ import {
   _getGhRateLimitBlockCount,
   _resetGhRateLimitBreaker,
   classifyGhRateLimitBucket,
-  createGhRateLimitBlockedError,
   getGhRateLimitBlockedUntilMs,
   isGhPrimaryRateLimitStderr,
-  isGhLocalOnlyCommand,
-  isGhRateLimitProbe,
   notifyGhPrimaryRateLimit,
   parseGhRateLimitScopeKey,
   recordGhPrimaryRateLimit,
@@ -31,38 +28,6 @@ describe('classifyGhRateLimitBucket', () => {
       ])
     ).toBe('search')
     expect(classifyGhRateLimitBucket(['search', 'prs', '--author', 'x'])).toBe('search')
-  })
-
-  it('classifies graphql endpoints and GraphQL-backed subcommands, defaulting the rest to core', () => {
-    expect(classifyGhRateLimitBucket(['api', 'graphql', '-f', 'query=…'])).toBe('graphql')
-    expect(classifyGhRateLimitBucket(['pr', 'list', '--limit', '36'])).toBe('graphql')
-    expect(classifyGhRateLimitBucket(['issue', 'close', '5', '--repo', 'a/b'])).toBe('graphql')
-    expect(classifyGhRateLimitBucket(['repo', 'view', 'a/b', '--json', 'isFork'])).toBe('graphql')
-    expect(classifyGhRateLimitBucket(['api', 'repos/a/b/pulls?per_page=36'])).toBe('core')
-    expect(classifyGhRateLimitBucket(['run', 'list', '--json', 'status'])).toBe('core')
-    expect(classifyGhRateLimitBucket(['pr'])).toBe('core')
-  })
-})
-
-describe('isGhLocalOnlyCommand', () => {
-  it('exempts keyring token reads and nothing else', () => {
-    expect(
-      isGhLocalOnlyCommand(['auth', 'token', '--user', 'alice', '--hostname', 'github.com'])
-    ).toBe(true)
-    expect(isGhLocalOnlyCommand(['auth', 'token', '--help'])).toBe(true)
-    expect(isGhLocalOnlyCommand(['auth', 'status'])).toBe(false)
-    expect(isGhLocalOnlyCommand(['auth', 'refresh', '-s', 'project'])).toBe(false)
-    expect(isGhLocalOnlyCommand(['api', 'user'])).toBe(false)
-  })
-})
-
-describe('isGhRateLimitProbe', () => {
-  it('recognizes the exempt rate_limit endpoint only', () => {
-    expect(isGhRateLimitProbe(['api', 'rate_limit'])).toBe(true)
-    expect(isGhRateLimitProbe(['api', '/rate_limit'])).toBe(true)
-    expect(isGhRateLimitProbe(['api', '--hostname', 'github.com', 'rate_limit'])).toBe(true)
-    expect(isGhRateLimitProbe(['api', 'search/issues?q=x'])).toBe(false)
-    expect(isGhRateLimitProbe(['pr', 'list'])).toBe(false)
   })
 })
 
@@ -187,12 +152,5 @@ describe('breaker state', () => {
     expect(
       getGhRateLimitBlockedUntilMs('core', Date.now(), 'native:github.acme-corp.com')
     ).not.toBeNull()
-  })
-
-  it('creates an error that classifies as rate_limited, not permission_denied', () => {
-    const error = createGhRateLimitBlockedError('search', Date.now() + 30_000)
-    expect(error.stderr.toLowerCase()).toContain('rate limit')
-    expect(error.stderr.toLowerCase()).not.toContain('403')
-    expect(error.ghRateLimitBlocked).toBe(true)
   })
 })

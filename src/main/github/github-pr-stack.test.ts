@@ -94,7 +94,7 @@ describe('hydrateGitHubPRStack', () => {
       repository,
       201,
       { ...summary, position: 1 },
-      { cwd: '/other-worktree' }
+      { cwd: '/repo' }
     )
 
     expect(first).toMatchObject({

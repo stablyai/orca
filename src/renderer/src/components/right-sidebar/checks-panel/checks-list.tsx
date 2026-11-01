@@ -16,6 +16,7 @@ import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
 import { getCheckStatusLabel } from '../../../../../shared/pr-check-status-label'
 import { type ChecksListProps, useChecksListState } from './use-checks-list-state'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {
   const {
@@ -173,7 +174,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                               )}
                               onClick={(event) => {
                                 event.stopPropagation()
-                                window.api.shell.openUrl(openUrl)
+                                openAppHttpLink(openUrl, { event })
                               }}
                             >
                               <ExternalLink className="size-3" />

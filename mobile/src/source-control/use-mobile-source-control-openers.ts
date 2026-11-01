@@ -5,7 +5,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { isRendererUnavailableReply } from '../transport/renderer-unavailable-reply'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { ConnectionState } from '../transport/types'
-import { triggerError, triggerSelection } from '../platform/haptics'
+import { triggerError } from '../platform/haptics'
 import { useMobileBranchDiffPreview } from './use-mobile-branch-diff-preview'
 import {
   canOpenMobileGitStatusEntry,
@@ -61,7 +61,6 @@ export function useMobileSourceControlOpeners(params: Params) {
 
   const openReviewScreen = useCallback(
     (filePath: string, area: MobileReviewRouteArea) => {
-      triggerSelection()
       router.push(
         buildMobileReviewFileRoute({
           hostId,
@@ -105,7 +104,10 @@ export function useMobileSourceControlOpeners(params: Params) {
         const diffReply = await sourceFileDiffOpenRun.request(client, {
           worktree: `id:${worktreeId}`,
           relativePath: entry.path,
-          staged: entry.area === 'staged'
+          staged: entry.area === 'staged',
+          ...(entry.area === 'staged' && entry.status === 'renamed' && entry.oldPath
+            ? { oldPath: entry.oldPath }
+            : {})
         })
         // Headless hosts have no editor tabs; use git.diff on the review screen.
         if (isRendererUnavailableReply(diffReply)) {
@@ -160,7 +162,6 @@ export function useMobileSourceControlOpeners(params: Params) {
             )
           )
         }
-        triggerSelection()
         // Embedded panels dismiss their dock; route panels pop back to the activated diff, with Back as the unwired-dock fallback.
         if (embedded) {
           ;(onRequestClose ?? (() => router.back()))()

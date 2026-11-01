@@ -1,10 +1,10 @@
 import { agentSessionSignInCopyId } from './agent-session-availability'
-import type { AgentSessionFailureFact } from './agent-session-failure'
-import type { AgentSessionFailureSay } from './agent-session-failure-copy'
+import type { AgentSessionFailureFact } from './agent-session/failures/agent-session-failure'
+import type { AgentSessionFailureSay } from './agent-session/failures/agent-session-failure-copy'
 import type {
   AgentSessionFailureWordsContext,
   AgentSessionFailureSurface
-} from './agent-session-failure-words'
+} from './agent-session/failures/agent-session-failure-words'
 import { joinSentences } from './sentence-joining'
 import { agentSessionSignInFor } from './agent-session-sign-in'
 
@@ -53,7 +53,9 @@ export function cliMissingSentence(
   say: AgentSessionFailureSay
 ): string {
   return joinSentences([
-    say('cliMissing', agent(say, context)),
+    context.wslDistro
+      ? say('cliMissingInWslDistro', { ...agent(say, context), distro: context.wslDistro })
+      : say('cliMissing', agent(say, context)),
     ...(context.command && !context.retryControl
       ? [say('runCommandAgain', { command: context.command })]
       : [])

@@ -19,7 +19,7 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { withAgentSessionAccountEnv } from '../../agent-session-account-env'
 import { resolveWslHostAgentResumeInputs } from '../../wsl-host-agent-terminal-launch'
 import {
-  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 
@@ -106,7 +106,10 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
+    // An explicit ensure is the caller's own act (automatic is refused above), as its spawn below.
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree, undefined, {
+      wslUserAct: true
+    })
     const namespace = this.getAgentSessionExecutionNamespace(workspace, request.agent)
     if (
       !namespace ||
@@ -139,7 +142,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
         agentArgs:
           request.agentArgs !== undefined
             ? request.agentArgs
-            : resolveTuiAgentLaunchArgs(request.agent, settings),
+            : resolveTuiAgentLaunchRawArgs(request.agent, settings, undefined, shell),
         agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings),
         ompResumeFilePath: request.ompResumeFilePath,
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
@@ -156,6 +159,8 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       throw new Error('client_disconnected')
     }
     const terminal = await this.createTerminal(`id:${workspace.id}`, {
+      // Only the agent-session RPC reaches here: the caller's own act.
+      wslUserAct: true,
       command: startup.launchCommand,
       env: withAgentSessionAccountEnv(startup.env, request.accountEnv),
       launchConfig: startup.launchConfig,

@@ -1,13 +1,13 @@
 import type { AgentSessionStopOutcome } from './structured-agent-session-adapter-stop'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
-  type AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
 import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
@@ -69,12 +69,14 @@ export async function endStoppedStructuredAgentSession(
     windDown.settled?.(failedOn)
   }
   const outcome = windDown.outcome
+  const writerStopped =
+    outcome?.root === 'exited' || outcome?.deathEvidenceKind === 'kill-delivered'
   if (
     outcome &&
     (outcome.errors.length > 0 ||
       outcome.pause === 'unconfirmed' ||
       outcome.interrupt === 'unconfirmed' ||
-      outcome.root !== 'exited' ||
+      !writerStopped ||
       outcome.workload !== 'exited')
   ) {
     // Thread-scoped operation feedback survives generic turn-end rekeying and turnless shutdown.
@@ -100,7 +102,7 @@ export async function endStoppedStructuredAgentSession(
               stopNotice:
                 outcome.pause === 'unconfirmed' &&
                 outcome.interrupt !== 'unconfirmed' &&
-                outcome.root === 'exited' &&
+                writerStopped &&
                 outcome.workload === 'exited'
                   ? 'pauseUnconfirmed'
                   : 'stopUnconfirmed'

@@ -1,7 +1,7 @@
 import { activeProviderContext } from '../../../shared/agent-session-provider-context'
 // Store CAS and idempotency rows make retried create/ensure replay instead of reserving another owner.
 
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type {
   StructuredAgentId,
@@ -26,16 +26,17 @@ import {
   agentSessionRefusalReference,
   isAgentSessionWireRefusalCode,
   refuse,
-  type AgentSessionMutationEnvelope,
   type AgentSessionRefusalReference,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
 } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { AdoptedTranscriptSource } from '../agent-session-journal/adopted-transcript-source'
 import { structuredAgentSessionRefusalMessage } from './structured-agent-session-refusal-message'
 
 /** Clients cannot assert spawn tokens, claim keys or owner death; only host observations grant authority. */
@@ -59,7 +60,7 @@ export type AgentSessionAttachParams = {
     providerHandle: AgentSessionProviderHandle
     /** Omit only for exact replay of an already-imported journal. */
     transcriptPath?: string
-    source?: { providerSessionId: string; workspaceCwd: string }
+    source?: AdoptedTranscriptSource
   }
 }
 

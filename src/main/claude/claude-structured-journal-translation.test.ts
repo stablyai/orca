@@ -4,11 +4,13 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,
+  AgentJournalRenderItem
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type {
   AgentJournalItemIdentity,
-  AgentJournalRenderItem,
   AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { activeStructuredAgentSessionTurnId } from '../../shared/structured-agent-session-projection'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import {
@@ -18,7 +20,10 @@ import {
 import type { ClaudePendingPrompt } from './claude-structured-prompt-replies'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
@@ -180,6 +185,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(journalRoot, { recursive: true, force: true })
 })
 

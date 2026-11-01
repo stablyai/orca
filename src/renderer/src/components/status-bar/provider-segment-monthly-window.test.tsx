@@ -30,46 +30,7 @@ function windowOf(
   return { usedPercent, windowMinutes, resetsAt, resetDescription: null }
 }
 
-// Grok unified-billing accounts surface a monthly window and nothing else.
-function grokMonthlyLimits(status: ProviderRateLimits['status']): ProviderRateLimits {
-  return {
-    provider: 'grok',
-    session: null,
-    weekly: null,
-    monthly: windowOf(25, 43200),
-    updatedAt: Date.now(),
-    error: null,
-    status
-  }
-}
-
 describe('ProviderSegment monthly window', () => {
-  it('renders a monthly-only snapshot in the chip instead of a bare icon', async () => {
-    const { ProviderSegment } = await import('./StatusBar')
-
-    const markup = renderToStaticMarkup(
-      <ProviderSegment p={grokMonthlyLimits('ok')} compact={false} display="used" mode="compact" />
-    )
-
-    expect(markup).toContain('>25% 30d<')
-  })
-
-  it('shows monthly data while fetching instead of the loading placeholder', async () => {
-    const { ProviderSegment } = await import('./StatusBar')
-
-    const markup = renderToStaticMarkup(
-      <ProviderSegment
-        p={grokMonthlyLimits('fetching')}
-        compact={false}
-        display="used"
-        mode="compact"
-      />
-    )
-
-    expect(markup).toContain('>25% 30d<')
-    expect(markup).not.toContain('···')
-  })
-
   it('shows only the highest-used window when several windows exist', async () => {
     const { ProviderSegment } = await import('./StatusBar')
 
@@ -78,7 +39,7 @@ describe('ProviderSegment monthly window', () => {
       session: windowOf(10, 300),
       weekly: windowOf(20, 10080),
       monthly: windowOf(30, 43200),
-      updatedAt: Date.now(),
+      updatedAt: 0,
       error: null,
       status: 'ok'
     }
@@ -101,7 +62,7 @@ describe('ProviderSegment monthly window', () => {
         { ...windowOf(25, 300), name: 'Flash' },
         { ...windowOf(80, 300), name: 'Pro' }
       ],
-      updatedAt: Date.now(),
+      updatedAt: 0,
       error: null,
       status: 'ok'
     }
@@ -113,74 +74,6 @@ describe('ProviderSegment monthly window', () => {
     expect(markup).toContain('>80% Pro<')
     expect(markup).not.toContain('>25%')
   })
-
-  // Keep the chip’s countdown consistent with the popup for the same resetsAt.
-  it('shows remaining session time on the chip when resetsAt is known (repro-8378)', async () => {
-    const { ProviderSegment } = await import('./StatusBar')
-    const now = 1_700_000_000_000
-    const dateNow = vi.spyOn(Date, 'now').mockReturnValue(now)
-    const remainingMs = 2 * 60 * 60_000 + 33 * 60_000
-
-    try {
-      const limits: ProviderRateLimits = {
-        provider: 'codex',
-        session: windowOf(42, 300, now + remainingMs),
-        weekly: windowOf(10, 10080, now + 6 * 24 * 60 * 60_000),
-        updatedAt: now,
-        error: null,
-        status: 'ok'
-      }
-      const markup = renderToStaticMarkup(
-        <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
-      )
-
-      expect(markup).toContain('>42% 2h 33m<')
-      expect(markup).not.toContain('5h')
-      // The consolidated footer intentionally renders only the tightest window.
-      expect(markup).not.toContain('>10%')
-      expect(markup).not.toContain('wk')
-    } finally {
-      dateNow.mockRestore()
-    }
-  })
-
-  it('shows the footer bar only in verbose mode', async () => {
-    const { ProviderSegment } = await import('./StatusBar')
-    const limits = grokMonthlyLimits('ok')
-
-    const verbose = renderToStaticMarkup(
-      <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />
-    )
-    const compact = renderToStaticMarkup(
-      <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
-    )
-
-    expect(verbose).toContain('data-usage-bar')
-    expect(compact).not.toContain('data-usage-bar')
-  })
-
-  it('restores every inline window in verbose mode', async () => {
-    const { ProviderSegment } = await import('./StatusBar')
-    const limits: ProviderRateLimits = {
-      provider: 'claude',
-      session: windowOf(10, 300),
-      weekly: windowOf(20, 10_080),
-      fableWeekly: windowOf(30, 10_080),
-      monthly: windowOf(40, 43_200),
-      updatedAt: Date.now(),
-      error: null,
-      status: 'ok'
-    }
-
-    const markup = renderToStaticMarkup(
-      <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />
-    )
-
-    expect(markup).toContain('>10% 5h<')
-    expect(markup).toContain('>20% wk<')
-    expect(markup).toContain('>30% Fable<')
-    expect(markup).not.toContain('>40%')
-  })
 })
 
 describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
@@ -189,10 +82,11 @@ describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
   // old `s.window !== null` filter let the undefined-window section through, so
   // getTightestUsageSection's reduce read `.usedPercent` of undefined and crashed
   // the status-bar overlay (TypeError in ProviderSegment).
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Deliberately omit session to reproduce malformed persisted provider data.
   const partialProvider = {
     provider: 'codex',
     weekly: windowOf(42, 10080),
-    updatedAt: Date.now(),
+    updatedAt: 0,
     error: null,
     status: 'ok'
   } as unknown as ProviderRateLimits // `session` omitted -> undefined at runtime

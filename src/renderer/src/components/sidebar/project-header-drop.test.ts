@@ -50,6 +50,37 @@ describe('getSidebarOrderedRepoHeaderIdsByBucket', () => {
       ])
     )
   })
+
+  it("orders a host copy by its project's anchor and skips copies already drawn", () => {
+    const repo = (id: string): Repo => ({
+      id,
+      path: `/${id}`,
+      displayName: id,
+      badgeColor: '#000000',
+      addedAt: 0
+    })
+    const header = (key: string, fields: Partial<Extract<Row, { type: 'header' }>>): Row => ({
+      type: 'header',
+      key,
+      count: 1,
+      icon: { kind: 'project' },
+      ...fields
+    })
+    const rows = [
+      header('project:p', { repo: repo('p-ssh'), anchorRepo: repo('p-local'), hostId: 'ssh:b' }),
+      header('project:q', { repo: repo('q'), hostId: 'ssh:b' }),
+      header('project:p', {
+        repo: repo('p-local'),
+        anchorRepo: repo('p-local'),
+        hostId: 'local',
+        repeated: true
+      })
+    ]
+
+    expect(getSidebarOrderedRepoHeaderIdsByBucket(rows)).toEqual(
+      new Map([['ungrouped', ['p-local', 'q']]])
+    )
+  })
 })
 
 describe('getLogicalRepoOrderRankById', () => {

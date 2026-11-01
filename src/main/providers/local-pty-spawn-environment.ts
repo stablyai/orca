@@ -46,7 +46,9 @@ export function buildLocalPtySpawnEnvironment(args: {
     cwd: plan.cwd,
     shellPath: plan.shellPath,
     isWsl: plan.isWslShell,
-    wslDistro: plan.launchWslDistro
+    wslDistro: plan.launchWslDistro,
+    // Main's background starts get the same E9 prep as a passive restore (STA-12870).
+    wslPassiveRestore: spawn.wslPassiveRestore === true || spawn.wslBackgroundStart === true
   })
 }
 

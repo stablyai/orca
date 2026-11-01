@@ -7,13 +7,13 @@ import {
   isStructuredRewindTarget,
   structuredRewindCut
 } from '../native-chat/agent-session-wire/structured-rewind-cut'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
 import { projectJournalBatch } from '../native-chat/agent-session-wire/agent-session-journal-batch'
 import { replacePage, mergeItems } from '../../shared/structured-agent-session-history-state'
-import { AgentJournalRenderItemSchema } from '../../shared/agent-session-journal-schemas'
+import { AgentJournalRenderItemSchema } from '../../shared/agent-session/journal/agent-session-journal-schemas'
 import { projectStructuredItemToNativeChat } from '../../shared/structured-agent-session-projection'
-import { agentSessionSendBodyFingerprint } from '../../shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
 import { childExited, sessionFor, userMessage } from './claude-structured-dispatch-test-support'
@@ -477,7 +477,7 @@ describe('Claude chat catch-up', () => {
     expect(c.warn).not.toHaveBeenCalled()
   })
 
-  // P saved aliases plus P unacknowledged queued prompts: P×J scope work and one J-item index.
+  // P saved aliases plus P unacknowledged queued prompts: two J-item indexes, not P×J scans.
   it.each([10, 100].flatMap((prompts) => [1_000, 10_000].map((items) => ({ prompts, items }))))(
     'bounds retained-leaf work for $prompts aliases and local misses over $items journal items',
     async ({ prompts, items }) => {
@@ -569,8 +569,7 @@ describe('Claude chat catch-up', () => {
       expect(c.journal.canonicalItemId(alias)).toBe(canonical)
       expect(committed).not.toHaveBeenCalled()
       expect(c.warn).not.toHaveBeenCalled()
-      expect(associationVisits).toBeGreaterThan(prompts * itemCount)
-      expect(associationVisits).toBeLessThanOrEqual((prompts + 1) * itemCount)
+      expect(associationVisits).toBeLessThanOrEqual(2 * itemCount)
       expect(viewVisits).toBeLessThanOrEqual(2 * itemCount)
       console.info('retained-leaf operation counts', {
         prompts,

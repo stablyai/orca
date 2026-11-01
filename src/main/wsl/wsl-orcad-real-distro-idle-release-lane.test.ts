@@ -66,6 +66,8 @@ const RECEIPT_DIR = process.env.ORCA_WSL_ORCAD_LANE_RECEIPTS ?? join(WORK_DIR, '
 const IDLE_TIMEOUT_MS = 15_000
 // Idle period, one holder poll, then WSL's own stop of a distro with no client left.
 const RELEASE_BUDGET_MS = IDLE_TIMEOUT_MS + WSL_DISTRO_HOLDER_POLL_SECONDS * 1000 + 90_000
+// Round-trip counts are exact; five runs keep the ms medians readable on a noisy runner.
+const RESTART_RUNS = 5
 const HELD_WITH_TERMINAL_MS = IDLE_TIMEOUT_MS + WSL_DISTRO_HOLDER_POLL_SECONDS * 1000 + 45_000
 
 type Receipt = Record<string, unknown>
@@ -373,14 +375,67 @@ async function readOrcadStartupTiming() {
   return parseOrcadStartupTimingLine(line)
 }
 
-/** (a) WSL host: holder boots the distro, orcad deploys and starts, a terminal spawns and prints. */
-async function restartThroughHost(repoPath: string): Promise<
+/** SIGTERM the active orcad, as its idle exit ends it, and wait until it is gone; the distro stays up. */
+/**
+ * True once the active slot's orcad is proven down: stopped here, or its recorded pid is gone.
+ * False when nothing proves it: no active slot or pid file, or a live pid not naming the slot.
+ */
+async function stopOrcadKeepingDistro(): Promise<boolean> {
+  const answer = (
+    await guest(
+      `v=$(sed -n 's/.*"active": *"\\([^"]*\\)".*/\\1/p' "$HOME/.orca-remote/orcad-active.json"); ` +
+        `p=$(cat "$HOME/.orca-remote/orcad-$v/.orcad-pid" 2>/dev/null); ` +
+        // GONE needs evidence: a known slot and pid file whose process no longer exists.
+        `if [ -z "$v" ] || [ -z "$p" ] || [ -n "$(printf '%s' "$p" | tr -d 0-9)" ]; then echo UNKNOWN; ` +
+        `elif [ ! -e "/proc/$p" ]; then echo GONE; ` +
+        // Only a pid whose command line still names the active slot: a reused pid is left alone.
+        `elif tr '\\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -qF "orcad-$v/"; then echo "$p"; ` +
+        `else echo MISMATCH; fi`
+    )
+  ).trim()
+  if (answer === 'GONE') {
+    return true
+  }
+  const pid = Number(answer)
+  if (answer === 'MISMATCH' || answer === 'UNKNOWN' || !Number.isSafeInteger(pid) || pid <= 0) {
+    return false
+  }
+  // It may exit on its own meanwhile; the wait below is what decides.
+  await guest(`kill -TERM ${pid} 2>/dev/null || true`)
+  await waitFor(
+    'orcad to exit',
+    async () =>
+      (await guest(`kill -0 ${pid} 2>/dev/null && echo up || echo gone`)).trim() === 'gone'
+        ? true
+        : null,
+    30_000,
+    100
+  )
+  return true
+}
+
+/**
+ * (a) WSL host: holder boots the distro, orcad deploys and starts, a terminal spawns and prints.
+ * `warm` keeps the distro (and the orcad an earlier connect left serving) running: an app relaunch
+ * or reconnect, not a distro restart. `orcad` stops only orcad first, as its idle exit does: the
+ * reopen-after-idle case.
+ */
+async function restartThroughHost(
+  repoPath: string,
+  start: 'distro' | 'warm' | 'orcad' = 'distro'
+): Promise<
   Receipt & {
     phases: WslOrcadEnsurePhases | null
     orcadStartup: OrcadStartupTimingReport | null
+    orcadStopped: boolean
   }
 > {
-  await terminatePlain()
+  let orcadStopped = false
+  if (start === 'distro') {
+    await terminatePlain()
+  } else if (start === 'orcad') {
+    orcadStopped = await stopOrcadKeepingDistro()
+  }
   createManager()
   const trace = createWslOrcadEnsureTrace()
   ensureTrace = trace
@@ -397,35 +452,53 @@ async function restartThroughHost(repoPath: string): Promise<
       worktree: `path:${repoPath}`
     })
     const createdMs = Math.round(performance.now() - started)
+    const tail = async (): Promise<string> =>
+      (
+        (
+          await held.call<{ terminal: { tail?: unknown[] } }>('terminal.read', {
+            terminal: created.terminal.handle
+          })
+        ).terminal.tail ?? []
+      )
+        .map(String)
+        .join('\n')
+    // What a user sees first: the first output on screen (the prompt, or a login banner).
+    await waitFor(
+      'the first screen output',
+      async () => ((await tail()).trim() ? true : null),
+      120_000,
+      25
+    )
+    const timeToFirstOutputMs = Math.round(performance.now() - started)
     const probe = outputProbe()
     const sendStarted = performance.now()
+    // Enter inside the text, as typing delivers it: `enter: true` would add the 500 ms settle that
+    // protects agent TUIs from a pasted Enter, which no keystroke pays.
     await held.call('terminal.send', {
       terminal: created.terminal.handle,
-      text: probe.command,
-      enter: true
+      text: `${probe.command}\r`,
+      enter: false
     })
     await waitFor(
       'the host terminal to print the probe',
-      async () => {
-        const read = await held.call<{ terminal: { tail?: unknown[] } }>('terminal.read', {
-          terminal: created.terminal.handle
-        })
-        return (read.terminal.tail ?? []).map(String).join('\n').includes(probe.token) ? true : null
-      },
+      async () => ((await tail()).includes(probe.token) ? true : null),
       120_000,
-      100
+      25
     )
     const firstOutputMs = Math.round(performance.now() - started)
     const sendToFirstOutputMs = Math.round(performance.now() - sendStarted)
-    const orcadStartup = await readOrcadStartupTiming()
+    // A warm connect starts no orcad, so the newest timing line is an earlier launch's.
+    const orcadStartup = start === 'warm' ? null : await readOrcadStartupTiming()
     await held.call('terminal.close', { terminal: created.terminal.handle }).catch(() => {})
     return {
       ensureMs,
       terminalCreatedMs: createdMs - ensureMs,
+      timeToFirstOutputMs,
       sendToFirstOutputMs,
       firstOutputMs,
       phases: summarizeWslOrcadEnsurePhases(trace.events),
-      orcadStartup
+      orcadStartup,
+      orcadStopped
     }
   } finally {
     held.close()
@@ -471,9 +544,10 @@ async function restartThroughBridgeConpty(): Promise<Receipt> {
     }
   )
   let output = ''
-  let firstPaintMs: number | null = null
+  // ConPTY's own startup repaint, before the distro has produced anything.
+  let conptyStartupOutputMs: number | null = null
   terminal.onData((data) => {
-    firstPaintMs ??= Math.round(performance.now() - started)
+    conptyStartupOutputMs ??= Math.round(performance.now() - started)
     output += data
   })
   try {
@@ -484,7 +558,7 @@ async function restartThroughBridgeConpty(): Promise<Receipt> {
       120_000,
       50
     )
-    return { firstPaintMs, firstOutputMs: Math.round(performance.now() - started) }
+    return { conptyStartupOutputMs, firstOutputMs: Math.round(performance.now() - started) }
   } finally {
     terminal.kill()
   }
@@ -540,8 +614,53 @@ async function profileOrcadRestart(repoPath: string): Promise<string[]> {
   return names
 }
 
+// The flag-on gate is warm start; cold start (distro restart) is tracked against its own target.
+const WARM_START_P50_TARGET_MS = 2_500
+const COLD_START_P50_TARGET_MS = 3_000
+
+/** Nearest-rank percentile, so p90 of five runs is the slowest. */
+function percentile(values: number[], fraction: number): number {
+  const sorted = values.toSorted((a, b) => a - b)
+  return sorted[Math.max(0, Math.ceil(fraction * sorted.length) - 1)] ?? 0
+}
+
+function startupGateFor(runs: Receipt[], targetP50Ms: number) {
+  const values = (key: string) => runs.map((run) => Number(run[key]))
+  const p50FirstOutputMs = percentile(values('firstOutputMs'), 0.5)
+  return {
+    n: runs.length,
+    targetP50Ms,
+    p50FirstOutputMs,
+    p90FirstOutputMs: percentile(values('firstOutputMs'), 0.9),
+    p50EnsureMs: percentile(values('ensureMs'), 0.5),
+    p90EnsureMs: percentile(values('ensureMs'), 0.9),
+    p50TerminalCreatedMs: percentile(values('terminalCreatedMs'), 0.5),
+    p50SendToFirstOutputMs: percentile(values('sendToFirstOutputMs'), 0.5),
+    p50TimeToFirstOutputMs: percentile(values('timeToFirstOutputMs'), 0.5),
+    p90TimeToFirstOutputMs: percentile(values('timeToFirstOutputMs'), 0.9),
+    meetsTarget: p50FirstOutputMs <= targetP50Ms,
+    runs: runs.map(
+      ({
+        ensureMs,
+        terminalCreatedMs,
+        timeToFirstOutputMs,
+        sendToFirstOutputMs,
+        firstOutputMs,
+        phases
+      }) => ({
+        ensureMs,
+        terminalCreatedMs,
+        timeToFirstOutputMs,
+        sendToFirstOutputMs,
+        firstOutputMs,
+        phases
+      })
+    )
+  }
+}
+
 /**
- * Distro restart (VM warm) to first command output, median of 3 each, alternating so neither path
+ * Distro restart (VM warm) to first command output, median of 5 each, alternating so neither path
  * always runs on a warmer VM.
  */
 async function distroRestartBaseline(): Promise<void> {
@@ -551,13 +670,13 @@ async function distroRestartBaseline(): Promise<void> {
   const host: Awaited<ReturnType<typeof restartThroughHost>>[] = []
   const bridge: Receipt[] = []
   const conpty: Receipt[] = []
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < RESTART_RUNS; i++) {
     host.push(await restartThroughHost(repoPath))
     bridge.push(await restartThroughBridgeExec())
     conpty.push(await restartThroughBridgeConpty())
   }
   const median = (runs: Receipt[], key: string): number =>
-    runs.map((run) => Number(run[key])).toSorted((a, b) => a - b)[1] ?? 0
+    runs.map((run) => Number(run[key])).toSorted((a, b) => a - b)[(runs.length - 1) >> 1] ?? 0
   receipt.distroRestartToFirstOutput = {
     host,
     bridgeExecLowerBound: bridge,
@@ -569,8 +688,32 @@ async function distroRestartBaseline(): Promise<void> {
     medianHostPhases: medianWslOrcadEnsurePhases(host.map((run) => run.phases)),
     medianBridgeExecLowerBoundMs: median(bridge, 'firstOutputMs'),
     bridgeConpty: conpty,
-    medianBridgeConptyFirstPaintMs: median(conpty, 'firstPaintMs'),
+    medianBridgeConptyStartupOutputMs: median(conpty, 'conptyStartupOutputMs'),
     medianBridgeConptyFirstOutputMs: median(conpty, 'firstOutputMs')
+  }
+  // One unrecorded connect boots the distro and orcad the warm runs reconnect to.
+  await restartThroughHost(repoPath)
+  const warm: Awaited<ReturnType<typeof restartThroughHost>>[] = []
+  for (let i = 0; i < RESTART_RUNS; i++) {
+    warm.push(await restartThroughHost(repoPath, 'warm'))
+  }
+  const orcadCold: Awaited<ReturnType<typeof restartThroughHost>>[] = []
+  for (let i = 0; i < RESTART_RUNS; i++) {
+    orcadCold.push(await restartThroughHost(repoPath, 'orcad'))
+  }
+  // A run that could not prove orcad down may have measured a warm reconnect: keep it out.
+  const stoppedRuns = orcadCold.filter((run) => run.orcadStopped)
+  expect(stoppedRuns.length, 'orcad-cold runs with orcad proven down').toBeGreaterThan(0)
+  receipt.startupGate = {
+    warm: startupGateFor(warm, WARM_START_P50_TARGET_MS),
+    cold: startupGateFor(host, COLD_START_P50_TARGET_MS),
+    // Reopening Orca after orcad's idle exit, distro still up: tracked against the warm bar, not gated.
+    orcadCold: {
+      ...startupGateFor(stoppedRuns, WARM_START_P50_TARGET_MS),
+      gated: false,
+      excludedNotStopped: orcadCold.length - stoppedRuns.length,
+      medianOrcadStartup: medianOrcadStartupTiming(stoppedRuns.map((run) => run.orcadStartup))
+    }
   }
   receipt.orcadStartupProfiles = await profileOrcadRestart(repoPath)
   await terminatePlain()
@@ -598,7 +741,8 @@ describe.runIf(RUN && process.platform === 'win32')('WSL distro idle release', (
     RELEASE_BUDGET_MS + 2 * HELD_WITH_TERMINAL_MS + 6 * 60_000
   )
 
-  // After the idle phase: six distro restarts, a warm-up and one profiled restart, each bounded.
+  // After the idle phase: fifteen distro restarts, five warm reconnects, five orcad restarts and one
+  // profiled restart.
   it(
     'measures distro restart to first output for the WSL host and an old-bridge exec lower bound',
     distroRestartBaseline,

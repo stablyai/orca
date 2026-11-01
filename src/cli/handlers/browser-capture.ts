@@ -88,7 +88,11 @@ export const BROWSER_CAPTURE_HANDLERS: Record<string, CommandHandler> = {
       if (v.entries.length === 0) {
         return 'No network entries'
       }
-      return v.entries.map((e) => `${e.status} ${e.url} (${e.mimeType}, ${e.size}B)`).join('\n')
+      return v.entries
+        .map(
+          (e) => `${e.status ?? '-'} ${e.method} ${e.url}${e.mimeType ? ` (${e.mimeType})` : ''}`
+        )
+        .join('\n')
     })
   }
 }

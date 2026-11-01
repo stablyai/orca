@@ -1,8 +1,18 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { ComponentProps } from 'react'
 import { useAppStore } from '@/store'
-import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import { makeFolderWorkspace, makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
+import {
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
+import { aiVaultSearchHitToSession } from './ai-vault-search-session'
+import type { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
+import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 import { resolveAiVaultPanelSessionListRequest } from './ai-vault-panel-session-list-request'
 import {
   writeAiVaultViewOptions,
@@ -16,6 +26,22 @@ type PanelRequest = {
 }
 
 const panelRequests = vi.hoisted((): PanelRequest[] => [])
+const returned = vi.hoisted((): { sessions: AiVaultSession[] } => ({ sessions: [] }))
+const panelRows = vi.hoisted(
+  (): { session: AiVaultSession; resume: AiVaultResumeInChatEligibility }[] => []
+)
+
+vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readLocalRuntimeCapabilitiesOrUnknown: () => [
+    STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+    STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
+  ]
+}))
+vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  structuredAgentSessionLaunchFeasible: () => true
+}))
 
 vi.mock('./ai-vault-session-refresh', () => ({
   useAiVaultSessionRefresh: (
@@ -29,7 +55,7 @@ vi.mock('./ai-vault-session-refresh', () => ({
       loading: false,
       refresh: vi.fn(),
       scanResult: null,
-      sessions: [],
+      sessions: returned.sessions,
       loadedSessionLimit: null
     }
   }
@@ -43,12 +69,30 @@ vi.mock('./ai-vault-original-pane-actions', () => ({
 vi.mock('./ai-vault-session-delete-action', () => ({
   useAiVaultSessionDeleteAction: () => vi.fn()
 }))
-vi.mock('./AiVaultSessionVirtualList', () => ({ AiVaultSessionVirtualList: () => null }))
+vi.mock('./AiVaultSessionVirtualList', () => ({
+  AiVaultSessionVirtualList: ({
+    groups,
+    getSessionResumeInChat
+  }: Pick<
+    ComponentProps<typeof AiVaultSessionVirtualList>,
+    'groups' | 'getSessionResumeInChat'
+  >) => {
+    panelRows.length = 0
+    for (const group of groups) {
+      for (const session of group.sessions) {
+        panelRows.push({ session, resume: getSessionResumeInChat(session) })
+      }
+    }
+    return null
+  }
+}))
 
 const WORKTREE_ID = 'repo-1::/repo/wt'
 
 beforeEach(() => {
   panelRequests.length = 0
+  returned.sessions = []
+  panelRows.length = 0
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
     activeRepoId: 'repo-1',
@@ -85,3 +129,32 @@ it('builds the exact request the Session History panel sends for the active work
   fireEvent.click(screen.getByRole('radio', { name: /^Workspace$/ }))
   expect(panelRequests.at(-1)).toEqual(request)
 })
+
+it.each([false, true])(
+  'delivers alias rows to native resume in Workspace and All (bound: %s)',
+  async (bound) => {
+    const folderId = 'folder:example'
+    useAppStore.setState({
+      activeWorktreeId: bound ? WORKTREE_ID : folderId,
+      folderWorkspaces: [makeFolderWorkspace({ id: 'example', folderPath: '/var/example' })]
+    })
+    const session = {
+      ...aiVaultSearchHitToSession(
+        { ...searchHit(), agent: 'claude', cwd: '/private/var/example' },
+        'local'
+      ),
+      cwdAliases: ['/var/example']
+    }
+    returned.sessions = [session]
+    const { default: AiVaultPanel } = await import('./AiVaultPanel')
+    render(<AiVaultPanel workspace={bound ? { worktreeId: folderId } : undefined} />)
+    expect(panelRequests.at(-1)?.scopePaths).toContain('/var/example')
+    expect(panelRows).toEqual([{ session, resume: { available: true, workspaceId: folderId } }])
+    expect(panelRows[0].session).toBe(session)
+    fireEvent.click(screen.getByRole('radio', { name: /^All$/ }))
+    expect(panelRequests.at(-1)?.scopePaths).toContain('/var/example')
+    expect(panelRows).toEqual([{ session, resume: { available: true, workspaceId: folderId } }])
+    expect(panelRows[0].session.cwd).toBe('/private/var/example')
+    expect(panelRows[0].session.sessionId).toBe(session.sessionId)
+  }
+)

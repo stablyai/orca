@@ -307,6 +307,47 @@ describe('GitHub PR local runtime routing', () => {
     expect(noteRateLimitSpendMock).not.toHaveBeenCalled()
   })
 
+  it('answers a hover preview with one REST call, following an issue link to its PR', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'orca' })
+    const restCalls: string[] = []
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const endpoint = args[0] === 'api' ? args[1] : ''
+      restCalls.push(endpoint)
+      if (endpoint === 'repos/acme/orca/issues/7') {
+        return { stdout: JSON.stringify({ number: 7, title: 'Peek', pull_request: {} }) }
+      }
+      if (endpoint === 'repos/acme/orca/pulls/7') {
+        return {
+          stdout: JSON.stringify({
+            number: 7,
+            title: 'Peek',
+            state: 'closed',
+            merged_at: '2026-10-01T00:00:00Z',
+            additions: 3,
+            deletions: 1
+          })
+        }
+      }
+      if (endpoint === 'repos/acme/orca/issues/8') {
+        return { stdout: JSON.stringify({ number: 8, title: 'Bug', state: 'open', comments: 2 }) }
+      }
+      throw new Error(`unexpected gh ${args.join(' ')}`)
+    })
+    const ownerRepo = { owner: 'acme', repo: 'orca' }
+
+    await expect(
+      getWorkItemByOwnerRepo('/repo', ownerRepo, 7, 'issue', null, {}, { preview: true })
+    ).resolves.toMatchObject({ type: 'pr', state: 'merged', additions: 3, deletions: 1 })
+    await expect(
+      getWorkItemByOwnerRepo('/repo', ownerRepo, 8, 'issue', null, {}, { preview: true })
+    ).resolves.toMatchObject({ type: 'issue', state: 'open', commentCount: 2 })
+    expect(restCalls).toEqual([
+      'repos/acme/orca/issues/7',
+      'repos/acme/orca/pulls/7',
+      'repos/acme/orca/issues/8'
+    ])
+  })
+
   it('never falls through to the default gh host for an unresolved SSH repository', async () => {
     const legacyRepo = { owner: 'team', repo: 'orca' }
     getOwnerRepoMock.mockResolvedValue(null)

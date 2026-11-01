@@ -1,7 +1,8 @@
+import { useAppStore } from '@/store'
 // @vitest-environment happy-dom
 
 import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
@@ -13,10 +14,15 @@ type CallParams = {
 }
 
 const mocks = vi.hoisted(() => ({
+  settingsWrite: vi.fn(async () => {}),
   call: vi.fn<(target: unknown, method: string, params: CallParams) => Promise<unknown>>(),
   createIntent: vi.fn(),
   retryIntent: vi.fn(),
   launch: vi.fn()
+}))
+
+vi.mock('@/components/native-chat/native-chat-session-option-settings-write', () => ({
+  enqueueSessionOptionSettingsWrite: mocks.settingsWrite
 }))
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
@@ -58,6 +64,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
+      runtimeEnvironmentCatalogHydrated: true,
       unifiedTabsByWorktree: {},
       seedNativeChatLaunchDraft: vi.fn(),
       clearNativeChatLaunchDraft: vi.fn()
@@ -84,15 +91,22 @@ import {
   startStructuredAgentLaunch
 } from './structured-agent-session-launch'
 import {
+  applyStructuredLaunchHeldOptions,
   getStructuredAgentSessionLaunchSelection,
   holdStructuredAgentSessionLaunchOption
 } from './structured-agent-session-launch-options'
 import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
 import {
+  getStructuredLaunchStateBySessionId,
   resetStructuredAgentLaunchRegistryForTests,
   subscribeStructuredAgentLaunchStatus
 } from './agent-session/launch/structured-agent-session-launch-registry'
 import { markStructuredAgentSessionLaunchPublished } from './agent-session/launch/structured-agent-session-launch-publication'
+import {
+  registerStructuredSelectionCatalogStore,
+  structuredSessionSelectionController,
+  forgetStructuredSessionSelection
+} from './structured-agent-session-selection-controller'
 
 const WORKTREE_ID = 'wt-1'
 const SESSION_ID = 'session-1'
@@ -172,10 +186,21 @@ async function settle(): Promise<void> {
   }
 }
 
+let restoreCatalogStore: (() => void) | undefined
+afterEach(() => {
+  resetStructuredAgentLaunchRegistryForTests()
+  forgetStructuredSessionSelection(SESSION_ID)
+  restoreCatalogStore?.()
+})
 describe('picks made while a chat launches', () => {
   let setOptionReplies: Deferred<unknown>[]
 
   beforeEach(() => {
+    restoreCatalogStore = registerStructuredSelectionCatalogStore({
+      read: useAppStore.getState,
+      subscribe: useAppStore.subscribe
+    })
+    forgetStructuredSessionSelection(SESSION_ID)
     vi.clearAllMocks()
     localStorage.clear()
     resetStructuredAgentLaunchPersistenceForTests()
@@ -217,7 +242,8 @@ describe('picks made while a chat launches', () => {
     markStructuredAgentSessionLaunchPublished(WORKTREE_ID, SESSION_ID, 'local')
     expect(lifecycle()).toBe('pending')
     expect(mutations()).toEqual([
-      { method: 'agentSession.setOption', fence: 7, key: 'model', value: 'gpt-picked' }
+      { method: 'agentSession.setOption', fence: 7, key: 'model', value: 'gpt-picked' },
+      { method: 'agentSession.setOption', fence: 7, key: 'effort', value: 'high' }
     ])
     setOptionReplies[0]!.resolve({
       ok: true,
@@ -257,27 +283,21 @@ describe('picks made while a chat launches', () => {
     expect(mutations().map((mutation) => mutation.value)).toEqual(['gpt-picked', 'gpt-repicked'])
   })
 
-  it('sends held Fast with the picked model even when its catalog omits that tier', async () => {
+  it('keeps a held tier across a model pick whose catalog does not offer it', async () => {
     const created = deferred<{ sessionId: string; fence: number }>()
     mocks.launch.mockReturnValue(created.promise)
     const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-tier' })
     const tierPick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'serviceTier', 'priority')
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-nofast')
-    expect(getStructuredAgentSessionLaunchSelection(SESSION_ID)?.held).toEqual({
-      model: 'gpt-nofast',
-      serviceTier: 'priority'
-    })
     created.resolve({ sessionId: SESSION_ID, fence: 3 })
     await settle()
-    setOptionReplies[0]!.resolve(ACCEPTED)
-    await settle()
-    setOptionReplies[1]!.resolve({ ok: true, value: { options: { serviceTier: 'priority' } } })
+    expect(setOptionReplies).toHaveLength(2)
+    for (const reply of setOptionReplies) {
+      reply.resolve(ACCEPTED)
+    }
+    await expect(tierPick).resolves.toMatchObject({ kind: 'accepted' })
     await launch.launchResult
 
-    await expect(tierPick).resolves.toEqual({
-      kind: 'accepted',
-      options: { serviceTier: 'priority' }
-    })
     expect(mutations().map(({ key, value }) => [key, value])).toEqual([
       ['model', 'gpt-nofast'],
       ['serviceTier', 'priority']
@@ -362,8 +382,7 @@ describe('picks made while a chat launches', () => {
 
     expect(retryStructuredAgentSessionLaunch(WORKTREE_ID, SESSION_ID)).toBe(true)
     expect(getStructuredAgentSessionLaunchSelection(SESSION_ID)).toEqual({
-      seed: { model: 'gpt-saved-since' },
-      held: { model: 'gpt-picked' }
+      seed: { model: 'gpt-saved-since' }
     })
     await settle()
     expect(mutations()).toEqual([
@@ -377,7 +396,13 @@ describe('picks made while a chat launches', () => {
     startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-6' })
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-picked')
 
+    const otherHost = { kind: 'environment', environmentId: 'surviving-held-chat' } as const
+    const survivor = structuredSessionSelectionController(otherHost, SESSION_ID, 'codex')
+    survivor.issue('model', 'other-host-model', null)
     cancelStructuredAgentLaunch(WORKTREE_ID, SESSION_ID)
+    expect(structuredSessionSelectionController(otherHost, SESSION_ID, 'codex')).toBe(survivor)
+    expect(survivor.overlay()).toEqual({ model: 'other-host-model' })
+    forgetStructuredSessionSelection(SESSION_ID, otherHost)
     created.resolve({ sessionId: SESSION_ID, fence: 1 })
     await settle()
 
@@ -385,22 +410,67 @@ describe('picks made while a chat launches', () => {
     expect(holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-late')).toBeNull()
   })
 
-  it('folds an accepted pick into what the launch reports it runs', async () => {
-    mocks.launch.mockResolvedValue({ sessionId: SESSION_ID, fence: 1 })
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-7' })
-    holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'high')
-    await settle()
-    const seen: unknown[] = []
-    subscribeStructuredAgentLaunchStatus(() =>
-      seen.push(getStructuredAgentSessionLaunchSelection(SESSION_ID))
-    )
-    setOptionReplies[0]!.resolve({
-      ok: true,
-      value: { key: 'effort', value: 'high', options: { model: 'gpt-seeded', effort: 'high' } }
-    })
-    await settle()
-
-    expect(seen[0]).toEqual({ seed: { model: 'gpt-seeded', effort: 'high' }, held: {} })
-    expect(lifecycle()).toBeNull()
+  it('keeps held issue and settlement off the global registry serializer at N and 10N', async () => {
+    for (const count of [10, 100]) {
+      mocks.launch.mockReturnValue(new Promise(() => {}))
+      for (let index = 0; index < count; index++) {
+        const sessionId = `perf-held-${index}`
+        const intent = {
+          ...launchIntent({ model: 'gpt-seeded' }),
+          sessionId,
+          worktreeId: `perf-worktree-${index}`,
+          params: {
+            ...launchIntent().params,
+            envelope: { ...launchIntent().params.envelope, sessionId }
+          }
+        }
+        mocks.createIntent.mockReturnValueOnce(intent)
+        startStructuredAgentLaunch(intent.worktreeId, 'codex', { requestId: sessionId })
+      }
+      const sessionId = 'perf-held-0'
+      const state = getStructuredLaunchStateBySessionId(sessionId)!
+      const selection = state.selection
+      const seed = selection.seed
+      const changed = vi.fn()
+      const global = vi.fn()
+      const unsubscribe = subscribeStructuredAgentLaunchStatus(global)
+      const controller = structuredSessionSelectionController(
+        state.intent.target,
+        sessionId,
+        'codex'
+      )
+      const stop = controller.subscribe(changed)
+      const storage = vi.spyOn(Storage.prototype, 'setItem')
+      const pick = holdStructuredAgentSessionLaunchOption(sessionId, 'model', 'gpt-picked')
+      await applyStructuredLaunchHeldOptions(state, { sessionId, fence: 1 }, false)
+      setOptionReplies.at(-1)!.resolve({ ok: true, value: { key: 'model', value: 'gpt-picked' } })
+      await expect(pick).resolves.toEqual({ kind: 'accepted', options: { model: 'gpt-picked' } })
+      await settle()
+      expect(state.selection).toBe(selection)
+      expect(state.selection.seed).toBe(seed)
+      expect(seed).toEqual({ model: 'gpt-seeded' })
+      expect(global).not.toHaveBeenCalled()
+      expect(storage).not.toHaveBeenCalled()
+      expect(changed).toHaveBeenCalledTimes(3)
+      expect(mocks.settingsWrite).toHaveBeenLastCalledWith(state.intent.target, {
+        type: 'apply-picks',
+        agent: 'codex',
+        picks: [{ modelId: 'gpt-picked', optionId: 'model', value: 'gpt-picked' }]
+      })
+      console.info(
+        'selection-held-notifier-work',
+        JSON.stringify({
+          pendingLaunches: count,
+          globalNotifications: 0,
+          serializerWrites: 0,
+          scopedNotifications: changed.mock.calls.length
+        })
+      )
+      storage.mockRestore()
+      stop()
+      unsubscribe()
+      resetStructuredAgentLaunchRegistryForTests()
+      resetStructuredAgentLaunchPersistenceForTests()
+    }
   })
 })

@@ -1,6 +1,6 @@
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentSessionPromptQuestions,
   isValidAgentSessionQuestionAnswers,
@@ -13,12 +13,10 @@ import type {
   AgentJournalApprovalItem,
   AgentJournalQuestionItem,
   AgentJournalResolution
-} from '../../../shared/agent-session-journal-types'
-import {
-  refuse,
-  type AgentSessionPromptResult,
-  type AgentSessionRefusalReason
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionPromptResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError

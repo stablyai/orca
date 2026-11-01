@@ -109,8 +109,12 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
     this.legacyWorkerRecovery.deleteRecoveredPty(ptyId)
-    // Why: a respawn under the same session id needs its own subscriber-driven attach.
-    this.terminalViewSubscribers.resetGeneration(ptyId)
+    // Why: a respawn under the same session id needs its own main attach.
+    this.mainDaemonAttachments.forget(ptyId)
+    const pty = this.ptysById.get(ptyId)
+    if (pty) {
+      pty.outputObservedSince = null
+    }
     // Why: a provider response belongs to the process generation that issued
     // it; a respawn must neither reuse its frame nor join its in-flight call.
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)

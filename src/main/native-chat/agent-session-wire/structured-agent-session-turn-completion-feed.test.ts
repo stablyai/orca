@@ -3,15 +3,15 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session-wire'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_HOST_RESTARTED,
   DISPATCH_REJECTED_NOT_DELIVERED,
   DISPATCH_REJECTED_PROVIDER_CLOSED
-} from '../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
 import type { StructuredAttentionState } from '../../../shared/agent-session-attention'
 import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-session-turn-completion-feed'

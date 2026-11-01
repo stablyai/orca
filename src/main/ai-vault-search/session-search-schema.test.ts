@@ -2,15 +2,18 @@ import type * as NodeFs from 'node:fs'
 import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   removeTree,
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS
 } from '../../shared/windows-transient-lock-removal'
+import { asRecord } from '../ai-vault/session-scanner-record-value'
 import SyncDatabase from '../sqlite/sync-database'
 import {
   SESSION_SEARCH_SCHEMA_VERSION,
+  addSessionSearchPrefixHashColumn,
   openSessionSearchDatabase,
   removeSessionSearchDatabase
 } from './session-search-schema'
@@ -67,6 +70,56 @@ describe('openSessionSearchDatabase', () => {
       text_truncated: 1
     })
     second.close()
+  })
+
+  it('keeps a version 8 index that predates prefix hashes and adds the column', async () => {
+    const path = await tempDatabasePath()
+    const first = openSessionSearchDatabase(path)
+    first.exec('ALTER TABLE files DROP COLUMN prefix_hash')
+    first.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
+    first.close()
+
+    const second = openSessionSearchDatabase(path)
+    expect(second.prepare('SELECT path, prefix_hash FROM files').all()).toEqual([
+      { path: 'a', prefix_hash: null }
+    ])
+    second.close()
+  })
+
+  it('adds the prefix hash column once when another opener migrates under its lock', async () => {
+    const path = await tempDatabasePath()
+    const setup = openSessionSearchDatabase(path)
+    setup.exec('ALTER TABLE files DROP COLUMN prefix_hash')
+    setup.close()
+    const opener = new SyncDatabase(path)
+    opener.pragma('busy_timeout = 5000')
+    // The other opener holds its uncommitted ALTER while this one runs the migration.
+    const rival = new Worker(
+      `
+      const { parentPort, workerData } = require('node:worker_threads')
+      const db = new (require('node:sqlite').DatabaseSync)(workerData.path)
+      db.exec('PRAGMA busy_timeout=5000; BEGIN IMMEDIATE')
+      db.exec('ALTER TABLE files ADD COLUMN prefix_hash TEXT')
+      parentPort.postMessage('locked')
+      setTimeout(() => { db.exec('COMMIT'); db.close(); parentPort.close() }, 300)
+      `,
+      { eval: true, workerData: { path } }
+    )
+    try {
+      await new Promise<void>((resolve, reject) => {
+        rival.once('message', () => resolve())
+        rival.once('error', reject)
+      })
+      expect(() => addSessionSearchPrefixHashColumn(opener)).not.toThrow()
+      const columns = opener
+        .prepare('PRAGMA table_info(files)')
+        .all()
+        .filter((column) => asRecord(column)?.name === 'prefix_hash')
+      expect(columns).toHaveLength(1)
+    } finally {
+      opener.close()
+      await rival.terminate()
+    }
   })
 
   it('carries one FTS table and throws away an index that carries two', async () => {

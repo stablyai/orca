@@ -7,7 +7,7 @@ import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-c
 import { sealStructuredSessionChild } from '../runtime/structured-session-child-env'
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -33,7 +33,7 @@ async function codexChildEnv(
   const launch = await createCodexStructuredLaunchResolver({
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveEnvironment: async () => env,
-    resolveCommand: () => command,
+    resolveCommand: () => ({ command: command, prefixArgs: [] }),
     resolveLaunchArgs: () => []
   })({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a launch reads only the session id of its identity here.

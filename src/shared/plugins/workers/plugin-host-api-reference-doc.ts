@@ -43,11 +43,21 @@ function typeText(schema: JsonSchema): string {
   return schema.type ?? 'JSON'
 }
 
-function signature(params: z.ZodType, result: z.ZodType): string {
+/** A method's params (as passed) and result (as returned), as TypeScript-like type text. */
+export function pluginHostMethodTypeTexts(
+  params: z.ZodType,
+  result: z.ZodType
+): { params: string; result: string } {
   const options = { target: 'draft-2020-12', unrepresentable: 'any' } as const
-  const input = z.toJSONSchema(params, { ...options, io: 'input' })
-  const output = z.toJSONSchema(result, { ...options, io: 'output' })
-  return `(params: ${typeText(input)}) => ${typeText(output)}`
+  return {
+    params: typeText(z.toJSONSchema(params, { ...options, io: 'input' })),
+    result: typeText(z.toJSONSchema(result, { ...options, io: 'output' }))
+  }
+}
+
+function signature(params: z.ZodType, result: z.ZodType): string {
+  const types = pluginHostMethodTypeTexts(params, result)
+  return `(params: ${types.params}) => ${types.result}`
 }
 
 // Why a Record: a new error code fails typecheck until it is documented here.
@@ -84,13 +94,15 @@ export function renderPluginHostApiReference(): string {
     '',
     'Every call is checked against the capabilities the user approved, and params are validated before Orca runs anything: params are strict, so a field this Orca does not know is refused with `invalid_params` instead of being dropped. Mutations are recorded in the audit log as `plugin:<publisher>.<id>`.',
     '',
+    'Methods whose capability is `none` need no capability but still need the plugin enabled and approved. `shell.openExternal` and `files.saveAs` also need transient user activation (a click or key press in the calling frame, within a few seconds), are rate-limited, and run only in the desktop app; frames also reach them as `orca.shell.openExternal(url)` and `orca.files.saveAs({ suggestedName, mimeType, data })`, which resolves with `{ status: "saved" }`, or `{ status: "cancelled" }` when the person cancels the dialog. Saved files carry the OS mark for downloaded files.',
+    '',
     '## Methods',
     '',
     '| Method | Capability | Surfaces | Mutation | Since | Summary |',
     '| --- | --- | --- | --- | --- | --- |',
     ...specs.map(
       (spec) =>
-        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | \`${spec.capability}\` | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
+        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | ${spec.capability === null ? 'none' : `\`${spec.capability}\``} | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
     )
   ]
   for (const spec of specs) {

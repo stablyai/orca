@@ -11,11 +11,25 @@ import {
   type PluginJsonValue
 } from '../../../shared/plugins/workers/plugin-host-api'
 import { shortPluginBranchName } from '../../../shared/plugins/events/plugin-events'
+import type { PluginHostCallScope } from './plugin-host-call-scope'
+
+export type { PluginHostCallScope } from './plugin-host-call-scope'
 
 export type PluginWorktreeContext = {
   worktreeId: string
   branch: string
   displayName: string
+}
+
+/** Desktop-only sinks for frame methods; absent in headless serve. */
+export type PluginDesktopFrameServices = {
+  openExternal(pluginId: string, url: string, scope: PluginHostCallScope): Promise<boolean>
+  /** False when the person cancelled the dialog. */
+  saveFile(
+    pluginId: string,
+    input: { suggestedName?: string; mimeType?: string; data: string | ArrayBuffer | Uint8Array },
+    scope: PluginHostCallScope
+  ): Promise<boolean>
 }
 
 export type PluginHostServices = {
@@ -47,7 +61,9 @@ export type PluginHostServices = {
     ): { ok: true; value: string | null } | { ok: false; error: string }
     set(pluginId: string, key: string, value: string): { ok: true } | { ok: false; error: string }
     delete(pluginId: string, key: string): void
+    protection(): 'os-keyring' | 'unavailable'
   }
+  desktop?: PluginDesktopFrameServices | null
   settings: {
     getAll(pluginId: string): Record<string, PluginJsonValue>
     set(
@@ -58,7 +74,11 @@ export type PluginHostServices = {
   }
 }
 
-type PluginHostMethodContext = { pluginId: string; services: PluginHostServices }
+type PluginHostMethodContext = {
+  pluginId: string
+  services: PluginHostServices
+  scope: PluginHostCallScope
+}
 
 export type PreparedPluginHostCall =
   | { ok: false; issue: string }
@@ -122,7 +142,7 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
         .map((terminal) => ({ id: terminal.id }))
     }
   }),
-  'terminal.sendText': bind(api['terminal.sendText'], async (params, { services }) => {
+  'terminal.sendText': bind(api['terminal.sendText'], async (params, { services, scope }) => {
     const context = await services.resolveActiveWorktreeContext()
     if (!context) {
       throw new Error('no active worktree is available for terminal input')
@@ -133,6 +153,7 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
       throw new Error('terminal is outside the active worktree')
     }
     const { text, enter } = params
+    scope.assertActive()
     const result = await services.sendTerminalText(params.terminalId, { text, enter })
     return { accepted: result.accepted }
   }),
@@ -166,12 +187,32 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
     services.secrets.delete(pluginId, key)
     return OK
   }),
+  'secrets.protection': bind(api['secrets.protection'], async (_params, { services }) => ({
+    status: services.secrets.protection()
+  })),
   'settings.get': bind(api['settings.get'], async (_params, { pluginId, services }) => ({
     settings: services.settings.getAll(pluginId)
   })),
   'settings.set': bind(api['settings.set'], async ({ key, value }, { pluginId, services }) =>
     okOrThrow(services.settings.set(pluginId, key, value))
-  )
+  ),
+  'shell.openExternal': bind(
+    api['shell.openExternal'],
+    async ({ url }, { pluginId, services, scope }) => ({
+      opened: await requireDesktop(services).openExternal(pluginId, url, scope)
+    })
+  ),
+  'files.saveAs': bind(api['files.saveAs'], async (params, { pluginId, services, scope }) => {
+    const saved = await requireDesktop(services).saveFile(pluginId, params, scope)
+    return { status: saved ? ('saved' as const) : ('cancelled' as const) }
+  })
+}
+
+function requireDesktop(services: PluginHostServices): PluginDesktopFrameServices {
+  if (!services.desktop) {
+    throw new Error('this method is only available in the Orca desktop app')
+  }
+  return services.desktop
 }
 
 function okOrThrow(result: { ok: true } | { ok: false; error: string }): typeof OK {

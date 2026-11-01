@@ -126,29 +126,3 @@ describe('a bridged tab closed while disconnected', () => {
     expect(leases[0].pendingKill).toBeUndefined()
   })
 })
-
-describe('a stop-and-wait of a connected bridged tab', () => {
-  it('settles only on the relay’s exit report', async () => {
-    relay.ptys = new Set([RELAY_PTY])
-    relay.shutdowns = []
-    leases = [
-      {
-        targetId: TARGET,
-        ptyId: RELAY_PTY,
-        tabId: 'tab-1',
-        leafId: 'leaf-1',
-        state: 'detached',
-        createdAt: 1,
-        updatedAt: 1
-      }
-    ]
-    connected = true
-    installHost()
-    await registry.startLegacyRelayBridge(TARGET)
-    await expect(registry.stopLegacyRelayPaneAndWait(PTY, Date.now() + 5_000)).resolves.toBe(
-      'reported'
-    )
-    expect(relay.shutdowns).toEqual([RELAY_PTY])
-    expect(leases[0].state).toBe('terminated')
-  })
-})

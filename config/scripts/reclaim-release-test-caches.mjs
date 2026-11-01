@@ -3,6 +3,8 @@ import { lstat, readFile, readdir, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { lock } from 'proper-lockfile'
 import { localRepositoryWorktrees } from './local-repository-worktrees.mjs'
+import { getDevBundleProcessTable } from './dev-electron-bundle-cache.mjs'
+import { worktreeActiveSince } from './worktree-recent-activity.mjs'
 import { CHECKOUT_FORMAT } from '../../tests/e2e/cross-version-wire/release-checkout-publication.ts'
 import { withReleaseSourceFormatLease } from '../../tests/e2e/cross-version-wire/release-source-retention.ts'
 
@@ -74,20 +76,22 @@ export async function reclaimReleaseTestCaches({
   apply = false,
   testsStopped = false,
   minAgeDays = 30,
+  idleDays = 7,
   nowMs = Date.now(),
   targets,
+  getProcessTable = getDevBundleProcessTable,
   report = console.log
 } = {}) {
   if (!Number.isFinite(minAgeDays) || minAgeDays < 0) {
     throw new Error('--min-age-days requires a non-negative number')
   }
-  if (apply && !testsStopped) {
-    throw new Error(
-      'Stop cross-version tests in this repository, then pass --tests-stopped with --apply'
-    )
+  if (!Number.isFinite(idleDays) || idleDays < 0) {
+    throw new Error('--idle-days requires a non-negative number')
   }
   const { commonDirectory, worktrees } = targets ?? (await localRepositoryWorktrees(repoRoot))
   const cutoff = nowMs - minAgeDays * DAY_MS
+  const idleCutoff = nowMs - idleDays * DAY_MS
+  const processTable = testsStopped ? '' : getProcessTable()
   const result = { entries: 0, logicalBytes: 0, protected: 0 }
 
   async function processEntry(path, commit, format, recheckParents, verifyLease = () => {}) {
@@ -143,6 +147,15 @@ export async function reclaimReleaseTestCaches({
     if (!cache) {
       continue
     }
+    // Older harnesses hold no lease while tests read a checkout, so only idle worktrees are safe.
+    let active
+    const isActive = async () => {
+      if (active === undefined) {
+        active = !testsStopped && (await worktreeActiveSince(worktree, idleCutoff, processTable))
+        result.protected += active ? 1 : 0
+      }
+      return active
+    }
     for (const label of await readdir(cache, { withFileTypes: true })) {
       if (!label.isDirectory() || label.isSymbolicLink()) {
         continue
@@ -152,6 +165,9 @@ export async function reclaimReleaseTestCaches({
         const match = LOCAL_ENTRY.exec(entry.name)
         if (!entry.isDirectory() || !match || Number(match[2]) > CHECKOUT_FORMAT) {
           continue
+        }
+        if (await isActive()) {
+          break
         }
         await processEntry(join(labelRoot, entry.name), match[1], Number(match[2]), async () =>
           Boolean(await descend(worktree, ['tests', 'e2e', '.cross-version-checkouts', label.name]))
@@ -214,7 +230,7 @@ export async function reclaimReleaseTestCaches({
     }
   }
   report(
-    `${apply ? 'Removed' : 'Would remove'} ${result.entries} cache(s); ${(result.logicalBytes / 1024 ** 3).toFixed(2)} GiB logical file data. Shared blocks affect actual savings.`
+    `${apply ? 'Removed' : 'Would remove'} ${result.entries} cache(s); ${(result.logicalBytes / 1024 ** 3).toFixed(2)} GiB logical file data; retained caches in ${result.protected} active worktree(s) or locked location(s). Shared blocks affect actual savings.`
   )
   return result
 }
@@ -225,7 +241,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
     const argument = process.argv[index]
     if (argument === '--help') {
       console.log(
-        'Usage: pnpm reclaim-space [--repo DIRECTORY] [--release-cache-min-age-days 30] [--apply --tests-stopped]'
+        'Usage: node config/scripts/reclaim-release-test-caches.mjs [--repo DIRECTORY] [--min-age-days 30] [--idle-days 7] [--tests-stopped] [--apply]'
       )
       process.exit(0)
     }
@@ -233,13 +249,19 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
       options.apply = true
     } else if (argument === '--tests-stopped') {
       options.testsStopped = true
-    } else if (argument === '--repo' || argument === '--min-age-days') {
+    } else if (
+      argument === '--repo' ||
+      argument === '--min-age-days' ||
+      argument === '--idle-days'
+    ) {
       const value = process.argv[++index]
       if (!value || value.startsWith('--')) {
         throw new Error(`${argument} requires a value`)
       }
       if (argument === '--repo') {
         options.repoRoot = resolve(value)
+      } else if (argument === '--idle-days') {
+        options.idleDays = Number(value)
       } else {
         options.minAgeDays = Number(value)
       }

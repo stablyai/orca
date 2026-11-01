@@ -22,6 +22,7 @@ import { BrowserCookieImportMachineNotice } from '../BrowserCookieImportMachineN
 import { useAppStore } from '../../store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
+import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
 
 type DetectedBrowser = {
   family: string
@@ -89,7 +90,7 @@ export function BrowserProfileRow({
         result
       )
     } else {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 
@@ -106,7 +107,7 @@ export function BrowserProfileRow({
         result
       )
     } else if (result.reason !== 'canceled') {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 

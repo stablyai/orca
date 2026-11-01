@@ -116,7 +116,7 @@ describe('Run binding during Dispatch checks', () => {
   })
 
   it.each(['before', 'during recovery'] as const)(
-    'replays Run delivery created %s residual acknowledgment',
+    'serves residual mail around a Run delivery created %s residual acknowledgment',
     async (phase) => {
       const ids = Array.from(
         { length: ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1 },
@@ -158,23 +158,22 @@ describe('Run binding during Dispatch checks', () => {
           }
         )
       }
-      const result = await check({ ack })
-      expect(result).toMatchObject({
-        runId: run.id,
-        deliveryId: runDelivery,
-        acknowledged: ack,
-        replayed: true
-      })
+      const tail = { runId: dispatch.run_id, messages: [{ id: last }], count: 1 }
+      expect(await check({ ack })).toMatchObject({ acknowledged: ack, count: 0 })
+      if (phase === 'during recovery') {
+        // A batch left outstanding by another consumer is replayed once, then handled.
+        expect(await check()).toMatchObject({
+          runId: run.id,
+          deliveryId: runDelivery,
+          replayed: true
+        })
+      }
+      expect(await check()).toMatchObject(tail)
       expect(state.db.hasOutstandingMailboxDelivery(`dispatch:${dispatch.id}`)).toBe(false)
-      for (const id of ids.slice(0, -1)) {
+      for (const id of ids) {
         expect(state.db.getMessageById(id)).toMatchObject({ read: 1, run_id: dispatch.run_id })
       }
-      expect(state.db.getMessageById(last)).toMatchObject({ read: 0, run_id: dispatch.run_id })
-      expect(await check({ ack })).toMatchObject({ deliveryId: runDelivery, replayed: true })
-      const tail = await check({ ack: runDelivery })
-      expect(tail).toMatchObject({ runId: dispatch.run_id, messages: [{ id: last }], count: 1 })
-      expect(await check({ ack: deliveryId(tail) })).toMatchObject({ count: 0 })
-      expect(state.db.getMessageById(last)?.read).toBe(1)
+      expect(await check({ ack: runDelivery })).toMatchObject({ count: 0 })
     }
   )
 })

@@ -12,6 +12,7 @@ export const hooksApi = {
   readIssueCommand: (args: {
     repoId: string
     hostId?: ExecutionHostId
+    wakeWslDistro?: boolean
   }): Promise<{
     status?: 'ok' | 'error'
     localContent: string | null
@@ -19,11 +20,13 @@ export const hooksApi = {
     effectiveContent: string | null
     localFilePath: string
     source: 'local' | 'shared' | 'none'
+    refusedWslDistro?: string
   }> => ipcRenderer.invoke('hooks:readIssueCommand', args),
 
   writeIssueCommand: (args: {
     repoId: string
     content: string
     hostId?: ExecutionHostId
+    wakeWslDistro?: boolean
   }): Promise<void> => ipcRenderer.invoke('hooks:writeIssueCommand', args)
 } satisfies PreloadApi['hooks']

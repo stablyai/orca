@@ -297,11 +297,14 @@ describe('repos:create', () => {
 
     expect(mkdirMock).toHaveBeenNthCalledWith(1, '/tmp', { recursive: true })
     expect(mkdirMock).toHaveBeenNthCalledWith(2, tmpPath('gitproj'), { recursive: false })
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['init'], { cwd: tmpPath('gitproj') })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['init'], {
+      cwd: tmpPath('gitproj'),
+      hostGit: true
+    })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       ['commit', '--allow-empty', '-m', 'Initial commit'],
-      { cwd: tmpPath('gitproj') }
+      { cwd: tmpPath('gitproj'), hostGit: true }
     )
     expect(mockStore.addRepo).toHaveBeenCalledWith(
       expect.objectContaining({

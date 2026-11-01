@@ -4,6 +4,7 @@ import {
   LinearProjectTable,
   LinearCollectionNotice
 } from '@/components/linear-project-view-surfaces'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageLinearProjectList({
   model
 }: {
@@ -43,7 +44,7 @@ export function TaskPageLinearProjectList({
           onSelectProject={openLinearProjectContext}
           onOpenProject={(project) => {
             if (project.url) {
-              void window.api.shell.openUrl(project.url)
+              openAppHttpLink(project.url)
             }
           }}
           onUseProjectIssues={(project) => {

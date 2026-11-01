@@ -5,7 +5,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { AGENT_SESSION_GOAL_CONTROL_COPY as COPY } from '../../shared/agent-session-goal-control-copy'
-import type { AgentSessionThreadGoalChange } from '../../shared/agent-session-thread-goal-wire'
+import type { AgentSessionThreadGoalChange } from '../../shared/agent-session/agent-session-thread-goal-wire'
 import { CodexAppServerRequestError } from '../codex/app-server/codex-app-server-request-error'
 import {
   CODEX_SCRIPTED_THREAD as THREAD,
@@ -607,6 +607,7 @@ it('orders Stop behind active-Set handler effects and closes the old child befor
   const host = await openChat(child)
   const first = goal(host, { kind: 'set', objective: 'Earlier goal' })
   await eventually(() => expect(activations).toBe(1))
+  child.closeEvidence = { root: 'live', tree: 'unverifiable', killDelivered: true }
   const stopping = stop(host)
   reply.resolve({ goal: { status: 'active' } })
   expect(await first).toMatchObject({ ok: true })

@@ -4,7 +4,7 @@ import { withCurrentSprintClause } from '../../../shared/jira/jira-jql-predicate
 import {
   buildJiraStatusCatalog,
   getJiraStatusCatalogScopeKey
-} from './task-page-jira-status-catalog'
+} from './task-page/jira/task-page-jira-status-catalog'
 import type { TaskPageLinearCollectionEffectsModel } from './task-page/linear/use-task-page-linear-collection-effects'
 import { useEffect, useMemo, useRef } from 'react'
 import {
@@ -12,12 +12,12 @@ import {
   getTaskPageJiraStatusOrderScopeKey,
   getTaskPageJiraStatusOrderRuntimeScopeKey,
   loadTaskPageJiraProjectStatusOrder
-} from '@/components/task-page-jira-status-order'
-import { createTaskPageJiraLoadFailureState } from '@/components/task-page-jira-load-state'
-import { searchTaskPageJiraIssues } from '@/components/task-page-jira-search'
+} from '@/components/task-page/jira/task-page-jira-status-order'
+import { createTaskPageJiraLoadFailureState } from '@/components/task-page/jira/task-page-jira-load-state'
+import { searchTaskPageJiraIssues } from '@/components/task-page/jira/task-page-jira-search'
 import { JIRA_ITEM_LIMIT } from './task-page/task-page-source-context'
 import { useTaskSearchDebouncedApply } from './task-page/use-task-search-debounced-apply'
-import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
+import { readLinkedJiraIssues } from './task-page/jira/task-page-jira-linked-issues'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { buildJiraPresetJql } from '../../../shared/jira/jira-preset-jql'
 import { restrictJiraQueryToProject } from '../../../shared/jira/jira-project-reference'

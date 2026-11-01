@@ -306,12 +306,14 @@ describe('the hybrid shell screen', () => {
     dependencies.client = createFakeRpcClient()
     const tree = await renderScreen(readyState('session-one'))
     const view = byName(tree, 'ShellViewProbe')[0]
+    const refreshesBeforeReady = dependencies.storageRefreshes
     await act(async () => {
       view.props.onBridgeMessage({ nativeEvent: { json: clientFrame({ type: 'ready' }) } })
       view.props.onBridgeMessage({ nativeEvent: { json: clientFrame({ type: 'ready' }) } })
     })
-    // A reload within this mount must refresh storage again so intervening app writes reach init.
-    expect(dependencies.storageRefreshes).toBe(2)
+    // A document that reloads inside one mount asks again; a refresh per ask is what lets a key
+    // the app changed meanwhile reach the `init` after it.
+    expect(dependencies.storageRefreshes - refreshesBeforeReady).toBe(2)
   })
 
   // Observe wire frames only; ruling 34 leaves delivery untracked and one-shot consumption to the page.

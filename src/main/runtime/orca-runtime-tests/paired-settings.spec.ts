@@ -33,18 +33,6 @@ describe('OrcaRuntimeService', () => {
     }
   )
 
-  it.each([true, false])('projects the single Chat UI switch to older clients (%s)', (enabled) => {
-    const controller = new RuntimeClientSettingsController({
-      getSettings: () => ({ ...store.getSettings(), experimentalNativeChat: enabled }),
-      updateSettings: () => undefined
-    })
-    expect(controller.get()).toMatchObject({
-      experimentalNativeChat: enabled,
-      experimentalStructuredNativeChat: enabled,
-      openAgentTabsInChatByDefault: false
-    })
-  })
-
   it('projects runtime-backed settings to paired clients', () => {
     const terminalQuickCommands = [
       {
@@ -167,7 +155,7 @@ describe('OrcaRuntimeService', () => {
     expect(updateSettings).toHaveBeenCalledTimes(2)
   })
 
-  it('retires a missing future-launch default when an older client asks to prune from inventory', () => {
+  it('keeps a future-launch default when an older client asks to prune from inventory', () => {
     let settings = {
       ...store.getSettings(),
       nativeChatSessionOptions: { grok: { model: 'grok-5' } }
@@ -193,11 +181,8 @@ describe('OrcaRuntimeService', () => {
       agent: 'grok',
       availableModelIds: ['grok-4.5']
     })
-    expect(settings.nativeChatSessionOptions).toEqual({ grok: {} })
-    expect(updateSettings).toHaveBeenCalledExactlyOnceWith(
-      { nativeChatSessionOptions: { grok: {} } },
-      { notifyListeners: true }
-    )
+    expect(settings.nativeChatSessionOptions).toEqual({ grok: { model: 'grok-5' } })
+    expect(updateSettings).not.toHaveBeenCalled()
   })
 
   it('preserves concurrent additions after forty quick commands', () => {

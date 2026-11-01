@@ -3,11 +3,13 @@ import {
   refuse,
   refuseUnclassified,
   withAgentSessionRefusalFacts,
-  type AgentSessionAttachResult,
-  type AgentSessionMutationResult,
-  type AgentSessionRefusalDetailsByCode,
   type AgentSessionWireRefusal
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type {
+  AgentSessionAttachResult,
+  AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionRefusalDetailsByCode } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import type {
   AgentSessionOperationOutcome,
   AgentSessionOperationRow
@@ -81,7 +83,9 @@ export function failedAcquisitionSettlement(
   const exitProof = isAgentSessionPreSpawnError(error)
     ? 'processless'
     : error instanceof AgentSessionAcquisitionRootExitObservedError
-      ? 'root-exit-observed'
+      ? error.deathEvidenceKind === 'kill-delivered'
+        ? 'kill-delivered'
+        : 'root-exit-observed'
       : 'exit-proven'
   const raw = error instanceof Error ? error.message : String(error)
   const details = failedAcquisitionDetails(error)

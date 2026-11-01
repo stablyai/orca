@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,6 +18,7 @@ const SESSION = 'session-held'
 const roots: string[] = []
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 

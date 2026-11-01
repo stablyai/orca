@@ -13,6 +13,7 @@ import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structur
 import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import * as dispatchContent from './claude-structured-dispatch-content'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
+import { createClaudeCliFlagSupport } from './claude-cli-flag-support'
 
 /** Claude ends a turn; a message sent before this joins the running turn on its choices. */
 const claudeTurnEnds = (connection: Parameters<typeof claudeFrame>[0]) =>
@@ -153,6 +154,71 @@ describe('Claude accepted message choices', () => {
       ranOptions: { model: 'claude-sonnet-5', ...ranOptions }
     })
   })
+
+  // --effort arrived in Claude Code 2.1.38 and the live control in 2.1.50; older CLIs reject the flag
+  // and never answer the control, so either one failed every resume of a chat with a saved effort.
+  it.each([
+    ['2.1.31', undefined],
+    ['2.1.40', 'high']
+  ])(
+    'resumes a saved effort on Claude Code %s once its slow version probe answers',
+    async (version, launchedEffort) => {
+      let answer: (version: string) => void = () => {}
+      const probe = vi.fn(
+        () =>
+          new Promise<string | null>((resolve) => {
+            answer = resolve
+          })
+      )
+      const support = createClaudeCliFlagSupport({
+        probe,
+        keyOf: async (command, cwd) => `${command}\n${cwd}`,
+        budgetMs: 20,
+        now: () => performance.now()
+      })
+      const launch = { command: 'claude', cwd: '/work/repo', env: {} }
+      const saved = { model: 'sonnet', effort: 'high' }
+      const models = [{ value: 'default' }, { value: 'sonnet', displayName: 'Sonnet' }]
+      const claude = fakeClaude({ initModels: models })
+      const adapter = adapterFor(claude, {
+        resumesTranscript: true,
+        cliFlag: (flag, ...budget) => support.check(flag, launch, ...budget)
+      })
+      const acquired = adapter.acquire({
+        identity: identityFor(),
+        fence: 7,
+        spawnToken: 'resume',
+        options: saved,
+        events: recordingJournalSink()
+      })
+      await vi.waitFor(() => expect(probe).toHaveBeenCalled())
+      answer(version)
+      await acquired
+      const connection = claude.connections[0]!
+      expect(connection.launch.options).toMatchObject({ model: 'sonnet' })
+      expect(connection.launch.options.effort).toBe(launchedEffort)
+      await expect(
+        adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'low', fence: 7 })
+      ).rejects.toThrow('update Claude Code')
+      for (const clientMessageId of ['resumed', 'after-model-switch']) {
+        await expect(
+          adapter.dispatch({
+            sessionId: 'session-1',
+            clientMessageId,
+            body: USER_MESSAGE,
+            executionOptions: saved,
+            fence: 7
+          })
+        ).resolves.toMatchObject({ state: 'admitted' })
+        claudeTurnEnds(connection)
+        await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'opus', fence: 7 })
+      }
+      expect(connection.calls.map((call) => call.subtype)).not.toContain('apply_flag_settings')
+      await expect(
+        adapter.readOptions({ sessionId: 'session-1', fence: 7 })
+      ).resolves.toMatchObject({ effortFixed: true, fastModeSupport: { supported: false } })
+    }
+  )
 
   it('applies a held message A before its prompt, then message B on the existing child', async () => {
     const order: string[] = []

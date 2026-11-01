@@ -1,6 +1,6 @@
 // Keep English text for legacy clients and presentation keys for translated host status rows.
 
-import type { AgentJournalPlainStatusItem } from './agent-session-journal-types'
+import type { AgentJournalPlainStatusItem } from './agent-session/journal/agent-session-journal-types'
 
 export const AGENT_SESSION_HOST_STATUS_COPY = {
   /** A repair skipped rows it could not read. */

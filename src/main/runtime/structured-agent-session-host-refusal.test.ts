@@ -1,3 +1,6 @@
+import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 // Journal-open refusal leaves the file intact and other runtime work available.
 
 import { createHash } from 'node:crypto'
@@ -6,7 +9,7 @@ import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isAgentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { isAgentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import { JOURNAL_DB_SCHEMA_VERSION } from '../native-chat/agent-session-journal/journal-database-schema'
 import {
   JournalHostDatabase,
@@ -317,11 +320,17 @@ describe('startup and other non-chat work without a structured host', () => {
       const unsubscribe = runtime.onMobileSessionTabsChanged((frame) => pushed.push(frame))
 
       await unlink(journalDatabasePath(root))
+      await seedTestAgentSessionRecordStore(root, {
+        records: [agentSessionRecordFixture({ sessionId: 'claude-1' })],
+        sessionTabs: [{ tabId: structuredAgentSessionTabId('claude-1'), sessionId: 'claude-1' }]
+      })
       const host = await install()
-      vi.spyOn(host, 'listSessionTabs').mockReturnValue([
-        { workspaceId: 'workspace-1', sessionId: 'claude-1', agent: 'claude' }
-      ])
-      vi.spyOn(host, 'setSessionTabVisibility').mockResolvedValue(undefined)
+      expect(host.deps.store.getConversation('claude-1')).toMatchObject({ sessionId: 'claude-1' })
+      expect(host.getPersistedVisibleSessionTabIndex()).toEqual({
+        present: true,
+        sessionIds: ['claude-1']
+      })
+      expect(host.isSessionTabVisible('claude-1')).toBe(true)
       const frames = await listInventory(runtime)
       unsubscribe()
 
@@ -375,7 +384,7 @@ describe('stopping', () => {
         connectionClose ??= vi.spyOn(this.db, 'close').mockImplementationOnce(() => {
           throw new Error('unable to close due to unfinalized statements')
         })
-        close.call(this)
+        return close.call(this)
       })
     const journal = () => journalClose.mock.contexts[0]
 

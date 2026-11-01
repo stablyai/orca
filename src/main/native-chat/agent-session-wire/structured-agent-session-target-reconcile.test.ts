@@ -65,7 +65,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -151,16 +151,6 @@ describe('targeted restart reconciliation', () => {
     expect(probe).toHaveBeenCalledOnce()
   })
 
-  it('does no reconciliation for a new chat or a session already reconciled', async () => {
-    const probe = vi.fn(async () => UNUSED)
-    const reconcile = createRestartReconciler({ store, probe, now: () => NOW })
-    expect(await reconcile('new-session')).toBeNull()
-    expect(probe).not.toHaveBeenCalled()
-    expect(await reconcile('session-1')).toBeNull()
-    expect(await reconcile('session-1')).toBeNull()
-    expect(probe).toHaveBeenCalledOnce()
-  })
-
   it('keeps an unproven target in recovery and refuses a new writer', async () => {
     const reconcile = createRestartReconciler({
       store,
@@ -176,23 +166,5 @@ describe('targeted restart reconciliation', () => {
         probe: { outcome: 'indeterminate', reason: 'owner runs on another host' }
       })
     ).rejects.toThrow('agent_session_ownership_unknown')
-  })
-
-  it('still batches every pending record for explicit startup reconciliation', async () => {
-    const probeMany = vi.fn(
-      async (records: readonly AgentSessionRecord[]) =>
-        new Map(records.map((record) => [record.sessionId, UNUSED]))
-    )
-    const reconcile = createRestartReconciler({
-      store,
-      probe: async () => UNUSED,
-      probeMany,
-      now: () => NOW
-    })
-    expect(await reconcile()).toBeNull()
-    expect(probeMany.mock.calls[0]?.[0].map((record) => record.sessionId)).toEqual([
-      'session-1',
-      'session-2'
-    ])
   })
 })

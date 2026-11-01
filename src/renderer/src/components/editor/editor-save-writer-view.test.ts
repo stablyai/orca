@@ -4,13 +4,22 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import { editorSaveWriterView } from './editor-save-writer-view'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an opaque marker; the mocked owner check only compares it by identity.
-const STALE = { stale: true } as unknown as EditorFileOperationProvenance
+const STALE: EditorFileOperationProvenance = {
+  ownershipProjection: 'explicit',
+  generation: {
+    route: { executionHostId: 'local', runtimeEnvironmentId: null },
+    runtimeConnectionGeneration: null,
+    runtimePairingRevision: undefined,
+    runtimeSshGeneration: null,
+    nestedSshGeneration: null,
+    directSshGeneration: null
+  }
+}
 
 vi.mock('@/lib/editor-file-operation-owner', () => ({
-  assertEditorFileOperationCurrent: (
+  captureEditorFileOperationForOwner: (
     _state: unknown,
-    _worktreeId: string,
+    _file: OpenFile,
     provenance: EditorFileOperationProvenance
   ) => {
     if (provenance === STALE) {

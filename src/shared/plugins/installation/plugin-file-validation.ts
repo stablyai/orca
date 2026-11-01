@@ -20,6 +20,11 @@ import {
   type PluginImageKind
 } from '../images/plugin-image-fields'
 import { formatPluginSchemaIssues } from '../manifest/plugin-schema-issues'
+import { PLUGIN_DERIVED_PUBLISHER_SINCE } from '../manifest/plugin-schema-field-docs'
+import {
+  UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE,
+  unsafePluginDisplayTextPaths
+} from '../manifest/plugin-display-text'
 
 /**
  * Strict checks for authors and catalog CI. The runtime reads catalogs tolerantly (skipping,
@@ -39,7 +44,10 @@ export function validatePluginFile(
     if (!parsed.ok) {
       return [parsed.error]
     }
-    const reserved = reservedPublisherError(parsed.manifest.publisher)
+    const reserved =
+      parsed.manifest.publisher === undefined
+        ? null
+        : reservedPublisherError(parsed.manifest.publisher)
     return reserved ? [`publisher: ${reserved}`] : []
   }
   if (fileName === PLUGIN_CATALOG_FILENAME) {
@@ -47,6 +55,17 @@ export function validatePluginFile(
   }
   return [
     `unknown plugin file ${fileName}; expected ${PLUGIN_MANIFEST_FILENAME} or ${PLUGIN_CATALOG_FILENAME}`
+  ]
+}
+
+/** Advice that never blocks a listing: deprecated fields that still work. */
+export function pluginManifestWarnings(raw: unknown): string[] {
+  const parsed = parsePluginManifest(raw)
+  if (!parsed.ok || parsed.manifest.manifestVersion !== 2 || !parsed.manifest.publisher) {
+    return []
+  }
+  return [
+    `publisher is deprecated and ignored: Orca derives it from the repository owner, like a Go module path. Remove it once engines.orca is at least >=${PLUGIN_DERIVED_PUBLISHER_SINCE}; until then it must equal the repository owner`
   ]
 }
 
@@ -66,11 +85,13 @@ function validatePluginCatalog(raw: unknown, readCatalogFile?: PluginCatalogFile
   if (!parsed.success) {
     return [formatPluginSchemaIssues(parsed.error.issues, raw)]
   }
+  const errors = unsafePluginDisplayTextPaths(raw).map(
+    (path) => `${path}: ${UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE}`
+  )
   const entries: unknown[] =
     typeof raw === 'object' && raw !== null && 'plugins' in raw && Array.isArray(raw.plugins)
       ? raw.plugins
       : []
-  const errors: string[] = []
   if (entries.length > PLUGIN_MARKETPLACE_ENTRY_LIMIT) {
     errors.push(`plugins: must be at most ${PLUGIN_MARKETPLACE_ENTRY_LIMIT} items`)
   }

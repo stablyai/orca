@@ -67,6 +67,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
           kittyKeyboardFlags: serialized.kittyKeyboardFlags,
           alternateScreen: serialized.alternateScreen,
           terminalOwner: serialized.terminalOwner,
+          lastTitle: serialized.lastTitle,
           truncatedByByteBudget: serialized.truncatedByByteBudget,
           scrollbackRows: serialized.scrollbackRows,
           data: serialized.data

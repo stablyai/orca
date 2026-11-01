@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LINEAR_WRITE_BODY_CAP } from '../../shared/linear/agent-access'
+import * as mutations from '../linear/linear-issue-mutations'
 import * as linearTeams from '../linear/teams'
 import { OrcaRuntimeService } from './orca-runtime'
 
@@ -43,8 +44,12 @@ describe('Linear save issue', () => {
       meta: { workspaceId: 'workspace-1', writeId: 'write-1', deduplicated: false }
     })
 
+    const signal = new AbortController().signal
     await expect(
-      runtime.linearSaveIssue({ team: 'ENG', title: 'New issue', workspaceId: 'workspace-1' })
+      runtime.linearSaveIssue(
+        { team: 'ENG', title: 'New issue', workspaceId: 'workspace-1' },
+        signal
+      )
     ).resolves.toMatchObject({ meta: { created: true } })
 
     expect(create).toHaveBeenCalledWith(
@@ -52,7 +57,8 @@ describe('Linear save issue', () => {
         teamInput: 'ENG',
         title: 'New issue',
         workspaceId: 'workspace-1'
-      })
+      }),
+      signal
     )
   })
 
@@ -83,7 +89,7 @@ describe('Linear save issue', () => {
 
   it('does not send a mutation or confirmation read when every field is already set', async () => {
     const runtime = new OrcaRuntimeService()
-    const runWrite = vi.fn()
+    const mutation = vi.spyOn(mutations, 'updateIssueForAgent')
     const notify = vi.fn().mockResolvedValue(undefined)
     Object.assign(runtime, {
       resolveLinearAgentWriteTarget: vi
@@ -91,7 +97,6 @@ describe('Linear save issue', () => {
         .mockResolvedValue({ issue, workspaceId: 'workspace-1' }),
       readLinearAgentIssueWriteRecord: vi.fn().mockResolvedValue(issue),
       buildLinearSaveUpdate: vi.fn().mockResolvedValue({ title: issue.title }),
-      runLinearAgentWrite: runWrite,
       notifyLinearLinkedIssueUpdated: notify
     })
 
@@ -99,7 +104,8 @@ describe('Linear save issue', () => {
       runtime.linearSaveIssue({ input: issue.identifier, title: issue.title })
     ).resolves.toMatchObject({ issue, meta: { created: false } })
 
-    expect(runWrite).not.toHaveBeenCalled()
+    expect(mutation).not.toHaveBeenCalled()
+    expect(runtime.readLinearAgentIssueWriteRecord).toHaveBeenCalledTimes(1)
     expect(notify).toHaveBeenCalledWith('workspace-1', issue.identifier)
   })
 

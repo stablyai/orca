@@ -30,6 +30,7 @@ import { isEditableTarget } from '@/lib/editable-target'
 import { findEditablePrimarySelectionPasteTarget } from '@/lib/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
+import { readNativeChatTranscriptSelection } from './native-chat-quote-selection'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import { NativeChatStructuredPaneMenuItems } from './NativeChatStructuredPaneMenuItems'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
@@ -196,10 +197,18 @@ export function useNativeChatContextMenu({
         return
       }
       menuOpenedAtRef.current = Date.now()
+      const root = rootRef.current
+      const selectedText = getNativeChatSelectedText(root)
+      const missesSelection =
+        selectedText !== '' && menuPointMissesSelection(event.clientX, event.clientY)
+      // Native menus drop a selection the press missed; editors own theirs, so only a reply's goes.
+      if (missesSelection && root && readNativeChatTranscriptSelection(root)) {
+        window.getSelection()?.removeAllRanges()
+      }
       setState({
         open: true,
         point: { x: event.clientX, y: event.clientY },
-        selectedText: getNativeChatSelectedText(rootRef.current),
+        selectedText: missesSelection ? '' : selectedText,
         canPaste: isEditableTarget(event.target),
         returnFocusTo: rootRef.current?.ownerDocument.activeElement ?? null,
         image: readNativeChatCopyImage(event.target),
@@ -350,6 +359,23 @@ function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): 
   ) {
     event.preventDefault()
   }
+}
+
+// Native menus act on what was pressed, so a selection the press missed is not offered.
+function menuPointMissesSelection(x: number, y: number): boolean {
+  const selection = window.getSelection()
+  const caret = document.caretPositionFromPoint?.(x, y)
+  const node = caret?.offsetNode
+  // A text control's caret offset counts its value, not DOM children, so it maps to no DOM point.
+  if (
+    !caret ||
+    !selection?.rangeCount ||
+    node instanceof HTMLInputElement ||
+    node instanceof HTMLTextAreaElement
+  ) {
+    return false
+  }
+  return !selection.getRangeAt(0).isPointInRange(caret.offsetNode, caret.offset)
 }
 
 // Why: only Chromium's own menu for a typing target carries the OS spellchecker's suggestions.

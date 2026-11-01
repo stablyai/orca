@@ -19,7 +19,7 @@ import {
   spawnWslRelayProcess
 } from './wsl-hook-relay-launch'
 import { waitForWslRelaySentinel } from './wsl-hook-relay-sentinel'
-import { listWslDistrosAsync } from '../wsl'
+import { resolveWslDefaultDistro as resolveSharedWslDefaultDistro } from '../wsl/wsl-default-distro'
 import { deferUntilWslDistroRunning, isWslDistroRunning } from '../wsl-background-distro-gate'
 import { isWslAgentHookRelayEnabled } from '../../shared/agent-hook-relay'
 import { wslBridgePtyPresence, type WslBridgePtyPresence } from './wsl-bridge-pty-presence'
@@ -27,6 +27,7 @@ import {
   readDaemonBridgeSessions,
   type DaemonBridgeSessionVerdict
 } from './wsl-bridge-daemon-sessions'
+import { blockedWslDistroForExec } from '../wsl/wsl-background-exec-gate'
 
 // Concurrent wsl.exe spawns can trigger transient E_UNEXPECTED failures.
 export const WSL_RELAY_TRANSIENT_RETRY_DELAY_MS = 2_000
@@ -55,6 +56,8 @@ export type WslHookRelayManagerDeps = {
   /** Recovery must not boot a distro the user shut down. */
   isDistroRunning: typeof isWslDistroRunning
   deferUntilRunning: typeof deferUntilWslDistroRunning
+  /** Starting a relay runs wsl.exe; only a running distro, or a user act's, may get one (E9). */
+  blockedForExec: typeof blockedWslDistroForExec
   spawnRelay: typeof spawnWslRelayProcess
   runInstall: typeof runWslInstallProcess
   waitForSentinel: typeof waitForWslRelaySentinel
@@ -103,9 +106,14 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   daemonBridgeSessions: readDaemonBridgeSessions,
   resolveBundle: resolveWslHookRelayBundle,
   readBundle: (jsPath) => readFileSync(jsPath),
-  listDistros: () => listWslDistrosAsync(),
+  // The exec gate's resolver: inside a user act it returns the act's own default.
+  listDistros: async () => {
+    const distro = await resolveSharedWslDefaultDistro()
+    return typeof distro === 'string' ? [distro] : []
+  },
   isDistroRunning: isWslDistroRunning,
   deferUntilRunning: deferUntilWslDistroRunning,
+  blockedForExec: blockedWslDistroForExec,
   spawnRelay: spawnWslRelayProcess,
   runInstall: runWslInstallProcess,
   waitForSentinel: waitForWslRelaySentinel,

@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
 /** Pre-dispatch failures prove no effects and record the real cause; a lost reply after dispatch remains unknown. Explicitly unsupported chat is refused before creation. */
 
@@ -18,6 +19,7 @@ import {
   methodNamed,
   runtimeStub,
   setAgentLaunchRecordStore,
+  STRUCTURED_PREFERENCE,
   type AgentLaunchRuntimeStub
 } from './agent-launch.test-fixture'
 
@@ -76,6 +78,7 @@ describe('a launch whose terminal fails', () => {
 
   afterEach(async () => {
     setAgentLaunchRecordStore(null)
+    await closeTestJournalHostDatabases()
     await rm(directory, { recursive: true, force: true })
   })
 
@@ -229,7 +232,7 @@ describe('a launch whose terminal fails', () => {
   )
 
   it('starts the CLI for an explicit terminal even when chats are the default', async () => {
-    const runtime = runtimeStub({ settings: { experimentalNativeChat: true } })
+    const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
 
     const response = await replay(runtime, { ...EXISTING_LAUNCH, surface: 'terminal' })
 
@@ -286,7 +289,7 @@ describe('a launch whose terminal fails', () => {
         ...(callerDowngrade ? {} : { nativeChatDefault: false }),
         prompt: { text: 'Reply with OK', delivery: 'submit' }
       }
-      const first = runtimeStub({ settings: { experimentalNativeChat: true } })
+      const first = runtimeStub({ settings: STRUCTURED_PREFERENCE })
       first.createManagedWorktree.mockImplementation(async (args) => {
         expect(args).toMatchObject({
           startupAgent: 'opencode',
@@ -316,7 +319,7 @@ describe('a launch whose terminal fails', () => {
   it.each([undefined, 'chat'] as const)(
     'keeps an OpenCode model create on its chat route %s',
     async (surface) => {
-      const runtime = runtimeStub({ settings: { experimentalNativeChat: true } })
+      const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
       const launch = {
         ...CREATE_LAUNCH,
         agent: 'opencode',

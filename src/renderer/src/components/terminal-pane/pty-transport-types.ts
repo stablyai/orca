@@ -53,6 +53,8 @@ export type PtyBufferSnapshot = {
    *  means unknown; never rewrite that silence into a known `0`. */
   kittyKeyboardFlags?: number
   terminalOwner?: 'shell'
+  /** The host's tracked title when this image was taken; absent from older hosts. */
+  lastTitle?: string
 }
 
 /** Metadata for one authoritative replay payload. */
@@ -66,6 +68,8 @@ export type PtyReplayDataMeta = {
   snapshotSeq?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  /** The host's tracked title when this image was taken, so live-agent judgement cannot race a separate title publication. */
+  lastTitle?: string
   /** Grid the payload was serialized at. Present only when the producer proved
    *  it; the drain replays there and fits back to the pane afterwards. */
   snapshotCols?: number
@@ -178,6 +182,8 @@ export type PtyTransport = {
     attachOnlyView?: true
     /** Sent only when this connect resumes an agent, and only to hosts that accept it. */
     resumeSpawnIntent?: RestoreSpawnIntent
+    /** A restore no user act asked for: main holds a stopped WSL distro's pane instead of starting it. */
+    wslPassiveRestore?: true
     command?: string
     commandDelivery?: 'renderer' | 'provider'
     env?: Record<string, string>
@@ -230,6 +236,11 @@ export type PtyTransport = {
   getRecoveryState?: () => PtyTransportRecoveryState
   /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
   retryRecovery?: () => boolean
+  /**
+   * The host the pane met stopped is running again: reopen a pane whose connect or attach was
+   * refused and left it idle (no retry armed), the way it opened. False when there is none to reopen.
+   */
+  reopenAfterHostReturned?: () => boolean
   /** True while the transport has a retry armed or parked; pane-level remounts must defer to it. */
   ownsRecovery?: () => boolean
   /** Typed input the host has not applied yet, which a remount would discard. */
@@ -266,6 +277,8 @@ export type PtyTransport = {
 }
 
 export type IpcPtyTransportOptions = {
+  /** Renderer-local observation before admission; never controls dispatch. */
+  onDrivingInputAttempt?: (ptyId: string | null) => void
   cwd?: string
   /** Retain bounded user input until the pane's first PTY connection binds. */
   bufferInputUntilConnect?: boolean

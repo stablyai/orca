@@ -14,11 +14,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { openCodexAppServerConnection } from './codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  CodexStructuredSessionAdapter,
-  type CodexStructuredLaunch,
-  type CodexStructuredSessionEvent
-} from './codex-structured-session-adapter'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import type {
+  CodexStructuredLaunch,
+  CodexStructuredSessionEvent
+} from './codex-structured-session-state'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
@@ -116,7 +116,8 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       models: [
         {
           id: 'gpt-live',
-          label: 'gpt-live',
+          label: 'GPT Live',
+          description: 'gpt-live',
           isDefault: false,
           efforts: [],
           effortsKnown: false
@@ -149,7 +150,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       resolveLaunch: createCodexStructuredLaunchResolver({
         store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => '/work/repo',
-        resolveCommand: () => 'codex',
+        resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
         resolveLaunchArgs: () => []
       })
     })

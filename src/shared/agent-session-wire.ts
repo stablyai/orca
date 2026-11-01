@@ -1,46 +1,36 @@
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type { AgentSessionFrameFields } from './agent-session-frame-fields'
-import type { AgentSessionCurrentWorkFields } from './agent-session-current-work-wire'
+import type { AgentSessionCurrentWorkFields } from './agent-session/requests/agent-session-current-work-wire'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
-} from './agent-session-background-task-wire'
+} from './agent-session/agent-session-background-task-wire'
 import type { AgentSessionRewindReason } from './agent-session-rewind'
-import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
+import type { AgentSessionWireRefusal } from './agent-session/failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
-} from './agent-session-queued-message-wire'
+} from './agent-session/requests/agent-session-queued-message-wire'
 
-export type { AgentSessionOptionsResult } from './agent-session-options-result'
-export * from './agent-session-wire-refusals'
-export * from './agent-session-queued-message-wire'
 export * from './agent-session-turn-completion-wire'
 // Use plain JSON and optional additions after structured.v1; hosts/clients update independently (docs/reference/remote-wire-compatibility.md).
 
+import type { AgentJournalCursor } from './agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalRenderItem,
   AgentJournalResetReason,
   AgentJournalResolution,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
 import type { AgentSessionRecord } from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
-import type { NativeChatSubagentEntry } from './native-chat-types'
+import type { NativeChatSubagentEntry } from './native-chat/native-chat-types'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
 export type { AgentSessionHandoffStatus } from './agent-session-handoff-status'
-
-export type {
-  AgentSessionBackgroundTask,
-  AgentSessionBackgroundTaskRunState,
-  AgentSessionBackgroundTaskState
-} from './agent-session-background-task-wire'
-export { agentSessionBackgroundTasksEqual } from './agent-session-background-task-wire'
 
 export type AgentSessionTurnActivity = {
   turnId: string
@@ -224,6 +214,11 @@ export type AgentSessionStatusSummary = {
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
   runtimePermission?: { fence: number; mode: string | null } | null
+  /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
+   *  client re-reads options. Absent from older hosts. */
+  effort?: string
+  fastMode?: string
+  serviceTier?: string
   /** The tool the running turn is inside, else the last one it used. Absent unless `status`
    *  is 'working'. */
   toolName?: string
@@ -317,7 +312,7 @@ export type AgentSessionAttachResult = {
   tabId?: string
 }
 
-/** Only queue-if-active callers with queued-messages.v1 receive this draft arm; non-waiting states occur only on settled-draft replays. */
+/** Only queue-if-active callers with queued-messages.v2 receive this draft arm; non-waiting states occur only on settled-draft replays. */
 export type AgentSessionQueuedSendReceipt = {
   messageId: string
   position: number
@@ -368,6 +363,8 @@ export type AgentSessionModelOption = {
   description?: string
   isDefault: boolean
   defaultEffort?: string
+  /** Transient display declaration; null is observed unknown, absence supplies no evidence. */
+  declaredDefaultEffort?: string | null
   efforts: AgentSessionOptionChoice[]
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean
@@ -429,7 +426,10 @@ export type AgentSessionSlashCommand = {
 }
 
 /** Per-session provider commands; older hosts return method_not_found and clients retain their curated catalog. */
-export type AgentSessionCommandsResult = { commands?: AgentSessionSlashCommand[] }
+export type AgentSessionCommandsResult = {
+  commands?: AgentSessionSlashCommand[]
+  commandsPending?: boolean
+}
 
 export type AgentSessionContinuationContext =
   | { status: 'current'; capturedText?: string; transcriptPath?: string }

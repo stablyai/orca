@@ -10,12 +10,11 @@ import {
 import { hostTestState } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { StructuredAgentSessionReadableRestorer } from '../native-chat/agent-session-wire/structured-agent-session-readable-restorer'
+import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   countRecordQueries,
   countStoreWork,
-  journals,
   scaleJournal,
   scaleStore,
   scaleDirectory,
@@ -299,6 +298,7 @@ describe('real conversation inventory work', () => {
       sessionTabs: [{ tabId: 'cold-tab', sessionId: successor }]
     })
     const opened = await openAgentSessionRecordStoreOnce({
+      legacySessionTabIds: [],
       stateDirectory: root,
       hostId: 'local',
       logger: createStructuredAgentSessionLogger()
@@ -336,7 +336,7 @@ describe('real conversation inventory work', () => {
     } finally {
       db.close()
       const released = await releaseAgentSessionRecordStore()
-      released?.journalDatabase.close()
+      await released?.journalDatabase.close()
     }
   })
 
@@ -480,7 +480,7 @@ describe('real conversation inventory work', () => {
   })
 
   it.each([10, 100])(
-    'restores selected journals and scopes lifecycle/audience inventory at %i rows',
+    'seeds selected records without opening journals and scopes lifecycle inventory at %i rows',
     async (n) => {
       const rig = await inventoryRig(n)
       for (const id of ['damaged-chat', rig.rows[0]!.sessionId, rig.rows[1]!.sessionId]) {
@@ -488,29 +488,11 @@ describe('real conversation inventory work', () => {
       }
       const work = countStoreWork(rig.store)
       const queries = countRecordQueries(rig.root)
-      const restored: string[] = []
-      const restorer = new StructuredAgentSessionReadableRestorer({
-        openDeps: {
-          store: rig.store,
-          journalDatabase: openTestJournalHostDatabase(rig.root),
-          logger: rig.host.deps.logger
-        },
-        reconcileAll: async () => false,
-        reconcile: async () => false,
-        resolveRecovery: async () => false,
-        serialize: async (_id, task) => task(),
-        hasSession: () => false,
-        onReadable: (id, opened) => {
-          restored.push(id)
-          journals.track(opened.session.journal)
-        }
-      })
-      await restorer.restore(['damaged-chat', rig.rows[0]!.sessionId])
-      expect(restored).toEqual(['damaged-chat', rig.rows[0]!.sessionId])
-      expect(work.counts).toMatchObject({ inventories: 1, views: n + 2, keyed: 2, clones: 0 })
-      const restoredWork = { ...work.counts }
-      await restorer.restore()
-      expect(work.counts).toEqual(restoredWork)
+      const openJournal = vi.spyOn(journalFactory, 'openAgentSessionJournal')
+      await rig.host.seedSessionTabs(['damaged-chat', rig.rows[0]!.sessionId])
+      expect(openJournal).not.toHaveBeenCalled()
+      expect(rig.host.hasSession(rig.rows[0]!.sessionId)).toBe(false)
+      expect(work.counts).toMatchObject({ inventories: 0, views: 1, keyed: 2, clones: 0 })
       work.reset()
       const scoped = listStructuredSessionsForWorktree('workspace-1', {
         resolvedConnectionId: null

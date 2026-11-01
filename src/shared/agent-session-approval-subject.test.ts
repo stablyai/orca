@@ -4,11 +4,11 @@ import {
   isNewerApprovalSubject,
   pendingPromptsAllUnanswerableHere
 } from './agent-session-approval-subject'
-import type { AgentJournalItemBody } from './agent-session-journal-types'
+import type { AgentJournalItemBody } from './agent-session/journal/agent-session-journal-types'
 import {
   AGENT_JOURNAL_APPROVAL_SUBJECT_KINDS,
   isAdmissibleAgentJournalItemBody
-} from './agent-session-journal-schemas'
+} from './agent-session/journal/agent-session-journal-schemas'
 
 it('draws exactly the subject kinds the journal schema knows', () => {
   expect([...DRAWN_APPROVAL_SUBJECT_KINDS].sort()).toEqual(

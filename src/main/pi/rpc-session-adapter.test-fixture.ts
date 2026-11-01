@@ -35,6 +35,7 @@ export class FakeConnection implements PiRpcConnection {
   closed = false
   rootVerdict: 'live' | 'unverifiable' | 'exited' = 'live'
   processless = false
+  spawnAbsence: PiRpcConnection['spawnAbsence'] = null
   deferExit = false
   closeError?: Error
   lastCloseResult: PiRpcConnection['lastCloseResult'] = null

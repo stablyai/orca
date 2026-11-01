@@ -127,7 +127,8 @@ describe('installPluginFromLocalPath', () => {
       stagingDir: sourcePath,
       hostVersion: '1.4.0',
       source: { kind: 'local-path', path: sourcePath },
-      resolvedCommit: null
+      resolvedCommit: null,
+      identity: { publisher: 'acme' }
     })
 
     expect(manifestRead).toHaveBeenCalledTimes(2)
@@ -448,10 +449,23 @@ describe('installPluginFromGit', () => {
     await serveRepositoriesOverTestSsh(await tempRoot('orca-plugin-ssh-shim-'), {
       '/demo.git': sourcePath
     })
+    // Why: a tag moved after the dialog showed its commit must not install the new bytes.
+    await expect(
+      installPluginFromGit({
+        pluginsDir,
+        url: 'ssh://git@plugin.test/demo.git',
+        ref: 'v1.0.0',
+        expectedCommit: 'f'.repeat(40),
+        hostVersion: '1.4.0'
+      })
+    ).resolves.toEqual({ ok: false, error: 'plugin Git ref moved after it was checked; try again' })
+    expect((await readPluginLockfile(pluginsDir)).plugins).toEqual({})
+
     const result = await installPluginFromGit({
       pluginsDir,
       url: 'ssh://git@plugin.test/demo.git',
       ref: 'v1.0.0',
+      expectedCommit: commitStdout.trim(),
       hostVersion: '1.4.0'
     })
 
@@ -512,5 +526,63 @@ describe('removeInstalledPlugin', () => {
 
     await expect(readFile(join(pluginsDir, key, 'content'))).rejects.toThrow()
     await expect(readFile(join(pluginsDataDir, key, 'storage.json'))).rejects.toThrow()
+  })
+
+  it('runs beforeRemove before deleting files and keeps them when it fails', async () => {
+    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const pluginsDataDir = await tempRoot('orca-plugin-data-')
+    const key = 'samples.demo'
+    await mkdir(join(pluginsDir, key))
+    await writeFile(join(pluginsDir, key, 'content'), 'installed')
+
+    await expect(
+      removeInstalledPlugin({
+        pluginsDir,
+        pluginsDataDir,
+        pluginKey: key,
+        beforeRemove: () => {
+          throw new Error('consent store unavailable')
+        }
+      })
+    ).rejects.toThrow('consent store unavailable')
+    await expect(readFile(join(pluginsDir, key, 'content'), 'utf8')).resolves.toBe('installed')
+
+    const observed: string[] = []
+    await removeInstalledPlugin({
+      pluginsDir,
+      pluginsDataDir,
+      pluginKey: key,
+      beforeRemove: async () => {
+        observed.push(await readFile(join(pluginsDir, key, 'content'), 'utf8'))
+      }
+    })
+    expect(observed).toEqual(['installed'])
+    await expect(readFile(join(pluginsDir, key, 'content'))).rejects.toThrow()
+  })
+})
+
+describe('readPluginLockfile', () => {
+  it('prunes entries whose install directory was deleted by an interrupted removal', async () => {
+    const sourcePath = await tempRoot('orca-plugin-source-')
+    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    await writePluginSource(sourcePath)
+    const result = await installPluginFromLocalPath({
+      pluginsDir,
+      sourcePath,
+      hostVersion: '1.4.0'
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(Object.keys((await readPluginLockfile(pluginsDir)).plugins)).toEqual([result.pluginKey])
+
+    await rm(join(pluginsDir, result.pluginKey), { recursive: true, force: true })
+
+    await expect(readPluginLockfile(pluginsDir)).resolves.toEqual({ version: 1, plugins: {} })
+    const persisted: unknown = JSON.parse(
+      await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')
+    )
+    expect(persisted).toHaveProperty('plugins', {})
   })
 })

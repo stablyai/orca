@@ -1,7 +1,7 @@
 import { createElement, useMemo, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
 import { agentJournalTurnBody } from '../../../src/shared/agent-session-turn-record'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
@@ -10,7 +10,7 @@ import { MobileNativeChatPageList } from './MobileNativeChatPageList'
 import type {
   NativeChatMessage,
   NativeChatToolResultBlock
-} from '../../../src/shared/native-chat-types'
+} from '../../../src/shared/native-chat/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import type * as MobileNativeChatItemReadModule from './mobile-native-chat-item-read'
 import type * as MobileNativeChatRowPropsModule from './native-chat/transcript/use-mobile-native-chat-row-props'
@@ -22,6 +22,7 @@ import { MobileNativeChatView } from './MobileNativeChatView'
 import { MobileNativeChatRowContent } from './native-chat/transcript/MobileNativeChatRowItemSource'
 
 vi.mock('react-native', async () => ({
+  ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
   ActivityIndicator: 'ActivityIndicator',
   ScrollView: 'ScrollView',
   Platform: { OS: 'web' },

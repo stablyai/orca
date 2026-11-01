@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { createNativeChatVisualsDelivery } from '../native-chat/native-chat-visuals-delivery'
@@ -43,7 +43,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
       const resolveLaunch = createClaudeStructuredLaunchResolver({
         store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => cwd,
-        resolveCommand: () => realClaudeCommand,
+        resolveCommand: () => ({ command: realClaudeCommand, prefixArgs: [] }),
         resolveLaunchArgs: () => [],
         resolveEnv: () => realClaudeLaunchHome().env,
         resolveAuthPolicy: () => ({ account: 'system' }),

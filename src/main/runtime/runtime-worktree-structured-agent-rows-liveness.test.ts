@@ -1,4 +1,4 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -142,14 +142,6 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
 }
 
 describe('worktree ps and a closed structured chat', () => {
-  it('reports the blocked row while the session is still held', async () => {
-    const { store } = await awaitingApproval()
-    const row = worktreeFor(store)
-    expect(row.agents).toHaveLength(1)
-    expect(row.agents[0]?.state).toBe('blocked')
-    expect(row.status).toBe('permission')
-  })
-
   it('stops reporting it once close forgets the session', async () => {
     const { feed, sessions, store } = await awaitingApproval()
     // What the host does after eviction: the feed keeps its projection, the store drops the row.

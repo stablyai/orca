@@ -1,4 +1,4 @@
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionPromptQuestions,
   type AgentSessionQuestionAnswer

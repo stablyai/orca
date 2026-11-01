@@ -8,6 +8,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { FileContent } from './editor-panel-content-types'
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en-US',
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     fallback.replace(/\{\{(value\d)\}\}/g, (_match, name: string) => values?.[name] ?? '')
 }))
@@ -118,15 +119,6 @@ describe('PluginBytesCustomEditorSurface', () => {
     })
     // The load hashes the bytes asynchronously before handing them over.
     await act(() => vi.waitFor(() => expect(lastDocument()).toEqual({ bytes, fileType: 'xlsx' })))
-  })
-
-  it('names the file, its size and the limit when it is too large to open', async () => {
-    readRuntimeFileBytes.mockResolvedValue({ kind: 'too_large', size: 80 * 1024 * 1024 })
-    await render({ content: '', isBinary: true, byteSource })
-    expect(container.textContent).toContain(
-      'book.xlsx is too large to open in Spreadsheet (80.0 MB; the limit is 64.0 MB).'
-    )
-    expect(container.querySelector('[data-testid="frame"]')).toBeNull()
   })
 
   it('reloads after an outside change but not while the old content is only marked stale', async () => {

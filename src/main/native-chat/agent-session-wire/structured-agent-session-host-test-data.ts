@@ -5,18 +5,20 @@ import type {
   AgentJournalSnapshot,
   AgentJournalItemBody,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type {
   AgentSessionRecord,
   AgentSessionExecutionLocation
 } from '../../../shared/agent-session-record'
-import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
+import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
-import { attachFingerprintFields } from './structured-agent-session-attach'
-import type { AgentSessionAttachParams } from './structured-agent-session-attach'
+import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import {
+  attachFingerprintFields,
+  type AgentSessionAttachParams
+} from './structured-agent-session-attach'
 
 export const HOST_TEST_NOW = 1_800_000_000_000
 export const HOST_TEST_SESSION = 'session-alpha'
@@ -209,3 +211,13 @@ export const HOST_TEST_RESTING_OPTIONS_CREATED_LINKS = [
     handle: codexProviderHandle('provider-session-1')
   }
 ] satisfies AgentSessionRecord['providerHandleChain']
+
+export function hostTestCatalogReadOperation() {
+  const controller = new AbortController()
+  return {
+    retirement: 0,
+    controller,
+    signal: controller.signal,
+    current: () => !controller.signal.aborted
+  }
+}

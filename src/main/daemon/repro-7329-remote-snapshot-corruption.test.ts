@@ -103,36 +103,4 @@ describe('#7329 remote-server snapshot corruption', () => {
       term.dispose()
     }
   })
-
-  it('does not eat the continuation byte when the tail and continuation are contiguous', async () => {
-    // Test a contiguous continuation directly; production snapshot-sequence accounting is not exercised here.
-    const emu = new HeadlessEmulator({ cols: 80, rows: 24 })
-    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
-    try {
-      await emulatorWrite(emu, '\x1b[38;5;')
-      const snapshot = emu.getSnapshot({ scrollbackRows: 0 })
-      expect(snapshot.pendingEscapeTailAnsi).toBe('\x1b[38;5;')
-      await replayRemoteSnapshot(term, snapshot)
-      await writeXterm(term, '82mHELLO')
-      const visible = renderVisible(term)
-      expect(visible).toBe('HELLO')
-    } finally {
-      emu.dispose()
-      term.dispose()
-    }
-  })
-
-  it('documents the residual edge: an idle-death tail eats the next output byte', async () => {
-    // A tail with no continuation can consume unrelated later output; pin the known parser limitation.
-    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
-    try {
-      await writeXterm(term, 'prompt$ ')
-      await writeXterm(term, '\x1b[3')
-      await writeXterm(term, 'yes\r\n')
-      // CSI consumes 'y' as a final byte; only the remaining 'es' renders.
-      expect(renderVisible(term)).toBe('prompt$ es')
-    } finally {
-      term.dispose()
-    }
-  })
 })

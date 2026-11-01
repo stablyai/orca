@@ -1,7 +1,8 @@
+import { acquiredAccountAcrossLease } from '../../../../shared/agent-session-acquired-account'
 /** Pure transitions applied by the store in one durable transaction.
  * Writer admission requires reservation, observed process identity and provider-handle proof at one fence. */
 
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   adjudicateAgentSessionRestart,
   evaluateAgentSessionAcquisition,
@@ -32,7 +33,13 @@ export function withLease(
   record: AgentSessionRecord,
   lease: AgentSessionLease
 ): AgentSessionRecord {
-  return { ...record, lease, updatedAt: lease.lastRenewedAt }
+  const acquiredAccount = acquiredAccountAcrossLease(record, lease)
+  return {
+    ...record,
+    lease,
+    ...(acquiredAccount === undefined ? {} : { acquiredAccount }),
+    updatedAt: lease.lastRenewedAt
+  }
 }
 
 export function assertFence(lease: AgentSessionLease, fence: number): void {

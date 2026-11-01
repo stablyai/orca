@@ -45,11 +45,19 @@ describe('RelayAuthCoordinator', () => {
     coordinator.reconcile()
     await coordinator.waitForLiveBroker()
 
-    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://c27.relay.example.test')
+    expect(onStatus).toHaveBeenLastCalledWith(
+      'registered',
+      'https://c27.relay.example.test',
+      undefined
+    )
 
     coordinator.reconcile()
     await coordinator.waitForLiveBroker()
-    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://c27.relay.example.test')
+    expect(onStatus).toHaveBeenLastCalledWith(
+      'registered',
+      'https://c27.relay.example.test',
+      undefined
+    )
   })
 
   it('drops the cell from every status the host is not served on', async () => {
@@ -69,10 +77,10 @@ describe('RelayAuthCoordinator', () => {
     demanded = false
     coordinator.reconcile()
     await vi.advanceTimersByTimeAsync(0)
-    expect(onStatus).toHaveBeenLastCalledWith('standby', undefined)
+    expect(onStatus).toHaveBeenLastCalledWith('standby', undefined, undefined)
 
     coordinator.fenceAndCloseNow()
-    expect(onStatus).toHaveBeenLastCalledWith('offline', undefined)
+    expect(onStatus).toHaveBeenLastCalledWith('offline', undefined, undefined)
     for (const [status, cellUrl] of onStatus.mock.calls) {
       expect(status === 'registered' || cellUrl === undefined).toBe(true)
     }

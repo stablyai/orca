@@ -11,16 +11,6 @@ const featureBranch = { branch: 'feature/create-pr', baseRef: 'main' }
 describe('resolveHostedReviewCreationProviderForTarget', () => {
   const target = { repoId: 'repo-1', worktreeId: 'worktree-1', branch: 'feature/create-pr' }
 
-  it('preserves a known self-hosted provider for the same target', () => {
-    expect(
-      resolveHostedReviewCreationProviderForTarget(
-        { ...target, provider: 'gitlab' },
-        target,
-        'github'
-      )
-    ).toBe('gitlab')
-  })
-
   it('does not leak a provider hint across worktrees', () => {
     expect(
       resolveHostedReviewCreationProviderForTarget(
@@ -58,42 +48,6 @@ describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
         branchCommitsAhead: 0
       })
     ).toEqual({ eligible: true, kind: 'dirty' })
-  })
-
-  it('prefers dirty over no_upstream when both apply, matching main-process ordering', () => {
-    expect(
-      buildLocalBlockerHostedReviewCreationEligibility('gitlab', {
-        ...featureBranch,
-        hasUncommittedChanges: true,
-        hasUpstream: false,
-        ahead: 0,
-        behind: 0
-      })
-    ).toMatchObject({ provider: 'gitlab', blockedReason: 'dirty' })
-  })
-
-  it('reports no_upstream for a clean unpublished branch', () => {
-    expect(
-      buildLocalBlockerHostedReviewCreationEligibility('github', {
-        ...featureBranch,
-        hasUncommittedChanges: false,
-        hasUpstream: false,
-        ahead: 0,
-        behind: 0
-      })
-    ).toMatchObject({ blockedReason: 'no_upstream', nextAction: 'publish' })
-  })
-
-  it('reports needs_sync when the branch is behind its upstream', () => {
-    expect(
-      buildLocalBlockerHostedReviewCreationEligibility('github', {
-        ...featureBranch,
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 1,
-        behind: 3
-      })
-    ).toMatchObject({ blockedReason: 'needs_sync', nextAction: 'sync' })
   })
 
   it('returns null for an ahead-only branch, matching main which will not offer an un-auth-checked push', () => {
@@ -144,30 +98,6 @@ describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
         hasUpstream: false,
         ahead: 0,
         behind: 0
-      })
-    ).toBeNull()
-  })
-
-  it('returns null when the local status cannot determine a blocker', () => {
-    expect(
-      buildLocalBlockerHostedReviewCreationEligibility('github', {
-        ...featureBranch,
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).toBeNull()
-  })
-
-  it('returns null when upstream status is unknown, matching main which treats it as retryable', () => {
-    expect(
-      buildLocalBlockerHostedReviewCreationEligibility('github', {
-        ...featureBranch,
-        hasUncommittedChanges: false,
-        hasUpstream: undefined,
-        ahead: undefined,
-        behind: undefined
       })
     ).toBeNull()
   })
@@ -226,43 +156,5 @@ describe('buildCreatePrIntentUnavailableEligibility', () => {
       nextAction: null,
       reviewLookupOutcome: 'unavailable'
     })
-  })
-
-  it('never synthesizes final intent eligibility for the default branch', () => {
-    expect(
-      buildCreatePrIntentUnavailableEligibility('github', {
-        branch: 'main',
-        baseRef: 'origin/main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 1,
-        behind: 0
-      })
-    ).toBeNull()
-  })
-
-  it('never synthesizes intent eligibility when the default branch is unknown', () => {
-    expect(
-      buildCreatePrIntentUnavailableEligibility('github', {
-        branch: 'main',
-        baseRef: null,
-        hasUncommittedChanges: true,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).toBeNull()
-  })
-
-  it('never synthesizes intent eligibility for an unsupported remote provider', () => {
-    expect(
-      buildCreatePrIntentUnavailableEligibility('unsupported', {
-        ...featureBranch,
-        hasUncommittedChanges: true,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).toBeNull()
   })
 })

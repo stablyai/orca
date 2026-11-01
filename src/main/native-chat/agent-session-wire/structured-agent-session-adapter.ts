@@ -1,3 +1,4 @@
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
@@ -10,11 +11,13 @@ import type {
 
 import type {
   AgentJournalAnsweredTurnIdentity,
-  AgentJournalItemIdentity,
   AgentJournalMessageItem,
-  AgentJournalTurnItem,
+  AgentJournalTurnItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
 import type {
   AgentSessionAccountHome,
@@ -24,8 +27,8 @@ import type {
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
-import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session/agent-session-thread-goal-wire'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentSessionCloseObserver,
   StructuredAgentSessionAdapterStop
@@ -35,8 +38,8 @@ export type {
   StructuredAgentSessionChildEndCause,
   StructuredAgentSessionStopCause
 } from './structured-agent-session-stop-cause'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
 import type {
   StructuredAgentSessionStartupAttempt,
@@ -71,11 +74,14 @@ export {
 } from './structured-agent-session-acquisition-errors'
 
 export type AgentSessionAcquisition = {
+  accountRecipe?: ClaudeAccountRecipe
   process: AgentSessionProcessIdentity
   /** Spawn-time handles only; protocol handles come from open. */
   link?: AgentSessionProviderHandleLink
   /** Exact host-local child identity, even when acquisitions reuse a durable fence. */
   acquisitionGeneration: string
+  /** The account home this child launched under, when its launch follows the selection. */
+  accountHome?: AgentSessionAccountHome
 }
 
 /** The host creates the command’s running turn; the child translator ends it and writes its result. */
@@ -118,6 +124,7 @@ export type StructuredAgentSessionEndedEvent = {
   /** Absent means provider exit without extra detail; host faults retain their own classification. */
   failure?: SubmissionRejectionFact
   cause: 'unexpected-exit' | 'requested-close'
+  deathEvidenceKind?: 'kill-delivered'
   /** Execution-host observations from a requested provider close, when available. */
   processExit?: {
     root: 'live' | 'unverifiable' | 'exited'
@@ -276,6 +283,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<void | Readonly<Record<string, string>>>
+  /** Opt in only when setOption can update idle metadata without a provider turn. */
+  canSetOptionWhileIdle?(input: StructuredAgentSessionSetOptionInput): boolean
   /** Applied inputs for this exact child; observations never decide message admission. */
   readAppliedInputOptions?(input: {
     sessionId: string
@@ -293,13 +302,34 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     sessionId: string
     fence: number
   }): Promise<StructuredAgentSessionLiveOptions>
-  readOptionRestoreFailures?(sessionId: string): readonly string[]
+  /** A fresh independent text task; never acquires or writes a turn in the chat. */
+  generateText?(input: {
+    agent: string
+    accountHome: AgentSessionAccountHome
+    prompt: string
+    shouldExecute?: () => boolean
+  }): Promise<string | null>
   /** Copy the provider conversation without changing the chat’s ID; omit for CLI-based forks. */
   copyConversation?(input: {
     identity: AgentSessionJournalIdentity
     providerSessionId: string
     accountHome: AgentSessionAccountHome
   }): Promise<AiVaultConversationCopy>
+  /** Give the agent's own conversation the user's chat name, as the agent's own rename would:
+   *  through the live child holding that conversation, otherwise at rest. Best effort. */
+  renameProviderSession?(input: {
+    record: AgentSessionRecord
+    providerSessionId: string
+    name: string
+  }): Promise<void>
+  /** Capture native invocation inputs at the committed explicit occurrence. */
+  nameProviderConversation?(input: {
+    record: AgentSessionRecord
+    name: string
+    sequence: number
+    inheritance?: boolean
+  }): Promise<void> | undefined
+  stopProviderNaming?(): void
   /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
   closeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
   /** Sink-failure shutdown leaves exit recovery unexpected. */

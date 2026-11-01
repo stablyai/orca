@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
@@ -80,6 +80,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI targeted stop'
           providerSessionId,
           resumeLeafUuid: null,
           resumesTranscript: false,
+          cliFlag: async () => 'supported' as const,
           continuesChain: false
         }),
         onEvent: (event) => events.push(event),

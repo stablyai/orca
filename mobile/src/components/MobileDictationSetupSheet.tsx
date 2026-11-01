@@ -332,8 +332,8 @@ const styles = themedStyleSheet(() => ({
     gap: 5,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
+    borderRadius: radii.control,
+    backgroundColor: colors.sheetGroup
   },
   actionPressed: { opacity: 0.7 },
   actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },

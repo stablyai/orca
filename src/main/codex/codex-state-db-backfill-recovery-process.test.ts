@@ -65,7 +65,8 @@ describe('stopCodexBackfillRecoveryProcess for a supervised app-server', () => {
     expect(terminateProviderProcessTree).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
     expect(terminateProviderProcessTree).toHaveBeenCalledWith(child, {
-      site: 'codex-state-db-backfill-recovery'
+      site: 'codex-state-db-backfill-recovery',
+      supervised: true
     })
     await vi.advanceTimersByTimeAsync(1_000)
     await stopped

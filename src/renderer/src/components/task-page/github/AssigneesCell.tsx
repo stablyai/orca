@@ -109,7 +109,7 @@ export function GHAssigneesCell({
                     >(target, 'github.project.updateIssueBySlug', args, {
                       timeoutMs: 30_000
                     })
-                  : await window.api.gh.updateIssueBySlug(args)
+                  : await window.api.gh.updateIssueBySlug({ ...args, wakeWslDistro: true })
               if (!res.ok) {
                 throw new Error(res.error.message)
               }

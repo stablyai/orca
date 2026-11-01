@@ -95,6 +95,12 @@ export type PtySpawnOptions = {
   startupIngress?: PtyStartupIngressIntent
   /** Why the caller is starting this terminal; presence lets the host defer an automatic restore. */
   spawnIntent?: SpawnIntent
+  /** A restore no user act asked for: a WSL bridge pane whose distro is stopped is held, not started. */
+  wslPassiveRestore?: true
+  /** A main-side start no user act asked for (orchestration, automations, recovery): held like a passive restore. */
+  wslBackgroundStart?: true
+  /** performance.now() before this spawn's startup-target hold read: the provider hold reuses only that read. */
+  wslHoldReadAnchor?: number
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding
@@ -136,8 +142,10 @@ export type IPtyProvider = {
   killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
-  attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence' | 'lastTitle'> | void>
+  attach(id: string): Promise<PtySpawnResult | void>
   hasPty?: (id: string) => boolean
+  /** Read-only input availability, including retained unattached PTYs; null means unobserved. */
+  getPtyAvailability?: (id: string) => boolean | null
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
   write(id: string, data: string): boolean | void

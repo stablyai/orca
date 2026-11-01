@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'

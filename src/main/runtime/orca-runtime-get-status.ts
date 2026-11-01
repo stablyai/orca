@@ -1,5 +1,5 @@
 import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../shared/browser-runtime-capabilities'
-import { OrcaRuntimeWithGetRuntimeId } from './workspaces/session-hosts/get-runtime-id'
+import { OrcaRuntimeWithPtyController } from './orca-runtime-pty-controller'
 import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
@@ -37,11 +37,6 @@ import { runtimeTerminalDegradation } from './native-terminal-availability'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from './orca-runtime-core'
-import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import type {
-  AutomaticWorkResumeOutcome,
-  AutomaticWorkStatus
-} from '../../shared/host-spawn-admission'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type {
   AutomationsChangedPayload,
@@ -67,7 +62,7 @@ type RuntimeStatusHost = {
   ): string[]
 }
 
-export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
+export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyController {
   protected abstract pruneUnregisteredWorktreeScans(): void
 
   private asRuntimeStatusHost(): RuntimeStatusHost {
@@ -183,20 +178,6 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
   /** Bound machine-name lookup; slow lookups temporarily publish hostname, then their result on the next read. */
   machineNameReady(): Promise<void> {
     return this.machineName.readyWithin(MACHINE_NAME_PUBLISH_WAIT_MS)
-  }
-
-  setPtyController(controller: RuntimePtyController | null): void {
-    // Write through the main-owned PTY registry so renderer reloads cannot drift handle/process identity.
-    this.ptyController = controller
-  }
-
-  /** Null when the local terminal owner has no fork gate (in-process fallback, older daemon). */
-  async getAutomaticWorkStatus(): Promise<AutomaticWorkStatus | null> {
-    return (await this.ptyController?.getAutomaticWorkStatus?.()) ?? null
-  }
-
-  async resumeAutomaticWork(): Promise<AutomaticWorkResumeOutcome> {
-    return (await this.ptyController?.resumeAutomaticWork?.()) ?? null
   }
 
   setNotifier(notifier: RuntimeNotifier | null): void {

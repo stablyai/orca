@@ -4,16 +4,22 @@ import {
   type CommandTemplateBackslash
 } from './commit-message-prompt'
 
-export function planAgentBinary(
+export function parseAgentCommand(
   defaultBinary: string,
   commandOverride: string | undefined,
   backslash: CommandTemplateBackslash = 'escape'
 ):
-  | { ok: true; binary: string; prefixArgs: string[]; env?: Record<string, string> }
+  | {
+      ok: true
+      binary: string
+      prefixArgs: string[]
+      env?: Record<string, string>
+      divergesFromShell: boolean
+    }
   | { ok: false; error: string } {
   const command = commandOverride?.trim()
   if (!command) {
-    return { ok: true, binary: defaultBinary, prefixArgs: [] }
+    return { ok: true, binary: defaultBinary, prefixArgs: [], divergesFromShell: false }
   }
 
   const tokenized = tokenizeCustomCommandTemplate(command, backslash)
@@ -25,5 +31,20 @@ export function planAgentBinary(
   if (!binary) {
     return { ok: false, error: 'Agent command override must start with a binary name.' }
   }
-  return { ok: true, binary, prefixArgs, ...(env ? { env } : {}) }
+  return {
+    ok: true,
+    binary,
+    prefixArgs,
+    ...(env ? { env } : {}),
+    divergesFromShell: tokenized.spans.some((span) => span.divergesFromShell)
+  }
+}
+
+export function planAgentBinary(...args: Parameters<typeof parseAgentCommand>) {
+  const parsed = parseAgentCommand(...args)
+  if (!parsed.ok) {
+    return parsed
+  }
+  const { divergesFromShell: _divergesFromShell, ...plan } = parsed
+  return plan
 }

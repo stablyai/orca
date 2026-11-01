@@ -1,4 +1,9 @@
 import { z } from 'zod'
+import {
+  textGenerationFailure,
+  type TextGenerationFailureFields
+} from './text-generation-failure-copy'
+import type { GenerationOutputParse } from './opencode-generation-output'
 
 const messageSchema = z.discriminatedUnion('role', [
   z
@@ -20,9 +25,7 @@ const messageSchema = z.discriminatedUnion('role', [
   z.object({ role: z.literal('meta'), type: z.string() })
 ])
 
-export function parseKimiGenerationOutput(
-  stdout: string
-): { ok: true; text: string } | { ok: false; error: string } {
+export function parseKimiGenerationOutput(stdout: string): GenerationOutputParse {
   let answer = ''
   for (const line of stdout.split(/\r?\n/)) {
     if (!line.trim()) {
@@ -32,11 +35,11 @@ export function parseKimiGenerationOutput(
     try {
       value = JSON.parse(line)
     } catch {
-      return { ok: false, error: "Kimi returned output Orca couldn't read. Try again." }
+      return { ok: false, ...textGenerationFailure('kimiUnreadableOutput') }
     }
     const parsed = messageSchema.safeParse(value)
     if (!parsed.success) {
-      return { ok: false, error: "Kimi returned output Orca couldn't read. Try again." }
+      return { ok: false, ...textGenerationFailure('kimiUnreadableOutput') }
     }
     const message = parsed.data
     if (message.role === 'assistant') {
@@ -49,7 +52,7 @@ export function parseKimiGenerationOutput(
 
 const failureSchema = z.object({ type: z.literal('error'), code: z.string() })
 
-export function findKimiGenerationFailure(stdout: string): string | null {
+export function findKimiGenerationFailure(stdout: string): TextGenerationFailureFields | null {
   for (const line of stdout.split(/\r?\n/)) {
     if (!line.trim()) {
       continue
@@ -58,7 +61,7 @@ export function findKimiGenerationFailure(stdout: string): string | null {
       const value: unknown = JSON.parse(line)
       const failure = failureSchema.safeParse(value)
       if (failure.success && failure.data.code === 'session.occupied') {
-        return "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again."
+        return textGenerationFailure('kimiSessionOccupied')
       }
     } catch {
       // Failed stdout can contain partial records before the declared refusal.

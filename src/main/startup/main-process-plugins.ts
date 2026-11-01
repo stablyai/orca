@@ -1,21 +1,26 @@
 import { join } from 'node:path'
 import { PluginImageCache } from '../plugins/plugin-image-cache'
 import { installPluginImageProtocolHandler } from '../plugins/plugin-image-protocol'
+import { getPluginDesktopFrameServices } from '../plugins/panels/plugin-frame-desktop-services'
 import { pluginHostVersion } from '../../shared/plugins/installation/plugin-host-version'
 import { app, BrowserWindow, net } from 'electron'
 import { performance } from 'node:perf_hooks'
 import { PluginService } from '../plugins/plugin-service'
 import { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
+import { PluginInstallStatsService } from '../plugins/catalog/plugin-install-stats-service'
 import { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-service'
 import { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
 import { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
 import { PluginReleaseFirstSeenStore } from '../plugins/catalog/plugin-release-first-seen-store'
+import { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update-review-notices'
 import { isPluginAutoUpdateOn } from '../../shared/plugins/catalog/plugin-update-policy'
 import { PluginBundledBootstrapCoordinator } from '../plugins/plugin-bundled-bootstrap-coordinator'
 import { getPluginsDataDir } from '../plugins/plugin-discovery'
 import { resolveBundledPluginRoot } from '../plugins/plugin-bundled-bootstrap'
 import { resolvePluginHostEntryPath } from '../plugins/workers/plugin-host-process'
 import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
+import { clearRemovedPluginSettings } from '../plugins/plugin-removal-settings'
+import { clearPluginFrameStorage } from '../plugins/panels/plugin-frame-guest-sessions'
 import { setPluginServiceForRpc } from '../runtime/rpc/methods/plugins'
 import {
   normalizePluginConsents,
@@ -47,6 +52,20 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     pluginsDataDir: getPluginsDataDir(app.getPath('userData'))
   })
   await state.pluginKillListService.initialize()
+  state.pluginInstallStatsService = new PluginInstallStatsService({
+    pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
+    // Why packaged only (like the safety list): dev and e2e runs must not reach the network unasked.
+    isFetchAllowed: () =>
+      store.getSettings().pluginSystemEnabled === true &&
+      (app.isPackaged || process.env.ORCA_PLUGIN_INSTALL_STATS === '1')
+  })
+  state.pluginInstallStatsService.onChanged(() => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('plugins:installCountsChanged')
+      }
+    }
+  })
   const pluginImageCache = new PluginImageCache(
     join(getPluginsDataDir(app.getPath('userData')), 'image-cache')
   )
@@ -65,6 +84,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
       .catch((error) =>
         console.warn('[plugins] failed to configure the official marketplace:', error)
       )
+    void state.pluginMarketplaceService
+      ?.seedCommunitySource()
+      .catch((error) => console.warn('[plugins] failed to add the community marketplace:', error))
   }
   state.pluginMarketplaceInstaller = new PluginMarketplaceInstaller({
     marketplace: state.pluginMarketplaceService,
@@ -84,7 +106,8 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     getDevPluginPaths: () => normalizePluginIdList(state.store?.getSettings().devPluginPaths),
     getKeybindings: () => state.keybindings?.getOverrides() ?? {},
     getPluginKillListEntry: (pluginKey) => state.pluginKillListService?.find(pluginKey) ?? null,
-    hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged)
+    hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged),
+    getDesktopFrameServices: getPluginDesktopFrameServices
   })
   const pluginService = state.pluginService
   const pluginAutoUpdater = new PluginAutoUpdater({
@@ -119,6 +142,12 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     }
   })
   state.pluginAutoUpdater = pluginAutoUpdater
+  state.pluginUpdateReviewNotices = new PluginUpdateReviewNotices({
+    pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
+    getHeld: () => pluginAutoUpdater.getHeldForReview(),
+    findName: (pluginKey) => pluginService.findValidPlugin(pluginKey)?.manifest.name ?? null,
+    isKillListed: (pluginKey) => Boolean(state.pluginKillListService?.find(pluginKey))
+  })
   // Why packaged only (like the safety list): dev and e2e runs must not update fixtures unasked.
   const autoUpdateScheduled = app.isPackaged || process.env.ORCA_PLUGIN_AUTO_UPDATE === '1'
   const syncPluginAutoUpdate = (runNow: boolean): void => {
@@ -148,6 +177,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     hostVersion: pluginHostVersion(app.getVersion()),
     isEnabled: () => state.store?.getSettings().pluginSystemEnabled === true,
     blockedPluginReason: (pluginKey) => state.pluginKillListService?.reason(pluginKey) ?? null,
+    // Why: a retired bundled plugin must not leave consent, theme choices or frame storage behind.
+    beforeRetire: (pluginKey) => clearRemovedPluginSettings(store, pluginKey),
+    afterRetire: (pluginKey) => clearPluginFrameStorage(pluginKey),
     refreshPlugins: () => state.pluginService?.refresh() ?? Promise.resolve()
   })
   const requestBundledPluginBootstrap = (): void => {
@@ -185,13 +217,25 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     if (updates.pluginSystemEnabled !== undefined || updates.pluginUpdatePolicy !== undefined) {
       syncPluginAutoUpdate(true)
     }
+    if ('pluginSystemEnabled' in updates || 'devPluginPaths' in updates) {
+      // Main owns lifecycle refresh even when a caller crashes before its follow-up refresh.
+      void pluginService.refresh().catch((error) => {
+        console.warn('[plugins] failed to apply plugin settings change:', error)
+      })
+    }
   })
+  // Bound here, not in the IPC handlers: a headless serve never opens a window to register them.
+  pluginService.setRuntimeDelegate(runtime)
   // Headless RPC resolves this service too; consent shares the desktop hash-keyed write path.
   setPluginServiceForRpc(state.pluginService, {
     applyConsent: (request) =>
       applyPluginConsent({ store, pluginService: state.pluginService!, ...request }),
     applyEnablement: (pluginKey, enabled) =>
-      applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled })
+      applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled }),
+    setPluginSystemEnabled: (pluginSystemEnabled) =>
+      store.updateSettings({ pluginSystemEnabled }, { notifyListeners: true }),
+    setDevPluginPaths: (devPluginPaths) =>
+      store.updateSettings({ devPluginPaths }, { notifyListeners: true })
   })
   // Initialization discovers manifests only; workers/panel reads wait for explicit triggers.
   void state.pluginService

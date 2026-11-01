@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createEditorStore, flushAsyncRemoteRefresh } from './editor-slice-test-harness'
 import { isSyncPushStageError } from '@/lib/source-control-remote-error'
+import { normalizeGitErrorMessage } from '../../../../shared/git-remote-error'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -537,7 +538,19 @@ describe('createEditorSlice remote branch actions', () => {
 
   it('maps force-with-lease rejection into force-push guidance', async () => {
     const store = createEditorStore()
-    const pushError = new Error('fatal: stale info')
+    const pushError = new Error(
+      normalizeGitErrorMessage(
+        new Error(
+          [
+            'Command failed: git push --force-with-lease --set-upstream origin HEAD:feature',
+            'To https://github.com/acme/repo.git',
+            ' ! [rejected] HEAD -> feature (stale info)',
+            "error: failed to push some refs to 'https://github.com/acme/repo.git'"
+          ].join('\n')
+        ),
+        'push'
+      )
+    )
     gitPushMock.mockRejectedValueOnce(pushError)
 
     await expect(

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatMessage
-} from '../../shared/native-chat-types'
-import { stripNoiseMessages } from '../../shared/native-chat-noise'
+} from '../../shared/native-chat/native-chat-types'
+import { stripNoiseMessages } from '../../shared/native-chat/native-chat-noise'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
 

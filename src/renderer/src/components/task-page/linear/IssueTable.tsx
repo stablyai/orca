@@ -10,6 +10,7 @@ import { getIntlLocale, translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { formatRelativeTime } from '../task-page-source-context'
 import { Button } from '@/components/ui/button'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageLinearIssueTable({
   model
 }: {
@@ -278,7 +279,7 @@ export function TaskPageLinearIssueTable({
                     size="icon-xs"
                     onClick={(event) => {
                       event.stopPropagation()
-                      window.api.shell.openUrl(issue.url)
+                      openAppHttpLink(issue.url, { event })
                     }}
                     aria-label={translate(
                       'auto.components.TaskPage.246bd64aed',

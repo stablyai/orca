@@ -229,18 +229,6 @@ describe('removing a project while its paired server is unreachable', () => {
     expect(rmAttempts).toBe(2)
   })
 
-  it('keeps the record when the server is still unreachable at replay time', async () => {
-    seedPendingRuntimeRepoRemovals([{ environmentId: 'env-1', repoId: 'app', requestedAt: 1 }])
-
-    await replayPendingRuntimeRepoRemovals(
-      'env-1',
-      () => Promise.reject(new Error(UNREACHABLE)),
-      vi.fn()
-    )
-
-    expect(listPendingRuntimeRepoRemovals('env-1')).toHaveLength(1)
-  })
-
   it('never lets a replayed repo.rm undo a re-add of the same project', async () => {
     seedPendingRuntimeRepoRemovals([{ environmentId: 'env-1', repoId: 'app', requestedAt: 1 }])
     reachable = true

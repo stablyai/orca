@@ -1,7 +1,7 @@
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 export type JournalReasoningLifecycle = Pick<AgentJournalMessageItem, 'state' | 'completedAt'>
 

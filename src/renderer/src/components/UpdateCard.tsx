@@ -6,6 +6,7 @@ import { useAppStore } from '../store'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { translate } from '@/i18n/i18n'
+import { updaterMessageText } from '@/lib/updater-message-copy'
 import { UpdateCardStateContent } from './maintenance/update-card/UpdateCardStateContent'
 import { buildUpdateCardErrorModel } from './maintenance/update-card/update-card-error-model'
 import {
@@ -168,7 +169,7 @@ export function UpdateCard(): React.JSX.Element | null {
   })
   const linuxPackageRecovery =
     status.state === 'error' && status.recovery?.kind === 'linux-package-install'
-      ? { recovery: status.recovery, diagnostic: status.message }
+      ? { recovery: status.recovery, diagnostic: updaterMessageText(status) }
       : null
   const handleDismissWithAnimation = (): void => {
     if (prefersReducedMotion) {

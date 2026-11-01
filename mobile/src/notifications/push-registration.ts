@@ -1,4 +1,10 @@
 import { ensureDesktopNotificationChannel } from './desktop-notification-channel'
+import {
+  createHostPushSupportCompletion,
+  createHostPushState,
+  type HostPushState,
+  type HostPushSupportCompletion
+} from './host-push-registration-state'
 import { AppState } from 'react-native'
 import { startMobilePushLeaseRenewal } from './mobile-push-lease-renewal'
 import {
@@ -12,7 +18,7 @@ import type {
   MobilePushRegisterInput
 } from '../../../src/shared/mobile-push-contract'
 import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcOperationSender as PushClient } from '../transport/rpc-operation-sender'
 import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
 import { pushRouteRegister, pushRouteUnregister } from './mobile-push-registration-operations'
 import {
@@ -25,23 +31,24 @@ import { addPushTokenListener, getDevicePushToken, type MobilePushToken } from '
 
 export const NOTIFICATIONS_REMOTE_PUSH_CAPABILITY = NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY
 
-type PushClient = RpcOperationSender
-
 const REQUEST_TIMEOUT_MS = 5_000
 const REMOVAL_TIMEOUT_MS = 2_000
 const TOKEN_TIMEOUT_MS = 2_000
 
-type HostPushState = {
-  connection: { client: PushClient | null }
-  // An unanswered probe is unknown, not unsupported.
-  supported: boolean | null
-  capabilityProbeStop: (() => void) | null
-  chain: Promise<void>
-}
-
 type RegistrationRecords = { registered: Set<string>; pending: Set<string> }
 
 const hostsById = new Map<string, HostPushState>()
+
+export function getHostPushSupported(hostId: string): boolean | null {
+  return hostsById.get(hostId)?.supported ?? null
+}
+export function getHostPushSupportCompletion(
+  hostId: string,
+  client: PushClient
+): HostPushSupportCompletion | null {
+  const connection = hostsById.get(hostId)?.connection
+  return connection?.client === client ? connection.support : null
+}
 let registrationRecords: RegistrationRecords | null = null
 let tokenPromise: Promise<MobilePushToken | null> | null = null
 // A late registration must not overwrite a newer preference or consent choice.
@@ -50,12 +57,7 @@ let consentGeneration = 0
 function hostState(hostId: string): HostPushState {
   let state = hostsById.get(hostId)
   if (!state) {
-    state = {
-      connection: { client: null },
-      supported: null,
-      capabilityProbeStop: null,
-      chain: Promise.resolve()
-    }
+    state = createHostPushState()
     hostsById.set(hostId, state)
   }
   return state
@@ -156,6 +158,7 @@ async function reconcileHost(hostId: string): Promise<void> {
         return
       }
       state.supported = capabilities.includes(NOTIFICATIONS_REMOTE_PUSH_CAPABILITY)
+      state.connection.support?.complete(state.supported)
       void enqueueReconcile(hostId)
     })
     return
@@ -224,6 +227,8 @@ export function attachPushRegistration(hostId: string, client: PushClient): () =
   if (state.connection.client !== client) {
     state.capabilityProbeStop?.()
     state.capabilityProbeStop = null
+    state.connection.support?.retire()
+    state.connection.support = createHostPushSupportCompletion()
     state.connection.client = client
     state.supported = null
   }
@@ -231,6 +236,8 @@ export function attachPushRegistration(hostId: string, client: PushClient): () =
   const connection = state.connection
   return () => {
     if (connection.client === client) {
+      connection.support?.retire()
+      connection.support = null
       connection.client = null
       state.capabilityProbeStop?.()
       state.capabilityProbeStop = null
@@ -277,6 +284,7 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
   const state = hostsById.get(hostId)
   // Retire ownership before waiting for earlier RPCs to settle.
   hostsById.delete(hostId)
+  state?.connection.support?.retire()
   state?.capabilityProbeStop?.()
   if (state) {
     state.capabilityProbeStop = null
@@ -292,6 +300,7 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
   return () => {
     if (state && !hostsById.has(hostId)) {
       // Preserve disconnect ownership without reviving stale registration work.
+      state.connection.support = state.connection.client ? createHostPushSupportCompletion() : null
       hostsById.set(hostId, { ...state, supported: null, capabilityProbeStop: null })
       void enqueueReconcile(hostId)
     }
@@ -312,6 +321,9 @@ export function startPushTokenSync(): () => void {
 }
 
 export function resetPushRegistrationForTests(): void {
+  for (const state of hostsById.values()) {
+    state.connection.support?.retire()
+  }
   hostsById.clear()
   registrationRecords = null
   tokenPromise = null

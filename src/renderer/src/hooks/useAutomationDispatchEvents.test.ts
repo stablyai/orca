@@ -1,4 +1,5 @@
 import type * as ReactModule from 'react'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
 import { countUnchangedObserverHistoryReads } from './automation-dispatch-observer-test-probe'
@@ -50,12 +51,9 @@ const state = {
   activeTabId: 'tab-active',
   activeTabType: 'terminal' as const,
   repos: [{ id: 'repo-1', connectionId: null, executionHostId: null, path: '/repo' }] as TestRepo[],
-  folderWorkspaces: [] as {
-    id: string
-    projectGroupId: string
-    folderPath: string
-    connectionId: string | null
-  }[],
+  folderWorkspaces: new Array<
+    Pick<FolderWorkspace, 'id' | 'name' | 'projectGroupId' | 'folderPath' | 'connectionId'>
+  >(),
   projectGroups: [] as {
     id: string
     connectionId: string | null
@@ -77,6 +75,7 @@ const state = {
 function makeAutomation(overrides: Record<string, unknown> = {}) {
   return {
     id: 'automation-1',
+    name: 'Nightly setup',
     projectId: 'repo-1',
     prompt: 'run this',
     precheck: null,
@@ -273,7 +272,9 @@ describe('useAutomationDispatchEvents setup launch', () => {
   })
 
   it('creates a new-per-run workspace on the captured run host, and names none without one', async () => {
-    await registerAndDispatch(makeAutomation({ runContext: { repoId: 'repo-1', hostId: 'local' } }))
+    await registerAndDispatch(
+      makeAutomation({ runContext: { repoId: 'repo-1', hostId: 'local', path: '/repo' } })
+    )
     expect(mockCreateWorktree.mock.calls[0]?.at(-1)).toEqual(
       expect.objectContaining({ executionHostId: 'local' })
     )
@@ -282,6 +283,20 @@ describe('useAutomationDispatchEvents setup launch', () => {
     await registerAndDispatch()
     expect(mockCreateWorktree.mock.calls[0]?.at(-1)).toEqual(
       expect.objectContaining({ executionHostId: undefined })
+    )
+  })
+
+  // #34433: a runtime host records this as a label; `local` sends the badge's lookup back to this desktop.
+  it('offers the run as a label that names this desktop as its owner', async () => {
+    state.repos[0]!.connectionId = 'box'
+    await registerAndDispatch(
+      makeAutomation({ runContext: { repoId: 'repo-1', hostId: 'ssh:box', path: '/repo' } })
+    )
+
+    expect(mockCreateWorktree.mock.calls[0]?.at(-1)).toEqual(
+      expect.objectContaining({
+        clientAutomationProvenance: expect.objectContaining({ hostId: 'local' })
+      })
     )
   })
 
@@ -342,6 +357,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     state.folderWorkspaces = [
       {
         id: 'fw-1',
+        name: folderWorkspace.displayName,
         projectGroupId: 'group-1',
         folderPath: '/srv/project',
         connectionId: 'ssh-folder'
@@ -356,7 +372,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
         workspaceMode: 'existing',
         workspaceId: folderWorkspace.id,
         setupDecision: 'skip',
-        runContext: { repoId: 'repo-1', hostId: 'ssh:ssh-folder' }
+        runContext: { repoId: 'repo-1', hostId: 'ssh:ssh-folder', path: '/srv/project/repo' }
       })
     )
 
@@ -387,6 +403,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     state.folderWorkspaces = [
       {
         id: 'fw-local',
+        name: folderWorkspace.displayName,
         projectGroupId: 'group-local',
         folderPath: '/project',
         connectionId: null
@@ -399,7 +416,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       makeAutomation({
         workspaceMode: 'existing',
         workspaceId: folderWorkspace.id,
-        runContext: { repoId: 'repo-1', hostId: 'local' }
+        runContext: { repoId: 'repo-1', hostId: 'local', path: '/repo' }
       })
     )
 
@@ -419,6 +436,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     state.folderWorkspaces = [
       {
         id: 'fw-other',
+        name: folderWorkspace.displayName,
         projectGroupId: 'group-other',
         folderPath: '/srv/other',
         connectionId: 'ssh-other'

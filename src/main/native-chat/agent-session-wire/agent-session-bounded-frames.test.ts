@@ -7,16 +7,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
   type AgentJournalSubmission,
   type AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionQueuedMessage } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionQueuedMessage,
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-wire'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'

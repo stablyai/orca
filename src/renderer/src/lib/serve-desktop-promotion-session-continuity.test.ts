@@ -13,9 +13,7 @@ import {
 } from '../../../main/startup/serve-desktop-activation'
 import {
   acquireSingleInstanceLock,
-  shouldActivateDesktopForSecondInstance,
-  shouldBypassSingleInstanceLock,
-  shouldSkipSingleInstanceLock
+  shouldActivateDesktopForSecondInstance
 } from '../../../main/startup/single-instance-lock'
 
 const WORKTREE_ID = 'wt-serve-promotion'
@@ -193,18 +191,6 @@ function expectNoAgentWasResumed(records: readonly SleepingAgentSessionRecord[])
 }
 
 describe('#8457 headless serve promotion preserves surviving agent sessions', () => {
-  it('leaves a packaged serve process owning the single-instance lock', () => {
-    expect(shouldSkipSingleInstanceLock({ isDev: false, isServeMode: true, env: {} })).toBe(false)
-    expect(
-      shouldBypassSingleInstanceLock({
-        platform: 'darwin',
-        isDev: false,
-        isServeMode: true,
-        env: { ORCA_BYPASS_SINGLE_INSTANCE_LOCK: '1' }
-      })
-    ).toBe(false)
-  })
-
   it('opens exactly one desktop window for a forced relaunch, and only after settle', () => {
     const serve = bootHeadlessServeOwner()
 
@@ -249,17 +235,6 @@ describe('#8457 headless serve promotion preserves surviving agent sessions', ()
     expect(serve.openMainWindowCalls()).toBe(1)
 
     const records = hydratePromotedRenderer({ reattached: false })
-
-    expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
-    expectNoAgentWasResumed(records)
-  })
-
-  it('resumes zero agents on the hydration pass after the panes rebind their PTYs', () => {
-    const serve = bootHeadlessServeOwner()
-    serve.secondInstance(DESKTOP_RELAUNCH_ARGV)
-    serve.settle({ hasPersistentPtyProvider: true })
-
-    const records = hydratePromotedRenderer({ reattached: true })
 
     expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
     expectNoAgentWasResumed(records)

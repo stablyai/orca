@@ -3,8 +3,8 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
 } from '../../../../shared/structured-agent-session-reducer'
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionCurrentRequestsMarker } from '../../../../shared/agent-session-current-requests-wire'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentSessionCurrentRequestsMarker } from '../../../../shared/agent-session/requests/agent-session-current-requests-wire'
 import type {
   AgentSessionHistoryPage,
   AgentSessionSubscribeEvent
@@ -21,7 +21,7 @@ vi.mock('@/runtime/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: mocks.watchHostContact
 }))
 
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session/requests/agent-session-current-requests-capability'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 
@@ -174,7 +174,7 @@ describe('structured agent-session read transport generations', () => {
     expect(attempts[0].unsubscribe).toHaveBeenCalledOnce()
 
     attempts[1].onEvent(snapshot(2))
-    expect(applyEvent).toHaveBeenCalledExactlyOnceWith(snapshot(2))
+    expect(applyEvent).toHaveBeenCalledExactlyOnceWith(snapshot(2), { opensSubscription: true })
     replacement.dispose()
   })
 
@@ -198,7 +198,7 @@ describe('structured agent-session read transport generations', () => {
       expect(applyError).not.toHaveBeenCalled()
 
       attempts[1].onEvent(snapshot(2))
-      expect(applyEvent).toHaveBeenCalledExactlyOnceWith(snapshot(2))
+      expect(applyEvent).toHaveBeenCalledExactlyOnceWith(snapshot(2), { opensSubscription: true })
       attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
       await flushPromises()
       transport.dispose()
@@ -573,7 +573,9 @@ describe('structured agent-session read transport unattached refusals', () => {
       expect(attempts).toHaveLength(2)
       attempts[1].onEvent(snapshot(1))
       await flushPromises()
-      expect(applyEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'snapshot' }))
+      expect(applyEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'snapshot' }), {
+        opensSubscription: true
+      })
       transport.dispose()
     } finally {
       vi.useRealTimers()

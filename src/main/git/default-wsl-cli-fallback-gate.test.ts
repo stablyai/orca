@@ -31,6 +31,7 @@ import { ghExecFileAsync, glabExecFileAsync, setDefaultWslDistroOverride } from 
 import { _resetGhRateLimitBreaker } from './gh-rate-limit-breaker'
 import { runAsWslExecUserAct } from '../wsl/wsl-background-exec-gate'
 import { WslDistroStoppedError, WslDistroUnverifiableError } from '../wsl/wsl-unc-access-gate'
+import { starOrca } from '../github/client/fetch/orca-star'
 
 const originalPlatform = process.platform
 
@@ -105,6 +106,16 @@ describe.each(CLIS)('$cli default-distro fallback', ({ cli, run }) => {
     hostMissingThenWslAnswers(cli)
 
     await expect(runAsWslExecUserAct('Ubuntu', run)).resolves.toEqual({ stdout: '{}', stderr: '' })
+    expect(spawnedWsl()).toBe(true)
+  })
+})
+
+describe('starring Orca, which is always a click', () => {
+  it('may start the stopped default distro its gh lives in', async () => {
+    readWslDistroRunningStateMock.mockResolvedValue('stopped')
+    hostMissingThenWslAnswers('gh')
+
+    await expect(starOrca()).resolves.toBe(true)
     expect(spawnedWsl()).toBe(true)
   })
 })

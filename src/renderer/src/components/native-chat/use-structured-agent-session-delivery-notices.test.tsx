@@ -2,8 +2,8 @@
 
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/structured-agent-session-dispatch-rejection'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
 
 afterEach(cleanup)

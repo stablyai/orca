@@ -1,8 +1,9 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import type { SubscriberFieldState } from './agent-session-subscriber-frame-fields'
 
 export type AgentSessionSubscribeInput = {
+  commandsOnRequest?: boolean
   id: string
   sessionId: string
   emit: (event: AgentSessionSubscribeEvent) => void

@@ -31,10 +31,6 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     ...args: Parameters<ResolveWaiterMethods['rejectAllWaiters']>
   ): ReturnType<ResolveWaiterMethods['rejectAllWaiters']>
 
-  protected abstract rejectWaitersForHandle(
-    ...args: Parameters<ResolveWaiterMethods['rejectWaitersForHandle']>
-  ): ReturnType<ResolveWaiterMethods['rejectWaitersForHandle']>
-
   protected abstract rememberDetachedPreAllocatedLeaves(
     ...args: Parameters<BindPtyIncarnationHandleMethods['rememberDetachedPreAllocatedLeaves']>
   ): ReturnType<BindPtyIncarnationHandleMethods['rememberDetachedPreAllocatedLeaves']>
@@ -110,15 +106,6 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     for (const [ptyId, retained] of this.handleByPtyIncarnation) {
       if (retained.incarnationId === null) {
         this.invalidatePtyIncarnationHandle(ptyId)
-      }
-    }
-    const retainedHandles = new Set([
-      ...this.handleByPtyId.values(),
-      ...[...this.handleByPtyIncarnation.values()].map((record) => record.handle)
-    ])
-    for (const handle of this.terminalWaiters.handles()) {
-      if (!retainedHandles.has(handle)) {
-        this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
       }
     }
     this.handles.clear()

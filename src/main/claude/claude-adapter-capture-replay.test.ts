@@ -6,10 +6,10 @@ import { describe, expect, it, vi, type Mock } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import type {
   ClaudeLateDispatchOutcome,
@@ -111,6 +111,7 @@ async function replayCapture(name: string): Promise<Replay> {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false
     }),
     openConnection: claude.openConnection,

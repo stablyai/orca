@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
+import { isRootAgentJournalItem } from '../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import type {
-  AgentSessionHistoryResult,
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import {
+  type AgentSessionHistoryResult,
+  AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../../../src/shared/agent-session-wire'
-import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../src/shared/agent-session-wire'
 import { structuredAgentSessionHolderId } from '../../../src/shared/structured-agent-session-holder'
-import { startStructuredAgentSessionLiveRead } from '../../../src/shared/structured-agent-session-live-read'
-import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
+import { startStructuredAgentSessionLiveRead } from '../../../src/shared/agent-session/structured-agent-session-live-read'
+import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
@@ -29,6 +31,7 @@ import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-olde
 const MAX_RETAINED_SESSION_STATES = 32
 
 export function useMobileStructuredAgentState(args: {
+  onCommandsChanged?: () => void
   client: RpcClient | null
   sessionId: string | null
   sessionKey: string | null
@@ -45,6 +48,10 @@ export function useMobileStructuredAgentState(args: {
   loadEarlier: () => void
 } {
   const { client, connected, enabled, sessionId, sessionKey } = args
+  const commandsChanged = useRef(args.onCommandsChanged)
+  useLayoutEffect(() => {
+    commandsChanged.current = args.onCommandsChanged
+  }, [args.onCommandsChanged])
   // Bound synchronous per-session retention so offline tab switches cannot grow memory indefinitely.
   const [sessionStates, setSessionStates] = useState<Map<string, StructuredAgentSessionState>>(
     () => new Map()
@@ -104,6 +111,9 @@ export function useMobileStructuredAgentState(args: {
       applyRequests: apply,
       applyEvent: (event, options) => {
         apply({ type: 'event', event, ...options })
+        if (event.type !== 'end' && event.commandsChanged) {
+          commandsChanged.current?.()
+        }
       },
       applyError: (message, refusal) => {
         if (stateRef.current.epoch !== null && refusal === undefined) {

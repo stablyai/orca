@@ -240,6 +240,9 @@ try {
         if ($keys -cne $case[1]) { throw "hotkey $($case[0]) expected '$($case[1])', received '$keys'" }
     }
 
+    & (Join-Path $PSHOME "powershell.exe") -NoLogo -NoProfile -File (Join-Path $PSScriptRoot "runtime-pointer.test.ps1")
+    if ($LASTEXITCODE -ne 0) { throw "Windows pointer tests failed" }
+
     Write-Output "windows-snapshot-render-tests-ok"
 } finally {
     Remove-Item -LiteralPath $operationPath -Force -ErrorAction SilentlyContinue

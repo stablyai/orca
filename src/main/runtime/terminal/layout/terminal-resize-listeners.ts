@@ -22,6 +22,7 @@ import { parseWorkerTerminalHostScope } from '../../../../shared/worker-terminal
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { escalateWorkerFailure } from '../../orchestration/worker-failure-escalation'
 import { dispatchReportMailbox } from '../../orchestration/dispatch-report-mailbox'
+import { reportWorkerTurnStop } from '../../orchestration/worker-turn-stop-report'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { OrchestrationDb } from '../../orchestration/db'
 
@@ -58,7 +59,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     cause: TerminalExitCause
   ): void {
     const errorContext = describeTerminalExitCause(cause)
-    this.failActiveDispatchAndEscalate(handle, paneKey ?? undefined, {
+    const settledLocally = this.failActiveDispatchAndEscalate(handle, paneKey ?? undefined, {
       error: errorContext,
       options: { workerProcessExited: true, terminationReason: cause.kind },
       processExited: true,
@@ -70,6 +71,39 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       }),
       payload: { exitCode, exitCause: cause }
     })
+    if (!settledLocally && paneKey) {
+      this.reportRemoteWorkerExit(handle, paneKey, errorContext)
+    }
+  }
+
+  /** A paired server's worker has no local Dispatch; any exit it did not report reaches the Run home through the stop relay. */
+  private reportRemoteWorkerExit(handle: string, paneKey: string, exitCause: string): void {
+    const db = this._orchestrationDb
+    const attachment = db?.findActiveRemoteAttachmentForPane(paneKey)
+    const processIncarnation = this.getTerminalProcessIncarnation(handle)
+    if (
+      !db ||
+      !attachment ||
+      !db.isRemoteAttachmentProcessCurrent({
+        dispatchId: attachment.dispatch_id,
+        paneKey,
+        processIncarnation
+      })
+    ) {
+      return
+    }
+    reportWorkerTurnStop(
+      db,
+      { kind: 'remote', attachment },
+      {
+        from: handle,
+        stopKey: `exit:${processIncarnation}`,
+        reason: 'exited',
+        lastOutput: undefined,
+        exitCause
+      },
+      this.workerTurnStopReportDeps
+    )
   }
 
   /** Codex outlives a failed reconnect, so no PTY exit will ever settle its dispatch (#24791). */

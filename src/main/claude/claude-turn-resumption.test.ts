@@ -3,17 +3,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalRenderItem
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   legacyAgentJournalTurnStatusBody,
   readAgentJournalTurn
 } from '../../shared/agent-session-turn-record'
 import { selectStructuredAgentSettledTurns } from '../../shared/structured-agent-session-turn-timing'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 import {
-  hasUnansweredStructuredAgentSessionDispatch,
   projectStructuredAgentSessionStatus,
   projectStructuredAgentSessionStatusSummary
 } from '../../shared/structured-agent-session-projection'

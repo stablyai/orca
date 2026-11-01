@@ -2,7 +2,8 @@
 
 import type { AgentSessionStoredAgent } from './agent-session/lifecycle/agent-session-stored-agent'
 
-/** Account root pinned at launch by the account selector, so a resume cannot drift to another login. */
+/** Account root the chat was created or adopted under, where its history was first written. An agent
+ *  whose launch follows the selection starts under the account selected now instead. */
 export type LegacyAgentSessionAccountHome = {
   /** Environment variable naming the agent's config directory. */
   variable: string
@@ -28,6 +29,10 @@ export function isLegacyAgentSessionAccountHome(
   home: AgentSessionAccountHome
 ): home is LegacyAgentSessionAccountHome {
   return !('kind' in home)
+}
+
+export function agentSessionAccountHomePath(home: AgentSessionAccountHome | null): string | null {
+  return home && isLegacyAgentSessionAccountHome(home) ? home.path : null
 }
 
 export function requireLegacyAgentSessionAccountHome(

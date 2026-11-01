@@ -2,6 +2,62 @@ import XCTest
 @testable import OrcaComputerUseMacOSCore
 
 final class SyntheticMouseClickDeliveryTests: XCTestCase {
+    func testScrollAndDragFenceTheOriginBeforeMoveAndBeforeMutation() {
+        let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
+        let sibling = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 202)
+        for drag in [false, true] {
+            for loss in [SyntheticMouseClickDelivery.RecipientObservation.focused(sibling), .unavailable, .dismissed] {
+                for afterMove in [false, true] {
+                    var observations: [SyntheticMouseClickDelivery.RecipientObservation] = afterMove ? [.focused(target), loss] : [loss]
+                    var posted: [String] = []
+                    let observe = { observations.isEmpty ? .unavailable : observations.removeFirst() }
+                    XCTAssertThrowsError(try {
+                        if drag {
+                            try SyntheticMouseClickDelivery.deliverDrag(
+                                move: "move", down: "down", dragged: ["drag"], up: "up",
+                                target: target, currentObservation: observe,
+                                post: { posted.append($0) }, pause: { _ in }
+                            )
+                        } else {
+                            try SyntheticMouseClickDelivery.deliverScroll(
+                                move: "move", wheel: "wheel",
+                                target: target, currentObservation: observe,
+                                post: { posted.append($0) }, pause: { _ in }
+                            )
+                        }
+                    }())
+                    XCTAssertEqual(posted, afterMove ? ["move"] : [])
+                }
+            }
+        }
+    }
+
+    func testScrollWaitsBeforeRecheckAndDragDoesNotRecheckAfterDown() throws {
+        let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
+        for drag in [false, true] {
+            var trace: [String] = []
+            let observe = {
+                trace.append("recipient")
+                return SyntheticMouseClickDelivery.RecipientObservation.focused(target)
+            }
+            let post = { (event: String) in trace.append(event) }
+            let pause = { (_: UInt32) in trace.append("pause") }
+            if drag {
+                try SyntheticMouseClickDelivery.deliverDrag(
+                    move: "move", down: "down", dragged: ["drag"], up: "up",
+                    target: target, currentObservation: observe, post: post, pause: pause
+                )
+                XCTAssertEqual(trace, ["recipient", "move", "recipient", "down", "pause", "drag", "pause", "up"])
+            } else {
+                try SyntheticMouseClickDelivery.deliverScroll(
+                    move: "move", wheel: "wheel", target: target,
+                    currentObservation: observe, post: post, pause: pause
+                )
+                XCTAssertEqual(trace, ["recipient", "move", "pause", "recipient", "wheel"])
+            }
+        }
+    }
+
     func testSingleClickPlanPairsDownAndUpAfterMove() {
         XCTAssertEqual(
             SyntheticMouseClickDelivery.steps(clickCount: 1),

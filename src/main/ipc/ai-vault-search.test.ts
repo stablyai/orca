@@ -240,9 +240,15 @@ describe('local search hits owned by a native chat', () => {
     record.providerHandleChain = [
       { ...record.providerHandleChain[0]!, handle: codexProviderHandle('host-session') }
     ]
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection only reads this record-list member.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection reads only `listConversations`, `getRecord` and `hostId`.
     setStructuredAgentSessionHost({
-      deps: { store: { listConversations: () => [agentSessionConversationView(record)] } }
+      deps: {
+        store: {
+          hostId: 'local',
+          getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null),
+          listConversations: () => [agentSessionConversationView(record)]
+        }
+      }
     } as never)
     return { sessionId: record.sessionId, workspaceId: record.location.workspaceId }
   }
