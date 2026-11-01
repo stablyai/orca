@@ -27,6 +27,7 @@ import {
   projectRowStatusLabel
 } from './mobile-tasks-legacy-foundation'
 import type { GitHubProjectField, GitHubProjectRow } from './mobile-tasks-view-state-types'
+import { pressedStyle } from '../theme/mobile-theme'
 
 function isProjectFieldEmpty(row: GitHubProjectRow, field: GitHubProjectField): boolean {
   switch (field.dataType) {
@@ -98,7 +99,11 @@ export function renderMobileTasksGitHubProjectList(
         {translate('tasks.githubProjectList.chooseProject', 'Choose a GitHub project')}
       </Text>
       <Pressable
-        style={[styles.targetButton, styles.centerActionButton]}
+        style={({ pressed }) => [
+          styles.targetButton,
+          styles.centerActionButton,
+          pressed && pressedStyle
+        ]}
         disabled={!taskUiReady}
         onPress={() => {
           if (!taskUiReady) {
@@ -152,7 +157,7 @@ export function renderMobileTasksGitHubProjectList(
         if (entry.type === 'group') {
           return (
             <Pressable
-              style={styles.projectGroupHeader}
+              style={({ pressed }) => [styles.projectGroupHeader, pressed && pressedStyle]}
               onPress={() =>
                 setCollapsedGitHubProjectGroups((current) => {
                   const next = new Set(current)

@@ -21,6 +21,7 @@ import {
   MobileNativeChatItemSourceContext,
   readMobileNativeChatItem
 } from './mobile-native-chat-item-read'
+import { pressedStyle } from '../theme/mobile-theme'
 
 // Keep full-content state per row so live transcript revisions cannot overwrite the reader’s requested expansion.
 
@@ -40,7 +41,7 @@ function ShowFull({
   useMobileColorScheme()
   return (
     <Pressable
-      style={styles.showFull}
+      style={({ pressed }) => [styles.showFull, pressed && pressedStyle]}
       onPress={onPress}
       disabled={load === 'loading'}
       hitSlop={8}

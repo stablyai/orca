@@ -10,3 +10,9 @@ export const SHEET_HEIGHT_DURATION_MS = 320
  * mass to 4, which turned the old `{ damping, stiffness }` pair into a wobble.
  */
 export const SETTLE_SPRING = { dampingRatio: 1, duration: 350 } as const
+/**
+ * Reduce Motion swaps every slide (sheets, the side panel, page pushes, in-sheet pages) for a
+ * cross-fade in place, like iOS; a swipe-away still follows the finger and then fades.
+ */
+export const REDUCED_MOTION_FADE_MS = 200
+export const REDUCED_MOTION_DISMISS_FADE_MS = 150

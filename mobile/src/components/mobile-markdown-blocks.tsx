@@ -23,6 +23,7 @@ import { codeFenceClosed, plainText } from './mobile-markdown-tree'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 import { MobileMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { translate } from '../i18n/mobile-i18n'
+import { pressedStyle } from '../theme/mobile-theme'
 
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
@@ -165,7 +166,7 @@ function renderBlock(
         return (
           <Pressable
             key={key}
-            style={styles.imageFrame}
+            style={({ pressed }) => [styles.imageFrame, pressed && pressedStyle]}
             onPress={() => openMarkdownHref(only.url, ctx.onOpenFile)}
             onLongPress={ctx.rowLongPress}
           >

@@ -33,6 +33,7 @@ import {
   renderMobileTasksProjectAssigneesEditor
 } from './mobile-tasks-project-metadata-editors'
 import { renderMobileTasksProjectLoadedDetail } from './mobile-tasks-project-detail-content'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPresentationModel) {
   const {
@@ -227,9 +228,10 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                       return (
                         <Pressable
                           key={issueType.id}
-                          style={[
+                          style={({ pressed }) => [
                             styles.detailChip,
-                            selected ? styles.detailChipSelected : undefined
+                            selected ? styles.detailChipSelected : undefined,
+                            pressed && pressedStyle
                           ]}
                           disabled={projectMutating || selected}
                           onPress={() => void mutateProjectRowIssueType(projectRowItem, issueType)}
@@ -248,7 +250,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                     })}
                     {projectRowItem.content.issueType ? (
                       <Pressable
-                        style={styles.detailChip}
+                        style={({ pressed }) => [styles.detailChip, pressed && pressedStyle]}
                         disabled={projectMutating}
                         onPress={() => void mutateProjectRowIssueType(projectRowItem, null)}
                       >

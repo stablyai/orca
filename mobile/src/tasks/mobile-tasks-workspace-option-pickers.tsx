@@ -14,6 +14,7 @@ import { TASK_SECONDARY_DRAWER_Z_INDEX } from './mobile-tasks-legacy-foundation'
 import { ListGroup, ListRow } from '../components/list/ListGroup'
 import { styles } from './mobile-tasks-legacy-styles'
 import { translate } from '../i18n/mobile-i18n'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPresentationModel) {
   const {
@@ -160,7 +161,7 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
               selected={workspaceSparsePresetId === preset.id}
               accessory={
                 <Pressable
-                  style={styles.iconActionButton}
+                  style={({ pressed }) => [styles.iconActionButton, pressed && pressedStyle]}
                   accessibilityRole="button"
                   accessibilityLabel={translate(
                     'tasks.workspaceOptionPickers.editPreset',
@@ -182,11 +183,12 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
           ))}
         </ListGroup>
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.inlineSaveButton,
             !workspaceSparsePresetsLoaded || workspaceSparsePresetsLoading
               ? styles.fieldButtonDisabled
-              : undefined
+              : undefined,
+            pressed && pressedStyle
           ]}
           disabled={!workspaceSparsePresetsLoaded || workspaceSparsePresetsLoading}
           onPress={startNewWorkspaceSparsePreset}

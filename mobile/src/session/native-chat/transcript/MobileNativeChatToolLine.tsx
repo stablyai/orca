@@ -22,7 +22,7 @@ import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButt
 import { MobileSyntaxSegments } from '../../../components/MobileSyntaxSegments'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { openExternalLink } from '../../../platform/external-link'
-import { colors } from '../../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { highlightMobileCode } from '../../mobile-file-syntax'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
@@ -219,7 +219,7 @@ export function MobileNativeChatToolLine({
     <View testID={memberId}>
       <View style={styles.line}>
         <Pressable
-          style={[styles.line, styles.cardToggle]}
+          style={({ pressed }) => [styles.line, styles.cardToggle, pressed && pressedStyle]}
           onPress={() => hasDetail && setExpanded(!expanded)}
           disabled={!hasDetail}
           accessibilityRole="button"

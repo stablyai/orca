@@ -75,6 +75,7 @@ import {
   renderMobileTasksSetupTrustDrawer,
   renderMobileTasksOrcaYamlTrustDrawer
 } from './mobile-tasks-workspace-trust-drawers'
+import { pressedStyle } from '../theme/mobile-theme'
 import {
   renderMobileTasksProjectMissingRepoDrawer,
   renderMobileTasksProjectDetailDrawer
@@ -172,7 +173,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
                     'Retry loading issues from {{source}}',
                     { source: `${sourceError.source.owner}/${sourceError.source.repo}` }
                   )}
-                  style={styles.sourceErrorRetry}
+                  style={({ pressed }) => [styles.sourceErrorRetry, pressed && pressedStyle]}
                   disabled={loading || isRetrying}
                   onPress={() => void retryGitHubIssueSourceFetch(sourceError.repoPath)}
                 >

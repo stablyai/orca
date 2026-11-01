@@ -18,6 +18,7 @@ import {
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { styles } from './mobile-tasks-legacy-styles'
 import { PROJECT_VIEW_DEFAULT_SORT } from './mobile-tasks-legacy-foundation'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentationModel) {
   const {
@@ -52,7 +53,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
     githubProjectKey(activeGitHubProject) === githubProjectKey(project)
   const inlineAction = (label: string, run: () => void) => (
     <Pressable
-      style={styles.inlineSaveButtonCompact}
+      style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
       onPress={(event) => {
         event.stopPropagation()
         run()
@@ -117,7 +118,11 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
             autoCorrect={false}
           />
           <Pressable
-            style={[styles.inlineSaveButtonCompact, styles.projectPasteButton]}
+            style={({ pressed }) => [
+              styles.inlineSaveButtonCompact,
+              styles.projectPasteButton,
+              pressed && pressedStyle
+            ]}
             disabled={githubProjectPasteBusy || githubProjectPasteInput.trim().length === 0}
             onPress={() => void resolveGitHubProjectFromInput()}
           >

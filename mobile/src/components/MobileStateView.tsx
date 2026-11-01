@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { CircleAlert, SearchX, WifiOff, type LucideIcon } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { describeLoadError } from './load-error-description'
@@ -74,6 +74,7 @@ function MobileStateDetails({ details }: { details: string }) {
   return (
     <>
       <Pressable
+        style={({ pressed }) => pressed && pressedStyle}
         onPress={() => setOpen(!open)}
         hitSlop={8}
         accessibilityRole="button"

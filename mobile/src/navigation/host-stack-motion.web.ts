@@ -1,23 +1,27 @@
+import { REDUCED_MOTION_FADE_MS } from '../components/sheet-motion-values'
 import { PUSH_EASING_CSS, PUSH_SLIDE_MS, PUSH_UNDER_DIM, PUSH_UNDER_SHIFT } from './push-motion'
 
 // Bound suspended-screen waits so a route with no content can still arrive.
 const CONTENT_WAIT_CAP_MS = 1000
 const UNDER_SHIFT = `translateX(${-PUSH_UNDER_SHIFT * 100}%)`
 
-/** Where an interrupted slide stopped, so the reverse starts there instead of jumping. */
+/** Where an interrupted move stopped (a transform, or an opacity under Reduce Motion). */
 const stoppedAt = new WeakMap<HTMLElement, string>()
 
 /**
- * Slides a pushed screen in over the one under it (or a popped one off it). Compositor animations,
- * so an expensive screen mount cannot stall them. Returns the cancel for an interrupting move.
+ * Slides a pushed screen in over the one under it (or a popped one off it); under Reduce Motion it
+ * cross-fades in place instead. Compositor animations, so an expensive screen mount cannot stall
+ * them. Returns the cancel for an interrupting move.
  */
 export function runStackMotion(args: {
   kind: 'push' | 'pop'
   moving: HTMLElement | null
   under: HTMLElement | null
+  reducedMotion: boolean
   onSettled: () => void
 }): () => void {
-  const { kind, moving, under, onSettled } = args
+  const { kind, moving, reducedMotion, onSettled } = args
+  const under = reducedMotion ? null : args.under
   if (moving === null) {
     return () => {}
   }
@@ -28,12 +32,19 @@ export function runStackMotion(args: {
     fill: 'both'
   }
   const from = (node: HTMLElement, rest: string) => stoppedAt.get(node) ?? rest
-  const slide = moving.animate(
-    push
-      ? [{ transform: from(moving, 'translateX(100%)') }, { transform: 'translateX(0)' }]
-      : [{ transform: from(moving, 'translateX(0)') }, { transform: 'translateX(100%)' }],
-    options
-  )
+  const slide = reducedMotion
+    ? moving.animate(
+        push
+          ? [{ opacity: from(moving, '0') }, { opacity: 1 }]
+          : [{ opacity: from(moving, '1') }, { opacity: 0 }],
+        { duration: REDUCED_MOTION_FADE_MS, easing: 'ease-out', fill: 'both' }
+      )
+    : moving.animate(
+        push
+          ? [{ transform: from(moving, 'translateX(100%)') }, { transform: 'translateX(0)' }]
+          : [{ transform: from(moving, 'translateX(0)') }, { transform: 'translateX(100%)' }],
+        options
+      )
   slide.onfinish = onSettled
   const dim = under === null ? null : appendDim(under)
   const underSlide =
@@ -88,7 +99,8 @@ export function runStackMotion(args: {
     }
     // Only an interrupted move hands its position on; a finished one rests where it should.
     if (slide.playState !== 'finished') {
-      stoppedAt.set(moving, getComputedStyle(moving).transform)
+      const style = getComputedStyle(moving)
+      stoppedAt.set(moving, reducedMotion ? style.opacity : style.transform)
       if (under !== null) {
         stoppedAt.set(under, getComputedStyle(under).transform)
       }

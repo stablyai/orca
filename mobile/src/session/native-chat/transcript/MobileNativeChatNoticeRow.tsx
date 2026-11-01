@@ -19,7 +19,7 @@ import {
 } from '../../mobile-native-chat-notice-context'
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
@@ -77,7 +77,7 @@ function NoticeDisclosureSummary({
       aria-expanded={expanded}
       onPress={onPress}
       onLongPress={onLongPress}
-      style={styles.disclosure}
+      style={({ pressed }) => [styles.disclosure, pressed && pressedStyle]}
     >
       <View style={expanded ? toolStyles.caretOpen : undefined}>
         <ChevronRight size={16 * fontScale} color={colors.textMuted} />

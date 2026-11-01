@@ -66,7 +66,7 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
   // Derive during render so a pop’s first frame still contains its outgoing screen.
   if (shown.routes !== routes) {
     const moved = shown.routes.at(-1)?.key !== routes.at(-1)?.key
-    const slides = moved && animation !== 'none' && !prefersReducedMotion()
+    const slides = moved && animation !== 'none'
     setShown({
       routes,
       descriptors,
@@ -91,6 +91,7 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
       kind: transition.kind,
       moving: nodes.current.get(push ? transition.enteringKey : transition.leaving.key) ?? null,
       under: nodes.current.get((push ? transition.underKey : topKey) ?? '') ?? null,
+      reducedMotion: prefersReducedMotion(),
       onSettled: settle
     })
   }, [transition, topKey, settle])

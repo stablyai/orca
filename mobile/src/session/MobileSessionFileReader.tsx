@@ -21,7 +21,7 @@ import {
 import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
 import { MobilePanZoomImage } from '../components/MobilePanZoomImage'
 import { MobileSvgPreview } from '../components/MobileSvgPreview'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
@@ -223,9 +223,10 @@ function FileReaderDocument({
             </View>
             <View style={styles.diffNotesActions}>
               <Pressable
-                style={[
+                style={({ pressed }) => [
                   styles.diffNotesActionButton,
-                  !canCopyNotes && styles.diffCommentButtonDisabled
+                  !canCopyNotes && styles.diffCommentButtonDisabled,
+                  pressed && pressedStyle
                 ]}
                 disabled={!canCopyNotes}
                 onPress={() => void diffCommentActions.onCopyAll()}
@@ -235,9 +236,10 @@ function FileReaderDocument({
                 <Text style={styles.diffNotesActionText}>{t('common.copy', 'Copy')}</Text>
               </Pressable>
               <Pressable
-                style={[
+                style={({ pressed }) => [
                   styles.diffNotesActionButton,
-                  !canSendNotes && styles.diffCommentButtonDisabled
+                  !canSendNotes && styles.diffCommentButtonDisabled,
+                  pressed && pressedStyle
                 ]}
                 disabled={!canSendNotes}
                 onPress={diffCommentActions.onSendAll}

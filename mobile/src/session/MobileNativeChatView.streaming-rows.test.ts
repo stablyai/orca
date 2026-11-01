@@ -22,6 +22,7 @@ import { MobileNativeChatView } from './MobileNativeChatView'
 import { MobileNativeChatRowContent } from './native-chat/transcript/MobileNativeChatRowItemSource'
 
 vi.mock('react-native', async () => ({
+  ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
   ActivityIndicator: 'ActivityIndicator',
   ScrollView: 'ScrollView',
   Platform: { OS: 'web' },

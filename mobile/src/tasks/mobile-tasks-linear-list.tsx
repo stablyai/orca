@@ -20,6 +20,7 @@ import {
   linearIssueSecondaryParts,
   formatUpdatedAt
 } from './mobile-tasks-legacy-foundation'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksLinearList(
   model: ConnectionPresentationModel,
@@ -80,7 +81,11 @@ export function renderMobileTasksLinearList(
                 </Text>
                 {effectiveLinearDisplayProperties.has('state') ? (
                   <Pressable
-                    style={[styles.statusPillSelf, styles.linearStatePill]}
+                    style={({ pressed }) => [
+                      styles.statusPillSelf,
+                      styles.linearStatePill,
+                      pressed && pressedStyle
+                    ]}
                     disabled={mutatingStatus}
                     accessibilityRole="button"
                     accessibilityLabel={translate(
@@ -176,7 +181,11 @@ export function renderMobileTasksLinearList(
             <View style={styles.linearListTrailing}>
               {effectiveLinearDisplayProperties.has('state') ? (
                 <Pressable
-                  style={[styles.statusPill, styles.linearStatePill]}
+                  style={({ pressed }) => [
+                    styles.statusPill,
+                    styles.linearStatePill,
+                    pressed && pressedStyle
+                  ]}
                   disabled={mutatingStatus}
                   accessibilityRole="button"
                   accessibilityLabel={translate(

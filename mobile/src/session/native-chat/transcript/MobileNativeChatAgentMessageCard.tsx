@@ -21,7 +21,7 @@ import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButt
 import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { styles as markdownStyles } from '../../../components/mobile-markdown-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import {
@@ -134,6 +134,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
         {status}
         {overflows ? (
           <Pressable
+            style={({ pressed }) => pressed && pressedStyle}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityState={{ expanded: open }}
@@ -214,7 +215,7 @@ function SenderName({
       disabled={!canOpen}
       accessibilityRole={canOpen ? 'button' : undefined}
       onPress={() => open?.(from, sender)}
-      style={styles.sender}
+      style={({ pressed }) => [styles.sender, pressed && pressedStyle]}
     >
       <Text style={styles.name}>{name}</Text>
       {canOpen ? <ArrowUpRight size={14} color={colors.textPrimary} /> : null}

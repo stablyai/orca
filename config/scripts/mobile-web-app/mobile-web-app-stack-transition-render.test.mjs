@@ -353,7 +353,7 @@ describeRender('the host stack transition on the page', () => {
         await page.close()
       }, 120_000)
 
-      it('swaps instantly in the tablet split view and under reduced motion', async () => {
+      it('swaps without sliding in the tablet split view and under reduced motion', async () => {
         for (const options of [{ animation: 'none' }, { reducedMotion: 'reduce' }]) {
           const { errors, page } = await open(options)
           const pushed = await sampleFrames(page, 'push')

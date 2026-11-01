@@ -28,6 +28,7 @@ import type { MobileNativeChatVisualRender } from '../visual/mobile-native-chat-
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { nativeChatHostStatusCopy } from './native-chat-notice-copy'
+import { pressedStyle } from '../../../theme/mobile-theme'
 
 export function Prose({
   block,
@@ -149,6 +150,7 @@ function ImageAttachment({
   }
   return (
     <Pressable
+      style={({ pressed }) => pressed && pressedStyle}
       onPress={() => openImage({ uri, label })}
       onLongPress={onLongPress}
       accessibilityRole="imagebutton"

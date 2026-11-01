@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable, TextInput } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 import { TextField } from './composer-input/TextField'
@@ -310,7 +310,11 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
           </View>
 
           <Pressable
-            style={[styles.saveButton, !shortcutPreview && styles.saveButtonDisabled]}
+            style={({ pressed }) => [
+              styles.saveButton,
+              !shortcutPreview && styles.saveButtonDisabled,
+              pressed && pressedStyle
+            ]}
             disabled={!shortcutPreview}
             onPress={handleShortcutSave}
           >
@@ -394,7 +398,11 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
               />
             </View>
             <Pressable
-              style={[styles.saveButton, !macroText.trim() && styles.saveButtonDisabled]}
+              style={({ pressed }) => [
+                styles.saveButton,
+                !macroText.trim() && styles.saveButtonDisabled,
+                pressed && pressedStyle
+              ]}
               disabled={!macroText.trim()}
               onPress={handleMacroSave}
             >

@@ -24,6 +24,7 @@ vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () =
 vi.mock('react-native-reanimated', () => ({
   default: { View: 'AnimatedView' },
   Easing: { bezier: () => (t: number) => t },
+  useReducedMotion: () => false,
   runOnJS:
     <Args extends unknown[]>(fn: (...args: Args) => void) =>
     (...args: Args) =>

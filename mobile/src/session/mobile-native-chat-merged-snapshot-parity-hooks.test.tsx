@@ -29,6 +29,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
+    ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     FlatList: React.forwardRef((props, ref) => {
       React.useImperativeHandle(ref, () => ({ scrollToEnd: vi.fn(), scrollToOffset: vi.fn() }), [])

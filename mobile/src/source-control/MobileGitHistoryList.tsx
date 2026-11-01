@@ -6,7 +6,7 @@ import {
   MobileOfflineState,
   MobileStateView
 } from '../components/MobileStateView'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { translate } from '../i18n/mobile-i18n'
@@ -192,7 +192,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
                   <Text style={styles.empty}>{filesState.error}</Text>
                   {connected || retryAction ? (
                     <Pressable
-                      style={styles.retryButton}
+                      style={({ pressed }) => [styles.retryButton, pressed && pressedStyle]}
                       accessibilityLabel={t(
                         'sourceControl.gitHistoryList.retryFiles',
                         'Retry commit files'

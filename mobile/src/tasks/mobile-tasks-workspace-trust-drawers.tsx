@@ -15,6 +15,7 @@ import { TASK_SECONDARY_DRAWER_Z_INDEX, setupSourceLabel } from './mobile-tasks-
 import { LIST_LEADING_INSET, ListGroup, ListRow } from '../components/list/ListGroup'
 import { styles } from './mobile-tasks-legacy-styles'
 import { translate } from '../i18n/mobile-i18n'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresentationModel) {
   const {
@@ -97,16 +98,17 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
           </View>
           <View style={styles.drawerActionRow}>
             <Pressable
-              style={styles.secondaryActionButton}
+              style={({ pressed }) => [styles.secondaryActionButton, pressed && pressedStyle]}
               disabled={workspaceSparseSaving}
               onPress={() => setWorkspaceSparseDraft(null)}
             >
               <Text style={styles.secondaryActionText}>{translate('common.cancel', 'Cancel')}</Text>
             </Pressable>
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.primaryActionButton,
-                !canSaveWorkspaceSparseDraft ? styles.fieldButtonDisabled : undefined
+                !canSaveWorkspaceSparseDraft ? styles.fieldButtonDisabled : undefined,
+                pressed && pressedStyle
               ]}
               disabled={!canSaveWorkspaceSparseDraft}
               onPress={() => void saveWorkspaceSparsePreset()}

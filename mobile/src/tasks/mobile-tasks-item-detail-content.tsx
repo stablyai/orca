@@ -29,6 +29,7 @@ import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { MobileLoadErrorState, MobileStateView } from '../components/MobileStateView'
 import type { ActionableTaskItem } from './mobile-tasks-project-workspace-types'
 import type { DetailPayload } from './mobile-tasks-provider-detail-types'
+import { pressedStyle } from '../theme/mobile-theme'
 
 function pipelineJobsSummary(count: number): string {
   return count === 1
@@ -152,7 +153,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
             trailing={
               <View style={styles.inlineActionRow}>
                 <Pressable
-                  style={styles.inlineSaveButtonCompact}
+                  style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
                   disabled={mutatingStatus}
                   onPress={() => void refreshGitHubChecks(actionItem)}
                 >
@@ -161,7 +162,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                   </Text>
                 </Pressable>
                 <Pressable
-                  style={styles.inlineSaveButtonCompact}
+                  style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
                   disabled={mutatingStatus || !detailPayload.checks.some(isBrokenCheck)}
                   onPress={() => void rerunGitHubChecks(actionItem, true)}
                 >
@@ -170,7 +171,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                   </Text>
                 </Pressable>
                 <Pressable
-                  style={styles.inlineSaveButtonCompact}
+                  style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
                   disabled={mutatingStatus || detailPayload.checks.length === 0}
                   onPress={() => void rerunGitHubChecks(actionItem, false)}
                 >
@@ -190,7 +191,10 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
               detailPayload.checks.map((check) => (
                 <Pressable
                   key={`${check.name}:${check.status}:${check.url ?? ''}`}
-                  style={styles.fileActionRow}
+                  style={({ pressed }) => [
+                    styles.fileActionRow,
+                    pressed && { backgroundColor: colors.translucentFill }
+                  ]}
                   disabled={!check.url}
                   onPress={() => {
                     if (check.url) {
@@ -238,7 +242,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                 return (
                   <Pressable
                     key={`${job.id ?? job.stage}:${job.name}`}
-                    style={styles.fileCard}
+                    style={({ pressed }) => [styles.fileCard, pressed && pressedStyle]}
                     disabled={!job.webUrl}
                     onPress={() => {
                       if (job.webUrl) {
@@ -289,7 +293,10 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
               detailPayload.children.map((child) => (
                 <Pressable
                   key={child.id}
-                  style={styles.fileActionRow}
+                  style={({ pressed }) => [
+                    styles.fileActionRow,
+                    pressed && { backgroundColor: colors.translucentFill }
+                  ]}
                   disabled={mutatingStatus}
                   onPress={() => void openLinearSubIssue(child, actionItem.source.workspaceId)}
                 >
@@ -307,7 +314,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
               placeholder={translate('tasks.itemDetailContent.subIssueTitle', 'Sub-issue title')}
             />
             <Pressable
-              style={styles.inlineSaveButton}
+              style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
               disabled={mutatingStatus || linearSubIssueTitle.trim().length === 0}
               onPress={() => void createLinearSubIssue(actionItem)}
             >
