@@ -9,14 +9,17 @@ import { runPluginDevWatch, type PluginDevWatchHost } from './plugin-dev-watch-l
 
 const KEY = 'acme.todos'
 
-function entry(devChangeCount: number): PluginHostListEntry {
+function entry(
+  devChangeCount: number,
+  status: PluginHostListEntry['status'] = 'idle'
+): PluginHostListEntry {
   return {
     pluginKey: KEY,
     consentFingerprint: 'sha256-x',
     name: 'Todos',
     version: '1.0.0',
     publisher: 'acme',
-    status: 'idle',
+    status,
     needsReconsent: false,
     isDev: true,
     devChangeCount,
@@ -33,7 +36,16 @@ function entry(devChangeCount: number): PluginHostListEntry {
 const passed: PluginDevWatchCheckResult = {
   ok: true,
   invalid: [],
-  panels: [{ panel: 'todos', entry: 'src/panel.tsx', elements: 12, issues: [], warnings: [] }]
+  panels: [
+    {
+      panel: 'todos',
+      entry: 'src/panel.tsx',
+      elements: 12,
+      summary: ['Heading "Tasks"'],
+      issues: [],
+      warnings: []
+    }
+  ]
 }
 const failed: PluginDevWatchCheckResult = {
   ok: false,
@@ -43,6 +55,7 @@ const failed: PluginDevWatchCheckResult = {
       panel: 'todos',
       entry: 'src/panel.tsx',
       elements: 0,
+      summary: [],
       issues: [{ kind: 'plugin', message: 'boom', location: 'src/panel.tsx:4:7' }],
       warnings: []
     }
@@ -50,9 +63,11 @@ const failed: PluginDevWatchCheckResult = {
 }
 
 /** Polls: 1 baseline, 2 status (unchanged), 3 logs, 4 status (one save), then Ctrl-C. */
-async function watch(check: PluginDevWatchHost['check']): Promise<PluginDevWatchEvent[]> {
+async function watch(
+  check: PluginDevWatchHost['check'],
+  lists = [[entry(0)], [entry(1)]]
+): Promise<PluginDevWatchEvent[]> {
   const events: PluginDevWatchEvent[] = []
-  const lists = [[entry(0)], [entry(1)]]
   let interrupt = () => {}
   let poll = 0
   const host: PluginDevWatchHost = {
@@ -64,7 +79,7 @@ async function watch(check: PluginDevWatchHost['check']): Promise<PluginDevWatch
       approval: 'approve-flag',
       plugin: entry(0)
     }),
-    list: async () => lists.shift() ?? [entry(1)],
+    list: async () => (lists.length > 1 ? lists.shift() : lists[0]) ?? [entry(1)],
     logs: async () => ({ pluginKey: KEY, lines: [] }),
     approvalNeeded: async () => null,
     devUnload: async () => {},
@@ -103,6 +118,19 @@ describe('plugin dev watch --check', () => {
     const last = events.findLast((event) => event.type === 'check')
     expect(last && formatPluginDevWatchEvent(last)).toBe(
       '✗ check failed for acme.todos\n  todos (src/panel.tsx): failed\n    src/panel.tsx:4:7: boom'
+    )
+  })
+
+  it('fails a check that renders while Orca does not run the plugin', async () => {
+    const pending = entry(1, 'pending')
+    const events = await watch(vi.fn().mockResolvedValue(passed), [[entry(0)], [pending]])
+    const checks = events.filter((event) => event.type === 'check')
+    expect(checks.map((event) => [event.ok, event.checkOk, event.pluginStatus])).toEqual([
+      [true, true, 'idle'],
+      [false, true, 'pending']
+    ])
+    expect(formatPluginDevWatchEvent(checks[1]).split('\n')[0]).toBe(
+      '✗ check passed, but in Orca acme.todos is pending approval'
     )
   })
 

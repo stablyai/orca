@@ -1,6 +1,6 @@
 import type { BrowserWindow, Tray } from 'electron'
 import { app } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'

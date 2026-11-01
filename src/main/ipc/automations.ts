@@ -1,7 +1,7 @@
 import { parseExecutionHostId } from '../../shared/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { AutomationService } from '../automations/service'
 import type {
   AutomationDispatchResult,

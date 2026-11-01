@@ -3,7 +3,7 @@ import {
   buildRemovedSshTargetTombstone,
   readoptOrphanedWorkspacesForTarget
 } from './ssh-target-readoption'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
 
 function makeTarget(overrides: Partial<SshTarget> = {}): SshTarget {

@@ -12,6 +12,8 @@ import {
   PLUGIN_SOURCE_TRANSPILER_ID,
   type PluginSourceTranspiled
 } from './plugin-source-transpile-protocol'
+import { parsePluginTranspileFailure } from './plugin-source-transpile-failure'
+import { pluginSourceMapPrelude } from '../../../shared/plugins/frames/plugin-frame-source-map-prelude'
 
 /** Source modules are read whole and transpiled per load, so they get a tighter cap. */
 export const PLUGIN_SOURCE_MODULE_MAX_BYTES = 1024 * 1024
@@ -26,18 +28,6 @@ export function pluginErrorModule(
 ): string {
   const where = at ? `${relativePath}:${at.line}:${at.column}` : relativePath
   return `throw new Error(${JSON.stringify(`${where}: ${message}`)})\n`
-}
-
-/** Sucrase reports `Error transforming <file>: <reason> (<line>:<column>)`. */
-function transpileFailure(
-  relativePath: string,
-  message: string
-): { message: string; at?: { line: number; column: number } } {
-  const reason = message.replace(`Error transforming ${relativePath}: `, '')
-  const match = /^(.*) \((\d+):(\d+)\)$/s.exec(reason)
-  return match?.[1]
-    ? { message: match[1], at: { line: Number(match[2]), column: Number(match[3]) } }
-    : { message: reason }
 }
 
 /** 1-based line and column of `offset`; transpiling keeps lines, so the line is the source's. */
@@ -68,7 +58,7 @@ export function createPluginSourceModuleCompiler(
   let cachedChars = 0
 
   const remember = (key: string, value: PluginSourceTranspiled): PluginSourceTranspiled => {
-    const chars = value.ok ? value.code.length : value.message.length
+    const chars = value.ok ? value.code.length + value.mappings.length : value.message.length
     cache.set(key, { value, chars })
     cachedChars += chars
     for (const [oldest, entry] of cache) {
@@ -111,7 +101,7 @@ export function createPluginSourceModuleCompiler(
     }
     const transpiled = await transpileCached(relativePath, Buffer.from(bytes).toString('utf8'))
     if (!transpiled.ok) {
-      const failure = transpileFailure(relativePath, transpiled.message)
+      const failure = parsePluginTranspileFailure(relativePath, transpiled.message)
       return pluginErrorModule(relativePath, failure.message, failure.at)
     }
     let code = transpiled.code
@@ -132,6 +122,7 @@ export function createPluginSourceModuleCompiler(
         code = code.slice(0, entry.start) + replacement + code.slice(entry.end)
       }
     }
-    return code
+    // A hashbang must stay first; such a module just keeps Chromium's transpiled columns.
+    return code.startsWith('#!') ? code : pluginSourceMapPrelude(transpiled.mappings) + code
   }
 }

@@ -5,16 +5,18 @@ syntaxes, language packs, custom editors, panels, TSX component panels). All com
 `error.code`, not on wording.
 
 ```text
-ORCA plugin create <dir> --template <theme|terminal-theme|icon-theme|syntax|language-pack|editor|panel|components> [--id <id>] [--name <name>] --json
+ORCA plugin create <dir> --template <theme|terminal-theme|icon-theme|syntax|language-pack|editor|panel|components|worker-panel> [--id <id>] [--name <name>] --json
 ORCA plugin types <dir> --json
 ORCA plugin validate <dir|orca-plugin.json|orca-catalog.json> --json
 ORCA plugin inspect <dir> --json
 ORCA plugin release-entry <dir> --json
 ORCA plugin test [dir] --json
 ORCA plugin check [dir] --json
-ORCA plugin dev watch <dir> [--check] [--approve <fingerprint>] --json
+ORCA plugin dev watch <dir> [--check] [--shot <out-dir> [--shot-panel <id>]] [--approve <fingerprint>] --json
 ORCA plugin dev load <dir> [--approve <fingerprint>] --json
 ORCA plugin dev reload [<dir>] [--approve <fingerprint>] --json
+ORCA plugin dev emit <dir|plugin-key> <event> [--data <json>] --json
+ORCA plugin dev request <dir|plugin-key> <name> [--data <json>] [--panel <id>] [--timeout-ms <ms>] --json
 ORCA plugin dev unload <dir|plugin-key> --json
 ORCA plugin list --json
 ORCA plugin logs <plugin-key> --json
@@ -22,6 +24,8 @@ ORCA plugin enable <plugin-key> [--approve <fingerprint>] --json
 ORCA plugin disable <plugin-key> --json
 ORCA plugin system on|off --json
 ORCA plugin restart <plugin-key> --json
+ORCA plugin open <plugin-key> [--panel <id> | --editor <file>] --json
+ORCA plugin shot <plugin-key> [--panel <id>] [--theme light|dark] [--width <px>] [--act '<json>'] [--out <file.png>] --json
 ```
 
 Exit codes: `0` ok, `1` error, `2` `plugin_invalid`, `3` `approval_required` or `approval_stale`.
@@ -48,9 +52,33 @@ Exit codes: `0` ok, `1` error, `2` `plugin_invalid`, `3` `approval_required` or 
    `plugin dev inspect <plugin-key>` opens DevTools windows for its open frames; run it only
    when the user asks. `plugin dev watch <dir> --json` does the load, then stays running and
    prints one JSON object per line (`type`: `loaded`, `log`, `reloaded`, `status`, `approval`,
-   `warning`, `disconnected`, `unloaded`) as logs arrive and saves reload it; run it in a
-   background terminal and read its output. Ctrl-C unloads the folder it loaded.
-5. `plugin dev unload <dir>` when done.
+   `check`, `shot`, `shot_skipped`, `warning`, `disconnected`, `unloaded`) as logs arrive and saves reload it;
+   run it in a background terminal and read its output. Ctrl-C unloads the folder it loaded.
+   `plugin dev emit <dir|plugin-key> <event> --data '<json>'` fires a test event at a
+   development plugin's worker (if it lists the event in `contributes.events`) and its open
+   panels that subscribed with `orca.on`; the payload is checked against the event's schema.
+   Handler errors show in `plugin logs` and the watch.
+   `plugin dev request <dir|plugin-key> <name> --data '<json>'` calls the worker's
+   `orca.panels.handle(name)` handler as a panel's `plugin.request` would and prints
+   `{ pluginKey, name, result }`; a handler failure is `plugin_request_failed` with the worker's
+   code in `error.data.requestCode`.
+5. See what you built: `plugin shot <plugin-key> --json` writes a PNG of a panel exactly as Orca
+   draws it (default `.orca/shots/<plugin-key>-<panel>.png`, in the plugin folder when run inside
+   one; `--width` applies to that capture only, and `--theme` too but only while Orca's window is
+   hidden or minimized, else `themeApplied: false` with a `themeReason`) and lists the errors the
+   panel showed or logged; read the image file. A components panel's shot also waits for its
+   host calls (`plugin.request`) to answer, at most 3s; `pendingRequests` counts any still out.
+   `--act '[{"type":{"label":"New task"},"text":"Ship"},{"press":{"text":"Add"}}]'`
+   first drives a components panel with the test kit's verbs (`press`, `type`, `select`,
+   `toggle`, `slide`, Table `sort`/`selectRows`/`activateRow`/`loadMore`, Tree
+   `expand`/`collapse`/`selectItem`/`activateItem`; at most 20) and reports
+   `actions: [{ ok, error? }]`; it needs Orca's window hidden or minimized and never counts as a
+   user gesture. Afterwards the panel's atoms are put back (`restored`); worker-side effects stay. `plugin dev watch <dir> --shot <out-dir>` opens one panel once (the
+   first, or `--shot-panel <id>`) and captures it after every reload while it stays on screen;
+   when the user shows something else it skips (`shot_skipped`) and never switches back. `plugin open
+   <plugin-key>` shows a panel to the user (`--editor <file>` opens a file in its custom editor).
+   Both need the desktop app with a workspace showing and never raise the window.
+6. `plugin dev unload <dir>` when done.
 
 Paths are on the machine that runs Orca. With `--environment <server>`, pass an absolute path
 on that server. From an SSH or WSL shell that forwards `orca` to another machine, the authoring

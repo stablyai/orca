@@ -23,7 +23,7 @@ import {
 import {
   editPersistedTestAgentSessionStore,
   readPersistedTestAgentSessionStore
-} from '../../agent-session-record-store-test-harness'
+} from '../../agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'

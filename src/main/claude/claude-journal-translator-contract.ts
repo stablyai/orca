@@ -6,7 +6,7 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeChildToolQueries } from './claude-child-tool-queries'
 import type { ClaudeContextReportPart, ClaudeContextReportTarget } from './claude-context-facts'
-import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
+import type { ClaudeJournalPrompts } from './structured/journal/claude-structured-journal-prompts'
 import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import type { ClaudeCommandStart } from './claude-command-turn'
 

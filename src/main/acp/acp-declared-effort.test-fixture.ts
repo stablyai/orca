@@ -30,7 +30,7 @@ import { agentSessionRecordFixture } from '../native-chat/agent-session-record-t
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../runtime/agent-session-record-store-test-harness'
+} from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase

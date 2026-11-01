@@ -13,7 +13,7 @@ import {
   applyAgentSessionReservation,
   type AgentSessionReserveRequest
 } from './agent-session-reservation-admission'
-import type { AgentSessionStoreState } from '../../agent-session-store-state'
+import type { AgentSessionStoreState } from '../records/agent-session-store-state'
 import {
   claudeProviderHandle,
   codexProviderHandle

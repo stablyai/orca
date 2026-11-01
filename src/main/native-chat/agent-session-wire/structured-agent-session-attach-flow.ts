@@ -28,7 +28,7 @@ import {
   type AgentSessionAttachParams,
   type AttachedJournal
 } from './structured-agent-session-attach'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   adapterSupportsCreateIfDeclared,
   hostCanStartRecord

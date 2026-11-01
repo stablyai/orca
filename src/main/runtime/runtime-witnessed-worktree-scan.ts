@@ -6,7 +6,7 @@ import {
   isLocalWorktreeScanGenerationCurrent
 } from '../local-worktree-scan-generation'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 

@@ -12,12 +12,13 @@ A plugin is a folder (in practice its own Git repository) with `orca-plugin.json
 Start from one of these, or scaffold one with `orca plugin create` (see [Validate](#3-validate)).
 Add the `$schema` line from `orca-gleam-syntax` to your manifest for editor completion.
 
-| Example                              | Execution        | Shows                                                                        |
-| ------------------------------------ | ---------------- | ---------------------------------------------------------------------------- |
-| `examples/plugins/orca-gleam-syntax` | `data`           | A syntax, no code                                                            |
-| `examples/plugins/hello-tsx`         | `sandboxed-ui`   | A [components](plugin-declarative-ui.md) TSX panel with no build step        |
-| `examples/plugins/hello-components`  | `sandboxed-ui`   | The same kind of [components](plugin-declarative-ui.md) panel, bundled first |
-| `examples/plugins/hello-orca`        | `trusted-worker` | A panel, a worker command and events                                         |
+| Example                               | Execution        | Shows                                                                                                                     |
+| ------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `examples/plugins/orca-gleam-syntax`  | `data`           | A syntax, no code                                                                                                         |
+| `examples/plugins/hello-tsx`          | `sandboxed-ui`   | A [components](plugin-declarative-ui.md) TSX panel with no build step                                                     |
+| `examples/plugins/hello-worker-panel` | `trusted-worker` | A TSX panel with its own worker, storage atom, settings and events ([Panels, workers and data](#panels-workers-and-data)) |
+| `examples/plugins/hello-components`   | `sandboxed-ui`   | The same kind of [components](plugin-declarative-ui.md) panel, bundled first                                              |
+| `examples/plugins/hello-orca`         | `trusted-worker` | A panel, a worker command and events                                                                                      |
 
 Leave `publisher` out. Orca names the publisher after where the plugin comes from, the way a
 [Go module path](https://go.dev/ref/mod#module-path) is its repository path: the owner of the
@@ -68,7 +69,7 @@ Before any plugin code runs, the frame shell defines a frozen `window.orca`. It 
 supported way to talk to Orca; the messages underneath are internal and change without notice.
 
 ```js
-orca.api // { major: 1, minor: 1 }: the host API this Orca implements
+orca.api // { major: 1, minor: 2 }: the host API this Orca implements
 if (orca.host.has('workspace.readContext')) {
   // Synchronous: is the method offered to this surface by this Orca?
   const controller = new AbortController()
@@ -132,14 +133,51 @@ Browser clients (`orca serve` in a web browser) still load a frame as one sandbo
 with an opaque origin and `connect-src 'none'`: inline your scripts and styles, use `data:` URLs
 for images and fonts, and do not rely on storage, workers or WASM loaded by URL there.
 
+A worker's `main` module's **default export** is `activate(orca)`, which Orca calls once when the
+worker starts; it may be `async`. A named `export function activate` is not called: the worker
+fails to start with an error saying so.
+An optional `export function deactivate()` runs (and is awaited) before the worker stops, for
+flushing state; the worker may also stop when it has been idle for a while, and starts again on
+its next command, event or panel request.
+
+```ts
+import type { OrcaWorkerApi } from 'orca/worker'
+
+export default async function activate(orca: OrcaWorkerApi) {
+  orca.commands.register('hello', () => 'Hello from the worker')
+}
+
+export async function deactivate() {}
+```
+
 Workers get the same calls on the `orca` object passed to `activate(orca)`:
 `orca.api`, `orca.host.call(method, params, { signal })`, `orca.host.has(method)`, plus
 `orca.commands.register(id, (args, { signal }) => …)` and `orca.events.on(event, handler)`, which
-both return `{ dispose() }`. A command's `signal` aborts when Orca stops waiting for it.
+both return `{ dispose() }`, and the panel and data APIs in
+[Panels, workers and data](#panels-workers-and-data). A command's `signal` aborts when Orca stops waiting for it.
 `orca.log(message)` writes to `orca plugin logs`. `orca.grantedCapabilities` is the frozen list of
 capability kinds the user approved (such as `['storage:own']`), fixed when the worker starts; the
 host still checks each call. In `agent.status.changed`, `state` and `mainAgent.state` are one of `working`, `blocked`, `waiting`
 and `done`. Every event's payload is in the [host API reference](plugin-host-api.md#events).
+
+To test a handler without reproducing the real trigger, fire the event at a development plugin:
+
+```sh
+orca plugin dev emit . workspace.created --data '{"workspaceId":"wt-1","kind":"worktree","path":"/repo","branch":"main"}'
+```
+
+It follows the normal rules: the plugin must be approved and granted the event's capability, and
+`--data` is checked against the event's payload schema. The worker hears it when it lists the
+event in `contributes.events` (it starts if it is not running), and each of the plugin's open
+panels hears it once it has subscribed with `orca.on(event, …)`; with neither, it is refused.
+Installed plugins are refused. `--json` prints `{ pluginKey, event, delivered: { worker, panels } }`.
+A handler's errors land in `orca plugin logs` and `orca plugin dev watch`.
+
+To call a worker's `orca.panels.handle(name, …)` handler without opening its panel, use
+`orca plugin dev request . <name> --data '<json>'`. It goes through the same path as a panel's
+`plugin.request` (approved development plugin with `main`; the worker starts if needed) and
+prints `{ pluginKey, name, result }`. A handler failure exits `1` with `plugin_request_failed` and
+the worker's code (`unknown_method`, `timeout`, ...) in `error.data.requestCode`.
 
 A worker's `main` is an ES module: `.js`/`.mjs`, or `.ts`/`.mts` with no build step (needs
 `engines.orca` `>=1.4.246`). Orca transpiles TypeScript files in your plugin folder as Node loads
@@ -149,6 +187,111 @@ properties work too. JSX does not (no `.tsx` worker files). Relative imports res
 Everything else, such as `node:` builtins, resolves exactly as Node resolves it for a JavaScript
 worker. `orca/worker` holds only types, so import it with `import type`; a value import fails when
 the worker starts.
+
+### Panels, workers and data
+
+A plugin's panels, custom editors and worker are one program. A panel asks its own worker, the
+worker pushes back, and both read the same storage, settings and secrets (with the same
+capabilities). Every surface spells it the same way: frames on `window.orca`, components panels
+as imports from `orca`, workers on the `orca` from `activate`.
+
+Declare the contract once, in a file both sides include, and both type-check against it:
+
+```ts
+// src/protocol.ts
+export {}
+declare module 'orca' {
+  interface PluginRequests {
+    'todos.list': { input: { done?: boolean }; output: Todo[] }
+  }
+  interface PluginPanelEvents {
+    'todos.changed': { count: number }
+  }
+}
+```
+
+The worker answers and posts:
+
+```js
+export default function activate(orca) {
+  orca.panels.handle('todos.list', async ({ done }, { panel, signal }) => list(done))
+  // To every open panel of this plugin, or one: { panel: id } from a request's context.
+  orca.panels.post('todos.changed', { count: 3 })
+}
+```
+
+A panel asks and listens (in a frame, the same methods are on `orca.plugin`):
+
+```ts
+import { plugin } from 'orca'
+const todos = await plugin.request('todos.list', { done: false }, { timeoutMs: 5000 })
+plugin.on('todos.changed', ({ count }) => {})
+```
+
+- `plugin.request` starts the worker if it is not running, so a panel-only plugin can keep its
+  logic in a worker that runs only while someone uses it. It needs `main` (`trusted-worker`).
+- It rejects with `unknown_method` when no handler has that name, `timeout` past `timeoutMs`
+  (default 30 s, at most 120 s; the handler's `signal` aborts then, and when the panel closes),
+  `unavailable` when the worker cannot start, or the `code` the handler threw (`invalid_params`,
+  `conflict` and the other host error codes; anything else is `action_failed`).
+- Inputs and answers are JSON: an input up to 64 KiB, an answer up to 1 MiB. Posts are fire and
+  forget, up to 256 KiB each and 200 per 10 seconds per plugin.
+- Only the same plugin's panels and worker can reach each other.
+
+Storage, settings and secrets are the plugin's own, shared by every surface:
+
+```ts
+import { atom, storage, settings, secrets } from 'orca'
+await storage.set('filters', { done: false }) // storage:own
+storage.onDidChange(({ key }) => {}) // any surface's write, the person's included
+const url = await settings.get('apiUrl') // settings:own; declared ones read as their default
+await secrets.set('token', value) // secrets:own
+// A components atom kept in storage: the worker reads storage.get('todos') and its writes
+// update the atom.
+const todos = atom('todos', [], { persist: 'storage' })
+```
+
+Declare settings the person edits in `contributes.settings`; Orca shows them under the plugin in
+its Settings and checks every value against the declaration:
+
+```json
+"settings": [
+  { "key": "apiUrl", "title": "Server URL", "type": "string", "default": "https://example.com" },
+  { "key": "pageSize", "title": "Page size", "type": "integer", "default": 20, "minimum": 1 }
+],
+"capabilities": [{ "kind": "settings:own" }]
+```
+
+`type` is `string`, `number`, `integer` or `boolean`; `enum` (with `enumLabels`), `minimum`,
+`maximum`, `maxLength`, `multiline` and `placeholder` shape the control. A setting needs the
+`settings:own` capability, which is also how code reads it.
+
+Panels hear workspace and agent events the same way workers do, with the same capability:
+`on('agent.status.changed', handler)` needs `agent:read`, the workspace events `workspace:read`.
+A panel needs no `contributes.events` entry for that; it subscribes while it is open.
+
+To show the workspace's agents, list them once with `agents.list` (`agent:read`), then follow
+`agent.status.changed`. Both name each agent's terminal with `terminalId`, the id
+`workspace.readContext` lists (with each terminal's `title`) and `terminal.sendText` takes; an
+event's `paneKey` is Orca's own pane id. `workspace.changed` (`workspace:read`) carries the new
+`workspace.readContext` answer whenever focus moves to another workspace or its terminals open,
+close or are renamed, and once right when a panel or worker subscribes, so a panel never polls
+and never starts out stale.
+
+```ts
+import { atom, host, on, read, set, update } from 'orca'
+const agents = atom<{ terminalId: string | null; title: string | null; state: string }[]>([])
+export async function setup() {
+  set(agents, (await host.call('agents.list')).agents)
+  on('agent.status.changed', ({ terminalId, title, state }) =>
+    update(agents, (list) => [
+      { terminalId: terminalId ?? null, title: title ?? null, state },
+      ...list.filter((agent) => agent.terminalId !== terminalId)
+    ])
+  )
+  on('workspace.changed', async () => set(agents, (await host.call('agents.list')).agents))
+}
+```
 
 ### Custom editors
 
@@ -211,11 +354,70 @@ errors arrive as `[frame] <file>:<line> <message>`, at the line in your source f
 `orca plugin dev reload <dir> --approve <fingerprint>` command to run from another terminal.
 Ctrl-C unloads the folder (unless it was loaded before you started) and exits; press it again
 to exit at once. With `--json` it prints one JSON object per line, with a `type` of `loaded`,
-`log`, `reloaded`, `status`, `approval`, `check`, `warning`, `disconnected` or `unloaded`, for
-coding agents. `--check` also runs `orca plugin check` after the load and after each reload and
-prints what each components panel drew or threw, with `file:line:col`. Like `orca plugin check`,
-it runs your code on this machine outside Orca's sandbox, and it needs a local folder. The first load needs approval like `orca plugin dev load` (it exits with code 3 and
-prints the command to re-run with `--approve`).
+`log`, `reloaded`, `status`, `approval`, `check`, `shot`, `shot_skipped`, `warning`, `disconnected` or
+`unloaded`, for coding agents. `--check` also runs `orca plugin check` after the load and after each reload and
+prints what each components panel drew or threw, with `file:line:col`; it reports a failure while
+Orca does not run the plugin (pending approval, errored, invalid), even when the panels render
+(`ok` false, `checkOk` true, and `pluginStatus`). Like `orca plugin check`,
+it runs your code on this machine outside Orca's sandbox, and it needs a local folder. When the first load needs approval and you run it in a terminal, it prints what the plugin
+would be granted (execution, each capability, what it adds) and asks `Approve and load? [y/N]`;
+`y` loads it with that approval and keeps watching. Any other answer, Ctrl-C, `--json`, or
+output that is not a terminal (a coding agent, a pipe) fails like `orca plugin dev load`: it
+exits with code 3 and prints the command to re-run with `--approve` (with `--json`, as one line).
+It never approves on its own. The re-run owns the folder the refused attempt added, so its
+Ctrl-C unloads it.
+
+### See the panel
+
+`orca plugin shot <plugin-key>` saves a PNG of a panel exactly as Orca draws it, cropped to the
+panel, to `.orca/shots/<plugin-key>-<panel>.png` (or `--out <file>`): in the plugin folder when
+you run it inside one (the nearest `orca-plugin.json`, up to the repository root), else in the
+current folder. It opens the panel in the
+right sidebar, waits until the current code has drawn (a components panel's first tree, an HTML
+panel's page loaded; up to 15 seconds) and, for a components panel, until its host calls such as
+`plugin.request` have answered and redrawn (at most 3 seconds more), and captures it even while Orca's window is hidden or
+behind others, without showing, raising or focusing it. `--width <px>` sizes the panel for that
+capture only. `--theme light|dark` paints Orca in that mode for that capture only, and only while
+its window is hidden or minimized: with the window on screen, the shot keeps the current theme
+rather than repaint the app in front of you, and says so (`themeApplied: false` and a
+`themeReason`). Your width and theme setting are always put back. `--json` prints `{ path, width,
+height, theme, themeApplied, themeReason?, settled, errors, pendingRequests?, actions?,
+restored? }`, where `errors` holds the error banner the panel shows and the errors it logged
+during the capture, and `pendingRequests` counts host calls still unanswered (above 0, the image
+may show the panel still loading). A coding agent reads the
+image to see what it built.
+
+`--act '<json>'` drives a components panel before the capture, with the test kit's verbs: a list
+(at most 20) such as `[{"type":{"label":"New task"},"text":"Ship","submit":true},
+{"press":{"text":"Add"}},{"select":{"label":"View"},"value":"done"},{"toggle":{"label":"Hide
+done"}}]`, whose queries match like the kit's (`text`, `label`, `testId`, `type`, `role`). The
+kit's Slider, Table and Tree verbs work too: `{"slide":Q,"value":7}`, `{"sort":Q,"column":"name"}`,
+`{"selectRows":Q,"keys":["a"]}`, `{"activateRow":Q,"key":"a"}`, `{"loadMore":Q}`, and
+`expand`, `collapse`, `selectItem`, `activateItem` with a `key`. Each act goes through Orca's own
+control, as your typing or click would, and waits for the panel to redraw and its host calls to
+answer. `actions` in the result has one `{ ok, error? }` per act; the first failure skips the
+rest, the PNG shows the panel at that point, and the command exits 1. Once captured, Orca puts
+the panel's atoms back, persisted ones included, so later shots and you see the panel as it was
+(`restored: true`; false when it reloaded during the acts). What handlers did outside the panel
+is not rolled back: a press whose handler sends `plugin.request('counter.add')` leaves the
+worker's storage changed. It acts only on that
+plugin's panel and only while Orca's window is hidden or minimized, so it never clicks under you;
+html panels refuse it. An act is not a person's press: a Link's href stays unopened and calls
+that need a gesture (`shell.openExternal`, `files.saveAs`) are refused.
+
+`orca plugin dev watch . --shot ./.orca/shots` opens one panel (the first, or
+`--shot-panel <id>`) in the right sidebar once, then after the load and after each reload that
+leaves the plugin running saves a fresh `<plugin-key>-<panel>.png` of it; with `--check`, the
+check runs first. It never switches the sidebar again: while you show another tab or close the
+sidebar it skips the shot and says so once (`shot_skipped`), and resumes when the panel is back.
+
+`orca plugin open <plugin-key> [--panel <id>]` shows a panel to you in the right sidebar, and
+`--editor <file>` opens a file in the plugin's custom editor. It never brings the window forward.
+
+Both need the Orca desktop app with a workspace showing; `orca serve` has no window and refuses
+them. A shot never changes the view, so while Orca shows Settings or another full page it fails
+with `no_workspace`. With `--environment`, the PNG (at most 5 MiB) comes back to the machine
+that ran the command.
 
 To keep a folder loaded without a terminal, use Settings instead:
 
@@ -274,7 +476,7 @@ pnpm validate:plugin path/to/plugin
 orca plugin validate path/to/plugin
 ```
 
-`orca plugin create <dir> --template <theme|terminal-theme|icon-theme|syntax|language-pack|editor|panel|components>`
+`orca plugin create <dir> --template <theme|terminal-theme|icon-theme|syntax|language-pack|editor|panel|components|worker-panel>`
 scaffolds a plugin that passes these checks, and `orca plugin inspect <dir>` shows what it would be
 allowed to do and its content hash.
 
@@ -376,7 +578,6 @@ arbitrary plugin UI:
 - `mcpServers`: MCP server definitions offered to the agents Orca launches.
 - `skills`: agent skills shipped as files.
 - `hooks`: agent lifecycle hooks for the agents Orca launches.
-- `settings`: typed plugin settings shown in Orca's settings UI.
 
 `skills`, `mcpServers` and `hooks` will mean what they mean in agent-plugin formats such as
 Claude Code's. Orca does not reserve `agents`, because those formats use it for subagent files.

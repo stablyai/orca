@@ -32,7 +32,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes` | object | no | 1.4.160 | What the plugin adds to Orca. Every point defaults to empty. |
 | `contributes.panels` | [PanelContribution](#panelcontribution)[] | no | 1.4.160 | Sidebar panels. At most 64. |
 | `contributes.commands` | [CommandContribution](#commandcontribution)[] | no | 1.4.160 | Command palette entries. At most 256. |
-| `contributes.events` | [EventContribution](#eventcontribution)[] | no | 1.4.160 | Events delivered to the plugin worker. At most 3. |
+| `contributes.events` | [EventContribution](#eventcontribution)[] | no | 1.4.160 | Events delivered to the plugin worker. At most 4. |
 | `contributes.languagePacks` | [LanguagePackContribution](#languagepackcontribution)[] | no | 1.4.160 | Interface translations. At most 16. |
 | `contributes.keybindings` | [KeybindingContribution](#keybindingcontribution)[] | no | 1.4.160 | Keyboard shortcuts for contributed commands. At most 256. |
 | `contributes.vmRecipes` | [VmRecipeContribution](#vmrecipecontribution)[] | no | 1.4.160 | Virtual machine environment recipes. At most 64. |
@@ -42,13 +42,13 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.syntaxes` | [SyntaxContribution](#syntaxcontribution)[] | no | 1.4.245 | Syntax highlighting for editor languages. At most 16. |
 | `contributes.customEditors` | [CustomEditorContribution](#customeditorcontribution)[] | no | 1.4.245 | Editors that open files of given types in the editor tab. At most 16. |
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
+| `contributes.settings` | [SettingContribution](#settingcontribution)[] | no | 1.4.246 | Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
 | `contributes.mcpServers` | any[] | no | 1.4.245 | Reserved for MCP server definitions; must be empty until their format is defined. |
 | `contributes.hooks` | any[] | no | 1.4.245 | Reserved for agent hooks; must be empty until their format is defined. |
 | `contributes.taskSources` | any[] | no | 1.4.245 | Reserved for task sources; must be empty until their format is defined. |
 | `contributes.connections` | any[] | no | 1.4.245 | Reserved for account connections; must be empty until their format is defined. |
-| `contributes.settings` | any[] | no | 1.4.245 | Reserved for plugin settings; must be empty until their format is defined. |
 | `contributes.statusBarItems` | any[] | no | 1.4.245 | Reserved for status bar items; must be empty until their format is defined. |
 | `contributes.sidebarCards` | any[] | no | 1.4.245 | Reserved for sidebar cards; must be empty until their format is defined. |
 | `capabilities` | [Capability](#capability)[] | no | 1.4.160 | Host APIs the plugin asks the user to grant. At most 32. |
@@ -87,7 +87,7 @@ An event subscription. Requires `main`, the `trusted-worker` execution profile a
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `on` | `"workspace.created"` \| `"workspace.removed"` \| `"agent.status.changed"` | yes | 1.4.160 | Event delivered to the plugin worker. |
+| `on` | `"workspace.created"` \| `"workspace.removed"` \| `"agent.status.changed"` \| `"workspace.changed"` | yes | 1.4.160 | Event delivered to the plugin worker. |
 
 ## LanguagePackContribution
 
@@ -168,6 +168,25 @@ A kind of untitled file the user can create from the tab bar + menu or the comma
 | `template` | string | no | 1.4.245 | UTF-8 file copied into the new file, at most 256 KB. Without one the file starts empty. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"templates/empty.excalidraw"` |
 | `icon` | string | no | 1.4.245 | Square image shown beside the menu item. Defaults to the plugin icon. PNG, WEBP, static, at least 128×128, square, at most 256 KB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"images/editor-icon.png"` |
 
+## SettingContribution
+
+A setting shown under the plugin in Settings. Requires the `settings:own` capability, which is also how code reads it.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `key` | string | yes | 1.4.246 | Key code reads and writes, unique in this plugin. Example: `"apiUrl"` |
+| `title` | string | yes | 1.4.246 | Label shown in Settings. Example: `"Server URL"` |
+| `description` | string | no | 1.4.246 | Help text shown under the label. |
+| `type` | `"string"` \| `"number"` \| `"integer"` \| `"boolean"` | yes | 1.4.246 | JSON Schema type of the value. Example: `"string"` |
+| `default` | string \| number \| boolean | no | 1.4.246 | Value read while the person has not set one. |
+| `enum` | (string \| number)[] | no | 1.4.246 | Allowed values; Settings shows a picker. |
+| `enumLabels` | string[] | no | 1.4.246 | Picker labels, one per `enum` value. |
+| `minimum` | number | no | 1.4.246 | Numbers: smallest value. |
+| `maximum` | number | no | 1.4.246 | Numbers: largest value. |
+| `maxLength` | integer | no | 1.4.246 | Strings: most characters. |
+| `multiline` | boolean | no | 1.4.246 | Strings: a multi-line text box. |
+| `placeholder` | string | no | 1.4.246 | Strings and numbers: hint shown while empty. |
+
 ## Capability
 
 A host API the plugin may call once the user consents.
@@ -195,7 +214,7 @@ One screenshot of the plugin in use.
 - **`terminal:send` needs `trusted-worker`.** Panels get no host method that types into a terminal, so Orca refuses the capability on any other profile instead of asking the user to grant something the plugin can never use.
 - **New fields, contribution points and values are additive.** They arrive with a `Since` version; nothing else changes. `manifestVersion` rises only if an existing field changes meaning.
 - **Deprecation.** A field to be removed is marked deprecated here and keeps working for at least one release; it is removed only together with a higher `engines.orca` requirement, and its name is never reused.
-- **Reserved contribution points.** `contributes.agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections`, `settings`, `statusBarItems` and `sidebarCards` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format. `skills`, `mcpServers` and `hooks` keep the meaning agent-plugin formats such as Claude Code's give them; `agents` stays unclaimed because those formats use it for subagent files.
+- **Reserved contribution points.** `contributes.agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections`, `statusBarItems` and `sidebarCards` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format. `skills`, `mcpServers` and `hooks` keep the meaning agent-plugin formats such as Claude Code's give them; `agents` stays unclaimed because those formats use it for subagent files.
 
 ## Planned contribution points
 
@@ -209,7 +228,6 @@ Each reserved point is planned as declared data that Orca renders and enforces, 
 - `mcpServers`: MCP server definitions that Orca offers to the agents it launches.
 - `skills`: Agent skills shipped as files that Orca installs for the agents it launches.
 - `hooks`: Agent lifecycle hooks, such as before and after a tool call, for the agents Orca launches.
-- `settings`: Typed plugin settings that Orca renders in its own settings UI.
 
 ## Legacy format 1
 

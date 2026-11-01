@@ -8,7 +8,7 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/agent-session-next-fence'
 import { assertFence, withLease } from './agent-session-lease-transitions'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 
 export type AgentSessionRecordTransitionStore = Pick<AgentSessionRecordStore, 'transitionHandoff'>
 

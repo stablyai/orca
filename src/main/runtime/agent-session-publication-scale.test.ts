@@ -19,7 +19,7 @@ import { hostTestMessage } from '../native-chat/agent-session-wire/structured-ag
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import {
   countStoreWork,
   scaleDirectory,

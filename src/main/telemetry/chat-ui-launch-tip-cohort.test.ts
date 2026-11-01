@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatUiLaunchTipVariant } from '../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { TelemetrySettings } from '../../shared/telemetry-settings-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   ensureChatUiLaunchTipCohort,
   isChatUiLaunchTipDeferredForConsent

@@ -1,5 +1,5 @@
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionPinnedLaunchDirectory } from '../agent-session-record-launch-directory'
+import { agentSessionPinnedLaunchDirectory } from '../agent-session/records/agent-session-record-launch-directory'
 import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithStructuredSessionCliWriterHost } from './structured-session-cli-writer-host'

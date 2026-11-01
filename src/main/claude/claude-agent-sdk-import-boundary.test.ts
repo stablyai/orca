@@ -5,7 +5,7 @@ describe('claude agent SDK import boundary', () => {
   it('leaves the Windows executable-search environment alone when the runtime loads', async () => {
     // Remove any shell-provided value before checking this isolated test process.
     delete process.env.NoDefaultCurrentDirectoryInExePath
-    await import('../runtime/structured-agent-session-runtime')
+    await import('../runtime/agent-session/structured-agent-session-runtime')
 
     expect(process.env.NoDefaultCurrentDirectoryInExePath).toBeUndefined()
   })
