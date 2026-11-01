@@ -41,6 +41,10 @@ it('renders production-built canonical assignments as nested rows and groups onl
         })
       )
     })
+    const toggle = tree?.root.find(
+      (node) => node.props.accessibilityLabel === 'Show 1 child agent' && node.props.onPress
+    )
+    await act(async () => toggle?.props.onPress({ stopPropagation: vi.fn() }))
     expect(
       tree?.root
         .findAll((node) => node.props.agent !== undefined)
