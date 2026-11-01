@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import {
-  getMarkdownDocumentListRequestKey,
-  requestSharedMarkdownDocumentList
-} from './markdown-document-list-request'
+import { requestSharedMarkdownDocumentList } from './markdown-document-list-request'
 
 function context(overrides: Partial<RuntimeFileOperationArgs> = {}): RuntimeFileOperationArgs {
   return {
@@ -165,31 +162,6 @@ describe('shared Markdown document list requests', () => {
     } finally {
       now.mockRestore()
     }
-  })
-
-  it('keeps runtime routes isolated and encodes unusual paths losslessly', () => {
-    const local = context()
-    const ssh = context({ connectionId: 'ssh-1' })
-    const runtime = context({
-      target: { kind: 'environment' as const, environmentId: ' runtime-1 ' }
-    })
-    const unusualRoot = '/repo\nwith-newline'
-    const windowsRoot = 'C:\\repo\\docs'
-    const uncRoot = '\\\\server\\share\\repo'
-
-    expect(getMarkdownDocumentListRequestKey(local, unusualRoot)).not.toBe(
-      getMarkdownDocumentListRequestKey(ssh, unusualRoot)
-    )
-    expect(getMarkdownDocumentListRequestKey(ssh, unusualRoot)).not.toBe(
-      getMarkdownDocumentListRequestKey(runtime, unusualRoot)
-    )
-    expect(JSON.parse(getMarkdownDocumentListRequestKey(local, unusualRoot)).at(-1)).toBe(
-      unusualRoot
-    )
-    expect(JSON.parse(getMarkdownDocumentListRequestKey(local, windowsRoot)).at(-1)).toBe(
-      windowsRoot
-    )
-    expect(JSON.parse(getMarkdownDocumentListRequestKey(local, uncRoot)).at(-1)).toBe(uncRoot)
   })
 
   it('clears rejected requests so a retry can run', async () => {

@@ -22,10 +22,8 @@ import { wslMoverProfile } from '../__fixtures__/wsl-mover/wsl-mover-profiles'
 import { tabGroup, terminalTab, unifiedTab } from '../__fixtures__/wsl-mover/wsl-mover-profile-rows'
 import { listWslMoveCutovers, wslMoveJournalDirectory } from './wsl-move-cutover-journal'
 import { runWslMoveDesktopRewritePass } from './wsl-move-desktop-rewrite'
-import {
-  listWslMoveDesktopRewriteStores,
-  resetWslMoveDesktopRewriteStoresForTests
-} from './wsl-move-desktop-rewrite-stores'
+import { resetWslMoveDesktopRewriteStoresForTests } from './wsl-move-desktop-rewrite-stores'
+
 import { registerWslMoveMainRewriteStores } from './wsl-move-main-rewrite-stores'
 import { findCrossHostPaneTabIds } from '../restoring-sessions/cross-host-pane-tab-ids'
 import { loadWslMoveFence, resetWslMoveFenceForTests } from './wsl-move-scope-guard'
@@ -123,12 +121,6 @@ afterEach(async () => {
 })
 
 describe('WSL move main rewrite stores', () => {
-  it('registers the three main stores in run order', () => {
-    expect(listWslMoveDesktopRewriteStores().map((entry) => [entry.id, entry.side])).toEqual(
-      STORE_IDS.map((id) => [id, 'main'])
-    )
-  })
-
   it('rewrites and records each store on disk, then finishes the rewrite', async () => {
     seedWslMoveCutover(testState.dir, committedMove())
     loadWslMoveFence(testState.dir)

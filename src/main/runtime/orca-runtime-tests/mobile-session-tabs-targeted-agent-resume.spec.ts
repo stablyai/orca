@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
-import type { SleepingAgentSessionRecord } from '../orca-runtime-test-mocks.spec'
+import type {
+  SleepingAgentSessionRecord,
+  TerminalLaunchResult
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -11,21 +14,21 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../orca-runtime-test-fixtures.spec'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
-import type { TerminalLaunchResult } from '../../../shared/agent-session-resume'
 import type { PtyProcessInfo } from '../../providers/pty-provider-contract'
 import { deterministicAgentSessionUuid } from '../runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../remote-runtime-terminal-create-identity'
 import type { RuntimePtyController } from '../runtime-pty-controller-contract'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { AgentSessionRecordStore } from '../agent-session-record-store'
+import { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import {
   chooseSavedResumeFreshLaunch,
   savedResumeResult
 } from '../../ipc/pty/host-env/saved-resume-admission'
+import { spawnedCommands, resumeSpawns } from './agent-resume-spawn-commands.test-fixture'
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
 const SESSION = { key: 'session_id', id: 'provider-session-1' } as const
@@ -142,16 +145,6 @@ function makeRuntime(
       intent: 'user'
     })
   return { runtime, spawn, attachWindow, resume, openOldPane }
-}
-
-function spawnedCommands(spawn: ReturnType<typeof vi.fn>): string[] {
-  return spawn.mock.calls.map(([args]: unknown[]) =>
-    typeof args === 'object' && args !== null && 'command' in args ? String(args.command ?? '') : ''
-  )
-}
-
-function resumeSpawns(spawn: ReturnType<typeof vi.fn>): number {
-  return spawnedCommands(spawn).filter((command) => command.includes('provider-session-1')).length
 }
 
 function storedRecord(fixture: Fixture) {

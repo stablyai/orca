@@ -42,7 +42,7 @@ import type {
 import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
 import { dropStrandedSleepRecord } from '../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../terminal/recovery/restored-pane-start'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 import { WorkspaceLifecycleQueue } from './workspace-lifecycle-queue'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'

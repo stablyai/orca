@@ -230,14 +230,12 @@ describe("a chat assignee's liveness, stop and close", () => {
     })
   })
 
-  it('keeps its Dispatch while a close puts the tab back, and fails it once a close is proven', async () => {
+  it('keeps its Dispatch while a close remains unproven, and fails it once a close is proven', async () => {
     const { dispatchId } = await dispatchToChat()
     vi.spyOn(host, 'close').mockRejectedValueOnce(new Error('the agent would not stop'))
 
     // As a refusable worktree removal closes each chat in it.
-    const outcome = await closeStructuredAgentSessionChild(PEER_CHAT, {
-      restoreTabOnUnprovenClose: true
-    })
+    const outcome = await closeStructuredAgentSessionChild(PEER_CHAT)
 
     expect(outcome).toMatchObject({ stopped: false, closeAttempted: true })
     expectChatOpen(PEER_CHAT)
@@ -250,16 +248,16 @@ describe("a chat assignee's liveness, stop and close", () => {
     })
   })
 
-  it("keeps its Dispatch when another chat's close lands while its own close is rolled back", async () => {
+  it("keeps its Dispatch when another chat's close lands while its own close remains unproven", async () => {
     const { dispatchId } = await dispatchToChat()
     let refuseClose: (error: Error) => void = () => undefined
     const close = vi
       .spyOn(host, 'close')
       .mockImplementationOnce(() => new Promise((_resolve, reject) => (refuseClose = reject)))
-    const closing = closeStructuredAgentSessionChild(PEER_CHAT, { restoreTabOnUnprovenClose: true })
+    const closing = closeStructuredAgentSessionChild(PEER_CHAT)
     await vi.waitFor(() => expect(close).toHaveBeenCalled(), WAIT)
 
-    // Its tab is hidden pending the close when the other chat's notice re-derives.
+    // Its tab stays visible pending the close when the other chat's notice re-derives.
     await host.setSessionTabVisibility(COORDINATOR, false)
     expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
     refuseClose(new Error('the agent would not stop'))

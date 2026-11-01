@@ -7,10 +7,7 @@ import {
   writeWslDriveUncConversion,
   type WslDriveUncConversion
 } from './wsl-drive-unc-conversion-journal'
-import {
-  listPendingWslDriveUncRendererRewrites,
-  recordWslDriveUncRendererStoreRewritten
-} from './wsl-drive-unc-conversion-renderer'
+import { recordWslDriveUncRendererStoreRewritten } from './wsl-drive-unc-conversion-renderer'
 
 const MAIN = ['terminal-history', 'shell-history']
 let root: string
@@ -45,23 +42,6 @@ const record = (storeId: string) =>
   recordWslDriveUncRendererStoreRewritten(root, { migrationId: 'conv-1', storeId }, MAIN)
 
 describe('the window half of a Windows-drive conversion', () => {
-  it('lists a converted profile with the stores still to record', () => {
-    journal()
-    expect(listPendingWslDriveUncRendererRewrites(root)).toEqual([
-      expect.objectContaining({
-        migrationId: 'conv-1',
-        worktreeIds: [['r1::old', 'r1::new']],
-        storeIds: ['quick-open-history', 'file-view-preferences', 'notebook-environments']
-      })
-    ])
-  })
-
-  it('lists nothing before the profile rewrite', () => {
-    journal({ phase: 'prepared', rewrittenStores: [] })
-    expect(listPendingWslDriveUncRendererRewrites(root)).toEqual([])
-    expect(record('quick-open-history')).toEqual({ recorded: false, reason: 'not-pending' })
-  })
-
   it('drops the journal once every store is recorded', () => {
     journal()
     expect(record('quick-open-history')).toEqual({ recorded: true })

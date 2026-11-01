@@ -77,8 +77,7 @@
       "cancel": "保留篩選條件"
     },
     "startupWorktreeRefresh": {
-      "loading": "正在尋找工作區…",
-      "description": "載入本機與遠端專案時，可能會顯示更多工作區。"
+      "loading": "正在尋找工作區…"
     },
     "wslMoved": {
       "movedToHost": "已移至 {{distro}} 主機",
@@ -126,6 +125,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} 已是主機。",
         "distroStopped": "讀取清單後，{{distro}} 已停止。選擇「啟動並新增」以啟動它。",
+        "distroUnverifiable": "WSL 沒有回應 {{distro}} 是否正在執行。請重新整理清單，或從對話框新增，系統會視需要啟動它。",
         "wsl1": "{{distro}} 使用 WSL 1，Orca 已不再支援。請在 Windows 終端機中使用以下命令將其轉換為 WSL 2：{{command}}",
         "notRegistered": "{{distro}} 不是已安裝的 WSL 發行版。請在 Windows 終端機中執行 {{command}} 查看已安裝的發行版，或重新安裝它後再試一次。",
         "sshManaged": "{{distro}} 已在為「{{server}}」執行 Orca 伺服器，此電腦透過 SSH 存取該伺服器。請先移除該伺服器；目前尚不支援將其移轉為 WSL 主機。"
@@ -190,7 +190,8 @@
     "wslHostOffer": {
       "title": "將 {{distro}} 作為主機執行（建議）",
       "why": "Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
-      "accept": "作為主機執行"
+      "accept": "作為主機執行",
+      "projectNotFound": "找不到要移動的已新增專案。請在側邊欄的專案上使用「移至 {{distro}} 主機…」。"
     }
   },
   "app": {
@@ -6384,15 +6385,17 @@
           "remoteRuntimeEditorHint": "Orca 透過 SSH 連線至此伺服器時，此電腦上的應用程式才能開啟伺服器上的檔案。",
           "remotePathInvalid": "路徑對此 SSH 主機無效。",
           "remotePathInvalidDetail": "請先重新整理工作區，再重試。",
-          "remoteLaunchFailed": "無法在編輯器中開啟此路徑。",
-          "remoteLaunchFailedDetail": "請檢查此電腦上設定的編輯器命令。",
+          "pathLaunchFailed": "無法在編輯器中開啟此路徑。",
+          "pathLaunchFailedDetail": "請檢查此電腦上設定的編輯器命令。",
           "1417fd8380": "自訂應用程式...",
           "8009ab69a6": "開啟於",
           "bd0e8159f8": "檢查本機上的編輯器命令或檔案管理員設定。",
           "9a5381eb09": "無法開啟工作區資料夾。",
           "0bed8727db": "它可能已被移動或刪除。重新整理工作區或將其從 Orca 中移除。",
           "3921d3d9a5": "找不到工作區資料夾。",
+          "pathNotFound": "找不到檔案或資料夾。它可能已被移動或刪除。",
           "f387af445b": "工作區路徑不是有效的本機路徑。",
+          "pathInvalid": "路徑不是有效的本機路徑。",
           "wsl": "WSL"
         },
         "WorktreeTitleInlineRename": {
@@ -6961,12 +6964,14 @@
           "added": "已是主機",
           "running": "執行中",
           "stopped": "已停止",
+          "unverifiable": "未知",
           "title": "新增 WSL 發行版",
           "description": "Orca 在發行版內執行其伺服器，因此 git、檔案和終端機都在 Linux 中原生執行。此發行版中透過 \\\\wsl.localhost 開啟的專案會在其終端機閒置時自動移到此主機；位於 Windows 磁碟機 (/mnt/…) 上的專案會留在此電腦。你可以從側邊欄將已移動的專案移回。",
           "distro": "發行版",
           "loading": "正在查詢 WSL 發行版…",
           "placeholder": "選擇發行版",
           "stoppedHint": "{{value0}} 已停止。新增後會自動啟動。",
+          "unverifiableHint": "WSL 沒有回報 {{value0}} 是否正在執行。新增時會視需要啟動它。",
           "addingHint": "正在發行版中安裝並啟動 Orca 伺服器。首次可能需要一分鐘。",
           "adding": "正在設定…",
           "startAndAdd": "啟動並新增",
@@ -7397,14 +7402,13 @@
           "932ff1fbff": "主題",
           "leftSidebarAppearance": {
             "title": "左側邊欄外觀",
-            "rowDescription": "讓左側邊欄與終端機一致、保持預設，或使用色調。",
             "default": "預設",
-            "matchTerminal": "與終端機一致",
             "tinted": "色調",
             "tintColor": "側邊欄色調",
             "tintColorDescription": "混入左側邊欄表面的顏色。",
             "tintOpacity": "色調強度",
-            "tintOpacityDescription": "控制色調混入側邊欄的強度。"
+            "tintOpacityDescription": "控制色調混入側邊欄的強度。",
+            "tintDescription": "讓左側邊欄保持預設或套用色調。若要跟隨終端機，請將淺色或深色主題設為「與終端機一致」。"
           },
           "interfaceDefaultFont": "預設字型",
           "terminalDefaultFont": "預設字型",
@@ -9147,7 +9151,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI 洋紅色",
-          "03c855d15f": "重設所有顏色覆寫設定",
           "63f8d9336e": "顏色覆寫設定",
           "e86e09b5c7": "覆寫個別終端機顏色。",
           "1d1920dc8a": "在終端機中輸入時隱藏滑鼠游標。",
@@ -9156,10 +9159,7 @@
           "1afcc1d973": "垂直內距",
           "25e2f8e8e1": "終端機網格周圍的水平內距（以像素為單位）。",
           "36b8402015": "水平內距",
-          "53ce336e15": "重新啟動 Orca 以套用視窗模糊變更。",
           "c65bb9ce63": "需要重新啟動",
-          "97950bb087": "將背景模糊套用到終端機視窗。需要重新啟動。",
-          "2b82242f43": "視窗模糊",
           "809f37738d": "控制終端機背景的透明度。1 表示完全不透明，0 表示完全透明。",
           "ea7b1a158e": "背景不透明度",
           "03acb60aa0": "控制終端機背景的透明度。",
@@ -9214,7 +9214,11 @@
           "cf37ff69f6": "基本",
           "8abdab9f7c": "立即重新啟動",
           "907131d741": "正在重新啟動...",
-          "605a35d600": "終端機算繪器尚未套用此設定，因為 xterm.js 沒有粗體顏色欄位。已儲存的值會保留。"
+          "605a35d600": "終端機算繪器尚未套用此設定，因為 xterm.js 沒有粗體顏色欄位。已儲存的值會保留。",
+          "color_overrides_dark_description": "覆寫深色終端機主題的個別顏色。",
+          "color_overrides_light_description": "覆寫淺色終端機主題的個別顏色。",
+          "reset_dark_color_overrides": "重設深色主題顏色覆寫設定",
+          "reset_light_color_overrides": "重設淺色主題顏色覆寫設定"
         },
         "UIZoomControl": {
           "c2c64b24d0": "重設"
@@ -9584,11 +9588,10 @@
             },
             "leftSidebarAppearance": {
               "title": "左側邊欄外觀",
-              "description": "讓左側邊欄與終端機一致、保持預設，或使用色調。",
               "project": "專案",
-              "terminal": "終端機",
               "background": "背景",
-              "tint": "著色"
+              "tint": "著色",
+              "tintDescription": "讓左側邊欄保持預設或套用色調。若要跟隨終端機，請將淺色或深色主題設為「與終端機一致」。"
             },
             "workspaceCardLayout": {
               "title": "工作區卡片版面配置",
@@ -9641,7 +9644,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "與終端機一致"
           }
         },
         "auto": {
@@ -10813,8 +10817,6 @@
             "f6dd9ff606": "背景",
             "71eb45e293": "模糊",
             "0838b3717b": "視窗",
-            "bc2054657a": "將背景模糊套用到終端機視窗。需要重新啟動。",
-            "72d0482137": "視窗模糊",
             "7db59c4738": "阿爾法",
             "46d99ef4bb": "不透明度",
             "4c643695aa": "控制終端機背景的透明度。",
@@ -12573,7 +12575,7 @@
         "wslHosts": {
           "title": "WSL 主機",
           "experimental": "實驗性",
-          "description": "Orca 在每個發行版內執行一個伺服器。已停止的發行版只有在您開啟其某個專案或在此連線它時才會啟動。",
+          "description": "Orca 在每個發行版內執行一個伺服器。開啟專案不會啟動已停止的發行版：請按一下「啟動」、開啟新終端機，或在此連線它。",
           "add": "新增 WSL 發行版",
           "connect": "連線",
           "forceUpdate": "強制更新",
@@ -13120,7 +13122,9 @@
           "light": "淺色",
           "languageIncomplete": "已翻譯 {{value0}}%，完成度不足，無法作為 Orca 的介面語言",
           "languageCoverage": "介面語言 · 已翻譯 {{value0}}%",
-          "newFileMenu": "加入 + 選單"
+          "newFileMenu": "加入 + 選單",
+          "editorReplacesViewer": "以此開啟 {{value0}}，取代 Orca 的檢視器",
+          "editorMayReplaceViewer": "可能以此開啟 {{value0}}，取代 Orca 的檢視器"
         },
         "PluginPageAction": {
           "failedTitle": "無法安裝 {{value0}}",
@@ -13175,6 +13179,10 @@
         },
         "PluginContributionActionNewFile": {
           "create": "建立"
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "與終端機一致",
+          "dynamic": "動態"
         }
       },
       "right": {
@@ -15933,16 +15941,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "放大",
-          "6c89c73d9f": "重設縮放",
           "be27304574": "縮小",
-          "77bfc9b35a": "在彈出視窗中開啟影像",
           "3ef9551ba2": "正在載入預覽...",
-          "d9d2944855": "無法載入檔案預覽"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "按 Esc 關閉",
-          "535f4e2b56": "關閉",
-          "9e27b2ecaf": "全尺寸影像預覽"
+          "d9d2944855": "無法載入檔案預覽",
+          "fitToView": "符合視窗大小",
+          "actualSize": "實際大小",
+          "expand": "放大圖片"
         },
         "IpynbViewer": {
           "859bf9fc21": "執行儲存格",
@@ -16063,7 +16067,10 @@
           "zoomOut": "縮小",
           "zoomIn": "放大",
           "fit": "符合螢幕大小",
-          "close": "關閉"
+          "close": "關閉",
+          "copyPng": "複製為 PNG",
+          "copiedPng": "已複製為 PNG",
+          "copyPngFailed": "無法複製圖片"
         },
         "MermaidBlock": {
           "dcc132e691": "圖表錯誤：",
@@ -19306,8 +19313,6 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "請更新此主機上的 Orca，以便在聊天介面中繼續。",
-        "exitUnconfirmedFromTerminal": "{{agent}} 已在另一個終端機中執行此對話。請在該處結束 {{agent}} 或關閉該終端機，再從「工作階段歷史記錄」開啟此對話。",
-        "exitUnconfirmed": "{{agent}} 已在另一個終端機中執行此對話。請在該處結束 {{agent}} 或關閉該終端機，再從「工作階段歷史記錄」開啟此對話。",
         "notSavedYet": "{{agent}} 尚未儲存此對話。請在它回覆後重試。"
       },
       "state": {
@@ -19539,7 +19544,8 @@
         "stopped": "{{distro}} 已停止",
         "start": "啟動",
         "unverifiable": "Orca 無法確認 {{distro}} 是否正在執行",
-        "startToSend": "請啟動 {{distro}} 後再傳送。"
+        "startToSend": "請啟動 {{distro}} 後再傳送。",
+        "startDistro": "啟動 {{distro}}"
       },
       "interruptedContinue": {
         "continue": "繼續",
@@ -21710,12 +21716,8 @@
       "refreshBeforeEnd": "重新整理 PTY 後才能結束終端機。",
       "endUnsupported": "無法結束此終端機。其主機不支援必要的安全檢查，請從該終端機的分頁或在其主機上關閉。",
       "checkingTabs": "正在檢查分頁…",
-      "endTitle": "要結束 {{terminal}} 嗎？",
-      "endDescription": "這會結束終端機及其子行程。未儲存的工作可能會遺失。",
       "lastProcess": "上次觀測到的行程：{{process}}",
-      "cancel": "取消",
       "ending": "正在結束…",
-      "end": "結束終端機",
       "unassigned": "未指派",
       "thisComputer": "這台電腦",
       "localOwnedCount_one": "這台電腦上的 {{count}} 個 Orca PTY",

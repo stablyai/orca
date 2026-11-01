@@ -1,7 +1,7 @@
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../../shared/agent-session-record.test-fixture'
+} from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 /** Placement must discard structured sessions created before a throw, because callers receive no placement to tear down. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'

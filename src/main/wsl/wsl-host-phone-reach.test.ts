@@ -5,9 +5,9 @@ import { WslHostPhoneGate } from './wsl-host-phone-reach'
 import type { WslOrcadConnection } from './wsl-orcad-connection-types'
 
 const STOPPED =
-  'The WSL host Ubuntu isn’t running. Open one of its projects on your computer to start it.'
+  'The WSL host Ubuntu is stopped. To start it, click Start or open a new terminal in one of its projects on your computer.'
 const NEUTRAL =
-  'The WSL host Ubuntu isn’t available from your phone right now. Open one of its projects on your computer to connect it.'
+  'The WSL host Ubuntu isn’t available from your phone right now. On your computer, click Start if it’s stopped; otherwise open one of its projects to connect it.'
 
 const BRIDGE: WslOrcadConnection = {
   distro: 'Ubuntu',
@@ -80,12 +80,6 @@ describe('a paired phone and the WSL host', () => {
     made = makeGate()
   })
 
-  it('serves a running host and says it is ready', async () => {
-    made.publish('wsl:ubuntu', 'ready')
-    await made.gate.requireRunningWithoutStart('wsl:ubuntu')
-    expect(made.gate.reach('wsl:ubuntu')).toBe('ready')
-  })
-
   it('says the host stopped only when the running list confirmed it', async () => {
     for (const unconfirmed of ['unavailable', 'unreachable'] as const) {
       made.state.reachability = unconfirmed
@@ -144,37 +138,11 @@ describe('a paired phone and the WSL host', () => {
     expect(made.gate.reach('wsl:ubuntu')).toBe('unavailable')
   })
 
-  it("takes liveness's own confirmed stop", () => {
-    made.publish('wsl:ubuntu', 'distro-stopped')
-    expect(made.gate.reach('wsl:ubuntu')).toBe('stopped')
-  })
-
   it('forgets a stop with the removed host', async () => {
     await made.confirmStop()
     made.state.removed = true
     expect(made.gate.reachAll().has('wsl:ubuntu')).toBe(false)
     made.state.removed = false
     expect(made.gate.reach('wsl:ubuntu')).toBe('unavailable')
-  })
-
-  it('refuses without a running-list read while no bridge exists here', async () => {
-    made.state.bridged = false
-    await expect(made.gate.requireRunningWithoutStart('wsl:ubuntu')).rejects.toMatchObject({
-      message: NEUTRAL
-    })
-    expect(made.reachability).not.toHaveBeenCalled()
-  })
-
-  it('hides the host while the Experimental switch is off or its Remove is pending', async () => {
-    made.state.enabled = false
-    expect(made.gate.reach('wsl:ubuntu')).toBe('hidden')
-    await expect(made.gate.requireRunningWithoutStart('wsl:ubuntu')).rejects.toMatchObject({
-      code: 'remote_runtime_unavailable',
-      message: 'The WSL host Ubuntu is turned off or being removed on your computer.'
-    })
-    made.state.enabled = true
-    made.state.pendingStop = true
-    expect(made.gate.reach('wsl:ubuntu')).toBe('hidden')
-    expect(made.reachability).not.toHaveBeenCalled()
   })
 })

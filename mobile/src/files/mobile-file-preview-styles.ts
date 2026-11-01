@@ -64,15 +64,6 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     flex: 1,
     backgroundColor: colors.bgBase
   },
-  imageScrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md
-  },
-  image: {
-    backgroundColor: colors.bgBase
-  },
   editContainer: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -83,12 +74,19 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     color: colors.statusRed,
     fontSize: typography.metaSize
   },
+  previewSaveErrorText: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
   editInput: {
     flex: 1,
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
-    fontSize: 13,
-    lineHeight: 19,
+    // iOS zooms the page when a field under 16px takes focus; a literal, not the seam, avoids an extra shared chunk.
+    fontSize: 16,
+    lineHeight: 22,
     padding: 0
   }
 }))

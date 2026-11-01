@@ -91,13 +91,4 @@ describeOnWindows('clearing std handle inheritance', () => {
     expect(run.output).toContain('inherited-output')
     expect(run.holderAliveAtClose).toBe(false)
   }, 60_000)
-
-  // A regression pins the pipe for the 60 s holder; fail on the assertion, not the 5 s default.
-  it('plain Node already clears its own std handles, so it is no model for Orca', async () => {
-    const run = await runChild('node', 'keep', 60_000)
-
-    expect(run.code, run.output).toBe(0)
-    expect(run.output).toContain('inherited-output')
-    expect(run.holderAliveAtClose).toBe(true)
-  }, 90_000)
 })

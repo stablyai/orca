@@ -1,8 +1,8 @@
 import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemBody } from '../../../../shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session-journal-schemas'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
+import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
+import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import {
   structuredAgentSessionQueueRequest,
   structuredAgentSessionSendQueues,

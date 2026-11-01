@@ -1,6 +1,6 @@
 // Approximate unstructured scrollback as turns; scrape priority yields to transcript/hook copies.
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 const ESC = String.fromCharCode(27)
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, 'g')

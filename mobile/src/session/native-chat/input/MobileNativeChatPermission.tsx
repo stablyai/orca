@@ -1,8 +1,8 @@
 import { memo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
-import { approvalBlockedPathToShow } from '../../../../../src/shared/agent-session-approval-blocked-path'
-import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
+import { approvalBlockedPathToShow } from '../../../../../src/shared/agent-session/agent-session-approval-blocked-path'
+import { MobileNativeChatCardHeaderAction } from '../MobileNativeChatCardHeaderAction'
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
@@ -11,7 +11,7 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   isNewerApprovalSubject,
   isPlanApprovalSubject
-} from '../../../../../src/shared/agent-session-approval-subject'
+} from '../../../../../src/shared/agent-session/agent-session-approval-subject'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
 function MobileNativeChatPermissionImpl({

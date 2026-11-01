@@ -54,7 +54,9 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
     if (!full) {
       printOrchestrationResult(result, json, {
         fields: (value): { messages: MessageView[] } => ({
-          messages: value.messages.map((message) => toMessageView(message, { recipient: true }))
+          messages: value.messages.map((message) =>
+            inboxRowView(toMessageView(message, { recipient: true }))
+          )
         }),
         text: (fields) =>
           fields.messages.length === 0
@@ -85,4 +87,41 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
         .join(full ? '\n\n' : '\n')
     })
   }
+}
+
+const INBOX_BODY_PREVIEW_CHARS = 200
+
+// A sender can put anything under an id key; only short strings are ids.
+function isShortId(value: unknown): boolean {
+  return typeof value === 'string' && value.length <= 64
+}
+
+// inbox is history, not delivery: rows preview the body and keep only payload ids; check and --full print it whole.
+function inboxRowView(view: MessageView): MessageView {
+  const { body, payload, ...rest } = view
+  const ids =
+    payload && typeof payload === 'object'
+      ? Object.entries(payload).filter(
+          ([key, value]) =>
+            /Ids?$/.test(key) &&
+            (isShortId(value) || (Array.isArray(value) && value.every(isShortId)))
+        )
+      : []
+  return {
+    ...rest,
+    ...(body
+      ? {
+          body: previewBody(body)
+        }
+      : {}),
+    ...(ids.length ? { payload: Object.fromEntries(ids) } : {})
+  }
+}
+
+// Code points, not UTF-16 units, so a cut never leaves half of a surrogate pair.
+function previewBody(body: string): string {
+  const characters = Array.from(body)
+  return characters.length > INBOX_BODY_PREVIEW_CHARS
+    ? `${characters.slice(0, INBOX_BODY_PREVIEW_CHARS).join('')}… (truncated; --full)`
+    : body
 }

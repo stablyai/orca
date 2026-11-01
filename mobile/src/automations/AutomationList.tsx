@@ -4,7 +4,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { CalendarClock, ChevronRight } from 'lucide-react-native'
 import { Pressable, Switch, Text, View } from 'react-native'
 import { formatAutomationSchedule } from './automation-schedule-label'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { AutomationButton } from './AutomationControls'
 import type { MobileAutomationRow } from './automation-reply-schema'
 import { automationDate, automationRunStatusLabel } from './automation-run-presentation'
@@ -58,7 +58,7 @@ export function AutomationList(props: {
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => props.onOpen(row)}
-                  style={styles.grow}
+                  style={({ pressed }) => [styles.grow, pressed && pressedStyle]}
                 >
                   <View style={styles.row}>
                     <Text style={[styles.heading, styles.grow]}>{automation.name}</Text>

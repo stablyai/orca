@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { structuredAgentSessionQueueRequest } from '../../../renderer/src/components/native-chat/structured-agent-session-queue-request'
 import {
   createQueuedMessageTestRig,

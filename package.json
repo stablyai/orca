@@ -77,7 +77,10 @@
     "smoke:orcad-terminal": "node config/scripts/ensure-native-runtime.mjs --runtime=node && pnpm run build:orcad && node config/scripts/runtime-serve-terminal-smoke.mjs --target orcad",
     "smoke:serve-terminal": "node config/scripts/runtime-serve-terminal-smoke.mjs",
     "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",
+    "generate:plugin-declarative-runtime": "node config/scripts/build-plugin-declarative-runtime.mjs",
+    "generate:plugin-declarative-typings": "node config/scripts/generate-plugin-declarative-typings.mjs",
     "generate:plugin-schemas": "node config/scripts/generate-plugin-schemas.mjs",
+    "generate:plugin-author-typings": "node config/scripts/generate-plugin-author-typings.mjs",
     "validate:plugin": "node config/scripts/validate-plugin-files.mjs",
     "generate:rpc-params-catalog": "node config/scripts/generate-rpc-params-catalog.mjs",
     "verify:rpc-params-catalog": "node config/scripts/generate-rpc-params-catalog.mjs --check",
@@ -85,6 +88,8 @@
     "verify:acp-protocol": "node config/scripts/acp/generate-protocol.mjs --check",
     "generate:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --write",
     "verify:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --check",
+    "generate:plugin-authoring-skill-references": "node config/scripts/generate-plugin-authoring-skill-references.mjs --write && node config/scripts/generate-bundled-skill-guides.mjs --write",
+    "verify:plugin-authoring-skill-references": "node config/scripts/generate-plugin-authoring-skill-references.mjs --check",
     "generate:skill-bundle-manifest": "node config/scripts/generate-skill-bundle-manifest.mjs --write",
     "verify:skill-bundle-manifest": "node config/scripts/generate-skill-bundle-manifest.mjs",
     "verify:macos-entitlements": "node config/scripts/verify-macos-entitlements.mjs",
@@ -317,6 +322,7 @@
     "electron-vite": "^6.0.0",
     "emoji-picker-react": "^4.22.3",
     "emojibase-data": "17.0.0",
+    "es-module-lexer": "1.7.0",
     "esbuild": "^0.28.2",
     "github-slugger": "2.0.0",
     "happy-dom": "^21.0.4",
@@ -363,6 +369,7 @@
     "remend": "1.4.0",
     "shiki": "4.5.0",
     "sonner": "2.0.7",
+    "sucrase": "3.35.1",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",
     "tar": "7.5.22",
@@ -406,6 +413,14 @@
   "reactDoctor": {
     "ignore": {
       "overrides": [
+        {
+          "files": [
+            "resources/plugins/declarative/*.mjs"
+          ],
+          "rules": [
+            "eslint/max-lines"
+          ]
+        },
         {
           "files": [
             "src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts"

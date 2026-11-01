@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, concentricRadius, radii, spacing, typography } from '../theme/mobile-theme'
+import {
+  colors,
+  concentricRadius,
+  radii,
+  spacing,
+  typography,
+  pressedStyle
+} from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { MessageBox } from '../components/composer-input/MessageBox'
@@ -302,7 +309,12 @@ export function QuickCommandEditorForm({
           <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
         </Pressable>
         <Pressable
-          style={[styles.button, styles.saveButton, !canSave && styles.saveButtonDisabled]}
+          style={({ pressed }) => [
+            styles.button,
+            styles.saveButton,
+            !canSave && styles.saveButtonDisabled,
+            pressed && pressedStyle
+          ]}
           disabled={!canSave}
           onPress={onSave}
           accessibilityRole="button"

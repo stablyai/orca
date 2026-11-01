@@ -4,7 +4,7 @@ import { agentTurnEndedUncleanly } from '../../../../../shared/agent-main-agent-
 import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { resumeRecordFromStatus } from '../../../../../shared/agent-resume-record-from-status'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'

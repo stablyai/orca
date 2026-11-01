@@ -2,11 +2,11 @@ import {
   restoreStructuredAgentSessionLaunchIntent,
   type StructuredAgentSessionLaunchIntent
 } from '../../launch-structured-agent-session'
-import { StructuredAgentSessionOwnerUnresolvedError } from '../../structured-agent-session-launch-errors'
+import { StructuredAgentSessionOwnerUnresolvedError } from './structured-agent-session-launch-errors'
 import {
   createStructuredLaunchCallerGroup,
   type StructuredLaunchCallerGroup
-} from '../../structured-agent-session-launch-callers'
+} from './structured-agent-session-launch-callers'
 import {
   getPersistedStructuredAgentLaunchRecord,
   setStructuredLaunchState,
@@ -16,7 +16,7 @@ import {
 import {
   initialStructuredLaunchSelection,
   structuredLaunchSelectionController
-} from '../../structured-agent-session-launch-options'
+} from './structured-agent-session-launch-options'
 
 export function restorePersistedStructuredLaunchState(
   worktreeId: string,

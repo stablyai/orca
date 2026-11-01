@@ -1,57 +1,20 @@
-import { z } from 'zod'
+import type { z } from 'zod'
+import { PLUGIN_EVENT_PAYLOAD_SCHEMAS, PLUGIN_EVENT_SUMMARIES } from '../events/plugin-events'
 import type { PluginErrorCode } from '../frames/plugin-protocol'
+import { PLUGIN_EVENT_NAMES } from '../manifest/plugin-manifest'
 import { PLUGIN_HOST_API_MAJOR } from './plugin-host-api-major'
 import { PLUGIN_HOST_API, PLUGIN_HOST_API_MINOR, PLUGIN_HOST_METHOD_NAMES } from './plugin-host-api'
-
-type JsonSchema = z.core.JSONSchema.BaseSchema
-
-function asSchema(node: z.core.JSONSchema._JSONSchema | undefined): JsonSchema {
-  return typeof node === 'object' ? node : {}
-}
-
-/** TypeScript-like type text, so a method reads as a signature rather than a JSON Schema dump. */
-function typeText(schema: JsonSchema): string {
-  if (schema.const !== undefined) {
-    return JSON.stringify(schema.const)
-  }
-  if (schema.enum) {
-    return schema.enum.map((value) => JSON.stringify(value)).join(' | ')
-  }
-  if (schema.anyOf) {
-    return schema.anyOf.map((node) => typeText(asSchema(node))).join(' | ')
-  }
-  if (schema.type === 'array') {
-    const item = typeText(asSchema(Array.isArray(schema.items) ? undefined : schema.items))
-    return item.includes(' ') && !item.startsWith('{') ? `(${item})[]` : `${item}[]`
-  }
-  if (schema.type === 'object' && schema.properties) {
-    const required = new Set(schema.required ?? [])
-    const fields = Object.entries(schema.properties).map(
-      ([key, node]) => `${key}${required.has(key) ? '' : '?'}: ${typeText(asSchema(node))}`
-    )
-    return fields.length === 0 ? '{}' : `{ ${fields.join('; ')} }`
-  }
-  if (schema.type === 'object' && typeof schema.additionalProperties === 'object') {
-    return `Record<string, ${typeText(schema.additionalProperties)}>`
-  }
-  if (schema.type === 'integer') {
-    return 'number'
-  }
-  if (Array.isArray(schema.type)) {
-    return schema.type.join(' | ')
-  }
-  return schema.type ?? 'JSON'
-}
+import { REFERENCE_TYPE_TEXT, zodTypeText } from './plugin-schema-type-text'
 
 function signature(params: z.ZodType, result: z.ZodType): string {
-  const options = { target: 'draft-2020-12', unrepresentable: 'any' } as const
-  const input = z.toJSONSchema(params, { ...options, io: 'input' })
-  const output = z.toJSONSchema(result, { ...options, io: 'output' })
-  return `(params: ${typeText(input)}) => ${typeText(output)}`
+  const input = zodTypeText(params, 'input', REFERENCE_TYPE_TEXT)
+  // Why parse: a top-level `.optional()` is lost in the type text, yet the call may omit params.
+  const omittable = params.safeParse(undefined).success
+  return `(params${omittable ? '?' : ''}: ${input}) => ${zodTypeText(result, 'output', REFERENCE_TYPE_TEXT)}`
 }
 
 // Why a Record: a new error code fails typecheck until it is documented here.
-const ERROR_CODES: Record<PluginErrorCode, string> = {
+export const PLUGIN_HOST_ERROR_CODE_MEANINGS: Record<PluginErrorCode, string> = {
   invalid_request: 'the call itself is malformed',
   invalid_params:
     'params do not match the method, including a field this Orca does not know; the message names it',
@@ -84,13 +47,15 @@ export function renderPluginHostApiReference(): string {
     '',
     'Every call is checked against the capabilities the user approved, and params are validated before Orca runs anything: params are strict, so a field this Orca does not know is refused with `invalid_params` instead of being dropped. Mutations are recorded in the audit log as `plugin:<publisher>.<id>`.',
     '',
+    'Methods whose capability is `none` need no capability but still need the plugin enabled and approved. `shell.openExternal` and `files.saveAs` also need transient user activation (a click or key press in the calling frame, within a few seconds), are rate-limited, and run only in the desktop app; frames also reach them as `orca.shell.openExternal(url)` and `orca.files.saveAs({ suggestedName, mimeType, data })`, which resolves with `{ status: "saved" }`, or `{ status: "cancelled" }` when the person cancels the dialog. Saved files carry the OS mark for downloaded files.',
+    '',
     '## Methods',
     '',
     '| Method | Capability | Surfaces | Mutation | Since | Summary |',
     '| --- | --- | --- | --- | --- | --- |',
     ...specs.map(
       (spec) =>
-        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | \`${spec.capability}\` | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
+        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | ${spec.capability === null ? 'none' : `\`${spec.capability}\``} | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
     )
   ]
   for (const spec of specs) {
@@ -107,11 +72,26 @@ export function renderPluginHostApiReference(): string {
   }
   lines.push(
     '',
+    '## Events',
+    '',
+    "A worker receives the events its manifest lists in `contributes.events` through `orca.events.on(event, handler)`, which returns `{ dispose() }`. Each needs `main`, the `trusted-worker` profile and its domain's capability (`workspace:read` or `agent:read`). `orca plugin types` writes the payloads as `PluginEvents` in `orca/host`.",
+    '',
+    '| Event | Payload | Summary |',
+    '| --- | --- | --- |',
+    ...PLUGIN_EVENT_NAMES.map(
+      (name) =>
+        `| \`${name}\` | \`${zodTypeText(PLUGIN_EVENT_PAYLOAD_SCHEMAS[name], 'output', REFERENCE_TYPE_TEXT).replaceAll('|', '\\|')}\` | ${PLUGIN_EVENT_SUMMARIES[name]} |`
+    )
+  )
+  lines.push(
+    '',
     '## Errors',
     '',
     'A failed call rejects with an `Error` carrying `code`, `message`, `retryable` and, for `rate_limited`, `retryAfterMs`. Treat a code not listed here as `action_failed`:',
     '',
-    ...Object.entries(ERROR_CODES).map(([code, meaning]) => `- \`${code}\`: ${meaning}.`),
+    ...Object.entries(PLUGIN_HOST_ERROR_CODE_MEANINGS).map(
+      ([code, meaning]) => `- \`${code}\`: ${meaning}.`
+    ),
     '',
     '## Stability and deprecation',
     '',

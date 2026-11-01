@@ -10,6 +10,7 @@ keywords:
   - orca-linear skill
   - orca-emulator skill
   - orca-emulator-android skill
+  - orca-plugin-authoring skill
 ---
 
 Orca ships **skills** that agents install into their skill directories. Public install packages are **hybrid discovery stubs**: short `SKILL.md` files that tell the agent _when_ to engage Orca and how to load the full guide from the running CLI. Command flags live in the binary so they cannot drift from the app version.
@@ -27,6 +28,7 @@ Use `npx skills add` with the public Orca repo and the skill name. Default agent
 | [`orca-emulator`](#orca-emulator)                   | `npx skills add https://github.com/stablyai/orca --skill orca-emulator --global`          | iOS Simulator control.                                        |
 | [`orca-emulator-android`](#orca-emulator-android)   | `npx skills add https://github.com/stablyai/orca --skill orca-emulator-android --global`  | Android emulator/device via adb.                              |
 | [`orca-per-workspace-env`](#orca-per-workspace-env) | `npx skills add https://github.com/stablyai/orca --skill orca-per-workspace-env --global` | Per-workspace environment recipes (`orca.yaml`).              |
+| [`orca-plugin-authoring`](#orca-plugin-authoring)   | `npx skills add https://github.com/stablyai/orca --skill orca-plugin-authoring --global`  | Build, debug and publish Orca plugins.                        |
 
 ## Hybrid stubs vs the live guide
 
@@ -155,6 +157,14 @@ npx skills add https://github.com/stablyai/orca --skill orca-per-workspace-env -
 ```
 
 Use when setting up or debugging per-workspace environment recipes in `orca.yaml`. See [Ways to run Orca](/docs/ways-to-run#4-cloud-vms-per-workspace-environments).
+
+## orca-plugin-authoring
+
+```bash
+npx skills add https://github.com/stablyai/orca --skill orca-plugin-authoring --global
+```
+
+Use when an agent should make, debug, test or publish an Orca plugin: themes, syntaxes, custom editors, TSX components panels and worker commands. Load it with `orca skills get orca-plugin-authoring`; its references (components, host API, events, manifest fields, CLI) are generated from the running Orca.
 
 ## Discovery sources
 

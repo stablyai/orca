@@ -1,7 +1,7 @@
 import {
   AGENT_SESSION_HISTORY_DEFAULT_LIMIT,
   AGENT_SESSION_HISTORY_MAX_LIMIT
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 
 /** Clamp oversized requests so clients can keep paging instead of failing mid-scroll. */
 export function resolveHistoryLimit(limit: number | undefined): number {

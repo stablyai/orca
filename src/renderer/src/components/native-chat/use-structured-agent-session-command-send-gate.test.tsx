@@ -44,8 +44,8 @@ vi.mock('./use-structured-agent-session-sends', () => ({
   })
 }))
 
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session-background-task-wire'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 
 function answer(text: string, scoped: boolean): AgentJournalRenderItem {

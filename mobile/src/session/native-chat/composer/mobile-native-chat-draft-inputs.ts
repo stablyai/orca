@@ -1,7 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { createUuidV4 } from '../../../../../src/shared/uuid-v4'
-import { pickedSkillsInText } from '../../../../../src/shared/structured-agent-session-send-mutation'
-import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session-journal-types'
+import { pickedSkillsInText } from '../../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import type {

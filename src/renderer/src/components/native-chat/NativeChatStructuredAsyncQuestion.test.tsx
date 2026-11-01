@@ -4,8 +4,8 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { asyncQuestionSourceScope } from '../../../../shared/native-chat/input/native-chat-ask'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { projectStructuredItemToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { NativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
 import { nativeChatPromptDismissals } from './native-chat-prompt-dismissals'
@@ -110,7 +110,11 @@ describe('NativeChatStructuredAsyncQuestion', () => {
       ).toBe('Green')
       act(() => vi.runAllTimers())
 
-      expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [])
+      expect(send).toHaveBeenCalledWith(
+        '> Which color?\n\nBlue',
+        [],
+        expect.objectContaining({ callerKeepsText: true })
+      )
       expect(container.textContent).toContain('Which color?')
       render([
         asked,
@@ -187,7 +191,11 @@ describe('NativeChatStructuredAsyncQuestion', () => {
       )
       act(() => blue?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
       act(() => vi.runAllTimers())
-      expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [])
+      expect(send).toHaveBeenCalledWith(
+        '> Which color?\n\nBlue',
+        [],
+        expect.objectContaining({ callerKeepsText: true })
+      )
       expect(container.textContent).toContain('Which color?')
 
       render([
@@ -396,7 +404,11 @@ describe('NativeChatStructuredAsyncQuestion', () => {
     act(settle)
     render()
     expect(container.textContent).not.toContain('Which color?')
-    expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [])
+    expect(send).toHaveBeenCalledWith(
+      '> Which color?\n\nBlue',
+      [],
+      expect.objectContaining({ callerKeepsText: true })
+    )
   })
 
   it.each([false, true, 'queued'] as const)(
@@ -423,6 +435,66 @@ describe('NativeChatStructuredAsyncQuestion', () => {
       expect(container.textContent).toContain('Which color?')
     }
   )
+  it.each([
+    [{ action: 'queue', offersChoice: true }, true],
+    [{ action: 'queue', offersChoice: false }, undefined],
+    [{ action: 'steer', offersChoice: true }, undefined]
+  ] as const)('steers the answer into the running turn (follow-up: %j)', (followUp, alternate) => {
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => true)
+    act(() =>
+      root.render(
+        <NativeChatStructuredAsyncQuestion
+          paneKey="tab-1:structured"
+          sourceKey="host"
+          sourceScope="journal/session/epoch"
+          session={{ messages: [asked], readPhase: 'ready' }}
+          send={send}
+          sendFollowUp={followUp}
+        />
+      )
+    )
+    act(() =>
+      [...container.querySelectorAll('button[aria-pressed]')]
+        .find((node) => node.textContent?.includes('Blue'))!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    act(() => vi.runAllTimers())
+    expect(send.mock.calls[0]?.[2]?.alternate).toBe(alternate)
+  })
+
+  it('holds the question while a queued card answers it, across remounts, until that card is gone', () => {
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => 'queued')
+    const render = (queuedCards: { text: string }[]) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="tab-1:structured"
+            sourceKey="host"
+            sourceScope="journal/session/epoch"
+            session={{ messages: [asked], readPhase: 'ready' }}
+            send={send}
+            queuedCards={queuedCards}
+          />
+        )
+      )
+    render([{ text: 'earlier follow-up' }])
+    act(() =>
+      [...container.querySelectorAll('button[aria-pressed]')]
+        .find((node) => node.textContent?.includes('Blue'))!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    act(() => vi.runAllTimers())
+    const queued = [{ text: 'earlier follow-up' }, { text: '> Which color?\n\nBlue' }]
+    render(queued)
+    expect(container.textContent).not.toContain('Which color?')
+    act(() => root.unmount())
+    root = createRoot(container)
+    render(queued)
+    expect(container.textContent).not.toContain('Which color?')
+    render([{ text: 'earlier follow-up' }])
+    expect(container.textContent).toContain('Which color?')
+  })
+
   it('resets pending choices when host ownership changes with the same portable definition', () => {
     const send = vi.fn(() => true)
     const render = (host: string) =>
