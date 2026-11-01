@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { DISPATCH_REJECTED_CANCELLED } from '../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_CANCELLED } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { ClaudeStructuredSessionAdapterDeps } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,

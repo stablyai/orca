@@ -9,7 +9,7 @@ import type { AgentSessionFailureWordsContext } from '../../../shared/agent-sess
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import {
   refuse,

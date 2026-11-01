@@ -5,7 +5,7 @@ import {
 import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 import type { AgentSessionLease } from '../../../../shared/agent-session-record'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 
 const hostRef: { current: unknown } = { current: null }

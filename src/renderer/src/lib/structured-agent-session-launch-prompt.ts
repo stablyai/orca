@@ -1,4 +1,4 @@
-import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
+import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'

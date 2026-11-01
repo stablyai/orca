@@ -2,7 +2,7 @@ import { defineMethod } from '../core'
 import type { RpcContext } from '../core'
 import { requireInstalledStructuredHost } from './structured-agent-session-gate'
 import { CurrentRequestsParams } from '../../../../shared/rpc-contract/agent-session-current-requests-params'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session/requests/agent-session-current-requests-capability'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 
 export function clientReadsCurrentRequests(

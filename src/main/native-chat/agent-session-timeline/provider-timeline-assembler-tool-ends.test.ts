@@ -3,8 +3,8 @@ import {
   agentJournalToolCallLifecycle,
   interruptedAgentJournalToolCall
 } from '../../../shared/agent-journal-tool-call-lifecycle'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,

@@ -3,7 +3,7 @@ import type { ClaudeCliFlagCheck, ClaudeCliFlagFact } from '../claude-cli-flag-s
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type * as SessionAdapter from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {

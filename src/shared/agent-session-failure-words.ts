@@ -32,7 +32,7 @@ import {
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,
   DISPATCH_REJECTED_QUEUE_FULL,
   DISPATCH_REJECTED_WRITE_FAILED
-} from './structured-agent-session-dispatch-rejection'
+} from './agent-session/requests/structured-agent-session-dispatch-rejection'
 
 declare const failureSentence: unique symbol
 

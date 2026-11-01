@@ -4,7 +4,7 @@
 import { agentChildWorkStopTargets } from '../../../shared/agent-child-work-stop-targets'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionCancelResult } from '../../../shared/agent-session-wire'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
 import { acceptStopTarget } from './structured-agent-session-stop-acceptance'

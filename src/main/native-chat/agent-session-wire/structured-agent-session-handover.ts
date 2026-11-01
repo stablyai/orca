@@ -1,7 +1,7 @@
 // Commit pending/settlement around an external provider call so concurrent sends remain acceptable.
 
 import type { UnsentSendHold } from '../agent-session-journal/journal-unsent-send-hold'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { StructuredAgentSessionInputNotAdmitted } from './structured-agent-session-input-admission'
 import type { AgentSessionHandoverContext } from './structured-agent-session-host-types'
 import {
@@ -15,11 +15,11 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { resolveHandover } from './structured-agent-session-operation-settlement'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionDispatchOutcome } from './structured-agent-session-adapter'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   handOverStructuredAgentSessionCommand,
   structuredAgentSessionHandoverOrigin

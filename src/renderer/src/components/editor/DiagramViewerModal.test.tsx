@@ -81,7 +81,7 @@ describe('DiagramViewerModal', () => {
     await waitFor(() => expect(document.activeElement).toBe(opener))
   })
 
-  it('zooms from the toolbar, pans on drag, and fits again', async () => {
+  it('zooms from the toolbar, pans on Alt-drag, and fits again', async () => {
     const user = userEvent.setup()
     render(<Host />)
     await user.click(screen.getByRole('button', { name: 'open' }))
@@ -93,11 +93,17 @@ describe('DiagramViewerModal', () => {
     expect(image.style.transform).toBe('translate(250px, 175px)')
 
     canvas.setPointerCapture = vi.fn()
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 100, clientY: 100 })
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+      altKey: true
+    })
     // Two moves before a render must both count.
     act(() => {
-      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 120, clientY: 95 })
-      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 140, clientY: 90 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 120, clientY: 95, altKey: true })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 140, clientY: 90, altKey: true })
     })
     fireEvent.pointerCancel(canvas, { pointerId: 1 })
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 500, clientY: 500 })

@@ -1,8 +1,11 @@
 // Derive usage-limit cuts from journal rows on each read for Continue; never store derived state.
 
-import { isRootAgentJournalItem } from '../agent-session-journal-producer'
+import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-journal-producer'
 import { readAgentSessionFailureFact } from '../agent-session-failure'
-import type { AgentJournalRenderItem, AgentJournalSubmission } from '../agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../agent-session/journal/agent-session-journal-types'
 import type { AgentSessionUsageLimit } from '../agent-session-usage-limit'
 import { findInNativeChatTurn, latestNativeChatTurnSinceRequest } from './native-chat-orca-stop-cut'
 

@@ -6,9 +6,12 @@ import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
 } from '../../agent-session-failure-words'
-import { agentJournalItemKey, parseAgentJournalItemKey } from '../../agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../agent-session-journal-producer'
-import type { AgentJournalRenderItem } from '../../agent-session-journal-types'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../agent-session/journal/agent-session-journal-producer'
+import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from '../../agent-session-turn-record'
 import { agentTurnVerdict } from '../../agent-turn-outcome'
 import {

@@ -18,7 +18,7 @@ import type { MobileStructuredAgentMutate } from '../../use-mobile-structured-ag
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageMoveResult
-} from '../../../../../src/shared/agent-session-wire'
+} from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { StructuredAgentSessionMutationResult } from '../../mobile-structured-agent-session-rpc'
 
 let fontScale = 1

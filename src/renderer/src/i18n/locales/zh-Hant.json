@@ -77,8 +77,7 @@
       "cancel": "保留篩選條件"
     },
     "startupWorktreeRefresh": {
-      "loading": "正在尋找工作區…",
-      "description": "載入本機與遠端專案時，可能會顯示更多工作區。"
+      "loading": "正在尋找工作區…"
     },
     "wslMoved": {
       "movedToHost": "已移至 {{distro}} 主機",

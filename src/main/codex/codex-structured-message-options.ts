@@ -1,5 +1,5 @@
-import { pickedSkillsInText } from '../../shared/structured-agent-session-send-mutation'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import { pickedSkillsInText } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 import type { CodexTurnHost } from './codex-structured-turn-start'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'

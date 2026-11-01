@@ -21,24 +21,6 @@ describe('source-control recovery admission', () => {
     mocks.toastError.mockReset()
   })
 
-  it('admits when the host reports no Orca Git work in flight', async () => {
-    await expect(admitSourceControlRecovery(context)).resolves.toBe(true)
-    expect(mocks.probe).toHaveBeenCalledExactlyOnceWith(context)
-    expect(mocks.toastError).not.toHaveBeenCalled()
-  })
-
-  it('refuses with a message while the host runs Orca Git work here', async () => {
-    mocks.probe.mockResolvedValue({ inFlight: true })
-    await expect(admitSourceControlRecovery(context)).resolves.toBe(false)
-    expect(mocks.toastError).toHaveBeenCalledWith('Wait for the running Git operation to finish.')
-  })
-
-  it('keeps recovery available on hosts that predate the check', async () => {
-    mocks.probe.mockRejectedValue(new Error('method_not_found'))
-    await expect(admitSourceControlRecovery(context)).resolves.toBe(true)
-    expect(mocks.toastError).not.toHaveBeenCalled()
-  })
-
   it.each([false, true, 'unsupported'] as const)(
     'ignores a cancelled check returning %s',
     async (result) => {

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { open } from 'node:fs/promises'
 import { extname } from 'node:path'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 import {
   agentSessionFailureFact,

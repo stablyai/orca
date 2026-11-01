@@ -1,7 +1,7 @@
 // Broadcast only child facts and minute-scale freshness; per-tick usage/clocks stay on the chat’s background channel.
 
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentChildWorkViewsEqual } from '../../../shared/agent-status-child-work-view-wire'

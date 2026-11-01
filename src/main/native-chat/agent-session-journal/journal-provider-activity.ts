@@ -1,5 +1,5 @@
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'

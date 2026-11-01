@@ -6,10 +6,12 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-  type AgentJournalItemIdentity,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+  AGENT_SESSION_JOURNAL_SCHEMA_VERSION
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session-journal-identity'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,

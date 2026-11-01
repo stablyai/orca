@@ -102,8 +102,7 @@
       "quitDuringMoveConfirm": "Trotzdem beenden"
     },
     "startupWorktreeRefresh": {
-      "loading": "Arbeitsbereiche werden gesucht…",
-      "description": "Während lokale und entfernte Projekte geladen werden, können weitere Arbeitsbereiche erscheinen."
+      "loading": "Arbeitsbereiche werden gesucht…"
     },
     "createProject": {
       "errors": {

@@ -7,7 +7,7 @@ import {
   clampConversationNameFirstPrompt,
   conversationNameSeed
 } from '../../shared/conversation-name-generation'
-import { hasStructuredChatPromptText } from '../../shared/structured-agent-session-first-prompt'
+import { hasStructuredChatPromptText } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
 import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'

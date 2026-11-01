@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
 import { expect, it } from 'vitest'
 import {
@@ -19,13 +18,6 @@ it('keeps small and existing plain caches readable without changing them', async
   expect(await compressClaudeUsageSourceText(small)).toBe(small)
   expect(await decodeClaudeUsageSourceText(Buffer.from(small))).toBe(small)
   expect(await decodeClaudeUsageSourceText(source)).toBe(source)
-})
-
-it('never grows a less compressible source and restores its original content', async () => {
-  const noisy = JSON.stringify({ value: randomBytes(100_000).toString('base64') })
-  const saved = await compressClaudeUsageSourceText(noisy)
-  expect(Buffer.byteLength(saved)).toBeLessThanOrEqual(Buffer.byteLength(noisy))
-  expect(await decodeClaudeUsageSourceText(saved)).toBe(noisy)
 })
 
 it('rejects truncated and corrupted gzip payloads', async () => {

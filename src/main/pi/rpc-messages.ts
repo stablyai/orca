@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { BoundedMap } from '../../shared/bounded-map'
 import { MAX_PROVIDER_TIMELINE_OPEN_ENTRIES } from '../native-chat/agent-session-timeline/provider-timeline-budget'
-import type { AgentJournalToolCallItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalToolCallItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   boundToolInput,
   JOURNAL_RUNNING_PREVIEW_LIMITS,

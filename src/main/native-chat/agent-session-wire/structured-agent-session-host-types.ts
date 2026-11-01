@@ -21,7 +21,7 @@ import type {
 import type { StructuredAgentSessionStatusObserverOptions } from './structured-agent-session-status-observation'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type {

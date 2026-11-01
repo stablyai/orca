@@ -1,7 +1,7 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { AgentSessionAcquisitionRootExitObservedError } from './structured-agent-session-adapter'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 

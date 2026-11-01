@@ -1,9 +1,7 @@
 // Allow one unanswered send per chat in memory; host rows/cards own admitted messages. Never retry a send or retain it past its deadline.
 
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionFirstMessage } from '../../../../shared/structured-agent-session-create'
 import {
   agentSessionUnconfirmedSendParts,
@@ -13,7 +11,7 @@ import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-
 import {
   structuredAgentSessionReadCoversSend,
   structuredAgentSessionSettledSends
-} from '../../../../shared/structured-agent-session-send-settlement'
+} from '../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
 import {

@@ -10,7 +10,7 @@ import {
   RUNTIME_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session/requests/agent-session-current-requests-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { AcpStructuredOptions } from '../../../acp/acp-structured-options'
 import { NewSessionResponseSchema } from '../../../acp/generated/acp-protocol.generated'

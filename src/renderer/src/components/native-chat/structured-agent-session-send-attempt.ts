@@ -1,9 +1,7 @@
 // Only agentSession.send mutates; stops during earlier local/read-only work prove the request never went out.
 
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryResult,
   AgentSessionMutationResult,
@@ -15,13 +13,13 @@ import {
   agentSessionWriteNotDoneParts
 } from '../../../../shared/agent-session-refusal-notice'
 import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session-write-notice-copy'
-import { structuredAgentSessionMessageSendMutation } from '../../../../shared/structured-agent-session-send-mutation'
+import { structuredAgentSessionMessageSendMutation } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 import {
   structuredAgentSessionSendEvidence,
   type StructuredAgentSessionSendAnswer,
   type StructuredAgentSessionSendEvidence
-} from '../../../../shared/structured-agent-session-send-evidence'
+} from '../../../../shared/agent-session/requests/structured-agent-session-send-evidence'
 import { ensureRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'

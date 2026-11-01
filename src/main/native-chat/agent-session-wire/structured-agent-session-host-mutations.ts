@@ -13,7 +13,7 @@ import {
 } from '../../../shared/agent-session-wire'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { shouldQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult

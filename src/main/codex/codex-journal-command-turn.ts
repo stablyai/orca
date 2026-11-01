@@ -1,10 +1,8 @@
 // Command-carrying provider turns share the command's journal turn instead of creating a second one.
 
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
 import { providerDiagnostic } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
