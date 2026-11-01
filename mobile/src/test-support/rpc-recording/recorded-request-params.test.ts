@@ -124,7 +124,8 @@ function contractProblems(
     }
     const parsed = parseRpcRequestParams(
       { id: 'recorded', authToken: 'recorded', method, params },
-      defineMethod({ name: method, params: schema, handler: () => null }),
+      // Param parsing never reads the permission; the method only carries the real schema.
+      defineMethod({ name: method, permission: 'workspace', params: schema, handler: () => null }),
       { runtimeId: 'recorded' }
     )
     if (parsed.error) {
