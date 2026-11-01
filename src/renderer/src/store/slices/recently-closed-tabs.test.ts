@@ -38,9 +38,11 @@ import {
   makeUnifiedTab
 } from './store-test-helpers'
 import {
+  insertRecentlyClosedTabKind,
   pushRecentlyClosedTabKind,
   remapClosedTerminalTabSnapshotCwds,
-  restoreRecentlyClosedTabPosition
+  restoreRecentlyClosedTabPosition,
+  takeClosedTabOrder
 } from './recently-closed-tabs'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
@@ -487,5 +489,14 @@ describe('reopenClosedTab cross-type MRU', () => {
   it('returns false when no tab was ever closed', () => {
     const store = makeSeededStore()
     expect(store.getState().reopenClosedTab(WT)).toBe(false)
+  })
+})
+
+describe('insertRecentlyClosedTabKind', () => {
+  it('places a late editor kind behind a tab closed after that editor', () => {
+    const editorOrder = takeClosedTabOrder()
+    const afterTerminal = pushRecentlyClosedTabKind(undefined, WT, 'terminal')
+    const kinds = insertRecentlyClosedTabKind(afterTerminal, WT, 'editor', editorOrder)
+    expect(kinds[WT]).toEqual(['terminal', 'editor'])
   })
 })

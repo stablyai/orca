@@ -36,6 +36,24 @@ const MAX_RECENT_CLOSED_TERMINAL_TABS = 10
 // Cross-type history exceeds per-type cap 10; drained snapshot kinds are skipped on pop.
 const MAX_RECENT_CLOSED_TAB_KINDS = 30
 
+let nextClosedTabOrder = 0
+// Why: parallel to the kind list, and only for this session. A stat that finishes
+// after a later close has to insert behind that close instead of prepending.
+const kindCloseOrderByWorktree = new Map<string, number[]>()
+
+export function takeClosedTabOrder(): number {
+  nextClosedTabOrder += 1
+  return nextClosedTabOrder
+}
+
+function kindOrdersAligned(worktreeId: string, kindCount: number): number[] {
+  const orders = kindCloseOrderByWorktree.get(worktreeId)
+  if (orders && orders.length === kindCount) {
+    return orders
+  }
+  return Array.from({ length: kindCount }, () => -1)
+}
+
 // Partial single-slice test stores can omit these maps.
 export function pushClosedTerminalTabSnapshot(
   map: Record<string, ClosedTerminalTabSnapshot[]> | undefined,
@@ -52,7 +70,8 @@ export function pushRecentlyClosedTabKind(
   map: Record<string, RecentlyClosedTabKind[]> | undefined,
   worktreeId: string,
   kind: RecentlyClosedTabKind,
-  count = 1
+  count = 1,
+  closeOrder?: number
 ): Record<string, RecentlyClosedTabKind[]> {
   // No-op pushes preserve identity for unrelated subscribers, like closeTab unread maps.
   if (count <= 0) {
@@ -60,6 +79,15 @@ export function pushRecentlyClosedTabKind(
   }
   // Thousands of close-all entries beyond history cap cannot affect reopen order.
   const retainedCount = Math.min(count, MAX_RECENT_CLOSED_TAB_KINDS)
+  const order = closeOrder ?? takeClosedTabOrder()
+  const priorOrders = kindOrdersAligned(worktreeId, (map?.[worktreeId] ?? []).length)
+  kindCloseOrderByWorktree.set(
+    worktreeId,
+    [...Array.from({ length: retainedCount }, () => order), ...priorOrders].slice(
+      0,
+      MAX_RECENT_CLOSED_TAB_KINDS
+    )
+  )
   return {
     ...map,
     [worktreeId]: [
@@ -67,6 +95,52 @@ export function pushRecentlyClosedTabKind(
       ...(map?.[worktreeId] ?? [])
     ].slice(0, MAX_RECENT_CLOSED_TAB_KINDS)
   }
+}
+
+export function insertRecentlyClosedTabKind(
+  map: Record<string, RecentlyClosedTabKind[]> | undefined,
+  worktreeId: string,
+  kind: RecentlyClosedTabKind,
+  closeOrder: number
+): Record<string, RecentlyClosedTabKind[]> {
+  const kinds = map?.[worktreeId] ?? []
+  const orders = kindOrdersAligned(worktreeId, kinds.length)
+  let index = kinds.length
+  for (let i = 0; i < kinds.length; i++) {
+    if (orders[i] < closeOrder) {
+      index = i
+      break
+    }
+  }
+  kindCloseOrderByWorktree.set(
+    worktreeId,
+    [...orders.slice(0, index), closeOrder, ...orders.slice(index)].slice(
+      0,
+      MAX_RECENT_CLOSED_TAB_KINDS
+    )
+  )
+  return {
+    ...map,
+    [worktreeId]: [...kinds.slice(0, index), kind, ...kinds.slice(index)].slice(
+      0,
+      MAX_RECENT_CLOSED_TAB_KINDS
+    )
+  }
+}
+
+export function shiftRecentlyClosedTabKindOrder(
+  worktreeId: string,
+  remainingKindCount: number
+): void {
+  const orders = kindCloseOrderByWorktree.get(worktreeId)
+  if (!orders || orders.length !== remainingKindCount + 1) {
+    kindCloseOrderByWorktree.set(
+      worktreeId,
+      Array.from({ length: remainingKindCount }, () => -1)
+    )
+    return
+  }
+  kindCloseOrderByWorktree.set(worktreeId, orders.slice(1))
 }
 
 export function remapClosedTerminalTabSnapshotCwds(
@@ -164,6 +238,7 @@ export const createRecentlyClosedTabsSlice: StateCreator<
         if (!kind) {
           return s
         }
+        shiftRecentlyClosedTabKindOrder(worktreeId, kinds.length - 1)
         return {
           recentlyClosedTabKindsByWorktree: {
             ...s.recentlyClosedTabKindsByWorktree,
