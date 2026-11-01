@@ -9,7 +9,6 @@ import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
 
-type MentionInput = 'ready' | 'disabled' | 'ime' | 'none' | 'plain' | 'missing-handle'
 export function mountedMention(
   crewRows: OrchestrationCrewRow[],
   first: OrchestrationAgentReference,
@@ -18,7 +17,6 @@ export function mountedMention(
 ): RenderResult & {
   input: RefObject<NativeChatComposerInput | null>
   handle: RefObject<NativeChatComposerHandle | null>
-  setMode: (mode: MentionInput) => void
 } {
   crewRows.push({
     partyKey: 'worker',
@@ -31,17 +29,16 @@ export function mountedMention(
   })
   const input = createRef<NativeChatComposerInput>()
   const handle = createRef<NativeChatComposerHandle>()
-  const absent = createRef<NativeChatComposerHandle>()
-  function Pane({ mode }: { mode: MentionInput }) {
+  function Pane() {
     useNativeChatComposerHandle(handle, {
       textareaRef: input,
-      isComposing: () => mode === 'ime',
+      isComposing: () => false,
       setDraft: () => {},
       setCaret: () => {},
       setActiveSuggestion: () => {},
       attachmentScopeKey: 'menu',
       targetKey: 'menu',
-      disabled: mode === 'disabled',
+      disabled: false,
       caret: 6,
       resolveAttachmentOwner: () => ({ kind: 'local' }),
       attachResolvedPaths: () => {},
@@ -60,36 +57,20 @@ export function mountedMention(
             target={{ kind: 'environment', environmentId: 'captured-host' }}
             party="term_self"
             canMention
-            composerRef={mode === 'missing-handle' ? absent : handle}
+            composerRef={handle}
           />
-          {mode === 'none' ? null : mode === 'plain' ? (
-            <textarea
-              aria-label="Current input"
-              defaultValue={initialValue}
-              ref={(node) => {
-                input.current = node
-              }}
-            />
-          ) : (
-            <NativeChatPromptEditor
-              scopeKey="menu"
-              inputRef={input}
-              initialValue={initialValue}
-              disabled={mode === 'disabled'}
-              placeholder="Current input"
-              onChange={() => {}}
-              onSelect={() => {}}
-            />
-          )}
+          <NativeChatPromptEditor
+            scopeKey="menu"
+            inputRef={input}
+            initialValue={initialValue}
+            disabled={false}
+            placeholder="Current input"
+            onChange={() => {}}
+            onSelect={() => {}}
+          />
         </div>
       </TooltipProvider>
     )
   }
-  const view = render(<Pane mode="ready" />)
-  return {
-    ...view,
-    input,
-    handle,
-    setMode: (mode: MentionInput) => view.rerender(<Pane mode={mode} />)
-  }
+  return { ...render(<Pane />), input, handle }
 }

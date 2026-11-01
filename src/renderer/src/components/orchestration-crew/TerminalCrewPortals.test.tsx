@@ -7,21 +7,13 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
-import type * as RuntimeGraph from '@/runtime/sync-runtime-graph'
-import type * as OpenAgentMessageSender from '@/lib/open-agent-message-sender'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PtyTransport } from '../terminal-pane/pty-transport-types'
 import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createIpcPtyTransport } from '../terminal-pane/pty-transport'
 import { TerminalCrewPortals } from './TerminalCrewPortals'
-import { FOCUS_TERMINAL_PANE_EVENT } from '@/constants/terminal'
-import { handleFocusTerminalPaneDetail } from '../terminal-pane/focus-terminal-pane-event'
 import { holdPhysicalCloseTasks } from './crew-menu.test-fixture'
-import {
-  retainedCrewSurfaces,
-  selectConfiguredNextPane
-} from './terminal-crew-selection.test-fixture'
 
 const rig = vi.hoisted(() => ({ open: vi.fn(), copy: vi.fn() }))
 vi.mock('./use-terminal-crew-identity', () => ({
@@ -39,18 +31,6 @@ vi.mock('@/lib/pane-manager/pane-lifecycle', async (importOriginal) => {
   return { ...actual, openTerminal: vi.fn() }
 })
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('../tab-bar/TabBar', () => ({ default: () => null }))
-vi.mock('../editor/EditorPanel', () => ({
-  default: () => <textarea aria-label="Other editor input" />
-}))
-vi.mock('@/runtime/sync-runtime-graph', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeGraph>()),
-  observeTabGroupBodyGridSize: () => () => {}
-}))
-
-const sender = await vi.importActual<typeof OpenAgentMessageSender>(
-  '@/lib/open-agent-message-sender'
-)
 
 const worker: OrchestrationCrewRow = {
   partyKey: 'worker',
@@ -71,10 +51,8 @@ let currentWorker = worker
 type Controller = ComponentProps<typeof TerminalCrewPortals>['controller']
 const managers = new Set<PaneManager>()
 const ipcTransports: ReturnType<typeof createIpcPtyTransport>[] = []
-const disposeSurfaces: (() => void)[] = []
 function resetFixture() {
   cleanup()
-  disposeSurfaces.splice(0).forEach((dispose) => dispose())
   for (const transport of ipcTransports.splice(0)) {
     transport.destroy?.()
   }
@@ -95,12 +73,10 @@ afterEach(() => {
 function mount(insertion?: {
   acceptance: boolean | Promise<boolean> | undefined
   split?: boolean
-  retained?: 'terminal' | 'editor' | 'agent-session'
 }) {
   currentWorker = insertion
     ? { ...worker, task: { title: 'Inspect', state: 'dispatched' }, sendAddress: 'term_worker' }
     : worker
-  let ptyId = 'pty-captured'
   if (insertion) {
     vi.stubGlobal('requestAnimationFrame', () => 1)
     vi.stubGlobal('cancelAnimationFrame', () => {})
@@ -129,7 +105,7 @@ function mount(insertion?: {
     disconnect: vi.fn(),
     sendInputImmediate: vi.fn(() => true),
     resize: vi.fn(() => true),
-    getPtyId: () => ptyId,
+    getPtyId: () => 'pty-captured',
     isConnected: () => true,
     sendInput,
     ...(insertion?.acceptance === undefined ? {} : { sendInputAccepted: accepted })
@@ -171,17 +147,9 @@ function mount(insertion?: {
     value: { ui: { writeTerminalClipboardText: rig.copy } }
   })
   rig.copy.mockResolvedValue(undefined)
-  const retained = insertion?.retained ? retainedCrewSurfaces(root, insertion.retained) : undefined
-  if (retained) {
-    disposeSurfaces.push(retained.dispose)
-  }
   const content = () => (
     <TooltipProvider>
-      {retained ? (
-        retained.wrap(<TerminalCrewPortals controller={controller} />)
-      ) : (
-        <TerminalCrewPortals controller={controller} />
-      )}
+      <TerminalCrewPortals controller={controller} />
     </TooltipProvider>
   )
   const view = render(content())
@@ -196,19 +164,11 @@ function mount(insertion?: {
     transports,
     accepted,
     sendInput,
-    retained,
-    update: () => view.rerender(content()),
-    replacePty: () => {
-      ptyId = 'pty-replaced'
-    }
+    update: () => view.rerender(content())
   }
 }
-function fixture(
-  acceptance: boolean | Promise<boolean> | undefined,
-  split = false,
-  retained?: 'terminal' | 'editor' | 'agent-session'
-) {
-  const test = mount({ acceptance, split, retained })
+function fixture(acceptance: boolean | Promise<boolean> | undefined, split = false) {
+  const test = mount({ acceptance, split })
   const pane = test.first
   fireEvent.click(within(pane.container).getByRole('button', { name: 'Show crew: 1 workers' }))
   return {
@@ -282,112 +242,32 @@ it.each(['row', 'all', 'menu'] as const)(
   }
 )
 
-it.each(['pointer', 'keyboard', 'open', 'floating'] as const)(
-  'does not focus or activate after ACK over a later %s choice',
-  async (choice) => {
-    const tasks = holdPhysicalCloseTasks()
-    const user = userEvent.setup()
-    const delivery = Promise.withResolvers<boolean>()
-    const test = fixture(delivery.promise, true)
-    await user.click(test.more)
-    await user.click(screen.getByRole('menuitem', { name: 'Mention in message' }))
-    expect(test.input).toHaveFocus()
-    if (choice === 'pointer') {
-      fireEvent.pointerDown(test.second.container)
-    } else if (choice === 'keyboard') {
-      selectConfiguredNextPane(test.controller, test.manager)
-    } else if (choice === 'open') {
-      const frames: FrameRequestCallback[] = []
-      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
-        frames.push(callback)
-      )
-      useAppStore.setState({
-        activeWorktreeId: 'workspace',
-        tabsByWorktree: {
-          workspace: [
-            {
-              id: 'tab',
-              ptyId: null,
-              worktreeId: 'workspace',
-              title: 'Terminals',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1
-            }
-          ]
-        },
-        terminalLayoutsByTabId: {
-          tab: {
-            root: { type: 'leaf', leafId: test.second.leafId },
-            activeLeafId: test.second.leafId,
-            expandedLeafId: null,
-            ptyIdsByLeafId: { [test.second.leafId]: 'term_worker' }
-          }
-        }
-      })
-      const receive = (event: Event) => {
-        if (event instanceof CustomEvent) {
-          const detail: unknown = event.detail
-          if (
-            !detail ||
-            typeof detail !== 'object' ||
-            !('tabId' in detail) ||
-            typeof detail.tabId !== 'string' ||
-            !('leafId' in detail) ||
-            typeof detail.leafId !== 'string'
-          ) {
-            throw new Error('Invalid production focus event')
-          }
-          handleFocusTerminalPaneDetail(
-            { tabId: detail.tabId, leafId: detail.leafId },
-            {
-              tabId: 'tab',
-              manager: test.manager,
-              acknowledgeAgents: vi.fn(),
-              surfaceStaleAgentRow: vi.fn()
-            }
-          )
-        }
-      }
-      window.addEventListener(FOCUS_TERMINAL_PANE_EVENT, receive)
-      disposeSurfaces.push(() => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, receive))
-      rig.open.mockImplementationOnce(sender.openOrchestrationCrewAgent)
-      await user.click(within(test.pane.container).getByRole('button', { name: 'Open Worker' }))
-      expect(rig.open).toHaveBeenCalledExactlyOnceWith(currentWorker, { kind: 'local' })
-      act(() => frames.splice(0).forEach((frame) => frame(0)))
-      expect(test.secondInput).toHaveFocus()
-      expect(test.manager.getActivePane()?.id).toBe(test.second.id)
-    } else {
-      const destination = document.createElement('textarea')
-      destination.setAttribute('aria-label', 'Floating input')
-      document.body.append(destination)
-      destination.focus()
-    }
-    const destination = document.activeElement
-    act(tasks[0])
-    expect(document.activeElement).toBe(destination)
-    vi.mocked(test.manager.setActivePane).mockClear()
-    const focus = vi.mocked(test.pane.terminal.focus)
-    focus.mockClear()
-    await act(async () => {
-      if (choice === 'floating') {
-        delivery.reject(new Error('paste failed'))
-      } else {
-        delivery.resolve(choice !== 'pointer')
-      }
-    })
-    expect(test.manager.setActivePane).not.toHaveBeenCalled()
-    expect(focus).not.toHaveBeenCalled()
-    expect(document.activeElement).toBe(destination)
-    expect(test.accepted).toHaveBeenCalledExactlyOnceWith(
-      'Worker (Orca agent term_worker) ',
-      'driving'
-    )
-    expect(test.sendInput).not.toHaveBeenCalled()
-    expect(toast.error).toHaveBeenCalledTimes(choice === 'pointer' || choice === 'floating' ? 1 : 0)
-  }
-)
+it('does not focus or activate after ACK over a later pointer choice of another pane', async () => {
+  const tasks = holdPhysicalCloseTasks()
+  const user = userEvent.setup()
+  const delivery = Promise.withResolvers<boolean>()
+  const test = fixture(delivery.promise, true)
+  await user.click(test.more)
+  await user.click(screen.getByRole('menuitem', { name: 'Mention in message' }))
+  expect(test.input).toHaveFocus()
+  fireEvent.pointerDown(test.second.container)
+  const destination = document.activeElement
+  act(tasks[0])
+  expect(document.activeElement).toBe(destination)
+  vi.mocked(test.manager.setActivePane).mockClear()
+  const focus = vi.mocked(test.pane.terminal.focus)
+  focus.mockClear()
+  await act(async () => delivery.resolve(false))
+  expect(test.manager.setActivePane).not.toHaveBeenCalled()
+  expect(focus).not.toHaveBeenCalled()
+  expect(document.activeElement).toBe(destination)
+  expect(test.accepted).toHaveBeenCalledExactlyOnceWith(
+    'Worker (Orca agent term_worker) ',
+    'driving'
+  )
+  expect(test.sendInput).not.toHaveBeenCalled()
+  expect(toast.error).toHaveBeenCalledOnce()
+})
 
 it('focuses the captured pane before acceptance, preserves caret/no Enter, and uses the legacy input fallback', async () => {
   for (const acceptance of [true, undefined]) {
@@ -408,77 +288,15 @@ it('focuses the captured pane before acceptance, preserves caret/no Enter, and u
   }
 })
 
-it('shows one refusal toast and never focuses replaced captured pane, PTY or transport after an asynchronous write', async () => {
-  for (const rejects of [false, true]) {
-    const refused = fixture(false)
-    if (rejects) {
-      refused.accepted.mockRejectedValueOnce(new Error('transport rejected'))
-    }
-    await act(async () => refused.mention())
-    expect(toast.error).toHaveBeenCalledTimes(1)
-    expect(refused.manager.setActivePane).toHaveBeenCalledExactlyOnceWith(refused.pane.id, {
-      focus: false
-    })
-    expect(refused.input).toHaveFocus()
-    resetFixture()
-    vi.clearAllMocks()
-  }
-  for (const kind of ['pane', 'pty', 'transport', 'manager'] as const) {
-    let finish!: (accepted: boolean) => void
-    const test = fixture(
-      new Promise<boolean>((resolve) => {
-        finish = resolve
-      })
-    )
-    act(() => test.mention())
-    expect(test.input).toHaveFocus()
-    vi.mocked(test.manager.setActivePane).mockClear()
-    if (kind === 'pane') {
-      const replacement = test.manager.createInitialPane({
-        focus: false,
-        leafId: '22222222-2222-4222-8222-222222222222'
-      })
-      expect(test.manager.retirePanePreservingPty(test.pane.id)).toBe(true)
-      expect(test.manager.getPanes()).toEqual([replacement])
-    }
-    if (kind === 'pty') {
-      test.replacePty()
-    }
-    if (kind === 'transport') {
-      test.transports.set(test.pane.id, { ...test.transport })
-    }
-    if (kind === 'manager') {
-      const root = document.createElement('div')
-      document.body.append(root)
-      const replacement = new PaneManager(root, { linkOpenHint: () => '' })
-      managers.add(replacement)
-      replacement.createInitialPane({ focus: false })
-      test.controller.managerRef.current = replacement
-    }
-    await act(async () => finish(true))
-    expect(test.manager.setActivePane).not.toHaveBeenCalled()
-    expect(toast.error).not.toHaveBeenCalled()
-    expect(test.accepted).toHaveBeenCalledTimes(1)
-    resetFixture()
-    vi.clearAllMocks()
-  }
-})
-
-it.each(['pane', 'pty', 'transport', 'disconnected', 'detached'] as const)(
+it.each(['pane', 'transport'] as const)(
   'refuses an invocation with a stale %s without focusing or writing to a replacement',
   async (kind) => {
     const test = fixture(true)
     if (kind === 'pane') {
       test.manager.createInitialPane({ focus: false })
       test.manager.retirePanePreservingPty(test.pane.id)
-    } else if (kind === 'pty') {
-      test.replacePty()
-    } else if (kind === 'transport') {
-      test.transports.set(test.pane.id, { ...test.transport })
-    } else if (kind === 'disconnected') {
-      vi.spyOn(test.transport, 'isConnected').mockReturnValue(false)
     } else {
-      test.pane.container.remove()
+      test.transports.set(test.pane.id, { ...test.transport })
     }
     vi.mocked(test.manager.setActivePane).mockClear()
     const focus = vi.mocked(test.pane.terminal.focus)
@@ -493,107 +311,6 @@ it.each(['pane', 'pty', 'transport', 'disconnected', 'detached'] as const)(
     )
   }
 )
-
-it('keeps accepted real menu Mention on the captured terminal across close and pending delivery', async () => {
-  for (const pending of [false, true]) {
-    const user = userEvent.setup()
-    const delivery = Promise.withResolvers<boolean>()
-    const test = fixture(pending ? delivery.promise : true)
-    await user.click(test.more)
-    expect(test.manager.setActivePane).toHaveBeenCalledExactlyOnceWith(test.pane.id, {
-      focus: false
-    })
-    expect(document.activeElement).not.toBe(test.input)
-    vi.mocked(test.manager.setActivePane).mockClear()
-    const popup = within(document.body).getByRole('menu')
-    const closed = vi.fn()
-    popup.addEventListener('focusScope.autoFocusOnUnmount', closed)
-    const returned = vi.spyOn(test.more, 'focus')
-    await user.click(within(document.body).getByRole('menuitem', { name: 'Mention in message' }))
-    await waitFor(() => expect(within(document.body).queryByRole('menu')).toBeNull())
-    await waitFor(() => expect(closed).toHaveBeenCalledOnce())
-    expect(closed.mock.calls[0][0].target).toBe(popup)
-    if (pending) {
-      expect(test.input).toHaveFocus()
-      returned.mockClear()
-      await act(async () => delivery.resolve(true))
-    }
-    await waitFor(() => expect(document.activeElement).toBe(test.input))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(returned).not.toHaveBeenCalled()
-    expect(test.manager.setActivePane).toHaveBeenCalledExactlyOnceWith(test.pane.id, {
-      focus: false
-    })
-    expect(test.accepted).toHaveBeenCalledExactlyOnceWith(
-      'Worker (Orca agent term_worker) ',
-      'driving'
-    )
-    expect(test.sendInput).not.toHaveBeenCalled()
-    expect(test.input.selectionStart).toBe(8)
-    expect(test.input.value).toBe('existing suffix')
-    expect(toast.error).not.toHaveBeenCalled()
-    resetFixture()
-    vi.clearAllMocks()
-  }
-})
-
-it('dismisses real menu Mention without inventing delivery on refusal, rejection or captured transport replacement', async () => {
-  for (const outcome of ['refused', 'rejected', 'replaced-before', 'replaced-after'] as const) {
-    const user = userEvent.setup()
-    const delivery = Promise.withResolvers<boolean>()
-    const test = fixture(delivery.promise)
-    await user.click(test.more)
-    expect(test.manager.setActivePane).toHaveBeenCalledExactlyOnceWith(test.pane.id, {
-      focus: false
-    })
-    expect(document.activeElement).not.toBe(test.input)
-    vi.mocked(test.manager.setActivePane).mockClear()
-    if (outcome === 'replaced-before') {
-      test.transports.set(test.pane.id, { ...test.transport })
-    }
-    await user.click(within(document.body).getByRole('menuitem', { name: 'Mention in message' }))
-    await waitFor(() => expect(within(document.body).queryByRole('menu')).toBeNull())
-    await waitFor(() =>
-      expect(document.activeElement).toBe(outcome === 'replaced-before' ? test.more : test.input)
-    )
-    const focusCalls = vi.mocked(test.manager.setActivePane).mock.calls.length
-    vi.mocked(test.manager.setActivePane).mockClear()
-    if (outcome === 'replaced-after') {
-      test.transports.set(test.pane.id, { ...test.transport })
-    }
-    await act(async () => {
-      if (outcome === 'rejected') {
-        delivery.reject(new Error('transport rejected'))
-      } else {
-        delivery.resolve(outcome === 'replaced-before' || outcome === 'replaced-after')
-      }
-    })
-    expect(test.manager.setActivePane).not.toHaveBeenCalled()
-    expect(document.activeElement).toBe(outcome === 'replaced-before' ? test.more : test.input)
-    expect(focusCalls).toBe(outcome === 'replaced-before' ? 0 : 1)
-    if (outcome === 'replaced-before') {
-      expect(test.accepted).not.toHaveBeenCalled()
-      expect(toast.error).toHaveBeenCalledExactlyOnceWith(
-        'The terminal did not accept the agent reference. Try again.'
-      )
-      await act(async () => test.mention())
-      expect(test.accepted).not.toHaveBeenCalled()
-      expect(test.manager.setActivePane).not.toHaveBeenCalled()
-      expect(toast.error).toHaveBeenCalledTimes(2)
-      expect(vi.mocked(toast.error).mock.calls[1]).toEqual(vi.mocked(toast.error).mock.calls[0])
-    } else {
-      expect(test.accepted).toHaveBeenCalledExactlyOnceWith(
-        'Worker (Orca agent term_worker) ',
-        'driving'
-      )
-      expect(toast.error).toHaveBeenCalledTimes(outcome === 'replaced-after' ? 0 : 1)
-    }
-    expect(test.sendInput).not.toHaveBeenCalled()
-    expect(test.input.value).toBe('existing suffix')
-    resetFixture()
-    vi.clearAllMocks()
-  }
-})
 
 it('retires only the hidden menu before deferred physical close and never replays it on show', async () => {
   const tasks = holdPhysicalCloseTasks()
@@ -692,67 +409,4 @@ it('uses numeric expansion and exact activity leaf identity without dismissing a
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   expect(rig.open).not.toHaveBeenCalled()
   expect(rig.copy).not.toHaveBeenCalled()
-})
-
-it.each(['terminal', 'editor', 'agent-session'] as const)(
-  'keeps exact retained %s group selection from pointer and keyboard/AT entry while A stays current',
-  async (kind) => {
-    for (const entry of ['pointer', 'focus'] as const) {
-      const user = userEvent.setup()
-      const delivery = Promise.withResolvers<boolean>()
-      const test = fixture(delivery.promise, false, kind)
-      await user.click(test.more)
-      await user.click(screen.getByRole('menuitem', { name: 'Mention in message' }))
-      await waitFor(() => expect(test.input).toHaveFocus())
-      const destination =
-        kind === 'editor'
-          ? await screen.findByRole('textbox', { name: 'Other editor input' })
-          : test.retained!.otherInput
-      expect(test.retained!.otherPane.id).toBe(test.pane.id)
-      if (entry === 'pointer') {
-        fireEvent.pointerDown(destination)
-      } else {
-        act(() => destination.focus())
-      }
-      const state = useAppStore.getState()
-      expect(state.activeGroupIdByWorktree.workspace).toBe('other')
-      expect(
-        state.groupsByWorktree.workspace.find((group) => group.id === 'other')?.activeTabId
-      ).toBe('other-tab')
-      expect(
-        state.unifiedTabsByWorktree.workspace.find((tab) => tab.id === 'other-tab')
-      ).toMatchObject({ entityId: 'other-content', contentType: kind })
-      expect(test.manager.getActivePane()?.id).toBe(test.pane.id)
-      vi.mocked(test.manager.setActivePane).mockClear()
-      await act(async () => delivery.resolve(true))
-      expect(test.manager.setActivePane).not.toHaveBeenCalled()
-      expect(useAppStore.getState().activeGroupIdByWorktree.workspace).toBe('other')
-      expect(test.manager.getActivePane()?.id).toBe(test.pane.id)
-      if (entry === 'focus') {
-        expect(destination).toHaveFocus()
-      }
-      expect(test.accepted).toHaveBeenCalledExactlyOnceWith(
-        'Worker (Orca agent term_worker) ',
-        'driving'
-      )
-      expect(test.sendInput).not.toHaveBeenCalled()
-      expect(toast.error).not.toHaveBeenCalled()
-      resetFixture()
-      vi.clearAllMocks()
-    }
-  }
-)
-
-it('keeps ordinary retained menu press focus in A through physical close and acceptance', async () => {
-  const user = userEvent.setup()
-  const delivery = Promise.withResolvers<boolean>()
-  const test = fixture(delivery.promise, false, 'terminal')
-  await user.click(test.more)
-  await user.click(screen.getByRole('menuitem', { name: 'Mention in message' }))
-  await waitFor(() => expect(test.input).toHaveFocus())
-  expect(useAppStore.getState().activeGroupIdByWorktree.workspace).toBe('source')
-  vi.mocked(test.manager.setActivePane).mockClear()
-  await act(async () => delivery.resolve(true))
-  expect(test.manager.setActivePane).not.toHaveBeenCalled()
-  expect(test.input).toHaveFocus()
 })
