@@ -36,6 +36,7 @@ import {
 } from './federated-worker-start-receipts'
 import { releaseRetriedWorkerTerminal } from '../worker/retried-worker-terminal-release'
 import { withWorkerStartNext } from '../receipt-next'
+import { recordReadyFederatedDispatch } from './federated-worker-ready-record'
 import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
 import {
   recordWorkerLaunchObservation,
@@ -226,21 +227,7 @@ export async function startFederatedWorker(args: {
       remote.state === 'ready'
     )
     if (isReadyRemoteFederatedWorkerStartReceipt(remote)) {
-      db.updateFederatedDispatchResources({
-        dispatchId: started.dispatch.id,
-        remoteRuntimeEpoch: remote.runtimeEpoch,
-        worktreeId: remote.worktreeId,
-        terminalHandle: remote.terminalHandle
-      })
-      db.recordWorkerStage({
-        dispatchId: started.dispatch.id,
-        stage: 'remote_input_accepted',
-        worktreeId: remote.worktreeId,
-        terminalHandle: remote.terminalHandle,
-        setupState: remote.setup?.state,
-        effects: remote.effects,
-        residualResources: remote.residualResources
-      })
+      recordReadyFederatedDispatch(db, started.dispatch.id, remote)
       const readyWorker = db.markWorkerDispatchReady(started.dispatch.id)
       runtime.ensureOrchestrationFederationRelay(runId)
       const reportsTurnStops = status.capabilities?.includes(
