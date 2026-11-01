@@ -145,6 +145,8 @@ export function RichMarkdownCodeBlock({
             content={node.textContent.trim()}
             isDark={isDark}
             onExpand={expandMermaidDiagram}
+            lazy
+            pendingContent={<div className="min-h-48" />}
           />
         </div>
       )}

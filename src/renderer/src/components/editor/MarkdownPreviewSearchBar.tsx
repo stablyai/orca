@@ -23,7 +23,11 @@ export function MarkdownPreviewSearchBar({
   const { moveToMatch, closeSearch } = viewport
 
   return (
-    <div className="markdown-preview-search" onKeyDown={(event) => event.stopPropagation()}>
+    <div
+      className="markdown-preview-search"
+      aria-busy={searchPending || undefined}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
       <div className="markdown-preview-search-field">
         <Input
           ref={setSearchInputElement}

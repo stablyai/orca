@@ -180,6 +180,7 @@ export function useMarkdownPreviewComponents({
               content={String(children).trimEnd()}
               isDark={isDark}
               onExpand={expandMermaidDiagram}
+              lazy
             />
           )
         }

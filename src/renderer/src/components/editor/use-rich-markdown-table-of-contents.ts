@@ -3,6 +3,7 @@ import { useCallback, useMemo, type MutableRefObject } from 'react'
 import type { MarkdownTocItem } from './markdown-table-of-contents'
 import { findRichMarkdownTocHeadingTarget } from './rich-markdown-toc-heading-target'
 import { selectMarkdownTableOfContents } from './markdown-toc-visibility-gate'
+import { settleMermaidNavigation } from './use-mermaid-viewport'
 
 function flattenMarkdownTocItems(items: MarkdownTocItem[]): MarkdownTocItem[] {
   return items.flatMap((item) => [item, ...flattenMarkdownTocItems(item.children)])
@@ -35,6 +36,11 @@ export function useRichMarkdownTableOfContents(
       if (heading) {
         revealMarkdownNavigationDetails(heading)
         heading.scrollIntoView({ block: 'center' })
+        void settleMermaidNavigation(container, () => {
+          if (container.contains(heading)) {
+            heading.scrollIntoView({ block: 'center' })
+          }
+        })
       }
     },
     [flatTableOfContentsItems, scrollContainerRef]
