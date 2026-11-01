@@ -286,17 +286,26 @@ for (const theme of ['dark', 'light'] as const) {
     const mobilePane = page.getByText('Control terminals and agents from your phone.')
 
     // An older persistent toast, raised before the modal opened, stays dismissible over it.
-    await showUnpairedDeviceToast(electronApp)
-    await expect(action).toBeVisible()
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].webContents.send('star-nag:show', {
+        mode: 'web',
+        surface: 'toast'
+      })
+    })
+    const olderToast = page
+      .locator('[data-sonner-toast]')
+      .filter({ hasText: 'Onboarding completed!' })
+    const olderAction = olderToast.getByRole('button', { name: 'Later', includeHidden: true })
+    await expect(olderAction).toBeVisible()
     await page.getByRole('button', { name: 'Add Profile', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'New Browser Profile' })
     await expect(dialog).toBeVisible()
     const nameField = dialog.getByRole('textbox')
     await nameField.fill('Draft profile name')
-    await expect(unpairedToast.locator('[data-title]')).toBeVisible()
-    await expect(action).toHaveCSS('visibility', 'hidden')
-    await unpairedToast.locator('[data-close-button]').click()
-    await expect(unpairedToast).toBeHidden()
+    await expect(olderToast.getByText('Onboarding completed!')).toBeVisible()
+    await expect(olderAction).toHaveCSS('visibility', 'hidden')
+    await olderToast.getByRole('button', { name: 'Dismiss', exact: true }).click()
+    await expect(olderToast).toBeHidden()
     await expect(dialog).toBeVisible()
     await expect(nameField).toHaveValue('Draft profile name')
     await expect(nameField).toBeFocused()
