@@ -6,6 +6,7 @@ import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/lis
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { AgentHookServerAgentPresence } from './server/server-agent-presence'
 import { isValidPaneKey } from './server/server-status-identity'
+import { createLocalHookRootEvidenceReader } from '../../shared/hook-process-root-evidence-reader'
 
 export type {
   AgentHookAuthorityAttestation,
@@ -28,6 +29,8 @@ export { isValidPaneKey }
 export class AgentHookServer extends AgentHookServerAgentPresence {}
 
 export const agentHookServer = new AgentHookServer()
+// The desktop and SSH hosts run this server beside their panes, so their own process table holds the agents.
+agentHookServer.setHookRootEvidenceReader(createLocalHookRootEvidenceReader())
 
 export const _internals = {
   // Bind normalization to singleton state so tests exercise its caches.

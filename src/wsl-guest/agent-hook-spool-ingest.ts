@@ -1,6 +1,7 @@
 import type { RelayHookAdmissionOptions } from './agent-hook-event-admission'
 import { admitRelayOpenCodeTui } from './agent-hook-request'
 import { checkHookOwnerPresence } from '../shared/agent-hook-owner-presence'
+import type { HookRootEvidenceReader } from '../shared/hook-process-root-evidence'
 import { normalizeHookPayload } from '../shared/agent-hook-listener'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
@@ -21,6 +22,7 @@ export function ingestRelayHookSpoolRecord(
     isCurrent?: () => boolean
     providerNormalization?: RelayProviderHookNormalization
     checkAgentPresence?: (paneKey: string) => Promise<void>
+    readHookRootEvidence?: HookRootEvidenceReader
     apply: (
       event: AgentHookEventPayload,
       source: AgentHookSource,
@@ -59,7 +61,14 @@ export function ingestRelayHookSpoolRecord(
     }
   }
   const pending = host.checkAgentPresence
-    ? checkHookOwnerPresence(state, record.source, body, env, host.checkAgentPresence)
+    ? checkHookOwnerPresence(
+        state,
+        record.source,
+        body,
+        env,
+        host.checkAgentPresence,
+        host.readHookRootEvidence
+      )
     : undefined
   return pending ? pending.then(apply) : apply()
 }

@@ -415,15 +415,6 @@ describe('host-owned hook presence', () => {
       server.getStatusSnapshot().find((row) => row.paneKey === PANE)?.providerSession?.id
     ).toBe('resumed')
   })
-
-  it('records the process once the same session proves it after a hook without one', async () => {
-    const server = await createServer()
-    await hook(server, 'SessionStart', 'session-a', undefined, null)
-    await hook(server, 'UserPromptSubmit', 'nested', undefined, 4002)
-    expect(server.hasVerifiableAgentProcess(PANE)).toBe(false)
-    await hook(server, 'PostToolUse', 'session-a')
-    expect(server.hasVerifiableAgentProcess(PANE)).toBe(true)
-  })
 })
 
 describe('retained agent exit', () => {

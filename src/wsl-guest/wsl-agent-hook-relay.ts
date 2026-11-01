@@ -17,6 +17,7 @@ import {
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-relay'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
+import { createLocalHookRootEvidenceReader } from '../shared/hook-process-root-evidence-reader'
 import {
   sanitizeWslHookInstanceKey,
   WSL_HOOK_RELAY_INSTANCE_ENV,
@@ -62,7 +63,9 @@ async function main(): Promise<void> {
     preferredPort: windowsPort,
     forwardClaudeAgentView: (body) =>
       dispatcher.requestPrimary(CLAUDE_AGENT_VIEW_RELAY_METHOD, { body }, { timeoutMs: 1000 }),
-    forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
+    forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope),
+    // The guest owns these processes; the desktop never inspects a guest PID.
+    readHookRootEvidence: createLocalHookRootEvidenceReader()
   })
   dispatcher.onRequest(AGENT_HOOK_INFER_INTERRUPT_METHOD, async (params) => ({
     applied: hookServer.inferInterrupt(params)

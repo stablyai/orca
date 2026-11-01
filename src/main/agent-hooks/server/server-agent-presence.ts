@@ -202,10 +202,16 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     await this.initializeStatusHookOwner()
     const resolved = this.resolvePaneKeyAlias(paneKey)
     const row = this.state.lastStatusByPaneKey.get(resolved)
-    if (!row || row.connectionId !== null || row.agentPresence?.ended) {
+    // A terminal report after an exit keeps the retired record only as metadata, not as its author.
+    const retired = row?.agentPresence?.ended === true
+    if (!row || row.connectionId !== null || (retired && row.providerSessionOnly)) {
       return null
     }
-    if (row.agentPresence?.process && (await this.checkAgentPresence(resolved)) !== 'live') {
+    if (
+      !retired &&
+      row.agentPresence?.process &&
+      (await this.checkAgentPresence(resolved)) !== 'live'
+    ) {
       return null
     }
     // Each await may have seen hooks turned off or a newer report replace this one.

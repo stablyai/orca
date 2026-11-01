@@ -1,5 +1,4 @@
 import { AgentHookStartup, listenForAgentHooks } from '../../../shared/agent-hook-startup'
-import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
@@ -139,9 +138,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           res.end()
           return
         }
-        await checkHookOwnerPresence(this.state, source, aliasedBody, this.env, (paneKey) =>
-          this.checkAgentPresence(paneKey)
-        )
+        await this.checkHookOwner(source, aliasedBody)
         if (!isStatusCurrent()) {
           res.writeHead(204)
           res.end()
