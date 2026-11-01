@@ -83,6 +83,34 @@ for (const kind of ['dropdown', 'context'] as const) {
       await expect(first).toHaveAttribute('data-state', 'closed')
     })
 
+    test('keeps submenu pointer grace after wheel scrolling', async ({ page }) => {
+      const first = page.getByRole('menuitem', { name: 'First', exact: true })
+      const second = page.getByRole('menuitem', { name: 'Second', exact: true })
+      const start = await first.boundingBox()
+      if (!start) {
+        throw new Error('First submenu trigger has no bounds')
+      }
+      await page.mouse.move(start.x + start.width - 60, start.y + start.height / 2)
+      await expect(first).toHaveAttribute('data-state', 'open')
+      await page.mouse.wheel(0, 1)
+      const menu = page.locator(`[data-slot="${kind}-menu-content"]`)
+      await expect.poll(() => menu.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+      const from = await first.boundingBox()
+      const to = await second.boundingBox()
+      if (!from || !to) {
+        throw new Error('Submenu triggers have no bounds')
+      }
+      // Cross the next row while moving diagonally toward the open submenu.
+      await page.mouse.move(from.x + from.width - 60, from.y + from.height / 2)
+      await page.mouse.move(from.x + from.width - 40, from.y + from.height / 2 + 1)
+      await page.mouse.move(to.x + to.width - 20, to.y + 1)
+      await expect(first).toHaveAttribute('data-state', 'open')
+      await expect(second).toHaveAttribute('data-state', 'closed')
+      const child = page.getByRole('menuitem', { name: 'First child', exact: true })
+      await child.hover()
+      await expect(child).toBeFocused()
+    })
+
     if (kind === 'dropdown') {
       test('keyboard reopening after wheel dismissal preserves the first item', async ({
         page

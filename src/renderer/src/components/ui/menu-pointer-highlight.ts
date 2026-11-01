@@ -8,8 +8,7 @@ const OPEN_POPOVER_TRIGGER_SELECTOR = '[data-slot="popover-trigger"][aria-expand
 type Point = { x: number; y: number }
 
 type MenuPointerHighlightState = {
-  /** Set by wheel, cleared by keydown so keyboard-driven scrolling keeps its own highlight. */
-  wheelArmed: boolean
+  /** Tracked from wheel until keyboard navigation or pointer exit. */
   pointer: Point | null
   frame: number
 }
@@ -73,7 +72,6 @@ type Handlers = {
 
 function resetPointerTracking(state: MenuPointerHighlightState): void {
   cancelAnimationFrame(state.frame)
-  state.wheelArmed = false
   state.pointer = null
   state.frame = 0
 }
@@ -83,7 +81,6 @@ export function useMenuPointerHighlight(
   props: Handlers & { ref?: React.Ref<HTMLDivElement> }
 ): Required<Handlers> & { ref: React.RefCallback<HTMLDivElement> } {
   const stateRef = React.useRef<MenuPointerHighlightState>({
-    wheelArmed: false,
     pointer: null,
     frame: 0
   })
@@ -107,45 +104,48 @@ export function useMenuPointerHighlight(
     ref,
     onWheel: (event) => {
       props.onWheel?.(event)
-      stateRef.current.wheelArmed = true
       stateRef.current.pointer = { x: event.clientX, y: event.clientY }
     },
     onPointerMove: (event) => {
       props.onPointerMove?.(event)
       const state = stateRef.current
-      if (event.pointerType !== 'mouse') {
+      if (event.pointerType !== 'mouse' || !state.pointer) {
         return
       }
       state.pointer = { x: event.clientX, y: event.clientY }
     },
-    // Why: the deferred boundary events after a scroll fire Radix's pointerleave on the row that
-    // used to be under the cursor, which clears the highlight; re-sync once they land.
+    // Re-sync scroll's deferred boundary events; actual pointer movement belongs to Radix.
     onPointerOver: (event) => {
       props.onPointerOver?.(event)
-      if (stateRef.current.wheelArmed && event.pointerType === 'mouse') {
+      const pointer = stateRef.current.pointer
+      if (
+        event.pointerType === 'mouse' &&
+        pointer?.x === event.clientX &&
+        pointer.y === event.clientY
+      ) {
         syncMenuHighlightAtPoint(event.currentTarget, event.clientX, event.clientY)
       }
     },
     onPointerLeave: (event) => {
       props.onPointerLeave?.(event)
-      stateRef.current.pointer = null
+      resetPointerTracking(stateRef.current)
     },
     // Inputs can stop propagation when transferring keyboard focus to a menu item.
     onKeyDownCapture: (event) => {
-      stateRef.current.wheelArmed = false
+      resetPointerTracking(stateRef.current)
       props.onKeyDownCapture?.(event)
     },
     // Capture so menus that scroll an inner list (not the content itself) are covered too.
     onScrollCapture: (event) => {
       props.onScrollCapture?.(event)
       const state = stateRef.current
-      if (!state.wheelArmed || !state.pointer || state.frame) {
+      if (!state.pointer || state.frame) {
         return
       }
       const content = event.currentTarget
       state.frame = requestAnimationFrame(() => {
         state.frame = 0
-        if (state.wheelArmed && state.pointer) {
+        if (state.pointer) {
           syncMenuHighlightAtPoint(content, state.pointer.x, state.pointer.y)
         }
       })

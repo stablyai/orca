@@ -130,6 +130,24 @@ it('uses the current cursor position when it moves during wheel scrolling', () =
   expect(document.activeElement).toBe(b)
 })
 
+it('leaves moving-pointer boundary events to Radix after wheel scrolling', () => {
+  const { menu, a, b } = render()
+  a.focus()
+  wheelAt(menu, 10, 40)
+  hit = b
+  act(() => {
+    b.dispatchEvent(
+      new PointerEvent('pointerover', {
+        bubbles: true,
+        pointerType: 'mouse',
+        clientX: 20,
+        clientY: 60
+      })
+    )
+  })
+  expect(document.activeElement).toBe(a)
+})
+
 it('leaves keyboard-driven scrolling alone', () => {
   const { menu, a, b } = render()
   wheelAt(menu, 10, 40)
