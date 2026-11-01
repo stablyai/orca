@@ -22,7 +22,7 @@ export function NativeChatCrewPanel({
   return <OrchestrationCrewPanel target={target} party={party} isVisible={isVisible} />
 }
 
-/** The chat body below the pane header; the crew panel overlays it, never the header's buttons. */
+/** The chat transcript: the crew panel overlays it, never the header's buttons or the composer below it. */
 export function NativeChatCrewFrame({
   pane,
   children

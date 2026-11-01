@@ -327,82 +327,82 @@ export function NativeChatStructuredSession(
             </NativeChatRewindContext.Provider>
           )}
         </NativeChatContextClearFade>
-        {readFailure?.final ? null : (
-          <>
-            {/* Keep queued drafts outside the transcript and above the background-task dock. */}
-            <NativeChatQueuedMessageList
-              controller={submits.queuedMessages}
-              chatWorktreeId={ownerWorktreeId ?? null}
-              agentName={agentLabel}
-              statedFailures={startFailures}
-              steerHeld={stopControls.stopping || hostHeld}
-              focusComposer={focusComposer}
-              editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
-            />
-            <NativeChatStructuredSessionStatus
-              sessionId={props.sessionId}
-              paneKey={paneKey}
-              isVisible={props.isVisible}
-              backgroundTasks={controller.backgroundTasks}
-              stopBackgroundTask={controller.stopBackgroundTask}
-            />
-            {prompt ? null : (
-              <NativeChatStructuredComposerTabStrips
-                tabId={props.tabId}
-                threadGoal={controller.threadGoal}
-                transport={transport}
-                isWorking={controller.isWorking}
-                isVisible={props.isVisible}
-                turnId={controller.turnId}
-                workingStartedAt={controller.workingStartedAt}
-              />
-            )}
-            {composerShown ? null : <NativeChatPromptSlotNotices notices={notices} />}
-            {prompt && approval ? (
-              <NativeChatApprovalCard
-                key={`${prompt.itemId}:${prompt.revision}`}
-                approval={approval}
-                onChoose={(optionId) =>
-                  void promptResponse.respond(prompt, { kind: 'option', optionId })
-                }
-                isSubmitting={promptResponse.holds(prompt)}
-                onCancel={cancelPrompt}
-                shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
-                {...fileLinkProps}
-              />
-            ) : null}
-            {prompt && questionBody ? (
-              <NativeChatStructuredQuestionCard
-                key={`${prompt.itemId}:${prompt.revision}`}
-                questions={agentSessionPromptQuestions(questionBody)}
-                onAnswer={(response) => void promptResponse.respond(prompt, response)}
-                isSubmitting={promptResponse.holds(prompt)}
-                onCancel={cancelPrompt}
-                shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
-                answerInputRef={questionAnswerInputRef}
-              />
-            ) : null}
-            {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
-            {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
-            {composerShown ? (
-              <NativeChatComposer
-                ref={composerRef}
-                terminalTabId={props.tabId}
-                paneKey={paneKey}
-                draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}
-                targetPtyId={null}
-                agent={props.agent}
-                {...stopControls.composer}
-                unavailableHint={install.unavailableHint}
-                steerHead={stopControls.stopping ? undefined : submits.queuedMessages.steerHead}
-                structuredTransport={transport}
-                notices={notices}
-                recallSource={{ messages: session.messages, withoutImageMarkers: true }}
-              />
-            ) : null}
-          </>
-        )}
       </NativeChatCrewFrame>
+      {readFailure?.final ? null : (
+        <>
+          {/* Keep queued drafts outside the transcript and above the background-task dock. */}
+          <NativeChatQueuedMessageList
+            controller={submits.queuedMessages}
+            chatWorktreeId={ownerWorktreeId ?? null}
+            agentName={agentLabel}
+            statedFailures={startFailures}
+            steerHeld={stopControls.stopping || hostHeld}
+            focusComposer={focusComposer}
+            editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
+          />
+          <NativeChatStructuredSessionStatus
+            sessionId={props.sessionId}
+            paneKey={paneKey}
+            isVisible={props.isVisible}
+            backgroundTasks={controller.backgroundTasks}
+            stopBackgroundTask={controller.stopBackgroundTask}
+          />
+          {prompt ? null : (
+            <NativeChatStructuredComposerTabStrips
+              tabId={props.tabId}
+              threadGoal={controller.threadGoal}
+              transport={transport}
+              isWorking={controller.isWorking}
+              isVisible={props.isVisible}
+              turnId={controller.turnId}
+              workingStartedAt={controller.workingStartedAt}
+            />
+          )}
+          {composerShown ? null : <NativeChatPromptSlotNotices notices={notices} />}
+          {prompt && approval ? (
+            <NativeChatApprovalCard
+              key={`${prompt.itemId}:${prompt.revision}`}
+              approval={approval}
+              onChoose={(optionId) =>
+                void promptResponse.respond(prompt, { kind: 'option', optionId })
+              }
+              isSubmitting={promptResponse.holds(prompt)}
+              onCancel={cancelPrompt}
+              shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
+              {...fileLinkProps}
+            />
+          ) : null}
+          {prompt && questionBody ? (
+            <NativeChatStructuredQuestionCard
+              key={`${prompt.itemId}:${prompt.revision}`}
+              questions={agentSessionPromptQuestions(questionBody)}
+              onAnswer={(response) => void promptResponse.respond(prompt, response)}
+              isSubmitting={promptResponse.holds(prompt)}
+              onCancel={cancelPrompt}
+              shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
+              answerInputRef={questionAnswerInputRef}
+            />
+          ) : null}
+          {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
+          {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
+          {composerShown ? (
+            <NativeChatComposer
+              ref={composerRef}
+              terminalTabId={props.tabId}
+              paneKey={paneKey}
+              draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}
+              targetPtyId={null}
+              agent={props.agent}
+              {...stopControls.composer}
+              unavailableHint={install.unavailableHint}
+              steerHead={stopControls.stopping ? undefined : submits.queuedMessages.steerHead}
+              structuredTransport={transport}
+              notices={notices}
+              recallSource={{ messages: session.messages, withoutImageMarkers: true }}
+            />
+          ) : null}
+        </>
+      )}
       {paneCommands.menu}
       {handOff.dialog}
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
