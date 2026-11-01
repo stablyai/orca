@@ -132,7 +132,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         managementTitle: null,
         managementTitleAt: null,
         controllerTitle: null,
-        title: state.title ?? null,
+        title: state.title || null,
         titleUpdatedAt: titleObservedAt,
         titleObservedAtEpochMs: titleObservedAt !== null ? Date.now() : null,
         lastOutputAt: state.lastOutputAt ?? null,
