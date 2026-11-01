@@ -62,6 +62,7 @@ export {
   getManageSessionsSearchEntries,
   getTerminalWindowSearchEntries
 } from './terminal-window-setup-search'
+export { getTerminalShellHistorySearchEntry } from './terminal-shell-history-search'
 
 type TerminalAppearanceSearchOptions = {
   showDesktopThemeImports?: boolean
