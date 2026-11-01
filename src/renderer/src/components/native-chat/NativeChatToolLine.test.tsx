@@ -245,10 +245,20 @@ describe('tool sentence rows', () => {
   })
 
   it.each([
-    ['Bash', { command: 'pnpm test' }],
-    ['exec', JSON.stringify({ cmd: 'pnpm test' })],
-    ['Bash', 'pnpm test']
-  ])('omits duplicate input for a complete %s command row', (name, input) => {
+    ['Bash', { command: 'pnpm test' }, 'pnpm test'],
+    ['exec', JSON.stringify({ cmd: 'pnpm test' }), 'pnpm test'],
+    ['Bash', { command: '/bin/zsh -lc "pnpm test"' }, '/bin/zsh -lc "pnpm test"'],
+    [
+      'exec_command',
+      { cmd: 'printf hello', workdir: '/repo', timeout_ms: 10000 },
+      '{\n  "cmd": "printf hello",\n  "workdir": "/repo",\n  "timeout_ms": 10000\n}'
+    ],
+    [
+      'Read',
+      { file_path: '/repo/a.ts', offset: 10 },
+      '{\n  "file_path": "/repo/a.ts",\n  "offset": 10\n}'
+    ]
+  ])('opens a %s call to its exact name and arguments, then its output', (name, input, args) => {
     const { container } = render(
       <NativeChatToolLine
         block={{ type: 'tool-call', name, input, state: 'completed' }}
@@ -256,35 +266,11 @@ describe('tool sentence rows', () => {
       />
     )
     fireEvent.click(screen.getByRole('button'))
-    expect(container.querySelectorAll('pre')).toHaveLength(1)
-    expect(container.querySelector('pre')).toHaveTextContent('all passed')
-  })
-
-  it.each([
-    [{ command: 'pnpm test', description: 'Run the suite' }],
-    [{ command: ['printf', '%s', 'a b'] }],
-    [{ command: '/bin/zsh -lc "pnpm test"' }]
-  ])('opens a command to its output alone, never its raw arguments', (input) => {
-    const { container } = render(
-      <NativeChatToolLine
-        block={{ type: 'tool-call', name: 'Bash', input, state: 'completed' }}
-        result={{ type: 'tool-result', output: 'all passed' }}
-      />
-    )
-    fireEvent.click(screen.getByRole('button'))
     expect([...container.querySelectorAll('pre')].map((pre) => pre.textContent)).toEqual([
+      args,
       'all passed'
     ])
-  })
-
-  it('does not offer empty detail for a short command without output', () => {
-    const { container } = render(
-      <NativeChatToolLine
-        block={{ type: 'tool-call', name: 'Bash', input: { command: 'pwd' }, state: 'completed' }}
-      />
-    )
-    expect(screen.getByRole('button')).not.toHaveAttribute('aria-expanded')
-    expect(container.querySelector('pre')).toBeNull()
+    expect(screen.getByText(name, { exact: true, selector: 'p' })).toBeInTheDocument()
   })
 
   it.each([false, true])(
@@ -362,35 +348,21 @@ describe('tool sentence rows', () => {
     expect(container.textContent).toContain('now')
   })
 
-  it.each(['exec', 'shell', 'Bash'])('offers nothing to open on a running %s command', (name) => {
-    render(
-      <NativeChatToolLine
-        block={{ type: 'tool-call', name, input: { command: 'ls' }, state: 'running' }}
-      />
-    )
-    expect(screen.getByRole('button')).not.toHaveAttribute('aria-expanded')
-  })
-
-  it('offers nothing to open on a call that has produced no output', () => {
-    render(
-      <NativeChatToolLine
-        block={{ type: 'tool-call', name: 'lookup_ticket', input: { ticket: 'ORC-1' } }}
-      />
-    )
-    expect(screen.getByRole('button')).not.toHaveAttribute('aria-expanded')
-  })
-
-  it('shows a read as its output alone, not the arguments its row already names', () => {
+  it.each([
+    ['exec', { command: 'ls' }, 'running', 'ls'],
+    ['mcp__linear__get_issue', { id: 'ORC-1' }, 'completed', '{\n  "id": "ORC-1"\n}']
+  ] as const)('opens a %s call without output to its arguments', (name, input, state, args) => {
     const { container } = render(
-      <NativeChatToolLine
-        block={{ type: 'tool-call', name: 'Read', input: { file_path: '/repo/a.ts', offset: 10 } }}
-        result={{ type: 'tool-result', output: 'const a = 1' }}
-      />
+      <NativeChatToolLine block={{ type: 'tool-call', name, input, state }} />
     )
     fireEvent.click(screen.getByRole('button'))
-    expect([...container.querySelectorAll('pre')].map((pre) => pre.textContent)).toEqual([
-      'const a = 1'
-    ])
+    expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true')
+    expect(container.querySelector('pre')?.textContent).toBe(args)
+  })
+
+  it('offers nothing to open on a call with neither arguments nor output', () => {
+    render(<NativeChatToolLine block={{ type: 'tool-call', name: 'list_tickets', input: {} }} />)
+    expect(screen.getByRole('button')).not.toHaveAttribute('aria-expanded')
   })
 
   it.each(['Task', 'Agent'])(

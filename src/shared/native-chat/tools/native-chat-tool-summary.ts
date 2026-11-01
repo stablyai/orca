@@ -107,6 +107,16 @@ function isStructuredNormalizedToolInput(input: unknown): boolean {
   return Array.isArray(input) ? input.length > 0 : Object.keys(input).length > 0
 }
 
+/** Whether a call carries any arguments worth showing; format them only once a row opens. */
+export function hasToolInput(input: unknown): boolean {
+  const normalized = normalizeToolInput(input)
+  return typeof normalized === 'string'
+    ? normalized.trim().length > 0
+    : typeof normalized === 'number' ||
+        typeof normalized === 'boolean' ||
+        isStructuredNormalizedToolInput(normalized)
+}
+
 function normalizedToolInputHasDetail(input: unknown, label: string): boolean {
   if (isStructuredNormalizedToolInput(input)) {
     return true

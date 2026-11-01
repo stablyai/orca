@@ -20,7 +20,11 @@ import { NativeChatDiffView } from './NativeChatDiffView'
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 import { nativeChatToolRowVerb } from './native-chat-tool-line-label'
 import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'
-import { nativeChatToolLineView } from '../../../../shared/native-chat/tools/native-chat-tool-line-view'
+import {
+  nativeChatToolLineInput,
+  nativeChatToolLineView
+} from '../../../../shared/native-chat/tools/native-chat-tool-line-view'
+import type { NativeChatToolLineLabel } from '../../../../shared/native-chat/tools/native-chat-tool-line-label'
 import type { NativeChatWebSearchResult } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import {
   diffFromText,
@@ -33,19 +37,19 @@ import { NativeChatToolOutput } from './NativeChatToolOutput'
 const TARGET_CLASS =
   'min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong'
 
-/** Mount detail separately so collapsed rows do no diff work. */
+/** Mount detail separately so collapsed rows do no diff or argument formatting work. */
 function ToolLineDetail({
   block,
   body,
-  fullCommand,
-  commandLanguage,
+  label,
+  hasInput,
   results,
   onLinkClick
 }: {
   block: NativeChatBlock
   body: NativeChatToolResultBlock | undefined
-  fullCommand: string | null
-  commandLanguage: string | null
+  label: NativeChatToolLineLabel | null
+  hasInput: boolean
   results: NativeChatWebSearchResult[]
   onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element {
@@ -54,23 +58,28 @@ function ToolLineDetail({
     : isToolResultBlock(block)
       ? diffFromText(block.output)
       : null
+  const input = hasInput && isToolCallBlock(block) ? nativeChatToolLineInput(block, label) : null
   return (
     <div className="ml-6 space-y-1.5 py-1">
       {results.length > 0 ? (
         <NativeChatSearchResults results={results} onLinkClick={onLinkClick} />
       ) : null}
       {diff ? <NativeChatDiffView lines={diff} /> : null}
-      {!diff && fullCommand ? (
-        <pre
-          data-native-chat-code-content
-          className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-chat-code-border bg-chat-code-surface p-2 font-mono text-chat-code text-chat-foreground scrollbar-sleek"
-        >
-          {commandLanguage ? (
-            <NativeChatHighlightedCode code={fullCommand} language={commandLanguage} />
-          ) : (
-            fullCommand
-          )}
-        </pre>
+      {input ? (
+        <div className="space-y-1">
+          <p className="break-all font-mono text-xs text-chat-foreground-faint">{input.name}</p>
+          <pre
+            data-native-chat-code-content
+            data-native-chat-tool-input
+            className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-chat-code-border bg-chat-code-surface p-2 font-mono text-chat-code text-chat-foreground scrollbar-sleek"
+          >
+            {input.language ? (
+              <NativeChatHighlightedCode code={input.text} language={input.language} />
+            ) : (
+              input.text
+            )}
+          </pre>
+        </div>
       ) : null}
       {body ? <NativeChatToolOutput body={body} /> : null}
     </div>
@@ -107,13 +116,11 @@ export function NativeChatToolLine({
   const name = isCall
     ? block.name
     : translate('components.native-chat.tool.result', NATIVE_CHAT_TOOL_ACTIVITY_COPY.result)
-  const { label: sharedLabel, body, resultPreview, failed, results, hasDetail } = view
+  const { label: sharedLabel, body, resultPreview, failed, results, hasInput, hasDetail } = view
   const label = sharedLabel && {
     ...sharedLabel,
     verb: sharedLabel.verb === null ? null : nativeChatToolRowVerb(sharedLabel.verb)
   }
-  // A call opens to its output; its arguments are the row's own words, bar a shortened command.
-  const fullCommand = label?.commandDetail ?? null
   const commandAlone = label?.command === true && label.verb !== null && label.target.length > 0
 
   return (
@@ -182,8 +189,8 @@ export function NativeChatToolLine({
           <ToolLineDetail
             block={block}
             body={body}
-            fullCommand={fullCommand}
-            commandLanguage={label?.commandLanguage ?? null}
+            label={sharedLabel}
+            hasInput={hasInput}
             results={results}
             onLinkClick={onLinkClick}
           />

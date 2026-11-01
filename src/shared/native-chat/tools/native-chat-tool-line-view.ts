@@ -5,11 +5,13 @@ import {
   type NativeChatToolResultBlock
 } from '../native-chat-types'
 import { diffFromToolCall } from './native-chat-diff'
+import { nativeChatPlainCommandInput } from './native-chat-tool-input-text'
 import { toolWebSearchResults, type NativeChatWebSearchResult } from './native-chat-tool-identity'
 import {
   nativeChatToolLineLabel,
   type NativeChatToolLineLabel
 } from './native-chat-tool-line-label'
+import { formatToolInput, hasToolInput } from './native-chat-tool-summary'
 
 export type NativeChatToolLineView = {
   call: NativeChatToolCallBlock | undefined
@@ -21,7 +23,17 @@ export type NativeChatToolLineView = {
   failed: boolean
   /** Link-safe hits only, so unsafe-only results do not open an empty panel. */
   results: NativeChatWebSearchResult[]
+  /** The call's arguments open with it; an edit's diff already shows them. */
+  hasInput: boolean
   hasDetail: boolean
+}
+
+export type NativeChatToolLineInput = {
+  /** The tool's own name, which a row's verb or MCP label stands in for. */
+  name: string
+  text: string
+  /** Grammar of a lone command; null for structured arguments. */
+  language: string | null
 }
 
 const NO_SEARCH_RESULTS: NativeChatWebSearchResult[] = []
@@ -38,11 +50,22 @@ export function nativeChatToolLineView(
   const failed = lifecycle === 'failed' || (lifecycle !== 'interrupted' && result?.isError === true)
   const results = call ? toolWebSearchResults(call.webSearchResults) : NO_SEARCH_RESULTS
   // An edit that has not landed has no output yet, but the change it proposes is worth opening.
-  const hasDetail =
-    body !== undefined ||
-    label?.commandDetail != null ||
-    results.length > 0 ||
-    (call !== undefined && diffFromToolCall(call.name, call.input) !== null)
+  const diff = call !== undefined && diffFromToolCall(call.name, call.input) !== null
+  const hasInput = call !== undefined && !diff && hasToolInput(call.input)
+  const hasDetail = body !== undefined || hasInput || results.length > 0 || diff
   const resultPreview = call ? '' : (body?.output.split('\n')[0]?.slice(0, 80) ?? '')
-  return { call, label, body, resultPreview, failed, results, hasDetail }
+  return { call, label, body, resultPreview, failed, results, hasInput, hasDetail }
+}
+
+/** An opened call's invocation: a lone command as typed, else every argument it was given. */
+export function nativeChatToolLineInput(
+  call: NativeChatToolCallBlock,
+  label: NativeChatToolLineLabel | null
+): NativeChatToolLineInput {
+  const command = nativeChatPlainCommandInput(call.input)
+  return {
+    name: call.name,
+    text: command ?? formatToolInput(call.input),
+    language: command === null ? null : (label?.commandLanguage ?? null)
+  }
 }

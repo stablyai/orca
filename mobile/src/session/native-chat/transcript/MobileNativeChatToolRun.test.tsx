@@ -139,19 +139,32 @@ describe('ToolRun', () => {
       expect(textIn(tree.root).some((text) => text.includes('file_path'))).toBe(false)
     })
 
-    it('opens a call to its output, plus the whole command only when the row shortened it', () => {
+    it('opens a call to its exact name and arguments, then its output', () => {
       const command = `pnpm vitest run ${'src/session/'.repeat(10)}`
       const tree = render([
         { type: 'tool-call', name: 'Bash', input: { command } },
         { type: 'tool-result', output: 'ok' },
-        { type: 'tool-call', name: 'Bash', input: { command: 'ls', description: 'List' } },
+        { type: 'tool-call', name: 'exec_command', input: { cmd: 'ls', workdir: '/repo' } },
         { type: 'tool-result', output: 'a.ts' }
       ])
       open(tree, 'ls')
-      expect(textIn(tree.root)).toContain('a.ts')
-      expect(textIn(tree.root).some((text) => text.includes('"description"'))).toBe(false)
+      expect(textIn(tree.root)).toEqual(
+        expect.arrayContaining([
+          'exec_command',
+          '{\n  "cmd": "ls",\n  "workdir": "/repo"\n}',
+          'a.ts'
+        ])
+      )
       open(tree, 'pnpm vitest run')
-      expect(textIn(tree.root)).toEqual(expect.arrayContaining([command, 'ok']))
+      expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Bash', command, 'ok']))
+    })
+
+    it('opens a call that has no output yet to its arguments', () => {
+      const tree = render([
+        { type: 'tool-call', name: 'Bash', input: { command: 'sleep 20' }, state: 'running' }
+      ])
+      open(tree, 'sleep 20')
+      expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Bash', 'sleep 20']))
     })
 
     it('bounds an opened output before native text layout', () => {
@@ -222,10 +235,9 @@ describe('ToolRun', () => {
     })
 
     it('offers no caret on a row with nothing to show', () => {
-      const tree = render([{ type: 'tool-call', name: 'Agent', input: { description: 'Explore' } }])
-      expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Subagent', 'Explore']))
+      const tree = render([{ type: 'tool-call', name: 'list_tickets', input: {} }])
       expect(tree.root.findAll((node) => String(node.type) === 'ChevronRight')).toHaveLength(0)
-      expect(pressable(tree, 'Subagent').props.disabled).toBe(true)
+      expect(pressable(tree, 'list_tickets').props.disabled).toBe(true)
     })
   })
 

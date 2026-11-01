@@ -13,7 +13,11 @@ import {
 } from '../../../../../src/shared/native-chat/tools/native-chat-tool-identity'
 import { nativeChatToolIconName } from '../../../../../src/shared/native-chat/tools/native-chat-tool-icon'
 import { nativeChatToolRowVerbCopy } from './native-chat-tool-row-verb-copy'
-import { nativeChatToolLineView } from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-view'
+import {
+  nativeChatToolLineInput,
+  nativeChatToolLineView
+} from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-view'
+import type { NativeChatToolLineLabel } from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-label'
 import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
@@ -112,12 +116,12 @@ function DiffView({ lines, fontScale }: { lines: NativeChatDiffLine[]; fontScale
   )
 }
 
-// Defer output diff/highlight work until its row opens.
+// Defer output diff, argument formatting and highlight work until its row opens.
 function ToolLineDetail({
   call,
   body,
-  fullCommand,
-  commandLanguage,
+  label,
+  hasInput,
   results,
   fontScale,
   disclosureKey,
@@ -125,8 +129,8 @@ function ToolLineDetail({
 }: {
   call: NativeChatToolCallBlock | undefined
   body: NativeChatToolResultBlock | undefined
-  fullCommand: string | null
-  commandLanguage: string | null
+  label: NativeChatToolLineLabel | null
+  hasInput: boolean
   results: NativeChatWebSearchResult[]
   fontScale: number
   disclosureKey?: string
@@ -138,31 +142,43 @@ function ToolLineDetail({
     : body
       ? diffFromText(body.output)
       : null
-  const command = useMemo(
-    () =>
-      !diff && fullCommand && commandLanguage
-        ? highlightMobileCode(fullCommand, commandLanguage).segments
-        : null,
-    [diff, fullCommand, commandLanguage]
-  )
+  const input = useMemo(() => {
+    if (!hasInput || !call) {
+      return null
+    }
+    const invocation = nativeChatToolLineInput(call, label)
+    const segments = invocation.language
+      ? highlightMobileCode(invocation.text, invocation.language).segments
+      : null
+    return { ...invocation, segments }
+  }, [hasInput, call, label])
   const type = toolType(fontScale).code
+  const metaType = toolType(fontScale).meta
   const onLayout = useMobileNativeChatOpenedDetail()
   return (
     <View style={styles.detail} onLayout={onLayout}>
       {results.length > 0 ? <SearchResults results={results} fontScale={fontScale} /> : null}
       {diff ? <DiffView lines={diff} fontScale={fontScale} /> : null}
-      {!diff && fullCommand ? (
-        <MobileNativeChatOwnedScrollView
-          rootIdentity={`${memberId ?? call?.callId ?? 'detail'}:command`}
-          positionKey={`${disclosureKey ?? call?.callId ?? 'detail'}:command`}
-          style={[styles.codeBox, styles.codeScroll]}
-          nestedScrollEnabled
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text selectable={INLINE_TEXT_SELECTION} style={[styles.codeText, type]}>
-            {command ? <MobileSyntaxSegments segments={command} /> : fullCommand}
+      {input ? (
+        <>
+          <Text
+            selectable={INLINE_TEXT_SELECTION}
+            style={[styles.codeText, styles.lineMeta, metaType]}
+          >
+            {input.name}
           </Text>
-        </MobileNativeChatOwnedScrollView>
+          <MobileNativeChatOwnedScrollView
+            rootIdentity={`${memberId ?? call?.callId ?? 'detail'}:command`}
+            positionKey={`${disclosureKey ?? call?.callId ?? 'detail'}:command`}
+            style={[styles.codeBox, styles.codeScroll]}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text selectable={INLINE_TEXT_SELECTION} style={[styles.codeText, type]}>
+              {input.segments ? <MobileSyntaxSegments segments={input.segments} /> : input.text}
+            </Text>
+          </MobileNativeChatOwnedScrollView>
+        </>
       ) : null}
       {body ? (
         <MobileNativeChatToolOutput
@@ -194,11 +210,10 @@ export function MobileNativeChatToolLine({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
-  const { call, label, body, resultPreview, failed, results, hasDetail } = useMemo(
+  const { call, label, body, resultPreview, failed, results, hasInput, hasDetail } = useMemo(
     () => nativeChatToolLineView(block, result),
     [block, result]
   )
-  const commandDetail = label?.commandDetail ?? null
   const fullCommand = label?.fullCommand ?? null
   const verb = label?.verb ? nativeChatToolRowVerbCopy(t)[label.verb] : null
   const commandAlone = label?.command === true && verb !== null && label.target.length > 0
@@ -278,8 +293,8 @@ export function MobileNativeChatToolLine({
           disclosureKey={disclosureKey}
           call={call}
           body={body}
-          fullCommand={commandDetail}
-          commandLanguage={label?.commandLanguage ?? null}
+          label={label}
+          hasInput={hasInput}
           results={results}
           fontScale={fontScale}
         />
