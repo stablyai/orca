@@ -466,6 +466,46 @@ describe('orchestration agent views', () => {
     expect((await show({ agentWait: null })).stdout).not.toContain('waitingOnHuman')
   })
 
+  it('formats worker-show attention, requiresAction, lastAssistantMessage, and nextAction for stopped_without_worker_done', async () => {
+    const showResult = {
+      dispatch: { id: 'ctx_1', taskId: 'task_1', status: 'dispatched' },
+      worker: { state: 'ready', stage: 'prompt_delivered', agentTerminalHandle: 'term_agent' },
+      projection: {
+        host: { id: 'local' },
+        workspace: { id: 'wt_1::/repo' },
+        stage: { activity: 'done' },
+        liveness: { verdict: 'live' },
+        nextAction: { argv: ['orchestration', 'worker-read', '--dispatch', 'ctx_1'] },
+        attention: {
+          categories: ['stopped_without_worker_done'],
+          requiresAction: true,
+          lastAssistantMessage: 'Which file should I edit?'
+        }
+      }
+    }
+
+    const json = await run('worker-show', [['dispatch', 'ctx_1']], showResult, true)
+    const parsed = JSON.parse(json.stdout)
+    expect(parsed).toMatchObject({
+      ok: true,
+      result: {
+        dispatchId: 'ctx_1',
+        taskId: 'task_1',
+        state: 'ready',
+        attention: ['stopped_without_worker_done'],
+        requiresAction: true,
+        lastAssistantMessage: 'Which file should I edit?',
+        next: 'orca-dev orchestration worker-read --dispatch ctx_1'
+      }
+    })
+
+    const text = await run('worker-show', [['dispatch', 'ctx_1']], showResult, false)
+    expect(text.stdout).toContain('attention=stopped_without_worker_done')
+    expect(text.stdout).toContain('requiresAction=true')
+    expect(text.stdout).toContain('lastAssistantMessage="Which file should I edit?"')
+    expect(text.stdout).toContain('Next: orca-dev orchestration worker-read --dispatch ctx_1')
+  })
+
   it('does not echo the Run objective the caller just sent', async () => {
     const { stdout } = await run(
       'worker-start',
