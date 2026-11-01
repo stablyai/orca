@@ -1318,6 +1318,14 @@
   stroke-width: 2.2;
 }
 
+/* The frame keeps the phone's aspect ratio, so a narrow one is also short: drop
+   the Home mock's extra rows there so Tasks and Automations stay above the bar. */
+@container mp-phone-screen (max-width: 345px) {
+  .mobile-page-root .mp-home-group > .is-tall-only {
+    display: none;
+  }
+}
+
 .mobile-page-root .mp-status-dot {
   width: 7px;
   height: 7px;

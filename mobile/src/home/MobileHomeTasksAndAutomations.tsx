@@ -15,18 +15,15 @@ export function MobileHomeTasksAndAutomations(props: {
   onOpenAutomations: (hostId: string) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
-  const tasksHostPicker = useConnectedHostPicker(props.connectedHosts)
-  const automationsHostPicker = useConnectedHostPicker(props.connectedHosts)
-  const enabled = props.connectedHosts.length > 0
   return (
     <>
       <HomeSection
         icon={ListTodo}
-        title={t('home.bottomBar.tasks', 'Tasks')}
-        subtitle={t('home.sections.tasksSubtitle', 'Issues and pull requests')}
-        enabled={enabled}
-        onPress={() => tasksHostPicker.pickHost(props.onOpenTasks)}
+        title={t('home.sections.tasks', 'Tasks')}
+        subtitle={t('home.sections.tasksSubtitle', 'Browse your issues and reviews')}
+        pickerTitle={t('home.listFooter.hostPickerTitle', 'Open Tasks On')}
+        connectedHosts={props.connectedHosts}
+        onOpen={props.onOpenTasks}
       />
       <HomeSection
         icon={CalendarClock}
@@ -35,16 +32,9 @@ export function MobileHomeTasksAndAutomations(props: {
           'automations.mobile.scheduleAgentWorkAndViewRuns',
           'Schedule agent work and view runs'
         )}
-        enabled={enabled}
-        onPress={() => automationsHostPicker.pickHost(props.onOpenAutomations)}
-      />
-      <PickerModal
-        title={t('home.listFooter.hostPickerTitle', 'Open Tasks On')}
-        {...tasksHostPicker.pickerProps}
-      />
-      <PickerModal
-        title={t('home.listFooter.automationsHostPickerTitle', 'Open Automations On')}
-        {...automationsHostPicker.pickerProps}
+        pickerTitle={t('home.listFooter.automationsHostPickerTitle', 'Open Automations On')}
+        connectedHosts={props.connectedHosts}
+        onOpen={props.onOpenAutomations}
       />
     </>
   )
@@ -54,10 +44,13 @@ function HomeSection(props: {
   icon: LucideIcon
   title: string
   subtitle: string
-  enabled: boolean
-  onPress: () => void
+  pickerTitle: string
+  connectedHosts: HostProfile[]
+  onOpen: (hostId: string) => void
 }) {
   useMobileColorScheme()
+  const hostPicker = useConnectedHostPicker(props.connectedHosts)
+  const enabled = props.connectedHosts.length > 0
   const Icon = props.icon
   return (
     <>
@@ -68,14 +61,14 @@ function HomeSection(props: {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${props.title}, ${props.subtitle}`}
-          accessibilityState={{ disabled: !props.enabled }}
-          disabled={!props.enabled}
+          accessibilityState={{ disabled: !enabled }}
+          disabled={!enabled}
           style={({ pressed }) => [
             styles.row,
             pressed && styles.rowPressed,
-            !props.enabled && styles.rowDisabled
+            !enabled && styles.rowDisabled
           ]}
-          onPress={props.onPress}
+          onPress={() => hostPicker.pickHost(props.onOpen)}
         >
           <View style={styles.status}>
             <Icon size={18} color={colors.textSecondary} />
@@ -84,7 +77,7 @@ function HomeSection(props: {
             <Text style={styles.title} numberOfLines={1}>
               {props.title}
             </Text>
-            <Text style={styles.subtitle} numberOfLines={1}>
+            <Text style={styles.subtitle} numberOfLines={2}>
               {props.subtitle}
             </Text>
           </View>
@@ -93,6 +86,7 @@ function HomeSection(props: {
           </View>
         </Pressable>
       </View>
+      <PickerModal title={props.pickerTitle} {...hostPicker.pickerProps} />
     </>
   )
 }

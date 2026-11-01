@@ -535,7 +535,6 @@
     },
     "bottomBar": {
       "connectFirst": "Connect a desktop to start new work.",
-      "tasks": "Tasks",
       "newWorkspace": "New workspace"
     },
     "desktops": {
@@ -547,7 +546,8 @@
       "connectToOpen": "Connect {{desktop}} to open"
     },
     "sections": {
-      "tasksSubtitle": "Issues and pull requests"
+      "tasks": "Tasks",
+      "tasksSubtitle": "Browse your issues and reviews"
     }
   },
   "hooks": {
