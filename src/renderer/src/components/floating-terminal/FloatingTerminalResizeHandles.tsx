@@ -5,15 +5,17 @@ import {
   type FloatingTerminalPanelBounds
 } from './floating-terminal-panel-bounds'
 
+// Why outside the border: inner handles covered the terminal's vertical scrollbar.
+// PANEL_EDGE_MARGIN keeps the panel 8px from the viewport, so they stay reachable.
 const RESIZE_HANDLES = [
-  ['n', 'top-0 left-2 right-2 h-2 cursor-n-resize'],
-  ['s', 'bottom-0 left-2 right-2 h-2 cursor-s-resize'],
-  ['w', 'left-0 top-2 bottom-2 w-2 cursor-w-resize'],
-  ['e', 'right-0 top-2 bottom-2 w-2 cursor-e-resize'],
-  ['nw', 'left-0 top-0 size-3 cursor-nw-resize'],
-  ['ne', 'right-0 top-0 size-3 cursor-ne-resize'],
-  ['sw', 'left-0 bottom-0 size-3 cursor-sw-resize'],
-  ['se', 'right-0 bottom-0 size-3 cursor-se-resize']
+  ['n', '-top-2 left-1 right-1 h-2 cursor-n-resize'],
+  ['s', '-bottom-2 left-1 right-1 h-2 cursor-s-resize'],
+  ['w', '-left-2 top-1 bottom-1 w-2 cursor-w-resize'],
+  ['e', '-right-2 top-1 bottom-1 w-2 cursor-e-resize'],
+  ['nw', '-left-2 -top-2 size-3 cursor-nw-resize'],
+  ['ne', '-right-2 -top-2 size-3 cursor-ne-resize'],
+  ['sw', '-left-2 -bottom-2 size-3 cursor-sw-resize'],
+  ['se', '-right-2 -bottom-2 size-3 cursor-se-resize']
 ] as const
 
 type ResizeEdge = (typeof RESIZE_HANDLES)[number][0]
