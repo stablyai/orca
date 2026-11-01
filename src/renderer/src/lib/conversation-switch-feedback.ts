@@ -1,7 +1,17 @@
 import { translate } from '@/i18n/i18n'
 import { structuredLaunchFailure } from './agent-session/launch/structured-agent-session-launch-failure'
 import { agentLabel } from '../../../shared/ai-vault-session-filters'
+import { agentSessionWriteFailureText } from '@/components/native-chat/agent-session-write-notice-text'
 import type { AiVaultAgent } from '../../../shared/ai-vault-types'
+
+const REFUSES_AGAIN: ReadonlySet<string> = new Set([
+  'hostUnsupported',
+  'hostDisabled',
+  'clientCapabilityMissing',
+  'notSignedIn',
+  'cliMissing',
+  'historyInOtherAccount'
+])
 
 export function conversationSwitchFailureText(
   error: unknown,
@@ -65,6 +75,10 @@ export function conversationSwitchFailureText(
       "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
       values
     )
+  }
+  // A refusal that would only refuse again says why and what to do, never "try again".
+  if (failure && reason && REFUSES_AGAIN.has(reason)) {
+    return agentSessionWriteFailureText(failure, 'read-history')
   }
   // From a terminal, the retry is the Switch to Chat UI its pane (or Session History) still offers.
   const fromTerminal = args.direction === 'chat' && args.source !== undefined

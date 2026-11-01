@@ -371,6 +371,11 @@ it.each([
   ['whole', 'Codex could not switch to chat. Use Switch to Chat UI to try again.']
 ] as const)('points a failed switch from a %s tab to a retry it still has', async (shape, text) => {
   // A split pane whose switch fails after the stop closes, and its switch control with it.
+  mocks.capture.mockResolvedValue({
+    handle: 'terminal-source',
+    incarnationId: 'incarnation',
+    presentation: { identity: { tabId: fromPane.tabId }, holders: [] }
+  })
   const leaf = { type: 'leaf' as const, leafId: 'leaf' }
   useAppStore.setState({
     terminalLayoutsByTabId: {
@@ -392,12 +397,35 @@ it.each([
   mocks.call.mockResolvedValue({
     status: 'refused',
     sessionId: 'chat',
-    refusal: { code: 'agent_session_operation_invalid', details: { reason: 'commitFailed' } }
+    refusal: { code: 'agent_session_operation_invalid', details: { reason: 'attachFailed' } }
   })
   await expect(
     runConversationSwitch({ direction: 'chat', ...fromPane, source: fromPane })
   ).resolves.toBe(false)
   expect(mocks.error).toHaveBeenCalledExactlyOnceWith(text)
+})
+
+it.each([
+  ['structured_agent_session_unsupported', 'hostUnsupported'],
+  ['agent_session_operation_invalid', 'notSignedIn'],
+  ['agent_session_operation_invalid', 'cliMissing'],
+  ['agent_session_operation_invalid', 'historyInOtherAccount']
+] as const)('says why a %s %s refusal will refuse again, with no retry', async (code, reason) => {
+  mocks.capture.mockResolvedValue({
+    handle: 'terminal-source',
+    incarnationId: 'incarnation',
+    presentation: { identity: { tabId: fromPane.tabId }, holders: [] }
+  })
+  mocks.call.mockResolvedValue({
+    status: 'refused',
+    sessionId: 'chat',
+    refusal: { code, details: { reason } }
+  })
+  await expect(
+    runConversationSwitch({ direction: 'chat', ...fromPane, source: fromPane })
+  ).resolves.toBe(false)
+  expect(mocks.error).toHaveBeenCalledOnce()
+  expect(mocks.error.mock.calls[0]![0]).not.toMatch(/try again|Switch to Chat UI/i)
 })
 
 it.each([true, false])(
