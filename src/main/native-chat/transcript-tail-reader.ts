@@ -31,9 +31,17 @@ import {
   readTranscriptFile,
   transcriptFileStat
 } from './wsl-transcript-fs-access'
+import {
+  MAX_NATIVE_CHAT_IMAGE_TRANSCRIPT_RECORD_BYTES,
+  MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
+  MAX_NATIVE_CHAT_INLINE_IMAGE_READ_BYTES,
+  exceedsPlainBudgetAfterDecode,
+  exceedsPlainTranscriptRecordLimit,
+  inlineImageBytes
+} from './transcript-record-limits'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
-export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
+export { MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES }
 
 export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
 
@@ -90,6 +98,7 @@ export async function readNativeChatTranscriptTailFile(
   let lifecycle: NativeChatTurnLifecycle | undefined
   let malformedRecordCount = 0
   let oversizedRecordCount = 0
+  let inlineImageReadBytes = 0
   let ignoreNextMalformedRecord = false
   try {
     signal?.throwIfAborted()
@@ -185,7 +194,7 @@ export async function readNativeChatTranscriptTailFile(
       return
     }
     lineBytes += part.length
-    if (lineBytes > MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES) {
+    if (lineBytes > MAX_NATIVE_CHAT_IMAGE_TRANSCRIPT_RECORD_BYTES) {
       lineParts.length = 0
       lineOversized = true
       oversizedRecordCount++
@@ -206,6 +215,10 @@ export async function readNativeChatTranscriptTailFile(
   ): void {
     // Positional reads own their buffers; only split records require a reverse-order join.
     const bytes = lineParts.length === 1 ? lineParts[0] : Buffer.concat(lineParts.toReversed())
+    if (exceedsPlainTranscriptRecordLimit(bytes)) {
+      oversizedRecordCount++
+      return
+    }
     let line = bytes.toString('utf8')
     if (line.endsWith('\r')) {
       line = line.slice(0, -1)
@@ -229,6 +242,15 @@ export async function readNativeChatTranscriptTailFile(
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
     const message = decode(line, fallbackId)
     if (message) {
+      const imageBytes = inlineImageBytes(message)
+      if (
+        exceedsPlainBudgetAfterDecode(bytes.length, message) ||
+        inlineImageReadBytes + imageBytes > MAX_NATIVE_CHAT_INLINE_IMAGE_READ_BYTES
+      ) {
+        oversizedRecordCount++
+        return
+      }
+      inlineImageReadBytes += imageBytes
       messages.push({ message, offset: lineOffset })
     }
   }
