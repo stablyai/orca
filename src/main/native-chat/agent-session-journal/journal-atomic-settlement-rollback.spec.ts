@@ -3,8 +3,8 @@ import { expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSnapshot
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import { AgentSessionSubscribers } from '../agent-session-wire/structured-agent-session-subscribers'
 import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/structured-agent-session-dead-generation-settlement'
 import { openTestJournalHostDatabase } from './journal-host-database-test-support'

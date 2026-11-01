@@ -1,12 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
 import { getIntlLocale, translate } from '@/i18n/i18n'
-import { buildResourcePtyRows, groupResourcePtyRows } from './resource-pty-view-model'
+import {
+  buildResourcePtyRows,
+  groupResourcePtyRows,
+  type ResourcePtyRow
+} from './resource-pty-view-model'
 import { ResourcePtyList } from './ResourcePtyList'
 import type { useResourceSessionInventory } from './use-resource-session-inventory'
-import type { useResourcePtyActions } from './use-resource-pty-actions'
+import { canEndResourcePty, type useResourcePtyActions } from './use-resource-pty-actions'
 
 const EMPTY_PTY_ROWS: ReturnType<typeof buildResourcePtyRows> = []
+const ptyRowKey = (row: ResourcePtyRow): string => row.identity
 
 type Props = Omit<Parameters<typeof buildResourcePtyRows>[0], 'sessions'> & {
   active: boolean
@@ -27,7 +34,10 @@ export function ResourcePtyPanel({
   runtimePaneTitlesByTabId
 }: Props) {
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const getScope = useCallback(() => panelRef.current, [])
   const { sessions } = inventory.sessionInventory
+  const { end: endPty } = actions
   const rows = useMemo(
     () =>
       active
@@ -43,12 +53,50 @@ export function ResourcePtyPanel({
     [active, sessions, bindings, worktrees, repos, projectGroups, runtimePaneTitlesByTabId]
   )
   const groups = useMemo(() => groupResourcePtyRows(rows), [rows])
+  const selectableRows = useMemo(
+    () =>
+      inventory.sessionsError
+        ? EMPTY_PTY_ROWS
+        : rows.filter((row) => canEndResourcePty(row) && !actions.ending.has(row.identity)),
+    [rows, inventory.sessionsError, actions.ending]
+  )
+  const selection = useListMultiSelection({ items: selectableRows, getKey: ptyRowKey, getScope })
+  const allSelected =
+    selectableRows.length > 0 && selection.selectedKeys.size === selectableRows.length
   const unbound = useMemo(
     () => rows.reduce((count, row) => count + Number(row.binding === 'unbound'), 0),
     [rows]
   )
+  const focusBodyBeforeEnd = useCallback(
+    (source: Element | null) => {
+      if (
+        !active ||
+        !scrollElement?.isConnected ||
+        !source?.contains(scrollElement.ownerDocument.activeElement) ||
+        !panelRef.current?.contains(source) ||
+        scrollElement.getClientRects().length === 0 ||
+        getComputedStyle(scrollElement).visibility !== 'visible' ||
+        scrollElement.closest('[aria-hidden="true"], [inert]')
+      ) {
+        return
+      }
+      scrollElement.focus({ preventScroll: true })
+    },
+    [active, scrollElement]
+  )
+  const end = useCallback(
+    (row: ResourcePtyRow) => {
+      const focusedRow =
+        panelRef.current?.ownerDocument.activeElement?.closest('[data-resource-pty-row]')
+      focusBodyBeforeEnd(
+        focusedRow?.getAttribute('data-resource-pty-row') === row.identity ? focusedRow : null
+      )
+      endPty(row)
+    },
+    [endPty, focusBodyBeforeEnd]
+  )
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={panelRef} className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 space-y-2 border-b border-border px-3 py-2">
         <div className="text-xs text-muted-foreground">
           {inventory.observedAt === null
@@ -75,6 +123,44 @@ export function ResourcePtyPanel({
             {translate('resourceManager.pty.observedTime', 'Last observed {{time}}', {
               time: new Date(inventory.observedAt).toLocaleTimeString(getIntlLocale())
             })}
+          </div>
+        )}
+        {rows.length > 0 && (
+          <div className="flex items-center justify-between gap-2">
+            <label className="flex items-center gap-2 text-xs">
+              <Checkbox
+                aria-label={translate('resourceManager.pty.selectAll', 'Select all terminals')}
+                checked={
+                  allSelected ? true : selection.selectedKeys.size > 0 ? 'indeterminate' : false
+                }
+                disabled={selectableRows.length === 0}
+                onCheckedChange={() => selection.setAllSelected(!allSelected)}
+              />
+              {translate('resourceManager.pty.selectAllShort', 'Select all')}
+            </label>
+            <Button
+              variant="destructive"
+              size="xs"
+              disabled={selection.selectedItems.length === 0}
+              onClick={(event) => {
+                const focusedRow =
+                  event.currentTarget.ownerDocument.activeElement?.closest(
+                    '[data-resource-pty-row]'
+                  )
+                focusBodyBeforeEnd(
+                  selection.selectedKeys.has(
+                    focusedRow?.getAttribute('data-resource-pty-row') ?? ''
+                  )
+                    ? (focusedRow ?? null)
+                    : event.currentTarget
+                )
+                void actions.endMany(selection.selectedItems)
+              }}
+            >
+              {translate('resourceManager.pty.endSelected', 'End selected ({{count}})', {
+                count: selection.selectedItems.length
+              })}
+            </Button>
           </div>
         )}
       </div>
@@ -112,7 +198,9 @@ export function ResourcePtyPanel({
           unverifiable={inventory.sessionsError}
           ending={actions.ending}
           errors={actions.errors}
-          onEnd={actions.confirm}
+          selected={selection.selectedKeys}
+          onSelect={selection.toggleSelection}
+          onEnd={end}
           onNavigate={onNavigate}
         />
       </div>

@@ -6,7 +6,7 @@ import { createPluginWorkerRuntime } from './workers/plugin-host-runtime'
 
 const root = join(process.cwd(), 'examples', 'plugins', 'hello-orca')
 
-it('ships a worker that counts for the panel it declares', async () => {
+it('ships a worker that counts for its panel', async () => {
   const inspection = await inspectPluginInstallTree({
     rootDir: root,
     hostVersion: PLUGIN_SCHEMA_NEWEST_SINCE,
@@ -16,7 +16,11 @@ it('ships a worker that counts for the panel it declares', async () => {
   if (!inspection.ok) {
     return
   }
-  const panelId = inspection.manifest.contributes.panels[0]!.id
+  const panel = {
+    id: 'panel-1',
+    surface: 'panel',
+    contributionId: inspection.manifest.contributes.panels[0]!.id
+  }
 
   const send = vi.fn()
   const runtime = createPluginWorkerRuntime({ send, exit: vi.fn() })
@@ -31,19 +35,19 @@ it('ships a worker that counts for the panel it declares', async () => {
       grantedCapabilities: []
     }
   })
-  const ask = async (id: number, message: unknown) => {
+  const ask = async (id: number, name: string) => {
     await runtime.handleMessage({
       orca: 1,
       kind: 'req',
       id,
-      method: 'panel.message',
-      params: { panelId, message }
+      method: 'panel.request',
+      params: { name, input: null, panel }
     })
     return send.mock.calls.map(([sent]) => sent).find((sent) => sent.id === id)
   }
 
-  expect(await ask(1, { type: 'increment' })).toMatchObject({ result: { clicks: 1 } })
-  expect(await ask(2, { type: 'increment' })).toMatchObject({ result: { clicks: 2 } })
-  expect(await ask(3, { type: 'get' })).toMatchObject({ result: { clicks: 2 } })
-  expect(await ask(4, { type: 'reset' })).toMatchObject({ error: { code: 'action_failed' } })
+  expect(await ask(1, 'clicks.increment')).toMatchObject({ result: { clicks: 1 } })
+  expect(await ask(2, 'clicks.increment')).toMatchObject({ result: { clicks: 2 } })
+  expect(await ask(3, 'clicks.get')).toMatchObject({ result: { clicks: 2 } })
+  expect(await ask(4, 'clicks.reset')).toMatchObject({ error: { code: 'unknown_method' } })
 })

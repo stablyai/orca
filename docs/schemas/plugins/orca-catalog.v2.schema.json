@@ -562,7 +562,8 @@
             "iconThemes",
             "syntaxes",
             "customEditors",
-            "newFiles"
+            "newFiles",
+            "settings"
           ],
           "description": "Contribution point.",
           "x-orca-since": "1.4.245",

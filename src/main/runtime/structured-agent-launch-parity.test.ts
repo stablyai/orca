@@ -1,4 +1,4 @@
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 // Capture native-chat children at the spawn boundary with production wiring; launch-path refactors must preserve these snapshots.
 
 import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -9,7 +9,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type * as ProcessHostModule from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import type * as AcpAdapterModule from '../acp/acp-structured-session-adapter'
-import type * as ClaudeAdapterModule from '../claude/claude-structured-session-adapter'
+import type * as ClaudeAdapterModule from '../claude/structured/claude-structured-session-adapter'
 import type * as CodexAdapterModule from '../codex/codex-structured-session-adapter'
 import type * as PiAdapterModule from '../pi/rpc-session-adapter'
 import type * as ManagedProviderProcessModule from '../provider-process/managed-provider-process'
@@ -76,7 +76,7 @@ vi.mock('../codex/codex-structured-session-adapter', async (importOriginal) => {
   }
   return { ...actual, CodexStructuredSessionAdapter: RecordingAdapter }
 })
-vi.mock('../claude/claude-structured-session-adapter', async (importOriginal) => {
+vi.mock('../claude/structured/claude-structured-session-adapter', async (importOriginal) => {
   const actual = await importOriginal<typeof ClaudeAdapterModule>()
   class RecordingAdapter extends actual.ClaudeStructuredSessionAdapter {
     constructor(deps: ConstructorParameters<typeof actual.ClaudeStructuredSessionAdapter>[0]) {
@@ -111,13 +111,16 @@ vi.mock('electron', () => ({
 }))
 
 import { setAppEnvironment } from '../../shared/app-environment'
-import { AGENT_SESSION_RECORD_SCHEMA_VERSION } from '../../shared/agent-session-record'
-import type { AgentSessionAccountHome, AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
+import {
+  AGENT_SESSION_RECORD_SCHEMA_VERSION,
+  type AgentSessionRecord
+} from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,

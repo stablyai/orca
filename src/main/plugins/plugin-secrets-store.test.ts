@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const storageMocks = vi.hoisted(() => ({
   available: true,
+  backend: 'gnome_libsecret',
   encryptString: vi.fn((value: string) => Buffer.from(`encrypted:${value}`, 'utf8')),
   decryptString: vi.fn((value: Buffer) => {
     const text = value.toString('utf8')
@@ -19,13 +20,15 @@ vi.mock('electron', () => ({
   safeStorage: {
     isEncryptionAvailable: () => storageMocks.available,
     encryptString: storageMocks.encryptString,
-    decryptString: storageMocks.decryptString
+    decryptString: storageMocks.decryptString,
+    getSelectedStorageBackend: () => storageMocks.backend
   }
 }))
 
-import { PluginSecretsStore } from './plugin-secrets-store'
+import { PluginSecretsStore, pluginSecretsProtection } from './plugin-secrets-store'
 
 const roots: string[] = []
+const originalPlatform = process.platform
 
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-plugin-secrets-'))
@@ -35,6 +38,7 @@ async function tempRoot(): Promise<string> {
 
 beforeEach(() => {
   storageMocks.available = true
+  storageMocks.backend = 'gnome_libsecret'
   storageMocks.encryptString.mockImplementation((value) =>
     Buffer.from(`encrypted:${value}`, 'utf8')
   )
@@ -48,6 +52,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  Object.defineProperty(process, 'platform', { value: originalPlatform })
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -113,5 +118,28 @@ describe('PluginSecretsStore', () => {
   it('rejects unsafe plugin namespaces', async () => {
     const root = await tempRoot()
     expect(() => new PluginSecretsStore(root, 'constructor.demo')).toThrow('unsafe plugin key')
+  })
+
+  it('refuses writes on the Linux basic_text backend but still reads existing secrets', async () => {
+    const root = await tempRoot()
+    const store = new PluginSecretsStore(root, 'acme.linux')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    expect(store.set('token', 'sealed-earlier')).toEqual({ ok: true, value: true })
+    expect(pluginSecretsProtection()).toEqual({ level: 'os', gap: null })
+
+    storageMocks.backend = 'basic_text'
+
+    expect(pluginSecretsProtection()).toMatchObject({ level: 'obfuscated' })
+    expect(store.set('token', 'next')).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('basic_text')
+    })
+    expect(store.get('token')).toEqual({ ok: true, value: 'sealed-earlier' })
+  })
+
+  it('reports unavailable protection when OS encryption is off', () => {
+    storageMocks.available = false
+
+    expect(pluginSecretsProtection()).toMatchObject({ level: 'unavailable' })
   })
 })

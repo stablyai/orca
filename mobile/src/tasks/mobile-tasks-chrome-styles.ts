@@ -28,13 +28,12 @@ export const mobileTasksChromeStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md
   },
   filterSheetHeader: {
-    marginHorizontal: -spacing.sm,
     marginBottom: spacing.xs
   },
   filterFootnote: {
     fontSize: 12,
     color: colors.textMuted,
-    paddingHorizontal: spacing.md + 2,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm
   },
   errorBanner: {

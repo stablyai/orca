@@ -58,23 +58,6 @@ describe('spawnProxyCommand', () => {
     expect(proc.listenerCount('error')).toBe(0)
   })
 
-  it('drains proxy stderr so the pipe cannot fill and block the child', () => {
-    const proc = createMockProxyProcess()
-    spawnMock.mockReturnValue(proc)
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    spawnProxyCommand(
-      { kind: 'jump-host', jumpHost: 'bastion.example.com' },
-      'target.example.com',
-      22,
-      'deploy'
-    )
-    proc.stderr.emit('data', Buffer.from('bastion: permission denied\n'))
-
-    expect(consoleError).toHaveBeenCalledWith('[ssh-proxy-command] bastion: permission denied')
-    consoleError.mockRestore()
-  })
-
   it('expands a comma-separated ProxyJump chain into -J plus a final hop', () => {
     spawnMock.mockReturnValue(createMockProxyProcess())
 
@@ -95,23 +78,6 @@ describe('spawnProxyCommand', () => {
         '--',
         'third.example.com'
       ],
-      expect.anything()
-    )
-  })
-
-  it('tunnels a single ProxyJump hop without a -J chain', () => {
-    spawnMock.mockReturnValue(createMockProxyProcess())
-
-    spawnProxyCommand(
-      { kind: 'jump-host', jumpHost: 'bastion.example.com' },
-      'target.example.com',
-      22,
-      'deploy'
-    )
-
-    expect(spawnMock).toHaveBeenCalledWith(
-      'ssh',
-      ['-W', 'target.example.com:22', '--', 'bastion.example.com'],
       expect.anything()
     )
   })

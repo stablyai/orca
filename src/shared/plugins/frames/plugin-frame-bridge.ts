@@ -24,7 +24,9 @@ export const FRAME_EVENTS = {
   /** frame → host: a modifier chord, so Orca's save shortcut works inside an editor. */
   editorKeydown: 'editor.keydown',
   /** host → frame: the document, on ready and whenever it changes outside the frame. */
-  editorDocument: 'editor.document'
+  editorDocument: 'editor.document',
+  /** host → frame, payload `PluginPanelPush`: a worker post, an event or a data change. */
+  push: 'plugin.push'
 } as const
 
 /** Frame-local methods a custom editor handles or calls on the same envelope. */
@@ -35,12 +37,6 @@ export const EDITOR_METHODS = {
   flush: 'editor.flush'
 } as const
 
-/** Frame-local methods a panel calls on the same envelope; main answers them, never `executeHostCall`. */
-export const PANEL_METHODS = {
-  /** frame → host: JSON for the panel's own worker, answered with the worker's JSON reply. */
-  postMessage: 'panel.postMessage'
-} as const
-
 export type PluginFrameTheme = { colorScheme: 'light' | 'dark'; tokens: string }
 
 export type PluginFrameHello = {
@@ -49,13 +45,14 @@ export type PluginFrameHello = {
   api: { major: number; minor: number }
   methods: string[]
   theme: PluginFrameTheme
+  /** Orca's UI locale (BCP-47); Chromium's `navigator.language` does not follow it. */
+  locale?: string
 }
 
-/** Per-plugin bridge budgets, enforced host-side. */
+/** Per-plugin bridge budgets, enforced host-side. Why 120: a panel loading its storage atoms,
+ *  settings and first worker requests makes a burst of small calls. */
 export const PANEL_MESSAGE_MAX_BYTES = 64 * 1024
-export const PANEL_MESSAGE_RATE_LIMIT = { maxMessages: 30, perMs: 10_000 }
-/** A worker's reply to `orca.panel.postMessage`; matches the storage value cap so it can carry a small image. */
-export const PANEL_WORKER_REPLY_MAX_BYTES = 256 * 1024
+export const PANEL_MESSAGE_RATE_LIMIT = { maxMessages: 120, perMs: 10_000 }
 
 /** Size-only liveness lane: count limits let a panel’s pongs exhaust the budget and starve genuine replies.
  * Pongs also spend the data budget, bounding aggregate cost; walks are capped here. */
@@ -78,10 +75,20 @@ export const panelActionCallSchema = z
 
 export type PluginPanelActionCall = z.infer<typeof panelActionCallSchema>
 
+/**
+ * Where a desktop frame loads as an isolated `<webview>` guest (plugin-frame-guest.ts). `dev`: a
+ * development folder's, whose URL changes on every save (components panels hot reload then).
+ */
+export type PluginFrameGuest = { partition: string; url: string; dev?: true }
+
 export type PluginFrameEntry = {
   html: string
   /** Authorizes this frame's host calls; main binds it to the plugin and contribution. */
   sessionToken: string
+  /** Desktop IPC only: browser clients never get one and keep the srcdoc iframe. */
+  guest?: PluginFrameGuest
+  /** A declarative panel: the guest runs a module and Orca renders its tree; `html` is empty. */
+  ui?: 'components'
 }
 
 /** Pong fast path without parse-issue allocations (~90x accepted cost), bounding near-miss spam cost. */

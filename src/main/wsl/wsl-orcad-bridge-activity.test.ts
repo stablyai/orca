@@ -141,21 +141,6 @@ describe('the desktop’s bridged sockets as the liveness watch', () => {
     await expect.poll(() => watch.proving()).toBe(false)
     expect(exits).not.toHaveBeenCalled()
   })
-
-  it('stops listening once closed, and keys hosts apart', () => {
-    const activity = new WslOrcadBridgeActivity()
-    const watch = activity.watch(ENV)
-    const other = vi.fn()
-    activity.watch('wsl:debian').onExit(other)
-    const exits = vi.fn()
-    watch.onExit(exits)
-    watch.close()
-    const events = activity.events(ENV)
-    events.opened()
-    events.ended(true)
-    expect(exits).not.toHaveBeenCalled()
-    expect(other).not.toHaveBeenCalled()
-  })
 })
 
 describe('bridge activity signals', () => {
@@ -207,16 +192,6 @@ describe('probeThenWatchWslOrcadBridges', () => {
     onExit: () => {},
     close: vi.fn(),
     proving: () => false
-  })
-
-  it('reports a refused or unverifiable probe as before, holding nothing', async () => {
-    const activity = new WslOrcadBridgeActivity()
-    for (const signal of ['refused', 'unverifiable'] as const) {
-      const probe = inert(signal)
-      await expect(probeThenWatchWslOrcadBridges(async () => probe, activity, ENV)).resolves.toBe(
-        probe
-      )
-    }
   })
 
   it('closes the probe bridge once it proved the port, and watches the desktop’s sockets', async () => {

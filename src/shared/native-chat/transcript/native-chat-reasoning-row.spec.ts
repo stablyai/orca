@@ -4,7 +4,7 @@ import {
   nativeChatReasoningHeadlineText,
   selectNativeChatLiveReasoning
 } from './native-chat-reasoning-row'
-import type { NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatMessage } from '../native-chat-types'
 
 function row(
   id: string,

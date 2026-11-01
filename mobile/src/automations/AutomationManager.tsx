@@ -1,5 +1,6 @@
 import { useAutomationSetupConsent } from './use-automation-setup-consent'
-import { SetupHookTrustDrawer } from '../components/SetupHookTrustDrawer'
+import { describeLoadError } from '../components/load-error-description'
+import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useAutomationRuns, type AutomationRunScope } from './use-automation-runs'
@@ -266,7 +267,7 @@ export function AutomationManager(props: {
         {catalog.error ? (
           <View style={styles.stack}>
             <Text accessibilityRole="alert" style={styles.error}>
-              {catalog.error}
+              {describeLoadError(catalog.error, t).message}
             </Text>
             <AutomationButton
               label={t('automations.mobile.refresh', 'Refresh')}
@@ -382,7 +383,7 @@ export function AutomationManager(props: {
           </View>
         ) : null}
       </ScrollView>
-      <SetupHookTrustDrawer {...setupConsent.drawer} />
+      <OrcaHookTrustDrawer {...setupConsent.drawer} />
       <ConfirmModal
         visible={deleting !== null}
         title={t('automations.mobile.deleteAutomationTitle', 'Delete automation?')}

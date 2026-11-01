@@ -5,13 +5,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import {
   nativeChatRowTurnKeys,
@@ -21,14 +21,14 @@ import {
   nativeChatTurnFold,
   nativeChatTurnFoldRow
 } from '../../../shared/native-chat/transcript/native-chat-turn-fold'
-import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
-import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
-import { selectStructuredAgentTurnBars } from '../../../shared/structured-agent-session-turn-timing'
+import { nativeChatTurnMembership } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
+import { projectStructuredItemsToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import { selectStructuredAgentTurnBars } from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { GROK_ACP_DIALECT } from '../../acp/acp-dialects/grok-dialect'
 import { readAcpFixture } from '../../acp/acp-timeline-fixture.test-support'
 import { AcpTimelineTranslator } from '../../acp/acp-timeline-translator'
 import { PromptResponseSchema } from '../../acp/generated/acp-protocol.generated'
-import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createCodexDispatchEchoes } from '../../codex/codex-structured-dispatch-echo'
 import { readCodexTurnId } from '../../codex/codex-structured-thread-facts'

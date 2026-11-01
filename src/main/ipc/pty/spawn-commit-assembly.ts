@@ -1,7 +1,7 @@
 import { readTerminalStartFailure } from '../../../shared/terminal-start-failure'
 import type { PtySpawnSizeSeed } from './spawn-options-assembly'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
-import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session-host-authority'
+import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/agent-session-host-authority'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { Store, PtyBindingSourceExpectation } from '../../persistence'

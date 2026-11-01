@@ -284,12 +284,15 @@ export async function finishRuntimeLocalWorktreeRemoval(
     // Removal overtakes earlier scans; invalidate their catalogs.
     runWorktreeChangeInvalidators(repo.id)
     completed = true
+    try {
+      await cleanupRemovedWorktreePushTarget(args)
+    } finally {
+      args.finishRemoval(removalResult, true, refreshed.head)
+    }
+    return removalResult ?? {}
   } finally {
     await gate.finish(completed)
   }
-  await cleanupRemovedWorktreePushTarget(args)
-  args.finishRemoval(removalResult, true, refreshed.head)
-  return removalResult ?? {}
 }
 
 export async function cleanupRemovedWorktreePushTarget(

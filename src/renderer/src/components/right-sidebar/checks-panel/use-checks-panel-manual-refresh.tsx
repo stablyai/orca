@@ -206,13 +206,17 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           worktreeId: activeWorktreeId ?? undefined,
           linkedPRNumber: linkedPR,
           fallbackPRNumber: fallbackGitHubPRNumber,
-          reason: 'manual'
+          reason: 'manual',
+          userRefresh: true
         })
       } finally {
         if (startedPRRefreshToken) {
           expireGitHubPRRefreshState(prCacheKey, startedPRRefreshToken)
         }
       }
+      // Read this click's settlement now; the key-wide slot can belong to another read after the card read.
+      const prLookupFailed =
+        !refreshedPR && useAppStore.getState().prRefreshStates[prCacheKey]?.status === 'error'
       if (!isCurrentRequest()) {
         return
       }
@@ -224,6 +228,10 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         refreshedPR?.number ?? fallbackGitHubPRNumber
       ).catch(() => null)
       if (!isCurrentRequest()) {
+        return
+      }
+      if (prLookupFailed) {
+        refreshOutcome = 'error'
         return
       }
       if (refreshedPR) {
@@ -247,7 +255,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           branch,
           refreshedPR.headSha,
           refreshedPR.prRepo,
-          { force: true, repoId: repo.id, wakeWslDistro: true }
+          { force: true, repoId: repo.id, wakeWslDistro: true, userRefresh: true }
         ).then(
           (result) => {
             if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
@@ -276,7 +284,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         const refreshedComments = fetchPRComments(repo.path, refreshedPR.number, {
           force: true,
           repoId: repo.id,
-          prRepo: refreshedPR.prRepo
+          prRepo: refreshedPR.prRepo,
+          userRefresh: true
         }).then(
           (result) => {
             if (isCurrentRequest() && isCurrentAsyncResult(prRequestKey)) {

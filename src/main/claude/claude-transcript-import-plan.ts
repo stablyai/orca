@@ -2,13 +2,13 @@ import { isDeepStrictEqual } from 'node:util'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
-  type AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
+  type AgentJournalItemBody
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
 import {
   continuedOutsideNotice,
@@ -36,8 +36,8 @@ import {
   claudeToolIdentity,
   claudeToolUses,
   readClaudeMessageEnvelope
-} from './claude-structured-item-translation'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+} from './structured/journal/claude-structured-item-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { createClaudeTranscriptItemReader } from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from './claude-session-state-turn-over'
 

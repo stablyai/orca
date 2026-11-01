@@ -45,6 +45,7 @@ export function createPageReadyFrame(): Extract<BridgeClientMessage, { type: 're
   return {
     v: BRIDGE_PROTOCOL_VERSION,
     type: 'ready',
-    storageKeys: [...NEGOTIATED_PAGE_STORAGE_KEYS]
+    storageKeys: [...NEGOTIATED_PAGE_STORAGE_KEYS],
+    connectionPathFrames: true
   }
 }

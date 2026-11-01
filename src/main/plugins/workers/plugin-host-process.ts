@@ -1,4 +1,6 @@
 import { fork, type ChildProcess } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   PLUGIN_WORKER_INVOKE_TIMEOUT_MS,
   PLUGIN_WORKER_READY_TIMEOUT_MS,
@@ -6,66 +8,43 @@ import {
   WORKER_EVENTS,
   WORKER_METHODS
 } from '../../../shared/plugins/workers/plugin-host-protocol'
-import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
-import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
 import {
-  pluginCancel,
   pluginEvent,
   pluginOutcomeResponse,
   pluginRequest,
+  normalizePluginErrorCode,
   readPluginEnvelope,
-  type PluginEnvelope,
-  type PluginHostCallOutcome
+  type PluginEnvelope
 } from '../../../shared/plugins/frames/plugin-protocol'
+import type { PluginWorkerHandle, StartPluginWorkerOptions } from './plugin-host-process-types'
+import {
+  requestError,
+  sendPluginWorkerRequest,
+  type PendingCall,
+  type PluginWorkerRequestChannel
+} from './plugin-worker-requests'
 import { buildPluginWorkerEnv } from './plugin-worker-env'
 import { pipePluginWorkerOutput } from './plugin-worker-output-buffer'
-import { createPluginWorkerPanelMessages } from './plugin-worker-panel-messages'
 
 const PLUGIN_WORKER_SHUTDOWN_GRACE_MS = 2_000
 const PLUGIN_WORKER_EVENT_TIMEOUT_MS = 5 * 60_000
 const PLUGIN_WORKER_MAX_PENDING_EVENTS = 64
 
-export type PluginWorkerLogSink = (level: 'info' | 'warn' | 'error', line: string) => void
+export type {
+  PluginWorkerHandle,
+  PluginWorkerHostCallExecutor,
+  PluginWorkerLogSink,
+  StartPluginWorkerOptions
+} from './plugin-host-process-types'
 
-export type PluginWorkerHostCallExecutor = (
-  method: string,
-  params: unknown
-) => Promise<PluginHostCallOutcome>
-
-export type PluginWorkerHandle = {
-  /** Command ids the worker registered on activate (⊆ manifest commands). */
-  commands: readonly string[]
-  invokeCommand(commandId: string, args?: unknown): Promise<unknown>
-  deliverEvent(event: PluginEventName, payload: unknown): void
-  /** Hands a panel's JSON to the handler its worker registered for `panelId`; never rejects. */
-  deliverPanelMessage(panelId: string, message: unknown): Promise<PluginHostCallOutcome>
-  /** Last completed work timestamp, in milliseconds, for idle reaping. */
-  lastActivityAt(): number
-  inFlightCount(): number
-  dispose(): Promise<void>
-  kill(): void
-  onExit(callback: (code: number | null) => void): void
-}
-
-export type StartPluginWorkerOptions = {
-  pluginId: string
-  rootDir: string
-  mainEntry: string
-  /** Caller-resolved compiled entry path. */
-  entryPath: string
-  grantedCapabilities: readonly PluginCapabilityKind[]
-  executeHostCall: PluginWorkerHostCallExecutor
-  log: PluginWorkerLogSink
-  readyTimeoutMs?: number
-  invokeTimeoutMs?: number
-  eventTimeoutMs?: number
-  signal?: AbortSignal
-}
-
-type PendingCall = {
-  resolve: (value: unknown) => void
-  reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
+/** Fork the unpacked entry because Node cannot execute inside app.asar. */
+export function resolvePluginHostEntryPath(appPath: string, isPackaged: boolean): string {
+  const basePath = isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
+  const directEntryPath = join(basePath, 'plugin-host-entry.js')
+  if (existsSync(directEntryPath)) {
+    return directEntryPath
+  }
+  return join(basePath, 'out', 'main', 'plugin-host-entry.js')
 }
 
 export async function startPluginWorker(
@@ -92,21 +71,12 @@ export async function startPluginWorker(
   const pendingCommands = new Map<number, PendingCall>()
   const pendingEvents = new Map<number, ReturnType<typeof setTimeout>>()
   const exitCallbacks: ((code: number | null) => void)[] = []
-  // One id space for host → worker requests: commands, event deliveries and panel messages share `res`.
+  // One id space for host → worker requests: commands and event deliveries share `res`.
   let nextId = 0
   let exited = false
   let exitCode: number | null = null
   let disposed = false
   let lastActivityAt = Date.now()
-  const panelMessages = createPluginWorkerPanelMessages({
-    send: sendToChild,
-    nextId: () => nextId++,
-    timeoutMs: invokeTimeoutMs,
-    isRunning: () => !exited && !disposed,
-    onActivity: () => {
-      lastActivityAt = Date.now()
-    }
-  })
 
   function sendToChild(message: PluginEnvelope): void {
     if (child.connected) {
@@ -118,13 +88,12 @@ export async function startPluginWorker(
     for (const [callId, entry] of pendingCommands) {
       clearTimeout(entry.timer)
       pendingCommands.delete(callId)
-      entry.reject(new Error(reason))
+      entry.reject(requestError('unavailable', reason))
     }
     for (const timer of pendingEvents.values()) {
       clearTimeout(timer)
     }
     pendingEvents.clear()
-    panelMessages.rejectAll()
   }
 
   child.on('exit', (code) => {
@@ -181,9 +150,6 @@ export async function startPluginWorker(
       switch (message.kind) {
         case 'res': {
           lastActivityAt = Date.now()
-          if (panelMessages.settle(message)) {
-            return
-          }
           clearTimeout(pendingEvents.get(message.id))
           const entry = pendingCommands.get(message.id)
           if (pendingEvents.delete(message.id) || !entry) {
@@ -192,7 +158,8 @@ export async function startPluginWorker(
           clearTimeout(entry.timer)
           pendingCommands.delete(message.id)
           if (message.error) {
-            entry.reject(new Error(message.error.message || 'plugin command failed'))
+            const code = normalizePluginErrorCode(message.error.code)
+            entry.reject(requestError(code, message.error.message || 'plugin command failed'))
           } else {
             entry.resolve(message.result)
           }
@@ -222,6 +189,9 @@ export async function startPluginWorker(
         clearTimeout(timer)
         options.signal?.removeEventListener('abort', onAbort)
         resolve(event.payload.commands)
+      } else if (event?.event === WORKER_EVENTS.panelPost) {
+        lastActivityAt = Date.now()
+        options.onPanelPost?.(event.payload)
       } else if (event?.event === WORKER_EVENTS.log) {
         log(event.payload.level, event.payload.message)
       } else if (event?.event === WORKER_EVENTS.fatal) {
@@ -243,23 +213,39 @@ export async function startPluginWorker(
     }
   })
 
+  const requests: PluginWorkerRequestChannel = {
+    pending: pendingCommands,
+    send: sendToChild,
+    nextId: () => nextId++,
+    isRunning: () => !exited && !disposed,
+    tag
+  }
+
   return {
     commands,
     invokeCommand(commandId, args) {
-      if (exited || disposed) {
-        return Promise.reject(new Error(`${tag} worker is not running`))
+      return sendPluginWorkerRequest(
+        requests,
+        WORKER_METHODS.invokeCommand,
+        { commandId, args },
+        invokeTimeoutMs,
+        commandId
+      )
+    },
+    requestFromPanel({ name, input, panel, timeoutMs, signal }) {
+      return sendPluginWorkerRequest(
+        requests,
+        WORKER_METHODS.panelRequest,
+        { name, input, panel },
+        timeoutMs,
+        name,
+        signal
+      )
+    },
+    notifyDataChanged(change) {
+      if (!exited && !disposed) {
+        sendToChild(pluginEvent(WORKER_EVENTS.dataChanged, change))
       }
-      const callId = nextId++
-      return new Promise<unknown>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          pendingCommands.delete(callId)
-          // Tell the handler too, so it stops instead of running on unobserved.
-          sendToChild(pluginCancel(callId))
-          reject(new Error(`${tag} ${commandId} timed out after ${invokeTimeoutMs}ms`))
-        }, invokeTimeoutMs)
-        pendingCommands.set(callId, { resolve, reject, timer })
-        sendToChild(pluginRequest(callId, WORKER_METHODS.invokeCommand, { commandId, args }))
-      })
     },
     deliverEvent(event, payload) {
       if (exited || disposed) {
@@ -280,9 +266,8 @@ export async function startPluginWorker(
       pendingEvents.set(eventId, timer)
       sendToChild(pluginRequest(eventId, WORKER_METHODS.deliverEvent, { event, payload }))
     },
-    deliverPanelMessage: panelMessages.deliver,
     lastActivityAt: () => lastActivityAt,
-    inFlightCount: () => pendingCommands.size + pendingEvents.size + panelMessages.size(),
+    inFlightCount: () => pendingCommands.size + pendingEvents.size,
     async dispose() {
       if (disposed) {
         return

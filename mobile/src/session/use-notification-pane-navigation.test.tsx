@@ -1,8 +1,21 @@
-import { createElement } from 'react'
+import type { PendingSessionSelection } from './pending-session-selection'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../src/shared/agent-session/view/structured-agent-session-projection'
+import type { StructuredSessionOpenSource } from '../../../src/shared/open-structured-agent-session'
+import { createElement, useRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BridgeInitRoute } from '../mobile-web-shell/bridge/bridge-envelope'
 import type { MobileSessionTab } from './mobile-session-route-types'
+
+vi.mock('../navigation/workspace-execution-host', () => ({
+  useWorkspaceExecutionHost: () => 'local'
+}))
+vi.mock('../navigation/workspace-route-handoff', () => ({
+  useWorkspaceRouteHandoff: () => ({ push: vi.fn() })
+}))
 
 type RouteUpdateListener = (route: BridgeInitRoute | null) => void
 
@@ -31,6 +44,9 @@ vi.mock('../transport/client-context.web', () => ({
   })
 }))
 
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
+import type { ConnectionState } from '../transport/types'
+import { useMobileStructuredSessionOpening } from './use-mobile-structured-session-opening'
 import { useNotificationPaneNavigation } from './use-notification-pane-navigation'
 
 // Use a real leaf id; invalid keys would test only the closed-pane path.
@@ -61,15 +77,19 @@ const switched: MobileSessionTab[] = []
 
 function Probe({
   terminalsLoaded,
-  sessionTabs = TABS
+  sessionTabs = TABS,
+  openNativeSession
 }: {
   terminalsLoaded: boolean
   sessionTabs?: MobileSessionTab[]
+  openNativeSession?: (source: StructuredSessionOpenSource) => Promise<void>
 }): null {
   useNotificationPaneNavigation({
     sessionTabs,
     terminalsLoaded,
-    switchSessionTab: (tab) => switched.push(tab)
+    switchSessionTab: (tab) => switched.push(tab),
+    worktreeId: 'wt-1',
+    openNativeSession
   })
   return null
 }
@@ -191,3 +211,143 @@ describe('the page pane hook', () => {
     expect(switched).toEqual([])
   })
 })
+
+it('opens a missing canonical native notification once, only after inventory loads', () => {
+  const openNativeSession = vi.fn(async () => {})
+  const paneKey = structuredAgentSessionPaneKey(
+    structuredAgentSessionTabId('historical'),
+    'historical'
+  )
+  bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey } }
+  let tree: ReactTestRenderer | undefined
+  act(() => {
+    tree = create(createElement(Probe, { terminalsLoaded: false, openNativeSession }))
+  })
+  expect(openNativeSession).not.toHaveBeenCalled()
+  act(() => {
+    tree?.update(createElement(Probe, { terminalsLoaded: true, openNativeSession }))
+  })
+  expect(openNativeSession).toHaveBeenCalledExactlyOnceWith({
+    kind: 'notification',
+    sessionId: 'historical',
+    worktreeId: 'wt-1'
+  })
+  deliver(paneKey)
+  expect(openNativeSession).toHaveBeenCalledOnce()
+  act(() => tree?.unmount())
+})
+it('routes an existing native notification through lineage instead of selecting its historical tab directly', () => {
+  const openNativeSession = vi.fn(async () => {})
+  const tab: MobileSessionTab = {
+    type: 'agent-session',
+    id: 'issued',
+    sessionId: 'historical',
+    agent: 'codex',
+    title: 'Chat',
+    isActive: false
+  }
+  let tree: ReactTestRenderer | undefined
+  act(() => {
+    tree = create(
+      createElement(Probe, { terminalsLoaded: true, sessionTabs: [tab], openNativeSession })
+    )
+  })
+  deliver(structuredAgentSessionPaneKey('issued', 'historical'))
+  expect(openNativeSession).toHaveBeenCalledExactlyOnceWith({
+    kind: 'notification',
+    sessionId: 'historical',
+    worktreeId: 'wt-1',
+    agent: 'codex'
+  })
+  expect(switched).toEqual([])
+  act(() => tree?.unmount())
+})
+
+it.each([false, true])(
+  'retains a disconnected unstarted native receipt until reconnect, listed=%s',
+  async (listed) => {
+    let connection: ConnectionState = 'disconnected'
+    const client = createFakeRpcClient({ getState: () => connection })
+    const current: MobileSessionTab = {
+      type: 'agent-session',
+      id: 'issued-S',
+      sessionId: 'successor',
+      agent: 'codex',
+      title: 'Chat',
+      isActive: false
+    }
+    const historical: MobileSessionTab = { ...current, id: 'issued-R', sessionId: 'historical' }
+    const rows = listed ? [TABS[0]!, historical] : [TABS[0]!]
+    const send = vi.spyOn(client, 'sendRequest').mockImplementation(async (method) => ({
+      id: 'reply',
+      ok: true,
+      result:
+        method === 'orchestration.partyLocation'
+          ? { location: { kind: 'chat', sessionId: 'successor', worktreeId: 'wt-1' } }
+          : method === 'session.tabs.list'
+            ? { tabs: [current] }
+            : {}
+    }))
+    const switchTab = vi.fn()
+    function Joined() {
+      const active = useRef('first'),
+        selected = useRef<string | null>('first')
+      const pending = useRef<PendingSessionSelection | null>(null)
+      const tabs = useRef(rows)
+      const open = useMobileStructuredSessionOpening({
+        hostId: 'host-1',
+        worktreeId: 'wt-1',
+        client,
+        connState: connection,
+        showToast: vi.fn(),
+        switchSessionTab: switchTab,
+        activeSessionTabIdRef: active,
+        selectedSessionTabIdRef: selected,
+        pendingSelectionRef: pending,
+        sessionTabsRef: tabs
+      })
+      useNotificationPaneNavigation({
+        sessionTabs: rows,
+        terminalsLoaded: true,
+        connState: connection,
+        switchSessionTab: switchTab,
+        worktreeId: 'wt-1',
+        openNativeSession: open
+      })
+      return null
+    }
+    let tree: ReactTestRenderer | undefined
+    await act(async () => {
+      tree = create(createElement(Joined))
+    })
+    const pane = structuredAgentSessionPaneKey(
+      listed ? 'issued-R' : structuredAgentSessionTabId('historical'),
+      'historical'
+    )
+    deliver(pane)
+    expect(send).not.toHaveBeenCalled()
+    await act(async () => {
+      connection = 'connected'
+      tree?.update(createElement(Joined))
+    })
+    expect(switchTab).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ id: 'issued-S', sessionId: 'successor' }),
+      { activate: false }
+    )
+    expect(send.mock.calls.map(([method]) => method)).toEqual([
+      'orchestration.partyLocation',
+      'session.tabs.list',
+      'session.tabs.activate'
+    ])
+    deliver(pane)
+    await act(async () => {
+      connection = 'disconnected'
+      tree?.update(createElement(Joined))
+      connection = 'connected'
+      tree?.update(createElement(Joined))
+    })
+    expect(switchTab).toHaveBeenCalledOnce()
+    expect(send.mock.calls.filter(([method]) => method === 'agentSession.reveal')).toHaveLength(0)
+    await act(async () => tree?.unmount())
+  }
+)

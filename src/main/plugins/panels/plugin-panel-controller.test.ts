@@ -49,7 +49,6 @@ describe('PluginPanelController identity binding', () => {
       resolveApprovedPlugin: (pluginKey) => (pluginKey === plugin.pluginKey ? plugin : null),
       contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
       executeHostCall,
-      ensureWorker: vi.fn(),
       log: () => vi.fn()
     })
     const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
@@ -76,7 +75,8 @@ describe('PluginPanelController identity binding', () => {
       plugin.pluginKey,
       'notifications.show',
       { title: 'Hello' },
-      'panel'
+      'panel',
+      { panel: { id: expect.any(String), surface: 'panel', contributionId: 'dashboard' } }
     )
     await expect(
       controller.execute('runtime:other', {
@@ -94,7 +94,6 @@ describe('PluginPanelController identity binding', () => {
       resolveApprovedPlugin: () => plugin,
       contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
       executeHostCall,
-      ensureWorker: vi.fn(),
       log: () => vi.fn(),
       panelAdmission: createPluginPanelCallAdmission({
         limits: { maxBytes: 128, maxMessages: 2, perMs: 10_000 },
@@ -146,7 +145,6 @@ describe('PluginPanelController identity binding', () => {
       resolveApprovedPlugin: () => (approved ? plugin : null),
       contentVerifier: { verify: () => verification },
       executeHostCall: vi.fn(),
-      ensureWorker: vi.fn(),
       log: () => vi.fn()
     })
 
@@ -165,7 +163,6 @@ describe('PluginPanelController identity binding', () => {
       resolveApprovedPlugin: () => current,
       contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
       executeHostCall,
-      ensureWorker: vi.fn(),
       log: () => vi.fn()
     })
     const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
@@ -185,107 +182,70 @@ describe('PluginPanelController identity binding', () => {
   })
 })
 
-describe('PluginPanelController panel messages to the worker', () => {
-  async function open(
-    options: Partial<ConstructorParameters<typeof PluginPanelController>[0]> = {}
-  ) {
-    const base = await createPlugin()
-    const plugin = { ...base, manifest: { ...base.manifest, main: 'worker.mjs' } }
-    const other = { ...plugin, pluginKey: 'samples.other' }
-    const executeHostCall = vi.fn()
-    const deliverPanelMessage = vi.fn().mockResolvedValue({ ok: true, value: { playing: true } })
-    const ensureWorker = vi.fn().mockResolvedValue({ deliverPanelMessage })
-    let approved = true
+describe('PluginPanelController user-gesture methods', () => {
+  it("runs them only for this machine's window, outside the 64 KiB message budget", async () => {
+    const plugin = await createPlugin()
+    const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: { status: 'saved' } })
     const controller = new PluginPanelController({
-      resolveApprovedPlugin: (pluginKey) => {
-        if (!approved) {
-          return null
-        }
-        return pluginKey === plugin.pluginKey
-          ? plugin
-          : pluginKey === other.pluginKey
-            ? other
-            : null
-      },
+      resolveApprovedPlugin: () => plugin,
       contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
       executeHostCall,
-      ensureWorker,
       log: () => vi.fn(),
-      ...options
-    })
-    const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
-    const post = (params: unknown) =>
-      controller.execute('runtime:one', {
-        sessionToken: entry!.sessionToken,
-        action: 'panel.postMessage',
-        params
-      })
-    return {
-      plugin,
-      controller,
-      executeHostCall,
-      ensureWorker,
-      deliverPanelMessage,
-      post,
-      revokeApproval: () => {
-        approved = false
-      }
-    }
-  }
-
-  it('delivers to the session plugin and panel even when the message names others', async () => {
-    const { plugin, ensureWorker, deliverPanelMessage, executeHostCall, post } = await open()
-    const forged = { pluginKey: 'samples.other', panelId: 'admin', sessionToken: 'x'.repeat(43) }
-
-    await expect(post(forged)).resolves.toEqual({ ok: true, value: { playing: true } })
-
-    expect(ensureWorker).toHaveBeenCalledOnce()
-    expect(ensureWorker).toHaveBeenCalledWith(plugin)
-    expect(deliverPanelMessage).toHaveBeenCalledOnce()
-    expect(deliverPanelMessage).toHaveBeenCalledWith('dashboard', forged)
-    expect(executeHostCall).not.toHaveBeenCalled()
-  })
-
-  it('refuses an oversized message before it reaches the worker', async () => {
-    const { ensureWorker, post } = await open({
       panelAdmission: createPluginPanelCallAdmission({
-        limits: { maxBytes: 256, maxMessages: 10, perMs: 10_000 },
+        limits: { maxBytes: 128, maxMessages: 30, perMs: 10_000 },
         now: () => 0
       })
     })
-
-    await expect(post({ data: 'x'.repeat(512) })).resolves.toMatchObject({
-      ok: false,
-      code: 'too_large'
-    })
-    expect(ensureWorker).not.toHaveBeenCalled()
-  })
-
-  it('refuses a flood once the plugin budget is spent, and delivers again after the window', async () => {
-    let now = 0
-    const { deliverPanelMessage, post } = await open({
-      panelAdmission: createPluginPanelCallAdmission({
-        limits: { maxMessages: 3, perMs: 10_000 },
-        now: () => now
-      })
-    })
-
-    for (let index = 0; index < 3; index += 1) {
-      await expect(post({ index })).resolves.toMatchObject({ ok: true })
+    const entry = await controller.open('renderer:1', plugin.pluginKey, 'dashboard')
+    const call = {
+      sessionToken: entry!.sessionToken,
+      action: 'files.saveAs',
+      params: { data: 'x'.repeat(4096) }
     }
-    await expect(post({ index: 3 })).resolves.toMatchObject({ ok: false, code: 'rate_limited' })
-    expect(deliverPanelMessage).toHaveBeenCalledTimes(3)
-    now = 10_000
-    await expect(post({ index: 4 })).resolves.toMatchObject({ ok: true })
+
+    await expect(controller.execute('renderer:1', call)).resolves.toMatchObject({
+      ok: false,
+      code: 'not_permitted'
+    })
+    expect(executeHostCall).not.toHaveBeenCalled()
+    await expect(
+      controller.execute('renderer:1', call, { desktop: true, callerWebContentsId: 7 })
+    ).resolves.toMatchObject({ ok: true })
+    expect(executeHostCall).toHaveBeenCalledWith(
+      plugin.pluginKey,
+      'files.saveAs',
+      call.params,
+      'panel',
+      expect.objectContaining({
+        webContentsId: 7,
+        panel: expect.objectContaining({ surface: 'panel' })
+      })
+    )
   })
+})
 
-  it('does not deliver once approval is withdrawn or the session is revoked', async () => {
-    const { controller, ensureWorker, post, revokeApproval } = await open()
-    revokeApproval()
-    await expect(post({})).resolves.toMatchObject({ ok: false, code: 'unavailable' })
-
-    controller.revokeOwner('runtime:one')
-    await expect(post({})).resolves.toMatchObject({ ok: false, code: 'invalid_request' })
-    expect(ensureWorker).not.toHaveBeenCalled()
+describe('PluginPanelController declarative panels', () => {
+  it('marks the entry and never sends the module text as a page', async () => {
+    const plugin = await createPlugin()
+    await writeFile(join(plugin.rootDir, 'panel.js'), 'export default () => null // MODULE')
+    const declarative: ValidDiscoveredPlugin = {
+      ...plugin,
+      manifest: {
+        ...plugin.manifest,
+        contributes: {
+          ...plugin.manifest.contributes,
+          panels: [{ id: 'todos', title: 'Todos', entry: 'panel.js', ui: 'components' }]
+        }
+      }
+    }
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: () => declarative,
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall: vi.fn(),
+      log: () => vi.fn()
+    })
+    const entry = await controller.open('renderer:1', plugin.pluginKey, 'todos')
+    expect(entry?.ui).toBe('components')
+    expect(entry?.html).not.toContain('MODULE')
   })
 })

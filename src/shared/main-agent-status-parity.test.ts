@@ -8,14 +8,14 @@ import {
   type HookListenerState
 } from './agent-hook-listener/listener-state'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
-import type { AgentSessionBackgroundTask } from './agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from './agent-session/agent-session-background-task-wire'
 import type {
   AgentMainAgentStatus,
   AgentStatusState,
   AgentWorkingMode,
   ParsedAgentStatusPayload
 } from './agent-status-types'
-import { structuredAgentSessionAgentStatus } from './structured-agent-session-agent-status'
+import { structuredAgentSessionAgentStatus } from './agent-session/view/structured-agent-session-agent-status'
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 
 type Published = {

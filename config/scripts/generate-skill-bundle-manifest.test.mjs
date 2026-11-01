@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import {
   chmod,
@@ -179,6 +180,23 @@ describe('skill bundle manifest generator', () => {
     sandbox.generate('--write')
     expect(JSON.parse(await sandbox.read('released-digests.json')).skills.demo).toHaveLength(3)
     expect(() => sandbox.generate()).not.toThrow()
+  })
+
+  it('keeps SKILL.md bytes only a release tag shipped, off HEAD', async () => {
+    const sandbox = await createGeneratorSandbox()
+    sandbox.git('init', '-q', '-b', 'main')
+    sandbox.git('add', 'skills')
+    sandbox.git('commit', '-qm', 'one')
+    sandbox.git('checkout', '-qb', 'release')
+    await sandbox.editSkill('release-only version\n')
+    sandbox.git('commit', '-qam', 'release cut')
+    sandbox.git('tag', 'v1.0.0')
+    sandbox.git('checkout', '-q', 'main')
+    await sandbox.editSkill('demo skill\n')
+    sandbox.generate('--write')
+    const digests = JSON.parse(await sandbox.read('released-digests.json')).skills.demo
+    expect(digests).toContain(createHash('sha256').update('release-only version\n').digest('hex'))
+    expect(digests).toHaveLength(2)
   })
 
   it('fails when a digest is missing or the pull request base cannot be read', async () => {

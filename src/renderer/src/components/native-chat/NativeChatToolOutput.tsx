@@ -6,8 +6,8 @@ import {
   readStructuredAgentSessionItem,
   supportsStructuredAgentSessionItemDetail
 } from '@/runtime/structured-agent-session-client'
-import type { AgentJournalBoundedPayload } from '../../../../shared/agent-session-journal-types'
-import type { NativeChatToolResultBlock } from '../../../../shared/native-chat-types'
+import type { AgentJournalBoundedPayload } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatToolResultBlock } from '../../../../shared/native-chat/native-chat-types'
 import { truncateToolDetail } from '../../../../shared/native-chat/tools/native-chat-tool-summary'
 import {
   isNativeChatToolOutputClipped,

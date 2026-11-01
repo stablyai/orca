@@ -1,5 +1,5 @@
-import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
+import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import {
   applyJournalRow,
   createJournalReducerState

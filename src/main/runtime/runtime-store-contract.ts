@@ -122,6 +122,8 @@ export type RuntimeStore = {
     // Read by worktree placement: decides whether this project's worktrees
     // mirror into a WSL distro instead of the Windows drive.
     localWindowsRuntimeDefault?: GlobalSettings['localWindowsRuntimeDefault']
+    // Stage 1 is opt-in: WSL-host-only explanations and routing need the setting on.
+    experimentalWslHosts?: GlobalSettings['experimentalWslHosts']
     refreshLocalBaseRefOnWorktreeCreate: boolean
     localBaseRefSuggestionDismissed?: boolean
     branchPrefix: string

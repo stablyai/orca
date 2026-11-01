@@ -1,9 +1,11 @@
 import type {
   AgentSessionMutationEnvelope,
-  AgentSessionMutationResult,
+  AgentSessionMutationResult
+} from '../../../shared/agent-session/agent-session-wire'
+import type {
   AgentSessionQueuedMessageMoveAnchor,
   AgentSessionQueuedMessageMoveResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { mutateQueued } from './structured-agent-session-queued-mutations'

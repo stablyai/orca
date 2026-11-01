@@ -1,5 +1,5 @@
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
-import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
+import type { ClaudeStructuredLaunch } from './structured/launch/claude-structured-launch-resolution'
 import { claudeNamingLaunchInputs, type ClaudeNamingInputs } from './claude-naming-invocation'
 
 type Phase = 'acquiring' | 'initializing' | 'ready' | 'closing' | 'exited' | 'unproven'

@@ -1,9 +1,9 @@
 // Exercise real adapter connection exits/Stop during compact; fake only the Codex child, never its compaction result.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../ipc/desktop-renderer-runtime-capabilities'
-import { structuredAgentSessionCommandTurn } from '../native-chat/agent-session-wire/structured-agent-session-command-turn'
+import { structuredAgentSessionCommandTurn } from '../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { ensureStructuredAgentSessionHost } from './structured-agent-session-runtime'
 import {
   openStructuredCodexRpcHarness,

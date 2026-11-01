@@ -9,16 +9,10 @@ export default function activate(orca) {
   })
 
   // The panel asks this worker; the count is memory, so it resets when Orca restarts the worker. Older Orca has no orca.panels.
-  if (typeof orca.panels?.onMessage === 'function') {
+  if (typeof orca.panels?.handle === 'function') {
     let clicks = 0
-    orca.panels.onMessage('hello', (message) => {
-      if (message.type === 'increment') {
-        clicks += 1
-      } else if (message.type !== 'get') {
-        throw new Error(`unknown message ${message.type}`)
-      }
-      return { clicks }
-    })
+    orca.panels.handle('clicks.increment', () => ({ clicks: (clicks += 1) }))
+    orca.panels.handle('clicks.get', () => ({ clicks }))
   }
 
   orca.events.on('workspace.created', async (payload) => {

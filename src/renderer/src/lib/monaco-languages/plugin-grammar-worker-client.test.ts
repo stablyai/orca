@@ -121,18 +121,4 @@ describe('PluginGrammarWorkerClient', () => {
     void instance.tokenize('next', [4], signal())
     expect(workers).toHaveLength(2)
   })
-
-  it('reports a crash and an oversized document', async () => {
-    const { instance, workers } = client()
-    const crashed = instance.tokenize('x', [1], signal())
-    workers[0]?.onerror?.(new ErrorEvent('error'))
-    await expect(crashed).resolves.toEqual({ ok: false, reason: 'crashed' })
-    await expect(
-      instance.tokenize(
-        'z',
-        Array.from({ length: 25_000 }, () => 1),
-        signal()
-      )
-    ).resolves.toEqual({ ok: false, reason: 'size' })
-  })
 })

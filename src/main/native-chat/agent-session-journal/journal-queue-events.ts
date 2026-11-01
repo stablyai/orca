@@ -1,17 +1,17 @@
 // Queue facts share the chat journal/reducer; no second stored copy may drift behind dispatch state.
 
-import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import {
   AGENT_SESSION_JOURNAL_QUEUE_SCHEMA_VERSION,
-  type AgentJournalCursor,
   type AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import {
   readAgentJournalMessageBody,
   type AgentJournalContentVerdict
-} from '../../../shared/agent-session-journal-body-admission'
-import { isJournalTag } from '../../../shared/agent-session-journal-open-union'
+} from '../../../shared/agent-session/journal/agent-session-journal-body-admission'
+import { isJournalTag } from '../../../shared/agent-session/journal/agent-session-journal-open-union'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRowBase } from './journal-row-schema'
 

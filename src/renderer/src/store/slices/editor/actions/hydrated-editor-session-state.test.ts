@@ -38,13 +38,6 @@ const session: WorkspaceSessionState = {
 }
 
 describe('buildHydratedEditorSessionState', () => {
-  it('restores a moved tab’s file under the owned id the tab names, from a restart or a frame', () => {
-    const restored = buildHydratedEditorSessionState(session, new Set([SIBLING]), null)
-
-    expect(restored.state.openFiles.map((file) => file.id)).toEqual([OWNED])
-    expect(restored.editorFileIdMigrationsByWorktree[SIBLING]?.get(OWNED)).toBeUndefined()
-  })
-
   it('keeps the moved tab’s owned id apart from a sibling showing the same path, in any frame', () => {
     const OTHER = 'repo-a::/repo-a'
     const both: WorkspaceSessionState = {

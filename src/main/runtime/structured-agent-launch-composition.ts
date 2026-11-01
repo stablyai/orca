@@ -1,9 +1,9 @@
 import type { ClaudeAccountRecipe } from '../../shared/agent-session-acquired-account'
 // Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
 
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { isNativeLocalLocation } from '../../shared/execution-host'
 import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
 import { agentDrivesSession } from '../native-chat/agent-session-wire/structured-agent-session-provider-support'

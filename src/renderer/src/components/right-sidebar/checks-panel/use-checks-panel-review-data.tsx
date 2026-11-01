@@ -51,11 +51,14 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     async ({
       force = false,
       prNumberOverride,
-      prRepoOverride
+      prRepoOverride,
+      userRefresh = false
     }: {
       force?: boolean
       prNumberOverride?: number | null
       prRepoOverride?: PRInfo['prRepo'] | null
+      /** A follow-up to a write: it must not be answered by a read begun before the write. */
+      userRefresh?: boolean
     } = {}) => {
       const targetPRNumber = prNumberOverride ?? prNumber
       const targetPRRepo = prRepoOverride ?? pr?.prRepo
@@ -74,7 +77,8 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         const result = await fetchPRComments(repo.path, targetPRNumber, {
           force,
           repoId: repo.id,
-          prRepo: targetPRRepo
+          prRepo: targetPRRepo,
+          ...(userRefresh ? { userRefresh: true } : {})
         })
         if (!isCurrentAsyncResult(requestKey)) {
           return
@@ -210,7 +214,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       if (!sameRepo || payload.type !== 'pr' || payload.number !== prNumber) {
         return
       }
-      void fetchComments({ force: true })
+      void fetchComments({ force: true, userRefresh: true })
     })
   }, [activeGitLabReview, fetchComments, isPanelVisible, prNumber, repo])
   return { fetchComments, handleLoadCheckDetails, getGitLabProjectRef }

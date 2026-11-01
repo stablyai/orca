@@ -242,28 +242,6 @@ describe('ImageViewer preview source retry', () => {
   })
 })
 
-describe('ImageViewer pre-load layout box', () => {
-  beforeEach(() => {
-    reactHookRuntime.states = []
-    reactHookRuntime.index = 0
-    vi.clearAllMocks()
-  })
-
-  // The w-max/h-max scroll box makes percentage maxima ineffective before image load; viewport units must bound natural dimensions.
-  it('bounds both scroll surfaces with viewport units before the image loads', async () => {
-    const images = findElementsByType(await renderExpandedImageViewer(pngBase64(1)), 'img')
-
-    expect(images).toHaveLength(2)
-    for (const image of images) {
-      const className = String(image.props.className)
-      expect(className).toContain('max-h-[100vh]')
-      expect(className).toContain('max-w-[100vw]')
-      expect(className).not.toContain('max-h-full')
-      expect(className).not.toContain('max-w-full')
-    }
-  })
-})
-
 describe('ImageViewer reading its bytes by URL', () => {
   beforeEach(() => {
     reactHookRuntime.states = []

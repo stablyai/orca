@@ -6,6 +6,7 @@ import {
 } from '../manifest/plugin-manifest'
 import { PLUGIN_CAPABILITY_KINDS } from '../capabilities/plugin-capabilities'
 import { pluginEvent, type PluginEvent } from '../frames/plugin-protocol'
+import { pluginWorkerPanelPostSchema } from './plugin-panel-bridge-protocol'
 
 /**
  * The worker fork channel, on the shared envelope (plugin-protocol.ts). Validate both sides:
@@ -20,15 +21,19 @@ export const WORKER_EVENTS = {
   ready: 'ready',
   log: 'log',
   fatal: 'fatal',
-  shutdown: 'shutdown'
+  shutdown: 'shutdown',
+  /** worker → host, {@link PluginWorkerPanelPost}: `orca.panels.post`. */
+  panelPost: 'panel.post',
+  /** host → worker, {@link PluginDataChanged}: a panel or the person changed storage or settings. */
+  dataChanged: 'data.changed'
 } as const
 
 /** host → worker requests; the worker answers each with a `res`. */
 export const WORKER_METHODS = {
   invokeCommand: 'command.invoke',
   deliverEvent: 'event.deliver',
-  /** A panel's message for the handler its worker registered under that panel id. */
-  deliverPanelMessage: 'panel.message'
+  /** A panel's `plugin.request`, answered by the handler from `orca.panels.handle`. */
+  panelRequest: 'panel.request'
 } as const
 
 export const pluginWorkerInitSchema = z.object({
@@ -50,12 +55,6 @@ export const pluginWorkerDeliverParamsSchema = z.object({
   payload: z.unknown()
 })
 
-export const pluginWorkerPanelMessageParamsSchema = z.object({
-  /** Bound by the host from the panel session, never read from the frame's own message. */
-  panelId: z.string().min(1),
-  message: z.unknown()
-})
-
 export const pluginWorkerReadySchema = z.object({
   /** Command ids the worker registered handlers for (⊆ manifest commands). */
   commands: z.array(pluginCommandIdSchema).max(PLUGIN_COMMAND_LIMIT)
@@ -73,7 +72,8 @@ export type PluginWorkerInit = z.infer<typeof pluginWorkerInitSchema>
 const pluginWorkerChildEventSchema = z.discriminatedUnion('event', [
   z.object({ event: z.literal(WORKER_EVENTS.ready), payload: pluginWorkerReadySchema }),
   z.object({ event: z.literal(WORKER_EVENTS.log), payload: pluginWorkerLogSchema }),
-  z.object({ event: z.literal(WORKER_EVENTS.fatal), payload: pluginWorkerFatalSchema })
+  z.object({ event: z.literal(WORKER_EVENTS.fatal), payload: pluginWorkerFatalSchema }),
+  z.object({ event: z.literal(WORKER_EVENTS.panelPost), payload: pluginWorkerPanelPostSchema })
 ])
 
 /** A worker → host lifecycle event, or null for anything else. */
@@ -94,9 +94,9 @@ export function pluginWorkerFatal(error: string): PluginEvent {
 
 export const PLUGIN_WORKER_READY_TIMEOUT_MS = 10_000
 export const PLUGIN_WORKER_INVOKE_TIMEOUT_MS = 30_000
-/** Concurrent panel messages one worker may have unanswered before more are refused. */
-export const PLUGIN_WORKER_MAX_PENDING_PANEL_MESSAGES = 16
 /** Dispose idle workers and refork on their next trigger. */
 export const PLUGIN_WORKER_IDLE_REAP_MS = 5 * 60_000
 /** Default cap on concurrently-active workers; excess activations queue. */
 export const PLUGIN_WORKER_MAX_ACTIVE_DEFAULT = 5
+/** Panel request handlers one worker runs at once; past it, requests are `rate_limited`. */
+export const PLUGIN_WORKER_MAX_RUNNING_PANEL_REQUESTS = 16

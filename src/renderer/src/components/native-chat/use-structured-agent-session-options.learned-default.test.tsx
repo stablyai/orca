@@ -13,16 +13,16 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
 }))
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', () => ({
   holdStructuredAgentSessionLaunchOption: vi.fn(),
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
 import type {
   AgentSessionModelCatalogResult,
-  AgentSessionModelOption,
-  AgentSessionOptionsResult
-} from '../../../../shared/agent-session-wire'
+  AgentSessionModelOption
+} from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   recordHostModelCatalogSnapshot,
@@ -32,7 +32,7 @@ import type { StructuredAgentSessionMutate } from './use-structured-agent-sessio
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 import type { AcpDeclaredEffortFixtureModule } from '../../../../shared/acp-declared-effort.test-fixture-contract'
-import { structuredAgentSessionMessageSelection } from '../../../../shared/structured-agent-session-option-view'
+import { structuredAgentSessionMessageSelection } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { firstFrameOptionState } from './structured-agent-session-option-first-frame'
 
 // Only the first chat without a saved pick may wait to name its model; later launches use the host’s learned default.

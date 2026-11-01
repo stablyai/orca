@@ -3,25 +3,25 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { DISPATCH_REJECTED_CANCELLED } from '../../shared/structured-agent-session-dispatch-rejection'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { DISPATCH_REJECTED_CANCELLED } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
   DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED,
   DISPATCH_DOUBT_PROVIDER_IDLE
 } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { ClaudeControlRequestError } from './claude-agent-sdk-control-requests'
-import { claudeDispatchRejection } from './claude-structured-dispatch-content'
-import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import { claudeDispatchRejection } from './structured/claude-structured-dispatch-content'
+import { ClaudeStructuredSessionAdapter } from './structured/claude-structured-session-adapter'
 import type { ClaudeLateDispatchOutcome } from './structured/claude-structured-session-state'
 import {
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
   type FakeConnection
-} from './claude-structured-session-test-support'
-import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
+} from './structured/claude-structured-session-test-support'
+import { claudeStartupSettled } from './structured/claude-structured-startup-settled-test-support'
 
 type CapturedEvent =
   | { kind: 'meta'; providerSessionId: string }

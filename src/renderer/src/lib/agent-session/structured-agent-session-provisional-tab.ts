@@ -3,7 +3,7 @@ import {
   structuredAgentSessionDraftScopeKey
 } from '@/components/native-chat/native-chat-composer-draft-store'
 import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-composer-draft-memory'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type {
@@ -21,7 +21,7 @@ import {
   type DeclinedStructuredLaunchTerminalOptions,
   type HostAdmittedStructuredLaunch,
   type StructuredLaunchTerminal
-} from '@/lib/structured-agent-session-launch-admission'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionTargetForHost
@@ -31,13 +31,13 @@ import {
   openTerminalForDeclinedChat,
   openDeclinedTerminal,
   opensAtAction
-} from '../structured-agent-session-action-launch'
+} from './launch/structured-agent-session-action-launch'
 import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '../empty-workspace-default-surface-claims'
 import type { OpenedAgentSessionTab } from '../structured-agent-session-tab-open-through-layout-owner'
 import {
   captureStructuredLaunchSurfaceAddress,
   openStructuredAgentSessionProvisionalTab
-} from '../structured-agent-session-launch-surface'
+} from './launch/structured-agent-session-launch-surface'
 
 type LocalProvisionalLaunch = StructuredAgentLaunchHandle & { tab: OpenedAgentSessionTab }
 

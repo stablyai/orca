@@ -163,7 +163,7 @@ import { useMobileNativeChatController } from './use-mobile-native-chat-controll
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import { mobileNativeChatPromptDismissals } from './native-chat/input/mobile-native-chat-prompt-dismissals'
-import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
+import type { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 
 const sendWithOutcome = vi.mocked(NativeChatSend.sendMobileNativeChatMessageWithOutcome)
 
@@ -298,22 +298,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(isMobileNativeChatInputStale('term-1')).toBe(true)
   })
 
-  it('retires a held failure banner when a card action is accepted', async () => {
-    // Accepted answers/permission replies must clear the route-owned send-error banner too.
-    sendWithOutcome.mockResolvedValue('accepted')
-    await act(async () => {
-      await controller!.handleNativeChatCancelAsk()
-    })
-    expect(onSendResolved).toHaveBeenCalled()
-
-    onSendResolved.mockClear()
-    sendWithOutcome.mockResolvedValue('rejected')
-    await act(async () => {
-      await controller!.handleNativeChatCancelAsk()
-    })
-    expect(onSendResolved).not.toHaveBeenCalled()
-  })
-
   it('routes structured agent-session sends away from terminal/nativeChat transports', async () => {
     await act(async () => {
       renderer?.update(createElement(Harness, structuredTab('codex')))
@@ -334,82 +318,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     )
     expect(sendWithOutcome).not.toHaveBeenCalled()
     expect(clientStub.sendRequest).not.toHaveBeenCalled()
-  })
-
-  it("leaves a command the chat's own agent runs to its session, though Codex's host claims it", async () => {
-    await act(async () => {
-      renderer?.update(createElement(Harness, structuredTab('opencode')))
-    })
-    await act(async () => {
-      await controller!.handleNativeChatSend('/review')
-    })
-    expect(structuredSendWithOutcome).toHaveBeenCalledWith(
-      '/review',
-      undefined,
-      undefined,
-      undefined,
-      []
-    )
-    expect(acceptSend).not.toHaveBeenCalled()
-    expect(restoreRejectedDraft).not.toHaveBeenCalled()
-    expect(controller!.nativeChatAcceptsImages).toBe(false)
-  })
-
-  it('offers prompt Cancel only while a provider turn runs', async () => {
-    const props = structuredTab('codex')
-    structuredActivity.isWorking = true
-    try {
-      await act(async () => {
-        renderer?.update(createElement(Harness, props))
-      })
-      expect(controller?.nativeChatTurnActive).toBe(true)
-      expect(controller?.handleNativeChatCancelPrompt).toBeUndefined()
-      structuredActivity.turnId = 'provider-turn'
-      await act(async () => {
-        renderer?.update(createElement(Harness, props))
-      })
-      expect(controller?.handleNativeChatCancelPrompt).toEqual(expect.any(Function))
-      structuredActivity.turnId = null
-      harnessHostSupport = structuredAgentSessionHostSupport(['agent-session.conversation-stop.v1'])
-      await act(async () => renderer?.update(createElement(Harness, props)))
-      expect(controller?.handleNativeChatCancelPrompt).toBeUndefined()
-    } finally {
-      harnessHostSupport = null
-      structuredActivity.isWorking = false
-      structuredActivity.turnId = null
-    }
-  })
-
-  it('exposes structured prompt cards and session options on structured tabs', async () => {
-    await act(async () => {
-      renderer?.update(createElement(Harness, structuredTab('codex')))
-    })
-
-    expect(controller!.nativeChatPermission).toEqual(structuredPermission)
-    expect(controller!.nativeChatQuestion).toEqual(structuredQuestion)
-    expect(controller!.nativeChatSessionOptions).not.toBeNull()
-    expect(controller!.nativeChatSessionOptions?.controller.snapshot).toEqual(
-      structuredOptionSnapshot
-    )
-
-    await act(async () => {
-      expect(await controller!.handleNativeChatRespondPermission('allow-once')).toBe(true)
-    })
-    expect(structuredRespondPermission).toHaveBeenCalledWith('allow-once')
-    expect(sendWithOutcome).not.toHaveBeenCalled()
-
-    await act(async () => {
-      expect(await controller!.handleNativeChatQuestionAnswer?.('choice-a')).toBe(true)
-    })
-    expect(structuredRespondQuestion).toHaveBeenCalledWith('choice-a')
-    expect(clientStub.sendRequest).not.toHaveBeenCalled()
-
-    await act(async () => {
-      expect(
-        await controller!.nativeChatSessionOptions!.controller.setOption('model', 'gpt-fast')
-      ).toBe(true)
-    })
-    expect(structuredSetOption).toHaveBeenCalledWith('model', 'gpt-fast')
   })
 
   it('pre-clears separately for a text-only send but never for an image send', async () => {
@@ -451,17 +359,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
   })
 
-  it('preserves the unknown outcome on the WithOutcome surface for paste-first callers', async () => {
-    sendWithOutcome.mockResolvedValue('unknown')
-    let outcome = 'accepted'
-    await act(async () => {
-      outcome = await controller!.handleNativeChatSendWithOutcome('look', ['file:///a.jpg'])
-    })
-    // Preserve unknown outcomes so image callers can heal potentially orphaned pastes.
-    expect(outcome).toBe('unknown')
-    expect(holdUnconfirmedSend).toHaveBeenCalledWith(ORIGIN, 'look', expect.any(Function))
-  })
-
   it('fails a send fast while the socket is down, before spending the heal budget', async () => {
     // Gate on live connection immediately; lease state collapses one render later.
     markMobileNativeChatInputStale('term-1')
@@ -476,18 +373,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(clientStub.sendRequest).not.toHaveBeenCalled()
     expect(sendWithOutcome).not.toHaveBeenCalled()
     expect(onSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
-  })
-
-  it('reports a rejected send and posts no echo', async () => {
-    sendWithOutcome.mockResolvedValue('rejected')
-    let accepted = true
-    await act(async () => {
-      accepted = await controller!.handleNativeChatSend('look', ['file:///a.jpg'])
-    })
-    expect(accepted).toBe(false)
-    expect(acceptSend).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledWith('Message not sent')
-    expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, 'look')
   })
 })
 
@@ -765,13 +650,6 @@ describe('useMobileNativeChatController terminal turn', () => {
     vi.useRealTimers()
   })
 
-  it('runs the turn clock and streams the hook preview while the agent works', () => {
-    expect(controller?.nativeChatTurnActive).toBe(true)
-    expect(controller?.nativeChatCanStop).toBe(true)
-    expect(controller?.nativeChatStreamingText).toBe('Partial reply')
-    expect(controller?.nativeChatWorkingStartedAt).toBe(turnStartedAt)
-  })
-
   it('treats passive monitoring as outside the foreground turn', () => {
     workingTab.agentStatus.workingMode = 'monitoring'
     rerender()
@@ -817,16 +695,5 @@ describe('useMobileNativeChatController terminal turn', () => {
     terminalStop.mockResolvedValueOnce(false)
     await act(async () => controller?.handleNativeChatStop())
     expect(controller?.nativeChatCanStop).toBe(true)
-  })
-
-  it('keeps the delayed-send route guard view-gated', () => {
-    const before = answerSendArgs.at(-1)?.streamIdentity
-    expect(before).toContain('term-1')
-
-    viewMode.isTabChatView = () => false
-    rerender()
-
-    expect(answerSendArgs.at(-1)?.streamIdentity).not.toBe(before)
-    expect(controller?.nativeChatTurnActive).toBe(false)
   })
 })

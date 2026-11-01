@@ -110,7 +110,7 @@ export const mobileSessionFrameStyles = themedStyleSheet(() => ({
     maxHeight: 44
   },
   tabContent: {
-    paddingLeft: spacing.sm,
+    paddingLeft: spacing.md,
     paddingRight: spacing.sm
   },
   tabContentInTopBar: {
@@ -136,6 +136,9 @@ export const mobileSessionFrameStyles = themedStyleSheet(() => ({
   tabActive: {
     borderBottomColor: colors.textSecondary,
     backgroundColor: colors.bgRaised
+  },
+  tabPressed: {
+    backgroundColor: colors.translucentFill
   },
   tabLabelRow: {
     maxWidth: '100%',

@@ -6,27 +6,29 @@ import type {
   AgentSessionRewindFork,
   AgentSessionRewindReason,
   AgentSessionRewindSupport
-} from '../../../shared/agent-session-rewind'
+} from '../../../shared/agent-session/lifecycle/agent-session-rewind'
 // The host owns journal/lease authority; adapters report delivery uncertainty without guessing.
 
 import type {
   AgentJournalAnsweredTurnIdentity,
-  AgentJournalItemIdentity,
   AgentJournalMessageItem,
-  AgentJournalTurnItem,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
+  AgentJournalTurnItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
-  AgentSessionAccountHome,
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type {
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity,
   AgentSessionRecord
-} from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
-import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
-import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session/agent-session-thread-goal-wire'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentSessionCloseObserver,
   StructuredAgentSessionAdapterStop
@@ -36,9 +38,9 @@ export type {
   StructuredAgentSessionChildEndCause,
   StructuredAgentSessionStopCause
 } from './structured-agent-session-stop-cause'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
 import type {
   StructuredAgentSessionStartupAttempt,
   StructuredAgentSessionAcquisitionReceipt

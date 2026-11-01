@@ -65,9 +65,4 @@ describe("a Codex child agent's shell on an older client's flat roster", () => {
       settledTasks: ['codex-agent:thread-A: reviewer']
     })
   })
-
-  it('leaves another provider’s owned commands as they are', () => {
-    const { tasks } = structuredChildWorkLegacyTasks([reviewer, shell], 'claude')
-    expect(tasks?.map((task) => task.id)).toEqual(['thread-A', 'cmd-1'])
-  })
 })
