@@ -4,7 +4,8 @@ import { shell } from 'electron'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import {
   ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS,
-  ORCA_CLOUD_CALLBACK_SUCCESS_PAGE
+  orcaCloudCallbackPage,
+  type OrcaCloudCallbackOutcome
 } from './profile-cloud-callback-page'
 
 export type OrcaCloudAuthorizationCode = {
@@ -13,9 +14,13 @@ export type OrcaCloudAuthorizationCode = {
   nonce: string
   redirectUri: string
   state: string
+  /** Answers the waiting browser tab once Orca knows whether sign-in finished. */
+  respond: (outcome: OrcaCloudCallbackOutcome) => void
 }
 
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000
+// Longer than the code exchange request timeout, so the app normally answers first.
+const BROWSER_RESPONSE_TIMEOUT_MS = 45 * 1000
 
 function base64Url(buffer: Buffer): string {
   return buffer.toString('base64').replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
@@ -61,19 +66,39 @@ export function beginOrcaCloudPkceFlow(
       closeServer(server)
     }
 
-    function resolveFlow(code: string): void {
+    function resolveFlow(code: string, response: ServerResponse): void {
       if (settled) {
         return
       }
       settled = true
+      // Stop accepting callbacks but keep this response open until the app answers.
+      server.close()
+      let answered = false
+      const respond = (outcome: OrcaCloudCallbackOutcome): void => {
+        if (answered) {
+          return
+        }
+        answered = true
+        clearTimeout(responseTimeout)
+        response.writeHead(
+          outcome.status === 'connected' ? 200 : 500,
+          ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS
+        )
+        response.end(orcaCloudCallbackPage(outcome))
+        closeServer(server)
+      }
+      const responseTimeout = setTimeout(
+        () => respond({ status: 'failed', error: 'orca_cloud_auth_response_timeout' }),
+        BROWSER_RESPONSE_TIMEOUT_MS
+      )
       resolve({
         code,
         codeVerifier,
         nonce,
         redirectUri,
-        state
+        state,
+        respond
       })
-      closeServer(server)
     }
 
     function writeInvalidCallback(response: ServerResponse): void {
@@ -113,9 +138,7 @@ export function beginOrcaCloudPkceFlow(
           writeInvalidCallback(response)
           return
         }
-        response.writeHead(200, ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS)
-        response.end(ORCA_CLOUD_CALLBACK_SUCCESS_PAGE)
-        resolveFlow(code)
+        resolveFlow(code, response)
       } catch (error) {
         rejectFlow(error instanceof Error ? error : new Error('orca_cloud_auth_callback_failed'))
       }

@@ -80,6 +80,17 @@ async function startedFlow(): Promise<{
   return { authUrl, flow, nonce, redirectUri, state }
 }
 
+// The browser tab waits for the app's outcome, so read it only after answering.
+async function connectBrowser(
+  flow: ReturnType<typeof beginOrcaCloudPkceFlow>,
+  url: string
+): Promise<{ code: Awaited<typeof flow>; response: HttpResponse }> {
+  const response = readHttp(url)
+  const code = await flow
+  code.respond({ status: 'connected' })
+  return { code, response: await response }
+}
+
 describe('Orca cloud PKCE flow', () => {
   beforeEach(() => {
     openExternalMock.mockReset()
@@ -94,14 +105,17 @@ describe('Orca cloud PKCE flow', () => {
     )
     expect(invalidResponse.statusCode).toBe(400)
 
-    const validResponse = await readHttp(callbackUrl(redirectUri, { code: 'real-code', state }))
+    const { code, response: validResponse } = await connectBrowser(
+      flow,
+      callbackUrl(redirectUri, { code: 'real-code', state })
+    )
     expect(validResponse.statusCode).toBe(200)
     expect(validResponse.headers['cache-control']).toBe('no-store')
     expect(validResponse.headers['content-security-policy']).toContain("default-src 'none'")
     expect(validResponse.body).toContain('<h1>Signed in to Orca</h1>')
     expect(validResponse.body).toContain('You can close this tab and return to the app.')
     expect(validResponse.body).not.toContain('class="brand"')
-    await expect(flow).resolves.toMatchObject({
+    expect(code).toMatchObject({
       code: 'real-code',
       redirectUri,
       state
@@ -146,8 +160,11 @@ describe('Orca cloud PKCE flow', () => {
     expect(authUrl.searchParams.get('code_challenge_method')).toBe('S256')
     expect(authUrl.searchParams.get('local_profile_id')).toBe('local-default')
 
-    await readHttp(callbackUrl(redirectUri, { code: 'real-code', state }))
-    await expect(flow).resolves.toMatchObject({ code: 'real-code', nonce })
+    const { code } = await connectBrowser(
+      flow,
+      callbackUrl(redirectUri, { code: 'real-code', state })
+    )
+    expect(code).toMatchObject({ code: 'real-code', nonce })
   })
 
   it('keeps the first loopback alive when a second sign-in starts', async () => {
@@ -170,17 +187,19 @@ describe('Orca cloud PKCE flow', () => {
     }
     expect(secondRedirectUri).not.toBe(firstRedirectUri)
 
-    const firstResponse = await readHttp(
+    const firstAnswer = await connectBrowser(
+      first,
       callbackUrl(firstRedirectUri, { code: 'first-code', state: firstState })
     )
-    expect(firstResponse.statusCode).toBe(200)
-    await expect(first).resolves.toMatchObject({ code: 'first-code', state: firstState })
+    expect(firstAnswer.response.statusCode).toBe(200)
+    expect(firstAnswer.code).toMatchObject({ code: 'first-code', state: firstState })
 
-    const secondResponse = await readHttp(
+    const secondAnswer = await connectBrowser(
+      second,
       callbackUrl(secondRedirectUri, { code: 'second-code', state: secondState })
     )
-    expect(secondResponse.statusCode).toBe(200)
-    await expect(second).resolves.toMatchObject({ code: 'second-code', state: secondState })
+    expect(secondAnswer.response.statusCode).toBe(200)
+    expect(secondAnswer.code).toMatchObject({ code: 'second-code', state: secondState })
   })
   it('hands the opened authorize URL to the caller so it can be copied', async () => {
     const onAuthorizeUrl = vi.fn()
@@ -192,8 +211,11 @@ describe('Orca cloud PKCE flow', () => {
     const authUrl = new URL(opened)
     const redirectUri = authUrl.searchParams.get('redirect_uri') ?? ''
     const state = authUrl.searchParams.get('state') ?? ''
-    await readHttp(callbackUrl(redirectUri, { code: 'real-code', state }))
-    await expect(flow).resolves.toMatchObject({ code: 'real-code' })
+    const { code } = await connectBrowser(
+      flow,
+      callbackUrl(redirectUri, { code: 'real-code', state })
+    )
+    expect(code).toMatchObject({ code: 'real-code' })
   })
 
   it('ends the wait as cancelled when its signal aborts', async () => {
