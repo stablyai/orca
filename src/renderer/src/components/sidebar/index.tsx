@@ -99,6 +99,7 @@ function Sidebar({
     workspaceBoardRenderedOpen,
     workspaceBoardDragPreviewOpen,
     workspaceBoardMenuOpen,
+    workspaceBoardSearchRef,
     toggleWorkspaceBoard,
     handleWorkspaceBoardOpenChange,
     setWorkspaceBoardMenuOpen,
@@ -258,6 +259,7 @@ function Sidebar({
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer
+          searchInputRef={workspaceBoardSearchRef}
           leftSidebarStyle={leftSidebarStyle}
           open={workspaceBoardRenderedOpen}
           statusBarVisible={statusBarVisible}

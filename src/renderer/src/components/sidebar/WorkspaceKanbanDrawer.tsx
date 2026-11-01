@@ -28,6 +28,7 @@ import {
 } from './use-workspace-board-statuses'
 
 type WorkspaceKanbanDrawerProps = {
+  searchInputRef?: React.RefCallback<HTMLInputElement>
   leftSidebarStyle?: React.CSSProperties
   open: boolean
   statusBarVisible: boolean
@@ -49,6 +50,7 @@ export default function WorkspaceKanbanDrawer(
 }
 
 function WorkspaceKanbanDrawerContent({
+  searchInputRef,
   leftSidebarStyle,
   open,
   statusBarVisible,
@@ -257,6 +259,7 @@ function WorkspaceKanbanDrawerContent({
       sidebarWidth={sidebarWidth}
       statusBarVisible={statusBarVisible}
       headerProps={{
+        searchInputRef,
         selectedCount: renderedSelectedWorktrees.length,
         query,
         isFiltering: hasQuery,
