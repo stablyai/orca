@@ -14,9 +14,10 @@ export async function disposeBridgePortPair(
   pair: Pick<BridgePortPair<RpcClient>, 'client' | 'host' | 'flush'>
 ): Promise<void> {
   const errors: unknown[] = []
+  // Async wrappers turn a synchronous close/dispose throw into a rejection the same catch records.
   for (const cleanup of [
-    () => pair.client.close(),
-    () => pair.host.dispose(),
+    async () => pair.client.close(),
+    async () => pair.host.dispose(),
     () => pair.flush()
   ]) {
     try {

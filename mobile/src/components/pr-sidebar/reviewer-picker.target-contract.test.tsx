@@ -118,7 +118,7 @@ afterEach(() => {
   root = undefined
   vi.unstubAllGlobals()
 })
-it('real sidebar/section/drawer sends accepted fork to the runtime provider with original worktree/account and supports refusal/reopen/migration', async () => {
+it('real sidebar/section/drawer sends accepted fork to the runtime provider with original worktree/account, supports refusal/reopen/migration, and keeps one visit rows across connection changes', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   const prRepo = { owner: 'fork', repo: 'widgets', host: 'github.corp' }
   const repo: Repo = {
@@ -153,6 +153,8 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
   const physical = createFakeRpcClient()
   let capable = false
   const frames: string[] = []
+  let hold = false
+  const held: { release: () => void; fail: () => void }[] = []
   const method = eraseRpcMethods(GITHUB_REPO_WORK_ITEM_METHODS).find(
     (entry) => entry.name === 'github.listAssignableUsers'
   )!
@@ -176,8 +178,18 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
     if (name !== 'github.listAssignableUsers') {
       throw new Error(`unexpected ${name}`)
     }
-    const result = await method.handler(method.params!.parse(params), { runtime })
-    return rpcSuccess('users', result)
+    const reply = async () =>
+      rpcSuccess('users', await method.handler(method.params!.parse(params), { runtime }))
+    if (!hold) {
+      return reply()
+    }
+    // A held list reply runs the provider only when released, so each release picks its own gh output.
+    return new Promise<ReturnType<typeof rpcSuccess>>((resolve, reject) => {
+      held.push({
+        release: () => void reply().then(resolve, reject),
+        fail: () => reject(new Error('socket closed'))
+      })
+    })
   }
   const logical = createStableLogicalRpcClient(physical, 'relay')
   io.requestReviewer.mockReset()
@@ -199,7 +211,7 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
   }
   const container = document.createElement('div')
   root = createRoot(container)
-  await act(async () =>
+  const renderSidebar = (target: typeof prRepo, worktreeId: string) =>
     root!.render(
       <MobilePRSidebar
         client={logical}
@@ -211,7 +223,7 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
               state: 'open',
               title: 'fork',
               url: details.item.url,
-              prRepo,
+              prRepo: target,
               checksStatus: 'success',
               updatedAt: '',
               mergeable: 'MERGEABLE'
@@ -225,14 +237,14 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
         connState="connected"
         onRetry={() => {}}
         refetch={() => {}}
-        worktreeId="clone::/worktree"
+        worktreeId={worktreeId}
         gitBranch="feature"
         gitStatus={null}
         headSha={null}
         workspaceLabel="fixture"
       />
     )
-  )
+  await act(async () => renderSidebar(prRepo, 'clone::/worktree'))
   const press = async (label: string) => {
     const button = container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)
     if (!button) {
@@ -254,6 +266,21 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
   expect(io.requestReviewer).toHaveBeenCalledWith('fork-only')
   expect(frames).toEqual(['status.get', 'status.get', 'github.listAssignableUsers'])
   await press('Close picker')
+  const spinner = () => container.querySelector('[role="progressbar"]')
+  const text = () => container.textContent ?? ''
+  // Sends since the last check, at the status and list boundaries.
+  const sent = () => frames.splice(0)
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
+  let session = physical
+  const migrate = async () => {
+    session = createFakeRpcClient()
+    session.sendRequest = physical.sendRequest
+    await act(async () => logical.migrateTo(session, 'lan'))
+    await settle()
+  }
+  sent()
+
+  // 1. A connected-to-connected migration mid-load starts a successor instead of a false empty list.
   let late!: (value: { stdout: string }) => void
   io.gh.mockImplementationOnce(
     () =>
@@ -262,20 +289,149 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
       })
   )
   await press('Add or remove reviewers')
-  expect(container.querySelector('[role="progressbar"]')).not.toBeNull()
-  const next = createFakeRpcClient()
-  next.sendRequest = physical.sendRequest
-  await act(async () => logical.migrateTo(next, 'lan'))
-  // The cancelled load refetches on the new session instead of reading as an empty list.
-  expect(container.textContent).not.toContain('No matching people')
-  expect(container.textContent).toContain('fork-only')
+  expect(spinner()).not.toBeNull()
+  await migrate()
+  expect(text()).not.toContain('No matching people')
+  expect(text()).toContain('fork-only')
   await act(async () => late({ stdout: '{"login":"retired-person"}' }))
-  expect(container.textContent).not.toContain('retired-person')
-  await act(async () => next.pushState('disconnected'))
-  expect(container.querySelector('[role="progressbar"]')).not.toBeNull()
-  expect(container.textContent).not.toContain('No matching people')
+  await settle()
+  expect(text()).not.toContain('retired-person')
+  expect(sent()).toEqual([
+    'status.get',
+    'github.listAssignableUsers',
+    'status.get',
+    'github.listAssignableUsers'
+  ])
+
+  // 2. Loaded rows stay in place through a disconnect and the refresh reconnecting starts.
+  hold = true
+  await act(async () => session.pushState('disconnected'))
+  expect(spinner()).toBeNull()
+  expect(text()).toContain('fork-only')
+  expect(sent()).toEqual([])
+  await act(async () => session.pushState('connected'))
+  await settle()
+  expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
+  expect(spinner()).toBeNull()
+  expect(text()).toContain('fork-only')
+  io.gh.mockImplementationOnce(async () => ({
+    stdout: '{"login":"fork-only"}\n{"login":"fork-second"}'
+  }))
+  await act(async () => held.shift()!.release())
+  await settle()
+  expect(text()).toContain('fork-second')
+
+  // A loaded migration refreshes silently, and a failed background read keeps accepted rows.
+  await migrate()
+  expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
+  expect(spinner()).toBeNull()
+  await act(async () => held.shift()!.fail())
+  await settle()
+  expect(text()).toContain('fork-second')
+  expect(text()).not.toContain('socket closed')
+
+  // Reopening is fresh demand; a down-up pair in one render still retires the first attempt.
+  await press('Close picker')
+  await press('Add or remove reviewers')
+  await settle()
+  expect(text()).not.toContain('fork-second')
+  expect(spinner()).not.toBeNull()
+  expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
+  await act(async () => {
+    session.pushState('disconnected')
+    session.pushState('connected')
+  })
+  await settle()
+  expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
+  await act(async () => held.shift()!.fail())
+  await settle()
+  expect(text()).not.toContain('socket closed')
+  expect(spinner()).not.toBeNull()
+  await act(async () => held.shift()!.release())
+  await settle()
+  expect(text()).toContain('fork-only')
+
+  // Opening offline sends nothing; the drawer explains the outage and recovers on connect.
+  await press('Close picker')
+  await act(async () => session.pushState('disconnected'))
   io.gh.mockClear()
-  await act(async () => next.pushState('connected'))
-  expect(container.textContent).toContain('fork-only')
+  await press('Add or remove reviewers')
+  expect(text()).not.toContain('fork-only')
+  expect(text()).toContain('Disconnected')
+  await act(async () => session.pushState('auth-failed'))
+  expect(text()).toContain('Pairing invalid — re-pair with your desktop')
+  expect(sent()).toEqual([])
+  expect(io.gh).not.toHaveBeenCalled()
+  hold = false
+  await act(async () => session.pushState('connected'))
+  await settle()
+  expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
   expect(io.gh).toHaveBeenCalledTimes(1)
+  expect(text()).toContain('fork-only')
+  expect(text()).not.toContain('Pairing invalid')
+
+  // A to B to A: each target is a new visit, and no earlier visit's reply can paint the current one.
+  hold = true
+  const upstream = { owner: 'upstream', repo: 'widgets', host: 'github.corp' }
+  await migrate()
+  await act(async () => renderSidebar(upstream, 'clone::/worktree'))
+  await settle()
+  expect(text()).not.toContain('fork-only')
+  expect(spinner()).not.toBeNull()
+  await act(async () => renderSidebar(prRepo, 'clone::/worktree'))
+  await settle()
+  expect(text()).not.toContain('fork-only')
+  expect(spinner()).not.toBeNull()
+  expect(sent()).toEqual([
+    'status.get',
+    'github.listAssignableUsers',
+    'status.get',
+    'github.listAssignableUsers',
+    'status.get',
+    'github.listAssignableUsers'
+  ])
+  const [firstVisit, upstreamVisit, returnVisit] = held.splice(0)
+  io.gh.mockImplementationOnce(async () => ({ stdout: '{"login":"retired-person"}' }))
+  await act(async () => firstVisit.release())
+  await settle()
+  await act(async () => upstreamVisit.release())
+  await settle()
+  expect(text()).not.toContain('retired-person')
+  expect(text()).not.toContain('upstream-only')
+  expect(spinner()).not.toBeNull()
+  await act(async () => returnVisit.release())
+  await settle()
+  expect(text()).toContain('fork-only')
+
+  // A worktree change and a close/reopen while its reply is pending start fresh visits too.
+  await act(async () => renderSidebar(prRepo, 'clone::/other'))
+  await settle()
+  expect(text()).not.toContain('fork-only')
+  expect(spinner()).not.toBeNull()
+  await press('Close picker')
+  await press('Add or remove reviewers')
+  await settle()
+  expect(sent()).toEqual([
+    'status.get',
+    'github.listAssignableUsers',
+    'status.get',
+    'github.listAssignableUsers'
+  ])
+  const [worktreeVisit, reopenedVisit] = held.splice(0)
+  io.gh.mockImplementationOnce(async () => ({ stdout: '{"login":"retired-person"}' }))
+  await act(async () => worktreeVisit.release())
+  await settle()
+  expect(text()).not.toContain('retired-person')
+  expect(spinner()).not.toBeNull()
+  await act(async () => reopenedVisit.release())
+  await settle()
+  expect(text()).toContain('fork-only')
+
+  // A genuine empty reply is the only way to reach the empty state.
+  hold = false
+  await press('Close picker')
+  io.gh.mockImplementationOnce(async () => ({ stdout: '' }))
+  await press('Add or remove reviewers')
+  await settle()
+  expect(text()).toContain('No matching people')
 })
