@@ -6689,6 +6689,7 @@
       },
       "settings": {
         "AccountsPane": {
+          "locationSaveFailed": "계정 위치를 저장할 수 없습니다. 다시 시도하세요.",
           "c2d2751587": "계정 삭제",
           "dbb9626ed1": "취소",
           "63843e37e2": "Claude 계정을 삭제하시겠습니까?",

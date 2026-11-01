@@ -7155,6 +7155,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "無法儲存帳戶位置。請再試一次。",
           "c2d2751587": "移除帳戶",
           "dbb9626ed1": "取消",
           "63843e37e2": "移除 Claude 帳戶？",
