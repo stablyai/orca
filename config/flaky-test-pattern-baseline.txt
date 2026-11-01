@@ -1326,7 +1326,6 @@
 2 test-timeout-needs-reason:src/main/ssh/system-transport/system-ssh-forward-process-real-openssh.test.ts
 3 test-timeout-needs-reason:src/main/startup/single-instance-lock-exit.electron.test.ts
 1 test-timeout-needs-reason:src/main/usage/usage-scan-worker-event-loop.test.ts
-1 test-timeout-needs-reason:src/main/window/clipboard-remote-file-cleanup.bench.test.ts
 1 test-timeout-needs-reason:src/main/window/renderer-publication-throttle.electron.test.ts
 1 test-timeout-needs-reason:src/main/windows/windows-administrator-restart.win32.test.ts
 1 test-timeout-needs-reason:src/main/windows/windows-host-job.win32.test.ts
