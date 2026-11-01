@@ -18,7 +18,11 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     conflictGroups: ['global', 'tabs', 'terminal', 'chat', 'fileExplorer'],
     implicitDefaultYields: true,
     searchKeywords: ['shortcut', 'chat', 'chat ui', 'native chat', 'terminal', 'toggle', 'switch'],
-    defaultBindings: platformBindings(['Mod+Shift+J'])
+    defaultBindings: {
+      darwin: ['Mod+Shift+J'],
+      linux: ['Mod+J', 'Mod+Shift+J'],
+      win32: ['Mod+J', 'Mod+Shift+J']
+    }
   },
   {
     id: 'sidebar.childWorkspaces.toggle',

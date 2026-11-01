@@ -6,6 +6,31 @@ import {
 } from '../../../../shared/keybindings'
 import { matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 
+it.each(['win32', 'linux'] as const)(
+  'keeps the default chat toggle separate from the %s worktree palette',
+  (platform) => {
+    expect(matchesNativeChatToggleShortcut({ key: 'j', ctrlKey: true }, platform, {})).toBe(true)
+    expect(
+      matchesNativeChatToggleShortcut({ key: 'j', ctrlKey: true, shiftKey: true }, platform, {})
+    ).toBe(false)
+    const palette = getKeybindingDefinition('worktree.palette')
+    if (!palette) {
+      throw new Error('Missing worktree palette')
+    }
+    expect(effective(palette, platform, {})).toEqual(['Mod+Shift+J'])
+    expect(
+      matchesNativeChatToggleShortcut({ key: 'j', ctrlKey: true, shiftKey: true }, platform, {
+        'worktree.palette': []
+      })
+    ).toBe(true)
+    expect(
+      matchesNativeChatToggleShortcut({ key: 'j', ctrlKey: true }, platform, {
+        'terminal.toggleNativeChat': ['Mod+Alt+Y']
+      })
+    ).toBe(false)
+  }
+)
+
 it('bounds warm saved-alias work and invalidates on snapshot replacement; dynamic definitions bypass memo', () => {
   const measure = (size: number) => {
     let reads = 0
