@@ -245,7 +245,7 @@ export function CrewPanelContent({
                       <Button
                         variant="outline"
                         size="xs"
-                        className="ml-auto h-5 px-2 text-2xs font-medium disabled:opacity-40"
+                        className="ml-auto h-5"
                         disabled={!canMention || !rows.some(runningWorker)}
                         onClick={() => mention(rows.filter(runningWorker))}
                       >
