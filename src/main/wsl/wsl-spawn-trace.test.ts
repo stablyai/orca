@@ -54,6 +54,8 @@ describe('WSL spawn trace', () => {
     expect(first).toMatch(/ at \S/)
     expect(second).toContain('spawn git-runner distro=Ubuntu userAct=true')
     expect(rest).toEqual([])
+    // Frames start at the caller of the trace, never at the trace helpers themselves.
+    expect(first).not.toMatch(/ at (writeTrace|traceWslSpawn)\b/)
   })
 
   it("logs the path gate's verdict, by user act or by running read", async () => {

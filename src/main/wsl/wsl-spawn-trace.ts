@@ -7,7 +7,7 @@ import { isWslUserActFor } from './wsl-user-act-scope'
 
 export const WSL_SPAWN_TRACE_ENV = 'ORCA_WSL_SPAWN_TRACE'
 const MAX_ARG_CHARS = 160
-const MAX_FRAMES = 6
+const MAX_FRAMES = 12
 
 export function isWslSpawnTraceEnabled(): boolean {
   return process.env[WSL_SPAWN_TRACE_ENV] === '1'
@@ -21,7 +21,8 @@ export function traceWslSpawn(source: string, command: string, args: readonly st
   const distro = distroArg(args)
   writeTrace(
     `spawn ${source}`,
-    `distro=${distro ?? '-'} userAct=${distro ? isWslUserActFor(distro) : false} argv=${formatArgs(args)}`
+    `distro=${distro ?? '-'} userAct=${distro ? isWslUserActFor(distro) : false} argv=${formatArgs(args)}`,
+    traceWslSpawn
   )
 }
 
@@ -30,7 +31,7 @@ export function traceWslGate(gate: string, distro: string, verdict: string): voi
   if (!isWslSpawnTraceEnabled()) {
     return
   }
-  writeTrace(`gate ${gate}`, `distro=${distro} verdict=${verdict}`)
+  writeTrace(`gate ${gate}`, `distro=${distro} verdict=${verdict}`, traceWslGate)
 }
 
 function isWslExecutable(command: string, source: string): boolean {
@@ -49,17 +50,20 @@ function formatArgs(args: readonly string[]): string {
   )
 }
 
-function writeTrace(kind: string, detail: string): void {
+function writeTrace(kind: string, detail: string, entry: (...args: never[]) => void): void {
   try {
     const limit = Error.stackTraceLimit
-    Error.stackTraceLimit = MAX_FRAMES + 8
-    const stack = new Error('wsl-spawn-trace').stack ?? ''
+    Error.stackTraceLimit = MAX_FRAMES + 6
+    // Frames start at the traced call's caller, so bundling cannot hide the trace helpers' names.
+    const holder: { stack?: string } = {}
+    Error.captureStackTrace(holder, entry)
     Error.stackTraceLimit = limit
-    const frames = stack
+    const frames = (holder.stack ?? '')
       .split('\n')
       .slice(1)
       .map((line) => line.trim().replace(/^at /, ''))
-      .filter((line) => !line.includes('wsl-spawn-trace') && !line.startsWith('node:'))
+      // Spawn-observer plumbing names nothing about the caller.
+      .filter((line) => !/notifySpawnObserver|spawn-observer|run-process\.js|^node:/.test(line))
       .slice(0, MAX_FRAMES)
     console.warn(`[wsl-spawn-trace] ${kind} ${detail} at ${frames.join(' < ')}`)
   } catch {
