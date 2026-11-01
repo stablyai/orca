@@ -576,6 +576,8 @@ function makeRuntimeStoreWithWorkspaceSession(
     getWorkspaceSession: (hostId?: string) => WorkspaceSessionState
     setWorkspaceSession: ReturnType<typeof vi.fn<Store['setWorkspaceSession']>>
     flushOrThrow: ReturnType<typeof vi.fn<() => void>>
+    runDurableMutation: Store['runDurableMutation']
+    applyLayoutCommand: ReturnType<typeof vi.fn<Store['applyLayoutCommand']>>
     persistPtyBinding: ReturnType<typeof vi.fn<Store['persistPtyBinding']>>
   }
   getSession: () => WorkspaceSessionState

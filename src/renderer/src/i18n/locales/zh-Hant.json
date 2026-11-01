@@ -809,6 +809,8 @@
       "claudeRemoveFolder": "Orca 會從這部電腦刪除此帳戶的 Claude 資料夾及其登入資訊。與系統預設共用的聊天記錄會保留。如果已選取此帳戶，您下次啟動的 Claude 將使用系統預設。"
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作",
+      "remoteOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作（例如推送、拉取或強制推送）。請等待其完成後再使用此動作，以免操作重疊。",
       "actionModel": {
         "on": "開啟",
         "off": "關閉",
@@ -22639,6 +22641,7 @@
       "androidDeviceNotRunning": "Android 裝置「{{device}}」尚未執行。請先啟動它。",
       "unknownDeviceOrAvd": "「{{device}}」不是正在執行的裝置，也不是已知的 AVD。",
       "avdBootTimeout": "AVD「{{avdName}}」未在時限內完成啟動。",
+      "avdExitedBeforeBoot": "AVD「{{avdName}}」在完成啟動前已停止：{{detail}}",
       "scrcpyDownloadFailed": "無法下載 scrcpy 伺服器：{{detail}}",
       "scrcpyServerInvalid": "下載的 scrcpy 伺服器無效或不完整。"
     },

@@ -1529,42 +1529,18 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "Acción requerida",
-      "cancelled": "Cancelado",
-      "checkDetails": "Detalles del check {{name}}",
-      "failed": "Falló",
       "failing": "{{count}} con errores",
-      "failingChecks_many": "{{count}} comprobaciones fallidas",
-      "failingChecks_one": "{{count}} comprobación fallida",
-      "failingChecks_other": "{{count}} comprobaciones fallidas",
-      "fix": "Arreglar",
-      "fixFailing": "Arreglar los checks fallidos con IA",
-      "inProgress": "En curso",
-      "inspectOrFix": "Inspecciona los detalles o inicia una pasada de corrección con IA.",
-      "loadDetailsFailed": "No se pudieron cargar los detalles del check",
-      "neutral": "Neutral",
-      "neutralCount": "{{count}} con resultado neutral",
       "noChecks": "Sin checks",
       "openOnWeb": "Abrir {{name}} en la web",
       "passed": "{{count}} con éxito",
-      "pending": "Pendiente",
-      "pendingCount": "{{count}} por completar",
-      "queued": "En cola",
-      "rerunFailing": "Volver a ejecutar los checks fallidos",
-      "skipped": "Omitido",
-      "successful": "Correcto",
-      "timedOut": "Tiempo agotado",
-      "title": "Checks",
-      "unavailable": "Checks no disponibles"
+      "title": "Checks"
     },
     "commentCard": {
       "daysAgo_many": "hace {{count}} días",
       "daysAgo_one": "hace {{count}} día",
       "daysAgo_other": "hace {{count}} días",
-      "deleteComment": "Eliminar comentario",
       "deleteConfirmMessage": "Esto elimina permanentemente el comentario en GitHub.",
       "deleteConfirmTitle": "¿Eliminar comentario?",
-      "editComment": "Editar comentario",
       "editPlaceholder": "Edita el comentario…",
       "hoursAgo_many": "hace {{count}} h",
       "hoursAgo_one": "hace {{count}} h",
@@ -1576,38 +1552,20 @@
       "monthsAgo_many": "hace {{count}} meses",
       "monthsAgo_one": "hace {{count}} mes",
       "monthsAgo_other": "hace {{count}} meses",
-      "openOnGitHub": "Abrir comentario en GitHub",
       "reply": "Responder",
-      "replyPlaceholder": "Escribe una respuesta…",
-      "replyToComment": "Responder al comentario",
       "resolve": "Resolver",
-      "resolveThread": "Resolver hilo",
-      "resolved": "resuelto",
       "unresolve": "Marcar como no resuelto",
-      "unresolveThread": "Marcar el hilo como no resuelto",
       "yearsAgo_many": "hace {{count}} años",
       "yearsAgo_one": "hace {{count}} año",
       "yearsAgo_other": "hace {{count}} años"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "Añade un comentario…",
-      "all": "Todos",
-      "bots": "Bots",
       "comment": "Comentar",
-      "commentsLoadFailed": "No se pudieron cargar los comentarios. Toca Actualizar para reintentarlo.",
       "description": "Descripción",
       "descriptionLoadFailed": "No se pudo cargar la descripción. Toca Actualizar para reintentarlo.",
-      "humans": "Humanos",
-      "noBotComments": "Sin comentarios de robots.",
       "noComments": "Aún no hay comentarios.",
       "noDescription": "No se proporcionó descripción.",
-      "noHumanComments": "Sin comentarios humanos.",
-      "resolvedCommentCount": "Comentario resuelto de {{author}} ({{count}})",
-      "resolvedCommentSingle": "Comentario resuelto de {{author}}",
-      "resolvedThreadCount": "Hilo resuelto de {{author}} ({{count}})",
-      "resolvedThreadSingle": "Hilo resuelto de {{author}}",
       "showMore": "Mostrar {{count}} más",
-      "showMoreOf": "Mostrar {{count}} más ({{remaining}} restantes)",
       "title": "Comentarios"
     },
     "conflictingFilesSection": {
@@ -1637,27 +1595,14 @@
       "details": "Detalles"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "Activar o desactivar auto-merge",
-      "autoMergeLabel": "Auto-merge cuando esté listo",
-      "autoMergeOff": "Desactivado",
-      "autoMergeOn": "Activado",
-      "closeAccessibilityLabel": "Cerrar pull request",
       "closeConfirmMessage": "Se cerrará #{{number}} sin hacer merge.",
       "closeConfirmTitle": "¿Cerrar el pull request?",
-      "markReadyAccessibilityLabel": "Marcar pull request como listo para revisión",
       "markReadyButton": "Listo para revisión",
-      "mergeAccessibilityLabel": "Hacer merge del pull request",
-      "mergeButton": "Merge",
-      "mergeConfirmTitle": "¿Hacer merge del pull request?",
-      "recheckAccessibilityLabel": "Volver a comprobar el estado del merge",
-      "recheckButton": "Comprobar de nuevo",
       "reopenAccessibilityLabel": "Reabrir pull request",
       "reopenButton": "Reabrir",
       "reopenConfirmMessage": "Se reabrirá #{{number}}.",
       "reopenConfirmTitle": "¿Reabrir el pull request?",
-      "unlinkAccessibilityLabel": "Desvincular pull request",
-      "unlinkButton": "Desvincular",
-      "unlinkFailed": "No se pudo desvincular el pull request."
+      "unlinkButton": "Desvincular"
     },
     "prActionsState": {
       "behindHint": "Actualiza la rama antes de hacer merge",
@@ -1756,25 +1701,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "La rama {{branch}} no está vinculada a ningún PR abierto.",
-      "branchRequired": "Haz checkout de una rama antes de crear un pull request.",
-      "createFailed": "No se pudo crear el pull request.",
-      "createPr": "Crear PR",
-      "createPullRequest": "Crear pull request",
       "currentBranchNotLinked": "La rama actual no está vinculada a ningún PR abierto.",
-      "linkExistingPr": "Vincular un PR existente",
       "linkExistingPullRequest": "Vincular un pull request existente",
       "linkedPrUnavailable": "PR #{{number}} vinculado no disponible",
-      "noOpenPullRequest": "Ningún pull request abierto",
-      "refreshOrCreate": "Actualiza para volver a comprobarlo o crea un nuevo PR para esta rama.",
-      "refreshPullRequest": "Actualizar pull request",
-      "title": "Pull request"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "Cancelar la edición del título",
-      "editTitle": "Editar el título de la pull request",
-      "openInBrowser": "Abrir la pull request #{{number}} en el navegador",
-      "openOnWeb": "Abrir la pull request #{{number}} en la web",
-      "saveTitle": "Guardar título"
+      "refreshOrCreate": "Actualiza para volver a comprobarlo o crea un nuevo PR para esta rama."
     },
     "prViewPanel": {
       "branchUnavailable": "La rama actual no está disponible.",
@@ -1782,20 +1712,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "No se pudieron cargar las personas",
-      "noMatches": "No hay personas que coincidan",
-      "removeReviewer": "Quitar a {{login}}",
-      "requestReviewer": "Solicitar revisión a {{login}}",
-      "searchPeople": "Buscar personas",
-      "title": "Revisores"
+      "noMatches": "No hay personas que coincidan"
     },
     "reviewersSection": {
-      "addOrRemove": "Añadir o eliminar revisores",
       "approved": "Aprobado",
       "changesRequested": "Cambios solicitados",
       "commented": "Comentado",
       "dismissed": "Descartado",
-      "loadFailed": "No se pudieron cargar los revisores. Toca Actualizar para reintentarlo.",
-      "loading": "Cargando revisores…",
       "noReviewers": "No se han solicitado revisores",
       "pending": "Pendiente",
       "removeReviewer": "Eliminar a {{login}}",
@@ -2493,8 +2416,7 @@
       "actionFailed": "No se pudo realizar la acción sobre el comentario"
     },
     "usePrTitleAction": {
-      "disconnected": "Sin conexión con el escritorio.",
-      "updateFailed": "No se pudo actualizar el título."
+      "disconnected": "Sin conexión con el escritorio."
     },
     "useQuickCommands": {
       "loadFailed": "No se pudieron cargar los comandos rápidos",
@@ -3287,9 +3209,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "No se pudo generar el mensaje de commit"
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "Haz checkout de una rama antes de crear una pull request."
     },
     "useMobileGitRequests": {
       "actionFailed": "No se pudo realizar la acción de control de código fuente",

@@ -1,3 +1,4 @@
+import { CrewChanges } from './orchestration/crew/crew-changes'
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import * as mocks from './orca-runtime-test-mocks.spec'
 import type { Mock } from 'vitest'
@@ -215,6 +216,7 @@ function makePostRevealWorkerRecoveryHarness(
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This recovery fixture reaches only the listed planner, terminal settlement and authority lookup methods.
   runtime.setOrchestrationDb({
+    crewChanges: new CrewChanges(),
     listSessionDispatchesForPresentation: () => [],
     reconcileMissingWorkerTerminal: vi.fn(),
     getActiveDispatchForTerminal: () => undefined,

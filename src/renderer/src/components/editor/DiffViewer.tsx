@@ -58,7 +58,9 @@ export default function DiffViewer({
   largeDiffRenderLimit,
   largeDiffSaveContentAvailable
 }: DiffViewerProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
+  const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
+  const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
+  const diffCollapseUnchangedRegions = useAppStore((s) => s.settings?.diffCollapseUnchangedRegions)
   const monacoTheme = useMonacoTheme()
   const diffTypography = useEditorTypography('diff')
   const addDiffComment = useAppStore((s) => s.addDiffComment)
@@ -75,7 +77,6 @@ export default function DiffViewer({
     () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
     [allDiffComments, relativePath]
   )
-  const diffWordWrap = settings?.diffWordWrap
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const { registerDiffEditor, unregisterDiffEditor } = useDiffEditorRegistration()
@@ -319,6 +320,37 @@ export default function DiffViewer({
     }
   }, [diffWordWrap, sideBySide])
 
+  // Why: @monaco-editor/react calls updateOptions whenever this object's identity changes.
+  const editorOptions = useMemo<editor.IDiffEditorConstructionOptions>(
+    () => ({
+      dropIntoEditor: { enabled: false },
+      readOnly: !editable,
+      originalEditable: false,
+      renderSideBySide: sideBySide,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
+      ...monacoTypographyOptions(diffTypography),
+      lineNumbers: 'on',
+      ...buildDiffEditorWordWrapOptions(diffWordWrap),
+      ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
+      ...buildDiffEditorHideUnchangedOptions(diffCollapseUnchangedRegions),
+      automaticLayout: true,
+      renderOverviewRuler: true,
+      scrollbar: diffEditorScrollbarOptions,
+      padding: { top: 0 },
+      find: monacoFindOptions
+    }),
+    [
+      editable,
+      sideBySide,
+      diffTypography,
+      diffWordWrap,
+      diffShowWhitespace,
+      diffCollapseUnchangedRegions
+    ]
+  )
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex-1 min-h-0 relative">
@@ -348,25 +380,7 @@ export default function DiffViewer({
             modifiedModelPath={currentDiffModelPaths.modifiedModelPath}
             keepCurrentOriginalModel
             keepCurrentModifiedModel
-            options={{
-              dropIntoEditor: { enabled: false },
-              readOnly: !editable,
-              originalEditable: false,
-              renderSideBySide: sideBySide,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
-              ...monacoTypographyOptions(diffTypography),
-              lineNumbers: 'on',
-              ...buildDiffEditorWordWrapOptions(settings?.diffWordWrap),
-              ...buildDiffEditorWhitespaceOptions(settings?.diffShowWhitespace),
-              ...buildDiffEditorHideUnchangedOptions(settings?.diffCollapseUnchangedRegions),
-              automaticLayout: true,
-              renderOverviewRuler: true,
-              scrollbar: diffEditorScrollbarOptions,
-              padding: { top: 0 },
-              find: monacoFindOptions
-            }}
+            options={editorOptions}
           />
         )}
       </div>

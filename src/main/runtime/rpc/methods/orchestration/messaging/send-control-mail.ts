@@ -40,22 +40,22 @@ export function sendFederatedControlMail(args: {
   if (!federatedTarget || !dispatchId) {
     return undefined
   }
-  if (federatedTarget.protocol_version < ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION) {
-    throw new OrchestrationError(
-      'capability_unsupported',
-      `Federated Dispatch ${dispatchId} does not support coordinator control mail; start a fresh worker after updating its Orca server.`
-    )
-  }
-  const state = db.getWorkerDispatch(dispatchId)?.state
-  if (state !== 'ready') {
+  let state: string | undefined
+  const refusal = federatedControlMailRefusal(
+    dispatchId,
+    federatedTarget.protocol_version,
+    () => (state = db.getWorkerDispatch(dispatchId)?.state)
+  )
+  if (refusal) {
     const server = federatedTarget.environment_name
     // Paired servers cannot continue a finished worker yet; steering a running one still works.
-    throw new OrchestrationError(
-      'dispatch_inactive',
-      state && ['succeeded', 'failed', 'stopped', 'abandoned'].includes(state)
-        ? `Dispatch ${dispatchId} finished on ${server}, which cannot take follow-ups for finished workers yet. Start a new worker there with \`orca orchestration worker-start --on ${server}\`.`
-        : `Dispatch ${dispatchId} on ${server} is not confirmed running (${state ?? 'unknown'}), so this message was not sent. Check it with \`orca orchestration worker-show --dispatch ${dispatchId}\` before starting another worker.`
-    )
+    const message =
+      refusal.code !== 'dispatch_inactive'
+        ? refusal.message
+        : state && ['succeeded', 'failed', 'stopped', 'abandoned'].includes(state)
+          ? `Dispatch ${dispatchId} finished on ${server}, which cannot take follow-ups for finished workers yet. Start a new worker there with \`orca orchestration worker-start --on ${server}\`.`
+          : `Dispatch ${dispatchId} on ${server} is not confirmed running (${state ?? 'unknown'}), so this message was not sent. Check it with \`orca orchestration worker-show --dispatch ${dispatchId}\` before starting another worker.`
+    throw new OrchestrationError(refusal.code, message)
   }
   if (params.type === 'worker_done' || params.type === 'heartbeat') {
     throw new OrchestrationError(
@@ -93,4 +93,21 @@ export function sendFederatedControlMail(args: {
     () => runtime.ensureOrchestrationFederationRelay(messageRunId),
     { kind: 'federation', ...(messageRunId ? { runId: messageRunId } : {}) }
   )
+}
+
+export function federatedControlMailRefusal(
+  dispatchId: string,
+  protocolVersion: number,
+  workerState: () => string | undefined
+): { code: 'capability_unsupported' | 'dispatch_inactive'; message: string } | undefined {
+  if (protocolVersion < ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION) {
+    return {
+      code: 'capability_unsupported',
+      message: `Federated Dispatch ${dispatchId} does not support coordinator control mail; start a fresh worker after updating its Orca server.`
+    }
+  }
+  if (workerState() !== 'ready') {
+    return { code: 'dispatch_inactive', message: `Federated Dispatch ${dispatchId} is not active.` }
+  }
+  return undefined
 }

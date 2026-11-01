@@ -632,6 +632,8 @@
       "claudeRemoveFolder": "Orca supprime le dossier Claude de ce compte et sa connexion de cet ordinateur. L'historique de chat partagé avec Système par défaut est conservé. S'il est sélectionné, le prochain Claude que vous démarrez utilise Système par défaut."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Opération Git en cours ailleurs",
+      "remoteOperationInAnotherWorkspace": "Un autre espace de travail exécute une opération Git, par exemple un push, un pull ou un force push. Attendez qu’elle se termine avant d’utiliser cette action pour éviter des opérations simultanées.",
       "actionModel": {
         "on": "Activé",
         "off": "Désactivé",
@@ -23383,6 +23385,7 @@
       "androidDeviceNotRunning": "L’appareil Android « {{device}} » n’est pas démarré. Démarrez-le d’abord.",
       "unknownDeviceOrAvd": "« {{device}} » n’est ni un appareil démarré ni un AVD connu.",
       "avdBootTimeout": "L’AVD « {{avdName}} » n’a pas fini de démarrer à temps.",
+      "avdExitedBeforeBoot": "L’AVD « {{avdName}} » s’est arrêté avant la fin du démarrage : {{detail}}",
       "scrcpyDownloadFailed": "Impossible de télécharger le serveur scrcpy : {{detail}}",
       "scrcpyServerInvalid": "Le serveur scrcpy téléchargé était invalide ou tronqué."
     },

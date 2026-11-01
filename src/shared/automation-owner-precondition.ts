@@ -31,6 +31,14 @@ export type AutomationDestination = {
   selector: { kind: 'self' } | { kind: 'ssh'; targetId: string; targetGeneration: number }
 }
 
+/** Optional caller preconditions an update is checked against before anything is written. */
+export type AutomationUpdatePreconditions = {
+  expectedOwner?: AutomationOwnerPrecondition
+  destination?: AutomationDestination
+  /** Sent by an edit whose explicit setup choice relies on the stored mode still being new-per-run. */
+  expectedWorkspaceMode?: 'new_per_run'
+}
+
 export type AutomationOwnerFenceOperation = 'read' | 'mutate' | 'execute'
 
 /** Echo captured host identity, omitting orphan diagnosis: ownership and why its host is unusable are separate claims. */
@@ -109,6 +117,18 @@ export function assertAutomationDestination(
   }
   if (context.sshTargetGeneration(selector.targetId) !== selector.targetGeneration) {
     conflict('invalidDestination')
+  }
+}
+
+/** Compare with the stored record: the controller can synthesize workspaceMode from an older read. */
+export function assertAutomationWorkspaceModePrecondition(
+  automation: Pick<Automation, 'workspaceMode'>,
+  expected: AutomationUpdatePreconditions['expectedWorkspaceMode']
+): void {
+  if (expected && automation.workspaceMode !== expected) {
+    throw new Error(
+      'This automation now runs in an existing worktree, so nothing was changed. Pass --workspace-mode new-per-run or omit --setup.'
+    )
   }
 }
 

@@ -429,6 +429,38 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     expect(netFetchMock).not.toHaveBeenCalled()
   })
 
+  it('lists only the selected worktree sessions, across backends, and every session for all', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-ios', session('device-1'), { managed: true })
+    bridge.registerActiveEmulator(
+      'wt-android',
+      { ...session('emulator-5554'), backend: 'android', streamCodec: 'h264' },
+      { managed: true }
+    )
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveEmulatorWorkspaceId: vi.fn(async (selector: string) => selector.replace('id:', '')),
+      resolveEmulatorCleanupWorkspaceId: vi.fn(async (selector: string) => selector),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({ mobileEmulatorEnabled: true, mobileEmulatorDefaultDeviceUdid: null })
+    })
+
+    await expect(commands.emulatorList({ worktree: 'id:wt-android' })).resolves.toEqual({
+      sessions: [
+        expect.objectContaining({
+          worktreeId: 'wt-android',
+          backend: 'android',
+          deviceUdid: 'emulator-5554'
+        })
+      ]
+    })
+    await expect(commands.emulatorList({ worktree: 'id:wt-none' })).resolves.toEqual({
+      sessions: []
+    })
+    const all = (await commands.emulatorList({})).sessions.map((row) => row.worktreeId)
+    expect(all.sort()).toEqual(['wt-android', 'wt-ios'])
+  })
+
   it('heals a session registered without an axUrl by deriving it from the stream url', async () => {
     const tree = [{ type: 'Application', children: [] }]
     netFetchMock.mockResolvedValue(new Response(JSON.stringify(tree), { status: 200 }))
