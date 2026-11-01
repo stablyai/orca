@@ -56,8 +56,10 @@ export function attachSttWorkerLifecycle(args: {
   onError: (error: Error) => void
   onExit: () => void
 }): () => void {
-  const onWorkerMessage = (event: SttEvent): void => {
-    if (args.isCurrent()) {
+  const onWorkerMessage = (
+    event: SttEvent | { type: 'audio-consumed'; byteEnd: number; frameEnd: number }
+  ): void => {
+    if (args.isCurrent() && event.type !== 'audio-consumed') {
       args.onMessage(event)
     }
   }
