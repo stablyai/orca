@@ -111,10 +111,10 @@ beforeEach(() => {
   getPathMock.mockReturnValue(directory)
   vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
   vi.mocked(splitUsageCacheFileViaWorker).mockReset()
-  initClaudeUsagePath()
-  initCodexUsagePath()
-  initOpenCodeUsagePath()
-  initMuseUsagePath()
+  initClaudeUsagePath(directory)
+  initCodexUsagePath(directory)
+  initOpenCodeUsagePath(directory)
+  initMuseUsagePath(directory)
 })
 
 afterEach(async () => {
@@ -168,6 +168,20 @@ it('awaits loading before the first disabled cached snapshot and all historical 
     { day: '2026-10-09', inputTokens: 7, outputTokens: 2, cacheReadTokens: 0, cacheWriteTokens: 0 }
   ])
   expect(snapshotGetter).toHaveBeenCalledWith('all', 'all', 7)
+  expect(snapshot).not.toHaveProperty('history')
+  expect(
+    await invoke('claudeUsage:getSnapshot', { scope: 'all', range: 'all', includeHistory: true })
+  ).toHaveProperty('history', [
+    expect.objectContaining({
+      day: '2026-10-09',
+      sessionId: null,
+      totalTokens: 9,
+      apiEquivalentCostUsd: null
+    })
+  ])
+  expect(
+    await invoke('claudeUsage:getSnapshot', { scope: 'orca', range: 'all', includeHistory: true })
+  ).toHaveProperty('history', [])
   expect(scanClaudeUsageFilesViaWorker).not.toHaveBeenCalled()
 })
 

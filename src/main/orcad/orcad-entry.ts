@@ -4,7 +4,6 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import { resolveOrcadInstallRoot, resolveUserDataPath } from './orcad-app-paths'
 import { prepareOrcadCliLauncher } from './orcad-cli-launcher'
 import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-adapters'
-import { prepareOrcadSecretStoreAndMigrate } from './orcad-secret-store-startup'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
@@ -27,6 +26,7 @@ import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 import { adoptWslHostLoginEnvironmentLogged } from './orcad-wsl-host-login-environment'
 import { installOrcadProcessErrorGuards } from './orcad-process-error-guards'
 import { orcadWsPortOptions } from './orcad-ws-port-policy'
+import { prepareOrcadSecretStoreAndMigrate } from './orcad-secret-store-startup'
 import { createOrcadStartupTiming } from './orcad-startup-timing'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { restoreOrcadTerminalAuthority } from './orcad-restored-terminal-authority'
@@ -134,13 +134,8 @@ async function startOrcadRuntime(
     console.warn('[orcad] Could not prepare the profile CLI launcher', error)
   })
   const idleExitStartup = beginOrcadIdleExit(runtimeUserDataPath)
-  const { orcadSessionScannerIdleTimeoutMs } = await import('./orcad-session-scanner-idle')
-  const scannerIdleTimeoutMs = orcadSessionScannerIdleTimeoutMs()
-  if (scannerIdleTimeoutMs !== null) {
-    const { setAiVaultServiceIdleTimeoutMs } =
-      await import('../ai-vault/session-scanner-service-spawn')
-    setAiVaultServiceIdleTimeoutMs(scannerIdleTimeoutMs)
-  }
+  const { configureOrcadSessionScannerIdleTimeout } = await import('./orcad-session-scanner-idle')
+  await configureOrcadSessionScannerIdleTimeout()
   // Initialize sealing before Store load unseals protected settings.
   await timed('secret-store', () => prepareOrcadSecretStoreAndMigrate(runtimeUserDataPath))
   const { store: profileStore, authority: profileStateAuthority } = await timed('profile', () =>
@@ -228,7 +223,10 @@ async function startOrcadRuntime(
   const { installOrcadEmulatorBridge } = await import('./orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)
 
-  // Restore prior desktop-pushed account selection before automations or CLI launches.
+  const { startOrcadUsageHistory } = await import('./orcad-usage-history')
+  startOrcadUsageHistory(runtimeUserDataPath, profileStore, runtime.usageHistory, registerCleanup)
+
+  // Why before any launch: a desktop that owns this host's accounts pushed them on an earlier run.
   const { restoreOrcadHostAccountLaunchEnv } = await import('./orcad-host-account-launch-env-store')
   restoreOrcadHostAccountLaunchEnv(runtime, runtimeUserDataPath)
   featureReadiness.open('accounts')

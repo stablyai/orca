@@ -4602,7 +4602,6 @@
         },
         "StatsPane": {
           "42d3e0bdf7": "使用状況分析プロバイダー: {{value0}}",
-          "c79f073d4c": "使用状況分析",
           "a58aba506f": "作成された PR",
           "1c96f433e2": "Agent 作業時間",
           "9dbec9e675": "Agent が生成されました",
@@ -4615,24 +4614,7 @@
           "trackingSince": "{{value0}} 以降の追跡"
         },
         "UsageOverviewPane": {
-          "33f7b043d2": "プロバイダー",
-          "70f36452d4": "キャッシュシェア",
-          "327603fe8b": "アクティブ日数",
-          "0eaf937335": "推定コスト",
-          "3887b94ce5": "総トークン数",
-          "2d13e57f72": "OpenCode を有効にする",
-          "2f1ee2878b": "Codex を有効にする",
-          "0ea0cae435": "Claude を有効にする",
-          "6c00c46815": "プロバイダーがローカル Agent ログをスキャンし、結合されたトークン台帳を構築できるようにします。",
-          "49405ccc8d": "トークンの追跡を開始する",
-          "ca6bc5fded": "更新",
-          "e06d1baf5c": "使用量の概要を更新",
-          "c760c481c5": "使用方法の概要",
-          "55c910f4f1": "- 一部のモデルの価格は利用できません",
-          "enableMuse": "Muse を有効にする",
-          "noLocalUsageYet": "ローカルの Claude、Codex、OpenCode、Muse の使用状況はまだ見つかりません。次の Agent セッションがトークンログを書き込むと、概要に反映されます。",
-          "providersEnabledWithData": "{{enabled}} 件が有効 - {{withData}} 件にデータあり",
-          "sessionCount_other": "{{formatted}} セッション"
+          "3887b94ce5": "総トークン数"
         },
         "share": {
           "card": {

@@ -1,4 +1,6 @@
-import { app } from 'electron'
+import { localUsageDay } from '../../shared/usage-history-range'
+import { projectEventUsageHistory } from '../usage/usage-history-projection'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import type {
   MuseUsageBreakdownKind,
@@ -26,12 +28,12 @@ import type { MuseUsageDailyAggregate, MuseUsagePersistedState, MuseUsageSession
 
 let museUsageFile: string | null = null
 
-export function initMuseUsagePath(): void {
-  museUsageFile = join(app.getPath('userData'), 'orca-muse-usage.json')
+export function initMuseUsagePath(userDataPath = getAppEnvironment().getPath('userData')): void {
+  museUsageFile = join(userDataPath, 'orca-muse-usage.json')
 }
 
 function getMuseUsageFile(): string {
-  museUsageFile ??= join(app.getPath('userData'), 'orca-muse-usage.json')
+  museUsageFile ??= join(getAppEnvironment().getPath('userData'), 'orca-muse-usage.json')
   return museUsageFile
 }
 
@@ -56,17 +58,24 @@ export class MuseUsageStore extends UsageProviderStoreLifecycle<
   getSnapshot(
     scope: MuseUsageScope,
     range: MuseUsageRange,
-    recentSessionLimit = 10
+    recentSessionLimit = 10,
+    includeHistory = false
   ): MuseUsageSnapshot {
     const daily = this.getFilteredDaily(scope, range)
     const sessions = this.getFilteredSessions(scope, range)
     return {
       scanState: this.getScanState(),
+      ...(includeHistory
+        ? {
+            historyToday: localUsageDay(new Date()),
+            history: projectEventUsageHistory('muse', this.getFilteredDaily(scope, range))
+          }
+        : {}),
       summary: buildMuseUsageSummary(scope, range, daily, sessions),
       daily: buildMuseUsageDailyPoints(daily),
       modelBreakdown: buildMuseUsageBreakdownRows('model', scope, daily, sessions),
       projectBreakdown: buildMuseUsageBreakdownRows('project', scope, daily, sessions),
-      recentSessions: buildMuseUsageRecentSessions(sessions, recentSessionLimit)
+      recentSessions: buildMuseUsageRecentSessions(sessions, recentSessionLimit, daily, range)
     }
   }
 
@@ -95,7 +104,12 @@ export class MuseUsageStore extends UsageProviderStoreLifecycle<
     limit = 10
   ): Promise<MuseUsageSessionRow[]> {
     await this.refresh(false)
-    return buildMuseUsageRecentSessions(this.getFilteredSessions(scope, range), limit)
+    return buildMuseUsageRecentSessions(
+      this.getFilteredSessions(scope, range),
+      limit,
+      this.getFilteredDaily(scope, range),
+      range
+    )
   }
 
   private buildSummary(scope: MuseUsageScope, range: MuseUsageRange): MuseUsageSummary {

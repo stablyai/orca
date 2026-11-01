@@ -1,10 +1,15 @@
+import { selectEventUsageSessions } from '../usage/usage-session-selection'
 import type {
   CodexUsageRange,
   CodexUsageScope,
   CodexUsageSessionRow
 } from '../../shared/codex-usage-types'
 import type { CodexUsagePersistedState } from './types'
-import { getFilteredSessions, getScopedSessionPrimaryModel } from './codex-usage-scope-filters'
+import {
+  getFilteredDaily,
+  getFilteredSessions,
+  getScopedSessionPrimaryModel
+} from './codex-usage-scope-filters'
 
 export function buildRecentSessions(
   state: CodexUsagePersistedState,
@@ -12,6 +17,14 @@ export function buildRecentSessions(
   range: CodexUsageRange,
   limit = 12
 ): CodexUsageSessionRow[] {
+  const selected = selectEventUsageSessions(
+    'codex',
+    getFilteredDaily(state, scope, range),
+    state.sessions
+  )
+  if (selected) {
+    return selected.slice(0, limit)
+  }
   return getFilteredSessions(state, scope, range)
     .slice(0, limit)
     .map((session) => {
@@ -50,6 +63,7 @@ export function buildRecentSessions(
       )
       return {
         sessionId: session.sessionId,
+        ...(range !== 'all' ? { totalsScope: 'lifetime' as const } : {}),
         lastActiveAt: session.lastTimestamp,
         durationMinutes,
         projectLabel:

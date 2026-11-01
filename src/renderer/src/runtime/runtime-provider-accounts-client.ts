@@ -1,6 +1,7 @@
 import type {
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState
+  CodexRateLimitAccountsState,
+  ManagedDataAccountsState
 } from '../../../shared/managed-account-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
@@ -10,6 +11,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 // Mirrors OrcaRuntime.getAccountsSnapshot() / the accounts.subscribe payload.
 export type ProviderAccountsSnapshot = {
+  opencode?: ManagedDataAccountsState
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
   rateLimits: RateLimitState | null

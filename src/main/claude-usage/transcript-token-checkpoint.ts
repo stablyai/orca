@@ -29,7 +29,8 @@ function projectionKey(projection: ClaudeUsageTurnProjection): string {
     projection.sessionId,
     projection.day,
     projection.model,
-    projection.projectKey
+    projection.projectKey,
+    projection.accountId ?? null
   ])
 }
 

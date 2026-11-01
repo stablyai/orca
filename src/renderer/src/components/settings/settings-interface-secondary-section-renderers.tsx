@@ -135,7 +135,7 @@ export function renderShortcutsSettingsSection(context: SettingsRenderContext): 
 }
 
 export function renderStatsSettingsSection(context: SettingsRenderContext): React.JSX.Element {
-  const { navigation, view } = context
+  const { model, navigation, view } = context
   return (
     <SettingsSection
       id="stats"
@@ -146,7 +146,7 @@ export function renderStatsSettingsSection(context: SettingsRenderContext): Reac
       )}
       searchEntries={navigation.getSectionSearchEntries('stats')}
     >
-      {view.isSectionMounted('stats') ? <StatsPane /> : null}
+      {view.isSectionMounted('stats') ? <StatsPane hostScope={model.settingsHostScope} /> : null}
     </SettingsSection>
   )
 }

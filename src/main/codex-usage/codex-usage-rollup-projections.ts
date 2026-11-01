@@ -1,3 +1,7 @@
+import {
+  countUsageDailySessions,
+  applyUsageBreakdownSessionCounts
+} from '../usage/usage-session-selection'
 import { highestUsageKey } from '../usage/highest-usage-key'
 import type {
   CodexUsageBreakdownKind,
@@ -62,7 +66,7 @@ export function buildSummary(
   return {
     scope,
     range,
-    sessions: filteredSessions.length,
+    sessions: countUsageDailySessions(filteredDaily, filteredSessions.length),
     events,
     inputTokens,
     cachedInputTokens,
@@ -189,5 +193,6 @@ export function buildBreakdown(
       kind === 'model' && longContext ? estimateCostUsd(row.key, { ...row, ...longContext }) : null
   }
 
+  applyUsageBreakdownSessionCounts(rows.values(), filteredDaily, kind)
   return [...rows.values()].sort((left, right) => right.totalTokens - left.totalTokens)
 }

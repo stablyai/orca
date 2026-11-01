@@ -12,21 +12,33 @@ function formatTokens(value: number): string {
   return value.toLocaleString(getIntlLocale())
 }
 
-function getMaxDailyTotal(daily: CodexUsageDailyPoint[]): number {
+function getMaxDailyTotal(
+  daily: CodexUsageDailyPoint[],
+  reasoningIncludedInOutput: boolean
+): number {
   let max = 1
   // Avoid spreading unbounded usage history into Math.max, which can exceed V8’s argument limit.
   for (const entry of daily) {
-    max = Math.max(max, entry.totalTokens)
+    max = Math.max(
+      max,
+      entry.inputTokens +
+        entry.outputTokens +
+        (reasoningIncludedInOutput ? 0 : entry.reasoningOutputTokens)
+    )
   }
   return max
 }
 
 type CodexUsageDailyChartProps = {
   daily: CodexUsageDailyPoint[]
+  reasoningIncludedInOutput?: boolean
 }
 
-export function CodexUsageDailyChart({ daily }: CodexUsageDailyChartProps): React.JSX.Element {
-  const maxDailyTotal = getMaxDailyTotal(daily)
+export function CodexUsageDailyChart({
+  daily,
+  reasoningIncludedInOutput = true
+}: CodexUsageDailyChartProps): React.JSX.Element {
+  const maxDailyTotal = getMaxDailyTotal(daily, reasoningIncludedInOutput)
 
   return (
     <section className="rounded-lg border border-border/60 bg-card/40 p-4">
@@ -53,7 +65,10 @@ export function CodexUsageDailyChart({ daily }: CodexUsageDailyChartProps): Reac
             {
               key: 'output',
               label: translate('auto.components.stats.CodexUsageDailyChart.7b596a88b2', 'Output'),
-              value: entry.outputTokens,
+              value: Math.max(
+                0,
+                entry.outputTokens - (reasoningIncludedInOutput ? entry.reasoningOutputTokens : 0)
+              ),
               className: 'bg-emerald-500/80'
             },
             {
@@ -78,7 +93,11 @@ export function CodexUsageDailyChart({ daily }: CodexUsageDailyChartProps): Reac
           return (
             <div key={entry.day} className="flex h-full min-w-0 flex-col justify-end gap-2">
               <span className="text-center text-[11px] text-muted-foreground">
-                {formatTokens(entry.totalTokens)}
+                {formatTokens(
+                  entry.inputTokens +
+                    entry.outputTokens +
+                    (reasoningIncludedInOutput ? 0 : entry.reasoningOutputTokens)
+                )}
               </span>
               <div className="flex min-h-0 flex-1 items-end justify-center">
                 <div className="flex h-full w-full max-w-12 overflow-hidden rounded-t-sm bg-muted/60">

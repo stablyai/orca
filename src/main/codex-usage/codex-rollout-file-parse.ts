@@ -30,6 +30,7 @@ export type CodexRolloutParseOptions = {
   legacySourceSkipBytes?: number
   canClaimEventKey?: (eventKey: string) => boolean
   commitEventKey?: (eventKey: string) => void
+  accountIdForEvent?: (eventKey: string) => string | null
   /** Resume point verified by the caller, with the cached projection to extend. */
   resume?: { state: CodexUsageParseResumeState; previous: CodexUsagePersistedFile }
 }
@@ -115,6 +116,7 @@ export async function parseCodexUsageFile(
       const context = createParseContext(filePath, parseOptions)
       const accumulator = codexUsageAggregation.createAccumulator()
       const ownedEventKeys = new Set<string>()
+      const accountIds = new Map<string, string | null>()
       let hasDeferredClaims = false
       let parsedBytes = startOffset
       let resumeContext = context
@@ -138,15 +140,17 @@ export async function parseCodexUsageFile(
         if (!parsed) {
           continue
         }
+        const accountId = parseOptions.accountIdForEvent?.(parsed.eventKey)
         // Deferred records still advance cumulative totals without retaining their copies.
         if (parseOptions.canClaimEventKey && !parseOptions.canClaimEventKey(parsed.eventKey)) {
           hasDeferredClaims = true
           continue
         }
         ownedEventKeys.add(parsed.eventKey)
+        accountIds.set(parsed.eventKey, accountId ?? null)
         const attributed = await attributeCodexUsageEvent(parsed, resolveWorktree)
         if (attributed) {
-          accumulator.add(attributed)
+          accumulator.add(accountId ? { ...attributed, accountId } : attributed)
         }
       }
 
@@ -180,16 +184,26 @@ export async function parseCodexUsageFile(
       const processedFile = processedFileInfo(filePath, reader.stats)
       const appended = accumulator.finalize()
       const previous = parseOptions.resume?.previous
+      const retainedAccounts = new Map(
+        previous?.ownedEventKeys.map((key, index) => [
+          key,
+          previous.ownedAccountIds?.[index] ?? null
+        ])
+      )
       const committedKeys = previous ? new Set(previous.ownedEventKeys) : ownedEventKeys
       if (previous) {
         for (const key of ownedEventKeys) {
           committedKeys.add(key)
         }
       }
+      const ownedAccountIds = [...committedKeys].map((key) =>
+        accountIds.has(key) ? (accountIds.get(key) ?? null) : (retainedAccounts.get(key) ?? null)
+      )
       return {
         ...processedFile,
         ...(previous ? mergeRolloutProjections(previous, appended) : appended),
         ownedEventKeys: [...committedKeys],
+        ...(ownedAccountIds.some((id) => id !== null) ? { ownedAccountIds } : {}),
         hasDeferredClaims: previous?.hasDeferredClaims || hasDeferredClaims,
         parseResumeState
       }

@@ -62,6 +62,7 @@ vi.mock('../codex/codex-home-paths', () => ({
 }))
 
 vi.mock('../codex/codex-account-home-discovery', () => ({
+  getCodexAccountHomeSessionSources: () => [],
   getCodexAccountHomeSessionDirectories: () => []
 }))
 

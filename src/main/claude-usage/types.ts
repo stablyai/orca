@@ -41,6 +41,8 @@ export type ClaudeUsageSession = {
 }
 
 export type ClaudeUsageDailyAggregate = {
+  accountId?: string | null
+  sessionId?: string
   day: string
   model: string | null
   projectKey: string
@@ -74,6 +76,8 @@ export type ClaudeUsagePersistedState = {
 }
 
 export type ClaudeUsagePersistedFile = ClaudeUsageProcessedFile & {
+  /** Aligned with ownedDedupeKeys; null preserves unknown and legacy ownership. */
+  ownedAccountIds?: (string | null)[]
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
   /** Exclusive turn ownership across files, using message/request IDs or message-ID/UUID fallbacks. */
@@ -100,6 +104,7 @@ export type ClaudeUsageParsedTurn = {
 }
 
 export type ClaudeUsageAttributedTurn = ClaudeUsageParsedTurn & {
+  accountId?: string | null
   day: string
   projectKey: string
   projectLabel: string
@@ -114,6 +119,7 @@ export type ClaudeUsageTokenTotals = Pick<
 >
 
 export type ClaudeUsageTurnProjection = {
+  accountId?: string | null
   sessionId: string
   day: string
   model: string | null

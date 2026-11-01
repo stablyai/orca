@@ -1,3 +1,7 @@
+import {
+  countUsageDailySessions,
+  applyUsageBreakdownSessionCounts
+} from '../usage/usage-session-selection'
 import { highestUsageKey } from '../usage/highest-usage-key'
 import type {
   ClaudeUsageBreakdownKind,
@@ -40,11 +44,10 @@ export function buildSummary(
     turns += row.turnCount
     zeroCacheReadTurns += row.zeroCacheReadTurnCount
     const modelKey = row.model ?? 'Unknown model'
-    byModel.set(modelKey, (byModel.get(modelKey) ?? 0) + row.inputTokens + row.outputTokens)
-    byProject.set(
-      row.projectLabel,
-      (byProject.get(row.projectLabel) ?? 0) + row.inputTokens + row.outputTokens
-    )
+    const totalTokens =
+      row.inputTokens + row.outputTokens + row.cacheReadTokens + row.cacheWriteTokens
+    byModel.set(modelKey, (byModel.get(modelKey) ?? 0) + totalTokens)
+    byProject.set(row.projectLabel, (byProject.get(row.projectLabel) ?? 0) + totalTokens)
     const cost = estimateCostUsd(row.model, row)
     if (cost !== null) {
       hasAnyBillableCost = true
@@ -60,7 +63,7 @@ export function buildSummary(
   return {
     scope,
     range,
-    sessions: filteredSessions.length,
+    sessions: countUsageDailySessions(filteredDaily, filteredSessions.length),
     turns,
     zeroCacheReadTurns,
     inputTokens,
@@ -167,6 +170,7 @@ export function buildBreakdown(
     }
   }
 
+  applyUsageBreakdownSessionCounts(rows.values(), filteredDaily, kind)
   return [...rows.values()].sort((left, right) => {
     const leftTotal = left.inputTokens + left.outputTokens
     const rightTotal = right.inputTokens + right.outputTokens

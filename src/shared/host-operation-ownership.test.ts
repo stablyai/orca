@@ -18,6 +18,7 @@ describe('getHostOperationOwnership', () => {
     expect(getHostOperationOwnership('files.unwatch')).toBe('stream')
     expect(getHostOperationOwnership('session.tabs.subscribeAll')).toBe('stream')
     expect(getHostOperationOwnership('accounts.list')).toBe('host')
+    expect(getHostOperationOwnership('usage.getSnapshot')).toBe('host')
     expect(getHostOperationOwnership('github.prChecks')).toBe('credential')
     expect(getHostOperationOwnership('jira.getIssueStream')).toBe('scope-picked')
   })

@@ -674,6 +674,11 @@ import {
   UsageCredentialApiKeyParams,
   UsageCredentialSessionCookieParams
 } from './usage-credentials-params'
+import {
+  UsageRefreshParams,
+  UsageSetEnabledParams,
+  UsageSnapshotParams
+} from './usage-history-params'
 import { LayoutReopenHeldPanesParams } from './workspace-layout-held-panes-params'
 import {
   LayoutApplyParams,
@@ -1515,6 +1520,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.download': null,
   'updater.getStatus': null,
   'updater.install': null,
+  'usage.getSnapshot': UsageSnapshotParams,
+  'usage.refresh': UsageRefreshParams,
+  'usage.setEnabled': UsageSetEnabledParams,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,
   'workspacePorts.probePage': WorkspacePortProbePageParams,
