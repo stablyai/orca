@@ -35,6 +35,23 @@ beforeEach(() => {
 afterEach(() => invalidateWslGuestEnvironment(undefined, true))
 
 describe('probing', () => {
+  it('preserves an absolute CLAUDE_CONFIG_DIR from the guest login environment', async () => {
+    respondWithPayload(`${GOOD}\0/home/u/.claude-alt`)
+    await expect(getWslGuestEnvironment('Ubuntu')).resolves.toMatchObject({
+      claudeConfigDir: '/home/u/.claude-alt'
+    })
+  })
+
+  it('rejects invalid Claude directories without disabling unrelated guest tools', async () => {
+    for (const configDir of ['relative', '/tmp/config\nother']) {
+      invalidateWslGuestEnvironment(undefined, true)
+      respondWithPayload(`${GOOD}\0${configDir}`)
+      await expect(getWslGuestEnvironment('Ubuntu')).resolves.toMatchObject({
+        path: '/home/u/.nvm/bin:/usr/bin',
+        claudeConfigDir: null
+      })
+    }
+  })
   it('reads PATH, HOME and env out of a banner-polluted stdout', async () => {
     respondWithPayload(GOOD)
     expect(await getWslGuestEnvironment('Ubuntu')).toEqual({
