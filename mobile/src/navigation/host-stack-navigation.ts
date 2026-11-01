@@ -23,12 +23,18 @@ export type HostStackReplaceAction = Readonly<{
   payload: HostStackRouteTarget
 }>
 
+export type HostStackPushAction = Readonly<{
+  type: 'PUSH'
+  target: string
+  payload: HostStackRouteTarget
+}>
+
 export type HostStackRootNavigation = {
   addListener: (event: 'state', listener: () => void) => () => void
   dispatch: (
     action:
       | HostStackReplaceAction
-      | Readonly<{ type: 'PUSH'; target: string; payload: HostStackRouteTarget }>
+      | HostStackPushAction
       | Readonly<{
           type: 'SET_PARAMS'
           target: string
@@ -63,9 +69,11 @@ export type PendingHostStackNavigation = Readonly<{
   controller: HostStackNavigationController
 }>
 
+export const HOST_SESSION_ROUTE = '[hostId]/session/[worktreeId]'
+
 // A session keeps its host's list beneath it so Back lands there; other targets take the list's place.
 function opensOverHostList(target: HostStackRouteTarget): boolean {
-  return target.name === '[hostId]/session/[worktreeId]'
+  return target.name === HOST_SESSION_ROUTE
 }
 
 const SETTLED_NAVIGATION: HostStackNavigationController = {
@@ -192,12 +200,13 @@ export function navigateToHostStackRoute(
       dispose()
       return
     }
+    const overHostList = opensOverHostList(selectedTarget)
     const hostStack = hostContainer && mountedHostStack(hostContainer, hostId)
     if (!hostStack) {
       if (hostContainer && hostParamMatches(hostContainer.params?.hostId, hostId)) {
         dispose()
         const href = hostStackRouteHref(selectedTarget)
-        if (opensOverHostList(selectedTarget)) {
+        if (overHostList) {
           router.push(href)
         } else {
           router.replace(href)
@@ -207,7 +216,7 @@ export function navigateToHostStackRoute(
     }
     dispose()
     navigation.dispatch(
-      opensOverHostList(selectedTarget)
+      overHostList
         ? { type: 'PUSH', target: hostStack.key, payload: selectedTarget }
         : {
             type: 'REPLACE',
