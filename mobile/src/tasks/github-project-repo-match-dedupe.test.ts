@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   filterGitHubProjectRowsForRepos,
-  findRepoForGitHubProjectRepository,
   type GitHubProjectRepoMatch,
   type GitHubRepoSlugCacheEntry
 } from './github-project-repo-match'
@@ -36,7 +35,7 @@ describe('project repository matching within one row projection', () => {
     actual.forEach((entry, index) => expect(entry).toBe(expected[index]))
   })
 
-  it('retains raw source keys and accepts the same values as individual matching', () => {
+  it('keeps repositoryless rows and matches raw repository keys without changing row order', () => {
     const repos = [{ id: 'one', path: '/one', displayName: 'one' }]
     const slugs = { one: { path: '/one', repository: { owner: 'acme', repo: 'one' } } }
     const rows = rowsFor([
@@ -53,10 +52,9 @@ describe('project repository matching within one row projection', () => {
       ' ACME/ONE ',
       'acme/one/extra'
     ])
-    const expected = rows.filter((entry) =>
-      Boolean(findRepoForGitHubProjectRepository(entry.content.repository, repos, slugs))
-    )
-    expect(filterGitHubProjectRowsForRepos(rows, repos, slugs)).toEqual(expected)
+    expect(filterGitHubProjectRowsForRepos(rows, repos, slugs).map((row) => row.id)).toEqual([
+      0, 1, 2, 3, 4, 6, 7, 8, 9, 10
+    ])
   })
 
   it('does not retain matches across changed repo evidence or ambiguity', () => {

@@ -21,7 +21,7 @@ export default function ProjectBoardCard({
   const title = restricted
     ? translate('projectBoardCard.restrictedItem', 'Restricted item')
     : row.content.title
-  const clickable = !restricted && row.itemType !== 'DRAFT_ISSUE'
+  const clickable = !restricted
   const Glyph =
     row.itemType === 'PULL_REQUEST'
       ? GitPullRequest

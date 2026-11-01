@@ -155,6 +155,9 @@ export function filterGitHubProjectRowsForRepos<
   const matchedRepositories = new Map<string | null | undefined, boolean>()
   return rows.filter((row) => {
     const repository = row.content.repository
+    if (!repository) {
+      return true
+    }
     const cached = matchedRepositories.get(repository)
     if (cached !== undefined) {
       return cached

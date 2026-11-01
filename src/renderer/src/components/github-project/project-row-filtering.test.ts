@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
 import type { Repo } from '../../../../shared/repo-types'
+import { normalizeItem } from '../../../../main/github/project-view/project-view-item-normalization'
 import {
-  filterProjectTableRowsByOpenRepos,
   filterProjectTableRowsBySelectedRepos,
   resolveSelectedProjectRowRepo
 } from './project-row-filtering'
@@ -71,37 +71,68 @@ function table(rows: GitHubProjectRow[]): GitHubProjectTable {
   }
 }
 
-describe('filterProjectTableRowsByOpenRepos', () => {
-  it('keeps rows whose repository slug resolves to at least one live repo', () => {
-    const rows = [row('visible', 'acme/orca'), row('missing', 'acme/removed')]
-    const filtered = filterProjectTableRowsByOpenRepos(table(rows), (slug) =>
-      slug?.toLowerCase() === 'acme/orca' ? [repo('repo-1')] : []
-    )
-
-    expect(filtered.rows.map((r) => r.id)).toEqual(['visible'])
-    expect(filtered.totalCount).toBe(1)
-  })
-
-  it('keeps rows while any of multiple Orca repos map to the slug', () => {
-    const rows = [row('visible', 'acme/orca')]
-    const filtered = filterProjectTableRowsByOpenRepos(table(rows), () => [
-      repo('repo-1'),
-      repo('repo-2')
-    ])
-
-    expect(filtered.rows.map((r) => r.id)).toEqual(['visible'])
-  })
-
-  it('filters missing or unresolved repository slugs', () => {
-    const rows = [row('missing-slug', null), row('unresolved', 'gitlab/orca')]
-    const filtered = filterProjectTableRowsByOpenRepos(table(rows), () => [])
-
-    expect(filtered.rows).toEqual([])
-    expect(filtered.totalCount).toBe(0)
-  })
-})
-
 describe('filterProjectTableRowsBySelectedRepos', () => {
+  it('keeps 67 draft items and inaccessible content while scoping repository-backed items', () => {
+    const drafts = Array.from({ length: 67 }, (_, position) => {
+      const result = normalizeItem(
+        {
+          id: `draft-${position}`,
+          type: 'DRAFT_ISSUE',
+          content: { __typename: 'DraftIssue', title: `Draft ${position}`, body: 'Draft body' },
+          fieldValues: {
+            nodes: [
+              {
+                __typename: 'ProjectV2ItemFieldSingleSelectValue',
+                field: { id: 'status', name: 'Status', dataType: 'SINGLE_SELECT' },
+                optionId: 'todo',
+                name: 'Todo',
+                color: 'GRAY'
+              }
+            ],
+            pageInfo: { hasNextPage: false }
+          }
+        },
+        position
+      )
+      if (!result.ok) {
+        throw new Error('Draft normalization failed')
+      }
+      return result.row
+    })
+    const draftTable = table(drafts)
+    const lookup = vi.fn(() => originOnly([]))
+    expect(filterProjectTableRowsBySelectedRepos(draftTable, lookup, true, new Set())).toBe(
+      draftTable
+    )
+    expect(lookup).not.toHaveBeenCalled()
+    expect(drafts[0].fieldValuesByFieldId.status).toMatchObject({
+      kind: 'single-select',
+      name: 'Todo'
+    })
+
+    const restricted = ['ISSUE', 'PULL_REQUEST'].map((type, position) => {
+      const result = normalizeItem({ id: `restricted-${type}`, type, content: null }, position)
+      if (!result.ok) {
+        throw new Error('Restricted item normalization failed')
+      }
+      expect(result.row).toMatchObject({
+        itemType: 'REDACTED',
+        content: { title: 'Restricted item', repository: null, number: null }
+      })
+      return result.row
+    })
+    const issue = row('issue', 'acme/orca')
+    const pullRequest: GitHubProjectRow = { ...row('pr', 'acme/orca'), itemType: 'PULL_REQUEST' }
+    const filtered = filterProjectTableRowsBySelectedRepos(
+      table([...drafts, ...restricted, issue, pullRequest, row('unselected', 'acme/other')]),
+      (slug) => originOnly([repo(slug === 'acme/orca' ? 'selected' : 'other')]),
+      true,
+      new Set(['selected'])
+    )
+    expect(filtered.rows).toEqual([...drafts, ...restricted, issue, pullRequest])
+    expect(filtered.totalCount).toBe(71)
+  })
+
   it('keeps a row when at least one slug match is selected', () => {
     const rows = [row('visible', 'acme/orca'), row('hidden', 'acme/tool')]
     const filtered = filterProjectTableRowsBySelectedRepos(

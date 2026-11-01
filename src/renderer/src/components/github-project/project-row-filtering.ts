@@ -1,11 +1,6 @@
 import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 
-export type ProjectRowSlugLookup = (
-  slug: string | null | undefined,
-  host?: string
-) => readonly Repo[]
-
 /** Origin matches own the slug through their own remote; upstream matches are
  *  forks whose parent the row names. */
 export type ProjectRowSlugMatchLookup = (
@@ -66,27 +61,6 @@ export function resolveSelectedProjectRowRepo(input: {
   return { status: 'ambiguous_selected_match', selectedMatches, globalMatches }
 }
 
-export function projectRowHasOpenRepo(
-  row: GitHubProjectRow,
-  lookupSlug: ProjectRowSlugLookup,
-  host?: string
-): boolean {
-  return lookupSlug(row.content.repository, host).length > 0
-}
-
-export function filterProjectTableRowsByOpenRepos(
-  table: GitHubProjectTable,
-  lookupSlug: ProjectRowSlugLookup
-): GitHubProjectTable {
-  const rows = table.rows.filter((row) =>
-    projectRowHasOpenRepo(row, lookupSlug, table.project.host)
-  )
-  if (rows.length === table.rows.length && table.totalCount === rows.length) {
-    return table
-  }
-  return { ...table, rows, totalCount: rows.length }
-}
-
 export function filterProjectTableRowsBySelectedRepos(
   table: GitHubProjectTable,
   lookupSlugMatches: ProjectRowSlugMatchLookup,
@@ -94,6 +68,10 @@ export function filterProjectTableRowsBySelectedRepos(
   selectedRepoIds: ReadonlySet<string>
 ): GitHubProjectTable {
   const rows = table.rows.filter((row) => {
+    // Drafts and restricted items belong to the Project without a repository.
+    if (!row.content.repository) {
+      return true
+    }
     const resolution = resolveSelectedProjectRowRepo({
       row,
       lookupSlugMatches,
