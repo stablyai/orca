@@ -634,3 +634,83 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     expect(readMobileNativeChatDraftInputs(scope).skills).toEqual([])
   })
 })
+
+// The setup-only editing lock leaves ordinary transient-lock drafting and Stop intact.
+describe('workspace setup editing availability', () => {
+  let view: ReactTestRenderer | null = null
+  afterEach(() =>
+    act(() => {
+      view?.unmount()
+      view = null
+    })
+  )
+  it.each([true, false])(
+    'blocks actual editing and Send for structured=%s, keeping Stop with a draft',
+    async (isStructured) => {
+      const onSend = vi.fn(async () => true)
+      const onChangeText = vi.fn()
+      const onStop = vi.fn()
+      const onMicPress = vi.fn()
+      const props = {
+        value: 'retained draft',
+        onSend,
+        onChangeText,
+        onMicPress,
+        onAttachImage: vi.fn(),
+        sendSurfaceId: 'setup-chat',
+        getSendCompletionGeneration: () => 0,
+        structured: isStructured ? structured() : null
+      }
+      await act(async () => {
+        view = create(createElement(MobileNativeChatComposer, props))
+      })
+      const send = view!.root.find(
+        (node) =>
+          String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Send message'
+      ).props.onPress
+      await act(async () => {
+        view!.update(
+          createElement(MobileNativeChatComposer, {
+            ...props,
+            setupAgentStartHeld: true,
+            stop: { held: false, onStop }
+          })
+        )
+      })
+      const field = view!.root.find((node) => String(node.type) === 'TextInput')
+      expect(field.props.editable).toBe(false)
+      expect(field.props.value).toBe('retained draft')
+      await act(async () => {
+        field.props.onChangeText('no')
+        await send()
+      })
+      expect(onChangeText).not.toHaveBeenCalled()
+      expect(onSend).not.toHaveBeenCalled()
+      const stop = view!.root.find(
+        (node) =>
+          String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Stop the agent'
+      )
+      expect(stop.props.disabled).toBe(false)
+      await act(async () => stop.props.onPress())
+      expect(onStop).toHaveBeenCalledOnce()
+      const mic = view!.root.find(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Dictate'
+      )
+      await act(async () => mic.props.onPress())
+      expect(onMicPress).not.toHaveBeenCalled()
+      await act(async () => {
+        view!.update(createElement(MobileNativeChatComposer, { ...props, disabled: true }))
+      })
+      expect(view!.root.find((node) => String(node.type) === 'TextInput').props.editable).toBe(true)
+      await act(async () => {
+        view!.update(createElement(MobileNativeChatComposer, props))
+      })
+      expect(
+        view!.root.find(
+          (node) =>
+            String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Send message'
+        ).props.disabled
+      ).toBe(false)
+    }
+  )
+})

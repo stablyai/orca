@@ -1,4 +1,4 @@
-import { useCallback, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 
@@ -19,7 +19,10 @@ export function useMobileWorkspaceSetupHold(
   )
   const readSetupAgentStartHeld = useCallback(() => readObservation() !== false, [readObservation])
   const current = useRef(readSetupAgentStartHeld)
-  current.current = readSetupAgentStartHeld
+  // Publish only committed readers, so a retained Send or transcript reads the current workspace.
+  useLayoutEffect(() => {
+    current.current = readSetupAgentStartHeld
+  }, [readSetupAgentStartHeld])
   const readCurrent = useCallback(() => current.current(), [])
   const observed = useSyncExternalStore(subscribe, readObservation, readObservation)
   return {

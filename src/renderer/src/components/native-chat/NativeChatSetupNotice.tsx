@@ -17,15 +17,15 @@ export function NativeChatSetupNotice({
   }
   return (
     <div
-      className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
+      // The ghost settings link inherits this faint color; the message sets its own.
+      className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-chat-foreground-faint"
       role="status"
     >
       <p className="text-sm text-chat-foreground">Waiting for setup script to complete</p>
       <Button
         type="button"
         variant="ghost"
-        size="sm"
-        className="text-xs text-chat-foreground-faint"
+        size="xs"
         onClick={() => {
           const state = useAppStore.getState()
           openSetupScriptSettings({

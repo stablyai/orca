@@ -3,6 +3,9 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../src/shared/agent-session-wire'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionRefusalError } from '../../src/shared/agent-session-wire-refusals'
 import { foldAgentSessionStatusEvent } from '../../src/shared/agent-session-status-snapshot-fold'
@@ -18,7 +21,7 @@ import {
 } from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../../src/main/runtime/rpc/methods/structured-agent-session-status-stream'
 
-import type { AgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store'
+import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import type { Tab } from '../../src/shared/tab-types'
 import { agentSessionRecordFixture } from '../../src/shared/agent-session-record.test-fixture'
 import { structuredAgentSessionPaneKey } from '../../src/shared/structured-agent-session-projection'
@@ -46,7 +49,13 @@ vi.mock('../../src/renderer/src/runtime/runtime-rpc-client', () => ({
 }))
 
 const connections: AbortController[] = []
-afterEach(() => {
+const journals = createTrackedJournalOpener()
+const journalRoots: string[] = []
+afterEach(async () => {
+  await journals.closeAll()
+  await Promise.all(
+    journalRoots.splice(0).map((root) => rm(root, { recursive: true, force: true }))
+  )
   for (const controller of connections.splice(0)) {
     controller.abort()
   }
@@ -366,17 +375,19 @@ it('keeps shipped Sleep visibility and menu unknown through real setup frames un
     logger: host.deps.logger
   })
   host.deps.conversationNaming = naming
-  // SAFETY: the real status projection reads these cursor/snapshot/stop/activity journal members only.
-  const journal = {
-    cursor: () => ({ epoch: 'sleep-compat', sequence: 0 }),
-    lastActivityAt: () => 1,
-    stopMarks: { latest: () => null, revision: () => 0 },
-    snapshot: () => ({ items: [], submissions: [] }),
-    itemFence: () => undefined,
-    runningTurn: () => null,
-    context: { floor: () => null }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read-only journal double supplies all members used by the status projection, as in the existing RPC fixture.
-  } as unknown as AgentSessionJournal
+  const journalRoot = await mkdtemp(join(tmpdir(), 'orca-setup-sleep-'))
+  journalRoots.push(journalRoot)
+  const journal = await journals.open({
+    identity: {
+      sessionId: id,
+      workspaceId: record.location.workspaceId,
+      hostId: 'local',
+      agent: record.provider,
+      providerHandle: record.providerHandleChain[0]!.handle
+    },
+    now: () => 1,
+    stateDirectory: join(journalRoot, id)
+  })
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: new Map([
       [id, { journal, params: { location: record.location, provider: record.provider } }]

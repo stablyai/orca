@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 
 const electronMocks = vi.hoisted(() => {
   const ipcMain = {
@@ -44,6 +45,21 @@ import {
   formatWorkerStart,
   type WorkerStartReceipt
 } from '../../src/cli/handlers/orchestration/worker-output'
+
+// The CLI receives workerStart's untyped result; parsing proves it is the receipt the formatter reads.
+const workerStartReceipt = z.object({
+  mode: z.object({ detail: z.string() }).optional(),
+  run: z.object({ id: z.string(), objective: z.string(), created: z.boolean() }).optional(),
+  taskId: z.string(),
+  dispatchId: z.string(),
+  state: z.string(),
+  failedStage: z.string().optional(),
+  lastError: z.string().optional(),
+  warning: z.string().optional(),
+  effects: z.array(z.unknown()).optional(),
+  residualResources: z.array(z.unknown()).optional(),
+  nextCommands: z.array(z.string()).optional()
+}) satisfies z.ZodType<WorkerStartReceipt, unknown>
 
 const REPO_ID = 'repo-1'
 const REPO_PATH = '/repo'
@@ -236,8 +252,7 @@ describe('orchestration worker workspace resolution', () => {
         ])
       })
       expect(runtime.createTerminal).not.toHaveBeenCalled()
-      // SAFETY: The real method's receipt fields and named worktree effect are asserted above.
-      expect(formatWorkerStart(result as WorkerStartReceipt).split('\n')).toContain(
+      expect(formatWorkerStart(workerStartReceipt.parse(result)).split('\n')).toContain(
         'Created workspace: Release audit'
       )
     } finally {

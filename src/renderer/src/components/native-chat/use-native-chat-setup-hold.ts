@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore
+} from 'react'
 import { useAppStore } from '@/store'
 import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
@@ -38,7 +45,10 @@ export function useNativeChatSetupHold(tabId: string) {
     [feed, worktreeId]
   )
   const current = useRef(read)
-  current.current = read
+  // Publish only committed readers, so a retained send handler reads the current workspace.
+  useLayoutEffect(() => {
+    current.current = read
+  }, [read])
   const readHeld = useCallback(() => current.current() !== false, [])
   const observed = useSyncExternalStore(subscribe, read, read)
   return {

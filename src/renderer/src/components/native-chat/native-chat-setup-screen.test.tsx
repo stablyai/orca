@@ -383,3 +383,38 @@ it.each([true, false])(
     expect(promptValue(editor)).toBe('retained draft')
   }
 )
+
+it('a reader retained from the first render follows the current status source and workspace', async () => {
+  let latest: ReturnType<typeof useNativeChatSetupHold> | undefined
+  function Probe() {
+    latest = useNativeChatSetupHold(TAB)
+    return null
+  }
+  project(true)
+  render(<Probe />)
+  const readHeld = latest!.readHeld
+  expect(readHeld()).toBe(true)
+  project(false)
+  expect(readHeld()).toBe(false)
+  act(() => useAppStore.setState({ activeWorkspaceExecutionHostId: 'ssh:box' }))
+  await act(async () => {
+    await vi.waitFor(() => expect(frames).toHaveLength(2))
+  })
+  expect(readHeld()).toBe(true)
+  project(false)
+  expect(readHeld()).toBe(false)
+  const other = 'repo-setup::/other'
+  act(() =>
+    useAppStore.setState((state) => ({
+      activeWorktreeId: other,
+      tabsByWorktree: {
+        [other]: state.tabsByWorktree[WT]!.map((tab) => ({ ...tab, worktreeId: other }))
+      }
+    }))
+  )
+  expect(latest!.worktreeId).toBe(other)
+  project(true)
+  expect(latest!.held).toBe(false)
+  expect(readHeld()).toBe(false)
+  expect(latest!.readHeld).toBe(readHeld)
+})
