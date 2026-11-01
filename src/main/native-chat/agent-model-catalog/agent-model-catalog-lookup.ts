@@ -1,4 +1,7 @@
-import { agentModelCatalogReleasedOwner } from './agent-model-catalog-read-scope'
+import {
+  agentModelCatalogReleasedOwner,
+  agentModelCatalogReadRecords
+} from './agent-model-catalog-read-scope'
 import { seedAccountList } from './agent-model-catalog-account-list'
 import type { PrioritySemaphore } from '../../../shared/priority-semaphore'
 import type {
@@ -6,7 +9,6 @@ import type {
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
 import type { AgentModelCatalogReadOperation } from './agent-model-catalog-operation'
-import { agentModelCatalogReadRecords } from './agent-model-catalog-read-scope'
 import { recordCatalogKey } from './agent-model-catalog-fingerprint'
 import { scopedAgentModelCatalogLister } from './agent-model-catalog-lister'
 import { newChatCatalogKey } from './agent-model-catalog-prewarm'

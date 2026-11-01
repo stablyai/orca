@@ -1,4 +1,3 @@
-import { AGENT_MODEL_CATALOG_FRESH_MS } from './agent-model-catalog-store'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import {
@@ -13,7 +12,11 @@ import {
   agentModelCatalogFingerprintForRecord
 } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
-import { AgentModelCatalogStore, type AgentModelCatalogSuccess } from './agent-model-catalog-store'
+import {
+  AGENT_MODEL_CATALOG_FRESH_MS,
+  AgentModelCatalogStore,
+  type AgentModelCatalogSuccess
+} from './agent-model-catalog-store'
 
 function record(accountHomePath: string): AgentSessionRecord {
   return agentSessionRecordFixture({
