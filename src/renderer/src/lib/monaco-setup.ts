@@ -4,7 +4,8 @@ import * as monaco from 'monaco-editor'
 import { typescript as monacoTS } from 'monaco-editor'
 import 'monaco-editor/min/vs/editor/editor.main.css'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
-import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
+import jsonWorker from './json-schema.worker?worker'
+import { connectJsonSchemaWorker, installMonacoJsonSchemas } from './monaco-json-schemas'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
@@ -35,7 +36,7 @@ globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
     switch (label) {
       case 'json':
-        return new jsonWorker()
+        return connectJsonSchemaWorker(new jsonWorker())
       case 'css':
       case 'scss':
       case 'less':
@@ -100,7 +101,9 @@ runMonacoSetupSteps([
 loader.config({ monaco })
 
 const unregisterEditorModelRegistry = editorModelRegistry.register(monaco)
+const unregisterJsonSchemas = installMonacoJsonSchemas(monaco)
 if (import.meta.hot) {
   import.meta.hot.dispose(unregisterEditorModelRegistry)
+  import.meta.hot.dispose(unregisterJsonSchemas)
 }
 export { monaco }

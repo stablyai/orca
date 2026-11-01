@@ -32,4 +32,21 @@ By default the editor and diff views use the same font as the terminal. Leave **
 
 ## Language support
 
+### JSON schemas
+
+JSON and JSONC files use their top-level `$schema` for validation, completion, and hover descriptions. For example:
+
+```json
+{
+  "$schema": "./config.schema.json",
+  "name": "my-project"
+}
+```
+
+Relative schema references and references inside a schema resolve from that file's directory. Workspace schemas use the same local or SSH host as the open file. They must stay inside that workspace. Use relative references for remote files, since an explicit `file:` URI does not identify a remote host.
+
+Without `$schema`, known filenames such as `package.json` and `tsconfig.json` use the SchemaStore catalog. Schema errors appear as squiggles. Select **JSON problems** in the editor to inspect errors and jump to their locations.
+
+Turn off **Download JSON Schemas** under **Settings > General > Editor** to prevent remote schema and catalog requests. Workspace schemas still work. Turning it off cancels pending downloads and resets the JSON worker's schema state. Remote responses are cached in memory for up to ten minutes, with a limit of 32 entries and 2 MB per response. Requests time out after eight seconds and omit credentials and referrers.
+
 Syntax highlighting ships for the languages Monaco supports out of the box. Orca is intentionally editor-first, not IDE-first — run type-checkers and linters in a terminal pane.

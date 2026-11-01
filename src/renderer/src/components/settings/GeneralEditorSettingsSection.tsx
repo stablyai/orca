@@ -20,6 +20,7 @@ import { translate } from '@/i18n/i18n'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
+import { EditorJsonSchemasSetting } from './EditorJsonSchemasSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import { EditorTypographySettings } from './EditorTypographySettings'
 import {
@@ -239,6 +240,7 @@ export function GeneralEditorSettingsSection({
       <EditorTypographySettings settings={settings} updateSettings={updateSettings} />
 
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
+      <EditorJsonSchemasSetting settings={settings} updateSettings={updateSettings} />
 
       <DiffShowWhitespaceSetting settings={settings} updateSettings={updateSettings} />
 

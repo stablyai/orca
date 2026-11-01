@@ -5,6 +5,14 @@ import { getVisibleEditorTypographySearchEntries } from './editor-typography-sea
 
 export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
   {
+    title: translate('settings.editor.remoteJsonSchemas', 'Download JSON Schemas'),
+    description: translate(
+      'settings.editor.remoteJsonSchemasDescription',
+      'Fetch schemas and known filename mappings from the web for JSON validation and completion. Turn off for offline use. Workspace schemas still work.'
+    ),
+    keywords: ['JSON', 'schema', 'validation', 'offline', 'privacy', 'SchemaStore']
+  },
+  {
     title: translate('auto.components.settings.general.search.ae21e806ce', 'Auto Save Files'),
     description: translate(
       'auto.components.settings.general.search.e9d948d3c3',
