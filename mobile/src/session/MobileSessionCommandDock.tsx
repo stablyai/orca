@@ -3,7 +3,10 @@ import { View } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
-import { resolveTerminalInputMaskedState } from '../terminal/terminal-password-prompt'
+import {
+  reconcileTerminalManualMaskOverride,
+  resolveTerminalInputMaskedState
+} from '../terminal/terminal-password-prompt'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
 import { MobileTerminalPasswordMaskOverlay } from './MobileTerminalPasswordMaskOverlay'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
@@ -47,12 +50,33 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   const autoDetectedPrompt = Boolean(
     activeHandle && controller.terminalPasswordPromptHandles?.has(activeHandle)
   )
+  const rawManualOverride = manualMaskByHandle.get(maskScopeKey)
+  const manualOverride = reconcileTerminalManualMaskOverride({
+    autoDetectedPrompt,
+    manualOverride: rawManualOverride
+  })
+  if (manualOverride !== rawManualOverride) {
+    setManualMaskByHandle((prev) => {
+      const next = new Map(prev)
+      next.delete(maskScopeKey)
+      return next
+    })
+  }
   const inputMasked = resolveTerminalInputMaskedState({
     autoDetectedPrompt,
-    manualOverride: manualMaskByHandle.get(maskScopeKey)
+    manualOverride
   })
   const toggleInputMask = () => {
-    setManualMaskByHandle((prev) => new Map(prev).set(maskScopeKey, !inputMasked))
+    setManualMaskByHandle((prev) => {
+      const next = new Map(prev)
+      const nextMasked = !inputMasked
+      if (!autoDetectedPrompt && !nextMasked) {
+        next.delete(maskScopeKey)
+      } else {
+        next.set(maskScopeKey, nextMasked)
+      }
+      return next
+    })
   }
   if (!sessionCommandDockShown(controller)) {
     return null
@@ -170,6 +194,7 @@ function LiveInputField({
         'Typed text is sent directly to the active terminal'
       )}
       showSoftInputOnFocus
+      secureTextEntry={inputMasked}
       autoCapitalize="none"
       autoCorrect={false}
       spellCheck={false}
