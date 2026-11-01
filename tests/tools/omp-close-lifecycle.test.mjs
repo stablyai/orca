@@ -15,14 +15,14 @@ import {
   createPtyPhysicalExit,
   shutdownLocalPty,
   killAllLocalPtys
-} from '../../src/main/providers/local-pty-termination.ts'
+} from '../../src/main/providers/local-pty/local-pty-termination.ts'
 import {
   ptyProcesses,
   ptyAgentSessionIds,
   ptyPhysicalExits,
   ptyExitDisposables,
   clearPtyState
-} from '../../src/main/providers/local-pty-provider-state.ts'
+} from '../../src/main/providers/local-pty/local-pty-provider-state.ts'
 
 const binary = process.env.ORCA_OMP_PROBE_BINARY
 const externalTool = process.env.ORCA_OMP_PROBE_EXTERNAL_TOOL === '1'

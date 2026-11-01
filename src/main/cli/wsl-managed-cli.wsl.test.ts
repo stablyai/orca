@@ -8,7 +8,7 @@ import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { getManagedWslCliDir } from './wsl-managed-cli'
-import { buildLocalShellReadyWrapperFiles } from '../providers/local-pty-shell-ready-wrapper-fileset'
+import { buildLocalShellReadyWrapperFiles } from '../providers/local-pty/local-pty-shell-ready-wrapper-fileset'
 
 // Explicit opt-in: never require a developer's WSL installation for unit tests.
 const enabled = process.platform === 'win32' && process.env.ORCA_TEST_MANAGED_WSL === '1'
