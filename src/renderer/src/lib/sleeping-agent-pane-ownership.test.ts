@@ -60,4 +60,22 @@ describe('recordPaneIsOwnedByPreservedPane: a pane its host kept asleep', () => 
     expect(recordPaneIsOwnedByPreservedPane(record, legacyState as never)).toBe(true)
     releasePaneResumeHold('tab-1:2', holding)
   })
+
+  it('owns its record while the dispatcher promised the pane a wake on mount', async () => {
+    const { recordPaneIsOwnedByPreservedPane } = await import('./sleeping-agent-pane-ownership')
+    const { markSleepingAgentWakeRequest, takeSleepingAgentWakeRequest } =
+      await import('./sleeping-agent-wake-request-registry')
+    const record = note({ paneKey, tabId: 'tab-1', origin: 'quit' })
+
+    // Dead PTY, inactive worktree: unowned before the promise, owned while the pane owes a wake.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the predicate reads only these four store maps.
+    expect(recordPaneIsOwnedByPreservedPane(record, state as never)).toBe(false)
+    markSleepingAgentWakeRequest(record)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the predicate reads only these four store maps.
+    expect(recordPaneIsOwnedByPreservedPane(record, state as never)).toBe(true)
+    // Consuming the wake at pane mount releases ownership, so a sweep after a dead pane cannot strand the record.
+    takeSleepingAgentWakeRequest(record)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the predicate reads only these four store maps.
+    expect(recordPaneIsOwnedByPreservedPane(record, state as never)).toBe(false)
+  })
 })

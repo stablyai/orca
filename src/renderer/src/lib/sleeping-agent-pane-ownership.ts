@@ -13,6 +13,7 @@ import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { isWorkspaceSleepRecord } from '../../../shared/workspace-sleep'
 import { isPaneResumingInPlace, isPaneSpawnDeferred } from './pane-spawn-deferral-registry'
+import { hasSleepingAgentWakeRequest } from './sleeping-agent-wake-request-registry'
 
 export { getProviderSessionClaimKey }
 
@@ -200,6 +201,14 @@ export function recordPaneIsOwnedByPreservedPane(
     }
     // Main clears gone bindings during in-place resume; the active start, not the binding, proves ownership.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && isPaneResumingInPlace(record.paneKey)) {
+      return true
+    }
+    // A dispatcher wake-on-mount promise is the same ownership proof one step earlier: the pane
+    // will mount and cold-restore this record, so the sweep must not fork a duplicate resume tab.
+    // Unlike the in-place hold above, the wake mark's producer and consumer are build-independent,
+    // and it lapses with the record or when the pane consumes it, so a never-mounting pane cannot
+    // strand the resume forever.
+    if (hasSleepingAgentWakeRequest(record)) {
       return true
     }
     // Scrollback-only leaves without PTY/session IDs can repaint but cannot cold-resume active sessions.

@@ -7,6 +7,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { wakeSleepingAgentsForWorktreeInBackground } from './wake-sleeping-agents-in-background'
+import { hasSleepingAgentWakeRequest } from './sleeping-agent-wake-requests'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -147,12 +148,18 @@ describe('background wake of a pane whose PTY the host still holds', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeDefined()
   })
 
-  it('still resumes once the host inventory shows the PTY exited', async () => {
+  it('resumes in place, not in a duplicate tab, once the host inventory shows the PTY exited', async () => {
     useAppStore.setState(unmountedLivePaneState())
 
-    expect(await wakeAndSettle()).toBe('resumed')
+    // The record's own tab exists, so recovery mounts that tab and its pane cold-restores the
+    // record; the sweep must not queue a second --resume writer in a new tab (it did before,
+    // accumulating one empty duplicate tab per worktree open).
+    expect(await wakeAndSettle()).toBe('empty')
 
-    expect(queuedResumes()).toEqual([SESSION])
+    const state = useAppStore.getState()
+    expect(queuedResumes()).toEqual([])
+    expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeDefined()
+    expect(hasSleepingAgentWakeRequest(state.sleepingAgentSessionsByPaneKey[PANE_KEY]!)).toBe(true)
   })
 
   // #21235: the host re-keyed the live PTY onto a new tab, so the record's pane has no layout.
