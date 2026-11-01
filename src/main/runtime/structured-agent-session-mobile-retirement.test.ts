@@ -113,6 +113,7 @@ describe('host prompt delivery and retirement', () => {
             ]
           ]),
           readStatusState: () => projectStructuredAgentSessionStatusState(items),
+          readChildWork: () => undefined,
           now: () => 42
         })
         feed.subscribe({ id: 'legacy', emit: (event) => legacy.push(event) })

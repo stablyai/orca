@@ -227,6 +227,7 @@ beforeEach(() => {
       ]
     ]),
     readStatusState: () => projectStructuredAgentSessionStatusState(fixture.items),
+    readChildWork: () => undefined,
     now: hostClock
   })
   fixture = {
