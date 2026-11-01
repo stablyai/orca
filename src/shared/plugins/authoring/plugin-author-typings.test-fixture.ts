@@ -9,7 +9,8 @@ export const AUTHOR_TYPINGS_FILES = [
   path.join(RESOURCES, 'types', 'orca-host.d.ts'),
   path.join(RESOURCES, 'types', 'orca-frame.d.ts'),
   path.join(RESOURCES, 'types', 'orca-worker.d.ts'),
-  path.join(RESOURCES, 'types', 'orca-services.d.ts')
+  path.join(RESOURCES, 'types', 'orca-services.d.ts'),
+  path.join(RESOURCES, 'types', 'orca-testing.d.ts')
 ]
 
 // Mirrors the tsconfig `orca plugin types` writes (plugin-type-files.ts).

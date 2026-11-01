@@ -215,14 +215,22 @@ test('adds a task', async () => {
   same edit protocol as Orca.
 - Inspect `tree()` (plain data for snapshots, handlers shown as `[handler]`), `errors` (what the panel
   threw, with its stack, and renders Orca would refuse), `warnings` (props and components Orca would
-  drop) and `persisted`. `emit('theme', ...)`, `setVisible`, `rerender` and `settled` drive the rest;
-  `unmount()` ends the run, running `setup` cleanup.
+  drop) and `persisted` (`plugin`, `workspace`, and the plugin's `storage`). `emit(event, payload)`
+  delivers `theme` or a workspace or agent event, `post(event, payload)` is the worker's
+  `orca.panels.post` (what `plugin.on` hears), and `setVisible`, `rerender` and `settled` drive the
+  rest; `unmount()` ends the run, running `setup` cleanup.
 - `mockHost({ capabilities, results })` stands in for Orca's host. It refuses what Orca refuses, with
   the same error codes: a method panels cannot call, a capability the manifest does not declare
   (capabilities default to the manifest's), bad params, and `shell.openExternal` or `files.saveAs`
   without a press first (each `press` grants one). `results` maps a method to a value or to a function
   of its params, which may throw `hostError(code)`; `calls` and `callsOf(method)` record every call.
   The stationary-control rule for gestures is not simulated.
+- The mock host keeps the plugin's storage, settings and secrets in memory (seed them with
+  `mockHost({ storage, settings, secrets })`, read them with `host.data()`), so `storage`,
+  `settings`, `secrets` and `persist: 'storage'` atoms work under `mount()`, and a write reaches
+  `onDidChange` as in Orca. `requests` stands in for the worker: each `plugin.request` name maps to
+  its answer or a function of the input (which may throw `hostError(code)`); an unlisted name is
+  `unknown_method`. Both follow your `PluginRequests` types.
 
 `orca plugin check [dir]` validates the plugin like `orca plugin validate`, then renders every
 components panel once against `mockHost()` and reports what the panel threw (with `file:line`),

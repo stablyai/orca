@@ -117,6 +117,24 @@ export default function Panel() {
 }
 `
 
+const PANEL_TEST = `
+import { mockHost, mount, assert } from 'orca/testing'
+import Panel from './panel'
+import type { Todo } from './protocol'
+const done: Todo = { id: '1', title: 'x', done: true }
+const host = mockHost({
+  requests: { 'todos.list': () => [done], 'todos.add': ({ title }) => ({ ...done, title }) },
+  storage: { todos: [] },
+  settings: { apiUrl: 'https://example.com' }
+})
+const panel = await mount(Panel, { host })
+await panel.post('todos.changed', { count: 1 })
+await panel.emit('agent.status.changed', { workspaceId: null, paneKey: 'p', state: 'done', receivedAt: 1 })
+// @ts-expect-error posts carry the declared payload
+await panel.post('todos.changed', { count: 'one' })
+assert.deepEqual(panel.persisted.storage, host.data().storage)
+`
+
 describe('author typings', () => {
   it('checks in the host typings generated from the host API table', () => {
     const checkedIn = readFileSync(path.join(REPO_ROOT, PLUGIN_HOST_TYPINGS_FILE), 'utf8')
@@ -130,7 +148,8 @@ describe('author typings', () => {
       'panel/app.ts': FRAME_SCRIPT,
       'main.ts': WORKER_MAIN,
       'src/panel.tsx': COMPONENTS_PANEL,
-      'src/protocol.ts': PROTOCOL
+      'src/protocol.ts': PROTOCOL,
+      'src/panel.test.ts': PANEL_TEST
     })
     expect(authorTypingsDiagnostics(program)).toEqual([])
   })

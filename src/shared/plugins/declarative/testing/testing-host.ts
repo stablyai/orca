@@ -5,26 +5,22 @@ import {
 } from '../../workers/plugin-host-api'
 import { PLUGIN_HOST_API_MAJOR } from '../../workers/plugin-host-api-major'
 
-/** A host API rejection, as plugin code sees it from `host.call`. */
-export type MockHostError = Error & { code: string; retryable: boolean; retryAfterMs?: number }
+import { hostError } from './testing-host-error'
+import {
+  createMockPluginData,
+  type MockPluginDataOptions,
+  type MockPluginDataSnapshot
+} from './testing-plugin-data'
+
+export { hostError, type MockHostError } from './testing-host-error'
 export type MockHostCall = { method: string; params: unknown }
 
-export type MockHostOptions = {
+export type MockHostOptions = MockPluginDataOptions & {
   /** Granted capabilities; defaults to the ones the plugin's orca-plugin.json declares. */
   capabilities?: readonly string[]
-  /** What each method answers: a value, or a function of the params (it may throw `hostError`). */
+  /** What each method answers: a value, or a function of the params (it may throw `hostError`).
+   *  Overrides the built-in storage, settings, secrets and `requests`. */
   results?: Record<string, unknown>
-}
-
-const RETRYABLE = new Set(['rate_limited', 'unavailable', 'timeout', 'conflict'])
-
-/** The error `host.call` rejects with for `code`, e.g. `hostError('rate_limited', 'slow down', 500)`. */
-export function hostError(code: string, message = code, retryAfterMs?: number): MockHostError {
-  return Object.assign(new Error(message), {
-    code,
-    retryable: RETRYABLE.has(code),
-    ...(retryAfterMs === undefined ? {} : { retryAfterMs })
-  })
 }
 
 function isResultFunction(value: unknown): value is (params: unknown) => unknown {
@@ -49,6 +45,10 @@ export type MockHost = {
   grantGesture(): void
   /** Resolves when every call made so far has answered. */
   idle(): Promise<void>
+  /** The plugin's storage, settings and secrets as they are now. */
+  data(): MockPluginDataSnapshot
+  /** Hears each storage or settings write, as Orca tells the plugin's open panels. */
+  onDataChange(listener: (area: 'storage' | 'settings', key: string) => void): () => void
   readonly bridge: {
     api: { major: number; minor: number }
     call(method: string, params?: unknown): Promise<unknown>
@@ -67,6 +67,7 @@ export function createMockHost(
 ): MockHost {
   const capabilities = new Set(options.capabilities ?? declaredCapabilities)
   const results = new Map<string, unknown>(Object.entries(options.results ?? {}))
+  const data = createMockPluginData(options)
   const methods = pluginFrameMethodsFor('panel', true)
   const calls: MockHostCall[] = []
   const pending = new Set<Promise<unknown>>()
@@ -93,11 +94,16 @@ export function createMockHost(
     if (!parsedParams.success) {
       throw hostError('invalid_params', parsedParams.error.issues[0]?.message ?? 'invalid params')
     }
-    if (!results.has(method) && !Object.hasOwn(DEFAULT_RESULTS, method)) {
+    const builtIn = !results.has(method) && data.handles(method)
+    if (!results.has(method) && !builtIn && !Object.hasOwn(DEFAULT_RESULTS, method)) {
       throw hostError('unavailable', `the test configured no result for ${method}`)
     }
     const configured: unknown = results.has(method) ? results.get(method) : DEFAULT_RESULTS[method]
-    const value = isResultFunction(configured) ? await configured(parsedParams.data) : configured
+    const value = builtIn
+      ? await data.answer(method, parsedParams.data)
+      : isResultFunction(configured)
+        ? await configured(parsedParams.data)
+        : configured
     const parsedResult = spec.result.safeParse(value)
     if (!parsedResult.success) {
       // The test's mock is wrong, not the plugin: fail loudly instead of rejecting the call.
@@ -118,6 +124,8 @@ export function createMockHost(
       // Single-use, like a press: an unused grant does not pile up.
       gestures = 1
     },
+    data: () => data.snapshot(),
+    onDataChange: (listener) => data.onChange(listener),
     async idle() {
       while (pending.size > 0) {
         await Promise.allSettled(pending)

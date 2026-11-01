@@ -1,6 +1,16 @@
 // Test kit for components panels: `orca plugin test` runs *.test.ts(x) files in plain Node.
 declare module 'orca/testing' {
-  import type { OrcaEvents, OrcaNode, PanelContext } from 'orca'
+  import type {
+    JsonValue,
+    OrcaEvents,
+    OrcaNode,
+    PanelContext,
+    PluginPanelEvents,
+    PluginRequestInput,
+    PluginRequestOutput,
+    PluginRequests,
+    Undeclared
+  } from 'orca'
 
   /** One element of the drawn panel. Actions take it, or a query that finds it. */
   export type TestElement = {
@@ -39,12 +49,32 @@ declare module 'orca/testing' {
     readonly calls: readonly { method: string; params: unknown }[]
     callsOf(method: string): unknown[]
     respond(method: string, result: unknown): void
+    /** The plugin's storage, settings and secrets as they are now. */
+    data(): {
+      storage: Record<string, unknown>
+      settings: Record<string, unknown>
+      secrets: Record<string, unknown>
+    }
   }
+  /** A stand-in for the plugin's worker: each `plugin.request` name's answer, or a function of
+   *  its input (it may throw `hostError(...)`). An unlisted name rejects with `unknown_method`. */
+  export type MockRequests = {
+    [K in keyof PluginRequests]?:
+      | PluginRequestOutput<K>
+      | ((input: PluginRequestInput<K>) => PluginRequestOutput<K> | Promise<PluginRequestOutput<K>>)
+  } & Record<string, unknown>
   export type MockHostOptions = {
     /** Granted capabilities; defaults to those the plugin's orca-plugin.json declares. */
     capabilities?: readonly string[]
-    /** Each method's answer: a value, or a function of the params that may throw `hostError(...)`. */
+    /** Each method's answer: a value, or a function of the params that may throw `hostError(...)`.
+     *  Overrides the built-in storage, settings, secrets and `requests`. */
     results?: Record<string, unknown>
+    requests?: MockRequests
+    /** What the plugin's storage, settings and secrets hold before the panel runs. Writes land
+     *  here, and tell the panel's `onDidChange` listeners and `persist: 'storage'` atoms. */
+    storage?: Record<string, JsonValue>
+    settings?: Record<string, JsonValue>
+    secrets?: Record<string, string>
   }
   /**
    * A stand-in Orca host that refuses what Orca refuses, with the same codes: a missing
@@ -76,8 +106,12 @@ declare module 'orca/testing' {
     readonly errors: readonly PanelIssue[]
     /** Props and components Orca would drop, as Orca would warn. */
     readonly warnings: readonly string[]
-    /** What persisted atoms hold now, by scope and key. */
-    readonly persisted: { plugin: Record<string, unknown>; workspace: Record<string, unknown> }
+    /** What persisted atoms hold now, by scope and key; `storage` is the plugin's storage. */
+    readonly persisted: {
+      plugin: Record<string, unknown>
+      workspace: Record<string, unknown>
+      storage: Record<string, unknown>
+    }
     /** The innermost match, or null. */
     find(query: TestQuery): TestElement | null
     findAll(query: TestQuery): TestElement[]
@@ -96,7 +130,14 @@ declare module 'orca/testing' {
     select(target: Target, value: string): Promise<void>
     /** What Orca shows in an Input, Switch or Select. */
     valueOf(target: Target): unknown
+    /** An Orca event: `theme`, or a workspace or agent event the panel subscribed to. */
     emit<E extends keyof OrcaEvents>(event: E, payload: OrcaEvents[E]): Promise<void>
+    /** What the plugin's worker posts with `orca.panels.post`; `plugin.on` handlers hear it. */
+    post<K extends keyof PluginPanelEvents>(event: K, payload: PluginPanelEvents[K]): Promise<void>
+    post<N extends string>(
+      event: Undeclared<N, PluginPanelEvents>,
+      payload?: JsonValue
+    ): Promise<void>
     setVisible(visible: boolean): Promise<void>
     rerender(): Promise<void>
     settled(): Promise<void>
