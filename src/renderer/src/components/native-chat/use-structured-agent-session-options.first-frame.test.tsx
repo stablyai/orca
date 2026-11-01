@@ -438,7 +438,10 @@ describe('a new chat picker’s first frame', () => {
         mocks.call.mock.calls.some(
           ([, method, params]) =>
             method === 'agentSession.modelCatalog' &&
-            (params as { waitForListing?: boolean }).waitForListing
+            typeof params === 'object' &&
+            params !== null &&
+            'waitForListing' in params &&
+            params.waitForListing === true
         )
       ).toBe(true)
     )
