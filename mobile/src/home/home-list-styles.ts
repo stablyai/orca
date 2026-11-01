@@ -56,5 +56,5 @@ export const homeListStyles = themedStyleSheet(() => ({
     minHeight: 52,
     paddingHorizontal: ROW_LEADING_PADDING
   },
-  actionLabel: { fontSize: 17, color: colors.accentBlue }
+  actionLabel: { flex: 1, minWidth: 0, fontSize: 17, color: colors.accentBlue }
 }))
