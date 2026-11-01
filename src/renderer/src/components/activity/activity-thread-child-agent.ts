@@ -42,7 +42,7 @@ function firstReportedTerminalHandle(thread: ChildAgentClassifiableThread): stri
   return undefined
 }
 
-/** Reuse dashboard lineage classification: the newest still-resolving parent wins across history. Orphans and cycles remain top-level rather than disappearing behind child filters. A live child stays top-level unless a live ancestor already represents its work: coordinators end their turn while workers run, and running work must keep a row. */
+/** Reuse dashboard lineage classification: the newest still-resolving parent wins across history. Orphans and cycles remain top-level rather than disappearing behind child filters. A live child is never hidden, whatever its ancestors are doing: a row's visibility depends only on that chat's own state. */
 export function collectHiddenChildAgentPaneKeys(
   threads: readonly ChildAgentClassifiableThread[]
 ): Set<string> {
@@ -80,30 +80,13 @@ export function collectHiddenChildAgentPaneKeys(
     return base
   })
 
-  const tree = buildAgentRowLineageTree(rows)
-  const livePaneKeys = new Set<string>()
-  for (const thread of threads) {
-    if (thread.currentAgentState) {
-      livePaneKeys.add(thread.paneKey)
-    }
-  }
+  const livePaneKeys = new Set(
+    threads.filter((thread) => thread.currentAgentState).map((thread) => thread.paneKey)
+  )
   const hidden = new Set<string>()
-  const visited = new Set<string>()
-  const pending = tree.rootRows.map((row) => ({
-    paneKey: row.paneKey,
-    liveAncestor: livePaneKeys.has(row.paneKey)
-  }))
-  for (let next = pending.pop(); next; next = pending.pop()) {
-    for (const child of tree.childrenByParentPaneKey.get(next.paneKey) ?? []) {
-      if (visited.has(child.paneKey)) {
-        continue
-      }
-      visited.add(child.paneKey)
-      const live = livePaneKeys.has(child.paneKey)
-      if (next.liveAncestor || !live) {
-        hidden.add(child.paneKey)
-      }
-      pending.push({ paneKey: child.paneKey, liveAncestor: next.liveAncestor || live })
+  for (const paneKey of buildAgentRowLineageTree(rows).childPaneKeys) {
+    if (!livePaneKeys.has(paneKey)) {
+      hidden.add(paneKey)
     }
   }
   return hidden

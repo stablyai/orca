@@ -279,6 +279,7 @@ import {
     it('classifies a thread whose parent pane is listed as a child', () => {
       const parent = makeTestThread(PANE_KEY)
       const child = makeTestThread(PANE_KEY_2, {
+        currentAgentState: null,
         currentAgentEntry: makeTestEntry(PANE_KEY_2, {
           orchestration: { parentPaneKey: PANE_KEY, taskId: 'task-1', dispatchId: 'ctx-1' }
         })
@@ -309,6 +310,7 @@ import {
         currentAgentEntry: makeTestEntry(PANE_KEY, { terminalHandle: 'terminal-coord' })
       })
       const worker = makeTestThread(PANE_KEY_2, {
+        currentAgentState: null,
         currentAgentEntry: makeTestEntry(PANE_KEY_2, {
           terminalHandle: 'terminal-worker',
           orchestration: {
@@ -341,6 +343,7 @@ import {
         orchestration: { parentPaneKey: PANE_KEY, taskId: 'task-1', dispatchId: 'ctx-1' }
       })
       const child = makeTestThread(PANE_KEY_2, {
+        currentAgentState: null,
         currentAgentEntry: makeTestEntry(PANE_KEY_2),
         events: [makeEventFor(childEntry)]
       })
@@ -350,11 +353,13 @@ import {
     it('classifies a grandchild chained through a listed child', () => {
       const root = makeTestThread(PANE_KEY)
       const child = makeTestThread(PANE_KEY_2, {
+        currentAgentState: null,
         currentAgentEntry: makeTestEntry(PANE_KEY_2, {
           orchestration: { parentPaneKey: PANE_KEY, taskId: 'task-1', dispatchId: 'ctx-1' }
         })
       })
       const grandchild = makeTestThread(PANE_KEY_3, {
+        currentAgentState: null,
         currentAgentEntry: makeTestEntry(PANE_KEY_3, {
           orchestration: { parentPaneKey: PANE_KEY_2, taskId: 'task-2', dispatchId: 'ctx-2' }
         })
@@ -380,20 +385,18 @@ import {
       )
     })
 
-    it('hides live work beneath a listed live worker of a finished coordinator', () => {
-      const root = makeTestThread(PANE_KEY, { currentAgentState: null })
-      const child = makeTestThread(PANE_KEY_2, {
-        currentAgentState: 'blocked',
-        currentAgentEntry: makeTestEntry(PANE_KEY_2, {
-          orchestration: { parentPaneKey: PANE_KEY, taskId: 'task-1', dispatchId: 'ctx-1' }
+    it('keeps live workers listed while their coordinator resumes its turn', () => {
+      const workerOf = (paneKey: string, overrides: Partial<AgentPaneThread>) =>
+        makeTestThread(paneKey, {
+          currentAgentEntry: makeTestEntry(paneKey, {
+            orchestration: { parentPaneKey: PANE_KEY, taskId: paneKey, dispatchId: paneKey }
+          }),
+          ...overrides
         })
-      })
-      const grandchild = makeTestThread(PANE_KEY_3, {
-        currentAgentEntry: makeTestEntry(PANE_KEY_3, {
-          orchestration: { parentPaneKey: PANE_KEY_2, taskId: 'task-2', dispatchId: 'ctx-2' }
-        })
-      })
-      expect(collectHiddenChildAgentPaneKeys([root, child, grandchild])).toEqual(
+      const coordinator = makeTestThread(PANE_KEY, { currentAgentState: 'working' })
+      const blocked = workerOf(PANE_KEY_2, { currentAgentState: 'blocked' })
+      const finished = workerOf(PANE_KEY_3, { currentAgentState: null })
+      expect(collectHiddenChildAgentPaneKeys([coordinator, blocked, finished])).toEqual(
         new Set([PANE_KEY_3])
       )
     })

@@ -252,7 +252,7 @@ export function useAgentPaneThreads(args: {
       ) {
         return false
       }
-      // Why: child agents (e.g. dispatched orchestration workers) are hidden by default to keep top-level agent views focused on root tasks; live children without a live ancestor stay listed.
+      // Why: child agents (e.g. dispatched orchestration workers) are hidden by default to keep top-level agent views focused on root tasks; a live child always keeps its own row.
       if (
         !showChildAgents &&
         hiddenChildAgentPaneKeys.has(thread.paneKey) &&
