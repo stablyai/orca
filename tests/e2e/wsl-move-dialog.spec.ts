@@ -83,7 +83,7 @@ async function launch(
     inheritedEnv: cleanEnv,
     launchEnv: {},
     extraEnv: {
-      ...(internalGate ? { [WSL_HOSTS_INTERNAL_GATE_ENV]: '1' } : {}),
+      [WSL_HOSTS_INTERNAL_GATE_ENV]: internalGate ? '1' : '0',
       ORCA_E2E_FAKE_WSL_HOSTS: JSON.stringify({
         distros: [{ name: DISTRO, state: 'stopped', version: 2 }],
         pairingCode: 'unused'

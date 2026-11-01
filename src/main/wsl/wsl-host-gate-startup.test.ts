@@ -22,7 +22,7 @@ const STABLE = '1.4.2'
 describe('WSL hosts gate startup promotion', () => {
   let userDataPath: string
   beforeEach(() => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
+    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '0')
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-wsl-gate-'))
   })
   afterEach(() => {

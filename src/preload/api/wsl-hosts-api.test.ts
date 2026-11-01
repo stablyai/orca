@@ -5,10 +5,17 @@ vi.mock('electron', () => ({ ipcRenderer: { invoke: vi.fn(), on: vi.fn() } }))
 import { getWslHostsApi } from './wsl-hosts-api'
 
 describe('WSL hosts preload API', () => {
+  it('is present on Windows by default, with no gate env', () => {
+    expect(getWslHostsApi({}, 'win32', [])).toBeDefined()
+    expect(getWslHostsApi({}, 'darwin', [])).toBeUndefined()
+  })
+
   it('is absent on Windows and under the e2e fake while the internal gate is closed', () => {
-    expect(getWslHostsApi({}, 'win32', [])).toBeUndefined()
-    expect(getWslHostsApi({ ORCA_INTERNAL_WSL_HOSTS: 'true' }, 'win32', [])).toBeUndefined()
-    expect(getWslHostsApi({ ORCA_E2E_FAKE_WSL_HOSTS: '{}' }, 'darwin', [])).toBeUndefined()
+    const closed = { ORCA_INTERNAL_WSL_HOSTS: '0' }
+    expect(getWslHostsApi(closed, 'win32', [])).toBeUndefined()
+    expect(
+      getWslHostsApi({ ...closed, ORCA_E2E_FAKE_WSL_HOSTS: '{}' }, 'linux', [])
+    ).toBeUndefined()
   })
 
   it('is present behind the open gate only where WSL hosts can run', () => {
@@ -21,10 +28,13 @@ describe('WSL hosts preload API', () => {
 
   it('is present behind a closed gate when main stamped serve-only, still only where hosts run', () => {
     const argv = ['--orca-wsl-hosts-serve-only']
-    expect(getWslHostsApi({}, 'win32', argv)).toBeDefined()
-    expect(getWslHostsApi({ ORCA_E2E_FAKE_WSL_HOSTS: '{}' }, 'linux', argv)).toBeDefined()
-    expect(getWslHostsApi({}, 'darwin', argv)).toBeUndefined()
-    expect(getWslHostsApi({}, 'win32', [])).toBeUndefined()
+    const closed = { ORCA_INTERNAL_WSL_HOSTS: '0' }
+    expect(getWslHostsApi(closed, 'win32', argv)).toBeDefined()
+    expect(
+      getWslHostsApi({ ...closed, ORCA_E2E_FAKE_WSL_HOSTS: '{}' }, 'linux', argv)
+    ).toBeDefined()
+    expect(getWslHostsApi(closed, 'darwin', argv)).toBeUndefined()
+    expect(getWslHostsApi(closed, 'win32', [])).toBeUndefined()
   })
 
   it('is absent behind an open gate a remote policy blocked, unless main stamped serve-only', () => {
