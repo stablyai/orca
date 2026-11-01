@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import { normalizeCommandPositionals, parseArgs, specPaths } from '../args'
 import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
 import { RuntimeRpcFailureError } from '../runtime/types'
+import type { PluginShotActResult } from '../../shared/plugins/view/plugin-shot-acts'
 import { PLUGIN_VIEW_HANDLERS, formatPluginShot, type PluginShotReply } from './plugin-view'
 
 // A 1x1 PNG.
@@ -62,6 +63,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  process.exitCode = undefined
   delete process.env.ORCA_CLI_CWD
   await rm(cwd, { recursive: true, force: true })
 })
@@ -221,5 +223,58 @@ describe('orca plugin shot', () => {
         '  error: src/panel.tsx:4 boom'
       ].join('\n')
     )
+  })
+
+  it('writes beside the plugin when run inside its folder', async () => {
+    const plugin = join(cwd, 'todos')
+    await mkdir(join(plugin, 'src'), { recursive: true })
+    await writeFile(join(plugin, 'orca-plugin.json'), '{}')
+    await PLUGIN_VIEW_HANDLERS['plugin shot'](
+      context(['plugin', 'shot', 'acme.todos'], vi.fn().mockResolvedValue(shotReply()), {
+        cwd: join(plugin, 'src')
+      })
+    )
+    expect(JSON.parse(stdout.join('')).result.path).toBe(
+      join(plugin, '.orca', 'shots', 'acme.todos-todos.png')
+    )
+  })
+
+  it('sends --act, reports each act, and exits 1 when one failed', async () => {
+    const actions: PluginShotActResult[] = [
+      { ok: true },
+      { ok: false, error: 'press: the Button is disabled' }
+    ]
+    const call = vi.fn().mockResolvedValue(shotReply({ actions }))
+    const acts = '[{"type":{"label":"New task"},"text":"Ship"},{"press":{"text":"Add"}}]'
+    await PLUGIN_VIEW_HANDLERS['plugin shot'](
+      context(['plugin', 'shot', 'acme.todos', '--act', acts], call, { cwd })
+    )
+    expect(call).toHaveBeenCalledWith(
+      'plugins.shot',
+      { pluginKey: 'acme.todos', acts: JSON.parse(acts) },
+      { timeoutMs: 40_000 }
+    )
+    expect(JSON.parse(stdout.join('')).result.actions).toEqual(actions)
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('checks --act before reaching the host, and refuses a host that ignored it', async () => {
+    const call = vi.fn().mockResolvedValue(shotReply())
+    await expect(
+      PLUGIN_VIEW_HANDLERS['plugin shot'](
+        context(['plugin', 'shot', 'acme.todos', '--act', '[{"click":{}}]'], call, { cwd })
+      )
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringMatching(/^--act: /)
+    })
+    expect(call).not.toHaveBeenCalled()
+    await expect(
+      PLUGIN_VIEW_HANDLERS['plugin shot'](
+        context(['plugin', 'shot', 'acme.todos', '--act', '{"press":{"text":"Add"}}'], call, {
+          cwd
+        })
+      )
+    ).rejects.toMatchObject({ code: 'runtime_unsupported' })
   })
 })

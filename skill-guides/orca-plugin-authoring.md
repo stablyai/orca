@@ -39,7 +39,7 @@ Use the lowest `execution` profile that covers the request; it decides what the 
 | A sidebar panel needing its own HTML, canvas or libraries | `sandboxed-ui`; `panels` entry `.html` (or `.ts`/`.tsx`)            | `--template panel`                               |
 | A palette command or shortcut for a built-in Orca action  | `declarative`; `commands[].action`, `keybindings`                   | hand-written; fields in `references/manifest.md` |
 | A command that runs code, storage, secrets, terminal text | `trusted-worker`; `main`, `commands` (no `action`), `capabilities`  | example `hello-orca`                             |
-| A panel backed by its own Node code, storage or settings  | `trusted-worker`; `main`, a panel, `capabilities`, `settings`       | example `hello-worker-panel`                     |
+| A panel backed by its own Node code, storage or settings  | `trusted-worker`; `main`, a panel, `capabilities`, `settings`       | `--template worker-panel`                        |
 | Settings the user edits in Orca's Settings                | `contributes.settings` and `settings:own`                           | `references/manifest.md`                         |
 | Reacting to workspace or agent status changes             | `trusted-worker`; `main`, `contributes.events`, `*:read` capability | example `hello-orca`                             |
 | A virtual machine environment recipe                      | `declarative`; `contributes.vmRecipes`                              | hand-written; fields in `references/manifest.md` |
@@ -67,10 +67,12 @@ with `terminal:send` can.
    Consent exits `3`: see [Approval](#approval).
 3. Edit and save. Each save prints `reloaded`, a `check` of what each panel drew or threw, and a
    `shot` whose `path` is a PNG of the panel exactly as Orca draws it: read the image and fix
-   what looks wrong. Fix every `log` error (`[frame] <file>:<line>`) and `check` issue.
+   what looks wrong. Fix every `log` error (`[frame] <file>:<line>`) and `check` issue. To see a
+   state behind input, `ORCA plugin shot <plugin-key> --act '<json>'` types and presses first.
 4. `ORCA plugin test <dir> --json` after changes, and `ORCA plugin check <dir> --json` before you
    finish (it runs the worker; add states in `src/panel.check.ts`, see `references/workflow.md`).
-   For a worker, `ORCA plugin dev emit . <event> --data '{...}'` fires a test event.
+   For a worker, `ORCA plugin dev emit . <event> --data '{...}'` fires a test event and
+   `ORCA plugin dev request . <name> --data '{...}'` calls an `orca.panels.handle` handler.
 5. To show the user, `ORCA plugin open <plugin-key> --panel <id>`. Ctrl-C stops the watch.
 
 ## Ship
@@ -105,6 +107,7 @@ fingerprint Orca did not give you. New capabilities or changed commands print a 
 - No network: requests outside the plugin's files fail. Ship assets and load them relatively.
 - `shell.openExternal` and `files.saveAs` need a press on a settled control; never call on load.
 - A worker's `main` must `export default function activate(orca)`.
+- A worker save restarts the worker and drops its in-memory state; keep counters and caches you need across saves in `orca.storage`.
 - A plugin holds at most 2,000 files and 50 MiB; each transpiled file 1 MiB.
 
 ## Conditional references

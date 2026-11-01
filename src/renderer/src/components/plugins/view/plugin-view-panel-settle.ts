@@ -75,3 +75,29 @@ export function measurePluginPanelGuest(
   const { x, y, width, height } = guest.getBoundingClientRect()
   return width > 0 && height > 0 ? { x, y, width, height } : null
 }
+
+// Why these: a handler that awaits a host call draws well within 1s, a burst of renders ends within
+// a quiet 150ms, and 3s caps an act whose panel keeps re-rendering.
+const ACT_FIRST_DRAW_MS = 1_000
+const ACT_QUIET_MS = 150
+export const PLUGIN_PANEL_ACT_MAX_SETTLE_MS = 3_000
+
+/** After an act: waits for the trees it causes to stop coming, then for them to paint. */
+export async function settlePluginPanelAfterAct(onDraw: (listener: () => void) => () => void) {
+  await new Promise<void>((resolve) => {
+    let quiet: ReturnType<typeof setTimeout> | undefined
+    const finish = (): void => {
+      clearTimeout(quiet)
+      clearTimeout(cap)
+      unsubscribe()
+      resolve()
+    }
+    const cap = setTimeout(finish, PLUGIN_PANEL_ACT_MAX_SETTLE_MS)
+    quiet = setTimeout(finish, ACT_FIRST_DRAW_MS)
+    const unsubscribe = onDraw(() => {
+      clearTimeout(quiet)
+      quiet = setTimeout(finish, ACT_QUIET_MS)
+    })
+  })
+  await nextPaintedFrames()
+}

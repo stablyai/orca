@@ -233,4 +233,26 @@ describe('plugins.shot on the desktop', () => {
       'the right sidebar is closed'
     )
   })
+
+  it('passes --act through and returns its results; refuses on screen and for html', async () => {
+    const acts = [{ press: { text: 'Add' } }]
+    relay.requestPluginViewFromRenderer.mockImplementation(
+      answer({ ...DRAWN, panel: { ...DRAWN.panel!, actions: [{ ok: true }] } })
+    )
+    const shot = await createPluginViewDesktop(deps()).shot({ pluginKey: KEY, acts })
+    expect(shot).toMatchObject({ actions: [{ ok: true }] })
+    const [, body, timeoutMs] = relay.requestPluginViewFromRenderer.mock.calls[0] ?? []
+    expect(body).toMatchObject({ capture: { acts } })
+    expect(timeoutMs).toBe(24_000)
+
+    relay.requestPluginViewFromRenderer.mockClear()
+    await expect(
+      createPluginViewDesktop(deps({ windowShown: () => true })).shot({ pluginKey: KEY, acts })
+    ).rejects.toMatchObject({
+      message:
+        "shot --act needs Orca's window hidden or minimized, so it never clicks under the user",
+      data: { reason: 'window_shown' }
+    })
+    expect(relay.requestPluginViewFromRenderer).not.toHaveBeenCalled()
+  })
 })

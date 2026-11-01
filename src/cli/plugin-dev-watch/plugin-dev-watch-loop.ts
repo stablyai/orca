@@ -6,6 +6,7 @@ import type {
   PluginDevWatchStatus
 } from './plugin-dev-watch-events'
 import { PluginLogFollower } from './plugin-log-follower'
+import { PluginFrameLogDedupe, type PluginDevWatchLogLine } from './plugin-frame-log-dedupe'
 import {
   createPluginDevWatchCheckQueue,
   type PluginDevWatchCheckResult
@@ -177,13 +178,17 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
       : null
   afterLoad?.request()
   const follower = new PluginLogFollower()
+  const dedupe = new PluginFrameLogDedupe()
+  const emitLogs = (lines: readonly PluginDevWatchLogLine[]): void => {
+    for (const line of lines) {
+      emit({ type: 'log', pluginKey, ...line })
+    }
+  }
   let otherKeys: ReadonlySet<string> | null = null
   let lastWarning: string | null = null
 
   const pollLogs = async (): Promise<void> => {
-    for (const line of follower.take(await host.logs(pluginKey, follower.cursor))) {
-      emit({ type: 'log', pluginKey, ...line })
-    }
+    emitLogs(dedupe.take(follower.take(await host.logs(pluginKey, follower.cursor))))
   }
 
   const pollStatus = async (): Promise<void> => {
@@ -196,6 +201,7 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
         : 0
     const error = next.error ? { error: next.error } : {}
     if (changes > 0) {
+      emitLogs(dedupe.flush())
       emit({ type: 'reloaded', pluginKey, changes, status: next.status, ...error })
     } else if (next.status !== snapshot.status || next.error !== snapshot.error) {
       emit({
@@ -251,6 +257,7 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
     }
     // A check or shot that is still running reports before the unload line.
     await afterLoad?.idle()
+    emitLogs(dedupe.flush())
     if (!loaded.added) {
       emit({ type: 'unloaded', pluginKey, path: loaded.path, removed: false })
       return 0

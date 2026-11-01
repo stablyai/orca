@@ -4,6 +4,8 @@
  * renderer state changes: nothing here shows, raises or focuses a window.
  */
 
+import type { PluginShotAct, PluginShotActResult } from './plugin-shot-acts'
+
 export const PLUGIN_VIEW_REQUEST_CHANNEL = 'plugins:viewRequest'
 export const PLUGIN_VIEW_REPLY_CHANNEL = 'plugins:viewReply'
 
@@ -18,6 +20,8 @@ export type PluginViewCapture = {
   colorScheme?: PluginViewColorScheme
   /** Capture only if the panel is already the open right-sidebar tab; never open or switch. */
   ifShown?: boolean
+  /** Run on the drawn components panel, in order, before it is measured. */
+  acts?: PluginShotAct[]
   timeoutMs: number
 }
 
@@ -42,6 +46,8 @@ export type PluginViewDrawnPanel = {
   themeApplied: boolean
   /** False when the wait timed out and the rect shows whatever was drawn by then. */
   settled: boolean
+  /** One result per requested act. */
+  actions?: PluginShotActResult[]
 }
 
 export type PluginViewReply =

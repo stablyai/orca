@@ -16,6 +16,7 @@ import { usePluginDeclarativeTree } from './use-plugin-declarative-tree'
 import { usePluginDeclarativeState } from './use-plugin-declarative-state'
 import { useReportDeclarativePanelDraw } from './use-plugin-panel-draw-report'
 import { usePluginDeclarativeImages } from './use-plugin-declarative-images'
+import { usePluginPanelActDriver } from './plugin-panel-act-driver'
 import { useAppStore } from '@/store'
 import {
   PluginDeclarativeIssueNotice,
@@ -129,6 +130,7 @@ export function PluginDeclarativePanel({
     },
     [admitPress, revision, sendToGuest, shownDocument]
   )
+  usePluginPanelActDriver(tabKey, rendered?.tree ?? null, onEvent)
   // A click on Orca's own Link (or a Markdown link): no frame-activation check, but its control
   // must have settled, and main keeps the URL allowlist and rate limit.
   const onOpenLink = (href: string, gestureId: string): void => {

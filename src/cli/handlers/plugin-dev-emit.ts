@@ -9,7 +9,8 @@ export type PluginDevEmitReply = {
   delivered: { worker: boolean; panels: number }
 }
 
-function parseEventData(ctx: HandlerContext): unknown {
+/** `--data` as JSON; shared by `dev emit` and `dev request`. */
+export function parseDataFlag(ctx: HandlerContext): unknown {
   const raw = stringFlag(ctx, 'data')
   if (raw === undefined) {
     return undefined
@@ -31,7 +32,7 @@ export const PLUGIN_DEV_EMIT_HANDLERS: Record<string, CommandHandler> = {
     const result = await callPlugins<PluginDevEmitReply>(ctx, 'plugins.devEmit', {
       ...target,
       event,
-      payload: parseEventData(ctx)
+      payload: parseDataFlag(ctx)
     })
     printPluginResult(
       ctx,

@@ -26,20 +26,22 @@ export const PLUGIN_VIEW_COMMAND_SPECS: CommandSpec[] = [
     path: ['plugin', 'shot'],
     summary: 'Save a PNG of a plugin panel exactly as Orca draws it, to look at what you built',
     usage:
-      'orca plugin shot <plugin-key> [--panel <id>] [--theme <light|dark>] [--width <px>] [--out <file.png>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'plugin', 'panel', 'theme', 'width', 'out'],
+      "orca plugin shot <plugin-key> [--panel <id>] [--theme <light|dark>] [--width <px>] [--act '<json>'] [--out <file.png>] [--json]",
+    allowedFlags: [...GLOBAL_FLAGS, 'plugin', 'panel', 'theme', 'width', 'act', 'out'],
     positionalArgs: ['plugin'],
     notes: [
       'Shows the panel like `orca plugin open`, waits until it has drawn (a components panel: its first tree from the current code; an html panel: its page loaded), then captures exactly the panel, with the window hidden or behind others. It never shows, raises or focuses the window, and it does not leave Settings or another full-page view.',
-      'Writes <cwd>/.orca/shots/<plugin-key>-<panel>.png unless --out names a file; the image is in CSS pixels. Read the image file to see the panel.',
+      'Writes .orca/shots/<plugin-key>-<panel>.png unless --out names a file: in the plugin folder when run inside one (the nearest orca-plugin.json up to the repository root, as `dev watch --shot` does), else in <cwd>. The image is in CSS pixels. Read the image file to see the panel.',
       '--width sets the panel width for this capture only. --theme paints Orca light or dark for this capture only, and only while its window is hidden or minimized, then puts your theme back; the setting never changes. With the window on screen it captures in the current theme rather than repaint the app in front of you. The result says which theme it shows, whether --theme took effect (themeApplied) and why not (themeReason).',
-      '--json prints { path, width, height, theme, themeApplied, themeReason?, settled, errors }. errors lists the error banner the panel shows and the errors it logged (`orca plugin logs`) during the capture; settled is false when it had not finished drawing after 15s.',
+      '--act runs input on a components panel before the capture, in the test kit\'s words: a JSON list (at most 20) of {"press":Q}, {"type":Q,"text":"…","replace"?:true,"submit"?:true}, {"select":Q,"value":"…"} and {"toggle":Q}, where Q matches like the kit\'s queries ({"text"|"label"|"testId"|"type"|"role":"…"}). Each act goes through Orca\'s own control and waits for the panel to redraw. It acts only on this panel and only while Orca\'s window is hidden or minimized; html panels refuse it. Acts are not a person\'s input: a Link\'s href stays unopened and gesture-only calls (shell.openExternal, files.saveAs) are refused. The first failed act stops the rest; the PNG shows the panel at that point and the command exits 1.',
+      '--json prints { path, width, height, theme, themeApplied, themeReason?, settled, errors, actions? }; actions has one { ok, error? } per act. errors lists the error banner the panel shows and the errors it logged (`orca plugin logs`) during the capture; settled is false when it had not finished drawing after 15s.',
       'Desktop app only: a server with no window (`orca serve`) refuses it. With --environment the PNG (at most 5 MiB; it shows only the plugin panel) comes back to this machine and is written here.'
     ],
     examples: [
       'orca plugin shot acme.todos',
       'orca plugin shot acme.todos --theme light --width 360 --out ./todos-light.png',
-      'orca plugin shot acme.todos --panel stats --json'
+      'orca plugin shot acme.todos --panel stats --json',
+      'orca plugin shot acme.todos --act \'[{"type":{"label":"New task"},"text":"Ship","submit":true},{"toggle":{"label":"Hide done"}}]\''
     ]
   }
 ]

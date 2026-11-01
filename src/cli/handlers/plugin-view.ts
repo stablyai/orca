@@ -8,7 +8,13 @@ import {
   PLUGIN_SHOT_MAX_WIDTH,
   PLUGIN_SHOT_MIN_WIDTH
 } from '../../shared/rpc-contract/plugins-params'
+import {
+  parsePluginShotActs,
+  type PluginShotAct,
+  type PluginShotActResult
+} from '../../shared/plugins/view/plugin-shot-acts'
 import { callPlugins, requirePluginKey, resolveHostPluginPath, stringFlag } from './plugin-runtime'
+import { defaultPluginShotsDir } from './plugin-shot-default-dir'
 
 /** What `plugins.shot` answers; `png` is base64. */
 export type PluginShotReply = {
@@ -25,6 +31,8 @@ export type PluginShotReply = {
   themeReason?: string
   settled: boolean
   errors: string[]
+  /** Present when `acts` were sent; absent from hosts that predate --act. */
+  actions?: PluginShotActResult[]
 }
 
 /** `ifShown` and the panel was not on screen: the host opened, switched and captured nothing. */
@@ -41,6 +49,7 @@ export type PluginShotSaved = {
   themeReason?: string
   settled: boolean
   errors: string[]
+  actions?: PluginShotActResult[]
 }
 
 type PluginOpenReply =
@@ -49,6 +58,8 @@ type PluginOpenReply =
 
 // Why above the host's 20s: the host waits up to 15s for the panel to draw, then captures.
 const SHOT_RPC_TIMEOUT_MS = 30_000
+// Above the host's 4s per act.
+const SHOT_RPC_ACT_TIMEOUT_MS = 5_000
 
 /** `.orca/` ignores itself in Git, so shots next to a plugin never get committed. */
 export function defaultPluginShotPath(dir: string, pluginKey: string, panelId: string): string {
@@ -90,6 +101,7 @@ type PluginShotRequest = {
   panelId?: string
   colorScheme?: 'light' | 'dark'
   width?: number
+  acts?: PluginShotAct[]
   outFor: (panelId: string) => string
 }
 
@@ -102,10 +114,16 @@ async function shoot(
     ctx,
     'plugins.shot',
     params,
-    { timeoutMs: SHOT_RPC_TIMEOUT_MS }
+    { timeoutMs: SHOT_RPC_TIMEOUT_MS + (params.acts?.length ?? 0) * SHOT_RPC_ACT_TIMEOUT_MS }
   )
   if ('notShown' in reply) {
     return { pluginKey: reply.pluginKey, panelId: reply.panelId, notShown: reply.notShown }
+  }
+  if (params.acts && !reply.actions) {
+    throw new RuntimeClientError(
+      'runtime_unsupported',
+      'This Orca does not run shot --act (it captured without acting); update Orca, then run it again.'
+    )
   }
   const path = outFor(reply.panelId)
   await mkdir(dirname(path), { recursive: true })
@@ -120,7 +138,8 @@ async function shoot(
     themeApplied: reply.themeApplied,
     ...(reply.themeReason ? { themeReason: reply.themeReason } : {}),
     settled: reply.settled,
-    errors: reply.errors
+    errors: reply.errors,
+    ...(reply.actions ? { actions: reply.actions } : {})
   }
 }
 
@@ -155,8 +174,23 @@ export function formatPluginShot(shot: PluginShotSaved, requestedTheme?: string)
     ...(shot.settled
       ? []
       : ['  note: the panel had not finished drawing; this is what it showed.']),
+    ...(shot.actions ?? []).map((action, index) =>
+      action.ok ? `  act ${index + 1}: ok` : `  act ${index + 1} failed: ${action.error}`
+    ),
     ...shot.errors.map((error) => `  error: ${error}`)
   ].join('\n')
+}
+
+function parseActs(ctx: HandlerContext): PluginShotAct[] | undefined {
+  const json = stringFlag(ctx, 'act')
+  if (json === undefined) {
+    return undefined
+  }
+  const parsed = parsePluginShotActs(json)
+  if (!parsed.ok) {
+    throw new RuntimeClientError('invalid_argument', `--act: ${parsed.error}.`)
+  }
+  return parsed.acts
 }
 
 export const PLUGIN_VIEW_HANDLERS: Record<string, CommandHandler> = {
@@ -185,16 +219,22 @@ export const PLUGIN_VIEW_HANDLERS: Record<string, CommandHandler> = {
     const colorScheme = parseTheme(ctx)
     const out = stringFlag(ctx, 'out')
     const outPath = out === undefined ? null : resolveLocalShotPath(ctx, out)
-    const shotsDir = resolveLocalShotPath(ctx, join('.orca', 'shots'))
+    const shotsDir = resolveLocalShotPath(ctx, defaultPluginShotsDir(ctx.cwd))
     const panelId = stringFlag(ctx, 'panel')
     const width = parseWidth(ctx)
+    const acts = parseActs(ctx)
     const shot = await takePluginShot(ctx, {
       pluginKey,
       ...(panelId === undefined ? {} : { panelId }),
       ...(colorScheme === undefined ? {} : { colorScheme }),
       ...(width === undefined ? {} : { width }),
+      ...(acts ? { acts } : {}),
       outFor: (shotPanelId) => outPath ?? defaultPluginShotPath(shotsDir, pluginKey, shotPanelId)
     })
     printPluginResult(ctx, shot, formatPluginShot(shot, colorScheme))
+    // The PNG is saved either way; a failed act still fails the command.
+    if (shot.actions?.some((action) => !action.ok)) {
+      process.exitCode = 1
+    }
   }
 }

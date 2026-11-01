@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isPluginShotWindowShown,
+  pluginShotActRefusal,
   pluginShotThemeDecision,
   PLUGIN_SHOT_VISIBLE_THEME_REASON
 } from './plugin-shot-policy'
@@ -29,5 +30,13 @@ describe('pluginShotThemeDecision', () => {
       themeReason: PLUGIN_SHOT_VISIBLE_THEME_REASON
     })
     expect(pluginShotThemeDecision(undefined, true)).toEqual({})
+  })
+})
+
+describe('pluginShotActRefusal', () => {
+  it('acts only on a components panel while the window is out of sight', () => {
+    expect(pluginShotActRefusal('components', false)).toBeNull()
+    expect(pluginShotActRefusal('components', true)).toMatchObject({ reason: 'window_shown' })
+    expect(pluginShotActRefusal('html', false)).toMatchObject({ reason: 'act_unsupported' })
   })
 })

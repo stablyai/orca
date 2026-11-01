@@ -23,6 +23,7 @@ export function PluginDeclarativeTextarea({
     defaultValue: props.defaultValue,
     fallback: '',
     acked: props.$edit,
+    actTarget: props,
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })
@@ -65,6 +66,7 @@ export function PluginDeclarativeCheckbox({
     defaultValue: props.defaultChecked,
     fallback: false,
     acked: props.$edit,
+    actTarget: props,
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })
@@ -103,6 +105,7 @@ export function PluginDeclarativeRadioGroup({
     defaultValue: props.defaultValue,
     fallback: '',
     acked: props.$edit,
+    actTarget: props,
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })
@@ -160,6 +163,7 @@ export function PluginDeclarativeSlider({
     defaultValue: props.defaultValue,
     fallback: min,
     acked: props.$edit,
+    actTarget: props,
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })

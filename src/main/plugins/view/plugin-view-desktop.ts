@@ -14,7 +14,11 @@ import {
   withPaintingWhileHidden
 } from './plugin-view-capture'
 import { requestPluginViewFromRenderer } from './plugin-view-renderer-relay'
-import { pluginShotThemeDecision } from './plugin-shot-policy'
+import { pluginShotActRefusal, pluginShotThemeDecision } from './plugin-shot-policy'
+import type {
+  PluginShotAct,
+  PluginShotActResult
+} from '../../../shared/plugins/view/plugin-shot-acts'
 import {
   resolvePluginViewEditor,
   resolvePluginViewPanel,
@@ -42,6 +46,8 @@ export type PluginShotResult = {
   settled: boolean
   /** Errors the panel logged during the capture and the banner it shows, if any. */
   errors: string[]
+  /** One result per `acts` entry, when acts were asked for. */
+  actions?: PluginShotActResult[]
 }
 
 /** `ifShown` and the panel was not on screen: nothing was opened, switched or captured. */
@@ -64,6 +70,7 @@ export type PluginViewDesktop = {
     colorScheme?: PluginViewColorScheme
     width?: number
     ifShown?: boolean
+    acts?: PluginShotAct[]
   }): Promise<PluginShotResult | PluginShotNotShown>
 }
 
@@ -86,6 +93,8 @@ const OPEN_TIMEOUT_MS = 10_000
 // Why 15s: a cold components panel transpiles and boots its guest before the first tree.
 const RENDER_TIMEOUT_MS = 15_000
 const REPLY_GRACE_MS = 5_000
+// Why: each act may wait up to 3s for the panel to settle, plus the frames that paint it.
+const ACT_TIMEOUT_MS = 4_000
 const MAX_ERRORS = 20
 
 function failed(reply: PluginViewReply): PluginCliError | null {
@@ -143,9 +152,17 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
       return { pluginKey, kind: 'panel', panelId: panel.panelId, title: panel.title }
     },
 
-    shot: async ({ pluginKey, panelId, colorScheme: requested, width, ifShown }) => {
+    shot: async ({ pluginKey, panelId, colorScheme: requested, width, ifShown, acts }) => {
       const panel = await resolvePluginViewPanel(deps.source, pluginKey, panelId)
       const contents = requireContents()
+      const actRefusal = acts ? pluginShotActRefusal(panel.ui, deps.windowShown()) : null
+      if (actRefusal) {
+        throw new PluginCliError('invalid_argument', actRefusal.message, {
+          reason: actRefusal.reason,
+          nextSteps: actRefusal.nextSteps
+        })
+      }
+      const actsTimeoutMs = (acts?.length ?? 0) * ACT_TIMEOUT_MS
       const { colorScheme, themeReason } = pluginShotThemeDecision(requested, deps.windowShown())
       const { cursor } = deps.logsSince(pluginKey)
       return withPaintingWhileHidden([contents, ...deps.guestsOf(pluginKey)], async () => {
@@ -161,10 +178,11 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
                 ...(width === undefined ? {} : { width }),
                 ...(colorScheme === undefined ? {} : { colorScheme }),
                 ...(ifShown ? { ifShown: true } : {}),
+                ...(acts ? { acts } : {}),
                 timeoutMs: RENDER_TIMEOUT_MS
               }
             },
-            RENDER_TIMEOUT_MS + REPLY_GRACE_MS
+            RENDER_TIMEOUT_MS + actsTimeoutMs + REPLY_GRACE_MS
           )
           if (ifShown && !reply.ok && reply.code === PLUGIN_VIEW_NOT_SHOWN_CODE) {
             return {
@@ -210,7 +228,8 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
             themeApplied: drawn.themeApplied,
             ...(themeReason ? { themeReason } : {}),
             settled: drawn.settled,
-            errors: [...(drawn.issue ? [drawn.issue] : []), ...logged].slice(0, MAX_ERRORS)
+            errors: [...(drawn.issue ? [drawn.issue] : []), ...logged].slice(0, MAX_ERRORS),
+            ...(drawn.actions ? { actions: drawn.actions } : {})
           }
         } finally {
           await requestPluginViewFromRenderer(

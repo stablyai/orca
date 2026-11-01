@@ -69,6 +69,7 @@ export function PluginDeclarativeInput({
     defaultValue: props.defaultValue,
     fallback: '',
     acked: props.$edit,
+    actTarget: props,
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })
@@ -111,6 +112,7 @@ export function PluginDeclarativeSwitch({
     defaultValue: props.defaultChecked,
     fallback: false,
     acked: props.$edit,
+    actTarget: props,
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })
@@ -140,6 +142,7 @@ export function PluginDeclarativeSelect({
     defaultValue: props.defaultValue,
     fallback: '',
     acked: props.$edit,
+    actTarget: props,
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })

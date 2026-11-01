@@ -61,11 +61,15 @@ describe('plugin frame console formatting', () => {
     )
   })
 
-  it("drops Orca's own runtime frames from a logged stack", () => {
+  it("drops Orca's own runtime frames and sourceless engine frames from a logged stack", () => {
     const stack = [
       'Uncaught Error: boom',
       `    at Panel (${ORIGIN}/src/panel.tsx?rev=1:12:5)`,
       `    at evaluate (${ORIGIN}/__orca/orca-runtime.mjs:120:7)`,
+      '    at Array.forEach (<anonymous>)',
+      '    at new Promise (<anonymous>)',
+      '    at <anonymous>',
+      '    at Array.map (native)',
       `    at ${ORIGIN}/__orca/orca-runtime.mjs:300:1`
     ].join('\n')
     expect(

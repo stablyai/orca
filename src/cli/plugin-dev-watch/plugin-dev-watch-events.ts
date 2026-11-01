@@ -19,7 +19,17 @@ export type PluginDevWatchEvent =
       error?: string
       typeFiles: string[]
     }
-  | { type: 'log'; pluginKey: string; ts: number; level: string; line: string }
+  | {
+      type: 'log'
+      pluginKey: string
+      ts: number
+      level: string
+      line: string
+      /** A panel line that arrived this many times together (absent: once). */
+      count?: number
+      /** `count` more copies of a panel line printed earlier in this reload. */
+      repeat?: true
+    }
   | {
       type: 'reloaded'
       pluginKey: string
@@ -87,8 +97,14 @@ export function formatPluginDevWatchEvent(event: PluginDevWatchEvent): string {
         ...event.typeFiles.map((file) => `Refreshed ${file}`),
         'Watching for changes and logs; Ctrl-C to stop.'
       ].join('\n')
-    case 'log':
-      return `${clockTime(event.ts)} ${event.level.padEnd(5)} ${event.line}`
+    case 'log': {
+      const times = event.repeat
+        ? ` (×${event.count ?? 1} more)`
+        : event.count && event.count > 1
+          ? ` ×${event.count}`
+          : ''
+      return `${clockTime(event.ts)} ${event.level.padEnd(5)} ${event.line}${times}`
+    }
     case 'reloaded': {
       const changes = event.changes === 1 ? '1 file changed' : `${event.changes} files changed`
       return `↻ reloaded ${event.pluginKey} (${changes}): ${withError(event.status, event.error)}`

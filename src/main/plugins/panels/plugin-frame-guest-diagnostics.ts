@@ -70,12 +70,14 @@ export function pluginFrameSourceLocation(
 
 // After shortening, Orca's own guest files read `__orca/…`; authors only need their own frames.
 const ORCA_STACK_FRAME = new RegExp(`^\\s+at (?:.*\\()?${PLUGIN_FRAME_RESERVED_SEGMENT}/`)
+// `at Array.forEach (<anonymous>)`, `at new Promise (<anonymous>)`: engine frames with no source.
+const SOURCELESS_STACK_FRAME = /^\s+at (?:.*\((?:<anonymous>|native)\)|<anonymous>|native)\s*$/
 
-/** Drops stack lines inside Orca's guest runtime (`__orca/orca-runtime.mjs`). */
+/** Drops stack lines inside Orca's guest runtime (`__orca/orca-runtime.mjs`) and the engine's. */
 export function withoutOrcaStackFrames(text: string): string {
   return text
     .split('\n')
-    .filter((line) => !ORCA_STACK_FRAME.test(line))
+    .filter((line) => !ORCA_STACK_FRAME.test(line) && !SOURCELESS_STACK_FRAME.test(line))
     .join('\n')
 }
 

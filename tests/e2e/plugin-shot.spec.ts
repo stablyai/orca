@@ -1,7 +1,8 @@
 /**
  * Invariant: `orca plugin shot` captures exactly a plugin panel as Orca draws it, from the hidden
  * test window, without showing or focusing it: a components panel (Orca's own DOM) at the asked
- * width and theme, and an html panel whose isolated guest content is in the image.
+ * width and theme, after `--act` input when asked, and an html panel whose isolated guest content
+ * is in the image.
  */
 
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -247,6 +248,75 @@ test('plugin shot includes an html panel guest, plugin open shows a panel, and i
     })
     expect(shown.result).toMatchObject({ panelId: 'page' })
     expect(shown.result.png?.length).toBeGreaterThan(0)
+    // --act drives components panels only.
+    await expect(
+      client.call('plugins.shot', { pluginKey, acts: [{ press: { text: 'Go' } }] })
+    ).rejects.toThrow(/components panels only/)
+  } finally {
+    await disablePluginSystem(orcaPage).catch(() => undefined)
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
+test('plugin shot --act types and presses on the hidden components panel before capturing', async ({
+  electronApp,
+  orcaPage
+}) => {
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  const tempRoot = await mkdtemp(join(tmpdir(), 'orca-plugin-shot-act-'))
+  const pluginRoot = join(tempRoot, 'hello-tsx')
+  try {
+    await cp(join(process.cwd(), 'examples', 'plugins', 'hello-tsx'), pluginRoot, {
+      recursive: true
+    })
+    await enableDevPlugins(orcaPage, [pluginRoot])
+    const pluginKey = await devPluginKey(orcaPage, 'Hello TSX')
+    const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+    const shownBefore = await windowsShown(electronApp)
+    const client = new RuntimeClient(userDataDir, 60_000, null, null)
+    type ActShot = { png: string; errors: string[]; actions?: { ok: boolean; error?: string }[] }
+
+    const before = await client.call<ActShot>('plugins.shot', { pluginKey, width: 360 })
+    // Orca's floating launcher parks over the sidebar; a capture hides it so it is never in a shot.
+    const launcher = orcaPage.locator('[data-floating-terminal-toggle]')
+    const launchers = await launcher.count()
+    const pending = client.call<ActShot>(
+      'plugins.shot',
+      {
+        pluginKey,
+        width: 360,
+        acts: [
+          { type: { label: 'New task' }, text: 'Ship the act' },
+          { press: { label: 'Add task' } },
+          { press: { label: 'Ship the act' } },
+          { press: { text: 'Nothing here' } },
+          { press: { label: 'Add task' } }
+        ]
+      },
+      { timeoutMs: 60_000 }
+    )
+    if (launchers > 0) {
+      await expect.poll(() => launcher.count()).toBe(0)
+    }
+    const acted = await pending
+    expect(acted.result.actions).toEqual([
+      { ok: true },
+      { ok: true },
+      { ok: true },
+      { ok: false, error: 'press: nothing in the panel matches { text: "Nothing here" }' },
+      { ok: false, error: 'not run: an earlier action failed' }
+    ])
+    expect(acted.result.errors).toEqual([])
+    expect(acted.result.png).not.toBe(before.result.png)
+    // The guest ran the handlers: the task is listed and toggled done, as Orca draws it.
+    const task = orcaPage.getByRole('button', { name: /Ship the act/ })
+    await expect(task).toBeVisible()
+    await expect(task).toContainText('Done')
+    await expect(orcaPage.getByRole('textbox', { name: 'New task' })).toHaveValue('')
+    // The launcher is back once the capture ended; the window never showed.
+    await expect.poll(() => launcher.count()).toBe(launchers)
+    expect(await windowsShown(electronApp)).toEqual(shownBefore)
   } finally {
     await disablePluginSystem(orcaPage).catch(() => undefined)
     await rm(tempRoot, { recursive: true, force: true })

@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import type { PluginViewReply } from '../../../shared/plugins/view/plugin-view-protocol'
+import {
+  PLUGIN_SHOT_MAX_ACTS,
+  pluginShotActResultSchema
+} from '../../../shared/plugins/view/plugin-shot-acts'
 
 const rectSchema = z.object({
   x: z.number().finite(),
@@ -16,7 +20,8 @@ const drawnPanelSchema = z.object({
   issue: z.string().max(4000).nullable(),
   colorScheme: z.enum(['light', 'dark']),
   themeApplied: z.boolean(),
-  settled: z.boolean()
+  settled: z.boolean(),
+  actions: z.array(pluginShotActResultSchema).max(PLUGIN_SHOT_MAX_ACTS).optional()
 })
 
 /** The renderer's reply, checked before main captures a rect it names. */

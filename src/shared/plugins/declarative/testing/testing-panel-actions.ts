@@ -23,7 +23,8 @@ type Dependencies = {
   settled: () => Promise<void>
 }
 
-function optionsOf(element: TestElement, elements: readonly TestElement[]) {
+/** A Select or RadioGroup's options, or a Tabs' tabs, as values a `select` may pick. */
+export function optionsOf(element: TestElement, elements: readonly TestElement[]) {
   if (element.type === 'Tabs') {
     return tabsOf(element, elements).map((tab) => ({
       value: tab.props.value,
