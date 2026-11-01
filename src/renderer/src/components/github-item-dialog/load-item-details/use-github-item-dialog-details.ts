@@ -20,6 +20,7 @@ import {
 import type { GitHubItemDialogProjectOrigin } from './github-item-dialog-types'
 import {
   WORK_ITEM_DETAILS_FRESH_MS,
+  appendCachedWorkItemComment,
   getWorkItemDetailsCacheKey,
   invalidateWorkItemDetailsCacheByMatch,
   invalidateWorkItemDetailsCacheForKey,
@@ -252,23 +253,9 @@ export function useGitHubItemDialogDetails({
       const optimisticKey = detailsCacheKey ?? ''
       const optimisticComments = optimisticCommentsRef.current.get(optimisticKey) ?? []
       optimisticCommentsRef.current.set(optimisticKey, [...optimisticComments, comment])
-      // Notify concurrent drawers through the cache; mark stale so reopening fetches server fields.
-      if (detailsCacheKey) {
-        const prev = workItemDetailsCache.get(detailsCacheKey)
-        if (prev?.details) {
-          const ids = new Set(prev.details.comments.map((c) => c.id))
-          if (!ids.has(comment.id)) {
-            touchWorkItemDetailsCache(detailsCacheKey, {
-              details: {
-                ...prev.details,
-                comments: [...prev.details.comments, comment]
-              },
-              fetchedAt: 0,
-              error: undefined
-            })
-            return
-          }
-        }
+      // Notify concurrent drawers through the cache (a payload-only patch that keeps any owed or running read).
+      if (detailsCacheKey && appendCachedWorkItemComment(detailsCacheKey, comment)) {
+        return
       }
       // Without a cache entry to notify subscribers, wake the memo through local state.
       setOptimisticTick((n) => n + 1)

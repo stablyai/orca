@@ -2,12 +2,14 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { PRComment } from '../../../../../shared/github/comment-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-item-types'
 import {
   invalidateWorkItemDetailsCacheForKey,
+  touchWorkItemDetailsCache,
   workItemDetailsCache
 } from '../cache/work-item-details'
 import { usePullRequestDetails } from './use-details'
@@ -34,6 +36,19 @@ const workItem = {
   url: 'https://github.com/acme/widgets/pull/7',
   labels: []
 } as unknown as GitHubWorkItem
+const loaded = { item: workItem, body: 'Body', comments: [] } as unknown as GitHubWorkItemDetails
+const comment = (id: string) =>
+  ({ id, body: 'Thanks', author: 'me', createdAt: '' }) as unknown as PRComment
+const renderDetails = () =>
+  renderHook(() =>
+    usePullRequestDetails({
+      workItem,
+      repoPath: '/repo',
+      effectiveRepoId: 'repo-1',
+      issueSourcePreference: undefined,
+      canUseDetailsRepoContext: true
+    })
+  )
 
 afterEach(() => {
   lookup.mockReset()
@@ -84,5 +99,42 @@ describe('usePullRequestDetails reconciliation', () => {
     expect(result.current.error).toBeNull()
     expect(result.current.details?.files?.[0]?.viewerViewedState).toBe('VIEWED')
     expect(lookup).toHaveBeenCalledTimes(2)
+  })
+
+  it('starts the owed reread when a comment lands in the same batch as the invalidation', async () => {
+    lookup.mockResolvedValue(loaded)
+    const { result } = renderDetails()
+    await waitFor(() => expect(result.current.detailsLoaded).toBe(true))
+
+    act(() => {
+      invalidateWorkItemDetailsCacheForKey(result.current.detailsCacheKey!)
+      result.current.appendOptimisticComment(comment('during-settlement'))
+    })
+
+    await waitFor(() => expect(lookup).toHaveBeenCalledTimes(2))
+    await act(async () => {})
+    expect(lookup).toHaveBeenCalledTimes(2)
+    expect(result.current.details?.comments.map((c) => c.id)).toContain('during-settlement')
+  })
+
+  it('lands a running reread after a comment and an unrelated invalidation', async () => {
+    lookup.mockResolvedValueOnce(loaded)
+    const { result } = renderDetails()
+    await waitFor(() => expect(result.current.detailsLoaded).toBe(true))
+    const fresh = Promise.withResolvers<GitHubWorkItemDetails | null>()
+    lookup.mockReturnValueOnce(fresh.promise)
+    await act(async () => invalidateWorkItemDetailsCacheForKey(result.current.detailsCacheKey!))
+    expect(lookup).toHaveBeenCalledTimes(2)
+
+    await act(async () => result.current.appendOptimisticComment(comment('during-read')))
+    act(() => {
+      touchWorkItemDetailsCache('other-key', { details: loaded, fetchedAt: Date.now() })
+      invalidateWorkItemDetailsCacheForKey('other-key')
+    })
+    const merged = { ...loaded, item: { ...workItem, state: 'merged' } }
+    await act(async () => fresh.resolve(merged as GitHubWorkItemDetails))
+
+    expect(result.current.details?.item.state).toBe('merged')
+    expect(result.current.details?.comments.map((c) => c.id)).toContain('during-read')
   })
 })

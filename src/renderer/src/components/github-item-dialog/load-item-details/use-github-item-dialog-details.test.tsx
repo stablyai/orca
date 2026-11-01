@@ -3,13 +3,18 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import React, { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { PRComment } from '../../../../../shared/github/comment-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-item-types'
 import { requestPRReviewers } from '../land-pull-request/pr-reviewers-request-actions'
 import { useGitHubItemDialogDetails } from './use-github-item-dialog-details'
-import { workItemDetailsCache } from './work-item-details-cache'
+import {
+  invalidateWorkItemDetailsCacheForKey,
+  touchWorkItemDetailsCache,
+  workItemDetailsCache
+} from './work-item-details-cache'
 
 const lookup = vi.hoisted(() => vi.fn())
 const setViewed = vi.hoisted(() => vi.fn())
@@ -33,6 +38,8 @@ const workItem = {
   labels: []
 } as unknown as GitHubWorkItem
 const details = { item: workItem, body: 'Body', comments: [] } as unknown as GitHubWorkItemDetails
+const comment = (id: string) =>
+  ({ id, body: 'Thanks', author: 'me', createdAt: '' }) as unknown as PRComment
 
 let latest: ReturnType<typeof useGitHubItemDialogDetails> | null = null
 let setDraft: (value: string) => void = () => {}
@@ -126,5 +133,42 @@ describe('useGitHubItemDialogDetails reconciliation', () => {
     expect(latest?.details?.files?.[0]?.viewerViewedState).toBe('VIEWED')
     // One settlement owed exactly one read: the failed read and the local patches start none.
     expect(lookup).toHaveBeenCalledTimes(2)
+  })
+
+  it('starts the owed reread when a comment lands in the same batch as the invalidation', async () => {
+    lookup.mockResolvedValue(details)
+    render(<Harness />)
+    await waitFor(() => expect(latest?.detailsLoaded).toBe(true))
+
+    act(() => {
+      latest!.invalidateCurrentDetailsCache()
+      latest!.appendOptimisticComment(comment('during-settlement'))
+    })
+
+    await waitFor(() => expect(lookup).toHaveBeenCalledTimes(2))
+    await act(async () => {})
+    expect(lookup).toHaveBeenCalledTimes(2)
+    expect(latest?.details?.comments.map((c) => c.id)).toContain('during-settlement')
+  })
+
+  it('lands a running reread after a comment and an unrelated invalidation', async () => {
+    lookup.mockResolvedValueOnce(details)
+    render(<Harness />)
+    await waitFor(() => expect(latest?.detailsLoaded).toBe(true))
+    const fresh = Promise.withResolvers<GitHubWorkItemDetails | null>()
+    lookup.mockReturnValueOnce(fresh.promise)
+    await act(async () => latest!.invalidateCurrentDetailsCache())
+    expect(lookup).toHaveBeenCalledTimes(2)
+
+    await act(async () => latest!.appendOptimisticComment(comment('during-read')))
+    act(() => {
+      touchWorkItemDetailsCache('other-key', { details, fetchedAt: Date.now() })
+      invalidateWorkItemDetailsCacheForKey('other-key')
+    })
+    const merged = { ...details, item: { ...workItem, state: 'merged' } }
+    await act(async () => fresh.resolve(merged as GitHubWorkItemDetails))
+
+    expect(latest?.details?.item.state).toBe('merged')
+    expect(latest?.details?.comments.map((c) => c.id)).toContain('during-read')
   })
 })

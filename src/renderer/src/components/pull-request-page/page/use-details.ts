@@ -9,6 +9,7 @@ import type {
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import {
   WORK_ITEM_DETAILS_FRESH_MS,
+  appendCachedWorkItemComment,
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
   getWorkItemDetailsCacheKey,
   subscribeWorkItemDetailsCache,
@@ -222,23 +223,9 @@ export function usePullRequestDetails(args: {
     (comment: PRComment) => {
       // Why: skip refreshDetails() — gh api --cache 60s returns stale data that would overwrite the optimistic comment.
       optimisticCommentsRef.current.push(comment)
-      // Notify through cache writes and expire fetchedAt so reopening refreshes server-side fields.
-      if (detailsCacheKey) {
-        const prev = workItemDetailsCache.get(detailsCacheKey)
-        if (prev?.details) {
-          const ids = new Set(prev.details.comments.map((c) => c.id))
-          if (!ids.has(comment.id)) {
-            touchWorkItemDetailsCache(detailsCacheKey, {
-              details: {
-                ...prev.details,
-                comments: [...prev.details.comments, comment]
-              },
-              fetchedAt: 0,
-              error: undefined
-            })
-            return
-          }
-        }
+      // Notify through a payload-only cache patch that keeps any owed or running read.
+      if (detailsCacheKey && appendCachedWorkItemComment(detailsCacheKey, comment)) {
+        return
       }
       // Cold-loading cache has no details to patch/notify; tick the optimistic shell instead.
       setOptimisticTick((n) => n + 1)
