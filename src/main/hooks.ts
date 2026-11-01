@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { parseOrcaYaml } from '../shared/orca-yaml'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
 import { getEffectiveHooksFromConfig } from './effective-hook-config'
+import { resolveArchiveHookCommandForRun } from './archive-hook-command-paths'
 import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
 import { getSetupEnvVars } from './setup-hook-env-vars'
 import { iterateLfScriptLines } from './setup-runner-script-text'
@@ -199,6 +200,15 @@ export function runHook(
 
   const runtimeTarget = getHookRuntimeTarget(projectRuntime)
   const wslInfo = getHookWslContext(cwd, runtimeTarget)
+  const hostYamlRoot = hooksPath ?? repo.path
+  const command = resolveArchiveHookCommandForRun({
+    script,
+    hookName,
+    hostYamlRoot,
+    shellYamlRoot: wslInfo ? toLinuxPath(hostYamlRoot) : hostYamlRoot,
+    shellCwd: wslInfo ? wslInfo.linuxPath : cwd,
+    shell: wslInfo || process.platform !== 'win32' ? 'posix' : 'cmd'
+  })
 
   if (wslInfo) {
     // WSL hooks need Linux paths for ORCA_* values, including Windows UNC paths.
@@ -224,7 +234,7 @@ export function runHook(
     return runWslProcess({
       distro: wslInfo.distro ?? undefined,
       loginPath: 'preferred',
-      script,
+      script: command,
       // Match native Bash hook semantics; sh would reject Bash-only scripts inside WSL.
       shell: 'bash',
       cwd: wslInfo.linuxPath,
@@ -253,7 +263,7 @@ export function runHook(
       resolve(result)
     }
     // exec ignores detached; spawn creates the process group needed for tree termination.
-    const child = spawn(script, {
+    const child = spawn(command, {
       cwd,
       shell: getHookShell(),
       // Unattended hooks must suppress interactive Git prompts while retaining cached auth (#7652).
