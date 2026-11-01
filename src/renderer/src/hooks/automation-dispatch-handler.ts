@@ -122,7 +122,8 @@ export async function handleAutomationDispatchRequest({
             const submitted = await submitPromptToAgentPty({
               tabId: reusableSession.tabId,
               ptyId: reusableSession.ptyId,
-              content: automation.prompt
+              content: automation.prompt,
+              agent: automation.agentId
             })
             if (!submitted) {
               completion.cleanupRunObservers()

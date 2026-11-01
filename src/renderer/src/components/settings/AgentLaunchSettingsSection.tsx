@@ -2,8 +2,8 @@ import { useChatSettingsOwnPermissions } from '@/runtime/structured-agent-sessio
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentPostPasteSubmitInput } from '../../../../shared/tui-agent-post-paste-submit'
 import { wholeAgentEnvironmentUpdates } from '../../../../shared/agent-launch-permission-updates'
-import { useRef } from 'react'
 import { useAppStore } from '@/store'
 import {
   agentLaunchSettingsMutationUpdates,
@@ -26,6 +26,8 @@ import {
   useAgentPermissionOverrideNotice,
   type SelectPermissionOverrides
 } from './agent-permission-override-notice'
+
+let localAgentLaunchSettingsWriteTail: Promise<void> | null = null
 
 export function AgentLaunchSettingsSection({
   settings,
@@ -79,10 +81,11 @@ function LocalAgentLaunchSettings({
 }): React.JSX.Element {
   const notify = useAgentPermissionOverrideNotice()
   const chatOwnSupported = useChatSettingsOwnPermissions()
-  const tail = useRef<Promise<void> | null>(null)
   const enqueue = (operation: () => Promise<void>): Promise<void> => {
-    const write = (tail.current ?? Promise.resolve()).catch(() => {}).then(operation)
-    tail.current = write
+    const write = (localAgentLaunchSettingsWriteTail ?? Promise.resolve())
+      .catch(() => {})
+      .then(operation)
+    localAgentLaunchSettingsWriteTail = write
     return write
   }
   const current = () => useAppStore.getState().settings ?? settings
@@ -173,6 +176,19 @@ function LocalAgentLaunchSettings({
     apply(agent, (current, platform) =>
       wholeAgentEnvironmentUpdates(current, agent, requested, platform)
     )
+  const savePostPasteSubmitInput = (
+    agent: TuiAgent,
+    value: AgentPostPasteSubmitInput
+  ): Promise<void> =>
+    enqueue(async () => {
+      const latest = await window.api.settings.get().catch(failed(agent))
+      await write(agent, () => ({
+        agentPostPasteSubmitInputs: {
+          ...latest.agentPostPasteSubmitInputs,
+          [agent]: value
+        }
+      }))
+    })
 
   return (
     <AgentLaunchSettingsCatalog
@@ -183,7 +199,7 @@ function LocalAgentLaunchSettings({
       renderPermissions={renderPermissions}
       nativeChatPermissionsSupported
       chatOwnSupported={chatOwnSupported}
-      local={{ settings, updateSettings, saveEnvironment }}
+      local={{ settings, updateSettings, saveEnvironment, savePostPasteSubmitInput }}
     />
   )
 }

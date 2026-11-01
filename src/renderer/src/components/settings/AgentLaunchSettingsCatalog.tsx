@@ -42,6 +42,10 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import {
+  resolveAgentPostPasteSubmitInput,
+  type AgentPostPasteSubmitInput
+} from '../../../../shared/tui-agent-post-paste-submit'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   agentChoiceOpensAsChat,
@@ -91,6 +95,7 @@ export function AgentLaunchSettingsCatalog({
   local?: {
     settings: GlobalSettings
     saveEnvironment: (agent: TuiAgent, value: Record<string, string>) => Promise<void>
+    savePostPasteSubmitInput: (agent: TuiAgent, value: AgentPostPasteSubmitInput) => Promise<void>
     updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   }
 }): React.JSX.Element {
@@ -274,6 +279,16 @@ export function AgentLaunchSettingsCatalog({
         ? saveUserArgs(agent.id, agent.label, value)
         : mutate({ type: 'arguments', agent: agent.id, value }),
     onSaveEnv: (value) => local?.saveEnvironment(agent.id, value),
+    ...(local
+      ? {
+          postPasteSubmitInput: resolveAgentPostPasteSubmitInput(
+            agent.id,
+            local.settings.agentPostPasteSubmitInputs
+          ),
+          onSavePostPasteSubmitInput: (value: AgentPostPasteSubmitInput) =>
+            local.savePostPasteSubmitInput(agent.id, value)
+        }
+      : {}),
     ...(!local
       ? {
           environmentNames: settings.environmentNames[agent.id] ?? [],

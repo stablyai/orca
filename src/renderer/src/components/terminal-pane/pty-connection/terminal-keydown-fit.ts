@@ -8,6 +8,11 @@ import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
 } from '@/runtime/runtime-terminal-inspection'
+import {
+  primeReattachedPtyKittyKeyboardModeTracker,
+  registerPtyKittyKeyboardModeTracker,
+  unregisterPtyKittyKeyboardModeTracker
+} from '../terminal-pty-kitty-keyboard-flags'
 import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status-types'
 import { isCtrlCKeyEvent, isPlainEscapeKeyEvent } from '../agent-interrupt-inference'
 import { createAgentCompletionCoordinator } from '../agent-completion-coordinator'
@@ -77,7 +82,24 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
 
   session.visibleRemoteViewportClaimPtyId = null
   session.pendingVisibleRemoteViewportClaim = false
-  session.setPanePtyFitBinding = (ptyId: string): void => {
+  session.setPanePtyFitBinding = (ptyId: string, replayReattachment = false): void => {
+    const previousPtyId = session.activePanePtyBinding
+    if (previousPtyId && previousPtyId !== ptyId) {
+      unregisterPtyKittyKeyboardModeTracker(
+        previousPtyId,
+        session.activePtyKittyKeyboardModeRegistration
+      )
+    }
+    session.activePtyKittyKeyboardModeRegistration = registerPtyKittyKeyboardModeTracker(
+      ptyId,
+      session.kittyKeyboardModes
+    )
+    if (replayReattachment) {
+      primeReattachedPtyKittyKeyboardModeTracker(
+        ptyId,
+        session.activePtyKittyKeyboardModeRegistration
+      )
+    }
     bindPanePtyId(session.pane.id, ptyId, session.deps.tabId)
     session.pane.container.dataset.ptyId = ptyId
     if (
@@ -103,6 +125,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     session.claimPendingVisibleRemoteViewport()
   }
   session.activePanePtyBinding = null
+  session.activePtyKittyKeyboardModeRegistration = null
   // Why: bind time lets async liveness reconcile ignore a request started
   // before this PTY bound (newborn race). Null disables the guard (fail-safe).
   session.activePanePtyBindingBoundAt = null
@@ -159,11 +182,18 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     session.remoteOutputFactConsumerPtyId = null
   }
   session.clearPanePtyFitBinding = (): void => {
-    // Clear module-level fit bindings explicitly; DOM removal cannot release them.
+    // Why: fit bindings live in module-level maps, so pane teardown must clear them explicitly.
+    if (session.activePanePtyBinding) {
+      unregisterPtyKittyKeyboardModeTracker(
+        session.activePanePtyBinding,
+        session.activePtyKittyKeyboardModeRegistration
+      )
+    }
     bindPanePtyId(session.pane.id, null, session.deps.tabId)
     session.visibleRemoteViewportClaimPtyId = null
     session.pendingVisibleRemoteViewportClaim = false
     session.activePanePtyBinding = null
+    session.activePtyKittyKeyboardModeRegistration = null
     session.activePanePtyBindingBoundAt = null
     delete session.pane.container.dataset.ptyId
     delete session.pane.container.dataset.ptyRecoveryState
