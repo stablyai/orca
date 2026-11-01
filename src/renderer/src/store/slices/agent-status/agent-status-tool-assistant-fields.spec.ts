@@ -133,9 +133,14 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       expect(entry.lastAssistantMessage).toBeUndefined()
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
       expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenCalledTimes(1)
+      // No orchestration replace, and this payload carried no provider session.
       expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenLastCalledWith(
         'tab-1:1',
-        'parent codex'
+        'parent codex',
+        {
+          replaceExistingGeneratedTitle: false,
+          sessionId: undefined
+        }
       )
     })
 
