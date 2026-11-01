@@ -32,7 +32,10 @@ async function openPanel(page: Page, title: string): Promise<void> {
   await button.click()
 }
 
-test('the build-less TSX example renders and updates with no dist folder', async ({ orcaPage }) => {
+test('the build-less TSX example renders and updates with no dist folder', async ({
+  orcaPage,
+  electronApp
+}, testInfo) => {
   const tempRoot = await mkdtemp(join(tmpdir(), 'orca-buildless-tsx-'))
   const pluginRoot = join(tempRoot, 'hello-tsx')
   try {
@@ -73,6 +76,26 @@ test('the build-less TSX example renders and updates with no dist folder', async
     await orcaPage.getByText('Edit src/panel.tsx and save').click()
     await orcaPage.getByText('Ship without a build').click()
     await expect(orcaPage.getByText('All 3 done!')).toBeVisible({ timeout: 15_000 })
+
+    // The declared settings show under the plugin in Orca's Settings, with the person's value.
+    const pluginKey = await orcaPage.evaluate(
+      async () =>
+        (await window.api.plugins.list()).find((entry) => entry.name === 'Hello TSX')?.pluginKey
+    )
+    await electronApp.evaluate(({ app }, link) => {
+      app.emit('open-url', { preventDefault: () => undefined }, link)
+    }, `orca://plugins/${pluginKey}`)
+    const article = orcaPage.getByRole('article')
+    await expect(article.locator('#plugin-detail-heading')).toContainText('Hello TSX', {
+      timeout: 30_000
+    })
+    await expect(article.getByText('Celebrate finished lists')).toBeVisible()
+    await expect(article.getByLabel('Task ideas')).toHaveValue('Ship the bridge')
+    await expect(article.getByRole('switch', { name: 'Celebrate finished lists' })).toBeChecked()
+    await testInfo.attach('plugin-settings', {
+      body: await article.screenshot(),
+      contentType: 'image/png'
+    })
   } finally {
     await disablePluginSystem(orcaPage).catch(() => undefined)
     await rm(tempRoot, { recursive: true, force: true })
