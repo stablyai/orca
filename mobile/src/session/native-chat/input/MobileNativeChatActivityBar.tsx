@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Ban, ListChecks, Users } from 'lucide-react-native'
+import { Ban, ChevronLeft, ListChecks, Users } from 'lucide-react-native'
 import type { NativeChatSubagentState } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   nativeChatCompletedTaskCount,
@@ -86,6 +86,7 @@ export function MobileNativeChatActivityBar({
             onPress={() => onFocusSubagent(null)}
             style={styles.bannerAction}
           >
+            <ChevronLeft size={14} color={colors.textPrimary} strokeWidth={2} />
             <Text style={styles.bannerActionText}>
               {t('chat.activity.backToMain', 'Main agent')}
             </Text>
@@ -258,13 +259,20 @@ const styles = themedStyleSheet(() => ({
     fontSize: typography.metaSize
   },
   bannerAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.composerControl,
+    borderRadius: radii.control
   },
   bannerActionText: {
-    color: colors.textSecondary,
+    color: colors.textPrimary,
     fontSize: typography.metaSize,
-    fontWeight: '500'
+    fontWeight: '600'
   },
   pills: {
     flexDirection: 'row',
