@@ -224,6 +224,50 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
+  it('ignores a same-named fork PR when the head repository is unknown', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: null
+    })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 77,
+            title: 'Fork PR from its own develop',
+            state: 'OPEN',
+            url: 'https://github.com/stablyai/orca/pull/77',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'develop',
+            headRefName: 'develop',
+            baseRefOid: 'base-oid',
+            headRefOid: 'fork-head-oid',
+            headRepositoryOwner: { login: 'contributor' },
+            headRepository: { name: 'orca' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+
+    const outcome = await getPRForBranchOutcome('/repo-root', 'develop')
+
+    expect(outcome.kind).toBe('no-pr')
+    // `gh pr list --head` cannot scope by owner, so the same-repository head is asked for.
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        'api',
+        'repos/stablyai/orca/pulls?head=stablyai%3Adevelop&state=all&per_page=1',
+        '--include'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
   it('returns found when fallback branch discovery retry finds the PR', async () => {
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
       candidates: [{ owner: 'stablyai', repo: 'orca' }],

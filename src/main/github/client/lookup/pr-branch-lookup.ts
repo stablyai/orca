@@ -64,6 +64,19 @@ export async function getFallbackPRListForBranch(
   return list[0] ?? null
 }
 
+// `gh pr list --head` matches any fork's same-named branch; only a same-repo head is ours.
+async function getUnscopedPRForBranch(
+  prRepo: GitHubApiRepository,
+  branchName: string,
+  ghOptions: ReturnType<typeof ghRepoExecOptions>
+): Promise<PullRequestLookupData | null> {
+  const listed = await getFallbackPRListForBranch(prRepo, branchName, ghOptions)
+  if (!listed || pullRequestMatchesHeadRepository(listed, prRepo, prRepo)) {
+    return listed
+  }
+  return getRestPRForBranch(prRepo, prRepo.owner, branchName, ghOptions)
+}
+
 export async function hydrateBranchLookupWithExactPR(
   ownerRepo: OwnerRepo,
   branchData: PullRequestLookupData | null,
@@ -114,7 +127,7 @@ export async function lookupPRByBranchName(args: {
               args.branchName,
               args.ghOptions
             )
-          : await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
+          : await getUnscopedPRForBranch(candidate, args.branchName, args.ghOptions)
         // Cheap branch discovery needs exact hydration for review, queue and auto-merge metadata.
         const data = await hydrateBranchLookupWithExactPR(
           candidate,
