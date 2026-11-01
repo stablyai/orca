@@ -37,6 +37,8 @@ function heading(from: AgentMessageSource, message: NativeChatMessage): string {
         'components.native-chat.agentMessage.handedOffToAgent',
         'Handed off to agent'
       )
+    case 'started-agent':
+      return translate('components.native-chat.agentMessage.startedAgent', 'Started agent')
     case 'task':
       return translate(
         'components.native-chat.agentMessage.taskFromCoordinator',

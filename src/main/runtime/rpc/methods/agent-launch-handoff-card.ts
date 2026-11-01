@@ -48,9 +48,6 @@ function prepareHandoffRecord(
       outcome.kind === 'structured'
         ? `${ORCA_SESSION_ADDRESS_PREFIX}${outcome.sessionId}`
         : outcome.handle
-    if (outcome.kind === 'structured' && outcome.sessionId === callerSessionId) {
-      return
-    }
     publish(() => ({
       kind: 'agent-handoff',
       launchId: params.operationId,

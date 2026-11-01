@@ -20418,6 +20418,7 @@
         "messageFromCoordinator": "Сообщение от координатора",
         "startedWorker": "Исполнитель запущен",
         "handedOffToAgent": "Передано агенту",
+        "startedAgent": "Агент запущен",
         "taskFromCoordinator": "Задача от координатора",
         "updateFromWorker": "Обновление от исполнителя"
       },

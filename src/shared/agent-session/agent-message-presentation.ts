@@ -1,11 +1,13 @@
 import type { AgentMessageSender, AgentMessageSource } from './agent-session-message-source'
 import type { AgentStatusEntry } from '../agent-status-types'
 import type { NativeChatMessage } from '../native-chat-types'
+import { agentMessageTranscriptText } from './agent-message-display-text'
 
 export const AGENT_MESSAGE_FOLDED_LINES = 3
 export type AgentMessageHeading =
   | 'started'
   | 'handed-off'
+  | 'started-agent'
   | 'task'
   | 'coordinator'
   | 'worker'
@@ -27,13 +29,17 @@ export type AgentMessageSenderView = Readonly<{
     | 'permission'
 }>
 
-/** Takes the message's creation flags together, so no caller can show a handoff as a started worker. */
+/** Takes the message's creation flags and text together, so no caller can show a handoff as a started
+ *  worker, or claim work was handed over when no task reached the new agent. */
 export function agentMessageHeading(
   from: AgentMessageSource,
-  creation: Pick<NativeChatMessage, 'agentStart' | 'agentHandoff'> = {}
+  creation?: Pick<NativeChatMessage, 'agentStart' | 'agentHandoff' | 'blocks'>
 ): AgentMessageHeading {
-  if (creation.agentStart) {
-    return creation.agentHandoff ? 'handed-off' : 'started'
+  if (creation?.agentStart) {
+    if (!creation.agentHandoff) {
+      return 'started'
+    }
+    return agentMessageTranscriptText(creation.blocks, from) ? 'handed-off' : 'started-agent'
   }
   if (from.orchestration?.message === 'task') {
     return 'task'

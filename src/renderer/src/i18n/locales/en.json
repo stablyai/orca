@@ -19862,6 +19862,7 @@
         "showMore": "Show more",
         "startedWorker": "Started worker",
         "handedOffToAgent": "Handed off to agent",
+        "startedAgent": "Started agent",
         "taskFromCoordinator": "Task from coordinator",
         "updateFromWorker": "Update from worker"
       },

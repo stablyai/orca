@@ -180,7 +180,7 @@ it('records a card for each handoff, and never re-adds one the user removed, acr
 it.each([
   ['no prompt', {}],
   ['a draft', { prompt: { text: TASK, delivery: 'draft' } }],
-  ['a prompt that was not delivered', { prompt: { text: ' \t\n ', delivery: 'submit' } }]
+  ['a blank submit, which the CLI never sends', { prompt: { text: ' \t\n ', delivery: 'submit' } }]
 ])('records the new agent with no task for %s', async (_label, params) => {
   await launch(params)
 

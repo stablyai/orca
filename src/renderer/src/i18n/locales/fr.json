@@ -19781,6 +19781,7 @@
         "messageFromCoordinator": "Message du coordinateur",
         "startedWorker": "Worker démarré",
         "handedOffToAgent": "Confié à un agent",
+        "startedAgent": "Agent démarré",
         "taskFromCoordinator": "Tâche du coordinateur",
         "updateFromWorker": "Nouvelles du worker"
       },
