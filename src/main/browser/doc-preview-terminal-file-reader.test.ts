@@ -33,13 +33,35 @@ function grant(root = '/tmp/reports'): ReturnType<typeof mintDocPreviewGrant> {
   })
 }
 
-function resolvedFile(absolutePath: string): unknown {
-  return {
-    ok: true,
-    result: {
-      openTarget: { kind: 'absolute-file', absolutePath, grantId: 'host-grant' }
+type HostEntry = { canonical?: string; openTarget?: Record<string, unknown> }
+
+/** The paired host: resolveTerminalPath answers per path, reads answer with `read`. */
+function host(entries: Record<string, HostEntry>, read?: unknown): void {
+  mocks.call.mockImplementation(
+    async (_root: string, _env: string, method: string, params: { pathText?: string }) => {
+      if (method !== 'files.resolveTerminalPath') {
+        return read
+      }
+      const path = params.pathText ?? ''
+      const entry = entries[path] ?? {}
+      const canonical = entry.canonical ?? path
+      return {
+        ok: true,
+        result: {
+          absolutePath: canonical,
+          openTarget: entry.openTarget ?? {
+            kind: 'absolute-file',
+            absolutePath: canonical,
+            grantId: 'host-grant'
+          }
+        }
+      }
     }
-  }
+  )
+}
+
+function methodsCalled(): string[] {
+  return mocks.call.mock.calls.map((call) => String(call[2]))
 }
 
 beforeEach(() => {
@@ -52,38 +74,26 @@ describe('outside-workspace HTML preview', () => {
     'reads the full document on its owning host: %s',
     async (root) => {
       const filePath = root.startsWith('C:') ? `${root}\\report.html` : `${root}/report.html`
-      mocks.call.mockResolvedValueOnce(resolvedFile(filePath)).mockResolvedValueOnce({
-        ok: true,
-        result: { content: '<h1>remote</h1>', isBinary: false }
-      })
+      host({}, { ok: true, result: { content: '<h1>remote</h1>', isBinary: false } })
 
       await expect(readDocPreviewFile(grant(root), 'report.html')).resolves.toEqual({
         ok: true,
         bytes: Buffer.from('<h1>remote</h1>'),
         contentType: 'text/html; charset=utf-8'
       })
-      expect(mocks.call).toHaveBeenNthCalledWith(
-        1,
+      expect(mocks.call).toHaveBeenCalledWith(
         '/user-data',
         'vps',
         'files.resolveTerminalPath',
-        {
-          worktree: 'id:source-workspace',
-          pathText: filePath
-        },
+        { worktree: 'id:source-workspace', pathText: filePath },
         15_000,
         12
       )
-      expect(mocks.call).toHaveBeenNthCalledWith(
-        2,
+      expect(mocks.call).toHaveBeenLastCalledWith(
         '/user-data',
         'vps',
         'files.readTerminalArtifactPreview',
-        {
-          worktree: 'id:source-workspace',
-          grantId: 'host-grant',
-          absolutePath: filePath
-        },
+        { worktree: 'id:source-workspace', grantId: 'host-grant', absolutePath: filePath },
         15_000,
         12
       )
@@ -100,16 +110,17 @@ describe('outside-workspace HTML preview', () => {
     expect(mocks.call).not.toHaveBeenCalled()
 
     authorizeDocPreviewDirectory(page.id, 'assets/logo.png')
-    mocks.call
-      .mockResolvedValueOnce(resolvedFile('/tmp/reports/assets/logo.png'))
-      .mockResolvedValueOnce({
+    host(
+      {},
+      {
         ok: true,
         result: {
           content: Buffer.from([137, 80, 78, 71]).toString('base64'),
           isBinary: true,
           mimeType: 'image/png'
         }
-      })
+      }
+    )
     await expect(readDocPreviewFile(page, 'assets/logo.png')).resolves.toMatchObject({
       ok: true,
       bytes: Buffer.from([137, 80, 78, 71]),
@@ -117,50 +128,87 @@ describe('outside-workspace HTML preview', () => {
     })
   })
 
+  // A macOS host spells /tmp as /private/tmp and returns a case-insensitive volume's stored name.
+  it('reads paths the host spells differently once canonicalized', async () => {
+    const page = grant()
+    authorizeDocPreviewDirectory(page.id, 'assets/styles.css')
+    host(
+      {
+        '/tmp/reports': { canonical: '/private/tmp/reports' },
+        '/tmp/reports/report.html': { canonical: '/private/tmp/reports/report.html' },
+        '/tmp/reports/assets': { canonical: '/private/tmp/reports/assets' },
+        '/tmp/reports/assets/styles.css': { canonical: '/private/tmp/reports/assets/Styles.css' }
+      },
+      { ok: true, result: { content: 'h1{}', isBinary: false } }
+    )
+
+    await expect(readDocPreviewFile(page, 'report.html')).resolves.toMatchObject({ ok: true })
+    await expect(readDocPreviewFile(page, 'assets/styles.css')).resolves.toMatchObject({
+      ok: true
+    })
+  })
+
   it('refuses symlink redirection outside an approved asset directory', async () => {
     const page = grant()
     authorizeDocPreviewDirectory(page.id, 'assets/data.json')
-    mocks.call.mockResolvedValueOnce(resolvedFile('/home/dev/.config/credentials.json'))
+    host({ '/tmp/reports/assets/data.json': { canonical: '/home/dev/.config/credentials.json' } })
 
     await expect(readDocPreviewFile(page, 'assets/data.json')).resolves.toMatchObject({
       ok: false,
       message: 'The preview file path changed on its host.'
     })
-    expect(mocks.call).toHaveBeenCalledOnce()
+    expect(methodsCalled()).not.toContain('files.readTerminalArtifactPreview')
   })
 
-  it('uses directory-scoped reads when an approved asset is inside the source workspace', async () => {
+  it('pages a large approved asset inside the source workspace like a workspace preview', async () => {
     const page = grant('/srv')
     authorizeDocPreviewDirectory(page.id, 'repo/assets/app.js')
-    mocks.call
-      .mockResolvedValueOnce({
-        ok: true,
-        result: {
-          openTarget: {
-            kind: 'worktree-file',
-            absolutePath: '/srv/repo/assets/app.js',
-            relativePath: 'assets/app.js'
+    const workspaceParams = {
+      worktree: 'id:source-workspace',
+      relativePath: 'assets/app.js',
+      entryRelativePath: 'assets',
+      implicitRootRelativePath: null,
+      authorizedRootRelativePaths: ['assets']
+    }
+    host({
+      '/srv/repo/assets/app.js': {
+        openTarget: {
+          kind: 'worktree-file',
+          absolutePath: '/srv/repo/assets/app.js',
+          relativePath: 'assets/app.js'
+        }
+      }
+    })
+    const bundle = Buffer.from('console.log(1)')
+    const resolveOnly = mocks.call.getMockImplementation()
+    mocks.call.mockImplementation(async (...args: [string, string, string, unknown]) => {
+      if (args[2] === 'files.readDocPreview') {
+        return { ok: false, error: { message: 'file_too_large' } }
+      }
+      if (args[2] === 'files.readDocPreviewChunk') {
+        return {
+          ok: true,
+          result: {
+            contentBase64: bundle.toString('base64'),
+            size: bundle.length,
+            mtimeMs: 1,
+            ctimeMs: 1
           }
         }
-      })
-      .mockResolvedValueOnce({ ok: true, result: { content: 'console.log(1)', isBinary: false } })
+      }
+      return resolveOnly?.(...args)
+    })
 
     await expect(readDocPreviewFile(page, 'repo/assets/app.js')).resolves.toMatchObject({
-      ok: true
+      ok: true,
+      bytes: bundle
     })
-    expect(mocks.call).toHaveBeenLastCalledWith(
+    expect(mocks.call).toHaveBeenCalledWith(
       '/user-data',
       'vps',
       'files.readDocPreview',
-      {
-        worktree: 'id:source-workspace',
-        relativePath: 'assets/app.js',
-        entryRelativePath: 'assets',
-        implicitRootRelativePath: null,
-        authorizedRootRelativePaths: ['assets']
-      },
-      15_000,
-      12
+      workspaceParams,
+      15_000
     )
   })
 
@@ -182,9 +230,7 @@ describe('outside-workspace HTML preview', () => {
   })
 
   it('keeps expired-grant failures on the remote host', async () => {
-    mocks.call
-      .mockResolvedValueOnce(resolvedFile('/tmp/reports/report.html'))
-      .mockResolvedValueOnce({ ok: false, error: { message: 'terminal_file_grant_expired' } })
+    host({}, { ok: false, error: { message: 'terminal_file_grant_expired' } })
     await expect(readDocPreviewFile(grant(), 'report.html')).resolves.toMatchObject({
       ok: false,
       message: 'terminal_file_grant_expired'

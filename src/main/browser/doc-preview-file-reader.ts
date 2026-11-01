@@ -109,7 +109,7 @@ function toOutcome(source: PreviewFileBytes, contentType: string): DocPreviewRea
     : UNSUPPORTED_ASSET_OUTCOME
 }
 
-type RuntimeDocPreviewReadParams = {
+export type RuntimeDocPreviewReadParams = {
   worktree: string
   relativePath: string
   entryRelativePath: string
@@ -213,6 +213,35 @@ function notFoundOutcome(message = 'Not found'): DocPreviewReadOutcome {
   return { ok: false, status: 404, reason: 'unreadable', message }
 }
 
+function runtimeWorkspaceReadParams(
+  grant: DocPreviewGrant,
+  absolutePath: string
+): RuntimeDocPreviewReadParams | null {
+  if (grant.owner.kind !== 'runtime') {
+    return null
+  }
+  const { worktreeRoot, worktreeSelector } = grant.owner
+  const worktreeRelativePath = toRuntimeWorktreeRelativePath(worktreeRoot, absolutePath)
+  const authority = resolveDocPreviewAuthorityPaths(grant)
+  const entryRelativePath = authority.entryPath
+    ? toRuntimeWorktreeRelativePath(worktreeRoot, authority.entryPath)
+    : null
+  if (!worktreeRelativePath || !entryRelativePath) {
+    return null
+  }
+  return {
+    worktree: worktreeSelector,
+    relativePath: worktreeRelativePath,
+    entryRelativePath,
+    implicitRootRelativePath: authority.implicitRootPath
+      ? toRuntimeWorktreeRelativeDirectoryPath(worktreeRoot, authority.implicitRootPath)
+      : null,
+    authorizedRootRelativePaths: authority.authorizedRootPaths
+      .map((root) => toRuntimeWorktreeRelativeDirectoryPath(worktreeRoot, root))
+      .filter((root): root is string => root !== null)
+  }
+}
+
 export async function readDocPreviewFile(
   grant: DocPreviewGrant,
   relativePath: string
@@ -236,36 +265,17 @@ export async function readDocPreviewFile(
       return notFoundOutcome(SSH_HOST_NOT_SERVED_MESSAGE)
     }
     const runtimeOwner = grant.owner
-    if (runtimeOwner.fileAccess === 'terminal-artifact') {
-      return toOutcome(await readDocPreviewTerminalFile(runtimeOwner, absolutePath), contentType)
+    const terminalRead =
+      runtimeOwner.fileAccess === 'terminal-artifact'
+        ? await readDocPreviewTerminalFile(grant, absolutePath)
+        : null
+    if (terminalRead && 'preview' in terminalRead) {
+      return toOutcome(terminalRead.preview, contentType)
     }
-    const worktreeRelativePath = toRuntimeWorktreeRelativePath(
-      runtimeOwner.worktreeRoot,
-      absolutePath
-    )
-    const authority = resolveDocPreviewAuthorityPaths(grant)
-    const entryRelativePath = authority.entryPath
-      ? toRuntimeWorktreeRelativePath(runtimeOwner.worktreeRoot, authority.entryPath)
-      : null
-    const implicitRootRelativePath = authority.implicitRootPath
-      ? toRuntimeWorktreeRelativeDirectoryPath(
-          runtimeOwner.worktreeRoot,
-          authority.implicitRootPath
-        )
-      : null
-    const authorizedRootRelativePaths = authority.authorizedRootPaths
-      .map((root) => toRuntimeWorktreeRelativeDirectoryPath(runtimeOwner.worktreeRoot, root))
-      .filter((root): root is string => root !== null)
-    if (!worktreeRelativePath || !entryRelativePath) {
+    const params = terminalRead?.workspaceParams ?? runtimeWorkspaceReadParams(grant, absolutePath)
+    if (!params) {
       // Runtime file reads cannot address documents outside the worktree.
       return notFoundOutcome()
-    }
-    const params: RuntimeDocPreviewReadParams = {
-      worktree: runtimeOwner.worktreeSelector,
-      relativePath: worktreeRelativePath,
-      entryRelativePath,
-      implicitRootRelativePath,
-      authorizedRootRelativePaths
     }
     try {
       return toOutcome(
