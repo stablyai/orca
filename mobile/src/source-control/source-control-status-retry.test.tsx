@@ -21,6 +21,7 @@ const doubles = vi.hoisted(
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -142,7 +143,7 @@ vi.mock('./use-mobile-source-control-action-sheet', () => ({
 // The page has no forceReconnect; native providers supply it to redial after failed reads.
 vi.mock('expo-router', async () => {
   const { useEffect } = await import('react')
-  return { useFocusEffect: useEffect }
+  return { useFocusEffect: (effect: () => void) => useEffect(effect, [effect]) }
 })
 vi.mock('./use-mobile-source-control-state', async () => {
   const { useMobileSourceControlLoaders } = await import('./use-mobile-source-control-loaders')
@@ -420,7 +421,7 @@ it('reuses Source Control across worktrees without loading the old fallback into
   await act(async () => search().props.onChangeText('fork'))
   holdPr = true
   holdUsers = true
-  await act(async () => doubles.refetchPr!({ includeDetails: true }))
+  await act(async () => void doubles.refetchPr!({ includeDetails: true }))
   await settle()
   expect(heldPr).toHaveLength(1)
   const prReadsBefore = count('github.prForBranch')
@@ -480,12 +481,12 @@ it('reuses Source Control across worktrees without loading the old fallback into
     )
   holdDetails = true
   detailsBody = 'refreshed body'
-  await act(async () => doubles.refetchPr!({ includeDetails: true }))
+  await act(async () => void doubles.refetchPr!({ includeDetails: true }))
   await settle()
   await act(async () => heldPr.shift()!.resolve(rpcSuccess('current', pullRequest)))
   await settle()
   expect(heldDetails).toHaveLength(1)
-  await act(async () => doubles.refetchPr!({ includeDetails: false }))
+  await act(async () => void doubles.refetchPr!({ includeDetails: false }))
   await settle()
   await act(async () => heldPr.shift()!.reject(new Error('socket closed')))
   await settle()
@@ -515,12 +516,12 @@ it('reuses Source Control across worktrees without loading the old fallback into
 
   // An accepted no-PR result is retained and marked the same way.
   prValue = null
-  await act(async () => doubles.refetchPr!({ includeDetails: false }))
+  await act(async () => void doubles.refetchPr!({ includeDetails: false }))
   await settle()
   await act(async () => heldPr.shift()!.resolve(rpcSuccess('none', null)))
   await settle()
   expect(refreshLine()).toHaveLength(0)
-  await act(async () => doubles.refetchPr!({ includeDetails: false }))
+  await act(async () => void doubles.refetchPr!({ includeDetails: false }))
   await settle()
   await act(async () => heldPr.shift()!.reject(new Error('socket closed')))
   await settle()
