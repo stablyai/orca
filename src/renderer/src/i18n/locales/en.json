@@ -19550,6 +19550,8 @@
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes)."
       },
       "composer": {
+        "defaultModel": "Default",
+        "defaultModelNotReported": "Default model not reported",
         "send": "Send",
         "alternateSteerHint": "{{shortcut}} to steer",
         "alternateQueueHint": "{{shortcut}} to queue",
@@ -19662,7 +19664,8 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "futureOptionsRequireUpdate": "Update Orca on this host to change future-turn choices while the agent works."
       },
       "tool": {
         "exitCode": "exit {{value0}}",

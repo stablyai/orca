@@ -73,7 +73,7 @@ export function structuredAgentSessionOptionStamp(
   summary:
     | Pick<
         AgentSessionStatusSummary,
-        'model' | 'permissionMode' | 'effort' | 'fastMode' | 'serviceTier'
+        'model' | 'permissionMode' | 'effort' | 'fastMode' | 'serviceTier' | 'modelDefault'
       >
     | undefined
 ): string {
@@ -82,7 +82,8 @@ export function structuredAgentSessionOptionStamp(
     summary?.permissionMode,
     summary?.effort,
     summary?.fastMode,
-    summary?.serviceTier
+    summary?.serviceTier,
+    summary?.modelDefault === true
   ]
     .map((value) => value ?? '')
     .join('|')

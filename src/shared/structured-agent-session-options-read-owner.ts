@@ -10,6 +10,10 @@ import {
   type StructuredAgentSessionOptionState
 } from './agent-session/options/structured-agent-session-options'
 import type { StructuredSessionSelectionController } from './structured-agent-session-selection-operations'
+import {
+  createStructuredOptionPickBook,
+  resetStructuredOptionPickBook
+} from './structured-agent-session-option-pick-book'
 
 type ReadContext = {
   owner: readonly unknown[]
@@ -50,6 +54,8 @@ export function createStructuredAgentSessionOptionsReadOwner(
   let leases = 0
   let version = 0
   let dirty = true
+  const optionPicks = { current: createStructuredOptionPickBook() }
+  const writes = { current: { count: 0, readback: false } }
   const listeners = new Set<() => void>()
   const notify = () => listeners.forEach((listener) => listener())
   const run = createCoalescingKeyedRunner<void>()
@@ -70,6 +76,10 @@ export function createStructuredAgentSessionOptionsReadOwner(
     // Coalesce within a lease; a new lease reads at once and the old lease's reply stays inert.
     void run(attached.key, 'latest', async () => {
       if (lease !== attached || !dirty || !attached.isCurrent()) {
+        return
+      }
+      if (writes.current.count > 0) {
+        writes.current.readback = true
         return
       }
       dirty = false
@@ -122,6 +132,7 @@ export function createStructuredAgentSessionOptionsReadOwner(
         }
       }
       attached.accepted?.()
+      attached.controller.setModelDefault(result.current.modelDefault === true)
       attached.controller.retire(completed)
       notify()
     }).catch(() => undefined)
@@ -152,6 +163,26 @@ export function createStructuredAgentSessionOptionsReadOwner(
       }
     },
     updateOptionState,
+    optionPicks,
+    writes,
+    beginOptionWrite(_id: string) {
+      const pending = writes.current
+      pending.count += 1
+      version++
+      dirty = true
+      let finished = false
+      return (readback: boolean) => {
+        if (finished || writes.current !== pending) {
+          return
+        }
+        finished = true
+        pending.count -= 1
+        pending.readback ||= readback
+        if (pending.count === 0 && (pending.readback || dirty)) {
+          invalidate()
+        }
+      }
+    },
     invalidate,
     attach(context: ReadContext) {
       const sameOwner = !previous || same(previous.owner, context.owner)
@@ -173,6 +204,8 @@ export function createStructuredAgentSessionOptionsReadOwner(
           ...snapshot,
           optionState: sameOwner ? { ...kept, permissionMode: current.permissionMode } : kept
         }
+        writes.current = { count: 0, readback: false }
+        resetStructuredOptionPickBook(optionPicks.current)
         notify()
       }
       previous = context

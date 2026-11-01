@@ -1,3 +1,4 @@
+import type { AgentSessionOptionResult } from '../../../shared/agent-session/options/agent-session-options-result'
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
 import { readNoChoiceOptionResult } from './structured-agent-session-option-observation'
@@ -13,7 +14,6 @@ import type { AgentSessionOperationOutcome } from '../../../shared/agent-session
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
-  AgentSessionOptionResult,
   AgentSessionPromptResult,
   AgentSessionQueuedSendReceipt,
   AgentSessionSendResult
@@ -304,12 +304,13 @@ export function promptPlan(
   }
 }
 
-export function setOptionPlan(params: { key: string; value: string }) {
+export function setOptionPlan(params: { key: string; value: string | null }) {
   return {
     method: 'agentSession.setOption',
     fields: { key: params.key, value: params.value },
-    run: async (ctx) => {
-      const options = { ...ctx.persistedOptions, [params.key]: params.value }
+    run: async (ctx): Promise<TurnOutcome<AgentSessionOptionResult>> => {
+      const options =
+        params.value === null ? {} : { ...ctx.persistedOptions, [params.key]: params.value }
       await ctx.persistOptions(options)
       ctx.publish()
       return { ok: true, value: { ...params, options } }
@@ -319,12 +320,15 @@ export function setOptionPlan(params: { key: string; value: string }) {
       if (outcome.status !== 'succeeded') {
         return null
       }
-      if (Object.hasOwn(outcome, 'optionResult')) {
-        return readNoChoiceOptionResult(outcome.optionResult, params)
+      if (params.value !== null && Object.hasOwn(outcome, 'optionResult')) {
+        return readNoChoiceOptionResult(outcome.optionResult, {
+          key: params.key,
+          value: params.value
+        })
       }
       return {
-        key: params.key,
-        value: params.value,
+        ...params,
+        ...(params.value === null ? { modelDefault: ctx.defaultModelSelected === true } : {}),
         ...(ctx.persistedOptions ? { options: { ...ctx.persistedOptions } } : {})
       }
     }

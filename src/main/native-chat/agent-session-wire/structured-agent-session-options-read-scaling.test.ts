@@ -73,7 +73,10 @@ describe('host options row work', () => {
         measured.push(rowReads)
       }
       counts.push(measured)
-      expect(reads).toHaveBeenCalledTimes(2)
+      expect(reads).toHaveBeenCalledTimes(4)
+      expect(
+        reads.mock.calls.filter(([params]) => params.requireConfiguredDefault === true)
+      ).toHaveLength(2)
       expect(reads.mock.calls.every(([params]) => params.savedOnly === true)).toBe(true)
       expect(probe).toHaveBeenCalledTimes(1)
       service.stop()

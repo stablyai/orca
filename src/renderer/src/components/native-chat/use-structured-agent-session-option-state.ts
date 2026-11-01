@@ -107,6 +107,9 @@ export function useStructuredAgentSessionOptionState(args: {
   const contextRefresh = conversationSupport?.contextUsage ? (args.unloadedTurnRevisions ?? 0) : 0
   const {
     optionStateRef,
+    optionPicks,
+    writes,
+    beginOptionWrite,
     activeOptionRecordRef,
     updateOptionState,
     receiveCatalog,
@@ -242,6 +245,9 @@ export function useStructuredAgentSessionOptionState(args: {
     isCurrentContext,
     optionState,
     optionStateRef,
+    optionPicks,
+    writes,
+    beginOptionWrite,
     activeOptionRecordRef,
     updateOptionState
   }

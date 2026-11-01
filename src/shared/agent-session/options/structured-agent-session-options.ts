@@ -5,24 +5,16 @@ import {
   replaceStructuredAgentSessionAnsweredValues,
   type StructuredAgentSessionOptionRecord
 } from './structured-agent-session-option-state'
-import {
-  STRUCTURED_LAUNCH_OPTION_IDS,
-  STRUCTURED_LAUNCH_SEED_OPTION_IDS
-} from '../../native-chat/input/native-chat-session-option-defaults'
+import { STRUCTURED_LAUNCH_OPTION_IDS } from '../../native-chat/input/native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
 import { usesInstalledAgentModelCatalog } from '../../agent-model-catalog-ownership'
-import { structuredAgentSessionShownModel } from './structured-agent-session-option-snapshot'
-import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type {
   AgentSessionAcceptedInputSources,
   AgentSessionOptionsResult
 } from './agent-session-options-result'
 import { labelFromModelId } from '../../model-id-label'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
-import {
-  decodeStructuredAgentSessionOptionValue,
-  encodeStructuredAgentSessionOptionValue
-} from './structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from './structured-agent-session-option-codec'
 
 export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
@@ -66,6 +58,8 @@ export type StructuredAgentSessionOptionState = {
   reportedEffort?: string
   listingInProgress?: boolean
   fastModeRestricted?: boolean
+  modelDefault?: boolean
+  defaultModel?: AgentSessionOptionsResult['defaultModel']
 }
 
 /** Seed definitions supply geometry; only accepted input or host inventory can name a model. */
@@ -177,6 +171,9 @@ export function applyStructuredAgentSessionOptions(
   launch: { newLaunch: boolean; coherentCatalog?: boolean } = { newLaunch: false }
 ): StructuredAgentSessionOptionState {
   const { current } = result
+  if (current.modelDefault && current.model === undefined) {
+    delete state.record.values.model
+  }
   const installed = usesInstalledAgentModelCatalog(state.record.agent, launch.coherentCatalog)
   const keepCatalog = installed || result.modelsKnown === false
   // Catalog defaults supply picker context without claiming the chat chose them.
@@ -205,6 +202,8 @@ export function applyStructuredAgentSessionOptions(
     catalog: keepCatalog
       ? state.catalog
       : structuredAgentSessionOptionCatalog(seed, result, state.record.agent),
+    modelDefault: current.modelDefault === true,
+    defaultModel: result.defaultModel,
     fastModeRestricted:
       installed &&
       result.fastModeSupport?.supported === false &&
@@ -228,16 +227,6 @@ export function applyStructuredAgentSessionOptions(
     permissionMode: result.current.permissionMode ?? null,
     reportedPermissionMode: result.current.reportedPermissionMode
   }
-}
-
-/** The model a pick's other values were chosen under: the chat's own, else the default shown. */
-function structuredAgentSessionControlsModelId(
-  state: StructuredAgentSessionOptionState
-): string | null {
-  return state.catalog
-    ? structuredAgentSessionShownModel(state.catalog, state.catalog.models, state.record)
-        .controlsModelId
-    : null
 }
 
 export function commitStructuredAgentSessionOption(
@@ -266,14 +255,30 @@ export function commitStructuredAgentSessionOption(
     acceptedInputSources:
       state.acceptedInputSources === undefined
         ? undefined
-        : { ...state.acceptedInputSources, [id]: origin }
+        : { ...state.acceptedInputSources, [id]: origin },
+    ...(id === 'model' ? { modelDefault: false } : {})
+  }
+}
+
+export function commitStructuredAgentSessionModelDefault(
+  state: StructuredAgentSessionOptionState,
+  values: Readonly<Record<string, string>>
+): StructuredAgentSessionOptionState {
+  for (const id of ['model', 'effort', 'fastMode', 'serviceTier']) {
+    delete state.record.values[id]
+  }
+  return {
+    ...commitStructuredAgentSessionOptionValues(state, values),
+    modelDefault: true,
+    defaultModel: undefined
   }
 }
 
 export function commitStructuredAgentSessionOptionValues(
   state: StructuredAgentSessionOptionState,
   values: Readonly<Record<string, string>>,
-  origin: 'picked' | 'seeded' = 'picked'
+  origin: 'picked' | 'seeded' = 'picked',
+  pickedOptionId?: string
 ): StructuredAgentSessionOptionState {
   let next = state
   for (const id of STRUCTURED_LAUNCH_OPTION_IDS) {
@@ -282,42 +287,12 @@ export function commitStructuredAgentSessionOptionValues(
       next = commitStructuredAgentSessionOption(next, id, value, origin)
     }
   }
-  return next
+  return pickedOptionId !== undefined && pickedOptionId !== 'model'
+    ? { ...next, modelDefault: state.modelDefault }
+    : next
 }
 
-export type StructuredSessionOptionPick = {
-  modelId: string
-  optionId: string
-  value: SessionOptionValue
-}
-
-/** Persist only reseedable IDs, using provider-committed values after reconciliation. Effort-only picks adopt their controls’ model
- * because launch reads effort only under a stored model. Pre-commit state is valid: committed supplies changed model, record supplies unchanged model. */
-export function structuredAgentSessionOptionPicks(
-  state: StructuredAgentSessionOptionState,
-  committed: Readonly<Record<string, string>>
-): StructuredSessionOptionPick[] {
-  if (!state.catalog) {
-    return []
-  }
-  const committedModel = committed.model
-  const modelId =
-    typeof committedModel === 'string' && committedModel.trim()
-      ? committedModel
-      : structuredAgentSessionControlsModelId(state)
-  if (!modelId) {
-    return []
-  }
-  return STRUCTURED_LAUNCH_SEED_OPTION_IDS.flatMap((optionId) => {
-    const value = committed[optionId]
-    if (value === undefined) {
-      return []
-    }
-    const decoded = decodeStructuredAgentSessionOptionValue(optionId, value)
-    return decoded === null ||
-      (typeof decoded === 'string' && !decoded.trim()) ||
-      encodeStructuredAgentSessionOptionValue(optionId, decoded) === null
-      ? []
-      : [{ modelId, optionId, value: decoded }]
-  })
-}
+export {
+  structuredAgentSessionOptionPicks,
+  type StructuredSessionOptionPick
+} from '../../structured-agent-session-option-picks'

@@ -1,3 +1,4 @@
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type {
   AgentModelCatalogReadParams,
   AgentModelCatalogServiceDeps
@@ -29,4 +30,12 @@ export function agentModelCatalogScopedRecord(
   const records = agentModelCatalogReadRecords(deps, params)
   const stored = params.sessionId ? deps.getConversation(params.sessionId) : undefined
   return records?.scoped && stored ? { ...stored, accountHome: records.scoped.accountHome } : stored
+}
+
+export function agentModelCatalogReleasedOwner(
+  record: AgentSessionConversationView | undefined
+): boolean {
+  return (
+    record?.ownerObservation.claimStatus === 'released' && !!record.ownerObservation.deathEvidence
+  )
 }

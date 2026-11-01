@@ -1,3 +1,5 @@
+import { effectiveAgentSessionOptions } from '../../../shared/agent-session-default-model'
+import { readStructuredAgentSessionDefaultModel } from './structured-agent-session-model-default'
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../agent-model-catalog/agent-model-catalog-operation'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../agent-model-catalog/agent-model-catalog-listing-waiters'
@@ -147,7 +149,7 @@ export async function readStructuredAgentSessionOptions(
           (row) => row.isDefault
         )?.id
       : undefined
-  const saved = record?.options ?? {}
+  const saved = record ? (effectiveAgentSessionOptions(record) ?? {}) : {}
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined
@@ -224,10 +226,12 @@ export async function readStructuredAgentSessionOptions(
       current.serviceTier = projected.options.serviceTier
     }
   }
+  const defaultModel = await readStructuredAgentSessionDefaultModel(context.deps, sessionId)
   const recovery = await readStructuredSessionRecovery(session, context, sessionId)
   return {
     ...options,
     ...recovery,
+    ...(defaultModel ? { defaultModel } : {}),
     ...(live?.effortFixed
       ? {
           models: options.models.map(({ effortsKnown: _unknown, ...row }) => ({
@@ -238,6 +242,7 @@ export async function readStructuredAgentSessionOptions(
       : {}),
     current: {
       ...current,
+      ...(record?.defaultModelOptions !== undefined ? { modelDefault: true } : {}),
       acceptedInputSources,
       ...(reportedEffort !== undefined ? { reportedEffort } : {}),
       defaulted,
