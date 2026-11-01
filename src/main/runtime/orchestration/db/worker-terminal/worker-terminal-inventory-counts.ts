@@ -3,11 +3,10 @@ import type {
   WorkerDispatchListState,
   WorkerTerminalListState,
   WorkerTerminalOwnershipState,
-  WorkerTerminalReleaseState,
-  WorkerTerminalResourceRow
+  WorkerTerminalReleaseState
 } from '../../worker-terminal-ownership'
 import type { OrchestrationDb } from '../orchestration-db'
-import { parseWorkerTerminalPriorOwnerIds } from '../pane-key-match'
+import { WORKER_TERMINAL_PRIOR_OWNERS_SQL } from './worker-terminal-handed-on'
 import type { WorkerTerminalListingSnapshot } from './worker-terminal-listing'
 
 export type WorkerTerminalStateRow = {
@@ -45,23 +44,6 @@ function buildInventoryScope(params: WorkerTerminalInventoryParams): {
   return { where, values }
 }
 
-/** A resource a follow-up took over still lists the Dispatches that held it before. */
-export const WORKER_TERMINAL_HANDED_ON_SQL = "r.prior_owner_dispatch_ids != '[]'"
-
-/** The terminal each former owner handed on, as `transferred` from that owner's side; the latest hand-off wins. */
-export function indexHandedOnWorkerTerminalResources(
-  resources: readonly WorkerTerminalResourceRow[]
-): Map<string, WorkerTerminalResourceRow> {
-  const byPriorOwner = new Map<string, WorkerTerminalResourceRow>()
-  const oldestFirst = [...resources].sort((a, b) => a.updated_at.localeCompare(b.updated_at))
-  for (const resource of oldestFirst) {
-    for (const owner of parseWorkerTerminalPriorOwnerIds(resource.prior_owner_dispatch_ids) ?? []) {
-      byPriorOwner.set(owner, { ...resource, ownership_state: 'transferred' })
-    }
-  }
-  return byPriorOwner
-}
-
 /** Derive all filtering/counting through the single state machine; newest-first order supports paging. */
 export function scanWorkerTerminalStates(
   this: OrchestrationDb,
@@ -75,10 +57,18 @@ export function scanWorkerTerminalStates(
               d.rowid AS database_id,
               COALESCE(w.state, 'unsupervised') AS worker_state,
               COALESCE(w.agent_terminal_handle, d.assignee_handle) AS agent_terminal_handle,
-              r.id AS resource_id, r.ownership_state, r.release_state
+              r.id AS resource_id, r.ownership_state, r.release_state,
+              handed.release_state AS handed_on_release_state
          FROM dispatch_contexts d
          LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
          LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = d.id
+         -- The latest hand-off wins: SQLite takes the bare column from the MAX row.
+         LEFT JOIN (
+           SELECT prior.value AS dispatch_id, p.release_state, MAX(p.updated_at)
+             FROM ${WORKER_TERMINAL_PRIOR_OWNERS_SQL}
+            WHERE p.prior_owner_dispatch_ids != '[]'
+            GROUP BY prior.value
+         ) handed ON r.id IS NULL AND handed.dispatch_id = d.id
         ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
         ORDER BY d.rowid DESC`
     )
@@ -90,13 +80,8 @@ export function scanWorkerTerminalStates(
     resource_id: string | null
     ownership_state: WorkerTerminalOwnershipState | null
     release_state: WorkerTerminalReleaseState | null
+    handed_on_release_state: WorkerTerminalReleaseState | null
   }[]
-  const handedOn = indexHandedOnWorkerTerminalResources(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
-    this.db
-      .prepare(`SELECT r.* FROM worker_terminal_resources r WHERE ${WORKER_TERMINAL_HANDED_ON_SQL}`)
-      .all() as WorkerTerminalResourceRow[]
-  )
   return rows.map((row) => ({
     dispatchId: row.dispatch_id,
     databaseId: row.database_id,
@@ -105,7 +90,10 @@ export function scanWorkerTerminalStates(
       agentTerminalHandle: row.agent_terminal_handle,
       resource:
         row.resource_id === null
-          ? (handedOn.get(row.dispatch_id) ?? null)
+          ? row.handed_on_release_state && {
+              ownership_state: 'transferred',
+              release_state: row.handed_on_release_state
+            }
           : {
               ownership_state: row.ownership_state as WorkerTerminalOwnershipState,
               release_state: row.release_state as WorkerTerminalReleaseState

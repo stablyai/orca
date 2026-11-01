@@ -382,7 +382,7 @@ describe('orchestration worker-list pagination', () => {
     expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-a'])
   })
 
-  it('projects a 100-row page within seven synchronous read statements', async () => {
+  it('projects a 100-row page within six synchronous read statements', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
@@ -414,7 +414,57 @@ describe('orchestration worker-list pagination', () => {
     )
     expect(page.workers[49]?.projection.attention.categories).toContain('failure')
     expect(page.page).toEqual({ total: 100, limit: 100, hasMore: false, nextCursor: null })
-    expect(prepare).toHaveBeenCalledTimes(7)
+    expect(prepare).toHaveBeenCalledTimes(6)
+  })
+
+  it('fetches the same rows for one worker however many unrelated terminals were handed on', async () => {
+    const fetchedBeside = async (unrelated: number): Promise<number> => {
+      db = new OrchestrationDb(':memory:')
+      const runtime = new OrcaRuntimeService()
+      runtime.setOrchestrationDb(db)
+      const run = db.createRun({
+        objective: 'Handed-on history read cost',
+        coordinatorHandle: 'term-coordinator',
+        coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      })
+      insertWorkerInventory(db, run.id, 'dispatch-listed', 'succeeded', 'not_requested')
+      const sqlite = sqliteFor(db)
+      const insert = sqlite.prepare(
+        `INSERT INTO worker_terminal_resources (
+           id, origin_dispatch_id, owner_dispatch_id, prior_owner_dispatch_ids, terminal_handle
+         ) VALUES (?, ?, ?, ?, ?)`
+      )
+      for (let index = 0; index < unrelated; index += 1) {
+        insert.run(
+          `resource-${index}`,
+          `a-${index}`,
+          `b-${index}`,
+          `["a-${index}"]`,
+          `term-${index}`
+        )
+      }
+      const prepare = sqlite.prepare.bind(sqlite)
+      let fetched = 0
+      vi.spyOn(sqlite, 'prepare').mockImplementation((sql) => {
+        const statement = prepare(sql)
+        const all = statement.all.bind(statement)
+        statement.all = (...params) => {
+          const rows = all(...params)
+          fetched += rows.length
+          return rows
+        }
+        return statement
+      })
+      await callWorkerList(runtime, { run: run.id, limit: 100 })
+      // worker-show reads the same listing for its one Dispatch.
+      db.listWorkerTerminalResources({ dispatchIds: ['dispatch-listed'], limit: 1 })
+      vi.mocked(sqlite.prepare).mockRestore()
+      return fetched
+    }
+
+    const alone = await fetchedBeside(0)
+    db?.close()
+    expect(await fetchedBeside(10_000)).toBe(alone)
   })
 
   it('aggregates exact inventory counts while preserving filtered totals', async () => {
@@ -549,7 +599,7 @@ describe('orchestration worker-list pagination', () => {
       await callWorkerList(runtime, { run: run.id, limit: 100, includeRemote: true })
 
       // The page cost must not grow with the number of federated rows on it.
-      expect(prepare.mock.calls.length).toBeLessThan(9)
+      expect(prepare.mock.calls.length).toBeLessThan(8)
     }
   )
 

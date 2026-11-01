@@ -14,10 +14,9 @@ import {
 } from './worker-terminal-attention-query'
 import {
   countWorkerTerminalInventory,
-  indexHandedOnWorkerTerminalResources,
-  scanWorkerTerminalStates,
-  WORKER_TERMINAL_HANDED_ON_SQL
+  scanWorkerTerminalStates
 } from './worker-terminal-inventory-counts'
+import { readListedWorkerTerminalResources } from './worker-terminal-handed-on'
 import {
   allowWorkerTerminalAutoClose,
   getWorkerAutoCloseState,
@@ -209,21 +208,10 @@ export function listWorkerTerminalResources(
     created_at: string
     database_id: number
   }[]
-  const resources =
-    rows.length === 0
-      ? []
-      : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
-        (this.db
-          .prepare(
-            `SELECT r.* FROM worker_terminal_resources r
-               WHERE r.owner_dispatch_id IN (${rows.map(() => '?').join(',')})
-                  OR ${WORKER_TERMINAL_HANDED_ON_SQL}`
-          )
-          .all(...rows.map((row) => row.dispatch_id)) as WorkerTerminalResourceRow[])
-  const resourceByOwner = new Map(
-    resources.map((resource) => [resource.owner_dispatch_id, resource])
+  const { owned: resourceByOwner, handedOn } = readListedWorkerTerminalResources.call(
+    this,
+    rows.map((row) => row.dispatch_id)
   )
-  const handedOn = indexHandedOnWorkerTerminalResources(resources)
   return rows.map((row) => {
     const owned = resourceByOwner.get(row.dispatch_id)
     const resource = owned ?? handedOn.get(row.dispatch_id) ?? null

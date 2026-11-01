@@ -436,6 +436,32 @@ describe('a follow-up to a finished terminal worker', () => {
         counts: { active: 1 }
       }
     )
+
+    // A -> B -> C, then C's release: neither earlier row claims the terminal.
+    const b = getFollowUpDispatch(h.db, dispatchId)!
+    h.settle(b.task_id, b.id, 'succeeded')
+    await send(b.id, 'and the tests')
+    const c = getFollowUpDispatch(h.db, b.id)!
+    h.settle(c.task_id, c.id, 'succeeded')
+    await expect(h.call('orchestration.workerRelease', { dispatch: c.id })).resolves.toMatchObject({
+      state: 'released'
+    })
+    const handedOn = (id: string) =>
+      expect.objectContaining({ dispatchId: id, agentTerminalHandle: null, terminalState: null })
+    await expect(h.call('orchestration.workerList', { run: h.activeRunId })).resolves.toMatchObject(
+      {
+        workers: [
+          expect.objectContaining({
+            dispatchId: c.id,
+            agentTerminalHandle: 'term_worker',
+            terminalState: 'released'
+          }),
+          handedOn(b.id),
+          handedOn(dispatchId)
+        ],
+        counts: { released: 1 }
+      }
+    )
     await expect(
       h.call('orchestration.workerList', { run: h.activeRunId, terminalState: 'retained' })
     ).resolves.toMatchObject({ workers: [] })
