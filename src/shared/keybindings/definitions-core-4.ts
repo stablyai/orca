@@ -106,5 +106,22 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     },
     // Why: macOS uses Shift+Space as an input-source shortcut; Orca otherwise rejects Shift-only bindings to avoid stealing typed text.
     allowShiftOnlyKeybindings: true
+  },
+  {
+    id: 'tab.focusNextGroup',
+    title: 'Focus next split',
+    group: 'Tab Navigation',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'split', 'group', 'pane', 'focus', 'next', 'switch'],
+    // Why: every natural chord (Mod/Mod+Shift/Mod+Alt brackets, Mod+digits) is already taken, so users opt in.
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'tab.focusPreviousGroup',
+    title: 'Focus previous split',
+    group: 'Tab Navigation',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'split', 'group', 'pane', 'focus', 'previous', 'switch'],
+    defaultBindings: platformBindings([])
   }
 ]
