@@ -25,8 +25,13 @@ type Box = { left: number; right: number; top: number; bottom: number }
 // happy-dom's viewport is 1024 x 768; the cards' column is x 648-1008 as at 1024 px in Orca.
 const CARD_COLUMN: Box = { left: 648, right: 1008, top: 0, bottom: 0 }
 const rects = new Map<string, Box>()
-const resizeBox = (id: string): void =>
-  observed.get(document.querySelector(`[data-box="${id}"]`) as Element)?.()
+const resizeBox = (id: string): void => {
+  const box = document.querySelector(`[data-box="${id}"]`)
+  if (!box) {
+    throw new Error(`no element with data-box="${id}"`)
+  }
+  observed.get(box)?.()
+}
 
 function Composer({ id, column }: { id: string; column?: string }): React.JSX.Element {
   const pane = useRef<HTMLDivElement>(null)
