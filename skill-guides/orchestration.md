@@ -62,7 +62,9 @@ Never:
 
 ## When Orca wakes you
 
-- Run the `check` command the wake gives you. Answer a `question` with
+- In a chat, each message arrives whole as its own message: act on it. A wake
+  that names a `check` command (a terminal, or one message too large for a chat
+  message) means run that command. Answer a `question` with
   `ORCA orchestration reply --id <message_id> --body "<answer>"` when the answer
   follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
