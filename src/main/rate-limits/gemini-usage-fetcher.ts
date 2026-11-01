@@ -15,6 +15,7 @@ import {
   deriveSessionSummary
 } from './gemini-bucket-formatting'
 import { classifyThrownUsageRequestError } from './usage-request-failure-kind'
+import { fetchAntigravityLocalRateLimits } from './antigravity-local-usage-fetcher'
 
 const API_TIMEOUT_MS = 10_000
 const RETRIEVE_QUOTA_URL = 'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota'
@@ -231,6 +232,11 @@ export async function fetchGeminiRateLimits(
   }
 
   try {
+    const localResult = await fetchAntigravityLocalRateLimits().catch(() => null)
+    if (localResult && localResult.status === 'ok') {
+      return localResult
+    }
+
     const authJson = await readAuthJson()
     const result =
       authJson?.google?.type === 'oauth'
@@ -250,6 +256,6 @@ export async function fetchGeminiRateLimits(
           })()
     return result
   } catch (err) {
-    return geminiError(err)
+    return geminiError(err, classifyThrownUsageRequestError(err))
   }
 }

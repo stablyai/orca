@@ -1621,7 +1621,12 @@
             "worktreeHandoffSummary": "Move work to an agent that is already running in a different branch.",
             "childSequenceSummary": "Use child agents one after another when each phase depends on the last.",
             "childParallelSummary": "Split non-overlapping investigation or implementation tasks across child agents.",
-            "prSplitSummary": "Give each child agent its own worktree so parallel implementation stays reviewable."
+            "prSplitSummary": "Give each child agent its own worktree so parallel implementation stays reviewable.",
+            "handoffPrompt": "Use {{orchestrationCommand}} to hand this billing settings task to the idle Claude agent. Include the goal, current context, and what they should finish next.",
+            "worktreeHandoffPrompt": "Use {{orchestrationCommand}} to hand this settings cleanup to the agent in the settings-polish worktree. Send the goal, relevant files, and expected result.",
+            "childSequencePrompt": "Use {{orchestrationCommand}} to run this auth refactor in phases: plan, backend, UI, then tests. Start each child agent after the previous phase is done.",
+            "childParallelPrompt": "Use {{orchestrationCommand}} to split this auth refactor across parallel child agents: API contract, backend call sites, UI flow, and test gaps.",
+            "prSplitPrompt": "Use {{orchestrationCommand}} to split this onboarding update into smaller PRs, each in its own child worktree: setup state, settings UI, copy, and tests."
           }
         }
       },
@@ -4913,7 +4918,9 @@
             "updatedAgo": "Updated {{time}}",
             "notYetUpdated": "Not yet updated",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
-            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available"
+            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "resetsNow": "Resets now",
+            "resetsIn": "Resets in {{value0}}"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -7487,12 +7494,6 @@
           "36223200ac": "OpenCode Go Session Cookie",
           "ea631977b5": "Configure OpenCode Go provider settings.",
           "4ac10b4d08": "OpenCode Go",
-          "c2aee76420": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
-          "96f3649526": "Use Gemini CLI credentials (experimental)",
-          "d676c41fc6": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
-          "0c7f915b01": "Use Gemini CLI credentials",
-          "973741a871": "Keep existing Gemini CLI sessions available. Gemini credentials do not sign you into Antigravity.",
-          "0c64dc2a64": "Gemini CLI (legacy)",
           "db209ee572": "Remove",
           "8a0f870153": "Re-authenticate",
           "3d245ef7d9": "Codex reported this sign-in is out of date",
@@ -7611,7 +7612,12 @@
             }
           },
           "remoteScopeLocalAccountsKeptHostPicker": "Accounts managed on this desktop are unchanged. Choose this computer in the Host menu at the top of Settings to view them.",
-          "apiKeyUpdateFailed": "MiniMax API key update failed."
+          "apiKeyUpdateFailed": "MiniMax API key update failed.",
+          "antigravityTitle": "Antigravity",
+          "antigravityDescription": "Configure Antigravity provider settings.",
+          "useAntigravityCredentials": "Use Antigravity credentials",
+          "useAntigravityCredentialsDescription": "Extracts OAuth credentials from your local Antigravity installation to authenticate with Google. This uses credentials issued to the Antigravity app, not Orca. May break if Google updates Antigravity. Use at your own risk.",
+          "useAntigravityCredentialsWithRuntime": "Extracts OAuth credentials from your local Antigravity installation to authenticate with Google for {{value0}}. This uses credentials issued to the Antigravity app, not Orca. May break if Google updates Antigravity. Use at your own risk."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -9617,13 +9623,10 @@
             "37020a02c2": "console",
             "25591bf95b": "Paste the full opencode.ai Cookie header, including __Host-console_session, for rate limit fetching.",
             "6ed1401020": "OpenCode Go Session Cookie",
-            "b7c2cee442": "experimental",
             "7118d2f908": "credentials",
             "933deaf732": "oauth",
             "8630464352": "cli",
             "e8e1ff3887": "gemini",
-            "bada4a3218": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google.",
-            "d819755b02": "Use Gemini CLI credentials",
             "35b461d817": "sign in",
             "f2d666a886": "optional",
             "8b06729e0f": "active",
@@ -9684,7 +9687,10 @@
                 "codingPlan": "coding plan",
                 "rateLimit": "rate limit"
               }
-            }
+            },
+            "useAntigravityCredentials": "Use Antigravity credentials",
+            "useAntigravityCredentialsDescription": "Extracts OAuth credentials from your local Antigravity installation to authenticate with Google.",
+            "antigravity": "antigravity"
           }
         },
         "advanced": {

@@ -50,6 +50,15 @@ export function formatTimeAgo(ts: number): string {
   return translate('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
 }
 
+export function formatLocalizedResetCountdown(ms: number): string {
+  const duration = formatResetDuration(ms)
+  return duration === 'now'
+    ? translate('auto.components.status.bar.tooltip.resetsNow', 'Resets now')
+    : translate('auto.components.status.bar.tooltip.resetsIn', 'Resets in {{value0}}', {
+        value0: duration
+      })
+}
+
 // Preserve tooltip imports while sharing countdown formatting with mobile.
 export { formatResetCountdown }
 
@@ -218,7 +227,7 @@ function ProviderRateLimitWindowSection({
   }
   const usedPct = clampUsedPercent(window.usedPercent)
   const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
-  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - now) : null
+  const resetLabel = window.resetsAt ? formatLocalizedResetCountdown(window.resetsAt - now) : null
 
   return (
     <div className="space-y-1">

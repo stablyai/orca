@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setMainHttpClient } from '../network/http-client'
 import { authJsonGoogle, makeResponse, quotaResponse } from './gemini-usage-fetcher.test-fixtures'
 
-const { readFileMock, extractCredsMock } = vi.hoisted(() => ({
+const { readFileMock, extractCredsMock, fetchAntigravityLocalRateLimitsMock } = vi.hoisted(() => ({
   readFileMock: vi.fn(),
-  extractCredsMock: vi.fn()
+  extractCredsMock: vi.fn(),
+  fetchAntigravityLocalRateLimitsMock: vi.fn()
 }))
 const fetchMock = vi.fn()
 
@@ -21,6 +22,9 @@ vi.mock('node:fs/promises', () => ({
 vi.mock('../integration-credential-file', () => ({
   writeCredentialFileAtomic: vi.fn().mockReturnValue(true)
 }))
+vi.mock('./antigravity-local-usage-fetcher', () => ({
+  fetchAntigravityLocalRateLimits: fetchAntigravityLocalRateLimitsMock
+}))
 
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 
@@ -32,6 +36,8 @@ describe('fetchGeminiRateLimits', () => {
     vi.setSystemTime(new Date('2026-04-24T12:00:00.000Z'))
     readFileMock.mockReset()
     extractCredsMock.mockReset()
+    fetchAntigravityLocalRateLimitsMock.mockReset()
+    fetchAntigravityLocalRateLimitsMock.mockResolvedValue(null)
     fetchMock.mockReset()
     fetchMock.mockImplementation((url: string) => {
       if (url.includes('loadCodeAssist')) {
@@ -170,5 +176,24 @@ describe('fetchGeminiRateLimits', () => {
     const result = await fetchGeminiRateLimits(true)
     expect(result.status).toBe('ok')
     expect(quotaCallCount).toBe(2)
+  })
+
+  it('returns local Antigravity rate limits when available without OAuth fallback', async () => {
+    fetchAntigravityLocalRateLimitsMock.mockResolvedValue({
+      provider: 'gemini',
+      session: { usedPercent: 20, windowMinutes: 300, resetsAt: Date.now() + 1000 },
+      weekly: { usedPercent: 10, windowMinutes: 10080, resetsAt: Date.now() + 5000 },
+      planType: 'Pro',
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    })
+
+    const result = await fetchGeminiRateLimits(true)
+    expect(result.status).toBe('ok')
+    expect(result.planType).toBe('Pro')
+    expect(result.session?.usedPercent).toBe(20)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(readFileMock).not.toHaveBeenCalled()
   })
 })
