@@ -32,7 +32,7 @@ function ids(
 }
 
 describe('settings navigation metadata', () => {
-  it('places Chat directly after Appearance in Interface and moves its search entries', () => {
+  it('places Chat UI directly after Appearance in Interface and moves its search entries', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
       isWindows: false,
@@ -42,7 +42,7 @@ describe('settings navigation metadata', () => {
     const appearanceIndex = sections.findIndex((section) => section.id === 'appearance')
     const chat = sections[appearanceIndex + 1]
     expect(chat.id).toBe('chat')
-    expect(chat.title).toBe('Chat')
+    expect(chat.title).toBe('Chat UI')
     expect(chat.group).toBe('interface')
     for (const query of ['Code text size', 'Reset chat appearance']) {
       expect(matchesSettingsSearch(query, chat.searchEntries)).toBe(true)
