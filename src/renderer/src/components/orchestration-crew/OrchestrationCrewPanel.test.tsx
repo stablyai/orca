@@ -79,7 +79,7 @@ it('keeps disabled/enabled mentions, keyboard disclosure, Open, Copy, Escape and
   await user.keyboard('{Enter}')
   expect(screen.getByRole('button', { name: 'Collapse orchestration panel' })).toHaveFocus()
   expect(screen.getByText('Orchestration')).toBeInTheDocument()
-  const body = screen.getByRole('button', { name: /Check the result/ })
+  const body = screen.getByRole('button', { name: 'Mention Worker' })
   const chevron = screen.getByRole('button', { name: "Show Worker's task and latest message" })
   expect(body).toBeDisabled()
   expect(body).not.toHaveAttribute('aria-expanded')
@@ -217,7 +217,7 @@ it('shows a pending question on the row and in its details without navigating or
   const user = userEvent.setup()
   mount({ ...worker, pendingQuestion: { preview: 'Which option?', at: '2026-10-28T01:00:00Z' } })
   await user.click(
-    screen.getByRole('button', { name: 'Show orchestration: 1 worker, 1 needs attention' })
+    screen.getByRole('button', { name: 'Show orchestration: 1 worker, 1 needs you' })
   )
   expect(screen.getByText('Waiting for you · Which option?')).toBeInTheDocument()
   expect(screen.queryByText('Asks you')).not.toBeInTheDocument()
@@ -289,7 +289,7 @@ it('shows one collapsed avatar and question per party with reverse-role relation
       </TooltipProvider>
     )
     const tab = screen.getByRole('button', {
-      name: 'Show orchestration: 2 workers, 1 needs attention, 1 working'
+      name: 'Show orchestration: 2 workers, 1 needs you, 1 working'
     })
     expect(error).not.toHaveBeenCalled()
     expect(within(tab).getByText('2')).toBeInTheDocument()
@@ -311,7 +311,7 @@ it('retains an unavailable peer’s Open/latest/disclosure with one reason and u
   mount(peer, 'talkingWith', true)
   await user.click(screen.getByRole('button', { name: 'Show orchestration: 1 working' }))
   expect(screen.getAllByText('Sending unavailable')).toHaveLength(1)
-  const body = screen.getByRole('button', { name: /Check the result/ })
+  const body = screen.getByRole('button', { name: 'Mention Worker' })
   expect(body).toBeDisabled()
   await user.click(body)
   expect(rig.mention).not.toHaveBeenCalled()
@@ -362,6 +362,14 @@ it('groups the closed tab by status with three icons and +n, and sorts rows by l
       task: undefined,
       latest: at(6),
       pendingQuestion: { preview: 'Which?', at: '2026-10-28T01:00:00Z' }
+    },
+    {
+      ...worker,
+      partyKey: 'h',
+      label: 'H',
+      task: undefined,
+      latest: undefined,
+      pendingQuestion: { preview: 'Which?', at: '2026-10-28T01:00:00Z' }
     }
   ]
   rig.snapshot = {
@@ -379,7 +387,7 @@ it('groups the closed tab by status with three icons and +n, and sorts rows by l
     </TooltipProvider>
   )
   const tab = screen.getByRole('button', {
-    name: 'Show orchestration: 7 workers, 1 needs attention, 4 working, 1 idle, 1 failed'
+    name: 'Show orchestration: 8 workers, 2 need you, 4 working, 1 idle, 1 failed'
   })
   const groups = [...tab.querySelectorAll<HTMLElement>('[data-crew-group]')]
   expect(groups.map((group) => group.dataset.crewGroup)).toEqual([
@@ -392,7 +400,7 @@ it('groups the closed tab by status with three icons and +n, and sorts rows by l
   expect(groups[0]).not.toHaveTextContent('+')
   await user.click(tab)
   const titles = within(screen.getByRole('region', { name: 'Managing' })).getAllByText(
-    /^([A-G]|Ship it)$/
+    /^([A-H]|Ship it)$/
   )
   // Most recent message first; a row with no message keeps its place after them.
   expect(titles.map((title) => title.textContent)).toEqual([
@@ -402,6 +410,7 @@ it('groups the closed tab by status with three icons and +n, and sorts rows by l
     'C',
     'Ship it',
     'A',
-    'D'
+    'D',
+    'H'
   ])
 })

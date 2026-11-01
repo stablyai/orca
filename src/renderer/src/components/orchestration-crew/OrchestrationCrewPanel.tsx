@@ -1,57 +1,28 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  ChevronDown,
-  ChevronRight,
-  ExternalLink,
-  PanelRight,
-  PanelRightClose,
-  Workflow
-} from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { PanelRight, PanelRightClose, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { formatStateCount } from '@/components/sidebar/worktree-card-agent-summary'
+import type { WorktreeStatus } from '@/lib/worktree-status'
 import type {
   OrchestrationCrewRow,
   OrchestrationCrewSnapshot
 } from '../../../../shared/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useOrchestrationCrew } from '../native-chat/use-orchestration-crew'
-import { openOrchestrationCrewAgent } from '@/lib/open-agent-message-sender'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
-import { CrewRowDetails, CrewRowTime as Time } from './CrewRowDetails'
-import { CrewRowMenu } from './CrewRowMenu'
+import { CrewRowView, IconButton } from './CrewRowView'
 import {
   CREW_STATUS_GROUPS,
-  CrewAgentIcons,
   CrewAgentStack,
   crewStatusGroup,
   useCrewRowLooks,
   type CrewRowLook,
   type CrewStatusGroup
 } from './CrewAgentIcons'
-
-function IconButton({
-  label,
-  children,
-  ...props
-}: React.ComponentProps<typeof Button> & { label: string }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-xs" aria-label={label} {...props}>
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
 
 function runningWorker(row: OrchestrationCrewRow): boolean {
   return Boolean(
@@ -70,12 +41,23 @@ type PanelProps = {
   isVisible?: boolean
 }
 
-const GROUP_DOT = {
+// One fixed sidebar icon per group, so a group's icon never changes with message order.
+const GROUP_STATUS = {
   needsYou: 'permission',
   working: 'working',
-  idle: 'idle',
+  idle: 'inactive',
   failed: 'failed'
-} as const satisfies Record<CrewStatusGroup, Parameters<typeof formatStateCount>[0]>
+} as const satisfies Record<CrewStatusGroup, WorktreeStatus>
+
+function groupCount(group: CrewStatusGroup, count: number): string {
+  // The sidebar's "needs attention" count is singular in every form, so this one is the panel's own.
+  return group === 'needsYou'
+    ? translate('components.orchestrationCrew.needsYou', '{{count}} need you', {
+        count,
+        defaultValue_one: '{{count}} needs you'
+      })
+    : formatStateCount(group, count)
+}
 
 /** Most recent traffic first; the read model keeps one latest message per row, either direction. */
 function sortCrewRows(rows: readonly OrchestrationCrewRow[]): OrchestrationCrewRow[] {
@@ -116,7 +98,7 @@ function crewTabSummary(
           })
         ]
       : []),
-    ...groups.map(({ group, looks: members }) => formatStateCount(GROUP_DOT[group], members.length))
+    ...groups.map(({ group, looks: members }) => groupCount(group, members.length))
   ].join(', ')
   return { groups, counts }
 }
@@ -138,6 +120,15 @@ export function CrewPanelContent({
   const tab = useRef<HTMLButtonElement>(null)
   const collapse = useRef<HTMLButtonElement>(null)
   const restore = useRef(false)
+  // Hosts pass a new mention function each render; rows get one stable function so their memo holds.
+  const latestMention = useRef(mention)
+  useLayoutEffect(() => {
+    latestMention.current = mention
+  })
+  const stableMention = useCallback(
+    (rows: OrchestrationCrewRow[]) => latestMention.current(rows),
+    []
+  )
   useLayoutEffect(() => {
     if (open) {
       collapse.current?.focus({ preventScroll: true })
@@ -217,8 +208,8 @@ export function CrewPanelContent({
       data-orchestration-crew
       data-pane-prevent-terminal-focus
       data-native-chat-typing-redirect-ignore="true"
-      // A chat's own header is opaque, so the panel starts under it; elsewhere it reaches the pane top.
-      className="pointer-events-none absolute bottom-0 top-[var(--native-chat-header-inset,0px)] right-0 z-30 w-80 max-w-full text-foreground"
+      // z-15: above terminal text and the chat rail, below the pane title strip (z-20) so its buttons stay usable.
+      className="pointer-events-none absolute bottom-0 top-0 right-0 z-[15] w-80 max-w-full text-foreground"
       onMouseDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         event.stopPropagation()
@@ -227,8 +218,8 @@ export function CrewPanelContent({
       {open ? (
         <aside
           aria-label={title}
-          // The pane's transparent title strip draws its buttons over this band, so no chat shows above the panel.
-          className="pointer-events-auto flex h-full w-full flex-col border-l border-border bg-card pt-[calc(var(--orca-pane-title-height)-var(--native-chat-header-inset,0px))] text-card-foreground shadow-xs"
+          // The pane's title strip draws its buttons over this band, so no chat or terminal text shows above the panel.
+          className="pointer-events-auto flex h-full w-full flex-col border-l border-border bg-card pt-(--orca-pane-title-height) text-card-foreground shadow-xs"
         >
           <div className="flex h-9 shrink-0 items-center justify-between border-b border-border px-2">
             <span className="text-xs font-medium">{title}</span>
@@ -270,7 +261,7 @@ export function CrewPanelContent({
                       target={target}
                       isVisible={isVisible}
                       canMention={canMention}
-                      mention={mention}
+                      mention={stableMention}
                     />
                   ))}
                 </section>
@@ -285,7 +276,7 @@ export function CrewPanelContent({
               ref={tab}
               variant="outline"
               size="xs"
-              className="pointer-events-auto absolute top-[calc(var(--orca-pane-title-height)-var(--native-chat-header-inset,0px)+var(--spacing)*2)] right-0 h-auto max-w-full gap-1.5 py-1"
+              className="pointer-events-auto absolute top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] right-0 h-auto max-w-full gap-1.5 py-1"
               aria-label={translate(
                 'components.orchestrationCrew.show',
                 'Show orchestration: {{counts}}',
@@ -309,7 +300,7 @@ export function CrewPanelContent({
                     data-crew-group={group}
                     className="inline-flex shrink-0 items-center gap-0.5"
                   >
-                    <StatusIndicator status={members[0].status} showTooltip={false} />
+                    <StatusIndicator status={GROUP_STATUS[group]} showTooltip={false} />
                     <CrewAgentStack looks={members} />
                   </span>
                 ))}
@@ -326,88 +317,3 @@ export function CrewPanelContent({
     </div>
   )
 }
-
-// Memoized so one agent's status change re-renders only that row.
-const CrewRowView = memo(function CrewRowView({
-  row,
-  look,
-  target,
-  isVisible,
-  canMention,
-  mention: mentionRows
-}: {
-  row: OrchestrationCrewRow
-  look: CrewRowLook
-  target: RuntimeClientTarget
-  isVisible: boolean
-  canMention: boolean
-  mention: (rows: OrchestrationCrewRow[]) => void
-}) {
-  // A pending question already shows on the row's second line, so rows start collapsed.
-  const [expanded, setExpanded] = useState(false)
-  const open = () => {
-    void openOrchestrationCrewAgent(row, target)
-  }
-  const toggle = () => setExpanded((value) => !value)
-  const mention = () => mentionRows([row])
-  return (
-    <div className="mx-2 mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 rounded-lg border border-transparent px-2.5 py-2 hover:border-border/70 hover:bg-accent/50">
-      <button
-        type="button"
-        className="row-span-2 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default"
-        disabled={!canMention || !row.sendAddress}
-        // Keep focus in the terminal or composer the mention lands in.
-        onPointerDown={(event) => event.preventDefault()}
-        onClick={mention}
-      >
-        <CrewAgentIcons look={look} hostLabel={row.hostLabel} />
-        <span className="truncate text-[13px] font-medium">{row.task?.title ?? row.label}</span>
-        <span
-          className={cn(
-            'col-start-2 truncate text-xs',
-            row.pendingQuestion ? 'text-status-warning' : 'text-muted-foreground'
-          )}
-        >
-          {row.pendingQuestion
-            ? `${translate('components.orchestrationCrew.waitingPrefix', 'Waiting for you · ')}${row.pendingQuestion.preview}`
-            : (row.latest?.preview ?? row.progress ?? '')}
-        </span>
-      </button>
-      <div className="flex shrink-0 items-center">
-        <IconButton
-          label={translate(
-            'components.orchestrationCrew.showDetails',
-            "Show {{name}}'s task and latest message",
-            { name: row.label }
-          )}
-          aria-expanded={expanded}
-          onClick={toggle}
-        >
-          {expanded ? <ChevronDown /> : <ChevronRight />}
-        </IconButton>
-        <IconButton
-          label={translate('components.orchestrationCrew.open', 'Open {{name}}', {
-            name: row.label
-          })}
-          onClick={open}
-        >
-          <ExternalLink />
-        </IconButton>
-        {isVisible ? (
-          <CrewRowMenu row={row} open={open} canMention={canMention} mention={mention} />
-        ) : null}
-      </div>
-      <Time className="justify-self-end pr-1" at={row.pendingQuestion?.at ?? row.latest?.at} />
-      {!row.sendAddress ? (
-        <p className="col-span-2 pt-1 text-xs text-muted-foreground">
-          {translate('components.orchestrationCrew.sendingUnavailable', 'Sending unavailable')}
-        </p>
-      ) : null}
-      {expanded ? (
-        <div className="col-span-2 pt-2">
-          <CrewRowDetails row={row} />
-        </div>
-      ) : null}
-    </div>
-  )
-})

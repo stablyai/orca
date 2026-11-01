@@ -20650,6 +20650,7 @@
     },
     "orchestrationCrew": {
       "mentionAll": "Mention all",
+      "mentionAgent": "Mention {{name}}",
       "mentionInMessage": "Mention in message",
       "mentionRejected": "The terminal did not accept the agent reference. Try again.",
       "title": "Orchestration",
@@ -20662,6 +20663,8 @@
       "collapse": "Collapse orchestration panel",
       "show": "Show orchestration: {{counts}}",
       "summary": "Orchestration: {{counts}}",
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you",
       "waitingPrefix": "Waiting for you · ",
       "noTask": "No shared task",
       "open": "Open {{name}}",

@@ -1,10 +1,9 @@
-/* Height of the chat's own pane header; overlays anchored to the chat top (find bar, orchestration panel) sit below it. */
 .native-chat-appearance {
-  --native-chat-header-inset: 0px;
+  --native-chat-find-top-inset: 0px;
 }
 
 .native-chat-appearance:has(> .pane-title-bar) {
-  --native-chat-header-inset: var(--orca-pane-title-height);
+  --native-chat-find-top-inset: var(--orca-pane-title-height);
 }
 
 /* Paint find Ranges with CSS highlights in preview colors; only color/background are supported. */
