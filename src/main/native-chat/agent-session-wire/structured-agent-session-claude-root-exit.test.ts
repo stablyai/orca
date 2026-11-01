@@ -7,7 +7,7 @@ import {
   adapterFor,
   fakeClaude,
   identityFor
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   createTrackedJournalOpener,

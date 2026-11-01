@@ -61,6 +61,7 @@ function settings(overrides: Partial<NotificationSettings> = {}): NotificationSe
   return {
     enabled: true,
     agentTaskComplete: true,
+    agentNeedsInput: true,
     terminalBell: true,
     suppressWhenFocused: false,
     customSoundId: 'system',
@@ -129,12 +130,19 @@ describe('structured attention mobile delivery', () => {
     expect(h.sent[0]?.title).toContain('needs input')
   })
 
-  it('marks the push ineligible when agent notifications are off, as the desktop fan-out does', () => {
-    const h = harness({
+  it('gates a prompt on the needs-input setting and a completion on the finished one', () => {
+    const finishedOff = harness({
       readNotificationSettings: () => settings({ agentTaskComplete: false })
     })
-    h.delivery.deliver(PROMPT, SUMMARY)
-    expect(h.sent[0]).toMatchObject({ desktopAllowed: false })
+    finishedOff.delivery.deliver(PROMPT, SUMMARY)
+    finishedOff.delivery.deliver(completion('success'), SUMMARY)
+    expect(finishedOff.sent.map((event) => event.desktopAllowed)).toEqual([undefined, false])
+
+    const needsInputOff = harness({
+      readNotificationSettings: () => settings({ agentNeedsInput: false })
+    })
+    needsInputOff.delivery.deliver(PROMPT, SUMMARY)
+    expect(needsInputOff.sent[0]).toMatchObject({ desktopAllowed: false })
   })
 
   it('announces nothing for a completion with no verdict', () => {

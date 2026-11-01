@@ -7,7 +7,7 @@ import {
   claudeConfigDirEnvPatch,
   withoutInheritedClaudeConfigDir
 } from '../claude/claude-config-dir-pin'
-import { resolveClaudeStructuredLaunchHome } from '../claude/claude-structured-launch-home'
+import { resolveClaudeStructuredLaunchHome } from '../claude/structured/launch/claude-structured-launch-home'
 import type { CommitMessageGenerationTarget } from '../text-generation/source-control-text-generation-types'
 
 /** Default naming follows the native account binding; explicit recipes retain CLI routing. */

@@ -1,4 +1,4 @@
-import { useContext, useLayoutEffect, useRef } from 'react'
+import { useContext, useLayoutEffect, useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -23,6 +23,14 @@ import {
   PluginDeclarativeUnsupported
 } from './PluginDeclarativeDisplay'
 import { PluginDeclarativeListItem } from './PluginDeclarativeListItem'
+import {
+  isPluginDeclarativeRichNode,
+  PluginDeclarativeRichNodeView
+} from './PluginDeclarativeRichNode'
+import {
+  PluginDeclarativeHostServicesContext,
+  type PluginDeclarativeHostServices
+} from './plugin-declarative-assets'
 import { PluginDeclarativeIconGlyph } from './plugin-declarative-icons'
 import {
   PluginDeclarativeGestureContext,
@@ -58,15 +66,17 @@ export type PluginDeclarativeViewProps = {
   tree: PluginDeclarativeNode | null
   /** Fires a guest callback; the caller adds the revision the tree came from. */
   onEvent: PluginDeclarativeEmit
-  /** Opens a validated `http(s):`/`mailto:` Link href outside Orca. */
-  onOpenLink?: (href: string) => void
+  /** Opens a validated `http(s):`/`mailto:` href outside Orca, once `gestureId`'s control settled. */
+  onOpenLink?: (href: string, gestureId: string) => void
+  /** Object URL for a plugin-relative image file, or null when it cannot be shown. */
+  onLoadImage?: (path: string) => Promise<string | null>
   /** Tracks where granting controls sit, so a press can be judged settled. */
   gestures?: PluginDeclarativeGestureGeometry
 }
 
 type RenderContext = {
   emit: PluginDeclarativeEmit
-  openLink?: (href: string) => void
+  openLink?: (href: string, gestureId: string) => void
   /** Inside Text or Heading, where Text flows inline instead of as a block. */
   inline: boolean
 }
@@ -110,6 +120,17 @@ function PluginDeclarativeNodeView({
     ...context,
     inline: node.type === 'Text' || node.type === 'Heading'
   })
+  if (isPluginDeclarativeRichNode(node)) {
+    return (
+      <PluginDeclarativeRichNodeView
+        node={node}
+        emit={emit}
+        renderChildren={(nested) => renderChildren(nested, { ...context, inline: false })}
+      >
+        {children}
+      </PluginDeclarativeRichNodeView>
+    )
+  }
   switch (node.type) {
     case 'Stack':
       return (
@@ -159,8 +180,8 @@ function PluginDeclarativeNodeView({
         return <h3 className="text-sm font-semibold text-foreground">{children}</h3>
       }
       return <h2 className="text-base font-semibold text-foreground">{children}</h2>
-    case 'Button':
-      return (
+    case 'Button': {
+      const button = (
         <Button
           type="button"
           variant={buttonVariant(node.props)}
@@ -173,6 +194,17 @@ function PluginDeclarativeNodeView({
           {children}
         </Button>
       )
+      return node.props.tooltip ? (
+        <Tooltip>
+          <TooltipTrigger asChild>{button}</TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {node.props.tooltip}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        button
+      )
+    }
     case 'IconButton':
       return (
         <Tooltip>
@@ -190,7 +222,7 @@ function PluginDeclarativeNodeView({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {node.props.label}
+            {node.props.tooltip ?? node.props.label}
           </TooltipContent>
         </Tooltip>
       )
@@ -270,7 +302,11 @@ function PluginDeclarativeNodeView({
         <PluginDeclarativeLink
           props={node.props}
           trackRef={gestureId && gestures ? gestures.refFor(gestureId) : undefined}
-          onOpen={context.openLink}
+          onOpen={
+            href
+              ? (url) => context.openLink?.(url, pluginDeclarativeGestureId.href(url))
+              : undefined
+          }
           onPress={
             onPress && gestureId
               ? (grants) => emit(onPress, [], { press: { control: 'Link', gestureId, grants } })
@@ -301,8 +337,13 @@ export function PluginDeclarativeView({
   tree,
   onEvent,
   onOpenLink,
+  onLoadImage,
   gestures
 }: PluginDeclarativeViewProps): React.JSX.Element {
+  const services = useMemo<PluginDeclarativeHostServices>(
+    () => ({ openLink: onOpenLink, loadImage: onLoadImage }),
+    [onLoadImage, onOpenLink]
+  )
   const containerRef = useRef<HTMLDivElement | null>(null)
   // Every commit can move controls (a sibling grew, an ancestor reflowed), so re-measure.
   useLayoutEffect(() => {
@@ -311,17 +352,19 @@ export function PluginDeclarativeView({
   })
   return (
     <PluginDeclarativeGestureContext.Provider value={gestures ?? null}>
-      <div
-        ref={containerRef}
-        className="scrollbar-sleek flex h-full min-h-0 flex-col overflow-y-auto p-3 text-sm text-foreground"
-      >
-        {tree ? (
-          <PluginDeclarativeNodeView
-            node={tree}
-            context={{ emit: onEvent, openLink: onOpenLink, inline: false }}
-          />
-        ) : null}
-      </div>
+      <PluginDeclarativeHostServicesContext.Provider value={services}>
+        <div
+          ref={containerRef}
+          className="scrollbar-sleek flex h-full min-h-0 flex-col overflow-y-auto p-3 text-sm text-foreground"
+        >
+          {tree ? (
+            <PluginDeclarativeNodeView
+              node={tree}
+              context={{ emit: onEvent, openLink: onOpenLink, inline: false }}
+            />
+          ) : null}
+        </div>
+      </PluginDeclarativeHostServicesContext.Provider>
     </PluginDeclarativeGestureContext.Provider>
   )
 }

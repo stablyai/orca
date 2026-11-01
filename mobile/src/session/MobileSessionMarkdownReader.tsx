@@ -20,6 +20,7 @@ export function MarkdownReader({
   onCopy,
   onCopyPath,
   onDiscard,
+  loadImageSource,
   keyboardLift
 }: {
   documentId: string
@@ -30,6 +31,7 @@ export function MarkdownReader({
   onCopy: () => void
   onCopyPath: () => void
   onDiscard: () => void
+  loadImageSource?: (path: string) => Promise<string>
   keyboardLift: number
 }) {
   useMobileColorScheme()
@@ -58,6 +60,7 @@ export function MarkdownReader({
         editable={doc.editable && !doc.saving}
         onChange={onChange}
         onKeyboardInsetChange={setWebviewKeyboardInset}
+        loadImageSource={loadImageSource}
       />
       <View
         pointerEvents="box-none"

@@ -1,4 +1,4 @@
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useMemo, useState } from 'react'
 import type { AgentSessionUnavailable } from '../../../../shared/agent-session/agent-session-availability'
 import { readAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'

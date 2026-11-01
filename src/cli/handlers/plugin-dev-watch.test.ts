@@ -1,7 +1,11 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { COMMAND_SPECS } from '../specs'
 import { findCommandSpec, normalizeCommandPositionals, parseArgs, specPaths } from '../args'
 import type { HandlerContext } from '../dispatch'
+import { reportCliError } from '../cli-error'
 import type { RuntimeClient } from '../runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 import {
@@ -43,6 +47,44 @@ describe('orca plugin dev watch', () => {
     expect(
       devReloadArgs(['--json', 'plugin', 'dev', 'watch', 'watch', '--environment', 'box'])
     ).toEqual(['--json', 'plugin', 'dev', 'reload', 'watch', '--environment', 'box'])
+  })
+
+  it('suggests an approval command that dev reload accepts, without watch-only flags', async () => {
+    const rawArgs = [
+      'plugin',
+      'dev',
+      'watch',
+      '--check',
+      '/work/notes',
+      '--shot',
+      './shots',
+      '--shot-panel=stats',
+      '--approve',
+      'ap1-old',
+      '--json',
+      '--environment',
+      'box'
+    ]
+    const call = vi
+      .fn()
+      .mockRejectedValue(rpcFailure('approval_required', { approvalFingerprint: 'ap1-new' }))
+    const approval = await bindPluginDevWatchHost(
+      context(call, rawArgs),
+      '/work/notes'
+    ).approvalNeeded()
+    const argv = approval?.command.split(' ').slice(1) ?? []
+    const parsed = parse(argv)
+    expect(parsed.commandPath).toEqual(['plugin', 'dev', 'reload'])
+    const spec = findCommandSpec(COMMAND_SPECS, parsed.commandPath)
+    expect([...parsed.flags.keys()].filter((flag) => !spec?.allowedFlags.includes(flag))).toEqual(
+      []
+    )
+    expect(Object.fromEntries(parsed.flags)).toEqual({
+      dir: '/work/notes',
+      approve: 'ap1-new',
+      json: true,
+      environment: 'box'
+    })
   })
 
   it('treats a transport failure as a lost host but a host error reply as a reply', async () => {
@@ -87,6 +129,26 @@ describe('orca plugin dev watch', () => {
   })
 })
 
+describe('plugin dev watch --json errors', () => {
+  it('prints a failed first load as one JSON line, unlike other commands', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const error = new RuntimeClientError('approval_required', 'acme.notes needs approval')
+      reportCliError(error, true, { commandPath: ['plugin', 'dev', 'watch'] })
+      reportCliError(error, true, { commandPath: ['plugin', 'dev', 'load'] })
+      const [watchLine, loadOutput] = log.mock.calls.map(([text]) => String(text))
+      expect(watchLine).not.toContain('\n')
+      expect(JSON.parse(watchLine)).toMatchObject({
+        ok: false,
+        error: { code: 'approval_required' }
+      })
+      expect(loadOutput).toContain('\n')
+    } finally {
+      log.mockRestore()
+    }
+  })
+})
+
 describe('plugin dev watch --check', () => {
   it('parses as a flag before or after the folder', () => {
     for (const argv of [
@@ -104,5 +166,62 @@ describe('plugin dev watch --check', () => {
     remote.flags.set('check', true)
     expect(() => bindPluginDevWatchHost(remote, '/work/notes')).toThrow(/needs a local folder/)
     expect(bindPluginDevWatchHost(context(vi.fn()), '/work/notes').check).toBeUndefined()
+  })
+})
+
+describe('plugin dev watch --shot', () => {
+  it('parses --shot-panel and needs --shot with it', () => {
+    const parsed = parse(['plugin', 'dev', 'watch', '.', '--shot', 'out', '--shot-panel', 'stats'])
+    expect(parsed.flags.get('shot-panel')).toBe('stats')
+    const ctx = context(vi.fn())
+    ctx.flags.set('shot-panel', 'stats')
+    expect(() => bindPluginDevWatchHost(ctx, '/work/notes')).toThrow(/needs --shot/)
+  })
+
+  it('opens once by RPC, then shoots only while shown, also from a remote host', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-watch-shot-'))
+    try {
+      const png = Buffer.from('png').toString('base64')
+      const replies = [
+        {
+          pluginKey: 'acme.notes',
+          panelId: 'a',
+          png,
+          width: 300,
+          height: 500,
+          colorScheme: 'dark',
+          themeApplied: false,
+          settled: true,
+          errors: []
+        },
+        {
+          pluginKey: 'acme.notes',
+          panelId: 'a',
+          title: 'A',
+          notShown: 'the right sidebar is closed'
+        }
+      ]
+      const call = vi.fn(async (method: string, _params?: unknown) => ({
+        result: method === 'plugins.open' ? { kind: 'panel' } : replies.shift()
+      }))
+      const ctx = context(call)
+      ctx.flags.set('shot', dir)
+      const shot = bindPluginDevWatchHost(ctx, '/work/notes').shot
+      await shot?.open('acme.notes', 'a')
+      await expect(shot?.take('acme.notes', 'a')).resolves.toMatchObject({
+        path: join(dir, 'acme.notes-a.png')
+      })
+      await expect(shot?.take('acme.notes', 'a')).resolves.toEqual({
+        notShown: 'the right sidebar is closed'
+      })
+      expect(await readFile(join(dir, 'acme.notes-a.png'), 'utf8')).toBe('png')
+      expect(call.mock.calls.map(([method, params]) => [method, params])).toEqual([
+        ['plugins.open', { pluginKey: 'acme.notes', panelId: 'a' }],
+        ['plugins.shot', { pluginKey: 'acme.notes', panelId: 'a', ifShown: true }],
+        ['plugins.shot', { pluginKey: 'acme.notes', panelId: 'a', ifShown: true }]
+      ])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

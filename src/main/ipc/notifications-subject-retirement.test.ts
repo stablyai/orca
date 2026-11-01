@@ -65,6 +65,7 @@ function register(
         notifications: {
           enabled: true,
           agentTaskComplete: true,
+          agentNeedsInput: true,
           terminalBell: true,
           suppressWhenFocused: options.suppressWhenFocused
         }

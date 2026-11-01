@@ -8,7 +8,7 @@ import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
 } from '@/lib/worktree-activation-created-agent.test-fixture'
-import { openStructuredAgentSessionProvisionalTab } from '@/lib/structured-agent-session-launch-surface'
+import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import type * as AgentLaunchPlanModule from '@/lib/agent-session-launch-plan'
 import type { ProvisionalLaunchArgs } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { SidebarConversationStart } from './SidebarConversationStart'
