@@ -57,7 +57,7 @@ export function getPublishedVisibleWorktreeShortcutTargets():
 }
 
 /** The unmounted list's visible rows in sidebar sort order, ranked per host copy like the mounted list. */
-export function computeLiveVisibleSidebarWorktrees(state: AppState): Worktree[] {
+function computeUnmountedVisibleWorktrees(state: AppState = useAppStore.getState()): Worktree[] {
   const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
 
   const repoMap = getRepoMapFromState(state)
@@ -95,13 +95,20 @@ export function computeLiveVisibleSidebarWorktrees(state: AppState): Worktree[] 
   )
 }
 
+/** Filtered, sorted sidebar worktrees from a live store snapshot, before row grouping. */
+export function computeLiveVisibleSidebarWorktrees(state: AppState): Worktree[] {
+  return computeUnmountedVisibleWorktrees(state)
+}
+
 export function getVisibleWorktreeIds(): string[] {
   if (_publishedVisibleIds) {
     return _publishedVisibleIds
   }
   // Grouping, pinning and main-worktree hoisting must also govern shortcut numbering.
-  const state = useAppStore.getState()
-  return computeRenderedSidebarWorktreeOrder(state, computeLiveVisibleSidebarWorktrees(state))
+  return computeRenderedSidebarWorktreeOrder(
+    useAppStore.getState(),
+    computeUnmountedVisibleWorktrees()
+  )
 }
 
 export function getVisibleWorktreeShortcutTargets(): VisibleWorktreeShortcutTarget[] {
@@ -111,7 +118,7 @@ export function getVisibleWorktreeShortcutTargets(): VisibleWorktreeShortcutTarg
   const state = useAppStore.getState()
   if (!_publishedVisibleIds) {
     return toShortcutTargets(
-      computeRenderedSidebarWorktrees(state, computeLiveVisibleSidebarWorktrees(state))
+      computeRenderedSidebarWorktrees(state, computeUnmountedVisibleWorktrees())
     )
   }
   const visibleIds = _publishedVisibleIds
