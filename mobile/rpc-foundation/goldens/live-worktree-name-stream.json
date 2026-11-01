@@ -124,25 +124,14 @@
       "ordinal": 5,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.show\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
-    "46024d2d32fc": {
+    "592ccd522724": {
       "crash": {
         "$rpc": "null"
       },
-      "name": "Feature Work",
-      "projectName": "Project Orca",
+      "name": "Feature Work Renamed",
       "resolution": "present"
     },
-    "516a2c286b56": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "name": "feature",
-      "projectName": {
-        "$rpc": "null"
-      },
-      "resolution": "unknown"
-    },
-    "86ee7af97b0f": {
+    "7681f1052840": {
       "name": "repo.show#2",
       "ordinal": 12,
       "args": [
@@ -164,39 +153,25 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-8",
-          "ok": true,
-          "result": {
-            "repo": {
-              "displayName": "Project Orca Renamed"
-            }
-          }
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "b5675ae9a7e8": {
-      "name": "worktree.show#2",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-1::/work/feature\"}}"
-    },
-    "b83199262e6e": {
+    "7926694cda85": {
       "crash": {
         "$rpc": "null"
       },
-      "name": "Feature Work Renamed",
-      "projectName": "Project Orca",
+      "name": "Feature Work",
       "resolution": "present"
     },
-    "bb675baf729c": {
-      "name": "runtime.clientEvents.subscribe#2",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
+    "89ff819afc4f": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "name": "Feature Work Replayed",
+      "resolution": "present"
     },
-    "bff19a6baee2": {
+    "8cef45031109": {
       "name": "repo.show#1",
       "ordinal": 4,
       "args": [
@@ -218,19 +193,30 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "repo": {
-              "displayName": "Project Orca"
-            }
+        "error": {
+          "category": "LogicalClientCutoverError",
+          "message": "RPC interrupted by connection migration",
+          "isRpcDeliveryUnknown": true,
+          "cause": {
+            "category": "Error",
+            "message": "Connection closed",
+            "isRpcDeliveryUnknown": true
           }
         }
       }
+    },
+    "b5675ae9a7e8": {
+      "name": "worktree.show#2",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-1::/work/feature\"}}"
+    },
+    "bb675baf729c": {
+      "name": "runtime.clientEvents.subscribe#2",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
     },
     "cbd40b0b5312": {
       "name": "worktree.show#2",
@@ -269,18 +255,43 @@
         }
       }
     },
+    "ccba013c69e8": {
+      "name": "repo.show#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "d3fd2d2ea215": {
       "name": "worktree.show#1",
       "ordinal": 3,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-1::/work/feature\"}}"
     },
-    "d7cca3c9bbb4": {
+    "dcfa9a8e959c": {
       "crash": {
         "$rpc": "null"
       },
-      "name": "Feature Work Replayed",
-      "projectName": "Project Orca Renamed",
-      "resolution": "present"
+      "name": "feature",
+      "resolution": "unknown"
     },
     "e468e4d27a67": {
       "name": "runtime.clientEvents.unsubscribe#1",
@@ -312,7 +323,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "516a2c286b56",
+          "state": "dcfa9a8e959c",
           "effects": []
         }
       },
@@ -324,38 +335,38 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "516a2c286b56",
+          "state": "dcfa9a8e959c",
           "effects": []
         }
       },
       {
         "id": "named",
         "observation": {
-          "sender": ["12087a0dcffa", "bff19a6baee2"],
+          "sender": ["12087a0dcffa", "ccba013c69e8"],
           "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "3c0aff7108e3"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "46024d2d32fc",
+          "state": "7926694cda85",
           "effects": []
         }
       },
       {
         "id": "refreshed",
         "observation": {
-          "sender": ["12087a0dcffa", "bff19a6baee2", "cbd40b0b5312"],
+          "sender": ["12087a0dcffa", "ccba013c69e8", "cbd40b0b5312"],
           "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "3c0aff7108e3", "b5675ae9a7e8"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "b83199262e6e",
+          "state": "592ccd522724",
           "effects": []
         }
       },
       {
         "id": "re-subscribed",
         "observation": {
-          "sender": ["12087a0dcffa", "bff19a6baee2", "cbd40b0b5312"],
+          "sender": ["12087a0dcffa", "8cef45031109", "cbd40b0b5312"],
           "payloads": [
             "eef1ee3c2773",
             "d3fd2d2ea215",
@@ -368,7 +379,7 @@
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a"
           },
-          "state": "b83199262e6e",
+          "state": "592ccd522724",
           "effects": []
         }
       },
@@ -377,10 +388,10 @@
         "observation": {
           "sender": [
             "12087a0dcffa",
-            "bff19a6baee2",
+            "8cef45031109",
             "cbd40b0b5312",
             "22a7dcf9cd6a",
-            "86ee7af97b0f"
+            "7681f1052840"
           ],
           "payloads": [
             "eef1ee3c2773",
@@ -396,7 +407,7 @@
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a"
           },
-          "state": "d7cca3c9bbb4",
+          "state": "89ff819afc4f",
           "effects": []
         }
       },
@@ -405,10 +416,10 @@
         "observation": {
           "sender": [
             "12087a0dcffa",
-            "bff19a6baee2",
+            "8cef45031109",
             "cbd40b0b5312",
             "22a7dcf9cd6a",
-            "86ee7af97b0f"
+            "7681f1052840"
           ],
           "payloads": [
             "eef1ee3c2773",
@@ -426,7 +437,7 @@
             "cutover": "eb79a9b3682a",
             "unmount": "eb79a9b3682a"
           },
-          "state": "d7cca3c9bbb4",
+          "state": "89ff819afc4f",
           "effects": []
         }
       }

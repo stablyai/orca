@@ -20152,20 +20152,6 @@
           }
         },
         {
-          "complete": "repo.show#1",
-          "params": {
-            "repo": "id:repo-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "repo": {
-                "displayName": "Project Orca"
-              }
-            }
-          }
-        },
-        {
           "checkpoint": "named"
         },
         {
@@ -20228,20 +20214,6 @@
               "worktree": {
                 "worktreeId": "repo-1::/work/feature",
                 "displayName": "Feature Work Replayed"
-              }
-            }
-          }
-        },
-        {
-          "complete": "repo.show#2",
-          "params": {
-            "repo": "id:repo-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "repo": {
-                "displayName": "Project Orca Renamed"
               }
             }
           }

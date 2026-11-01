@@ -36,7 +36,6 @@ export function clientEventStreamMountAdapters(
         },
         state: () => ({
           name: value?.name ?? null,
-          projectName: value?.projectName ?? null,
           resolution: value?.resolution ?? null,
           crash: screen.crash()
         }),
