@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildWslInteractiveLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import { getBashShellReadyRcfileContent } from './local-pty-shell-ready-bash-rcfile'
+import { getDaemonBashShellReadyRcfileContent } from '../daemon/daemon-bash-shell-ready-rcfile'
 // Resolve content-addressed wrapper paths instead of assuming a fixed directory.
 import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
 
@@ -328,6 +330,38 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(rcfile).toContain('set -- --no-daemon "$@"')
     expect(rcfile).toContain('source "$HOME/.bash_profile"')
     expect(launched.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
+  it('hands ZDOTDIR to the sibling zsh wrapper across Git Bash login profile sourcing', () => {
+    const gitBash = resolveWindowsShellLaunchArgs(
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice'
+    )
+    const rcfilePath = getGitBashRcfilePath(gitBash.shellArgs[1])
+    const rcfile = readFileSync(rcfilePath, 'utf8')
+    const handoffIndex = rcfile.indexOf('export ZDOTDIR="$__orca_zsh_handoff_dir"')
+    const profileIndex = rcfile.indexOf('source "$HOME/.bash_profile"')
+    const cleanupIndex = rcfile.indexOf(
+      'builtin unset ORCA_ORIG_ZDOTDIR ORCA_SHELL_FEATURES __orca_zsh_handoff_armed'
+    )
+
+    expect(handoffIndex).toBeGreaterThan(0)
+    expect(handoffIndex).toBeLessThan(profileIndex)
+    expect(cleanupIndex).toBeGreaterThan(profileIndex)
+    expect(existsSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'))).toBe(true)
+    expect(getBashShellReadyRcfileContent()).toBe(
+      readFileSync(
+        join(__dirname, '..', '__fixtures__', 'shell-wrapper-snapshots', 'local-bash-rcfile.txt'),
+        'utf8'
+      )
+    )
+    expect(getDaemonBashShellReadyRcfileContent()).toBe(
+      readFileSync(
+        join(__dirname, '..', '__fixtures__', 'shell-wrapper-snapshots', 'daemon-bash-rcfile.txt'),
+        'utf8'
+      )
+    )
   })
 
   it('quotes a spaced preflight path through each shell environment', () => {
