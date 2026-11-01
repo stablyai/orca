@@ -25,6 +25,7 @@ import { startDaemonScopeDeathWatch } from './daemon-scope-death-watch'
 import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
 import { leaseAppImageGenerationForCurrentProcess } from '../cli/appimage-generation-lease'
 import { createDaemonShutdownDeadline } from './daemon-shutdown-deadline'
+import { startThreadpoolWaiterRefresh } from './threadpool-waiter-refresh'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -309,6 +310,7 @@ async function main(): Promise<void> {
   }
   daemonLog.log('ready')
 
+  startThreadpoolWaiterRefresh()
   warmWindowsConptyOnce()
   // Log native-addon availability without stderr and pay dlopen cost before the first teardown.
   if (process.platform === 'win32') {

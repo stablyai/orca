@@ -22,17 +22,46 @@ Observed on macOS arm64 on 2026-10-15. The installed app was
 - The production `DaemonAsyncIoProbe`, evaluated in that affected daemon,
   returned `stalled` at 5,000.8 ms. The debugger was closed afterwards.
 
-## Cause and remaining investigation
+## Cause
 
 The immediate failure is below the renderer: native asynchronous writes stop
 completing, and later keystrokes accumulate behind the first pending write.
 New terminals can also block on asynchronous working-directory checks.
 
-The initial runtime/native trigger is **not established**. No evidence yet ties
-it to a specific patch, an update, sleep/resume, workload size, or a protocol
-version mismatch. Increasing the thread pool, replaying queued input, replacing
-the writer with synchronous calls, or restarting healthy daemons is not a
-validated prevention fix.
+A second affected daemon (2026-10-30, Node 24.21.0, libuv 1.52.1, 77 sessions,
+two days up) was read with a brief `lldb` attach that only read memory:
+
+- The libuv pool queue held 15 `uv__fs_work` items, all four workers were idle
+  (`idle_threads == 4`), and the loop's completion queue was empty. The loop's
+  async wakeup was intact: its `EVFILT_USER` knote was registered and
+  `wq_async.pending` was 0. Work was never picked up; completion delivery was fine.
+- The pool condition variable read `L = U = 0xfd79d800`, `S = 0xfd79d402`.
+  Three workers waited at generations `0xfd79d6..d8`; the fourth waited at
+  `0x7d79d800`, exactly `0x80000000` behind.
+
+This is the Darwin psynch defect tracked in
+[libuv#5280](https://github.com/libuv/libuv/issues/5280): a worker that stays
+parked while its siblings complete 2^23 waits (0x100 per wait) falls half the
+32-bit sequence range behind. The kernel then turns every signal into a prepost,
+`U` catches up with `L`, and `pthread_cond_signal` returns in userspace without
+a syscall. Nothing wakes the workers again. Timers and sockets do not use the
+pool, so the daemon keeps answering RPCs.
+
+## Prevention
+
+On macOS the daemon holds every pool worker once every 60 seconds
+(`threadpool-waiter-refresh.ts`). It posts one blocking read per worker on a
+private FIFO and writes the bytes that release them 20 ms later. A worker holding
+one read cannot take another, so the reads occupy distinct workers. Every parked
+worker wakes and parks again at the current generation. Aging to the boundary
+inside one interval would need about 140,000 pool operations per second. A round
+is skipped while the previous one is unfinished, so a stalled pool gets no extra
+work. The cost is one 20 ms pause of pool work per minute.
+
+This prevents the stall. It cannot recover a pool that is already past the
+boundary, because signals no longer reach the kernel. That daemon still needs the
+restart review below. Upstream libuv PR 5351 bounds the worker wait natively.
+Orca shipped a patched runtime with that change in #29133 and reverted it in #33688.
 
 An older build remained alive intentionally: bundle freshness must not terminate
 existing terminal processes. This explains why an app update did not replace
@@ -95,4 +124,19 @@ Local/daemon macOS evidence is covered. The probe is platform-independent, but
 physical Linux, Windows, WSL and SSH deployments remain gaps. The notice describes
 only this computer's current daemon. Paired web clients explicitly decline local
 daemon inspection; remote/legacy daemon notices and hidden-sidebar surfacing are
-not covered. Initial-trigger reproduction and a prevention fix remain open.
+not covered.
+
+The refresh has unit tests for its round, skip and platform rules. Two manual
+checks on macOS 26.2 arm64 cover the mechanism:
+
+- An `lldb` read of an idle Node 24.22.1 process showed all four workers' wait
+  generations move to the current value after one refresh round. A unit test
+  checks that pool work posted during a round waits for the release.
+- A pthread model of the pool, aged with 1 ns timed waits on the pool mutex
+  (the method in libuv PR 5351), stalled with 0/4 jobs done after 2^23 + 4,096
+  steps. Holding one job per worker for 1 ms every 1M steps let all four complete.
+
+Serial `fs.promises.stat` on stock Node 24.22.1 with four workers stalled
+naturally after 40,262,072 operations (21 minutes). The trigger is intermittent:
+20M serial stats on two workers and 31M cycles of the libuv#5280 pthread repro
+completed.
