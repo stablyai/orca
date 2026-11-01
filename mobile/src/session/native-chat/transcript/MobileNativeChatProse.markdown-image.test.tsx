@@ -102,4 +102,63 @@ describe('mobile chat markdown images', () => {
     expect(readHostChatImage).not.toHaveBeenCalled()
     act(() => tree.unmount())
   })
+
+  it('shows stacked absolute images from one paragraph, including alt text with spaces', async () => {
+    const tree = render(
+      [
+        "![The dev server's session list](/Users/eclipxe/.orca-qa/shots/30-host-session-list.png)",
+        '![The session opened](/tmp/orca-real-session-tasks.png)',
+        "![After the swipe: back on that server's session list](/tmp/shot.png)"
+      ].join('\n')
+    )
+    await act(async () => {
+      await Promise.all(readHostChatImage.mock.results.map((result) => result.value))
+    })
+    expect(readHostChatImage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ worktreeId: 'worktree' }),
+      '/Users/eclipxe/.orca-qa/shots/30-host-session-list.png',
+      expect.any(AbortSignal)
+    )
+    expect(readHostChatImage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ worktreeId: 'worktree' }),
+      '/tmp/orca-real-session-tasks.png',
+      expect.any(AbortSignal)
+    )
+    expect(readHostChatImage).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ worktreeId: 'worktree' }),
+      '/tmp/shot.png',
+      expect.any(AbortSignal)
+    )
+    expect(tree.root.findAllByProps({ accessibilityRole: 'imagebutton' })).toHaveLength(3)
+    expect(
+      tree.root.findAll(
+        (node) =>
+          typeof node.props.onPress === 'function' && node.props.accessibilityRole !== 'imagebutton'
+      )
+    ).toHaveLength(0)
+    act(() => tree.unmount())
+  })
+
+  it('shows an absolute image beside a sentence instead of linking the alt text', async () => {
+    const tree = render('See ![host list](/tmp/shot.png) here.')
+    await act(async () => {
+      await readHostChatImage.mock.results[0]?.value
+    })
+    expect(tree.root.findByProps({ accessibilityRole: 'imagebutton' })).toBeTruthy()
+    expect(readHostChatImage).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: 'worktree' }),
+      '/tmp/shot.png',
+      expect.any(AbortSignal)
+    )
+    expect(
+      tree.root.findAll(
+        (node) =>
+          typeof node.props.onPress === 'function' && node.props.accessibilityRole !== 'imagebutton'
+      )
+    ).toHaveLength(0)
+    act(() => tree.unmount())
+  })
 })
