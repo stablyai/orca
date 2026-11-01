@@ -131,7 +131,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         deferMobileSessionPublish: true,
         signal: opts.signal,
         ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {}),
-        ...(opts.resumesSleepingRecord ? { resumesSleepingRecord: true } : {})
+        ...(opts.resumesSleepingRecord ? { resumesSleepingRecord: true } : {}),
+        ...(opts.restoresSavedPane ? { restoresSavedPane: true } : {})
       })
     const terminal = opts.createMutation
       ? await this.dedupeTerminalCreate(
