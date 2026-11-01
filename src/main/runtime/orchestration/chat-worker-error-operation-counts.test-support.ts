@@ -4,7 +4,7 @@ import type { AgentSessionJournal } from '../../native-chat/agent-session-journa
 import * as stopProjection from '../../native-chat/agent-session-journal/journal-stop-note-projection'
 import * as lineage from './structured-session-lineage'
 import * as journalPosition from '../../../shared/agent-session/journal/agent-session-journal-position'
-import * as liveTurn from '../../../shared/structured-agent-session-live-turn'
+import * as liveTurn from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore

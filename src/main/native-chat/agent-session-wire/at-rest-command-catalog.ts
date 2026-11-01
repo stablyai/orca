@@ -1,6 +1,6 @@
 import { AtRestCommandDemand } from './at-rest-command-demand'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 import {
   requireLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome

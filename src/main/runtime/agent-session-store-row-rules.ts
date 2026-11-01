@@ -10,7 +10,7 @@ import {
   isPersistedAgentSessionRecord
 } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { PersistedAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
-import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
+import { isAgentSessionSurfaceTabId } from '../../shared/agent-session/view/agent-session-surface-tab-id'
 import type { RetiredAgentSessionClaimKey } from './agent-session-store-state'
 import type { PersistedAgentSessionTab } from './agent-session/agent-session-tab-table'
 

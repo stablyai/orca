@@ -71,9 +71,9 @@ Every plugin frame on desktop is an Electron `<webview>`:
 - **Input**: Orca's window shortcuts are forwarded from a focused guest through the browser tab path, minus
   browser-page chords (address bar, find, reload, history, page zoom); a custom editor's save chord still
   rides `editor.keydown`, so it fires once. Editable fields get Orca's Cut/Copy/Paste context menu.
-- **Switch (default off)**: isolated guests ship off, so merging changes nothing; a separate one-line PR
-  flips the constant `PLUGIN_ISOLATED_FRAMES_DEFAULT` in `src/main/plugins/panels/plugin-frame-isolation.ts`.
-  `ORCA_PLUGIN_ISOLATED_FRAMES=1` (dev, e2e) turns guests on and `=0` off, overriding the
+- **Switch (default on)**: rolling back is the constant `PLUGIN_ISOLATED_FRAMES_DEFAULT` in
+  `src/main/plugins/panels/plugin-frame-isolation.ts`. `ORCA_PLUGIN_ISOLATED_FRAMES=0` turns guests off
+  for one machine and `=1` on, overriding the
   `experimentalPluginIsolatedFrames` setting; all are main-process only. Off, frames use the `srcdoc` iframe
   (never offered `orca.shell`/`orca.files`), and components panels say they are not available.
 - **Compatibility**: existing single-file plugins load unchanged. Browser clients (serve/web) have no

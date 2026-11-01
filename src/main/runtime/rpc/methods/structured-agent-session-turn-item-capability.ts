@@ -7,8 +7,8 @@ import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
-} from '../../../../shared/agent-session-wire'
-import { AGENT_SESSION_TURN_ITEM_CAPABILITY } from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-wire'
+import { AGENT_SESSION_TURN_ITEM_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RpcContext } from '../core'
 
 type TurnItemReader = Pick<RpcContext, 'clientKind' | 'clientCapabilities'>

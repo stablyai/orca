@@ -4,7 +4,7 @@ import type { AgentProviderSessionMetadata } from '../../../shared/agent-session
 import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   readAgentSessionHistory,

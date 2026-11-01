@@ -413,7 +413,7 @@
       "overrides": [
         {
           "files": [
-            "resources/plugins/declarative/orca-runtime.mjs"
+            "resources/plugins/declarative/*.mjs"
           ],
           "rules": [
             "eslint/max-lines"

@@ -56,6 +56,8 @@ export type OrcaDeclarativeRuntime = {
   hydrate(payload: unknown): void
   /** Renders now if an update is pending, and posts pending persisted changes. */
   flush(): void
+  /** Renders the mounted component again now. */
+  rerender(): void
   readonly themeAtom: OrcaAtom<OrcaTheme>
   readonly bridge: OrcaBridge | null
   dispose(): void

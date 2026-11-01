@@ -9,7 +9,9 @@ export const PLUGIN_HANDLER_GROUPS: readonly HandlerGroup[] = [
       'plugin types',
       'plugin validate',
       'plugin inspect',
-      'plugin release-entry'
+      'plugin release-entry',
+      'plugin test',
+      'plugin check'
     ],
     load: async () => (await import('./handlers/plugin-authoring.js')).PLUGIN_AUTHORING_HANDLERS
   },

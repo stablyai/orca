@@ -18,7 +18,7 @@ import type {
   AgentSessionOptionsResult
 } from './agent-session-options-result'
 import { labelFromModelId } from '../../model-id-label'
-import type { AgentSessionModelCatalogResult } from '../../agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue

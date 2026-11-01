@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionAttentionEdge } from '../../shared/agent-session-attention'
+import type { AgentSessionAttentionEdge } from '../../shared/agent-session/agent-session-attention'
 import { getDefaultNotificationSettings } from '../../shared/notification-settings-defaults'
 import { UI_LANGUAGE_ENGLISH, UI_LANGUAGE_SPANISH } from '../../shared/ui-language'
 import { setMainUiLanguage } from '../i18n/main-i18n'

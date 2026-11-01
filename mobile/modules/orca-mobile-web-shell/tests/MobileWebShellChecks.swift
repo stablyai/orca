@@ -545,9 +545,16 @@ import Foundation
     precondition(verdict(isDownload: true) == .cancelAndOffer(foreign))
     // Document-URL downloads are never offered, regardless of gesture.
     precondition(verdict(document, isDocumentUrl: true, isDownload: true) == .cancel)
-    // A subframe is the sealed preview loading itself, which is not the user leaving the app.
+    // A foreign-URL subframe is never offered: the user is not leaving the app.
     precondition(verdict(isMainFrame: false) == .cancel)
     precondition(verdict(isMainFrame: false, hasGesture: false) == .cancel)
+    // Sealed srcdoc frames (HTML previews, chat visuals) load; no other subframe or top-level srcdoc does.
+    let srcdoc = MobileWebShellNavigationPolicy.inlineDocumentUrl
+    precondition(verdict(srcdoc, isMainFrame: false, hasGesture: false) == .allow)
+    precondition(verdict(srcdoc, isMainFrame: false, isDownload: true) == .cancel)
+    precondition(verdict(srcdoc, hasGesture: false) == .cancel)
+    precondition(verdict("about:blank", isMainFrame: false, hasGesture: false) == .cancel)
+    precondition(verdict(document, isMainFrame: false, isDocumentUrl: true, isShellLoad: true) == .cancel)
     precondition(verdict(nil) == .cancel)
     precondition(verdict("") == .cancel)
     // The crossing cap, at it and one past it.

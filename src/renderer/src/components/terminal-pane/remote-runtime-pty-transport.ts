@@ -30,7 +30,7 @@ import {
 import type {
   RuntimeCreateAgentSessionResult,
   RuntimeEnsureAgentSessionResult
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
 import type {

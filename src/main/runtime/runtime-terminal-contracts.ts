@@ -7,7 +7,7 @@ import type {
   AgentLaunchPreferences,
   AgentSessionExecutionClaim,
   RuntimeCreateAgentSessionResult
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -101,6 +101,9 @@ export type TerminalCreateOptions = {
   startFailure?: Error
   /** Main-owned sleep wake publishes resume outcomes instead of relying on window restore. */
   resumesSleepingRecord?: true
+  /** May start an existing pane again rather than new work in the workspace: a saved pane's
+   *  restore, a lost pane's recovery, or a paired window mounting its panes. */
+  reopensPane?: true
   /** Refuse, rather than attach, when `tabId`/`leafId` name a pane whose PTY is already live. */
   requireFreshPane?: boolean
   sessionId?: string

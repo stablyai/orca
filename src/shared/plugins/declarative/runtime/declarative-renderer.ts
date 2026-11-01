@@ -108,7 +108,13 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
   function report(error: unknown): void {
     // Why the stack text: main routes guest console errors to `orca plugin logs`, file:line included.
     console.error(error instanceof Error && error.stack ? error.stack : String(error))
-    post(PLUGIN_DECLARATIVE_MESSAGES.error, { document, revision, message: errorMessage(error) })
+    const stack = error instanceof Error && error.stack ? error.stack.slice(0, 8192) : undefined
+    post(PLUGIN_DECLARATIVE_MESSAGES.error, {
+      document,
+      revision,
+      message: errorMessage(error),
+      ...(stack ? { stack } : {})
+    })
   }
 
   function retain(at: number, callbacks: Map<string, OrcaCallback>): void {
@@ -227,7 +233,9 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
 
   if (options.awaitHydration) {
     post(PLUGIN_DECLARATIVE_MESSAGES.ready, { document })
-    setTimeout(panel.markHydrated, HYDRATION_TIMEOUT_MS)
+    const fallback = setTimeout(panel.markHydrated, HYDRATION_TIMEOUT_MS)
+    // Why cleared: a pending timer would keep a test process (Node) alive for seconds.
+    void panel.hydrated.then(() => clearTimeout(fallback))
   } else {
     panel.markHydrated()
   }
@@ -282,6 +290,7 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
     dispatchEvent,
     acknowledge,
     hydrate: panel.hydrate,
+    rerender: () => render(),
     flush() {
       if (scheduled) {
         render()

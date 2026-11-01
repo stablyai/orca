@@ -44,6 +44,36 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca plugin types .']
   },
   {
+    path: ['plugin', 'test'],
+    summary: "Run a plugin's own tests on this machine, unsandboxed: only for code you trust",
+    usage: 'orca plugin test [dir] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'dir'],
+    positionalArgs: ['dir'],
+    notes: [
+      "Not sandboxed: this runs the plugin's code and tests on this machine with your user's full access, outside Orca's plugin sandbox. Run it only on code you trust.",
+      'Runs every *.test.ts(x) (also .mts, .js, .jsx, .mjs) under the folder, skipping node_modules, .orca, dist and dot-folders. The folder defaults to the current one.',
+      "Uses Node's built-in test runner (node:test), or the plugin's own vitest when it has one in node_modules. No config: `orca` and `orca/testing` resolve to the files this Orca ships, and sources are transpiled and imported exactly as Orca loads them.",
+      'Runs on the `node` on PATH when it is 20.6 or newer, else on the Node built into Orca, so no Node install is needed. It does not reach the Orca app.',
+      "Exit code: the runner's (0 when every test passes). With --json the runner output goes to stderr and one result object to stdout."
+    ],
+    examples: ['orca plugin test .', 'orca plugin test ./todo-panel --json']
+  },
+  {
+    path: ['plugin', 'check'],
+    summary:
+      'Validate a plugin and render each components panel once on this machine, unsandboxed: only for code you trust',
+    usage: 'orca plugin check [dir] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'dir'],
+    positionalArgs: ['dir'],
+    notes: [
+      "Not sandboxed: this runs the plugin's code on this machine with your user's full access, outside Orca's plugin sandbox. Check only code you trust.",
+      'Validates like `orca plugin validate`, then mounts each `ui: "components"` panel in Node against a stand-in host with the capabilities the manifest declares, and reports runtime errors (with file:line), layouts Orca would refuse, and props it would drop.',
+      'Runs on the `node` on PATH when it is 20.6 or newer, else on the Node built into Orca. It does not reach the Orca app.',
+      'Exit codes: 0 ok, 1 a panel failed to render, 2 the plugin is invalid (plugin_invalid).'
+    ],
+    examples: ['orca plugin check .', 'orca plugin check ./todo-panel --json']
+  },
+  {
     path: ['plugin', 'validate'],
     summary: 'Check a plugin folder, manifest or catalog the way Orca will load it',
     usage: 'orca plugin validate <dir|orca-plugin.json|orca-catalog.json> [--json]',

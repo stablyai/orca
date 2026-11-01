@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture

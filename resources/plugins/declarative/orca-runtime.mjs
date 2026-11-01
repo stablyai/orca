@@ -11,8 +11,9 @@ var snapshot = {
   workspace: /* @__PURE__ */ new Map()
 };
 var onPersistedChange = null;
+var writableAtoms = /* @__PURE__ */ new Set();
 function create(initial, fields = {}) {
-  return Object.freeze({
+  const created = Object.freeze({
     [ATOM]: {
       value: initial,
       initial,
@@ -23,6 +24,17 @@ function create(initial, fields = {}) {
       ...fields
     }
   });
+  if (!created[ATOM].readonly) {
+    writableAtoms.add(created[ATOM]);
+  }
+  return created;
+}
+function resetAtoms() {
+  snapshot.plugin = /* @__PURE__ */ new Map();
+  snapshot.workspace = /* @__PURE__ */ new Map();
+  for (const inner of writableAtoms) {
+    inner.value = inner.initial;
+  }
 }
 function stored(inner) {
   if (!inner.key || inner.persist === "memory") {
@@ -595,7 +607,13 @@ function createOrcaDeclarativeRuntime(options) {
   }
   function report(error) {
     console.error(error instanceof Error && error.stack ? error.stack : String(error));
-    post(PLUGIN_DECLARATIVE_MESSAGES.error, { document: document2, revision, message: errorMessage(error) });
+    const stack = error instanceof Error && error.stack ? error.stack.slice(0, 8192) : void 0;
+    post(PLUGIN_DECLARATIVE_MESSAGES.error, {
+      document: document2,
+      revision,
+      message: errorMessage(error),
+      ...stack ? { stack } : {}
+    });
   }
   function retain(at, callbacks) {
     renders.set(at, callbacks);
@@ -694,7 +712,8 @@ function createOrcaDeclarativeRuntime(options) {
   ] : [];
   if (options.awaitHydration) {
     post(PLUGIN_DECLARATIVE_MESSAGES.ready, { document: document2 });
-    setTimeout(panel.markHydrated, HYDRATION_TIMEOUT_MS);
+    const fallback = setTimeout(panel.markHydrated, HYDRATION_TIMEOUT_MS);
+    void panel.hydrated.then(() => clearTimeout(fallback));
   } else {
     panel.markHydrated();
   }
@@ -747,6 +766,7 @@ function createOrcaDeclarativeRuntime(options) {
     dispatchEvent,
     acknowledge,
     hydrate: panel.hydrate,
+    rerender: () => render(),
     flush() {
       if (scheduled) {
         render();
@@ -898,6 +918,7 @@ function documentColorScheme() {
 }
 function installOrcaDeclarativeRuntime(options) {
   runtime?.dispose();
+  resetAtoms();
   const installed = createOrcaDeclarativeRuntime({
     bridge: globalBridge(),
     colorScheme: documentColorScheme(),

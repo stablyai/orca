@@ -1,6 +1,6 @@
 import type { AgentSessionLastTurn } from './agent-session-last-turn'
 import type { AgentSessionRecord } from './agent-session/lifecycle/agent-session-record'
-import type { AgentSessionStatusSummary } from './agent-session-wire'
+import type { AgentSessionStatusSummary } from './agent-session/agent-session-wire'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
 import {
   agentSessionRecordFixture,

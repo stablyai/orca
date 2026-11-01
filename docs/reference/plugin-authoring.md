@@ -110,9 +110,7 @@ Aborting the `signal` rejects the call with `cancelled`. Treat an error `code` y
 
 #### Files and assets
 
-Preview: isolated frames are off by default for now (set `ORCA_PLUGIN_ISOLATED_FRAMES=1` to try
-them); until they ship, desktop frames behave like browser clients below. With them on, in the desktop
-app each plugin's frames run in their own isolated process, storage and origin,
+In the desktop app each plugin's frames run in their own isolated process, storage and origin,
 `orca-plugin-frame://<key>/`, served from your plugin folder. Load scripts, styles, images, fonts,
 WASM and workers by relative URL (`<script src="lib/app.js">`, `new Worker('worker.js')`,
 `WebAssembly.instantiateStreaming(fetch('lib/mod.wasm'))`), and `localStorage` and IndexedDB

@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionAttentionEdge,
   StructuredAttentionState
-} from '../../shared/agent-session-attention'
+} from '../../shared/agent-session/agent-session-attention'
 
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import type { NotificationSettings } from '../../shared/notification-settings-types'
 
 import {

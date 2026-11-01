@@ -1,4 +1,4 @@
-import { activeProviderContext } from '../../../shared/agent-session-provider-context'
+import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
 // Store CAS and idempotency rows make retried create/ensure replay instead of reserving another owner.
 
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
@@ -29,7 +29,7 @@ import {
   type AgentSessionRefusalReference,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint

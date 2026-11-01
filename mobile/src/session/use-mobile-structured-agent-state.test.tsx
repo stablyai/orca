@@ -10,7 +10,7 @@ import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared
 import type {
   AgentSessionSubscribeEvent,
   AgentSessionHistoryPage
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/agent-session-wire'
 import { publishConnectionRevival } from '../transport/connection-revival-signal'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'

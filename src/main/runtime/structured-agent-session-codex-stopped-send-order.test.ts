@@ -26,7 +26,7 @@ import {
   structuredAgentTurnAnchors
 } from '../../shared/native-chat/transcript/native-chat-turn-membership'
 import { classifyDispatchRejection } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../shared/agent-session/view/structured-agent-session-message-projection'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,

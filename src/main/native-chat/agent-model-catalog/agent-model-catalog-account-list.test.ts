@@ -8,7 +8,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { applyCodexConfiguredLaunchDefaults } from '../../codex/codex-configured-launch-defaults'
 import { getAgentSessionOptionCatalog } from '../../../shared/agent-session/options/agent-session-option-catalog'
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import {
   applyStructuredAgentSessionModelCatalog,
   commitStructuredAgentSessionOptionValues,

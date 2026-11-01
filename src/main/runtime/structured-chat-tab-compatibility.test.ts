@@ -5,7 +5,7 @@ import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './rpc/methods/structure
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
+} from '../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   B,
   C,
@@ -15,7 +15,7 @@ import {
   rejectVisibility,
   savedIds
 } from './structured-agent-session-tab-authority.test-support'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
 import { discardStructuredWorkerSession } from './rpc/methods/orchestration-structured-worker-session'
 

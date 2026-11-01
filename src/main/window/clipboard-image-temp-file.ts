@@ -9,12 +9,13 @@ import {
   agentSessionPastedImageName,
   sanitizeAgentSessionAttachmentName,
   type AgentSessionAttachmentClipboardTarget
-} from '../../shared/agent-session-attachments'
+} from '../../shared/agent-session/agent-session-attachments'
+import { detectImageFileSignature } from '../image-file-signature'
 import { nativeChatPasteFolder } from './native-chat-paste-files'
 
 export type SaveClipboardImageAsTempFileArgs = {
   connectionId?: string | null
-  /** A phone-picked file's own name; without it the paste is saved as a .png. */
+  /** A phone-picked file's own name; without it the paste is named by its image bytes. */
   fileName?: string
   runtimeEnvironmentId?: string | null
   /** With `runtimeEnvironmentId`: store the image as an attachment of this structured chat. */
@@ -49,7 +50,15 @@ export async function saveClipboardImageBufferAsTempFile(
   // A picked file keeps its own name, so the paste gets a folder to stay unique.
   const tempPath = args?.fileName
     ? path.join(folder, `orca-paste-${randomUUID()}`, shellInertFileName(args.fileName))
-    : path.join(folder, agentSessionPastedImageName(Date.now(), randomUUID()))
+    : path.join(
+        folder,
+        // Phone library picks are often JPEG; agents trust the extension over the bytes.
+        agentSessionPastedImageName(
+          Date.now(),
+          randomUUID(),
+          detectImageFileSignature(buffer)?.extension
+        )
+      )
   if (args?.fileName) {
     await fs.mkdir(path.dirname(tempPath), { recursive: true })
   }

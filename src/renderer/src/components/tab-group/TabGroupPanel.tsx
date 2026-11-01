@@ -15,7 +15,7 @@ import { registerTabGroupBody } from './tab-group-body-geometry'
 import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph'
 import { translate } from '@/i18n/i18n'
 import type { TabGroup } from '../../../../shared/tab-types'
-import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
+import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
@@ -266,7 +266,7 @@ export default function TabGroupPanel({
             }`
           : ''
       }`}
-      // Why not over a theme image: group opacity would let it bleed through opaque chrome.
+      // Why not over a window backdrop (material or theme image): group opacity would let it bleed through opaque chrome.
       style={
         hasSplitGroups && !isFocused && !backdropActive
           ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }

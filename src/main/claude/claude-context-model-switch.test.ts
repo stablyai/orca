@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectStructuredAgentContextUsage } from '../../shared/structured-agent-session-context-usage'
+import { selectStructuredAgentContextUsage } from '../../shared/agent-session/structured-agent-session-context-usage'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { bindClaudeContextUsageCapture } from './claude-context-usage'
 import {

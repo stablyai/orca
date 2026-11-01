@@ -39,8 +39,11 @@ const snapshot: Record<'plugin' | 'workspace', Map<string, OrcaStoredValue>> = {
 }
 let onPersistedChange: ((atom: OrcaAtom<unknown>) => void) | null = null
 
+/** Plugin-written atoms, so a new runtime starts them from their initial values. */
+const writableAtoms = new Set<AtomState<unknown>>()
+
 function create<T>(initial: T, fields: Partial<AtomState<T>> = {}): OrcaAtom<T> {
-  return Object.freeze({
+  const created = Object.freeze({
     [ATOM]: {
       value: initial,
       initial,
@@ -51,6 +54,23 @@ function create<T>(initial: T, fields: Partial<AtomState<T>> = {}): OrcaAtom<T> 
       ...fields
     }
   })
+  if (!created[ATOM].readonly) {
+    writableAtoms.add(created[ATOM])
+  }
+  return created
+}
+
+/**
+ * Puts every atom back to its initial value and forgets persisted snapshots. A guest installs one
+ * runtime before the plugin loads, so this matters only to `orca/testing`, which mounts a module
+ * many times in one process.
+ */
+export function resetAtoms(): void {
+  snapshot.plugin = new Map()
+  snapshot.workspace = new Map()
+  for (const inner of writableAtoms) {
+    inner.value = inner.initial
+  }
 }
 
 type Stored<T> = { found: true; value: T } | { found: false }

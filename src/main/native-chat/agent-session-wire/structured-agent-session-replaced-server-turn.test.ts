@@ -12,7 +12,7 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
-} from '../../../shared/structured-agent-session-turn-timing'
+} from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { beginAgentSessionRuntimeIncarnationForTest } from '../../runtime/agent-session-runtime-attribution'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'

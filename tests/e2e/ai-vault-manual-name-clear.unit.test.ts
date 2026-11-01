@@ -33,7 +33,7 @@ import { structuredAgentsDeclaringNothing } from '../../src/main/native-chat/age
 import { recordingStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { createStructuredChatNamingHandler } from '../../src/main/native-chat/structured-chat-naming'
 import { PI_RPC_AGENT } from '../../src/main/pi/rpc-agent-definition'
-import type { AgentSessionStatusEvent } from '../../src/shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../src/shared/agent-session/agent-session-wire'
 import { useAppStore } from '@/store'
 import {
   getStructuredAgentSessionStatusFeed,

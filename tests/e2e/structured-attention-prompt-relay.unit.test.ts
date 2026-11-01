@@ -30,7 +30,7 @@ import {
   agentSessionPromptAttentionKey,
   agentSessionAttentionSubjectPrefix,
   type AgentSessionAttentionEdge
-} from '../../src/shared/agent-session-attention'
+} from '../../src/shared/agent-session/agent-session-attention'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent

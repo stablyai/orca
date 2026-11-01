@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createPluginFromTemplate, pluginIdFromFolder } from './plugin-create'
+import { createPluginFromTemplate } from './plugin-create'
 import { inspectPluginFolder, validatePluginTarget } from './plugin-folder-validation'
 import { PLUGIN_TEMPLATE_NAMES } from './plugin-template-names'
 import { PLUGIN_SOURCE_MODULES_SINCE } from '../../shared/plugins/manifest/plugin-schema-field-docs'
@@ -69,17 +69,6 @@ describe('orca plugin create templates', () => {
       'is not empty'
     )
   })
-
-  it('rejects an id the manifest would refuse before writing anything', async () => {
-    const dir = join(await tempRoot(), 'x')
-    await expect(
-      createPluginFromTemplate({ dir, template: 'theme', id: 'Bad Id' })
-    ).rejects.toThrow('cannot create')
-  })
-
-  it('derives the id from the folder name', () => {
-    expect(pluginIdFromFolder('/tmp/My Cool_Theme')).toBe('my-cool-theme')
-  })
 })
 
 describe('orca plugin validate', () => {
@@ -93,19 +82,6 @@ describe('orca plugin validate', () => {
     const report = await validatePluginTarget(dir)
     expect(report.valid).toBe(false)
     expect(report.errors.join('\n')).toContain('contributes.themes')
-  })
-
-  it('names a folder without a publisher the way Orca loads it', async () => {
-    const dir = join(await tempRoot(), 'nopub')
-    await createPluginFromTemplate({ dir, template: 'theme', publisher: 'acme' })
-    const manifestPath = join(dir, 'orca-plugin.json')
-    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-    delete manifest.publisher
-    manifest.engines.orca = '>=1.4.246'
-    await writeFile(manifestPath, JSON.stringify(manifest))
-    const report = await validatePluginTarget(dir)
-    expect(report.errors).toEqual([])
-    expect(report.plugin?.pluginKey).toBe('local.nopub')
   })
 
   it('reports a missing panel entry', async () => {

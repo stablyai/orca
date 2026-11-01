@@ -3,7 +3,7 @@ import {
   type StructuredAgentSessionOptionsReader
 } from './structured-agent-session-resting-options'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionOptionResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionOptionResult } from '../../../shared/agent-session/agent-session-wire'
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   agentChatPermissionModes

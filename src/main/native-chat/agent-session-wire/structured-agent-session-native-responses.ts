@@ -3,7 +3,7 @@ import {
   isJournalStopOrResumeRow,
   type JournalRow
 } from '../agent-session-journal/journal-row-schema'
-import { isAgentSessionContextClear } from '../../../shared/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import { StructuredQueuedNativeResponses } from './structured-agent-session-queued-native-responses'
 import { StructuredAccountRecovery } from './structured-agent-session-account-recovery'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'

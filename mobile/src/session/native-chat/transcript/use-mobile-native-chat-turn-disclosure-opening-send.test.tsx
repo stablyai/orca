@@ -16,7 +16,7 @@ import { nativeChatTurnMembership } from '../../../../../src/shared/native-chat/
 import {
   projectStructuredAgentSessionMessages,
   type StructuredAgentSessionOptimisticMessage
-} from '../../../../../src/shared/structured-agent-session-message-projection'
+} from '../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages
