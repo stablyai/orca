@@ -147,3 +147,22 @@ export async function checkPluginPanels(
     })
   }))
 }
+
+/** Lines for one panel: what it drew, or each issue at its plugin location. */
+export function formatPluginPanelCheck(check: PluginPanelCheck): string[] {
+  const head = `${check.panel} (${check.entry}): `
+  if (check.issues.length === 0) {
+    return [
+      `${head}rendered ${check.elements} element(s)`,
+      ...check.warnings.map((warning) => `  warning: ${warning}`)
+    ]
+  }
+  return [
+    `${head}failed`,
+    ...check.issues.map(
+      (issue) =>
+        `  ${issue.location ?? check.entry}: ${issue.kind === 'refused' ? 'Orca would refuse this render: ' : ''}${issue.message}`
+    ),
+    ...check.warnings.map((warning) => `  warning: ${warning}`)
+  ]
+}

@@ -124,10 +124,41 @@ export const pluginDeclarativePersistPayloadSchema = z
   .strict()
 export type PluginDeclarativePersistPayload = z.infer<typeof pluginDeclarativePersistPayloadSchema>
 
+/**
+ * guest → host `ui.retain` (dev hot reload only): keyed memory atoms that changed. An entry without
+ * `value` held something that is not plain JSON, so the next guest starts that atom over.
+ */
+export const pluginDeclarativeRetainPayloadSchema = z
+  .object({
+    document: documentSchema,
+    entries: z
+      .array(
+        z
+          .object({
+            key: z.string().regex(PLUGIN_DECLARATIVE_STATE_KEY),
+            version: storedVersionSchema,
+            value: z.json().optional()
+          })
+          .strict()
+          .refine(
+            (entry) => JSON.stringify(entry.value ?? null).length <= PLUGIN_STORAGE_VALUE_MAX_BYTES,
+            'retained value is too large'
+          )
+      )
+      .min(1)
+      .max(64)
+  })
+  .strict()
+export type PluginDeclarativeRetainPayload = z.infer<typeof pluginDeclarativeRetainPayloadSchema>
+
 /** host → guest `ui.hydrate`; scopes are absent when the host has nothing new for them. */
 export type PluginDeclarativeHydratePayload = {
   panel?: { id: string }
   visible?: boolean
   plugin?: Record<string, PluginDeclarativeStoredValue>
   workspace?: Record<string, PluginDeclarativeStoredValue>
+  /** Keyed memory atoms of the guest a dev hot reload replaced. */
+  memory?: Record<string, PluginDeclarativeStoredValue>
+  /** Dev folders only: post `ui.retain` so the next hot reload can hand memory atoms over. */
+  retain?: true
 }

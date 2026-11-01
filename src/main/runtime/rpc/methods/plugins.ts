@@ -272,7 +272,9 @@ export const PLUGIN_METHODS = [
     handler: async (params) => {
       const service = requirePluginService()
       await service.whenReady()
-      return { pluginKey: params.pluginKey, lines: service.getLogs(params.pluginKey) }
+      // Why `cursor` even without `after`: `orca plugin dev watch` takes a baseline, then follows.
+      const { lines, cursor } = service.getLogsSince(params.pluginKey, params.after)
+      return { pluginKey: params.pluginKey, lines, cursor }
     }
   }),
   defineMethod({

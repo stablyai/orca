@@ -18440,8 +18440,12 @@
           "tooManyRequests": "Too many requests."
         },
         "PluginDeclarativePanel": {
+          "dismissLoadError": "Dismiss",
           "invalidTree": "The panel sent a layout Orca cannot show.",
-          "pluginMessage": "Message from {{value0}}: {{value1}}"
+          "loadFailed": "{{value0}} failed to load.",
+          "loadFailedKeptLastGood": "{{value0}} failed to load. Showing the last version that loaded.",
+          "pluginMessage": "Message from {{value0}}: {{value1}}",
+          "reloaded": "Reloaded"
         }
       },
       "link": {
