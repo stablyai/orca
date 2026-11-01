@@ -146,7 +146,8 @@ it('publishes the current fence when a resumed cursor is already caught up', asy
       },
       fence: 7,
       hostNow: expect.any(Number),
-      activity: null
+      activity: null,
+      promptSuggestion: null
     }
   ])
 })

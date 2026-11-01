@@ -66,6 +66,12 @@ function mergeBatch(
     ...(right.activity !== undefined || left.activity !== undefined
       ? { activity: right.activity !== undefined ? right.activity : (left.activity ?? null) }
       : {}),
+    ...(right.promptSuggestion !== undefined || left.promptSuggestion !== undefined
+      ? {
+          promptSuggestion:
+            right.promptSuggestion !== undefined ? right.promptSuggestion : left.promptSuggestion
+        }
+      : {}),
     ...(latestTurn !== undefined ? { latestTurn } : {}),
     ...(actionablePromptIds !== undefined ? { actionablePromptIds } : {}),
     ...(working !== undefined ? { working } : {}),

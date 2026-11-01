@@ -19,7 +19,11 @@ export function refreshPublishedWork(
   subscriber: Subscriber,
   journal: AgentSessionJournal,
   work: AgentSessionPublishedWork | undefined,
-  shared: { hostNow: number; activity?: AgentSessionTurnActivity | null }
+  shared: {
+    hostNow: number
+    activity?: AgentSessionTurnActivity | null
+    promptSuggestion?: string | null
+  }
 ): void {
   if (!work || !port.isActive(subscriber)) {
     return

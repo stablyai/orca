@@ -45,6 +45,7 @@ export type SubscriberDeliveryPort = {
   ) => void
   isActive: (subscriber: Subscriber) => boolean
   activity: (sessionId: string) => AgentSessionTurnActivity | null
+  promptSuggestion: (sessionId: string) => string | null
 }
 
 export function deliverToSubscriber(
@@ -55,14 +56,23 @@ export function deliverToSubscriber(
     hostNow: number
     emitCheckpoint: boolean
     activity?: AgentSessionTurnActivity | null | undefined
+    promptSuggestion?: string | null | undefined
   }
 ): void {
-  const { subscriber, journal, hostNow, emitCheckpoint, activity } = input
+  const { subscriber, journal, hostNow, emitCheckpoint, activity, promptSuggestion } = input
   const checkpointActivity = emitCheckpoint ? port.activity(subscriber.sessionId) : undefined
   const publishedActivity = activity !== undefined ? activity : checkpointActivity
+  // A resuming subscriber may hold a suggestion the host cleared while it was away.
+  const publishedSuggestion =
+    promptSuggestion !== undefined
+      ? promptSuggestion
+      : emitCheckpoint
+        ? port.promptSuggestion(subscriber.sessionId)
+        : undefined
   const shared = {
     hostNow,
-    ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
+    ...(publishedActivity !== undefined ? { activity: publishedActivity } : {}),
+    ...(publishedSuggestion !== undefined ? { promptSuggestion: publishedSuggestion } : {})
   }
   const work = port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
   const emit: SubscriberDeliveryPort['emit'] = (target, event, options) =>
@@ -155,6 +165,7 @@ export function deliverToSubscriber(
         readAgentSessionHydrationPage(journal, subscriber.fence, reader),
         work
       )
+      const tailSuggestion = port.promptSuggestion(subscriber.sessionId)
       emit(
         subscriber,
         {
@@ -163,7 +174,8 @@ export function deliverToSubscriber(
           page: tail,
           fence: subscriber.fence,
           hostNow,
-          activity: port.activity(subscriber.sessionId)
+          activity: port.activity(subscriber.sessionId),
+          ...(tailSuggestion ? { promptSuggestion: tailSuggestion } : {})
         },
         { historyView: view.normalizationKey }
       )
@@ -212,6 +224,7 @@ function emitCaughtUp(
   shared: {
     hostNow: number
     activity?: AgentSessionTurnActivity | null
+    promptSuggestion?: string | null
   },
   current: {
     journal: AgentSessionJournal
@@ -227,7 +240,13 @@ function emitCaughtUp(
     refreshPublishedWork(port, subscriber, current.journal, work, shared)
     return
   }
-  if (emitCheckpoint || shared.activity !== undefined || commandsChanged || queuedChanged) {
+  if (
+    emitCheckpoint ||
+    shared.activity !== undefined ||
+    shared.promptSuggestion !== undefined ||
+    commandsChanged ||
+    queuedChanged
+  ) {
     port.emit(
       subscriber,
       {

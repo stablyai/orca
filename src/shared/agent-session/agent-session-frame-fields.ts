@@ -7,4 +7,6 @@ export type AgentSessionFrameFields = {
   hostNow?: number
   /** Version of the independent current-request read; absent from older hosts. */
   currentRequests?: AgentSessionCurrentRequestsMarker
+  /** The provider's predicted next prompt; null clears it, absent leaves it (a snapshot omits a null). */
+  promptSuggestion?: string | null
 } & AgentSessionQueuePublicationFields
