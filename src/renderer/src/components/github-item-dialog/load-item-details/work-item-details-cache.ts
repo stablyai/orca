@@ -19,6 +19,8 @@ export type WorkItemDetailsCacheEntry = {
   fetchedAt: number
   pending?: Promise<GitHubWorkItemDetails | null>
   error?: string
+  // Why: invalidation keeps the shown details (patches keep landing on them) but owes one fresh read; the read's start clears it.
+  rereadOwed?: true
 }
 export const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
 
@@ -73,7 +75,7 @@ export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCac
 
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
   workItemDetailsCacheGeneration += 1
-  const existed = workItemDetailsCache.delete(key)
+  const existed = markWorkItemDetailsRereadOwed(key)
   if (existed) {
     notifyWorkItemDetailsCache()
   }
@@ -81,6 +83,24 @@ export function invalidateWorkItemDetailsCacheForKey(key: string): void {
 
 // Fence pending fetches on every invalidation so pre-mutation results cannot restore stale entries.
 export let workItemDetailsCacheGeneration = 0
+
+// Retire the pending read and owe one replacement read, keeping loaded details; an entry without details goes cold.
+function markWorkItemDetailsRereadOwed(key: string): boolean {
+  const prev = workItemDetailsCache.get(key)
+  if (!prev) {
+    return false
+  }
+  if (prev.details) {
+    workItemDetailsCache.set(key, {
+      details: prev.details,
+      fetchedAt: prev.fetchedAt,
+      rereadOwed: true
+    })
+  } else {
+    workItemDetailsCache.delete(key)
+  }
+  return true
+}
 
 // Without an exact key, invalidate matching repo/type/number entries across source preferences.
 export function invalidateWorkItemDetailsCacheByMatch(args: {
@@ -103,7 +123,7 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
     const [keyRepoId, keyRepoPath] = key.split('\0')
     const matches = args.repoId ? keyRepoId === args.repoId : keyRepoPath === args.repoPath
     if (matches) {
-      workItemDetailsCache.delete(key)
+      markWorkItemDetailsRereadOwed(key)
       removed = true
     }
   }

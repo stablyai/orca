@@ -16,7 +16,6 @@ import {
   workItemDetailsCache,
   workItemDetailsCacheGeneration
 } from '../cache/work-item-details'
-import { useRetainedWorkItemDetails } from '@/components/github/use-retained-work-item-details'
 
 export function usePullRequestDetails(args: {
   workItem: GitHubWorkItem | null
@@ -80,10 +79,9 @@ export function usePullRequestDetails(args: {
   // Cold opens need a local tick to reveal optimistic comments; warm cache writes notify subscribers.
   const [optimisticTick, setOptimisticTick] = useState(0)
 
-  const shownDetails = useRetainedWorkItemDetails(detailsCacheKey, cachedEntry?.details ?? null)
   // Merge optimistic comments only when stable cached-entry identity or explicit cold-open state changes.
   const details = useMemo<GitHubWorkItemDetails | null>(() => {
-    const cachedDetails = shownDetails
+    const cachedDetails = cachedEntry?.details ?? null
     const opt = optimisticCommentsRef.current
     if (!cachedDetails) {
       // Build a minimal shell while cold-loading so just-posted comments are visible immediately.
@@ -106,16 +104,20 @@ export function usePullRequestDetails(args: {
     }
     // Why: optimisticTick isn't read in the body but is the rerender signal for cold-open writes (memo reads a ref); removing it breaks the optimistic shell.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shownDetails, workItem, optimisticTick])
+  }, [cachedEntry, workItem, optimisticTick])
 
-  const loading = !!cachedEntry?.pending && !shownDetails
-  const error = cachedEntry?.error && !shownDetails ? cachedEntry.error : null
-  const detailsLoaded = Boolean(shownDetails)
+  const loading = !!cachedEntry?.pending && !cachedEntry?.details
+  const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
+  const detailsLoaded = Boolean(cachedEntry?.details)
 
-  // Cross-window invalidation can drop an open entry without changing fetch dependencies; trigger refetch explicitly.
+  // Invalidation drops or marks an open entry without changing fetch dependencies; a tick starts its one owed read.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
-    if (workItem && detailsCacheKey && !cachedEntry) {
+    if (
+      workItem &&
+      detailsCacheKey &&
+      (!cachedEntry || (cachedEntry.rereadOwed && !cachedEntry.pending))
+    ) {
       setRefetchTick((n) => n + 1)
     }
   }, [workItem, detailsCacheKey, cachedEntry])
@@ -132,7 +134,9 @@ export function usePullRequestDetails(args: {
 
     const cached = workItemDetailsCache.get(detailsCacheKey)
     const now = Date.now()
-    const hasFreshData = cached?.details && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
+    // A local field patch refreshes fetchedAt but is not the whole-payload read an invalidation owes.
+    const hasFreshData =
+      cached?.details && !cached.rereadOwed && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
 
     if (hasFreshData) {
       return

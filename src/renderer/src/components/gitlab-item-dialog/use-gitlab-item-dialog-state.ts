@@ -1,16 +1,18 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GitLabAssignableUser, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
 import type { JobTraceState } from '../gitlab-item-dialog-parts'
 
-export function useGitLabItemDialogState(itemId: string | null, detailsIdentity: string | null) {
+export function useGitLabItemDialogState(itemId: string | null, detailsOwner: string | null) {
   const [details, setDetails] = useState<GitLabWorkItemDetails | null>(null)
-  const [detailsOwner, setDetailsOwner] = useState(detailsIdentity)
-  if (detailsOwner !== detailsIdentity) {
-    // Why: drop before paint so a switched item never shows, or edits, the previous item's details (reviewers included).
-    setDetailsOwner(detailsIdentity)
+  const [shownOwner, setShownOwner] = useState(detailsOwner)
+  if (shownOwner !== detailsOwner) {
+    // Why: drop before paint so a switched target never shows, or edits, the previous one's details (reviewers included).
+    setShownOwner(detailsOwner)
     setDetails(null)
   }
+  const detailsOwnerRef = useRef(detailsOwner)
+  detailsOwnerRef.current = detailsOwner
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshNonce, setRefreshNonce] = useState(0)
@@ -45,6 +47,11 @@ export function useGitLabItemDialogState(itemId: string | null, detailsIdentity:
   const [retryingJobId, setRetryingJobId] = useState<number | null>(null)
   const [actionInFlight, setActionInFlight] = useState<'close' | 'reopen' | 'merge' | null>(null)
   const mountedRef = useMountedRef()
+  // A late provider result may set details/options only while the dialog still targets the owner it began for.
+  const claimDetailsOwner = useCallback((): (() => boolean) => {
+    const owner = detailsOwnerRef.current
+    return () => mountedRef.current && detailsOwnerRef.current === owner
+  }, [mountedRef])
   const updateCommentDraft = useCallback(
     (value: string): void => {
       setCommentDraftState({ itemId, value })
@@ -55,6 +62,7 @@ export function useGitLabItemDialogState(itemId: string | null, detailsIdentity:
   return {
     actionInFlight,
     bodyDraft,
+    claimDetailsOwner,
     commentDraft,
     commentSubmitting,
     details,

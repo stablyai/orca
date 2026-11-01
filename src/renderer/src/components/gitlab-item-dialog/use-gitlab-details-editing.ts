@@ -22,6 +22,7 @@ export function useGitLabDetailsEditing(
 ) {
   const {
     bodyDraft,
+    claimDetailsOwner,
     details,
     labelDraft,
     labelOptions,
@@ -42,13 +43,14 @@ export function useGitLabDetailsEditing(
       return
     }
     setLabelOptionsLoading(true)
+    const ownsResult = claimDetailsOwner()
     try {
       const labels = await gitLabApiFor(repoSelector).listLabels(repoSelector)
-      if (mountedRef.current) {
+      if (ownsResult()) {
         setLabelOptions(normalizeGitLabLabels(labels))
       }
     } catch {
-      if (mountedRef.current) {
+      if (ownsResult()) {
         setLabelOptions([])
       }
     } finally {
@@ -57,6 +59,7 @@ export function useGitLabDetailsEditing(
       }
     }
   }, [
+    claimDetailsOwner,
     labelOptions,
     labelOptionsLoading,
     mountedRef,
@@ -129,6 +132,7 @@ export function useGitLabDetailsEditing(
     }
 
     setDetailsSaving(true)
+    const ownsResult = claimDetailsOwner()
     try {
       const res = await gitLabApiFor(repoSelector).updateMR({
         ...repoSelector,
@@ -136,7 +140,7 @@ export function useGitLabDetailsEditing(
         updates
       })
       if (res.ok) {
-        if (mountedRef.current) {
+        if (ownsResult()) {
           setDetails((current) =>
             current
               ? {
@@ -171,6 +175,7 @@ export function useGitLabDetailsEditing(
     }
   }, [
     bodyDraft,
+    claimDetailsOwner,
     details,
     handleCancelDetailsEdit,
     handleRefresh,

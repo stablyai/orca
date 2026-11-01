@@ -30,7 +30,6 @@ import {
 } from './work-item-details-cache'
 import { settleWorkItemDetailsFetch } from './work-item-details-fetch-settle'
 import { syncPRFileViewedState } from './pr-file-viewed-change'
-import { useRetainedWorkItemDetails } from '@/components/github/use-retained-work-item-details'
 
 export function useGitHubItemDialogDetails({
   workItem,
@@ -124,10 +123,9 @@ export function useGitHubItemDialogDetails({
   // Wake the details memo on cold-open comment writes before a cache entry exists.
   const [optimisticTick, setOptimisticTick] = useState(0)
 
-  const shownDetails = useRetainedWorkItemDetails(detailsCacheKey, cachedEntry?.details ?? null)
   // Depend on stable cache-entry identity rather than a freshly built optimistic array.
   const details = useMemo<GitHubWorkItemDetails | null>(() => {
-    const cachedDetails = shownDetails
+    const cachedDetails = cachedEntry?.details ?? null
     const opt = optimisticCommentsRef.current.get(detailsCacheKey ?? '') ?? []
     if (!cachedDetails) {
       // Show pre-fetch optimistic comments in a minimal shell while full details load.
@@ -150,16 +148,20 @@ export function useGitHubItemDialogDetails({
     }
     // Why: optimisticTick forces this ref-reading memo to re-run on cold-open writes; lint can't see the dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shownDetails, workItem, detailsCacheKey, optimisticTick])
+  }, [cachedEntry, workItem, detailsCacheKey, optimisticTick])
 
-  const loading = !!cachedEntry?.pending && !shownDetails
-  const error = cachedEntry?.error && !shownDetails ? cachedEntry.error : null
-  const detailsLoaded = Boolean(shownDetails)
+  const loading = !!cachedEntry?.pending && !cachedEntry?.details
+  const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
+  const detailsLoaded = Boolean(cachedEntry?.details)
 
-  // Invalidation can remove an open entry without changing fetch dependencies; a tick forces refetch.
+  // Invalidation drops or marks an open entry without changing fetch dependencies; a tick starts its one owed read.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
-    if (workItem && detailsCacheKey && !cachedEntry) {
+    if (
+      workItem &&
+      detailsCacheKey &&
+      (!cachedEntry || (cachedEntry.rereadOwed && !cachedEntry.pending))
+    ) {
       setRefetchTick((n) => n + 1)
     }
   }, [workItem, detailsCacheKey, cachedEntry])
@@ -176,7 +178,9 @@ export function useGitHubItemDialogDetails({
 
     const cached = workItemDetailsCache.get(detailsCacheKey)
     const now = Date.now()
-    const hasFreshData = cached?.details && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
+    // A local field patch refreshes fetchedAt but is not the whole-payload read an invalidation owes.
+    const hasFreshData =
+      cached?.details && !cached.rereadOwed && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
 
     if (hasFreshData) {
       return

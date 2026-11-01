@@ -9,10 +9,16 @@ import type {
 } from '../../../../../shared/github/work-item-types'
 import { requestPRReviewers } from '../land-pull-request/pr-reviewers-request-actions'
 import { useGitHubItemDialogDetails } from './use-github-item-dialog-details'
+import { workItemDetailsCache } from './work-item-details-cache'
 
 const lookup = vi.hoisted(() => vi.fn())
+const setViewed = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemDetailsForSource: lookup
+}))
+vi.mock('@/components/github/github-work-item-comment-mutations', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  setPRFileViewedForRepo: setViewed
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
@@ -48,6 +54,8 @@ afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
   lookup.mockReset()
+  setViewed.mockReset()
+  workItemDetailsCache.clear()
 })
 
 describe('useGitHubItemDialogDetails reconciliation', () => {
@@ -95,6 +103,28 @@ describe('useGitHubItemDialogDetails reconciliation', () => {
     )
     expect(latest?.error).toBeNull()
     expect(latest?.details?.body).toBe('Body')
+    expect(lookup).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a Viewed write landing on the shown files after a failed reread, and rolls back a later failed one', async () => {
+    lookup.mockResolvedValueOnce({
+      ...details,
+      pullRequestId: 'PR_7',
+      files: [{ path: 'a.ts', viewerViewedState: 'UNVIEWED' }]
+    })
+    render(<Harness />)
+    await waitFor(() => expect(latest?.detailsLoaded).toBe(true))
+    lookup.mockRejectedValueOnce(new Error('offline'))
+    await act(async () => latest!.invalidateCurrentDetailsCache())
+    await waitFor(() => expect(lookup).toHaveBeenCalledTimes(2))
+
+    setViewed.mockResolvedValueOnce(true)
+    await act(async () => expect(await latest!.handlePRFileViewedChange('a.ts', true)).toBe(true))
+    expect(latest?.details?.files?.[0]?.viewerViewedState).toBe('VIEWED')
+    setViewed.mockResolvedValueOnce(false)
+    await act(async () => expect(await latest!.handlePRFileViewedChange('a.ts', false)).toBe(false))
+    expect(latest?.details?.files?.[0]?.viewerViewedState).toBe('VIEWED')
+    // One settlement owed exactly one read: the failed read and the local patches start none.
     expect(lookup).toHaveBeenCalledTimes(2)
   })
 })

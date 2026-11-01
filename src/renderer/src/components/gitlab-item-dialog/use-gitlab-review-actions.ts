@@ -17,6 +17,7 @@ export function useGitLabReviewActions(
   handleRefresh: () => void
 ) {
   const {
+    claimDetailsOwner,
     details,
     inlineCommentBody,
     inlineCommentFilePath,
@@ -38,13 +39,14 @@ export function useGitLabReviewActions(
       return
     }
     setReviewerOptionsLoading(true)
+    const ownsResult = claimDetailsOwner()
     try {
       const users = await gitLabApiFor(repoSelector).listAssignableUsers(repoSelector)
-      if (mountedRef.current) {
+      if (ownsResult()) {
         setReviewerOptions(dedupeGitLabUsers(users))
       }
     } catch {
-      if (mountedRef.current) {
+      if (ownsResult()) {
         setReviewerOptions([])
       }
     } finally {
@@ -53,6 +55,7 @@ export function useGitLabReviewActions(
       }
     }
   }, [
+    claimDetailsOwner,
     mountedRef,
     repoSelector,
     reviewerOptions,
@@ -79,6 +82,7 @@ export function useGitLabReviewActions(
         return
       }
       setReviewerUpdating(true)
+      const ownsResult = claimDetailsOwner()
       try {
         const result = await gitLabApiFor(repoSelector).updateMRReviewers({
           ...repoSelector,
@@ -86,7 +90,7 @@ export function useGitLabReviewActions(
           reviewerIds,
           projectRef: details.item.projectRef ?? item.projectRef ?? null
         })
-        if (!mountedRef.current) {
+        if (!ownsResult()) {
           return
         }
         if (result.ok) {
@@ -114,6 +118,7 @@ export function useGitLabReviewActions(
       }
     },
     [
+      claimDetailsOwner,
       details,
       handleRefresh,
       item,

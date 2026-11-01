@@ -15,6 +15,8 @@ export type WorkItemDetailsCacheEntry = {
   fetchedAt: number
   pending?: Promise<GitHubWorkItemDetails | null>
   error?: string
+  // Why: invalidation keeps the shown details (patches keep landing on them) but owes one fresh read; the read's start clears it.
+  rereadOwed?: true
 }
 export const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
 
@@ -64,11 +66,29 @@ export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCac
 // A mutable object keeps generation bumps visible across modules.
 export const workItemDetailsCacheGeneration = { current: 0 }
 
+// Retire the pending read and owe one replacement read, keeping loaded details; an entry without details goes cold.
+function markWorkItemDetailsRereadOwed(key: string): boolean {
+  const prev = workItemDetailsCache.get(key)
+  if (!prev) {
+    return false
+  }
+  if (prev.details) {
+    workItemDetailsCache.set(key, {
+      details: prev.details,
+      fetchedAt: prev.fetchedAt,
+      rereadOwed: true
+    })
+  } else {
+    workItemDetailsCache.delete(key)
+  }
+  return true
+}
+
 // Local mutations invalidate exact keys; cross-window events invalidate matching tuples.
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
   // Why: bump generation so an in-flight fetch launched before this invalidation won't write its stale result back.
   workItemDetailsCacheGeneration.current += 1
-  const existed = workItemDetailsCache.delete(key)
+  const existed = markWorkItemDetailsRereadOwed(key)
   if (existed) {
     notifyWorkItemDetailsCache()
   }
@@ -86,7 +106,7 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
   let removed = false
   for (const key of Array.from(workItemDetailsCache.keys())) {
     if (key.startsWith(prefix) && key.endsWith(suffix)) {
-      workItemDetailsCache.delete(key)
+      markWorkItemDetailsRereadOwed(key)
       removed = true
     }
   }
