@@ -38,6 +38,7 @@ export type NativeChatOptionPickerRequest = {
 export type NativeChatComposerSendIntent = Pick<StructuredAgentSessionSendRequest, 'alternate'>
 
 export type NativeChatStructuredComposerTransport = {
+  agent?: AgentType
   capturePresentation: CaptureStructuredAgentSessionPresentation
   conversationCommands?: readonly AgentSessionConversationCommand[]
   send: (

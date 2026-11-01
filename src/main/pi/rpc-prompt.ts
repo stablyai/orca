@@ -100,7 +100,20 @@ async function readImage(
     bytes = await reads.readLocal(block.path)
   } catch (error) {
     if (error instanceof ClaudeDispatchContentError) {
-      throw new PiRpcPromptError('Pi image could not be read', error.failure)
+      const failure =
+        error.failure?.type === 'attachmentProblem' &&
+        error.failure.problem.reason === 'tooLarge' &&
+        index !== undefined &&
+        error.failure.problem.index === undefined
+          ? {
+              ...error.failure,
+              problem: {
+                ...error.failure.problem,
+                index
+              }
+            }
+          : error.failure
+      throw new PiRpcPromptError('Pi image could not be read', failure)
     }
     throw new PiRpcPromptError(
       'Pi image could not be read',

@@ -139,6 +139,7 @@ export async function acpPromptBlocks(
   const signal = AbortSignal.timeout(READ_TIMEOUT_MS)
   let imageCount = 0
   let imageBytes = 0
+  let imageIndex = 0
   for (const [index, block] of body.blocks.entries()) {
     if (block.type === 'text') {
       continue
@@ -146,6 +147,7 @@ export async function acpPromptBlocks(
     if (block.type !== 'image-ref') {
       throw attachmentProblem({ reason: 'unsupportedType' })
     }
+    imageIndex += 1
     if (!acceptsImages) {
       const path = hostImagePath(block)
       if (!path) {
@@ -170,7 +172,7 @@ export async function acpPromptBlocks(
       : imageCount >= MAX_IMAGE_COUNT
         ? 0
         : Math.min(ACP_PROMPT_IMAGE_MAX_BYTES - imageBytes, encodedCapacity)
-    const image = await imageBlock(block, remainingBytes, signal, imageCount + 1)
+    const image = await imageBlock(block, remainingBytes, signal, imageIndex)
     if (image.block.type === 'image') {
       imageCount += 1
     }

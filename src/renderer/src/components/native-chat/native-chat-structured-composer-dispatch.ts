@@ -8,7 +8,7 @@ import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/ag
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
-import { basename } from '@/lib/path'
+import { basename } from '../../lib/path'
 import { agentSessionFailureSentence } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 
@@ -21,7 +21,8 @@ export async function dispatchNativeChatStructuredComposerText(
   skills: readonly AgentJournalSkillRef[] = [],
   intent: Pick<StructuredAgentSessionSendRequest, 'alternate'> = {}
 ): Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'> & { revealsTranscript: boolean }> {
-  if (typeof window !== 'undefined' && window.api?.fs?.stat && attachments.length > 0) {
+  const isAcp = transport.agent === 'acp'
+  if (!isAcp && typeof window !== 'undefined' && window.api?.fs?.stat && attachments.length > 0) {
     for (let index = 0; index < attachments.length; index += 1) {
       const attachment = attachments[index]
       if (!attachment.path) {

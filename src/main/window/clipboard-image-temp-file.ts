@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { app } from 'electron'
 
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -34,14 +33,14 @@ export async function saveClipboardImageBufferForTarget(
     return uploadPasteToAgentSessionAttachments(
       args.agentSessionAttachment,
       runtimeEnvironmentId,
-      app.getPath('userData'),
+      getAppEnvironment().getPath('userData'),
       buffer
     )
   }
   // #17679: connectionId belongs to the owning runtime's SSH registry (Remote Server → SSH); only that runtime can save it.
   if (runtimeEnvironmentId) {
     return saveClipboardImageBufferInRuntime(
-      app.getPath('userData'),
+      getAppEnvironment().getPath('userData'),
       runtimeEnvironmentId,
       buffer,
       args?.connectionId ?? null

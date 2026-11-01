@@ -228,7 +228,13 @@ function NativeChatImageThumbnail({
   const errorMessage = attachment.error ?? oversizedError
 
   useEffect(() => {
-    if (isPending || !attachment.path || attachment.failed || attachment.error) {
+    if (
+      number === undefined ||
+      isPending ||
+      !attachment.path ||
+      attachment.failed ||
+      attachment.error
+    ) {
       return
     }
     if (typeof window !== 'undefined' && window.api?.fs?.stat) {

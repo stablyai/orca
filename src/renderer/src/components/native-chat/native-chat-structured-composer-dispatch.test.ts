@@ -68,4 +68,30 @@ describe('dispatchNativeChatStructuredComposerText', () => {
     expect(outcome.error).toBeNull()
     expect(send).toHaveBeenCalled()
   })
+
+  it('leaves ACP conversion and fallback in control for attachments over 5MB', async () => {
+    const stat = vi.fn().mockResolvedValue({ size: 6 * 1024 * 1024 })
+    vi.stubGlobal('api', { fs: { stat } })
+
+    const send = vi.fn().mockReturnValue(true)
+    const dispatchCommand = vi.fn().mockResolvedValue({ handled: false, accepted: true })
+    const transport: NativeChatStructuredComposerTransport = {
+      agent: 'acp',
+      send,
+      dispatchCommand,
+      capturePresentation: () => () => true
+    } as unknown as NativeChatStructuredComposerTransport
+
+    const attachments = [{ id: 'img-1', path: '/path/to/six-mb.png' }]
+
+    const outcome = await dispatchNativeChatStructuredComposerText(
+      transport,
+      'look at this image',
+      attachments
+    )
+
+    expect(outcome.accepted).toBe(true)
+    expect(outcome.error).toBeNull()
+    expect(send).toHaveBeenCalled()
+  })
 })
