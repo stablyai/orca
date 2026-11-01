@@ -30,7 +30,7 @@ export function MobileNativeChatSaveButton({
       disabled={!canSave}
       hitSlop={COMPOSER_CONTROL_HIT_SLOP}
     >
-      <Text style={{ color: canSave ? colors.bgBase : colors.textMuted }}>
+      <Text style={[styles.textButtonLabel, { color: canSave ? colors.bgBase : colors.textMuted }]}>
         {t('common.save', 'Save')}
       </Text>
     </Pressable>

@@ -92,6 +92,12 @@ export const composerInputStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
+  textButtonLabel: {
+    maxWidth: '100%',
+    flexShrink: 1,
+    textAlign: 'center',
+    color: colors.textSecondary
+  },
   editActionRow: {
     flexWrap: 'wrap'
   },
