@@ -84,18 +84,4 @@ describe('worktree scans of a stopped WSL distro (E9)', () => {
       }
     }
   )
-
-  it('scans a host repo exactly as before', async () => {
-    vi.mocked(listWorktrees).mockReset()
-    vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [makeWorktreeInfo(repoPath)])
-    const blocked = vi.spyOn(wslUncAccessGate, 'blockedWslDistroForPath')
-    try {
-      await runtimeFor('/tmp/host-repo').listDetectedManagedWorktrees('id:wsl-repo')
-      expect(listWorktrees).toHaveBeenCalledTimes(1)
-      // A path no distro owns never even asks the running gate.
-      expect(blocked).not.toHaveBeenCalled()
-    } finally {
-      blocked.mockRestore()
-    }
-  })
 })

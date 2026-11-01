@@ -400,6 +400,83 @@ describe('PluginPanel', () => {
     expect(container.textContent).toContain('after reload')
   })
 
+  it('hot reloads a dev components panel: last good tree on a broken save, memory atoms handed over', async () => {
+    const devGuest = (rev: number) => ({
+      partition: 'persist:orca-plugin-0123456789abcdef',
+      url: `orca-plugin-frame://0123456789abcdef/__orca/declarative-host.html?entry=p.tsx&rev=dev-${rev}`,
+      dev: true
+    })
+    const entry = (rev: number) => ({
+      html: '',
+      sessionToken: SESSION_TOKEN,
+      guest: devGuest(rev),
+      ui: 'components'
+    })
+    readPanelEntryMock.mockResolvedValue(entry(1))
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+    const guestOf = () => {
+      const webview = container.querySelector('webview')!
+      const send = vi.fn()
+      Object.assign(webview, { send })
+      const post = async (event: string, payload: unknown) => {
+        await act(async () => {
+          webview.dispatchEvent(
+            Object.assign(new Event('ipc-message'), {
+              channel: 'orca-plugin-frame',
+              args: [{ orca: 1, kind: 'evt', event, payload }, false]
+            })
+          )
+          await waitForHappyDomTasks()
+        })
+      }
+      const hydrates = () =>
+        send.mock.calls
+          .filter(([, envelope]) => envelope.event === 'ui.hydrate')
+          .map(([, envelope]) => envelope.payload)
+      return { webview, post, hydrates }
+    }
+    const text = (value: string) => ({ type: 'Text', props: {}, children: [value] })
+    const first = guestOf()
+    await first.post('ui.ready', { document: 'd1' })
+    expect(first.hydrates()[0]).toMatchObject({ retain: true })
+    await first.post('ui.render', { document: 'd1', revision: 1, tree: text('draft: hi') })
+    await first.post('ui.retain', {
+      document: 'd1',
+      entries: [{ key: 'draft', version: 1, value: 'hi' }]
+    })
+
+    // A save that does not load: a new guest, the old tree stays, and an inline error names the line.
+    readPanelEntryMock.mockResolvedValue(entry(2))
+    await act(async () => {
+      pluginChangedListener?.()
+      await waitForHappyDomTasks()
+    })
+    const broken = guestOf()
+    expect(broken.webview).not.toBe(first.webview)
+    await broken.post('ui.error', { revision: 0, message: 'src/p.tsx:3:5: Unexpected token' })
+    expect(container.textContent).toContain('draft: hi')
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'src/p.tsx:3:5: Unexpected token'
+    )
+
+    // The fix loads: seeded with the retained atoms, it replaces the tree and clears the error.
+    readPanelEntryMock.mockResolvedValue(entry(3))
+    await act(async () => {
+      pluginChangedListener?.()
+      await waitForHappyDomTasks()
+    })
+    const fixed = guestOf()
+    await fixed.post('ui.ready', { document: 'd3' })
+    expect(fixed.hydrates()[0]).toMatchObject({
+      memory: { draft: { version: 1, value: 'hi' } },
+      retain: true
+    })
+    await fixed.post('ui.render', { document: 'd3', revision: 1, tree: text('draft: hi (v3)') })
+    expect(container.textContent).toContain('draft: hi (v3)')
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect(container.textContent).toContain('Reloaded')
+  })
+
   it('restarts the watchdog after a dev reload replaces the panel document', async () => {
     readPanelEntryMock.mockResolvedValue({
       html: '<h1>Hello plugin</h1>',

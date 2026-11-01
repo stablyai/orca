@@ -4,7 +4,7 @@ import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
-import type { AgentSessionModelCatalogResult } from '../../agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,

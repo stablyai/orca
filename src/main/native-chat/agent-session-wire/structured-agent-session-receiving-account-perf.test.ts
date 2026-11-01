@@ -9,7 +9,7 @@ import { observeReceivingSql } from './structured-agent-session-receiving-sql.te
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore

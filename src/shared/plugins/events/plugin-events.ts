@@ -64,6 +64,14 @@ export const PLUGIN_EVENT_PAYLOAD_SCHEMAS = {
   'agent.status.changed': agentStatusChangedPayloadSchema
 } satisfies Record<PluginEventName, z.ZodType>
 
+/** One line per event for the generated reference and author typings. */
+export const PLUGIN_EVENT_SUMMARIES: Record<PluginEventName, string> = {
+  'workspace.created': 'A worktree workspace was created.',
+  'workspace.removed': 'A worktree workspace was removed.',
+  'agent.status.changed':
+    'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace.'
+}
+
 export type PluginEventPayload<E extends PluginEventName> = z.infer<
   (typeof PLUGIN_EVENT_PAYLOAD_SCHEMAS)[E]
 >

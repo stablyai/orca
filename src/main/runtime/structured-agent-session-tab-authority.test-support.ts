@@ -8,11 +8,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { createStore, closeTestStores, testState } from '../persistence/persistence-test-harness'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-storage-paths'
 import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'

@@ -2,12 +2,12 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../src/shared/agent-session-create-capabilities'
+import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-create-capabilities'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams
-} from '../../src/shared/structured-agent-session-create'
-import { structuredAgentSessionTabId } from '../../src/shared/structured-agent-session-projection'
+} from '../../src/shared/agent-session/structured-agent-session-create'
+import { structuredAgentSessionTabId } from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import { HOST_TERMINAL_SURFACE_SEPARATOR } from '../../src/shared/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'

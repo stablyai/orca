@@ -6,7 +6,7 @@ import {
   type StructuredAgentSessionCreateParams,
   type StructuredAgentSessionFirstMessage,
   type StructuredAgentSessionResumeSource
-} from '../../../shared/structured-agent-session-create'
+} from '../../../shared/agent-session/structured-agent-session-create'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'

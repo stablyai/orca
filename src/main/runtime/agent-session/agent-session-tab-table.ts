@@ -1,8 +1,8 @@
 import { AgentSessionRecordPublication } from '../agent-session-record-publication'
-import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session-surface-tab-id'
+import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session/view/agent-session-surface-tab-id'
 import type { AgentSessionReserveRequest } from './ownership/agent-session-reservation-admission'
 import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   hasAgentSessionConversation,
   type AgentSessionStoreState

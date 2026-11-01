@@ -18,7 +18,7 @@ import {
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
 import { readRemoteRangePreview } from './runtime-file-range-preview'
-import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session-attachments'
+import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session/agent-session-attachments'
 import { decodeSvgBase64, isSvgFilePath } from '../../../shared/svg-document'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {

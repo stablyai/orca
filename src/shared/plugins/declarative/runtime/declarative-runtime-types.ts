@@ -15,7 +15,12 @@ export type OrcaBridge = {
 }
 export type OrcaColorScheme = 'light' | 'dark'
 export type OrcaTheme = { colorScheme: OrcaColorScheme }
-type PostedEvent = (typeof PLUGIN_DECLARATIVE_MESSAGES)['render' | 'error' | 'ready' | 'persist']
+type PostedEvent = (typeof PLUGIN_DECLARATIVE_MESSAGES)[
+  | 'render'
+  | 'error'
+  | 'ready'
+  | 'persist'
+  | 'retain']
 
 export type OrcaPanelContext = {
   /** Disposed when the panel closes or reloads. */
@@ -56,6 +61,10 @@ export type OrcaDeclarativeRuntime = {
   hydrate(payload: unknown): void
   /** Renders now if an update is pending, and posts pending persisted changes. */
   flush(): void
+  /** Renders the mounted component again now. */
+  rerender(): void
+  /** Logs `error` and posts it as `ui.error`, located at its first plugin stack frame. */
+  report(error: unknown): void
   readonly themeAtom: OrcaAtom<OrcaTheme>
   readonly bridge: OrcaBridge | null
   dispose(): void

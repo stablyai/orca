@@ -10,9 +10,9 @@ import type {
 } from '../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agent-session-wire'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 import {
   HOST_TEST_SESSION as SESSION,

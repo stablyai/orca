@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createElement } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { claudeSessionIdForOrcaSession } from '../../src/main/claude/structured/claude-structured-session-id'
 import { hostTestMessage } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { StructuredAgentSessionStartupAttempts } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-startup-attempt'

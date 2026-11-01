@@ -16,12 +16,12 @@ import {
 import {
   closeStructuredAgentSessionChild,
   captureStructuredSessionSurface,
-  retireCapturedStructuredSessionSurface
+  retireCapturedStructuredSessionSurface,
+  type StructuredSessionSurfaceRuntime
 } from './agent-session/structured-agent-session-close'
 import type { WorktreePtyHostFence } from './worktree-pty-host-fence'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import type { StructuredSessionSurfaceRuntime } from './agent-session/structured-agent-session-close'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 
 export type StructuredSessionInWorkspace = {
   sessionId: string

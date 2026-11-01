@@ -96,6 +96,12 @@ const NON_UNIT_TEST_RUNNERS = [
     ]
   },
   {
+    name: 'plugin example tests (orca plugin test)',
+    include: ['examples/plugins/*/src/**/*.test.ts', 'examples/plugins/*/src/**/*.test.tsx'],
+    sources: ['src/cli/plugin-authoring/plugin-test-runner.test.ts'],
+    mirrors: ["resolve('examples/plugins/hello-tsx')"]
+  },
+  {
     name: 'docs site',
     include: ['docs/site/tests/*.test.mjs'],
     sources: ['docs/site/package.json'],

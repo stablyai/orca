@@ -251,13 +251,13 @@ declare module 'orca' {
   // <generated: host methods, from plugin-host-api.ts>
   export type HostMethods = {
     /** Branch, name and terminal ids of the focused workspace, or null when none is focused. */
-    'workspace.readContext': { params: Record<string, never>; result: { branch: string; displayName: string; terminals: { id: string }[] } | null }
+    "workspace.readContext": { params: Record<string, never> | undefined; result: { branch: string; displayName: string; terminals: { id: string }[] } | null }
     /** Shows a desktop notification. */
-    'notifications.show': { params: { title: string; body?: string }; result: { delivered: boolean } }
+    "notifications.show": { params: { title: string; body?: string }; result: { delivered: boolean } }
     /** Opens an http:, https: or mailto: URL in the default browser. Needs a click or key press in the frame; desktop app only. Orca asks the person before an http(s) host the plugin was not allowed; `opened` is false if they cancel. */
-    'shell.openExternal': { params: { url: string }; result: { opened: boolean } }
+    "shell.openExternal": { params: { url: string }; result: { opened: boolean } }
     /** Offers data (a string or ArrayBuffer, up to 64 MiB) in Orca's save dialog; the plugin never learns the path. Needs a click or key press in the frame; desktop app only. */
-    'files.saveAs': { params: { suggestedName?: string; mimeType?: string; data: string | ArrayBuffer }; result: { status: "saved" | "cancelled" } }
+    "files.saveAs": { params: { suggestedName?: string; mimeType?: string; data: string | ArrayBuffer }; result: { status: "saved" | "cancelled" } }
   }
   // </generated>
   export type HostMethod = keyof HostMethods

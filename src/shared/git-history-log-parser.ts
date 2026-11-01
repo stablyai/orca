@@ -103,10 +103,29 @@ export function compareGitHistoryItemRefsByCategory(
   return categoryOrder || ref1.name.localeCompare(ref2.name)
 }
 
+// With -z, --shortstat prints after a record's NUL, so it leads the next record (or trails the last).
+const SHORTSTAT_PREFIX =
+  /^ *(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?[^\n]*\n*/
+
+function takeLeadingShortstat(record: string, previous: GitHistoryItem | undefined): string {
+  const match = SHORTSTAT_PREFIX.exec(record)
+  if (!match) {
+    return record
+  }
+  if (previous) {
+    previous.statistics = {
+      files: Number(match[1]),
+      insertions: Number(match[2] ?? 0),
+      deletions: Number(match[3] ?? 0)
+    }
+  }
+  return record.slice(match[0].length)
+}
+
 export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
   const items: GitHistoryItem[] = []
   for (const rawRecord of iterateNulDelimitedFields(stdout)) {
-    const record = rawRecord.replace(/^\n+/, '')
+    const record = takeLeadingShortstat(rawRecord.replace(/^\n+/, ''), items.at(-1))
     if (!record.trim()) {
       continue
     }
@@ -163,13 +182,33 @@ export function gitHistoryRefFromFullName(
 ): GitHistoryItemRef {
   const id = fullName || fallbackName
   if (id.startsWith('refs/heads/')) {
-    return { id, name: id.slice('refs/heads/'.length), revision, category: 'branches' }
+    return {
+      id,
+      name: id.slice('refs/heads/'.length),
+      revision,
+      category: 'branches'
+    }
   }
   if (id.startsWith('refs/remotes/')) {
-    return { id, name: id.slice('refs/remotes/'.length), revision, category: 'remote branches' }
+    return {
+      id,
+      name: id.slice('refs/remotes/'.length),
+      revision,
+      category: 'remote branches'
+    }
   }
   if (id.startsWith('refs/tags/')) {
-    return { id, name: id.slice('refs/tags/'.length), revision, category: 'tags' }
+    return {
+      id,
+      name: id.slice('refs/tags/'.length),
+      revision,
+      category: 'tags'
+    }
   }
-  return { id, name: fallbackName || shortGitHash(revision), revision, category: 'commits' }
+  return {
+    id,
+    name: fallbackName || shortGitHash(revision),
+    revision,
+    category: 'commits'
+  }
 }

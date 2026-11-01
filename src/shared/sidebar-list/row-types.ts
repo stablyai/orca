@@ -64,6 +64,7 @@ export type WorktreeRow = {
   groupDepth: number
   isLastLineageChild: boolean
   lineageChildCount: number
+  lineageChildWorktreeIds?: readonly string[]
   lineageGroupKey?: string
   lineageCollapsed?: boolean
   hostContextLabel?: string

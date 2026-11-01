@@ -4,8 +4,8 @@ import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 
 import { randomUUID } from 'node:crypto'
 import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   AgentLaunchStructuredSessionRefusedError,
   type AgentLaunchSurfaceFactory
@@ -19,8 +19,8 @@ import { createStructuredAgentSessionForWorktree } from './structured-agent-sess
 import { structuredAgentRuntimeMetadata } from '../../structured-agent-runtime-metadata'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
-import { createStructuredAgentSessionId } from '../../../../shared/structured-agent-session-create'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
+import { createStructuredAgentSessionId } from '../../../../shared/agent-session/structured-agent-session-create'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import { paneIdentity } from '../../runtime-terminal-pane-identity'
 import {

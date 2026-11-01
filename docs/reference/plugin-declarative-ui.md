@@ -11,19 +11,19 @@ app in light and dark, follows its keyboard and focus rules, and needs no HTML o
   "execution": "sandboxed-ui",
   "engines": { "orca": ">=1.4.246" },
   "contributes": {
-    "panels": [{ "id": "todos", "title": "Todos", "entry": "dist/panel.js", "ui": "components" }]
+    "panels": [{ "id": "todos", "title": "Todos", "entry": "src/panel.tsx", "ui": "components" }]
   }
 }
 ```
 
-`ui` defaults to `html` (a web page in an isolated frame). With `components`, `entry` must be a `.js` or
-`.mjs` ES module. `ui` arrived in Orca 1.4.246, so declare at least that in `engines.orca`; an older Orca
-then says which release the plugin needs.
+`ui` defaults to `html` (a web page in an isolated frame). With `components`, `entry` is an ES module:
+`.tsx`, `.ts`, `.jsx` or `.mts` with no build step, or a bundled `.js`/`.mjs`. `ui` and build-less
+entries arrived in Orca 1.4.246, so declare at least that in `engines.orca`; an older Orca then says
+which release the plugin needs.
 
 ## Writing a panel
 
 ```tsx
-/** @jsxImportSource orca */
 import { atom, read, set, update, Stack, Text, Button } from 'orca'
 
 const count = atom('count', 0, { persist: 'plugin' })
@@ -55,7 +55,8 @@ export default function Panel() {
 
 - `atom(initial)` holds state for this panel run.
 - `atom(key, initial, { persist, version, migrate })` is named, unique per plugin, and may persist:
-  `persist: 'memory'` (default), `'plugin'` (every run of the plugin) or `'workspace'` (per Orca
+  `persist: 'memory'` (default; this panel run, plus [hot reloads](#hot-reload) in development),
+  `'plugin'` (every run of the plugin) or `'workspace'` (per Orca
   workspace; switching workspaces swaps the values). Persisted values must be plain JSON, load before the
   first render, are saved shortly after they change, and live in the plugin's own data folder; no
   capability is needed. When the stored shape changes, bump `version`; `migrate(stored, fromVersion)` turns
@@ -107,20 +108,120 @@ The `orca` module has the same facade as frame panels:
 - `ui.catalog` is a number that grows with the component catalog; `ui.has(component, prop?)` says
   whether this Orca draws a component or accepts a prop on it.
 
-Types: copy [`resources/plugins/declarative/orca.d.ts`](../../resources/plugins/declarative/orca.d.ts) into
-your project and include it from `tsconfig.json` with `"jsx": "react-jsx"` and `"jsxImportSource": "orca"`.
+## Hot reload
 
-## Building
+In a development folder, saving a file reloads the panel in place:
 
-`orca` is provided by Orca at runtime, so leave it out of the bundle:
+- Keyed atoms carry over. Persisted ones reload as always; keyed `memory` atoms (`atom('draft', '')`)
+  are handed to the new module, so a half-typed draft or the open tab survives the save. An atom whose
+  `version` changed starts from `initial` (`migrate` is not called), and so does one holding something
+  other than plain JSON (a function, a `Map`). Unkeyed `atom(initial)` state, module variables and
+  `setup` start over; `setup`'s cleanup runs for the old module.
+- A brief **Reloaded** mark shows in the panel's corner.
+- A save that fails to load (a syntax error, an import Orca refuses, or a module that throws before
+  its first render) keeps the last version that loaded on screen, with an inline error naming
+  `file:line:column` and the message; the same line is in `orca plugin logs`. Until the next save
+  loads, that last tree does not respond to clicks. The next save that loads replaces it and clears
+  the error. Lines are your source's; a column can be off on a line that had types or JSX.
+
+Installed plugins remount from scratch on an update; only persisted atoms carry over.
+
+## No build step
+
+Orca transpiles `.tsx`, `.ts`, `.jsx` and `.mts` files when the panel loads, so a plugin ships its
+source and no `dist/` folder: edit, save, and the panel [hot reloads](#hot-reload).
+
+- Types are stripped and JSX compiles for `orca` (automatic runtime). Lines are kept, so an error's
+  `file:line` in `orca plugin logs` is the line in your source; an inline source map covers columns
+  in DevTools (`orca plugin dev inspect`).
+- Relative imports resolve to exact files: `./todos` finds `todos.tsx`, `todos.ts`, `todos.jsx`,
+  `todos.js`, then `todos/index.*`, and `./todos.js` finds `todos.ts` as TypeScript expects.
+- Only `orca`, `orca/*` and relative files can be imported. A bare package such as `react` fails with
+  an error naming the file and the import: copy the package's ESM files into the plugin and import
+  them by relative path, or bundle (below).
+- Transpiling is syntax only: it never type-checks. Each source file is capped at 1 MiB and
+  2 s of transpiling, which runs off Orca's main thread.
+- TypeScript features that need type information to compile, such as `const enum` across files and
+  `export =`, are not supported; `isolatedModules` in the generated tsconfig flags them.
+
+Types: `orca plugin types .` writes Orca's typings and a tsconfig to `.orca/types/` (`orca plugin
+dev load` refreshes them), and `.orca/` ignores itself in Git. Extend it:
+
+```json
+{ "extends": "./.orca/types/tsconfig.json", "include": ["src"] }
+```
+
+Then `npx tsc -p .` type-checks. `orca plugin create <dir> --template components` scaffolds all of
+this. [`examples/plugins/hello-tsx`](../../examples/plugins/hello-tsx) is a complete sample.
+
+### Bundling instead
+
+A bundled `.js` entry still works, for example to use npm packages. `orca` is provided by Orca at
+runtime, so leave it out of the bundle:
 
 ```sh
 esbuild src/panel.tsx --bundle --format=esm --jsx=automatic --jsx-import-source=orca \
   --external:orca --external:'orca/*' --outfile=dist/panel.js
 ```
 
-`/** @jsx h */` with `import { h, Fragment } from 'orca'` (classic `jsxFactory`) also works. The sample in
-[`examples/plugins/hello-components`](../../examples/plugins/hello-components) has a build script.
+`/** @jsx h */` with `import { h, Fragment } from 'orca'` (classic `jsxFactory`) also works when you
+bundle. [`examples/plugins/hello-components`](../../examples/plugins/hello-components) has a build
+script.
+
+## Testing
+
+`orca plugin test [dir]` runs the plugin's `*.test.ts(x)` files in plain Node, with no Orca window:
+Node's built-in runner (`node:test`), or the plugin's own vitest when it has one installed. `orca` and
+`orca/testing` resolve to the files this Orca ships, and the plugin's sources are transpiled and
+resolved exactly as Orca loads them, so a test runs the code Orca runs. The exit code is the runner's.
+
+```tsx
+import { assert, mount, test } from 'orca/testing'
+import * as panel from './panel'
+
+test('adds a task', async () => {
+  const view = await mount(panel, { persisted: { plugin: { todos: [] } } })
+
+  await view.type({ label: 'New task' }, 'Ship it', { submit: true })
+
+  assert.ok(view.find({ role: 'button', text: /Ship it/ }))
+  assert.deepEqual(view.persisted.plugin.todos, [{ id: 1, title: 'Ship it', done: false }])
+  assert.deepEqual(view.errors, [])
+  await view.unmount()
+})
+```
+
+- `orca/testing` also exports Node's `test`, `describe`, `beforeEach`, `afterEach` and strict `assert`,
+  so tests type-check without `@types/node`. With vitest, use vitest's own `test` and `expect`.
+- `mount(module | Component, options)` boots the panel with the real runtime (persisted atoms, `setup`,
+  then the first render) and resolves once it has drawn. Options: `host`, `theme`, `locale`,
+  `visible`, `panelId`, and `persisted` (`{ plugin, workspace }` by atom key; `stored(value, version)`
+  for a value an older version wrote, to test `migrate`). Each mount starts every atom from its
+  initial value; one panel is mounted at a time.
+- Find with `find(query)` (the innermost match, or `null`) and `findAll(query)`. A query matches on
+  any of `type`, `role`, `text`, `label` (a control's `label`, a list item's or card's `title`) and
+  `testId` (the element's `key`); `text` and `label` match exactly or by RegExp.
+- Act with `press`, `type(el, text, { replace?, submit? })`, `submit`, `toggle` and `select(el, value)`,
+  on an element or a query. Each act resolves once the panel has settled: its renders, its host calls
+  and its persisted writes. `valueOf(el)` is what Orca shows in an Input, Switch or Select, with the
+  same edit protocol as Orca.
+- Inspect `tree()` (plain data for snapshots, handlers shown as `[handler]`), `errors` (what the panel
+  threw, with its stack, and renders Orca would refuse), `warnings` (props and components Orca would
+  drop) and `persisted`. `emit('theme', ...)`, `setVisible`, `rerender` and `settled` drive the rest;
+  `unmount()` ends the run, running `setup` cleanup.
+- `mockHost({ capabilities, results })` stands in for Orca's host. It refuses what Orca refuses, with
+  the same error codes: a method panels cannot call, a capability the manifest does not declare
+  (capabilities default to the manifest's), bad params, and `shell.openExternal` or `files.saveAs`
+  without a press first (each `press` grants one). `results` maps a method to a value or to a function
+  of its params, which may throw `hostError(code)`; `calls` and `callsOf(method)` record every call.
+  The stationary-control rule for gestures is not simulated.
+
+`orca plugin check [dir]` validates the plugin like `orca plugin validate`, then renders every
+components panel once against `mockHost()` and reports what the panel threw (with `file:line`),
+layouts Orca would refuse, and props it would drop. Both commands run the plugin's code on your
+machine with your full access, outside Orca's sandbox, so run them only on code you trust. They use
+the `node` on PATH when it is 20.6 or newer (the first with `module.register`), else the Node built
+into Orca, so authors need no Node install.
 
 ## Catalog
 

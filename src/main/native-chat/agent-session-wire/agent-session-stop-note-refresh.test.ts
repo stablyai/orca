@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { refreshDerivedStopNotes } from './agent-session-stop-note-refresh'
 import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
