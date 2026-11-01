@@ -3,8 +3,10 @@ import { scanClaudeUsageFiles } from '../claude-usage/scanner'
 import { scanCodexUsageFiles } from '../codex-usage/scanner'
 import { scanOpenCodeUsageDatabases } from '../opencode-usage/scanner'
 import { scanMuseUsageFiles } from '../muse-usage/scanner'
+import { scanZcodeUsageDatabases } from '../zcode-usage/scanner'
 import { normalizeMuseUsagePersistedFiles } from '../muse-usage/persisted-file-normalization'
 import { normalizeOpenCodeUsagePersistedDatabases } from '../opencode-usage/persisted-database-normalization'
+import { normalizeZcodeUsagePersistedDatabases } from '../zcode-usage/persisted-database-normalization'
 import {
   readClaudeUsageSourceCache,
   splitClaudeUsageCacheFile,
@@ -13,6 +15,7 @@ import {
 import type { CodexUsagePersistedFile } from '../codex-usage/types'
 import type { OpenCodeUsagePersistedDatabase } from '../opencode-usage/types'
 import type { MuseUsagePersistedFile } from '../muse-usage/types'
+import type { ZcodeUsagePersistedDatabase } from '../zcode-usage/types'
 import type {
   UsageScanWorkerProgress,
   UsageScanWorkerRequest,
@@ -137,6 +140,22 @@ async function runScan(
       return {
         operation: 'scan',
         providerId: 'muse',
+        sessions: result.sessions,
+        dailyAggregates: result.dailyAggregates
+      }
+    }
+    case 'zcode': {
+      const result = await scanZcodeUsageDatabases(
+        request.worktrees,
+        normalizeZcodeUsagePersistedDatabases(
+          await readUsageSourceCache<ZcodeUsagePersistedDatabase>(request.sourceCache)
+        ),
+        onFilesScanned
+      )
+      await persistSourceCache(request.sourceCache, result.processedDatabases)
+      return {
+        operation: 'scan',
+        providerId: 'zcode',
         sessions: result.sessions,
         dailyAggregates: result.dailyAggregates
       }

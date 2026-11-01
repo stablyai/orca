@@ -14,6 +14,7 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
+import type { ZcodeUsageScanState } from '../../../../shared/zcode-usage-types'
 import { getRecentUsageDays } from './usage-overview-daily-series'
 import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 
@@ -48,6 +49,21 @@ function enabledOpenCodeScanState(): OpenCodeUsageScanState {
     lastScanError: null,
     hasAnyOpenCodeData: true
   }
+}
+
+function enabledZcodeScanState(): ZcodeUsageScanState {
+  return {
+    enabled: true,
+    isScanning: false,
+    lastScanStartedAt: 700,
+    lastScanCompletedAt: 800,
+    lastScanError: null,
+    hasAnyZcodeData: true
+  }
+}
+
+function emptyZcodeInput(): { scanState: null; summary: null; daily: never[] } {
+  return { scanState: null, summary: null, daily: [] }
 }
 
 describe('usage overview model', () => {
@@ -161,7 +177,8 @@ describe('usage overview model', () => {
         summary: openCodeSummary,
         daily: openCodeDaily
       },
-      muse: { scanState: null, summary: null, daily: [] }
+      muse: { scanState: null, summary: null, daily: [] },
+      zcode: { scanState: null, summary: null, daily: [] }
     })
 
     expect(overview.totalTokens).toBe(10_800)
@@ -181,6 +198,7 @@ describe('usage overview model', () => {
       codexTokens: 2_000,
       openCodeTokens: 0,
       museTokens: 0,
+      zcodeTokens: 0,
       intensity: 4
     })
     expect(overview.providers.find((provider) => provider.id === 'codex')).toMatchObject({
@@ -217,7 +235,8 @@ describe('usage overview model', () => {
         claude: { scanState: null, summary: null, daily: [] },
         codex: { scanState: enabledCodexScanState(), summary: codexSummary, daily: [] },
         opencode: { scanState: null, summary: null, daily: [] },
-        muse: { scanState: null, summary: null, daily: [] }
+        muse: { scanState: null, summary: null, daily: [] },
+        zcode: emptyZcodeInput()
       })
     }
 
@@ -249,7 +268,8 @@ describe('usage overview model', () => {
       claude: { scanState: enabledClaudeScanState(), summary: claudeSummary, daily: [] },
       codex: { scanState: null, summary: null, daily: [] },
       opencode: { scanState: null, summary: null, daily: [] },
-      muse: { scanState: null, summary: null, daily: [] }
+      muse: { scanState: null, summary: null, daily: [] },
+      zcode: emptyZcodeInput()
     })
 
     expect(overview.estimatedCostUsd).toBeCloseTo(0.01)
@@ -294,7 +314,8 @@ describe('usage overview model', () => {
             totalTokens: 28_300
           }
         ]
-      }
+      },
+      zcode: emptyZcodeInput()
     })
 
     expect(overview.providers.find((provider) => provider.id === 'muse')).toMatchObject({
@@ -304,6 +325,56 @@ describe('usage overview model', () => {
       estimatedCostUsd: null
     })
     expect(overview.bestDay).toMatchObject({ day: '2026-09-22', museTokens: 28_300 })
+    expect(overview.estimatedCostUsd).toBeNull()
+    expect(overview.hasPartialCost).toBe(false)
+  })
+
+  it('folds ZCode tokens into the overview without a partial-cost warning when nothing is priced', () => {
+    const overview = buildUsageOverview({
+      claude: { scanState: null, summary: null, daily: [] },
+      codex: { scanState: null, summary: null, daily: [] },
+      opencode: { scanState: null, summary: null, daily: [] },
+      muse: { scanState: null, summary: null, daily: [] },
+      zcode: {
+        scanState: enabledZcodeScanState(),
+        summary: {
+          scope: 'orca',
+          range: '30d',
+          sessions: 3,
+          events: 9,
+          inputTokens: 40_000,
+          cachedInputTokens: 36_000,
+          cacheReadInputTokens: 35_000,
+          cacheWriteInputTokens: 1_000,
+          outputTokens: 900,
+          reasoningOutputTokens: 120,
+          totalTokens: 40_900,
+          topModel: 'GLM-5.3',
+          topProject: 'orca',
+          hasAnyZcodeData: true
+        },
+        daily: [
+          {
+            day: '2026-09-22',
+            inputTokens: 40_000,
+            cachedInputTokens: 36_000,
+            cacheReadInputTokens: 35_000,
+            cacheWriteInputTokens: 1_000,
+            outputTokens: 900,
+            reasoningOutputTokens: 120,
+            totalTokens: 40_900
+          }
+        ]
+      }
+    })
+
+    expect(overview.providers.find((provider) => provider.id === 'zcode')).toMatchObject({
+      newInputTokens: 4_000,
+      cacheTokens: 36_000,
+      totalTokens: 40_900,
+      estimatedCostUsd: null
+    })
+    expect(overview.bestDay).toMatchObject({ day: '2026-09-22', zcodeTokens: 40_900 })
     expect(overview.estimatedCostUsd).toBeNull()
     expect(overview.hasPartialCost).toBe(false)
   })
@@ -318,6 +389,7 @@ describe('usage overview model', () => {
           codexTokens: 2_000,
           openCodeTokens: 0,
           museTokens: 0,
+          zcodeTokens: 0,
           intensity: 4
         }
       ],
@@ -333,6 +405,7 @@ describe('usage overview model', () => {
         codexTokens: 0,
         openCodeTokens: 0,
         museTokens: 0,
+        zcodeTokens: 0,
         intensity: 0
       },
       {
@@ -342,6 +415,7 @@ describe('usage overview model', () => {
         codexTokens: 2_000,
         openCodeTokens: 0,
         museTokens: 0,
+        zcodeTokens: 0,
         intensity: 4
       },
       {
@@ -351,6 +425,7 @@ describe('usage overview model', () => {
         codexTokens: 0,
         openCodeTokens: 0,
         museTokens: 0,
+        zcodeTokens: 0,
         intensity: 0
       }
     ])
@@ -361,7 +436,8 @@ describe('usage overview model', () => {
       claude: { scanState: null, summary: null, daily: [] },
       codex: { scanState: null, summary: null, daily: [] },
       opencode: { scanState: null, summary: null, daily: [] },
-      muse: { scanState: null, summary: null, daily: [] }
+      muse: { scanState: null, summary: null, daily: [] },
+      zcode: emptyZcodeInput()
     })
 
     expect(overview.hasAnyEnabledProvider).toBe(false)
@@ -392,7 +468,8 @@ describe('usage overview model', () => {
         daily: codexDaily
       },
       opencode: { scanState: null, summary: null, daily: [] },
-      muse: { scanState: null, summary: null, daily: [] }
+      muse: { scanState: null, summary: null, daily: [] },
+      zcode: emptyZcodeInput()
     })
 
     expect(overview.daily).toHaveLength(130_000)

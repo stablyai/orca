@@ -5283,7 +5283,8 @@
           "c760c481c5": "Usage Overview",
           "55c910f4f1": "- some model prices are unavailable",
           "enableMuse": "Enable Muse",
-          "noLocalUsageYet": "No local Claude, Codex, OpenCode, or Muse usage found yet. The overview will populate after the next agent session writes token logs.",
+          "noLocalUsageYet": "No local Claude, Codex, OpenCode, Muse, or ZCode usage found yet. The overview will populate after the next agent session writes token logs.",
+          "enableZcode": "Enable ZCode",
           "providersEnabledWithData": "{{enabled}} enabled - {{withData}} with data",
           "sessionCount_one": "{{formatted}} session",
           "sessionCount_other": "{{formatted}} sessions"
@@ -5317,14 +5318,16 @@
             "0bba8ca244": "statistics",
             "0e2a0b6431": "usage",
             "372debfac0": "stats",
-            "26bb901fcd": "Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.",
+            "26bb901fcd": "Orca stats plus Claude, Codex, OpenCode, Muse, and ZCode token analytics and Grok subscription usage.",
             "cb2430ae6a": "Stats & Usage",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "subscription",
             "d6e9f0a1b2": "credits",
             "a3b6c7d8e9": "grok usage",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "zcodeKeyword": "zcode",
+            "zcodeUsageKeyword": "zcode usage"
           }
         },
         "usage": {
@@ -5353,7 +5356,7 @@
               "statusScanning": "Scanning",
               "statusEnabled": "Enabled",
               "statusOff": "Off",
-              "recentCombinedActivity": "Recent combined Claude, Codex, OpenCode, and Muse token activity.",
+              "recentCombinedActivity": "Recent combined Claude, Codex, OpenCode, Muse, and ZCode token activity.",
               "sessionCount_one": "{{formatted}} session",
               "sessionCount_other": "{{formatted}} sessions",
               "turnCount_one": "{{formatted}} turn",
@@ -5390,6 +5393,20 @@
           "emptyMessage": "No local Muse usage found yet for this scope.",
           "noCostNote": "Muse session logs record tokens but not cost, so no cost estimate is shown.",
           "recentSessionsDescription": "Most recent local Muse sessions in this scope."
+        },
+        "ZcodeUsagePane": {
+          "recentSessionsDescription": "Most recent local ZCode sessions in this scope.",
+          "scopeOrca": "Orca workspaces only",
+          "scopeAll": "All local ZCode usage",
+          "title": "ZCode Usage Tracking",
+          "enableLabel": "Enable ZCode usage analytics",
+          "disabledDescription": "Reads the local ZCode CLI usage database to show token, model, and session stats.",
+          "optionsLabel": "ZCode usage options",
+          "refreshAriaLabel": "Refresh ZCode usage",
+          "emptyMessage": "No local ZCode usage found yet for this scope.",
+          "cacheReadInput": "Cache read input",
+          "cacheWriteInput": "Cache write input",
+          "noCostNote": "The ZCode usage database records tokens but not cost, so no cost estimate is shown."
         },
         "usageFormatters": {
           "notScannedYet": "Not scanned yet",
