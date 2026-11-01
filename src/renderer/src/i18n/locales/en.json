@@ -17316,14 +17316,19 @@
                 "chatPaneBelow": "chat pane below",
                 "browserRight": "browser right",
                 "splitBrowser": "split browser",
-                "browserSplit": "browser split"
+                "browserSplit": "browser split",
+                "togglePin": "toggle pin",
+                "pinWorkspace": "pin workspace",
+                "unpinWorkspace": "unpin workspace"
               },
               "splitChatRight": "Split Chat Right",
               "splitChatRightDescription": "Open a new chat in a split pane to the right.",
               "splitChatDown": "Split Chat Down",
               "splitChatDownDescription": "Open a new chat in a split pane below.",
               "newBrowserTabSplitRight": "New Browser Tab in Right Split",
-              "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right."
+              "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right.",
+              "togglePinWorkspace": "Toggle Pin for Current Workspace",
+              "togglePinWorkspaceDescription": "Pin or unpin the current workspace in the sidebar."
             }
           },
           "palette": {
@@ -22518,6 +22523,9 @@
       "workspaceCreate": "Create worktree",
       "workspaceRename": "Rename worktree",
       "workspaceDelete": "Delete Workspace",
+      "workspaceTogglePin": "Toggle Workspace Pin",
+      "workspacePin": "Pin Workspace",
+      "workspaceUnpin": "Unpin Workspace",
       "workspaceOpenBoard": "Toggle Workspace Board",
       "dashboardToggle": "Toggle Agent Dashboard",
       "workspaceSelectByIndex": "Select Workspace 1–9",

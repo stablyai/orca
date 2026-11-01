@@ -244,6 +244,35 @@ describe('keybindings', () => {
     )
   })
 
+  it('keeps the workspace pin actions unassigned until users customize them', () => {
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+    const binding = { key: 'p', code: 'KeyP', control: false, meta: true, alt: true, shift: false }
+
+    for (const platform of platforms) {
+      expect(getEffectiveKeybindingsForAction('workspace.togglePin', platform)).toEqual([])
+      expect(getEffectiveKeybindingsForAction('workspace.pin', platform)).toEqual([])
+      expect(getEffectiveKeybindingsForAction('workspace.unpin', platform)).toEqual([])
+    }
+
+    expect(keybindingMatchesAction('workspace.togglePin', binding, 'darwin')).toBe(false)
+    expect(
+      keybindingMatchesAction('workspace.togglePin', binding, 'darwin', {
+        'workspace.togglePin': ['Mod+Alt+P']
+      })
+    ).toBe(true)
+    expect(keybindingMatchesAction('workspace.pin', binding, 'darwin')).toBe(false)
+    expect(
+      keybindingMatchesAction('workspace.pin', binding, 'darwin', {
+        'workspace.pin': ['Mod+Alt+P']
+      })
+    ).toBe(true)
+
+    expect(getKeybindingDefinition('workspace.togglePin')?.group).toBe('Global')
+    expect(getKeybindingDefinition('workspace.unpin')?.searchKeywords).toEqual(
+      expect.arrayContaining(['workspace', 'unpin'])
+    )
+  })
+
   it('leaves floating workspace minimize unassigned because floating terminal toggle owns show and hide', () => {
     const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
     const minimizeAction = 'floatingWorkspace.minimize' as KeybindingActionId
