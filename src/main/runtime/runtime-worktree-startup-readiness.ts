@@ -44,11 +44,12 @@ export function pasteWorktreeStartupDraftWhenReady(
   const generation = targetPty ? host.generation?.(targetPty) : undefined
   void waitForWorktreeStartupDraft(host, handle, draft.agent)
     .then(async (ptyId) => {
+      const foreground = ptyId ? await host.getForegroundProcess(ptyId) : null
       if (
         !ptyId ||
         ptyId !== targetPty ||
         !(await startupInputIsClear(host, ptyId)) ||
-        isShellProcess((await host.getForegroundProcess(ptyId)) ?? '') ||
+        (foreground && isShellProcess(foreground)) ||
         Date.now() >= deadline ||
         host.getPtyId(handle) !== ptyId ||
         host.generation?.(ptyId) !== generation
