@@ -265,12 +265,13 @@ async function recordTelemetry(app: ElectronApplication): Promise<void> {
 }
 
 async function recordedToastActions(app: ElectronApplication): Promise<unknown[]> {
-  const events = await app.evaluate(
-    () =>
-      (globalThis as unknown as { __toastTelemetry: { name: unknown; props: unknown }[] })
-        .__toastTelemetry
-  )
-  return events.filter((event) => event.name === 'toast_action_over_modal').map((e) => e.props)
+  const events: unknown = await app.evaluate(() => Reflect.get(globalThis, '__toastTelemetry'))
+  if (!Array.isArray(events)) {
+    throw new Error('Telemetry recorder is not installed')
+  }
+  return events
+    .filter((event) => event?.name === 'toast_action_over_modal')
+    .map((event) => event.props)
 }
 
 async function toasterZIndex(page: Page): Promise<number> {
