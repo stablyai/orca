@@ -142,14 +142,12 @@ export async function runRecording(
     if (!recording.checkpoints.length) {
       throw new Error(`No checkpoints: ${scenario.id}`)
     }
-    const beforeCleanup = JSON.stringify(
-      snapshot(fault.capture('cleanup baseline', () => captureValue(mounted!.state())))
-    )
+    // Only teardown effects earn a cleanup checkpoint; requests settling at dispose are not new evidence.
+    const beforeCleanup = effects.length
     const stateAtCleanup = fault.capture('cleanup state', () => captureValue(mounted!.state()))
     await teardown()
-    const afterCleanup = snapshot(stateAtCleanup)
-    if (JSON.stringify(afterCleanup) !== beforeCleanup) {
-      recording.checkpoints.push({ id: 'cleanup', observation: afterCleanup })
+    if (effects.length !== beforeCleanup) {
+      recording.checkpoints.push({ id: 'cleanup', observation: snapshot(stateAtCleanup) })
     }
   } catch (error) {
     if (!checkingFault) {
