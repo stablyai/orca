@@ -543,6 +543,24 @@ describe('taking a share', () => {
     expect(share?.skipped).toBe(2)
   })
 
+  it("gives a failed file's handle to the next shared file", async () => {
+    const files = Array.from({ length: BRIDGE_MEDIA_MAX_LIVE_HANDLES + 1 }, (_, index) => ({
+      uri: `${CACHE}/photo-${index}.jpg`,
+      mimeType: 'image/jpeg',
+      name: `photo-${index}.jpg`
+    }))
+    const probe = harness({ takeShare: once({ text: '', files }) })
+    // The first file's copy is missing; every later one is readable, the last included.
+    for (const file of files.slice(1)) {
+      probe.files.set(file.uri, bytesOf(3))
+    }
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const { share } = shareTakeResultSchema.parse(await probe.serve('native.share.take', {}))
+    expect(share?.items).toHaveLength(BRIDGE_MEDIA_MAX_LIVE_HANDLES)
+    expect(share?.skipped).toBe(1)
+  })
+
   it('skips a shared file whose copy is missing, keeping the text', async () => {
     const probe = harness({
       takeShare: once({

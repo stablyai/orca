@@ -222,20 +222,26 @@ export function createNativeMediaVerbServer(
     }
   }
 
-  // Stage each file alone: one the page cannot hold drops that file, not the share's text or other files.
+  // Stage each file alone until the free handles are used: one the page cannot hold drops that file,
+  // not the share's text, and a later file takes its handle.
   function stageShared(files: readonly PickedAsset[]): StagedMedia[] {
-    return files.slice(0, Math.max(0, deps.registry.remainingCapacity())).flatMap((file) => {
+    const room = deps.registry.remainingCapacity()
+    const staged: StagedMedia[] = []
+    for (const file of files) {
+      if (staged.length >= room) {
+        break
+      }
       try {
         // A copy the sending app never let the shell read is missing (Expo reports no size); skip it.
         if (!(deps.openFile(file.uri).size > 0)) {
           throw new Error('a shared file is missing or empty')
         }
-        return stage([file])
+        staged.push(...stage([file]))
       } catch (error) {
         console.warn('[web-shell-bridge] a shared file could not be staged', error)
-        return []
       }
-    })
+    }
+    return staged
   }
 
   return async (verb, params) => {
