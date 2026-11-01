@@ -86,6 +86,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         params.reconcileExisting === true,
         (canonicalWorktreeSelector, preAllocatedHandle) =>
           runtime.createTerminal(canonicalWorktreeSelector, {
+            // A CLI command (typed or an agent's) or a window's create is the user's act.
+            wslUserAct: true,
             command: params.command,
             terminalImageViewerSupported: terminalImageViewerSupported(context),
             ...(params.shell ? { shellOverride: params.shell } : {}),
@@ -115,8 +117,11 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             tabId: params.tabId,
             leafId: params.leafId,
             ...(params.spawnIntent ? { spawnIntent: params.spawnIntent } : {}),
+            // A paired window starts its mounted panes here, activation spawns included, and can't tell them apart.
+            ...(clientKind === 'runtime' ? { reopensPane: true as const } : {}),
             ...(preAllocatedHandle ? { preAllocatedHandle } : {})
-          })
+          }),
+        { wslUserAct: true }
       )
       // Switch point. A CLI start is work in the workspace; a window or phone tab is a person opening one.
       if (
@@ -149,7 +154,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               command: params.command,
               env: params.env,
               // The window's split shows why its start failed, as its own spawn did.
-              keepPaneOnStartFailure: true
+              keepPaneOnStartFailure: true,
+              wslUserAct: true
             })
           : // The schema requires a handle when no pane is named.
             await runtime.splitTerminal(params.terminal ?? '', {
@@ -157,7 +163,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               command: params.command,
               env: params.env,
               telemetrySource: params.telemetrySource,
-              retrySplit: params.retrySplit
+              retrySplit: params.retrySplit,
+              wslUserAct: true
             })
     })
   }),

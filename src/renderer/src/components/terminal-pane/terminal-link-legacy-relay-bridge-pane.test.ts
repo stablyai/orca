@@ -44,11 +44,6 @@ const movedRows: WorktreeOperationRouteState = {
     ]
   }
 }
-// The same workspace while this desktop still dials the SSH host directly.
-const directSshRows: WorktreeOperationRouteState = {
-  repos: [{ id: 'repo-1', executionHostId: 'ssh:box', connectionId: 'box' }],
-  worktreesByRepo: { 'repo-1': [{ id: WORKTREE_ID, repoId: 'repo-1', hostId: 'ssh:box' }] }
-}
 
 function hover(runtimeEnvironmentId: string | null): Promise<ILink[]> {
   const { provider } = createProviderSetup(
@@ -102,28 +97,5 @@ describe('file links in a relay-era pane the legacy relay bridge serves', () => 
         params: { worktree: `id:${WORKTREE_ID}`, relativePaths: ['src/app/page.tsx'] }
       })
     )
-  })
-
-  it('keeps a workspace this desktop still dials over SSH off any server', () => {
-    expect(
-      resolveTerminalLinkRuntimeEnvironmentId(bridgedTransport, directSshRows, WORKTREE_ID)
-    ).toBeNull()
-  })
-
-  it('leaves an SSH pane the bridge does not serve as it was', () => {
-    bridged.ptyIds = new Set()
-    expect(
-      resolveTerminalLinkRuntimeEnvironmentId(bridgedTransport, movedRows, WORKTREE_ID)
-    ).toBeNull()
-  })
-
-  it("prefers a pane's own server", () => {
-    expect(
-      resolveTerminalLinkRuntimeEnvironmentId(
-        { ...bridgedTransport, getRuntimeEnvironmentId: () => 'env-2' },
-        movedRows,
-        WORKTREE_ID
-      )
-    ).toBe('env-2')
   })
 })

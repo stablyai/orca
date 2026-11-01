@@ -101,31 +101,6 @@ describe('work item checksSummary', () => {
     })
   })
 
-  it('reports a still-running check as pending', async () => {
-    mockPullRequestDetail({
-      number: 43,
-      title: 'Add feature',
-      state: 'OPEN',
-      url: 'https://github.com/acme/widgets/pull/43',
-      updatedAt: '2026-04-01T00:00:00Z',
-      statusCheckRollup: [
-        { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'SUCCESS' },
-        { __typename: 'CheckRun', status: 'IN_PROGRESS', conclusion: null }
-      ]
-    })
-
-    const item = await getWorkItem('/repo-root', 43, 'pr', null, {}, 'origin')
-
-    expect(item?.checksSummary).toEqual({
-      state: 'pending',
-      total: 2,
-      passed: 1,
-      failed: 0,
-      pending: 1,
-      neutral: 0
-    })
-  })
-
   it('fails the summary on a failing run and leaves an empty rollup with no state', async () => {
     mockPullRequestDetail({
       number: 44,

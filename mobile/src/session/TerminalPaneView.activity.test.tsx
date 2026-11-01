@@ -47,6 +47,7 @@ it('retains the terminal but disables interaction on tab hiding, app backgroundi
     onHaptic: vi.fn(),
     onTerminalInput: vi.fn(),
     onTerminalQueryReply: vi.fn(),
+    onTerminalInteraction: vi.fn(),
     onTerminalTap: vi.fn(),
     onFileTap: vi.fn(),
     onOpenUrl: vi.fn(),

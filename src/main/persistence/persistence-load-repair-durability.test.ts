@@ -95,6 +95,36 @@ describe('load-time normalization durability', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('durably migrates Agents model and effort on an already typed permission profile', async () => {
+    const settled = await settledProfile()
+    await closeTestStores()
+    delete settled.settings.agentLaunchChoices
+    settled.settings.agentPermissionDefault = 'ask'
+    settled.settings.agentDefaultArgs = {
+      claude: '--model saved-unlisted-id --effort high --verbose',
+      codex: '-c model_reasoning_effort=low --search'
+    }
+    writeDataFile(settled)
+    const saved = await reloadAndSettleWrites()
+    expect(saved.settings.agentLaunchChoices).toEqual({
+      claude: { model: 'saved-unlisted-id', options: { effort: 'high' } },
+      codex: { options: { effort: 'low' } }
+    })
+    expect(saved.settings.agentDefaultArgs).toMatchObject({
+      claude: '--verbose',
+      codex: '--search'
+    })
+    await closeTestStores()
+    const reopened = await createStore()
+    expect(reopened.getSettings().agentLaunchChoices).toEqual(saved.settings.agentLaunchChoices)
+    reopened.updateSettings({ agentLaunchChoices: {} })
+    reopened.flush()
+    await closeTestStores()
+    const cleared = await createStore()
+    expect(cleared.getSettings().agentLaunchChoices).toEqual({})
+    expect(cleared.getSettings().agentDefaultArgs?.claude).toBe('--verbose')
+  })
+
   it.each(['claude', 'codex'] as const)(
     'retains independent %s effort when lifting a model through load, save and reopen',
     async (agent) => {
@@ -357,7 +387,7 @@ describe('load-time normalization durability', () => {
         expect(launch.command).toBe(
           recipe.agentId === 'claude'
             ? "claude '--model' 'retired-unlisted-id' '--effort' 'high' '--dangerously-skip-permissions'"
-            : "codex '-m' 'retired-unlisted-id' '-c' 'model_reasoning_effort=high' '--dangerously-bypass-approvals-and-sandbox'"
+            : "codex '-c' 'disable_paste_burst=true' '-m' 'retired-unlisted-id' '-c' 'model_reasoning_effort=high' '--dangerously-bypass-approvals-and-sandbox'"
         )
       }
       const write = vi.spyOn(domainWrites, 'writeProfileStateDomains')

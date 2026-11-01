@@ -145,6 +145,14 @@ export const VERIFY_CHECKS = [
     inputs: ['README.md', 'docs/readme/']
   },
   {
+    // Compiles Tailwind (~1.5s), so it runs only for inputs that can change the emitted CSS.
+    name: 'compiled :has() restyle scope',
+    args: ['config/scripts/check-has-restyle-scope.mjs'],
+    inputs: ['electron.vite.config.ts'],
+    matches: (files) =>
+      files.some((file) => /^src\/(?:renderer\/.*\.(?:css|tsx?)|shared\/.*\.css)$/.test(file))
+  },
+  {
     name: 'import boundaries',
     runtime: 'bun',
     args: ['config/scripts/check-import-boundaries.mjs'],

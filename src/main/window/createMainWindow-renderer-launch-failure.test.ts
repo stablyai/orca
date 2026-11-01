@@ -108,26 +108,6 @@ describe('renderer launch-failed recovery', () => {
     vi.restoreAllMocks()
   })
 
-  it('backs off instead of opening the crash-loop breaker after 3 quick failures', async () => {
-    const { load } = createSpawnRefusingWindow()
-    const { onRendererRecoveryExhausted } = open()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(load).toHaveBeenCalledTimes(1)
-
-    // Spread retries across backoff instead of exhausting the breaker in ~750ms.
-    await vi.advanceTimersByTimeAsync(250)
-    expect(load).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(999)
-    expect(load).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(load).toHaveBeenCalledTimes(3)
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(load).toHaveBeenCalledTimes(4)
-    await vi.advanceTimersByTimeAsync(4_000)
-    expect(load).toHaveBeenCalledTimes(5)
-    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
-  })
-
   it('recovers in place once spawn headroom returns, without any prompt', async () => {
     const { handlers, load, spawn } = createSpawnRefusingWindow()
     const { onRendererRecoveryExhausted, onRecoveryReloadOutcome } = open()

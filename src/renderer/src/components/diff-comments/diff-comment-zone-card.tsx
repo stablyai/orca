@@ -1,6 +1,5 @@
 import type { RefObject } from 'react'
 import type { Root } from 'react-dom/client'
-import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
@@ -80,7 +79,6 @@ export function renderDiffCommentZoneCard(
       <DiffCommentCard
         lineNumber={comment.lineNumber}
         startLine={comment.startLine}
-        label={comment.author ? getDiffCommentLineLabel(comment).toLowerCase() : undefined}
         body={comment.body}
         sentAt={comment.sentAt}
         author={comment.author}

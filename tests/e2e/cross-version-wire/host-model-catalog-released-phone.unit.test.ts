@@ -68,7 +68,7 @@ it.each(['success', 'budget'] as const)(
       .map((row) => JSON.stringify(row))
       .join('\n')
     const probe = createClaudeModelCatalogProbe({
-      resolveCommand: () => process.execPath,
+      resolveCommand: () => ({ command: process.execPath, prefixArgs: [] }),
       resolveEnv: () => ({}),
       resolveInheritedEnv: async () => ({}),
       resolveAuthPolicy: () => ({ account: 'system' }),
@@ -123,6 +123,12 @@ it.each(['success', 'budget'] as const)(
     })
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
+        readModelCatalog: async (params: Parameters<typeof service.read>[0]) => {
+          if (!params.savedOnly) {
+            void service.demand(params)
+          }
+          return service.read(params)
+        },
         deps: {
           modelCatalog: service,
           store: { getRecord: () => undefined, getConversation: () => undefined },

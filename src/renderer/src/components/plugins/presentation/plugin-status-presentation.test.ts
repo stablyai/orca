@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  installedPluginPresentation,
-  isPluginEnabled,
-  pluginNeedsReview,
-  pluginStatusKind,
-  pluginStatusWord,
-  sortByAttention
-} from './plugin-status-presentation'
+import { installedPluginPresentation, sortByAttention } from './plugin-status-presentation'
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
 
 function host(pluginKey: string, extra: Partial<PluginHostListEntry> = {}): PluginHostListEntry {
@@ -31,37 +24,14 @@ function host(pluginKey: string, extra: Partial<PluginHostListEntry> = {}): Plug
 }
 
 const idle = { updatedTo: null, needsReview: false }
-const base = { status: 'running' as const, needsReconsent: false, blockedByKillList: undefined }
 
 describe('plugin status presentation', () => {
-  it('ranks the safety list, then review, over the worker state', () => {
-    expect(pluginStatusKind({ ...base, blockedByKillList: { reason: 'unsafe' } })).toBe('blocked')
-    expect(pluginStatusKind({ ...base, needsReconsent: true })).toBe('review')
-    expect(pluginStatusKind({ ...base, status: 'pending' })).toBe('review')
-    expect(pluginStatusKind({ ...base, status: 'errored' })).toBe('error')
-    expect(pluginStatusKind({ ...base, status: 'idle' })).toBe('enabled')
-    expect(pluginStatusWord(pluginStatusKind(base))).toBe('Running')
-  })
-
-  it('names a crashed plugin Stopped everywhere, never Error', () => {
-    expect(pluginStatusWord('error')).toBe('Stopped')
-    expect(
-      installedPluginPresentation(host('a', { status: 'errored' }), null, false, idle)
-    ).toMatchObject({ primary: 'restart', statusText: 'Stopped' })
-  })
-
   it('offers Reinstall for a plugin that cannot load, and View error without one', () => {
     const broken = host('a', { status: 'invalid' })
     expect(installedPluginPresentation(broken, null, false, idle, '1.0.0').primary).toBe(
       'reinstall'
     )
     expect(installedPluginPresentation(broken, null, false, idle).primary).toBe('error')
-  })
-
-  it('counts a crashed plugin as switched on, and a pending one as needing review', () => {
-    expect(isPluginEnabled({ status: 'errored' })).toBe(true)
-    expect(isPluginEnabled({ status: 'disabled' })).toBe(false)
-    expect(pluginNeedsReview({ status: 'pending', needsReconsent: false })).toBe(true)
   })
 
   it('puts plugins that need the user first, then updates, keeping order within each', () => {

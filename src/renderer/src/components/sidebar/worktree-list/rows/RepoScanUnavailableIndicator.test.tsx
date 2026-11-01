@@ -98,4 +98,51 @@ describe('RepoScanUnavailableIndicator', () => {
     })
     expect(fetchWorktrees).toHaveBeenCalledWith(repo.id, { executionHostId: 'local' })
   })
+
+  it.each([
+    ['stopped', 'WSL distro Ubuntu is stopped'],
+    ['unverifiable', "Couldn't confirm WSL distro Ubuntu is running"]
+  ] as const)(
+    'shows a %s WSL distro as a neutral state whose click starts it and scans',
+    async (state, title) => {
+      const calls: string[] = []
+      const fetchWorktrees = vi.fn(async () => {
+        calls.push('fetch')
+        return true
+      })
+      const scanStartingWslDistro = vi.fn(async () => {
+        calls.push('start')
+      })
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { worktrees: { scanStartingWslDistro } }
+      })
+      useAppStore.setState({
+        fetchWorktrees: fetchWorktrees as never,
+        detectedWorktreesByRepo: {
+          [repo.id]: makeDetectedResult(repo.id, [], {
+            authoritative: false,
+            source: 'metadata-fallback',
+            unavailableReason: "WSL distro 'Ubuntu' is not running.",
+            wslDistroStopped: { distro: 'Ubuntu', state }
+          })
+        }
+      })
+
+      const container = await render()
+      const button = container.querySelector('button')
+
+      expect(button?.getAttribute('aria-label')).toBe(`${title}. Start distro and scan`)
+      expect(button?.className).toContain('text-muted-foreground')
+      expect(button?.className).not.toContain('text-destructive')
+      await act(async () => {
+        button?.click()
+      })
+      // The click is the user act that may start the distro; the re-list follows it.
+      expect(scanStartingWslDistro).toHaveBeenCalledWith({ repoId: repo.id })
+      expect(fetchWorktrees).toHaveBeenCalledWith(repo.id, { executionHostId: 'local' })
+      expect(calls).toEqual(['start', 'fetch'])
+      Reflect.deleteProperty(window, 'api')
+    }
+  )
 })

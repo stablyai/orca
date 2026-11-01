@@ -21,7 +21,7 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
-import { getJiraProjectSelectionKey } from '@/components/task-page-jira-project-selection'
+import { getJiraProjectSelectionKey } from '@/components/task-page/jira/task-page-jira-project-selection'
 import { cn } from '@/lib/utils'
 import {
   Select,

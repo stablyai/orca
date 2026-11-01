@@ -1,5 +1,5 @@
 import { View, StyleSheet } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors, radii } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { ConnectionState } from '../transport/types'
 import { isConnectionDialing, type ConnectionVerdict } from '../transport/connection-health'
@@ -40,6 +40,6 @@ const styles = StyleSheet.create({
   dot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   }
 })

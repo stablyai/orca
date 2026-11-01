@@ -1,14 +1,14 @@
-import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
-import type { AgentSessionUsageLimit } from '../../../shared/agent-session-usage-limit'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
 import type {
   NativeChatBackgroundTaskBlock,
   NativeChatSubagentState
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpAgentError } from '../acp-errors'
-import type { AgentSessionOptionChoice } from '../../../shared/agent-session-wire'
+import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
 
 export type AcpRequestPresentation = {
@@ -100,9 +100,18 @@ export type AcpDialect = {
   /** A child-session notice supplies only its outcome; the translator owns membership and replay. */
   subagentSessionEnd?(method: string, params: unknown): 'completed' | 'stopped' | undefined
   notification?(method: string, params: unknown, at: number): AcpDialectNotification | undefined
+  /** Completion of an independent text task, apart from interactive turn projection. */
+  textTaskCompletion?(
+    method: string,
+    params: unknown
+  ): { sessionId: string; promptId: string; stopReason: string } | undefined
   contextWindow?(models: unknown): number | undefined
-  modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
-  /** The agent clamps an effort another model lacks, so unlisted models' menus are unknown, not empty. */
+  modelEfforts?(model: ModelInfo): {
+    efforts: AgentSessionOptionChoice[]
+    defaultEffort?: string
+    declaredDefaultEffort?: string | null
+  }
+  /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
   /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined

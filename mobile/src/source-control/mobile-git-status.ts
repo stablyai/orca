@@ -1,4 +1,5 @@
 import { translate } from '../i18n/mobile-i18n'
+import { colors } from '../theme/mobile-theme'
 import type { GitFileStatus, GitStagingArea } from '../../../src/shared/git-status-types'
 import {
   buildSourceControlDisplaySections,
@@ -11,7 +12,9 @@ import { getUnstageAllPaths } from '../../../src/shared/source-control-discard-a
 import {
   canDiscardStatusEntry,
   canStageStatusEntry,
-  canUnstageStatusEntry
+  canUnstageStatusEntry,
+  getConflictResolutions,
+  type ConflictResolution
 } from '../../../src/shared/source-control-entry-actions'
 import type { SourceControlGroupOrder } from '../../../src/shared/ui-chrome-types'
 import type { RpcResponse } from '../transport/types'
@@ -93,6 +96,10 @@ export function isMobileGitDiscardableEntry(entry: MobileGitStatusEntry): boolea
   return hasKnownArea(entry) && canDiscardStatusEntry(entry)
 }
 
+export function getMobileConflictResolutions(entry: MobileGitStatusEntry): ConflictResolution[] {
+  return hasKnownArea(entry) ? getConflictResolutions(entry) : []
+}
+
 export function isMobileGitUnstageableEntry(entry: MobileGitStatusEntry): boolean {
   return hasKnownArea(entry) && canUnstageStatusEntry(entry)
 }
@@ -128,4 +135,21 @@ export function isMobileGitTransientRefreshError(
 ) {
   const normalized = message?.trim().toLowerCase()
   return code === 'request_aborted' || normalized === 'aborting' || normalized === 'request_aborted'
+}
+
+export function statusColor(status: MobileGitFileStatus): string {
+  switch (status) {
+    case 'added':
+    case 'copied':
+      return colors.statusGreen
+    case 'deleted':
+      return colors.statusRed
+    case 'renamed':
+      return colors.accentBlue
+    case 'untracked':
+      return colors.statusAmber
+    case 'modified':
+    default:
+      return colors.textSecondary
+  }
 }

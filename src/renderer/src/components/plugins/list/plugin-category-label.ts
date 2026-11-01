@@ -10,13 +10,26 @@ function kindLabel(kind: PluginFilterKind): string {
       return translate('auto.components.settings.PluginFilterPopover.languages', 'Languages')
     case 'icons':
       return translate('auto.components.settings.PluginFilterPopover.icons', 'Icons')
+    case 'editors':
+      return translate('auto.components.settings.PluginFilterPopover.editors', 'Editors')
     case 'commands':
       return translate('auto.components.settings.PluginFilterPopover.commands', 'Commands & panels')
     case 'machines':
-      return translate(
-        'auto.components.settings.PluginFilterPopover.machines',
-        'Machines & recipes'
-      )
+      return translate('auto.components.settings.PluginFilterPopover.remoteVms', 'Remote/VMs')
+  }
+}
+
+// Why: catalog categories that stand alone as chips but have a known name.
+function standaloneCategoryLabel(category: string): string | null {
+  switch (category) {
+    case 'games':
+      return translate('auto.components.settings.PluginFilterPopover.games', 'Games')
+    case 'agents':
+      return translate('auto.components.settings.PluginFilterPopover.agents', 'Agents')
+    case 'integrations':
+      return translate('auto.components.settings.PluginFilterPopover.integrations', 'Integrations')
+    default:
+      return null
   }
 }
 
@@ -24,6 +37,10 @@ function kindLabel(kind: PluginFilterKind): string {
 export function pluginCategoryLabel(category: string): string {
   if (isPluginFilterKind(category)) {
     return kindLabel(category)
+  }
+  const standalone = standaloneCategoryLabel(category)
+  if (standalone) {
+    return standalone
   }
   const kinds = pluginFilterKinds({ categories: [category] })
   const [kind] = kinds

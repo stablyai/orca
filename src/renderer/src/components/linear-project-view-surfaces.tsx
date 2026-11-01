@@ -1,3 +1,4 @@
+import { linearIssueReadError } from '@/lib/linear-read-error'
 import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import React from 'react'
 import { ArrowLeft, ArrowRight, ExternalLink, Layers3, LoaderCircle, RefreshCw } from 'lucide-react'
@@ -124,7 +125,7 @@ export function LinearCollectionNotice({
                     'auto.components.linear.project.view.surfaces.linearLoginUnreadable',
                     'Unable to read saved Linear login. Reconnect it in Settings.'
                   )
-                : taskProviderErrorText(error.message)}
+                : taskProviderErrorText(linearIssueReadError(error.message))}
             </Badge>
           ))}
         </div>

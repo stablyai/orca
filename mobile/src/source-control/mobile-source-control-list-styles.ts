@@ -1,42 +1,23 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { COMPOSER_CONTROL_SIZE } from '../components/composer-input/composer-input-styles'
 
 export const listStyles = themedStyleSheet(() => ({
   listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 136
+    paddingHorizontal: spacing.lg
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
-  },
-  sectionTitle: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase'
-  },
-  sectionCount: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+  // SectionHeader brings its own row padding, so it reaches past the list's.
+  sectionHeaderBleed: {
+    marginHorizontal: -spacing.lg
   },
   branchCompareBlock: {
     paddingBottom: spacing.sm
   },
-  branchSectionTitleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
   branchSectionSubtitle: {
     color: colors.textMuted,
     fontSize: typography.metaSize,
-    marginTop: 2
+    paddingBottom: spacing.xs
   },
   branchStateRow: {
     minHeight: 44,
@@ -71,9 +52,10 @@ export const listStyles = themedStyleSheet(() => ({
   fileRowUnavailable: {
     opacity: 0.72
   },
+  // Leading-aligned so the status letter starts on the section label's edge.
   statusBadge: {
     width: 24,
-    alignItems: 'center'
+    alignItems: 'flex-start'
   },
   statusBadgeText: {
     fontFamily: typography.monoFamily,
@@ -104,9 +86,28 @@ export const listStyles = themedStyleSheet(() => ({
   iconButton: {
     width: 32,
     height: 32,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  conflictActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs
+  },
+  conflictActionButton: {
+    minHeight: 30,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.control,
+    backgroundColor: colors.bgRaised,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  conflictActionText: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
   },
   iconButtonPressed: {
     backgroundColor: colors.bgRaised
@@ -119,80 +120,45 @@ export const listStyles = themedStyleSheet(() => ({
     left: 0,
     right: 0,
     gap: spacing.xs,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
     backgroundColor: colors.bgPanel,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle
   },
-  commitRow: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  commitInput: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: radii.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgBase,
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.md,
-    // Keep input sizing above iOS’s web focus-zoom threshold.
-    fontSize: TEXT_INPUT_FONT_SIZE
-  },
-  commitInputDisabled: {
-    backgroundColor: colors.bgPanel,
-    borderColor: colors.borderSubtle,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  commitInputDisabledText: {
-    color: colors.textMuted,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
+  // A capsule beside the composer's round controls; the action's name matters more than an arrow.
   commitButton: {
-    minWidth: 88,
-    minHeight: 42,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary,
+    height: COMPOSER_CONTROL_SIZE,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surfaceBright,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.md
+    paddingHorizontal: spacing.lg
   },
   commitButtonSecondary: {
     backgroundColor: 'transparent',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },
-  generateButton: {
-    width: 42,
-    minHeight: 42,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
   commitButtonDisabled: {
-    opacity: 0.45
-  },
-  commitButtonPressed: {
-    opacity: 0.75
+    backgroundColor: colors.composerControl
   },
   commitButtonText: {
     color: colors.bgBase,
     fontSize: typography.bodySize,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   commitButtonSecondaryText: {
     color: colors.textPrimary
   },
+  commitButtonDisabledText: {
+    color: colors.textMuted
+  },
   commitFailurePanel: {
     marginTop: spacing.sm,
     padding: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusRed,
@@ -221,7 +187,7 @@ export const listStyles = themedStyleSheet(() => ({
   commitFailureFixButton: {
     minHeight: 36,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary,
     flexDirection: 'row',
     alignItems: 'center',

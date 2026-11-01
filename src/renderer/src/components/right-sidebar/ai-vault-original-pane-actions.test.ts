@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
-import { renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { cleanup, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  structured: vi.fn(async () => true),
+  findStructured: vi.fn((): object | null => null),
   activateAndRevealWorkspace: vi.fn<(workspaceId: string) => unknown>(),
   toastError: vi.fn<(message: string) => void>(),
   folderWorkspaces: new Array<{ id: string; projectGroupId: string; executionHostId: string }>()
@@ -13,10 +16,10 @@ vi.mock('@/lib/worktree-activation', () => ({
 }))
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
-  activateAiVaultStructuredSession: vi.fn()
+  activateAiVaultStructuredSession: mocks.structured
 }))
 vi.mock('@/lib/agent-session/structured-agent-session-tab-activation', () => ({
-  findStructuredAgentSessionTab: vi.fn(() => null)
+  findStructuredAgentSessionTab: mocks.findStructured
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/store', () => {
@@ -44,12 +47,16 @@ function folder(executionHostId: string) {
   return { id: 'folder-1', projectGroupId: 'group-1', executionHostId }
 }
 
-describe('jumpToWorktree', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.folderWorkspaces = []
-  })
+beforeEach(() => {
+  vi.resetAllMocks()
+  mocks.folderWorkspaces = []
+  mocks.findStructured.mockReturnValue(null)
+  mocks.structured.mockResolvedValue(true)
+})
 
+afterEach(() => cleanup())
+
+describe('jumpToWorktree', () => {
   it('activates folder workspaces through the workspace activator', () => {
     mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: null })
     const { result } = renderHook(() => useAiVaultOriginalPaneActions())
@@ -82,4 +89,36 @@ describe('jumpToWorktree', () => {
         : 'Worktree is no longer available.'
     )
   })
+})
+
+it('keeps the original-pane handled boolean used by the History dialog close callback', async () => {
+  const session: AiVaultSession = {
+    id: 'history-chat',
+    executionHostId: 'local',
+    agent: 'claude',
+    sessionId: 'provider-1',
+    title: 'Saved Chat',
+    cwd: '/repo',
+    branch: null,
+    model: null,
+    filePath: '/fixture/session.jsonl',
+    codexHome: null,
+    createdAt: null,
+    updatedAt: null,
+    modifiedAt: '',
+    messageCount: 0,
+    totalTokens: 0,
+    previewMessages: [],
+    queuedMessageCount: 0,
+    subagentTranscriptCount: 0,
+    resumeCommand: '',
+    subagent: null,
+    structuredSession: { workspaceId: 'workspace', sessionId: 'claude_saved' }
+  }
+  mocks.findStructured.mockReturnValue({})
+  mocks.structured.mockResolvedValue(true)
+  const { result } = renderHook(() => useAiVaultOriginalPaneActions())
+  expect(await result.current.jumpToOriginalPane(session)).toBe(true)
+  expect(mocks.structured).toHaveBeenCalledWith(session)
+  expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
 })

@@ -43,6 +43,10 @@ it('fills a freed compiler slot while the other project is still running', async
   expect(active).toBe(2)
   children[3].child.emit('close', 0, null)
   children[0].child.emit('close', 0, null)
+  for (let index = 4; index < TYPECHECK_PROJECTS.length; index++) {
+    await vi.waitFor(() => expect(children).toHaveLength(index + 1))
+    children[index].child.emit('close', 0, null)
+  }
   expect(await result).toEqual([])
   expect(peak).toBe(2)
   expect(children.map(({ spec }) => spec.args[spec.args.indexOf('-p') + 1])).toEqual(
@@ -61,6 +65,10 @@ it('keeps checking after compiler failures and reports errors in project order',
   await vi.waitFor(() => expect(children).toHaveLength(4))
   children[2].child.emit('close', 0, null)
   children[3].child.emit('close', 0, null)
+  for (let index = 4; index < TYPECHECK_PROJECTS.length; index++) {
+    await vi.waitFor(() => expect(children).toHaveLength(index + 1))
+    children[index].child.emit('close', 0, null)
+  }
   expect((await result).map(({ message }) => message)).toEqual([
     'bun config/tsconfig.node.json exited with signal SIGKILL',
     'bun config/tsconfig.tc.web.json exited with code 1'

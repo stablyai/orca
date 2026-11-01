@@ -10,6 +10,7 @@ function createServices(storageSet: PluginHostServices['storage']['set']): Plugi
     resolveActiveWorktreeContext: vi.fn().mockResolvedValue(null),
     listWorktreeTerminals: vi.fn().mockResolvedValue([]),
     sendTerminalText: vi.fn().mockResolvedValue({ accepted: true }),
+    listAgentStatuses: () => [],
     dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true }),
     storage: {
       get: vi.fn(),
@@ -20,7 +21,8 @@ function createServices(storageSet: PluginHostServices['storage']['set']): Plugi
     secrets: {
       get: vi.fn().mockReturnValue({ ok: true, value: null }),
       set: vi.fn().mockReturnValue({ ok: true }),
-      delete: vi.fn()
+      delete: vi.fn(),
+      protection: vi.fn().mockReturnValue('unavailable')
     },
     settings: {
       getAll: vi.fn().mockReturnValue({}),
@@ -189,9 +191,16 @@ describe('host API surfaces and strict params', () => {
     })
 
   it('lets each surface call only the methods that list it', async () => {
-    await expect(call('storage.keys', {}, 'editor')).resolves.toMatchObject({
+    await expect(
+      call('terminal.sendText', { terminalId: 't', text: 'x' }, 'editor')
+    ).resolves.toMatchObject({
       ok: false,
       code: 'not_permitted'
+    })
+    // Panels and editors share the plugin's own storage, behind the same capability.
+    await expect(call('storage.keys', {}, 'editor')).resolves.toEqual({
+      ok: true,
+      value: { keys: [] }
     })
     await expect(call('storage.keys', {}, 'worker')).resolves.toEqual({
       ok: true,
@@ -294,5 +303,99 @@ describe('terminal.sendText', () => {
 
     expect(outcome).toEqual({ ok: true, value: { accepted: true } })
     expect(delegate.sendTerminal).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('secrets.protection', () => {
+  it('tells a secrets-capable worker whether writes would be refused', async () => {
+    const call = (grantedCapabilities: ['secrets:own'] | []) =>
+      executePluginHostCall({
+        pluginId: 'samples.demo',
+        method: 'secrets.protection',
+        params: {},
+        surface: 'worker',
+        grantedCapabilities,
+        services: createServices(vi.fn())
+      })
+    await expect(call(['secrets:own'])).resolves.toEqual({
+      ok: true,
+      value: { status: 'unavailable' }
+    })
+    await expect(call([])).resolves.toMatchObject({ ok: false, code: 'capability_denied' })
+  })
+})
+
+describe('executePluginHostCall frame desktop methods', () => {
+  const audit = () => ({ record: vi.fn().mockResolvedValue(undefined) })
+
+  it('need no capability but still consent, and stay off workers', async () => {
+    const desktop = { openExternal: vi.fn().mockResolvedValue({ opened: true }), saveFile: vi.fn() }
+    const services = { ...createServices(vi.fn()), desktop }
+    const call = (overrides: Partial<Parameters<typeof executePluginHostCall>[0]>) =>
+      executePluginHostCall({
+        pluginId: 'samples.demo',
+        method: 'shell.openExternal',
+        params: { url: 'https://example.com/docs' },
+        surface: 'panel',
+        grantedCapabilities: [],
+        services,
+        audit: audit(),
+        ...overrides
+      })
+
+    await expect(call({})).resolves.toEqual({ ok: true, value: { opened: true } })
+    expect(desktop.openExternal).toHaveBeenCalledWith(
+      'samples.demo',
+      'https://example.com/docs',
+      expect.objectContaining({ assertActive: expect.any(Function) })
+    )
+    await expect(call({ grantedCapabilities: null })).resolves.toMatchObject({
+      code: 'consent_required'
+    })
+    await expect(call({ surface: 'worker' })).resolves.toMatchObject({ code: 'not_permitted' })
+  })
+
+  it.each(['javascript:alert(1)', 'file:///etc/passwd', 'orca-plugin-frame://0123456789abcdef/x'])(
+    'refuses %s before the desktop sink',
+    async (url) => {
+      const desktop = { openExternal: vi.fn(), saveFile: vi.fn() }
+      const outcome = await executePluginHostCall({
+        pluginId: 'samples.demo',
+        method: 'shell.openExternal',
+        params: { url },
+        surface: 'panel',
+        grantedCapabilities: [],
+        services: { ...createServices(vi.fn()), desktop },
+        audit: audit()
+      })
+      expect(outcome).toMatchObject({ ok: false, code: 'invalid_params' })
+      expect(desktop.openExternal).not.toHaveBeenCalled()
+    }
+  )
+
+  it('saves strings or bytes through the desktop dialog and fails without one', async () => {
+    const desktop = { openExternal: vi.fn(), saveFile: vi.fn().mockResolvedValue(false) }
+    const record = audit()
+    const save = (services: PluginHostServices) =>
+      executePluginHostCall({
+        pluginId: 'samples.demo',
+        method: 'files.saveAs',
+        params: { suggestedName: 'a.bin', data: new Uint8Array([1, 2]).buffer },
+        surface: 'editor',
+        grantedCapabilities: [],
+        services,
+        audit: record
+      })
+
+    await expect(save({ ...createServices(vi.fn()), desktop })).resolves.toEqual({
+      ok: true,
+      value: { status: 'cancelled' }
+    })
+    expect(record.record).toHaveBeenCalledWith(expect.objectContaining({ method: 'files.saveAs' }))
+    await expect(save(createServices(vi.fn()))).resolves.toMatchObject({
+      ok: false,
+      code: 'action_failed',
+      error: expect.stringContaining('desktop app')
+    })
   })
 })

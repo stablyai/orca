@@ -177,9 +177,14 @@ export function WorktreeJumpPaletteSurface({
       </div>
       <div aria-live="polite" className="sr-only">
         {controller.filterActive
-          ? `${translate('worktreeJumpPalette.filter.ariaActive', 'Filter: {{value0}} active.', {
-              value0: getPaletteFilterSelectionCount(controller.filter)
-            })} `
+          ? `${translate(
+              'worktreeJumpPalette.filter.ariaActiveCount',
+              'Filter: {{count}} active.',
+              {
+                count: getPaletteFilterSelectionCount(controller.filter),
+                defaultValue_one: 'Filter: {{count}} active.'
+              }
+            )} `
           : ''}
         {controller.deferredQuery.trim()
           ? translate(

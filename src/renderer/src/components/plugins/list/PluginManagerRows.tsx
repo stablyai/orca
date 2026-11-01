@@ -45,16 +45,13 @@ export function installedPluginControls(
     busy,
     canCheckUpdate,
     handlers,
-    inPage = false,
-    toggleInMenu = false
+    inPage = false
   }: {
     busy: boolean
     canCheckUpdate: boolean
     handlers: InstalledRowHandlers
     /** On the plugin's own page, so "Details" would reopen it. */
     inPage?: boolean
-    /** A card has no room for the switch, so Enable and Disable move into its menu. */
-    toggleInMenu?: boolean
   }
 ): InstalledPluginControls {
   const { kind, enabled, statusText, removable, primary, switchable } = installedPluginPresentation(
@@ -163,7 +160,6 @@ export function installedPluginControls(
     )
   }
 
-  const toggleItem = toggleInMenu && kind !== 'review' && kind !== 'invalid' && kind !== 'blocked'
   return {
     kind,
     statusText,
@@ -236,7 +232,7 @@ export function installedPluginControls(
             )}
           </DropdownMenuItem>
         ) : null}
-        {plugin.source?.kind === 'marketplace' || removable || plugin.bundled || toggleItem ? (
+        {plugin.source?.kind === 'marketplace' || removable || plugin.bundled ? (
           <DropdownMenuSeparator />
         ) : null}
         {plugin.source?.kind === 'marketplace' ? (
@@ -244,18 +240,6 @@ export function installedPluginControls(
             pluginKey={plugin.pluginKey}
             onSelect={() => handlers.onRollbackRequest(plugin.pluginKey)}
           />
-        ) : null}
-        {toggleItem ? (
-          // Why inset, no icon: sits with Remove as a lifecycle action, text aligned with iconed rows.
-          <DropdownMenuItem
-            inset
-            disabled={!switchable}
-            onSelect={() => handlers.onToggleEnabled(plugin.pluginKey)}
-          >
-            {enabled && !needsReview
-              ? translate('auto.components.settings.PluginCardAction.disable', 'Disable')
-              : translate('auto.components.settings.PluginCardAction.enable', 'Enable')}
-          </DropdownMenuItem>
         ) : null}
         {removable ? (
           <DropdownMenuItem

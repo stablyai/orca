@@ -1,7 +1,7 @@
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalHostDatabase } from './journal-host-database'
 import { replaceJournalEpoch, type JournalReplacementItem } from './journal-epoch-replacement'
@@ -36,8 +36,9 @@ export class JournalEpochController {
     }
   ) {}
 
-  start(reason: AgentJournalEpochReason, fence: number): void {
+  start(reason: AgentJournalEpochReason, fence: number, expectedEpoch: string | null): void {
     publishNewEpoch({
+      expectedEpoch,
       database: this.deps.database(),
       identity: this.deps.identity,
       epoch: this.deps.mintEpoch(),
@@ -53,7 +54,7 @@ export class JournalEpochController {
   roll(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
-      this.start(reason, fence)
+      this.start(reason, fence, this.deps.state().epoch)
       return this.deps.cursor()
     })
   }

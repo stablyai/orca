@@ -35,6 +35,10 @@ const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/lib/react-commit-cascade-telemetry.test.ts',
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
   'src/shared/ws-inbound-message-queue.test.ts',
+  'src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts',
+  'src/renderer/src/components/sidebar/HostRemoveDialog.test.tsx',
+  // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
+  'config/scripts/happy-dom-mutation-observer-retention.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
   'src/main/claude/claude-transcript-catch-up.test.ts',
   'src/main/claude/claude-transcript-duration.test.ts',
@@ -69,7 +73,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/acp/acp-structured-session-adapter.test.ts',
   'src/main/acp/acp-structured-session-adapter-resume.test.ts',
   // Counts real V8 Inspector coverage alongside delegated operation counters.
-  'src/main/acp/acp-history-scaling.test.ts',
+  'src/main/acp/history/acp-history-scaling.test.ts',
   'src/main/acp/acp-structured-host-start-aborts.test.ts',
   'src/main/acp/acp-conversation-copy.test.ts',
   'src/main/pi/rpc-turn-races.test.ts',
@@ -118,6 +122,10 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/terminal-tail-redraw-wall-time.test.ts',
   'src/main/agent-hooks/server-transport-interference.test.ts',
   'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
+  'src/main/plugins/workers/plugin-worker-dev-restart-storage.integration.test.ts',
+  // Worker TypeScript loads through node:module registerHooks, which Bun lacks.
+  'src/main/plugins/workers/plugin-worker-source-hooks.test.ts',
+  'src/main/plugins/workers/plugin-worker-typescript-entry.integration.test.ts',
   // Reconciliation loads the real native Parcel watcher; Bun can abort on Linux ARM.
   'src/main/plugins/plugin-service-reconciliation.test.ts',
   'src/main/usage/usage-scan-worker-event-loop.test.ts',
@@ -175,7 +183,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-outgrown-child.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-permission-mode.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-queued-legacy-import.test.ts',
-  'src/main/runtime/agent-session-conversation-name-store.test.ts',
+  'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/rpc/ws-transport.test.ts',
   'src/main/runtime/rpc/dispatcher-transport-parity.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-visual.test.ts',
@@ -193,8 +201,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/settings-delayed-response.test.ts',
   'src/main/ipc/session-window-view-save.test.ts',
   'src/main/ipc/renderer-shutdown-checkpoint-sleep-records.test.ts',
-  'src/main/runtime/structured-agent-session-startup-tab-restore.test.ts',
-  'src/main/runtime/structured-agent-session-windowless-layout-host.test.ts',
+  'src/main/runtime/agent-session/records/structured-agent-session-startup-tab-restore.test.ts',
+  'src/main/runtime/agent-session/structured-agent-session-windowless-layout-host.test.ts',
   'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/mobile-cloud-relay/relay-control-client.test.ts',
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
@@ -202,7 +210,6 @@ const NODE_RUNTIME_INCLUDE = [
   // Real fs.watch file bindings; Bun's watcher is not the one Electron runs.
   'src/main/ipc/rebinding-file-watch.test.ts',
   'src/main/ipc/parcel-watcher-shallow-file-subscription.test.ts',
-  'src/main/ipc/runtime-environments/runtime-environment-transport-routing-tailscale-hint.test.ts',
   'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/profile-state-worker-smoke.test.mjs',

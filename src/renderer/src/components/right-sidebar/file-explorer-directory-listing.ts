@@ -6,7 +6,7 @@ import {
   readRuntimeDirectoryPage,
   runtimeDirectoryPagesSupported
 } from '@/runtime/runtime-directory-page-client'
-import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
+import { readUserOpenedDirectory } from '@/lib/user-opened-local-path'
 import {
   FILE_READ_DIR_MAX_PAGE_ENTRIES,
   isDirListingTooLargeForRemoteError,
@@ -34,6 +34,8 @@ export type FileExplorerDirectoryListing = {
   operationOwner: FileExplorerOperationOwner
   more?: FileExplorerDirMore
   paged?: true
+  /** Listed through a folder link that leads out of the project. */
+  outsideProject?: true
 }
 
 export function fileExplorerEntriesToTreeNodes(
@@ -41,7 +43,8 @@ export function fileExplorerEntriesToTreeNodes(
   dirPath: string,
   depth: number,
   worktreePath: string | null,
-  operationOwner: FileExplorerOperationOwner
+  operationOwner: FileExplorerOperationOwner,
+  outsideProject = false
 ): TreeNode[] {
   return entries.filter(shouldIncludeFileExplorerEntry).map((entry) => {
     const path = joinPath(dirPath, entry.name)
@@ -52,7 +55,8 @@ export function fileExplorerEntriesToTreeNodes(
       isDirectory: entry.isDirectory,
       isSymlink: entry.isSymlink,
       depth: depth + 1,
-      operationOwner
+      operationOwner,
+      ...(outsideProject ? { outsideProject: true as const } : {})
     }
   })
 }
@@ -112,6 +116,26 @@ export function clearFailedOpenedDirectoryLink(
   return changed ? { ...cache, [parentPath]: { ...parent, children } } : cache
 }
 
+/** A gesture, a listed link row, or an already-outside listing may follow a project folder link; a folder that only became a link stays refused until clicked. */
+export function canFollowFolderLink(
+  cache: Readonly<Record<string, DirCache>>,
+  dirPath: string,
+  gesture: boolean | undefined
+): boolean {
+  const parent = cache[parentDirForWatchPath(dirPath)]
+  return (
+    gesture === true ||
+    cache[dirPath]?.outsideProject === true ||
+    parent?.outsideProject === true ||
+    parent?.children.some((child) => child.path === dirPath && child.isSymlink === true) === true
+  )
+}
+
+/** Explorer-opened tabs for outside-project rows store absolute paths so they keep user-named access. */
+export function fileExplorerNodeTabRelativePath(node: TreeNode): string {
+  return node.outsideProject ? node.path : node.relativePath
+}
+
 /**
  * Lists `dirPath` whole, as always. Only a remote folder too big for one reply is listed in pages:
  * from just after `after` until at least `minEntries` are read, so a refresh does not shrink the tree.
@@ -125,6 +149,7 @@ export async function readFileExplorerDirectory(
     paged?: boolean
     after?: DirEntryCursor
     minEntries?: number
+    followProjectFolderLink?: boolean
   } = {}
 ): Promise<FileExplorerDirectoryListing> {
   const operationOwner = getFileExplorerOperationOwner(activeWorktreeId)
@@ -147,8 +172,15 @@ export async function readFileExplorerDirectory(
   if (!options.paged && !options.after) {
     try {
       // Older remote hosts may return lexical order; adaptive sorting keeps already-sorted local listings cheap.
-      const whole = await readRuntimeDirectory(context, dirPath, readOptions)
-      return { entries: sortDirEntries(whole), operationOwner }
+      const whole = await readUserOpenedDirectory(context, dirPath, {
+        ...readOptions,
+        ...(options.followProjectFolderLink ? { followProjectFolderLink: true } : {})
+      })
+      return {
+        entries: sortDirEntries(whole.entries),
+        operationOwner,
+        ...(whole.escapesWorktree ? { outsideProject: true as const } : {})
+      }
     } catch (error) {
       if (
         !isDirListingTooLargeForRemoteError(error) ||

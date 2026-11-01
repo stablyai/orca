@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 type TaskPageGitHubIssueCreationInput = Pick<
   TaskPageWorkspaceActionsModel,
   | 'setTaskRefreshNonce'
@@ -109,7 +110,7 @@ export function useTaskPageGitHubIssueCreation<Model extends TaskPageGitHubIssue
         action: result.url
           ? {
               label: translate('auto.components.TaskPage.9c57663908', 'View'),
-              onClick: () => window.open(result.url, '_blank')
+              onClick: () => openAppHttpLink(result.url)
             }
           : undefined
       }

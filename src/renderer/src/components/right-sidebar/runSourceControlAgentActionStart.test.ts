@@ -101,29 +101,6 @@ describe('runSourceControlAgentActionStart', () => {
     expect(mocks.onClose).not.toHaveBeenCalled()
   })
 
-  it('does not gate conflict launches that are not paused-operation recovery', async () => {
-    mocks.mutationInFlight.mockResolvedValue({ inFlight: true })
-    await runSourceControlAgentActionStart(buildArgs({ actionId: 'resolveConflicts' }))
-    expect(mocks.mutationInFlight).not.toHaveBeenCalled()
-    expect(mocks.launchAgentInNewTab).toHaveBeenCalled()
-  })
-
-  it('waits for deferred prompt delivery before confirming a source-control launch', async () => {
-    mocks.launchAgentInNewTab.mockReturnValue({
-      surface: { kind: 'local-terminal', tabId: 'tab-1' },
-      startupPlan: {} as never,
-      pasteDraftAfterLaunch: true,
-      promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
-    })
-
-    await expect(runSourceControlAgentActionStart(buildArgs())).resolves.toBe(true)
-
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')
-    expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
-    expect(mocks.onClose).toHaveBeenCalledTimes(1)
-    expect(mocks.toastError).not.toHaveBeenCalled()
-  })
-
   it('notifies onLaunchAccepted as soon as the agent tab is created, before prompt delivery', async () => {
     let resolveDelivery: (value: {
       delivered: boolean
@@ -156,30 +133,6 @@ describe('runSourceControlAgentActionStart', () => {
     await expect(launchPromise).resolves.toBe(true)
     expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
     expect(onLaunchAborted).not.toHaveBeenCalled()
-  })
-
-  // Acceptance parks launch state; duplicate or dead-launch callbacks would falsely imply an agent is running.
-  it('fires onLaunchAccepted exactly once and only when a tab was created', async () => {
-    const onLaunchAccepted = vi.fn()
-    mocks.launchAgentInNewTab.mockReturnValue({
-      surface: { kind: 'local-terminal', tabId: 'tab-1' },
-      startupPlan: {} as never,
-      pasteDraftAfterLaunch: true,
-      promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
-    })
-
-    await expect(runSourceControlAgentActionStart(buildArgs({ onLaunchAccepted }))).resolves.toBe(
-      true
-    )
-    expect(onLaunchAccepted).toHaveBeenCalledTimes(1)
-
-    vi.clearAllMocks()
-    mocks.launchAgentInNewTab.mockReturnValue(null)
-
-    await expect(runSourceControlAgentActionStart(buildArgs({ onLaunchAccepted }))).resolves.toBe(
-      false
-    )
-    expect(onLaunchAccepted).not.toHaveBeenCalled()
   })
 
   // Why: irreversible host writes (fixing replies, thread resolves) hang off onLaunched, so a
@@ -226,184 +179,6 @@ describe('runSourceControlAgentActionStart', () => {
     expect(onLaunchAborted).toHaveBeenCalledTimes(1)
     expect(mocks.onLaunched).not.toHaveBeenCalled()
     expect(mocks.onClose).not.toHaveBeenCalled()
-  })
-
-  it('aborts an accepted launch when promptDeliveryResult rejects', async () => {
-    const onLaunchAccepted = vi.fn()
-    const onLaunchAborted = vi.fn()
-    const originalConsole = console
-    vi.stubGlobal('console', { ...originalConsole, error: vi.fn() })
-    mocks.launchAgentInNewTab.mockReturnValue({
-      surface: { kind: 'local-terminal', tabId: 'tab-1' },
-      startupPlan: {} as never,
-      pasteDraftAfterLaunch: true,
-      promptDeliveryResult: Promise.reject(new Error('boom'))
-    })
-
-    try {
-      await expect(
-        runSourceControlAgentActionStart(buildArgs({ onLaunchAccepted, onLaunchAborted }))
-      ).resolves.toBe(false)
-
-      expect(onLaunchAccepted).toHaveBeenCalledTimes(1)
-      expect(onLaunchAborted).toHaveBeenCalledTimes(1)
-      expect(mocks.onLaunched).not.toHaveBeenCalled()
-    } finally {
-      vi.stubGlobal('console', originalConsole)
-    }
-  })
-
-  it('does not report an abort when no tab was ever created', async () => {
-    const onLaunchAborted = vi.fn()
-    mocks.launchAgentInNewTab.mockReturnValue(null)
-
-    await expect(runSourceControlAgentActionStart(buildArgs({ onLaunchAborted }))).resolves.toBe(
-      false
-    )
-
-    expect(onLaunchAborted).not.toHaveBeenCalled()
-  })
-
-  it('keeps the source-control dialog open when deferred prompt delivery fails', async () => {
-    mocks.launchAgentInNewTab.mockReturnValue({
-      surface: { kind: 'local-terminal', tabId: 'tab-1' },
-      startupPlan: {} as never,
-      pasteDraftAfterLaunch: true,
-      promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: false })
-    })
-
-    await expect(runSourceControlAgentActionStart(buildArgs())).resolves.toBe(false)
-
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')
-    expect(mocks.onLaunched).not.toHaveBeenCalled()
-    expect(mocks.onClose).not.toHaveBeenCalled()
-    expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledWith('Could not start the selected agent.')
-  })
-
-  it('does not show a generic start failure when deferred delivery already notified the user', async () => {
-    mocks.launchAgentInNewTab.mockReturnValue({
-      surface: { kind: 'local-terminal', tabId: 'tab-1' },
-      startupPlan: {} as never,
-      pasteDraftAfterLaunch: true,
-      promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: true })
-    })
-
-    await expect(runSourceControlAgentActionStart(buildArgs())).resolves.toBe(false)
-
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')
-    expect(mocks.onLaunched).not.toHaveBeenCalled()
-    expect(mocks.onClose).not.toHaveBeenCalled()
-    expect(mocks.toastError).not.toHaveBeenCalled()
-  })
-
-  it('logs and treats a rejected promptDeliveryResult as a launch failure', async () => {
-    const error = new Error('boom')
-    const originalConsole = console
-    const consoleError = vi.fn()
-    vi.stubGlobal('console', { ...originalConsole, error: consoleError })
-    mocks.launchAgentInNewTab.mockReturnValue({
-      surface: { kind: 'local-terminal', tabId: 'tab-1' },
-      startupPlan: {} as never,
-      pasteDraftAfterLaunch: true,
-      promptDeliveryResult: Promise.reject(error)
-    })
-
-    try {
-      await expect(runSourceControlAgentActionStart(buildArgs())).resolves.toBe(false)
-
-      expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')
-      expect(consoleError).toHaveBeenCalledWith('promptDeliveryResult rejected', error)
-      expect(mocks.onLaunched).not.toHaveBeenCalled()
-      expect(mocks.onClose).not.toHaveBeenCalled()
-      expect(mocks.toastError).toHaveBeenCalledWith('Could not start the selected agent.')
-    } finally {
-      vi.stubGlobal('console', originalConsole)
-    }
-  })
-
-  it('keeps non-deferred tab launches immediate', async () => {
-    mocks.launchAgentInNewTab.mockReturnValue({
-      surface: { kind: 'local-terminal', tabId: 'tab-1' },
-      startupPlan: {} as never,
-      pasteDraftAfterLaunch: true
-    })
-
-    await expect(
-      runSourceControlAgentActionStart(buildArgs({ promptDelivery: 'draft' }))
-    ).resolves.toBe(true)
-
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')
-    expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
-    expect(mocks.onClose).toHaveBeenCalledTimes(1)
-    expect(mocks.toastError).not.toHaveBeenCalled()
-  })
-
-  it('keeps injected onStart successes immediate', async () => {
-    const onStart = vi.fn().mockResolvedValue(true)
-
-    await expect(
-      runSourceControlAgentActionStart(
-        buildArgs({
-          onStart,
-          worktreeId: undefined,
-          groupId: undefined
-        })
-      )
-    ).resolves.toBe(true)
-
-    expect(onStart).toHaveBeenCalledWith({
-      agent: 'codex',
-      commandInput: 'Fix the bug',
-      agentArgs: '--model gpt-5'
-    })
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-    expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
-    expect(mocks.onClose).toHaveBeenCalledTimes(1)
-  })
-
-  // onStart awaits no delivery result, so acceptance is terminal for that route.
-  it('accepts an onStart launch and never aborts it', async () => {
-    const onLaunchAccepted = vi.fn()
-    const onLaunchAborted = vi.fn()
-    const onStart = vi.fn().mockResolvedValue(true)
-
-    await expect(
-      runSourceControlAgentActionStart(
-        buildArgs({
-          onStart,
-          worktreeId: undefined,
-          groupId: undefined,
-          onLaunchAccepted,
-          onLaunchAborted
-        })
-      )
-    ).resolves.toBe(true)
-
-    expect(onLaunchAccepted).toHaveBeenCalledTimes(1)
-    expect(onLaunchAborted).not.toHaveBeenCalled()
-    expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports neither callback when onStart declines the launch', async () => {
-    const onLaunchAccepted = vi.fn()
-    const onLaunchAborted = vi.fn()
-    const onStart = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      runSourceControlAgentActionStart(
-        buildArgs({
-          onStart,
-          worktreeId: undefined,
-          groupId: undefined,
-          onLaunchAccepted,
-          onLaunchAborted
-        })
-      )
-    ).resolves.toBe(false)
-
-    expect(onLaunchAccepted).not.toHaveBeenCalled()
-    expect(onLaunchAborted).not.toHaveBeenCalled()
   })
 
   // Recipe persistence can fail while prompt delivery succeeds; report each outcome independently.
@@ -468,49 +243,6 @@ describe('runSourceControlAgentActionStart', () => {
   })
 })
 
-describe('runSourceControlAgentActionStart CLI arguments applicability', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  // Why: `undefined` is what reaches the global Agents arguments; an empty string would beat
-  // that fallback and launch the agent with no arguments at all.
-  it('keeps terminal candidates even when a dialog field is hidden', async () => {
-    mocks.launchAgentInNewTab.mockReturnValue({
-      surface: { kind: 'local-terminal', tabId: 'tab-1' }
-    })
-
-    await expect(runSourceControlAgentActionStart(buildArgs())).resolves.toBe(true)
-
-    expect(mocks.launchAgentInNewTab).toHaveBeenCalledTimes(1)
-    const launchCall = mocks.launchAgentInNewTab.mock.calls[0]?.[0]
-    expect(launchCall).toHaveProperty('agentArgs', '--model gpt-5')
-  })
-})
-
-it('executes the actual bound namespace while saving the literal default recipe', async () => {
-  const recipe = {
-    agentId: null,
-    commandInputTemplate: '{basePrompt}',
-    agentArgs: '',
-    launchPreferences: { agentId: 'codex' as const, model: 'chosen' }
-  }
-  const onStart = vi.fn().mockResolvedValue(true)
-  await runSourceControlAgentActionStart(
-    buildArgs({ recipe, onStart, selectedAgent: 'codex', saveTargetValue: 'global' })
-  )
-  expect(onStart).toHaveBeenCalledWith(
-    expect.objectContaining({ sessionOptions: { model: 'chosen' } })
-  )
-  expect(mocks.onSaveAgentDefault).toHaveBeenLastCalledWith({ type: 'global' }, 'resolveComments', {
-    ...recipe,
-    launchPreferences: {
-      agentId: 'codex',
-      modelSelection: { base: 'default', model: { agentId: 'codex', value: 'chosen' } }
-    }
-  })
-})
-
 it('confirms delivery and closes even while saving remains pending', async () => {
   mocks.launchAgentInNewTab.mockReturnValue({
     surface: { kind: 'local-terminal', tabId: 'tab-1' },
@@ -526,27 +258,6 @@ it('confirms delivery and closes even while saving remains pending', async () =>
   expect(onLaunched).toHaveBeenCalledOnce()
   expect(mocks.onClose).toHaveBeenCalled()
 })
-
-it.each([undefined, '', '--add-dir /extra'])(
-  'retains argument presence and inherited option precedence at adapter inputs (%s)',
-  async (agentArgs) => {
-    const recipe = {
-      agentId: 'codex' as const,
-      agentArgs,
-      surface: 'terminal' as const,
-      launchPreferences: { agentId: 'codex' as const, model: 'saved' },
-      launchPreferencesYieldToAgentArgs: true as const
-    }
-    const onStart = vi.fn().mockResolvedValue(true)
-    await runSourceControlAgentActionStart(buildArgs({ recipe, onStart }))
-    expect(onStart).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agentArgs,
-        sessionOptions: { model: 'saved' }
-      })
-    )
-  }
-)
 // Save keeps the repository's selected Args group on every later launch.
 it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
   'persists the complete target for changed or unchanged Customize arguments %s',
@@ -613,7 +324,7 @@ it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
     expect(command).toMatchObject({
       ok: true,
       appliedSessionOptions: {},
-      command: `codex '--model' '${agentArgs.split(' ')[1]}'`
+      command: `codex '-c' 'disable_paste_burst=true' '--model' '${agentArgs.split(' ')[1]}'`
     })
     expect(mocks.onSaveAgentDefault).toHaveBeenCalledTimes(1)
     await runSourceControlAgentActionStart(

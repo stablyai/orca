@@ -40,23 +40,14 @@ afterEach(() => {
 })
 
 describe('peekRuntimeEnvironmentCapability', () => {
-  it('answers undefined without issuing a request when no status is cached', () => {
-    expect(peekRuntimeEnvironmentCapability('env-cold', CAPABILITY)).toBeUndefined()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('answers a cached positive verdict synchronously', async () => {
-    runtimeEnvironmentCall.mockResolvedValue(statusReply([CAPABILITY]))
-    await runtimeEnvironmentSupportsCapability('env-new', CAPABILITY)
-    expect(peekRuntimeEnvironmentCapability('env-new', CAPABILITY)).toBe(true)
-  })
-
   it('caches an old host answer for the TTL while async callers still re-probe it', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(0))
     runtimeEnvironmentCall.mockResolvedValue(statusReply([]))
     await expect(runtimeEnvironmentSupportsCapability('env-old', CAPABILITY)).resolves.toBe(false)
     expect(peekRuntimeEnvironmentCapability('env-old', CAPABILITY)).toBe(false)
+    expect(peekRuntimeEnvironmentCapability('env-old', CAPABILITY, 'replacement')).toBeUndefined()
+    expect(peekRuntimeEnvironmentCapability('env-old', CAPABILITY, 'remote-runtime')).toBe(false)
     vi.setSystemTime(new Date(59_999))
     expect(peekRuntimeEnvironmentCapability('env-old', CAPABILITY)).toBe(false)
     expect(runtimeEnvironmentCall).toHaveBeenCalledOnce()

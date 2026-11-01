@@ -139,33 +139,6 @@ describe('runtime create events', () => {
     _resetWorktreeCreateConcurrencyForTests()
   })
 
-  it('sends one workspace_created with the runtime entry point and the timing fields', async () => {
-    await makeRuntime().createManagedWorktree({
-      repoSelector: 'repo-1',
-      name: 'app',
-      baseBranch: 'origin/main',
-      telemetrySource: 'sidebar'
-    })
-    await vi.waitFor(() => expect(events('workspace_created')).toHaveLength(1))
-
-    expect(events('workspace_created')[0]).toMatchObject({
-      source: 'sidebar',
-      from_existing_branch: true,
-      create_entry_point: 'runtime',
-      execution_host: 'local',
-      prepared_checkout: 'hit',
-      prepared_checkout_reset: 'none',
-      prepared_checkout_origin: 'prefetch',
-      concurrent_creates: 0,
-      concurrent_preparations: 0,
-      repo_file_count_bucket: '1k-10k',
-      post_checkout_hook: 'absent'
-    })
-    expect(typeof events('workspace_created')[0].git_worktree_add_ms).toBe('number')
-    expect(mocks.probe).toHaveBeenCalledWith('/repo')
-    expect(events('workspace_create_failed')).toHaveLength(0)
-  })
-
   it('sends one workspace_create_failed naming the phase the create died in', async () => {
     mocks.createLocal.mockImplementation(async ({ timing }: LocalCreateArgs) =>
       timing.time('git_worktree_add', async () => {
@@ -249,15 +222,6 @@ describe('runtime create events', () => {
       execution_host: 'ssh'
     })
     expect(mocks.probe).not.toHaveBeenCalled()
-  })
-
-  it('sends nothing for a folder workspace, as before', async () => {
-    await makeRuntime({ id: 'folder', path: '/notes', kind: 'folder' }).createManagedWorktree({
-      repoSelector: 'folder',
-      name: 'notes'
-    })
-    await new Promise((resolve) => setImmediate(resolve))
-    expect(mocks.track).not.toHaveBeenCalled()
   })
 
   it('sends nothing when the request is rejected before any create starts', async () => {

@@ -2,7 +2,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState,
   AgentSessionBackgroundTaskState
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-background-task-wire'
 import {
   classifyClaudeBackgroundTaskKind,
   liveClaudeTaskRunState,

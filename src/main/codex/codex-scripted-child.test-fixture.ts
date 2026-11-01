@@ -1,8 +1,8 @@
 import type { ScriptedAgentChild } from '../runtime/structured-agent-scripted-child.test-fixture'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from './codex-app-server-connection'
+import type { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
-import { CodexAppServerTimeoutError } from './codex-app-server-session'
+import { CodexAppServerTimeoutError } from './app-server/codex-app-server-session'
 import { codexTurnLifecycleFake } from './codex-turn-lifecycle-fake'
 import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
 
@@ -169,7 +169,7 @@ export const codexScriptedChild = (
     deps: {
       openCodexConnection: open,
       readProcessStartTime: async () => 1_700_000_000_000,
-      resolveCodexCommand: () => '/nonexistent/scripted-codex',
+      resolveCodexCommand: () => ({ command: '/nonexistent/scripted-codex', prefixArgs: [] }),
       resolveEnvironment: async () => ({})
     },
     get holdHandshakes() {

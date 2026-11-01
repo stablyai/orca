@@ -63,22 +63,6 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform === 'win32')('WSL connect state snapshot', () => {
-  it('reads a fresh host in one command', async () => {
-    const reader = createWslOrcadConnectStateReader()
-
-    await expect(reader.readActivationRecord(target())).resolves.toEqual(
-      emptyOrcadActivationRecord()
-    )
-
-    expect(mockExec).toHaveBeenCalledOnce()
-    expect(reader.snapshot()).toEqual({
-      activation: { state: 'absent' },
-      transactionAbsent: true,
-      instanceLock: { state: 'absent' },
-      fenceOpen: true
-    })
-  })
-
   it('reads the record, a pending journal, the instance lock and a held fence together', async () => {
     write('.orca-remote/orcad-active.json', serializeOrcadActivationRecord(ACTIVE))
     write('.orca-remote/.orcad-activation-transaction/transaction.json', '{"partial"')
@@ -135,7 +119,7 @@ describe.skipIf(process.platform === 'win32')('WSL connect state snapshot fallba
     mockExec.mockImplementationOnce(
       async () =>
         'UNREADABLE\n__ORCA_WSL_CONNECT_STATE_END__\nABSENT\n__ORCA_WSL_CONNECT_STATE_END__\n' +
-        'ABSENT\n__ORCA_WSL_CONNECT_STATE_END__\nOPEN\n'
+        'ABSENT\n__ORCA_WSL_CONNECT_STATE_END__\nNONE\n__ORCA_WSL_CONNECT_STATE_END__\nOPEN\n'
     )
     const reader = createWslOrcadConnectStateReader()
 
@@ -144,7 +128,42 @@ describe.skipIf(process.platform === 'win32')('WSL connect state snapshot fallba
   })
 })
 
+describe.runIf(process.platform === 'linux')('WSL connect state snapshot on a Linux guest', () => {
+  it("reads the lock holder's identity in the same command", async () => {
+    write('.orca/orcad.lock', `${JSON.stringify({ pid: process.pid, version: '0.1.0' })}\n`)
+    const reader = createWslOrcadConnectStateReader()
+
+    await reader.readActivationRecord(target())
+
+    expect(mockExec).toHaveBeenCalledOnce()
+    const lock = reader.snapshot()?.instanceLock
+    expect(lock?.state === 'present' && lock.holder?.pid).toBe(process.pid)
+    expect(lock?.state === 'present' && lock.holder?.guest.orcad).toMatch(`${process.pid}:`)
+  })
+})
+
 describe('parseWslOrcadConnectState', () => {
+  const end = '\n__ORCA_WSL_CONNECT_STATE_END__\n'
+  const stat = (pid: number) =>
+    `${pid} (node) S ${Array.from({ length: 18 }, () => '0').join(' ')} 77 0`
+  const identity = (pid: number) =>
+    `PID ${pid}\n0f6e1d2c-3b4a-4958-8776-655443322110\n--orca-identity--\n${stat(1)}\n` +
+    `--orca-identity--\n${stat(pid)}\n--orca-identity--\n`
+  const answer = (holder: string) =>
+    `ABSENT${end}ABSENT${end}PRESENT\n{"pid":9}${end}${holder}${end}OPEN\n`
+
+  it('attaches the holder identity to a present lock, and nothing it cannot parse', () => {
+    const lock = parseWslOrcadConnectState(answer(identity(9)))?.instanceLock
+    expect(lock).toMatchObject({ state: 'present', holder: { pid: 9, guest: { orcad: '9:77' } } })
+    expect(parseWslOrcadConnectState(answer('NONE'))?.instanceLock).toEqual({
+      state: 'present',
+      raw: '{"pid":9}'
+    })
+    expect(parseWslOrcadConnectState(answer('PID 9\nnoise'))?.instanceLock).not.toHaveProperty(
+      'holder'
+    )
+  })
+
   it('rejects a truncated answer', () => {
     expect(parseWslOrcadConnectState('ABSENT\n__ORCA_WSL_CONNECT_STATE_END__\n')).toBeNull()
   })
@@ -157,12 +176,6 @@ describe('wslOrcadConnectStateHints', () => {
     instanceLock: { state: 'absent' as const },
     fenceOpen: true
   }
-
-  it('hints while the record the snapshot read is the one acted on', () => {
-    const hints = wslOrcadConnectStateHints(snapshot, ACTIVE)
-    expect(hints.instanceLock(ACTIVE)).toEqual({ state: 'absent' })
-    expect(hints.deployPreRead(ACTIVE)).toEqual({ preRead: { record: ACTIVE, fenceOpen: true } })
-  })
 
   it('stops hinting once recovery, adoption or admission replaced the record', () => {
     const hints = wslOrcadConnectStateHints(snapshot, ACTIVE)

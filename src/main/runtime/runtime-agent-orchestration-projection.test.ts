@@ -1,12 +1,12 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   openAgentSessionRecordStoreOnce,
   releaseAgentSessionRecordStore
-} from './agent-session-record-store-slot'
+} from './agent-session/records/agent-session-record-store-slot'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { OrcaRuntimeService } from './orca-runtime'
 import './rpc/unused-default-rpc-methods.test-fixture'
@@ -32,7 +32,7 @@ import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixtur
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { RuntimeAgentOrchestrationProjection } from './runtime-agent-orchestration-projection'
 import {
   installSqlVisitCounters,
@@ -714,7 +714,7 @@ it('reads reopened/backfilled assignments and committed clear facts from the alr
       { tabId: 'reserved-worker', sessionId: SESSION_Y }
     ]
   })
-  closeTestJournalHostDatabase(directory)
+  await closeTestJournalHostDatabase(directory)
   const path = join(directory, 'orchestration.sqlite')
   let db = new OrchestrationDb(path)
   let opened = false
@@ -750,6 +750,7 @@ it('reads reopened/backfilled assignments and committed clear facts from the alr
     const before = runtime['agentOrchestrationProjection'].buildByPaneKey()
     expect(before?.[chatRow(SESSION_Y)]?.parentPaneKey).toBe(chatRow(SESSION_X))
     await openAgentSessionRecordStoreOnce({
+      legacySessionTabIds: [],
       stateDirectory: directory,
       hostId: 'local',
       logger: recordingStructuredAgentSessionLogger().logger
@@ -770,7 +771,7 @@ it('reads reopened/backfilled assignments and committed clear facts from the alr
     }
   } finally {
     if (opened) {
-      ;(await releaseAgentSessionRecordStore())?.journalDatabase.close()
+      await (await releaseAgentSessionRecordStore())?.journalDatabase.close()
     }
     db.close()
     rmSync(directory, { recursive: true, force: true })

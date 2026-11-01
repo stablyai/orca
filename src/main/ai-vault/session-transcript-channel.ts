@@ -40,6 +40,16 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
     }
   }
 
+  prefixReached(offset: number, digest: string): void {
+    for (const reader of this.readers) {
+      try {
+        reader.prefixReached?.(offset, digest)
+      } catch {
+        // A consumer failure must never fail the session list.
+      }
+    }
+  }
+
   push(message: TranscriptMessage): void {
     if (this.muted || this.readers.length === 0) {
       return
@@ -63,7 +73,8 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
       return
     }
     this.finishRead({ session: null, byteOffset: 0, incomplete: true, cancelled: true })
-    this.beginRead(start)
+    // Messages already withheld from a resuming consumer cannot be replayed into the restart.
+    this.beginRead({ ...start, prefixOffsets: undefined })
   }
 
   /** Synchronously mute display-only partial lines so consumers receive them only once complete. */

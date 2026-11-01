@@ -9,7 +9,7 @@ export function createOrchestrationProjectionScope(
 ) {
   const tasks = new Map<string, ReturnType<OrchestrationDb['getTask']>>()
   const runs = new Map<string, ReturnType<OrchestrationDb['getRun']>>()
-  const panes = new Map<string, ReturnType<OrchestrationDb['getCurrentRunForPane']>>()
+  const panes = new Map<string, ReturnType<OrchestrationDb['runsBoundToPane']>>()
   const now = Date.now()
   const resolve = createCanonicalSessionPaneResolver(deps.getSessionRecords())
   return {
@@ -55,11 +55,11 @@ export function createOrchestrationProjectionScope(
       }
       return runs.get(id)
     },
-    pane: (id: string) => {
+    paneRuns: (id: string) => {
       if (!panes.has(id)) {
-        panes.set(id, db?.getCurrentRunForPane?.(id))
+        panes.set(id, db?.runsBoundToPane?.(id) ?? [])
       }
-      return panes.get(id)
+      return panes.get(id) ?? []
     }
   }
 }

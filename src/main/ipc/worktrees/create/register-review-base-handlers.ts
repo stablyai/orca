@@ -4,8 +4,9 @@ import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import { gitExecFileAsync } from '../../../git/runner'
 import {
+  getLocalProjectGhExecOptions,
   getLocalProjectGitExecOptions,
-  getLocalProjectGhExecOptions
+  getWorktreeCreatePrefetchGitOptions
 } from '../../../project-runtime-git-options'
 import {
   SSH_GIT_RECONNECT_MESSAGE,
@@ -16,6 +17,7 @@ import {
   fetchGitHubPullRequestHeadRef
 } from '../../../github/pr-head-tracking-ref'
 import { resolveGitHubPrStartPoint } from '../../../github/pr-start-point'
+import { resolvePrStartPointUnlessWslStopped } from '../../../github/pr-start-point-wsl-gate'
 import { resolveGitHubReviewHeadRemote } from '../../../github/review-head-remote'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
@@ -33,6 +35,8 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
         headRefName?: string
         baseRefName?: string
         isCrossRepository?: boolean
+        /** The user creating or launching from the PR: it may start a stopped WSL distro. */
+        wakeWslDistro?: boolean
       }
     ): Promise<GitHubPrStartPoint | { error: string }> => {
       const repo = store.getRepo(args.repoId)
@@ -64,28 +68,35 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
           localGitExecOptions: getLocalProjectGitExecOptions(store, repo)
         })
 
-      return resolveGitHubPrStartPoint({
-        repoPath: repo.path,
-        prNumber: args.prNumber,
-        headRefName: args.headRefName,
-        baseRefName: args.baseRefName,
-        isCrossRepository: args.isCrossRepository,
-        issueSourcePreference: repo.issueSourcePreference,
-        connectionId,
-        localGitOptions: localGhOptions,
-        gitExec,
-        fetchRemoteTrackingRef,
-        fetchPullRequestHeadRef,
-        // Share source preference and hosting identity across local, WSL and SSH creation.
-        resolveRemote: () =>
-          resolveGitHubReviewHeadRemote({
+      // Source Control's push-target ensure asks unprompted; it must not start a stopped distro (E9).
+      const { wslDistro } = connectionId ? {} : getWorktreeCreatePrefetchGitOptions(store, repo)
+      return resolvePrStartPointUnlessWslStopped(
+        { path: repo.path, wslDistro },
+        { wakeWslDistro: args.wakeWslDistro },
+        () =>
+          resolveGitHubPrStartPoint({
             repoPath: repo.path,
+            prNumber: args.prNumber,
+            headRefName: args.headRefName,
+            baseRefName: args.baseRefName,
+            isCrossRepository: args.isCrossRepository,
             issueSourcePreference: repo.issueSourcePreference,
             connectionId,
             localGitOptions: localGhOptions,
-            gitExec
+            gitExec,
+            fetchRemoteTrackingRef,
+            fetchPullRequestHeadRef,
+            // Share source preference and hosting identity across local, WSL and SSH creation.
+            resolveRemote: () =>
+              resolveGitHubReviewHeadRemote({
+                repoPath: repo.path,
+                issueSourcePreference: repo.issueSourcePreference,
+                connectionId,
+                localGitOptions: localGhOptions,
+                gitExec
+              })
           })
-      })
+      )
     }
   )
 
@@ -99,6 +110,8 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
         sourceBranch?: string
         targetBranch?: string
         isCrossRepository?: boolean
+        /** The user creating from the MR: it may start a stopped WSL distro. */
+        wakeWslDistro?: boolean
       }
     ): Promise<
       | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
@@ -109,7 +122,8 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
         mrIid: args.mrIid,
         sourceBranch: args.sourceBranch,
         targetBranch: args.targetBranch,
-        isCrossRepository: args.isCrossRepository
+        isCrossRepository: args.isCrossRepository,
+        wakeWslDistro: args.wakeWslDistro
       })
     }
   )

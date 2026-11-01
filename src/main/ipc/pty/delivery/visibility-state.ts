@@ -10,6 +10,11 @@ export const visibleRendererPtys = new Set<string>()
 export const rendererVisibilityKnownPtys = new Set<string>()
 // Visible attaches suppress main-start hiding; remember it so failed attaches can hide the PTY again.
 export const attachingRendererViewPtys = new Map<string, { views: number; skippedHide: boolean }>()
+/** A visible view, or one mid-attach, owns delivery; hiding it would drop output it is about to paint. */
+export function isRendererViewShowingPty(id: string): boolean {
+  return visibleRendererPtys.has(id) || attachingRendererViewPtys.has(id)
+}
+
 // Keep null-initialized wrapper bridges to avoid Rolldown no-op folding (STA-5661; see debug.ts).
 let invalidatePendingPtyDrainPriorityImpl: ((id?: string, schedule?: boolean) => void) | null = null
 let invalidatePendingPtyDrainPolicyImpl: ((id?: string, schedule?: boolean) => void) | null = null

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { ModelManager } from '../speech/model-manager'
 import type { SttService } from '../speech/stt-service'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'

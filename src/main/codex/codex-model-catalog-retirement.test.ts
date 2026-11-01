@@ -15,7 +15,7 @@ it.each([null, 'second-page'])(
     let signal: AbortSignal | undefined
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({ PATH: '/fixture', HOME: '/fixture' }),
-      resolveCommand: () => '/fixture/codex',
+      resolveCommand: () => ({ command: '/fixture/codex', prefixArgs: [] }),
       runSession: async (invocation, body) => {
         signal = invocation.signal
         try {

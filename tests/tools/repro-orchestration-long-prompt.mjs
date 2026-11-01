@@ -259,7 +259,7 @@ async function parentMain() {
       ],
       { cwd }
     )
-    taskId = readNested(task, ['task', 'id'])
+    taskId = readNested(task, ['taskId'])
     if (!taskId) {
       throw new Error('Could not create orchestration task')
     }

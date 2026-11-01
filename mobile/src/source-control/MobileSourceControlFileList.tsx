@@ -1,4 +1,5 @@
-import { SectionList, Text, View } from 'react-native'
+import { SectionList, View } from 'react-native'
+import { SectionHeader } from '../components/list/ListGroup'
 import {
   BranchCompareHeader,
   BranchFileRow,
@@ -30,15 +31,20 @@ export type FileListState = Pick<
   | 'branchCompareState'
   | 'branchCompareResult'
   | 'busyAction'
-  | 'openingPath'
-  | 'openingBranchPath'
-  | 'openFile'
-  | 'openBranchDiff'
+  | 'openDiffForFile'
+  | 'resolveConflict'
   | 'runGitAction'
   | 'setDiscardTarget'
 >
 
-export function MobileSourceControlFileList({ state }: { state: FileListState }) {
+export function MobileSourceControlFileList({
+  state,
+  bottomInset
+}: {
+  state: FileListState
+  /** Clears the floating commit bar, which grows with its message. */
+  bottomInset: number
+}) {
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
   const sections: FileSection[] = state.sections.map((section) => ({
@@ -76,14 +82,13 @@ export function MobileSourceControlFileList({ state }: { state: FileListState })
         section.key === 'committed' ? (
           <BranchCompareHeader state={state} />
         ) : (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <Text style={styles.sectionCount}>{section.data.length}</Text>
+          <View style={styles.sectionHeaderBleed}>
+            <SectionHeader title={section.title} trailing={String(section.data.length)} />
           </View>
         )
       }
       stickySectionHeadersEnabled={false}
-      contentContainerStyle={styles.listContent}
+      contentContainerStyle={[styles.listContent, { paddingBottom: bottomInset }]}
     />
   )
 }

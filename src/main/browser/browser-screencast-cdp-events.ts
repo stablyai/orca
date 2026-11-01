@@ -9,6 +9,7 @@ import type {
   PendingScreencastFrame
 } from './browser-screencast-stream-types'
 import { isLiveFrameCompatibleWithViewport } from './browser-screencast-viewport-fit'
+import type { BrowserJavaScriptDialog } from '../../shared/browser-javascript-dialog'
 
 type BrowserScreencastMessageHandlerDeps = {
   dbg: WebContents['debugger']
@@ -22,7 +23,8 @@ type BrowserScreencastMessageHandlerDeps = {
   bumpSnapshotGeneration: () => void
   /** True while guest frames must be dropped pending re-emulation. */
   observeGuestViewSize: (metadata: BrowserScreencastFrameMetadata) => boolean
-  setDialogOpen: (open: boolean) => void
+  /** The page's dialog Orca still holds; a CDP close can be a second frame's turned-away one. */
+  openDialog: () => BrowserJavaScriptDialog | null
 }
 
 export function createBrowserScreencastMessageHandler(
@@ -31,7 +33,7 @@ export function createBrowserScreencastMessageHandler(
   const { dbg, options, isClosed, isStopping, queueFrame, ackScreencastFrame } = deps
   const { scheduleNavigationFrameCapture, clearNavigationCaptureTimer, bumpSnapshotGeneration } =
     deps
-  const { setDialogOpen, observeGuestViewSize } = deps
+  const { observeGuestViewSize, openDialog } = deps
 
   return (_event: unknown, method: string, params: unknown): void => {
     if (isClosed()) {
@@ -43,7 +45,6 @@ export function createBrowserScreencastMessageHandler(
     if (method === 'Page.javascriptDialogOpening') {
       const payload =
         params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
-      setDialogOpen(true)
       options.onEvent?.({
         type: 'dialog',
         dialogType: typeof payload.type === 'string' ? payload.type : 'alert',
@@ -52,8 +53,12 @@ export function createBrowserScreencastMessageHandler(
       return
     }
     if (method === 'Page.javascriptDialogClosed') {
-      setDialogOpen(false)
-      options.onEvent?.({ type: 'dialogClosed' })
+      const open = openDialog()
+      options.onEvent?.(
+        open
+          ? { type: 'dialog', dialogType: open.type, message: open.message }
+          : { type: 'dialogClosed' }
+      )
       return
     }
     if (method === 'Page.frameNavigated') {

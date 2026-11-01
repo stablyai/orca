@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { ArrowRight, ExternalLink } from 'lucide-react'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageGitLabItemList({
   model
 }: {
@@ -139,7 +140,7 @@ export function TaskPageGitLabItemList({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    void window.api.shell.openUrl(item.url)
+                    openAppHttpLink(item.url, { event: e })
                   }}
                   aria-label={translate('auto.components.TaskPage.bcdc1330b2', 'Open in GitLab')}
                   className="text-muted-foreground hover:text-foreground"

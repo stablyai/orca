@@ -10,6 +10,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { translate } from '../i18n/mobile-i18n'
 import { cancelMobileCommitMessage, requestMobileCommitMessage } from './mobile-commit-message-ai'
+import { textGenerationErrorText } from './text-generation-failure-copy'
 
 type Params = {
   client: RpcClient | null
@@ -65,7 +66,7 @@ export function useMobileCommitMessageGeneration(params: Params) {
         triggerSuccess()
       } else if (!result.canceled) {
         triggerError()
-        setActionError(result.error)
+        setActionError(textGenerationErrorText(result))
       }
     } catch (err) {
       // Catch transport drops because callers void this handler; retain error feedback.

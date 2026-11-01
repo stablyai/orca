@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Folder, Link2, Plus, X } from 'lucide-react'
+import { Link2, Plus, X } from 'lucide-react'
 import type { Repo } from '../../../../shared/repo-types'
 import { Button } from '../ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { cn } from '@/lib/utils'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import { SearchableSetting } from './SearchableSetting'
 import {
   getWorktreeSymlinkPathFilterState,
@@ -188,7 +188,11 @@ export function WorktreeSymlinksSection({
                       className={cn('items-center gap-2 px-3 py-2', alreadyAdded && 'opacity-50')}
                     >
                       {entry.isDirectory ? (
-                        <Folder className="size-3.5 text-muted-foreground" />
+                        <FolderIcon
+                          folderPath={entry.name}
+                          open={false}
+                          className="size-3.5 text-muted-foreground"
+                        />
                       ) : (
                         <FileTypeIcon
                           filePath={entry.name}

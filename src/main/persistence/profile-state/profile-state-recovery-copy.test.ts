@@ -93,20 +93,9 @@ describe('independent profile recovery copies', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
-  describe.skipIf(process.platform !== 'darwin')('Darwin clone failure boundaries', () => {
-    it('resolves both process arguments while preserving relative path behavior', () => {
-      const { directory, source, target } = fixture()
-      const run = vi.spyOn(processes, 'runProcessSync')
-      copyProfileStateRecoveryFile(relative(process.cwd(), source), relative(process.cwd(), target))
-      const args = run.mock.calls[0]?.[0].args
-      expect(args?.[0]).toBe('-c')
-      expect(isAbsolute(args?.[1] ?? '')).toBe(true)
-      expect(isAbsolute(args?.[2] ?? '')).toBe(true)
-      expect(readFileSync(target).equals(readFileSync(source))).toBe(true)
-      expectNoTemporary(directory)
-    })
-
-    it('keeps ordinary-copy semantics for symlinks to large recovery artifacts', () => {
+  it.skipIf(process.platform === 'win32')(
+    'keeps ordinary-copy semantics for symlinks to large recovery artifacts',
+    () => {
       const { directory, source, target } = fixture()
       const alias = join(directory, 'alias')
       symlinkSync(source, alias)
@@ -117,6 +106,20 @@ describe('independent profile recovery copies', () => {
       expect(statSync(target, { bigint: true }).ino).not.toBe(
         statSync(source, { bigint: true }).ino
       )
+      expectNoTemporary(directory)
+    }
+  )
+
+  describe.skipIf(process.platform !== 'darwin')('Darwin clone failure boundaries', () => {
+    it('resolves both process arguments while preserving relative path behavior', () => {
+      const { directory, source, target } = fixture()
+      const run = vi.spyOn(processes, 'runProcessSync')
+      copyProfileStateRecoveryFile(relative(process.cwd(), source), relative(process.cwd(), target))
+      const args = run.mock.calls[0]?.[0].args
+      expect(args?.[0]).toBe('-c')
+      expect(isAbsolute(args?.[1] ?? '')).toBe(true)
+      expect(isAbsolute(args?.[2] ?? '')).toBe(true)
+      expect(readFileSync(target).equals(readFileSync(source))).toBe(true)
       expectNoTemporary(directory)
     })
 

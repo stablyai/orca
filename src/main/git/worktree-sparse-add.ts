@@ -1,4 +1,5 @@
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
+import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { gitExecFileAsync } from './runner'
 import { addWorktree, unsetWorktreeCreationBase } from './worktree-add'
 import type {
@@ -33,16 +34,16 @@ export async function addSparseWorktree(
     created = true
     // --no-checkout wrote no files; these materialization steps need Windows long-path support.
     const longPathArgs = windowsLongPathGitArgs(worktreePath)
-    await gitExecFileAsync(
-      ['sparse-checkout', 'init', '--cone'],
-      gitExecOptions(worktreePath, options)
-    )
+    const [checkoutWorkersArgs] = await Promise.all([
+      checkoutWorkersGitArgs(worktreePath, options),
+      gitExecFileAsync(['sparse-checkout', 'init', '--cone'], gitExecOptions(worktreePath, options))
+    ])
     await gitExecFileAsync(
       [...longPathArgs, 'sparse-checkout', 'set', '--', ...directories],
       gitExecOptions(worktreePath, options)
     )
     await gitExecFileAsync(
-      [...longPathArgs, 'checkout', branch],
+      [...checkoutWorkersArgs, ...longPathArgs, 'checkout', branch],
       gitExecOptions(worktreePath, options)
     )
     return addResult

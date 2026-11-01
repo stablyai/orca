@@ -1,7 +1,7 @@
 import { act } from 'react'
 import { expect, vi } from 'vitest'
 import type { RuntimeAgentLineageTestModule } from '../../../../shared/runtime-agent-lineage-consumer.test-fixture'
-import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
+import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
@@ -50,7 +50,7 @@ export async function verifyMirroredTerminalLineage(
   const { projectStatus } =
     await import('@/components/native-chat/structured-agent-session-status-projection')
   const { structuredAgentSessionPaneKey: pane, structuredAgentSessionTabId: tabId } =
-    await import('../../../../shared/structured-agent-session-projection')
+    await import('../../../../shared/agent-session/view/structured-agent-session-projection')
   const { selectVisibleAgentOrchestration } = await import('@/runtime/visible-agent-orchestration')
   const worktree = makeWorktree({ id: 'folder-a', repoId: TEST_REPO.id })
   patch({ repos: [TEST_REPO], worktreesByRepo: { [TEST_REPO.id]: [worktree] } })

@@ -1,7 +1,7 @@
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 /** Project removal must close structured sessions and retire chat tabs itself; PTY sweeps cannot see them. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -45,6 +45,7 @@ function installHost(records: ReturnType<typeof record>[], detached: string[] = 
       },
       logger: { warn: () => {} }
     },
+    getSessionTabId: (sessionId: string) => (visible.has(sessionId) ? `tab-${sessionId}` : null),
     hasSession: (sessionId: string) => held.has(sessionId),
     getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [...visible] }),
     setSessionTabVisibility: async (sessionId: string, isVisible: boolean) => {
@@ -80,6 +81,11 @@ function createRuntime(rows: Repo[]) {
       )
     }
   })
+  vi.spyOn(runtime, 'captureStructuredAgentSessionPresentation').mockReturnValue({
+    raw: null,
+    saved: []
+  })
+  vi.spyOn(runtime, 'currentLocalStructuredSessionPresentation').mockReturnValue(null)
   runtime.setPtyController({
     write: () => true,
     kill: vi.fn(() => false),
@@ -172,6 +178,11 @@ describe('project removal and native chat sessions', () => {
     runtime.registerPty('pty-1', TEST_WORKTREE_ID, null)
     runtime.registerPty('pty-2', TEST_WORKTREE_ID, null)
     const kill = vi.fn((_ptyId: string) => true)
+    vi.spyOn(runtime, 'captureStructuredAgentSessionPresentation').mockReturnValue({
+      raw: null,
+      saved: []
+    })
+    vi.spyOn(runtime, 'currentLocalStructuredSessionPresentation').mockReturnValue(null)
     runtime.setPtyController({
       write: () => true,
       kill,

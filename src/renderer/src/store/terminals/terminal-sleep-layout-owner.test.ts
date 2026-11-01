@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { recordLayoutApply } from '@/runtime/layout-apply-send'
 import {

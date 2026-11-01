@@ -1,3 +1,5 @@
+import { AGENT_OUTPUT_FAILURE_COPY } from './agent-output-failure-copy'
+
 // One English table for AI text-generation failures: main builds the wire `error`, the renderer translates by code.
 export const TEXT_GENERATION_FAILURE_COPY = {
   promptTooLargeForWindows:
@@ -59,7 +61,8 @@ export const TEXT_GENERATION_FAILURE_COPY = {
   planAgentUnsupported: 'Agent "{{agent}}" does not support AI commit messages.',
   planModelUnavailable: 'Model "{{model}}" is not available for {{label}}.',
   planModelWithoutThinking: 'Model "{{model}}" does not support a thinking effort level.',
-  planThinkingLevelInvalid: 'Thinking level "{{level}}" is not valid for {{model}}.'
+  planThinkingLevelInvalid: 'Thinking level "{{level}}" is not valid for {{model}}.',
+  ...AGENT_OUTPUT_FAILURE_COPY
 } as const
 
 export type TextGenerationFailureCode = keyof typeof TEXT_GENERATION_FAILURE_COPY

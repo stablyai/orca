@@ -425,7 +425,7 @@ function writeFakeWindowsRegistry(projectDir, { requiresMarker = false } = {}) {
   mkdirSync(securityDir, { recursive: true })
   writeFileSync(
     join(securityDir, 'index.js'),
-    "exports.currentUserSid = () => 'S-1-5-18'; exports.clearStdHandleInheritance = () => []\n"
+    "exports.currentUserSid = () => 'S-1-5-18'; exports.hasNativeExport = () => true\n"
   )
 }
 

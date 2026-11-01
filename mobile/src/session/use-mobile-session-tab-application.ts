@@ -1,3 +1,5 @@
+import { keepsTerminalPaneVisible } from './mobile-terminal-pane-layout'
+import { orphanedMarkdownDraftTabs } from './orphaned-markdown-draft-tabs'
 import {
   pendingSelectionHandle,
   pendingSelectionTabId,
@@ -9,6 +11,7 @@ import { useCallback, useRef } from 'react'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalRecordsByCurrentOrder,
+  mobileFileTabsReadSameDocument,
   mobileSessionTabsEqual,
   terminalRecordsEqual
 } from './mobile-terminal-records'
@@ -39,6 +42,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     setTerminals,
     terminalsRef,
     setSessionTabs,
+    setFileDocs,
     sessionTabsRef,
     appliedSnapshotMarkerRef,
     appliedSessionTabsRevisionRef,
@@ -53,6 +57,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     markdownDocsRef,
     terminalDiagnosticsRef,
     activeHandleRef,
+    visibleTerminalHandlesRef,
     activeSessionTabTypeRef,
     pendingSelectionRef,
     pendingBrowserFocusPageIdRef,
@@ -81,23 +86,13 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         ),
         sessionTabsRef.current
       )
-      const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
-      const orphanedDraftTabs: MobileSessionTab[] = []
-      const currentMarkdownDocs = markdownDocsRef.current
       const currentSessionTabs = sessionTabsRef.current
-      for (const [tabId, doc] of currentMarkdownDocs) {
-        if (doc.status !== 'ready' || !doc.isDirty || presentTabIds.has(tabId)) {
-          continue
-        }
-        const draftTab = currentSessionTabs.find(
-          (tab): tab is Extract<MobileSessionTab, { type: 'markdown' }> =>
-            tab.type === 'markdown' && tab.id === tabId
-        )
-        if (draftTab) {
-          // Keep phone-local document drafts reachable after desktop tab removal so users can copy/discard them.
-          orphanedDraftTabs.push({ ...draftTab, isActive: tabId === activeSessionTabIdRef.current })
-        }
-      }
+      const orphanedDraftTabs = orphanedMarkdownDraftTabs(
+        nextTabs,
+        currentSessionTabs,
+        markdownDocsRef.current,
+        activeSessionTabIdRef.current
+      )
       if (orphanedDraftTabs.length > 0) {
         nextTabs = [...orphanedDraftTabs, ...nextTabs]
       }
@@ -127,6 +122,27 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
           ...phoneOwnedTabIds,
           ...selectionClaims
         ])
+      }
+      const previousTabsById = new Map(currentSessionTabs.map((tab) => [tab.id, tab]))
+      const changedFileTabIds: string[] = []
+      for (const tab of nextTabs) {
+        const previous = previousTabsById.get(tab.id)
+        if (
+          tab.type === 'file' &&
+          previous?.type === 'file' &&
+          !mobileFileTabsReadSameDocument(previous, tab)
+        ) {
+          changedFileTabIds.push(tab.id)
+        }
+      }
+      if (changedFileTabIds.length > 0) {
+        setFileDocs((prev) => {
+          const next = new Map(prev)
+          for (const id of changedFileTabIds) {
+            next.delete(id)
+          }
+          return next
+        })
       }
       sessionTabsRef.current = nextTabs
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
@@ -246,7 +262,9 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         if (typeof active.terminal !== 'string') {
           const previous = activeHandleRef.current
           if (previous) {
-            unsubscribeTerminal(previous)
+            if (!keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
+              unsubscribeTerminal(previous)
+            }
           }
           activeHandleRef.current = null
           setActiveHandle(null)
@@ -254,7 +272,9 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         }
         const previous = activeHandleRef.current
         if (previous && previous !== active.terminal) {
-          unsubscribeTerminal(previous)
+          if (!keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
+            unsubscribeTerminal(previous)
+          }
         }
         activeHandleRef.current = active.terminal
         setActiveHandle(active.terminal)
@@ -263,7 +283,9 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         // Transient empty snapshots may omit a live terminal; only explicit successful close clears it.
         const previous = activeHandleRef.current
         if (previous) {
-          unsubscribeTerminal(previous)
+          if (!keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
+            unsubscribeTerminal(previous)
+          }
         }
         activeHandleRef.current = null
         setActiveHandle(null)

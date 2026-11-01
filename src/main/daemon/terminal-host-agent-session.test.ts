@@ -1,3 +1,10 @@
+import {
+  createOrAttachClaimedAgentSession,
+  type InternalCreateOrAttachOptions
+} from './terminal-host-agent-session-claim'
+import { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
+import { readTerminalStartFailure } from '../../shared/terminal-start-failure'
+import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -59,6 +66,63 @@ describe('TerminalHost agent-session claims', () => {
   afterEach(async () => {
     subprocess?.exit()
     await host.dispose()
+  })
+
+  it('preserves the same exit reason for the creator and a joined claim when death beats liveness proof', async () => {
+    const owners = new ClaimedAgentPtyOwnerRegistry()
+    const created = Promise.withResolvers<CreateOrAttachResult>()
+    let stream: InternalCreateOrAttachOptions['streamClient'] | undefined
+    const options: InternalCreateOrAttachOptions = {
+      sessionId: 'claim-race',
+      cols: 80,
+      rows: 24,
+      agentSessionEnsure: { claim, surface },
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    }
+    const createOrAttach = vi.fn(async (opts: InternalCreateOrAttachOptions) => {
+      stream = opts.streamClient
+      return created.promise
+    })
+    const args = {
+      options,
+      owners,
+      createOrAttach,
+      isLive: () => {
+        stream?.onExit(256, 'claimed-incarnation', {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        })
+        return false
+      }
+    }
+    const first = createOrAttachClaimedAgentSession(args).catch((error: unknown) => error)
+    const joined = createOrAttachClaimedAgentSession(args).catch((error: unknown) => error)
+    const originalOnExit = options.streamClient.onExit
+    options.streamClient.onExit = () => {
+      throw new Error('request callback was replaced')
+    }
+    created.resolve({
+      isNew: true,
+      snapshot: null,
+      pid: 12345,
+      shellState: 'unsupported',
+      wslDistro: null,
+      incarnationId: 'claimed-incarnation',
+      attachToken: Symbol()
+    })
+    for (const error of await Promise.all([first, joined])) {
+      expect(readTerminalStartFailure(error)).toMatchObject({
+        incarnationId: 'claimed-incarnation',
+        cause: { initialOutputDiagnostic: 'git-bash-console-capacity' }
+      })
+    }
+    expect(createOrAttach).toHaveBeenCalledOnce()
+    expect(originalOnExit).toHaveBeenCalledWith(
+      256,
+      'claimed-incarnation',
+      expect.objectContaining({ initialOutputDiagnostic: 'git-bash-console-capacity' })
+    )
   })
 
   it('adopts one claimed provider session across different requested daemon ids', async () => {

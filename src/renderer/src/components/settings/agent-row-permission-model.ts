@@ -1,3 +1,4 @@
+import type { AgentPermissionChoice } from '../../../../shared/tui-agent-permission-choice'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
@@ -103,4 +104,10 @@ function buildPresetReset(
         ? (AUTO_TUI_AGENT_ARGS[agent] ?? '')
         : ''
   return { mode, apply: () => save({ type: 'arguments', agent, value }) }
+}
+
+export function sharedAgentPermissionChoice(
+  choices: readonly AgentPermissionChoice[]
+): AgentPermissionChoice | null {
+  return choices.length > 0 && choices.every((choice) => choice === choices[0]) ? choices[0] : null
 }

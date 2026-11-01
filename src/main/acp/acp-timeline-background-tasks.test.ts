@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { backgroundTaskFallbackText } from '../../shared/native-chat/input/native-chat-background-task-row'
-import { deriveNativeChatRowContent } from '../../shared/native-chat-row-content'
-import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
+import { deriveNativeChatRowContent } from '../../shared/native-chat/transcript/native-chat-row-content'
+import { isBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { openAcpFixtureRig, readAcpFixture } from './acp-timeline-fixture.test-support'
 

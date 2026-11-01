@@ -1,9 +1,11 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { pluginIdSchema, pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import {
   pluginFieldDoc,
   pluginPathFieldDoc,
-  PLUGIN_MANIFEST_V2_SINCE
+  PLUGIN_MANIFEST_V2_SINCE,
+  PLUGIN_SOURCE_MODULES_SINCE
 } from '../manifest/plugin-schema-field-docs'
 import { pluginFileMatchFields } from './plugin-file-match'
 import { PLUGIN_ICON_RULE_TEXT } from '../images/plugin-image-fields'
@@ -25,17 +27,13 @@ export const pluginCustomEditorContributionSchema = z
         ['excalidraw']
       )
     ),
-    title: z
-      .string()
-      .min(1)
-      .max(64)
-      .meta(
-        pluginFieldDoc(
-          "Name shown in the editor's view toggle beside Source, and on the tab of a file it opens.",
-          PLUGIN_MANIFEST_V2_SINCE,
-          ['Excalidraw']
-        )
-      ),
+    title: safePluginDisplayText(z.string().min(1).max(64)).meta(
+      pluginFieldDoc(
+        "Name shown in the editor's view toggle beside Source, and on the tab of a file it opens.",
+        PLUGIN_MANIFEST_V2_SINCE,
+        ['Excalidraw']
+      )
+    ),
     icon: pluginRelativePathSchema
       .optional()
       .meta(
@@ -51,7 +49,7 @@ export const pluginCustomEditorContributionSchema = z
     }),
     entry: pluginRelativePathSchema.meta(
       pluginPathFieldDoc(
-        'HTML file rendered inside a sandboxed editor frame, like a panel. It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust.',
+        `HTML file rendered inside an editor frame, like a panel, or a \`.ts\`/\`.tsx\` module that Orca transpiles and loads in a generated page (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`). It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust.`,
         PLUGIN_MANIFEST_V2_SINCE,
         ['editor/index.html']
       )

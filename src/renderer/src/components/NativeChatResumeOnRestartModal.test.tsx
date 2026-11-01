@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import {
   createResumeModalFixture,
   offered,
@@ -7,6 +8,7 @@ import {
   type ResumeStatusStream
 } from './native-chat-resume-modal.test-support'
 import { act, StrictMode } from 'react'
+import type * as ActivationModule from '@/lib/activate-ai-vault-structured-session'
 import { toast } from 'sonner'
 import { expect, it, vi, type Mock } from 'vitest'
 import { useAppStore } from '../store'
@@ -33,7 +35,17 @@ const statusStream: ResumeStatusStream = vi.hoisted(() => ({
   emit: (_event: Parameters<ResumeStatusStream['emit']>[0]) => {},
   snapshot: new Map()
 }))
-const activate: Mock<() => Promise<boolean>> = vi.hoisted(() => vi.fn(async () => true))
+const activate = vi.hoisted(() =>
+  vi.fn<typeof ActivationModule.activateAiVaultStructuredSession>(async () => true)
+)
+const openRpc = vi.hoisted(() => vi.fn())
+vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  callRuntimeRpc: openRpc
+}))
+vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
+  refreshLocalStructuredSessionWorktreeTabs: async () => undefined
+}))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: rpc,
   subscribeStructuredAgentSessionStatus: async (
@@ -50,6 +62,10 @@ vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
 }))
 vi.mock('sonner', async () =>
   (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
+
+const actual = await vi.importActual<typeof ActivationModule>(
+  '@/lib/activate-ai-vault-structured-session'
 )
 
 const { mount, button, offerIds, toasts, fakeHost, runStatus, calls } = createResumeModalFixture(
@@ -295,7 +311,7 @@ it('resumes and continues once when the launch begins opted in', async () => {
   useAppStore.setState({
     settings: {
       ...getDefaultSettings(''),
-      experimentalNativeChat: true,
+      nativeChatProviders: EVERY_AGENT_CHAT,
       nativeChatResumeWorkOnRestart: true
     }
   })
@@ -311,8 +327,10 @@ it('resumes and continues once when the launch begins opted in', async () => {
   await act(async () =>
     useAppStore.getState().updateSettings({ nativeChatResumeWorkOnRestart: true })
   )
-  await act(async () => useAppStore.getState().updateSettings({ experimentalNativeChat: false }))
-  await act(async () => useAppStore.getState().updateSettings({ experimentalNativeChat: true }))
+  await act(async () => useAppStore.getState().updateSettings({ nativeChatProviders: {} }))
+  await act(async () =>
+    useAppStore.getState().updateSettings({ nativeChatProviders: EVERY_AGENT_CHAT })
+  )
   expect(calls()).toEqual([
     ['agentSession.restartResumable', undefined],
     ['agentSession.restartContinue', { sessionIds: ['a', 'b'] }]
@@ -326,7 +344,7 @@ it('shows an opted-in launch resume in the status bar while it runs', async () =
   useAppStore.setState({
     settings: {
       ...getDefaultSettings(''),
-      experimentalNativeChat: true,
+      nativeChatProviders: EVERY_AGENT_CHAT,
       nativeChatResumeWorkOnRestart: true
     }
   })
@@ -346,7 +364,7 @@ it('reports chats an opted-in launch could not carry on in one toast and the sta
   useAppStore.setState({
     settings: {
       ...getDefaultSettings(''),
-      experimentalNativeChat: true,
+      nativeChatProviders: EVERY_AGENT_CHAT,
       nativeChatResumeWorkOnRestart: true
     }
   })
@@ -569,8 +587,48 @@ it('lists a chat the resume could not carry on when the dialog reopens, with wha
   ])
   expect(chatBox('b').getAttribute('data-state')).toBe('unchecked')
 
+  activate.mockImplementationOnce(actual.activateAiVaultStructuredSession)
+  useAppStore.setState({
+    unifiedTabsByWorktree: {
+      workspace: [
+        {
+          id: 'actual-successor',
+          entityId: 'S',
+          worktreeId: 'workspace',
+          executionHostId: 'local',
+          groupId: 'g',
+          contentType: 'agent-session',
+          agentSessionAgent: 'codex',
+          label: 'Chat',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 0
+        }
+      ]
+    },
+    groupsByWorktree: {
+      workspace: [
+        { id: 'g', worktreeId: 'workspace', activeTabId: null, tabOrder: ['actual-successor'] }
+      ]
+    },
+    activeGroupIdByWorktree: { workspace: 'g' }
+  })
+  openRpc.mockImplementation(async (_host, method) =>
+    method === 'orchestration.partyLocation'
+      ? { location: { kind: 'chat', sessionId: 'S', worktreeId: 'workspace' } }
+      : { ok: true }
+  )
   await act(async () => button('Open chat').click())
+  expect(useAppStore.getState().groupsByWorktree.workspace?.[0]?.activeTabId).toBe(
+    'actual-successor'
+  )
+  expect(openRpc.mock.calls.map((call) => call[1])).toEqual([
+    'orchestration.partyLocation',
+    'session.tabs.activate'
+  ])
   expect(activate).toHaveBeenCalledWith({
+    agent: 'codex',
     structuredSession: { workspaceId: 'workspace', sessionId: 'b' }
   })
   // Opening is read-only; only the user’s send settles the host record.

@@ -1,6 +1,9 @@
-/** Observed root exit releases its PID/start-time reservation without claiming descendant termination. */
+/** Writer death evidence releases its reservation without claiming descendant termination. */
 export class AgentSessionAcquisitionRootExitObservedError extends Error {
-  constructor(cause: unknown) {
+  constructor(
+    cause: unknown,
+    readonly deathEvidenceKind: 'exit-observed' | 'kill-delivered' = 'exit-observed'
+  ) {
     super(cause instanceof Error ? cause.message : String(cause), { cause })
     this.name = 'AgentSessionAcquisitionRootExitObservedError'
   }

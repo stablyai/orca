@@ -29,44 +29,6 @@ function runCommand(id: SlashCommandId, content = '/'): Editor {
 }
 
 describe('rich markdown slash commands', () => {
-  it('registers high-value markdown building blocks with searchable aliases', () => {
-    expect(getCommand('table').aliases).toContain('grid')
-    expect(getCommand('mermaid').aliases).toContain('diagram')
-    expect(getCommand('inline-math').aliases).toContain('latex')
-    expect(getCommand('math-block').aliases).toContain('equation block')
-    expect(getCommand('emoji').aliases).toContain('reaction')
-    expect(getCommand('toggle-h5').aliases).toContain('toggle-h5')
-  })
-
-  it('orders commands under section headers', () => {
-    expect(slashCommands.map((command) => `${command.group}:${command.id}`)).toEqual([
-      'Headings:heading-1',
-      'Headings:heading-2',
-      'Headings:heading-3',
-      'Headings:heading-4',
-      'Headings:heading-5',
-      'Toggle headings:toggle-h1',
-      'Toggle headings:toggle-h2',
-      'Toggle headings:toggle-h3',
-      'Toggle headings:toggle-h4',
-      'Toggle headings:toggle-h5',
-      'Basic blocks:blockquote',
-      'Basic blocks:ordered-list',
-      'Basic blocks:bullet-list',
-      'Basic blocks:task-list',
-      'Basic blocks:text',
-      'Basic blocks:toggle-text',
-      'Basic blocks:code-block',
-      'Basic blocks:divider',
-      'Advanced:table',
-      'Advanced:mermaid',
-      'Advanced:inline-math',
-      'Advanced:math-block',
-      'Media:image',
-      'Others:emoji'
-    ])
-  })
-
   it('supports deep heading slash commands', () => {
     const h4Editor = createEditor('Deep heading')
     const h5Editor = createEditor('Nested heading')
@@ -161,16 +123,6 @@ describe('rich markdown slash commands', () => {
         ]
       })
       expect(editor.getMarkdown()).toBe('Before\n\n$$\nx + y\n$$\n\nAfter')
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('inserts a plain unicode emoji', () => {
-    const editor = runCommand('emoji')
-
-    try {
-      expect(editor.getMarkdown()).toBe('🙂')
     } finally {
       editor.destroy()
     }

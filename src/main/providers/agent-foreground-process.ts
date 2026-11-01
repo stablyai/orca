@@ -1,6 +1,6 @@
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
-import type { ProcessTableRow } from '../../shared/process-table-snapshot'
+import { unreadableArgvName, type ProcessTableRow } from '../../shared/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
   getFreshShellForegroundSnapshot,
@@ -162,6 +162,14 @@ export async function resolveAgentForegroundProcessWithAvailability(
       ? await getFreshProcessTableSnapshot()
       : await getProcessTableSnapshot()
     if (options.fresh && !getProcessTableIndex(rows).byPid.has(shellPid)) {
+      return { available: false, processName: fallbackProcess }
+    }
+    // A foreground descendant whose argv ps withheld could be the agent, so its absence is not proof.
+    if (
+      collectDescendantsFromIndex(getProcessTableIndex(rows), shellPid).some(
+        (row) => row.stat.includes('+') && unreadableArgvName(row.command) !== null
+      )
+    ) {
       return { available: false, processName: fallbackProcess }
     }
     return {

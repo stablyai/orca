@@ -3,7 +3,7 @@ import './rpc/unused-default-rpc-methods.test-fixture'
 // words, and keeps the task.
 
 import { describe, expect, it, vi } from 'vitest'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { idOf } from './rpc/orchestration-session-caller-test-fixture'
@@ -73,7 +73,6 @@ function escalationsTo(runId: string) {
 
 describe('a chat worker whose turn fails', () => {
   it('tells the Run that dispatched it, once, with the error the chat shows, and keeps the task', async () => {
-    vi.spyOn(runtime, 'isChatWorkerErrorEscalationEnabled').mockReturnValue(true)
     const { runId, dispatchId } = await dispatchAndFailWorkerTurn()
 
     await vi.waitFor(() => expect(escalationsTo(runId)).toHaveLength(1), WAIT)
@@ -89,7 +88,6 @@ describe('a chat worker whose turn fails', () => {
   })
 
   it('keeps the existing failed Dispatch/RPC result for a never-delivered initial preamble, without error mail', async () => {
-    vi.spyOn(runtime, 'isChatWorkerErrorEscalationEnabled').mockReturnValue(true)
     await openChat(COORDINATOR)
     const worker = await openChat(PEER_CHAT)
     const { runId, taskId } = await coordinatorRunAndTask()
@@ -128,7 +126,6 @@ describe('a chat worker whose turn fails', () => {
   it.each(['notify', 'insert'] as const)(
     'accepts the next user turn after coordinator %s fails',
     async (mode) => {
-      vi.spyOn(runtime, 'isChatWorkerErrorEscalationEnabled').mockReturnValue(true)
       const failed =
         mode === 'notify'
           ? vi.spyOn(runtime, 'notifyMessageArrived')
@@ -149,12 +146,4 @@ describe('a chat worker whose turn fails', () => {
       await settleTurn(PEER_CHAT, connectionFor(PEER_CHAT).turns.length - 1)
     }
   )
-
-  it('sends nothing while the Orchestration switch is off', async () => {
-    vi.spyOn(runtime, 'isChatWorkerErrorEscalationEnabled').mockReturnValue(false)
-    const { runId } = await dispatchAndFailWorkerTurn()
-
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(escalationsTo(runId)).toHaveLength(0)
-  })
 })

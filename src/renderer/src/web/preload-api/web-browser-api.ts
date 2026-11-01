@@ -92,6 +92,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
           'Cookie import is unavailable in the web client.'
         )
       }),
+    sessionImportCookiesForClientHost: () => Promise.resolve(null),
     sessionResolvePartition: () => Promise.resolve(null),
     sessionDetectBrowsers: () => Promise.resolve([]),
     sessionDetectBrowsersForClientHost: () => Promise.resolve(null),

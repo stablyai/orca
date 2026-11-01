@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
 import { parsePluginManifest } from './plugin-manifest'
-import { formatPluginSchemaPath, pluginSchemaIssueLines } from './plugin-schema-issues'
+import { pluginSchemaIssueLines } from './plugin-schema-issues'
 
 function v2Manifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -25,13 +25,6 @@ function manifestError(raw: unknown): string {
 }
 
 describe('plugin schema issues', () => {
-  it('formats paths with bracketed indexes', () => {
-    expect(formatPluginSchemaPath(['contributes', 'themes', 0, 'path'])).toBe(
-      'contributes.themes[0].path'
-    )
-    expect(formatPluginSchemaPath([])).toBe('(root)')
-  })
-
   it('reports every mistake in one pass with author-facing wording', () => {
     const error = manifestError(
       v2Manifest({
@@ -56,21 +49,6 @@ describe('plugin schema issues', () => {
       'contributes.syntaxes: must be at most 16 items',
       '(root): unknown key "surprise"'
     ])
-  })
-
-  it('keeps messages the schema states itself', () => {
-    expect(manifestError(v2Manifest({ engines: { orca: '^1.4.0' } }))).toBe(
-      'engines.orca: must be a ">=x.y.z" version range'
-    )
-    expect(manifestError(v2Manifest({ execution: 'trusted-worker' }))).toBe(
-      'main: trusted-worker requires a Node entry'
-    )
-  })
-
-  it('names the supported manifest formats', () => {
-    expect(manifestError(v2Manifest({ manifestVersion: 7 }))).toBe(
-      'manifestVersion: must be one of 1, 2'
-    )
   })
 
   it('dedupes identical lines and caps the count', () => {

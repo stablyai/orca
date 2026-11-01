@@ -10,6 +10,7 @@ import type { MacOptionAsAlt } from '@/components/terminal-pane/terminal-shortcu
 import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
 import { installTerminalNativeCopyGutterTrim } from '@/components/terminal-pane/terminal-native-copy-gutter'
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import type { PreviewTerminalLinkHandlers } from '../dashboard-popout/preview-terminal-links'
 import { installPreviewTerminalCompatibility } from '../dashboard-popout/preview-terminal-compatibility'
 import { createPreviewClipboardPaster } from '../dashboard-popout/preview-terminal-paste'
 import { installPreviewImeBridge } from '../dashboard-popout/preview-terminal-ime-bridge'
@@ -31,6 +32,7 @@ export type StandaloneTerminalArgs = {
   getSettings: () => GlobalSettings | null
   getMacOptionAsAlt: () => MacOptionAsAlt
   getTerminalInput: () => DashboardCardTerminalInput | null
+  linkHandlers?: PreviewTerminalLinkHandlers
   requestClose?: () => void
 }
 
@@ -55,7 +57,8 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
   let replayDepth = 0
 
   const disposeCompatibility = installPreviewTerminalCompatibility(terminal, {
-    getSettings: args.getSettings
+    getSettings: args.getSettings,
+    ...(args.linkHandlers ? { linkHandlers: args.linkHandlers } : {})
   })
   const disposeNativeCopyGutterTrim = installTerminalNativeCopyGutterTrim(terminal).dispose
 

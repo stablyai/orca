@@ -5,6 +5,10 @@ import type { PluginTerminalThemeRegistration } from '../../../../../shared/plug
 import { translate } from '@/i18n/i18n'
 import { resolveDocumentTheme } from '@/lib/document-theme'
 import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-settings'
+import {
+  hasTerminalColorOverrides,
+  TERMINAL_COLOR_OVERRIDES_SETTING
+} from '../../../../../shared/terminal-color-overrides'
 import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
 import { useAppStore } from '@/store'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
@@ -43,21 +47,33 @@ export function isPluginTerminalThemeSelected(
   )
 }
 
+export function terminalThemeSlotUpdate(
+  theme: Pick<PluginTerminalThemeRegistration, 'id' | 'mode'>,
+  dark: boolean
+): Partial<
+  Pick<GlobalSettings, 'terminalThemeDark' | 'terminalThemeLight' | 'terminalUseSeparateLightTheme'>
+> {
+  const slot = terminalSlot(theme.mode, dark)
+  return {
+    [slot]: theme.id,
+    ...(slot === 'terminalThemeLight' ? { terminalUseSeparateLightTheme: true } : {})
+  }
+}
+
 export function terminalThemeUpdate(
   settings: GlobalSettings,
   theme: PluginTerminalThemeRegistration,
   dark: boolean,
   terminalThemes: readonly PluginTerminalThemeRegistration[]
 ): Partial<GlobalSettings> {
-  const slot = terminalSlot(theme.mode, dark)
+  const slot = terminalSlot(theme.mode, dark) === 'terminalThemeLight' ? 'light' : 'dark'
   return withTerminalPluginPalettes(
     settings,
     {
-      [slot]: theme.id,
-      ...(slot === 'terminalThemeLight' ? { terminalUseSeparateLightTheme: true } : {}),
-      // A selected theme must replace overrides or they mask its palette.
-      ...(Object.keys(settings.terminalColorOverrides ?? {}).length > 0
-        ? { terminalColorOverrides: undefined }
+      ...terminalThemeSlotUpdate(theme, dark),
+      // A selected theme must replace its slot's overrides or they mask its palette.
+      ...(hasTerminalColorOverrides(settings, slot)
+        ? { [TERMINAL_COLOR_OVERRIDES_SETTING[slot]]: undefined }
         : {})
     },
     terminalThemes
@@ -114,6 +130,7 @@ export async function applyPluginThemesNow(pluginKey: string): Promise<boolean> 
     terminalThemeLight: settings.terminalThemeLight,
     terminalUseSeparateLightTheme: settings.terminalUseSeparateLightTheme,
     terminalColorOverrides: settings.terminalColorOverrides,
+    terminalColorOverridesLight: settings.terminalColorOverridesLight,
     terminalPluginPalettes: settings.terminalPluginPalettes ?? []
   }
   let next: Partial<GlobalSettings> = {}

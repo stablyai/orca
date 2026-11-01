@@ -19,6 +19,7 @@ import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
 import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
 import { translate } from '@/i18n/i18n'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-folded-tools'
+import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
@@ -240,7 +241,7 @@ export function BrowserToolbarMenu({
         result
       )
     } else {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 
@@ -257,7 +258,7 @@ export function BrowserToolbarMenu({
         result
       )
     } else if (result.reason !== 'canceled') {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 

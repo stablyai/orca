@@ -1,6 +1,6 @@
 import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
 import { homedir } from 'node:os'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type {
   AgentModelCatalogService,
@@ -27,6 +27,7 @@ export async function resolveAgentModelCatalogScope(
   base: string
   fingerprint: string
   exact: boolean
+  accountListing?: boolean
   cwd?: string
   resolved?: AgentModelCatalogResolvedProbe
 } | null> {
@@ -86,6 +87,8 @@ export async function resolveAgentModelCatalogScope(
     base,
     fingerprint: scopeKey(resolved),
     exact: true,
+    // The account's own listing (prewarm names no folder or chat) seeds what unlisted folders show.
+    accountListing: !record && params.workspacePath === undefined && !params.legacy,
     cwd,
     ...(resolved ? { resolved } : {})
   }

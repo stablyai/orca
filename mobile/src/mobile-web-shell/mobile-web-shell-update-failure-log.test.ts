@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
+import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
 import { createGenerationStore, MAX_CACHED_HOSTS } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'

@@ -20,7 +20,13 @@ describe('who another agent’s message is from, on mobile', () => {
   })
 
   it('names each sender, an unnamed one as an agent, and counts the rest', () => {
-    expect(agentMessageAttribution('Message from', from(['Coder']))).toBe('Message from Coder')
+    const attributed = from(['Coder'])
+    expect(
+      agentMessageAttribution('Message from', {
+        ...attributed,
+        senders: attributed.senders.map((sender) => ({ ...sender, relation: 'worker' }))
+      })
+    ).toBe('Message from Coder')
     expect(agentMessageAttribution('From', from([]))).toBe('From an agent')
     expect(agentMessageAttribution('From', from(['A', 'B', 'C', 'D']))).toBe('From A, B, C +1')
   })

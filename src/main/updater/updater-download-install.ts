@@ -6,7 +6,7 @@ import {
 } from '../updater-mac-install'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { isExternallyManagedLinuxInstall } from '../linux-update-package-type'
-import { LINUX_PACKAGE_EXTERNALLY_MANAGED_MESSAGE } from '../linux-package-downloaded-status'
+import { updaterCodedMessage } from '../../shared/updater-failure-copy'
 import { QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
 import { UpdaterRemoteStatus } from './updater-remote-status'
 import { prepareThisProcessShipItStaging } from './shipit-leftover-recovery'
@@ -83,7 +83,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       this.restoreReleaseUpdateSource()
       this.sendStatus({
         state: 'error',
-        message: LINUX_PACKAGE_EXTERNALLY_MANAGED_MESSAGE,
+        ...updaterCodedMessage('linuxPackageExternallyManaged'),
         version,
         retryable: false
       })

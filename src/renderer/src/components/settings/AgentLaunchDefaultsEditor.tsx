@@ -92,17 +92,24 @@ export function AgentDefaultArgsInput({
   disabled = false,
   onDraftChange,
   placeholder,
-  onResetArgs
+  onResetArgs,
+  hideLabel = false,
+  onDiscardArgs,
+  containsFocus
 }: {
   defaultArgs: string
   placeholder?: string
   onResetArgs?: () => void | Promise<void>
+  containsFocus?: (target: EventTarget | null) => boolean
+  onDiscardArgs?: () => void
   argsOverride: string
   onSaveArgs: (value: string) => void | Promise<void>
   choiceChips?: readonly AgentArgsChoice[]
   note?: string
   disabled?: boolean
   onDraftChange?: (value: string) => void
+  /** The caller already labels the field, e.g. with a disclosure row. */
+  hideLabel?: boolean
 }): React.JSX.Element {
   const [draft, setDraft] = useState<string | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -122,7 +129,8 @@ export function AgentDefaultArgsInput({
       return
     }
     const measure = (): void => {
-      input.style.textIndent = `calc(${chip.getBoundingClientRect().width}px + var(--spacing) * 2)`
+      // Popover transforms change viewport geometry, but text-indent needs layout pixels.
+      input.style.textIndent = `calc(${chip.offsetWidth}px + var(--spacing) * 2)`
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -147,14 +155,20 @@ export function AgentDefaultArgsInput({
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <span className="text-xs font-medium leading-none text-muted-foreground">
-        {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
-      </span>
+      {hideLabel ? null : (
+        <span className="text-xs font-medium leading-none text-muted-foreground">
+          {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+        </span>
+      )}
       <div className="flex min-w-0 items-center gap-2">
         <div
           className="scrollbar-sleek relative max-h-[calc(var(--spacing)*41+2px)] min-h-7 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-md border border-input px-3 py-0.5 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
           onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget)) {
+            if (
+              !(containsFocus
+                ? containsFocus(event.relatedTarget)
+                : event.currentTarget.contains(event.relatedTarget))
+            ) {
               commitArgs()
             }
           }}
@@ -217,6 +231,7 @@ export function AgentDefaultArgsInput({
               }
               if (event.key === 'Escape') {
                 setDraft(null)
+                onDiscardArgs?.()
               }
             }}
             placeholder={
@@ -230,7 +245,7 @@ export function AgentDefaultArgsInput({
                   )
             }
             spellCheck={false}
-            className="block min-h-5 [field-sizing:content]"
+            className="block min-h-5 max-w-full [field-sizing:content] [overflow-wrap:anywhere]"
           />
         </div>
         {(argsOverride !== defaultArgs ||
@@ -263,16 +278,14 @@ export function AgentDefaultArgsInput({
 }
 
 export function AgentDefaultEnvInput({
-  showEmpty = false,
   defaultEnv,
   envOverride,
   onSaveEnv
 }: {
-  showEmpty?: boolean
   defaultEnv: Record<string, string>
   envOverride: Record<string, string>
   onSaveEnv: (value: Record<string, string>) => void | Promise<void>
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const defaultEnvText = stringifyAgentDefaultEnvDraft(defaultEnv)
   const draftSeed = stringifyAgentDefaultEnvDraft(envOverride)
   const [draft, setDraft] = useState<string | null>(null)
@@ -300,9 +313,6 @@ export function AgentDefaultEnvInput({
     }
   }
 
-  if (!showEmpty && !defaultEnvText && !draftSeed && draft === null && !pending) {
-    return null
-  }
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs text-muted-foreground">

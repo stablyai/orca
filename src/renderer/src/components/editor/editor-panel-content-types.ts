@@ -1,3 +1,6 @@
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { OpenFile } from '@/store/slices/editor'
+import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { CsvFilePreview } from './csv/csv-file-content'
 import type { RuntimeFileReadArgs } from '@/runtime/runtime-file-client-types'
@@ -46,4 +49,21 @@ export type DiffContent = GitDiffResult & {
 export type InFlightContentRead<T> = {
   externalEventGeneration?: number
   promise: Promise<T>
+}
+
+export type EditorPanelFileContentLoader = (
+  filePath: string,
+  id: string,
+  worktreeId?: string,
+  relativePath?: string,
+  options?: EditorPanelContentLoadOptions
+) => Promise<void>
+
+export type UseEditorPanelFileContentLoaderParams = {
+  fileLoadRetryAttemptsRef: MutableRefObject<Record<string, number>>
+  fileReadGenerationCounterRef: MutableRefObject<number>
+  fileReadGenerationRef: MutableRefObject<Record<string, number>>
+  openFilesRef: MutableRefObject<OpenFile[]>
+  outstandingFileReadsRef: MutableRefObject<Record<string, number>>
+  setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
 }

@@ -152,7 +152,7 @@ export function CatalogCard({
 export function PluginCardSkeletons(): React.JSX.Element {
   return (
     <>
-      {[0, 1, 2].map((index) => (
+      {[0, 1, 2, 3].map((index) => (
         <li
           key={index}
           aria-hidden="true"
@@ -316,6 +316,7 @@ export function PluginCatalogGroups({
             }
             notice={notice}
             hiddenCount={rows.length - shown.length}
+            totalCount={rows.length}
             onShowAll={showAll(source.id)}
           >
             {shown.length > 0

@@ -5,7 +5,6 @@ import { workItemsCacheKey } from '@/store/github/cache-identity'
 import type { CacheEntry } from '@/store/github/cache-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { LinearCollectionResult } from '../../../../shared/linear/workspace-types'
 import {
   buildTaskPageRepoSourceState,
   selectTaskPageUnresolvedSourceRepos,
@@ -18,10 +17,7 @@ import {
   shouldResetTaskPagePaginationAfterLandingRefresh,
   shouldReplaceTaskPageItemsAfterRefresh
 } from './task-page-cache-selectors'
-import {
-  findTaskPageLinearIssue,
-  reconcileTaskPageLinearIssuesAfterLandingRefresh
-} from './linear/task-page-linear-cache-selectors'
+import { reconcileTaskPageLinearIssuesAfterLandingRefresh } from './linear/task-page-linear-cache-selectors'
 
 function entry<T>(data: T): CacheEntry<T> {
   return { data, fetchedAt: 1 }
@@ -139,6 +135,77 @@ describe('task page cache selectors', () => {
       { repoId: 'unresolved', sourceKey: 'unresolved::local', label: 'unresolved-repo' },
       { repoId: 'no-name', sourceKey: 'no-name::local', label: '/repos/no-name' }
     ])
+  })
+
+  it('silently omits a proven other-forge source while keeping unknown identity retryable', () => {
+    const repos = [
+      { id: 'gitlab-only', path: '/repos/gitlab-only' },
+      { id: 'unknown', path: '/repos/unknown' }
+    ]
+    const entries = [
+      {
+        data: [],
+        fetchedAt: 1,
+        sources: {
+          issues: null,
+          prs: null,
+          originCandidate: null,
+          upstreamCandidate: null,
+          ineligible: true as const
+        }
+      },
+      {
+        data: [],
+        fetchedAt: 1,
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+      }
+    ]
+
+    const sourceState = buildTaskPageRepoSourceState(repos, entries)
+
+    expect(selectTaskPageUnresolvedSourceRepos(repos, sourceState)).toEqual([
+      { repoId: 'unknown', sourceKey: 'unknown::local', label: '/repos/unknown' }
+    ])
+  })
+
+  it('keeps an unknown twin retryable while omitting only its proven other-forge source', () => {
+    const unknown = { id: 'twin', path: '/same/path', displayName: 'unknown twin' }
+    const sources = { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+    const unknownEntry = { data: [], fetchedAt: 1, sources }
+    const ineligibleEntry = {
+      data: [],
+      fetchedAt: 1,
+      sources: { ...sources, ineligible: true as const }
+    }
+    const pairedScopes = [
+      { repoFields: { executionHostId: 'runtime:paired' }, scope: 'runtime:paired' },
+      { repoFields: { connectionId: 'devbox' }, scope: 'ssh:devbox' },
+      {
+        repoFields: { sourceCacheScope: 'source:local:github:acme/widgets' },
+        scope: 'source:local:github:acme/widgets'
+      }
+    ]
+
+    for (const { repoFields, scope } of pairedScopes) {
+      const provenOther = { ...unknown, ...repoFields, displayName: 'proven other-forge twin' }
+      const cache = {
+        [workItemsCacheKey('twin', 20, '', 'local')]: unknownEntry,
+        [workItemsCacheKey('twin', 20, '', scope)]: ineligibleEntry
+      }
+      for (const repos of [
+        [unknown, provenOther],
+        [provenOther, unknown]
+      ]) {
+        const entries = selectTaskPageWorkItemsCacheEntries(cache, repos, 20, '')
+        const sourceState = buildTaskPageRepoSourceState(repos, entries)
+        const expected = [{ repoId: 'twin', sourceKey: 'twin::local', label: 'unknown twin' }]
+
+        expect(selectTaskPageUnresolvedSourceRepos(repos, sourceState)).toEqual(expected)
+        expect(selectTaskPageUnresolvedSourceRepos(repos, sourceState.toReversed())).toEqual(
+          expected
+        )
+      }
+    }
   })
 
   it('does not flag an unresolved-source repo that already carries a per-repo error', () => {
@@ -425,25 +492,5 @@ describe('task page cache selectors', () => {
     )
 
     expect(next).toEqual([refreshedFirst, refreshedSecond])
-  })
-
-  it('returns null while the Linear drawer is closed and finds open issues by stable reference', () => {
-    const issue = linearIssue('LIN-1')
-    const searchIssue = linearIssue('LIN-2')
-    const issueCache = {
-      'LIN-1': entry(issue)
-    }
-    const searchCache = {
-      assigned: entry<LinearIssue[]>([searchIssue])
-    }
-    const listIssue = linearIssue('LIN-3')
-    const listCache = {
-      all: entry<LinearCollectionResult<LinearIssue>>({ items: [listIssue] })
-    }
-
-    expect(findTaskPageLinearIssue(issueCache, searchCache, listCache, null)).toBeNull()
-    expect(findTaskPageLinearIssue(issueCache, searchCache, listCache, 'LIN-1')).toBe(issue)
-    expect(findTaskPageLinearIssue({}, searchCache, listCache, 'LIN-2')).toBe(searchIssue)
-    expect(findTaskPageLinearIssue({}, {}, listCache, 'LIN-3')).toBe(listIssue)
   })
 })

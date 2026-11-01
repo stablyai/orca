@@ -2,6 +2,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from './rpc-operation'
 import type { RpcCompatibleReader } from './rpc-operation-contract'
 import { normalizeSourceControlGroupOrder } from '../../../src/shared/source-control-group-order'
 import type { SourceControlGroupOrder } from '../../../src/shared/ui-chrome-types'
+import { nativeChatQueueFollowUps } from '../../../src/shared/native-chat-follow-up-behavior'
 import { hostNewChatPermissionSettings } from '../../../src/shared/agent-chat-permission-host-support'
 import type { NewChatPermissionSettings } from '../../../src/shared/agent-chat-permission-mode'
 
@@ -92,21 +93,21 @@ export const newTabSettingsRead = bindDeferredRpcOperation(
   })
 )
 
-// Older hosts omit these settings; absence inherits the desktop’s enabled default.
-function onByDefaultSetting(settings: unknown, key: string): boolean {
-  return (settings == null ? undefined : settingsField(settings, key)) !== false
-}
-
 function onByDefaultSettingReader<Variant extends string>(
   key: string,
   variant: Variant
 ): RpcCompatibleReader<unknown, Variant, boolean> {
-  return (raw) => ({
-    compatible: true,
-    variant,
-    value: onByDefaultSetting(raw == null ? undefined : settingsMember(raw), key),
-    salvage: { droppedPaths: [], droppedCount: 0 }
-  })
+  return (raw) => {
+    const settings = raw == null ? undefined : settingsMember(raw)
+    const value: unknown = settings == null ? undefined : settingsField(settings, key)
+    return {
+      compatible: true,
+      variant,
+      // Older hosts omit these settings; absence inherits the desktop’s enabled default.
+      value: value !== false,
+      salvage: { droppedPaths: [], droppedCount: 0 }
+    }
+  }
 }
 
 export const terminalCopyTrimsGutterRead = bindDeferredRpcOperation(
@@ -119,36 +120,50 @@ export const terminalCopyTrimsGutterRead = bindDeferredRpcOperation(
   })
 )
 
-export type NativeChatHostSettings = {
-  queueFollowUps: boolean
-  newChatPermission: NewChatPermissionSettings
-}
-
-// One read per chat for every host setting the composer follows.
-const nativeChatHostSettingsReader: RpcCompatibleReader<
-  unknown,
-  'native-chat-host-settings',
-  NativeChatHostSettings
-> = (raw) => {
+// Absent settings default ON; delivery still depends on host capability.
+const followUpBehaviorReader: RpcCompatibleReader<unknown, 'follow-up-behavior', boolean> = (
+  raw
+) => {
   const settings = raw == null ? undefined : settingsMember(raw)
   return {
     compatible: true,
-    variant: 'native-chat-host-settings',
-    value: {
-      queueFollowUps: onByDefaultSetting(settings, 'nativeChatQueueFollowUps'),
-      newChatPermission: hostNewChatPermissionSettings(settings)
-    },
+    variant: 'follow-up-behavior',
+    value: nativeChatQueueFollowUps({
+      nativeChatQueueFollowUps:
+        settings == null ? undefined : settingsField(settings, 'nativeChatQueueFollowUps')
+    }),
     salvage: { droppedPaths: [], droppedCount: 0 }
   }
 }
 
-export const nativeChatHostSettingsRead = bindDeferredRpcOperation(
+export const nativeChatQueueFollowUpsRead = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'settings.native-chat-host-settings-or-skip',
+    name: 'settings.native-chat-follow-up-behavior-or-skip',
     method: 'settings.get',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: nativeChatHostSettingsReader
+    read: followUpBehaviorReader
+  })
+)
+
+const newChatPermissionReader: RpcCompatibleReader<
+  unknown,
+  'new-chat-permission',
+  NewChatPermissionSettings
+> = (raw) => ({
+  compatible: true,
+  variant: 'new-chat-permission',
+  value: hostNewChatPermissionSettings(raw == null ? undefined : settingsMember(raw)),
+  salvage: { droppedPaths: [], droppedCount: 0 }
+})
+
+export const nativeChatNewChatPermissionRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'settings.native-chat-new-chat-permission-or-skip',
+    method: 'settings.get',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: newChatPermissionReader
   })
 )
 

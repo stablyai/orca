@@ -64,6 +64,8 @@ export function dispatchTerminalWebViewNotification(
         handlers.onTerminalInput?.(bytes)
       }
     }
+  } else if (msg.type === 'terminal-interaction') {
+    handlers.onTerminalInteraction?.()
   } else if (msg.type === 'terminal-tap') {
     handlers.onTerminalTap?.()
   } else if (msg.type === 'terminal-file-tap') {

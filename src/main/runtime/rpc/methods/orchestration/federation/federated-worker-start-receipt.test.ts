@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
@@ -52,6 +53,7 @@ describe('federated worker start receipt validation', () => {
         }
       })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the RPC handler returns unknown; this test pins its receipt shape.
     const result = (await startFederatedWorker({
       params: {
         task: task.id,
@@ -62,7 +64,8 @@ describe('federated worker start receipt validation', () => {
       },
       runtime,
       db,
-      runId: run.id,
+      bindRunId: () => run.id,
+      taskDeps: undefined,
       task,
       orchestrationMutation: {
         callerFingerprint: 'caller',
@@ -87,5 +90,77 @@ describe('federated worker start receipt validation', () => {
         expectedEnvironmentPairingRevision: 73
       })
     }
+  })
+
+  it.each([
+    { host: 'an older host', reportsTurnStops: false },
+    { host: 'a host that reports turn stops', reportsTurnStops: true }
+  ])('tells the coordinator how to look when $host is ready', async ({ reportsTurnStops }) => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    databases.push(db)
+    const run = db.createRun({
+      objective: 'federated worker',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'remote work', runId: run.id })
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+      environmentId: 'environment_remote',
+      name: 'remote',
+      peerFingerprint: 'remote_peer',
+      pairingRevision: 1
+    })
+    vi.spyOn(runtime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
+    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockImplementation(
+      async (_environmentId, method, params) =>
+        method === 'status.get'
+          ? {
+              capabilities: [
+                ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+                ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
+                ...(reportsTurnStops
+                  ? [ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY]
+                  : [])
+              ]
+            }
+          : {
+              dispatchId: (params as { dispatchId: string }).dispatchId,
+              state: 'ready',
+              runtimeEpoch: 'remote_epoch',
+              worktreeId: 'worktree_remote',
+              terminalHandle: 'term_remote'
+            }
+    )
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the RPC handler returns unknown; this test pins its receipt shape.
+    const result = (await startFederatedWorker({
+      params: {
+        task: task.id,
+        from: 'term_coord',
+        on: 'remote',
+        worktree: 'id:worktree_remote',
+        terminal: 'term_remote'
+      },
+      runtime,
+      db,
+      bindRunId: () => run.id,
+      taskDeps: undefined,
+      task,
+      orchestrationMutation: {
+        callerFingerprint: 'caller',
+        requestId: 'remote_start',
+        method: 'orchestration.workerStart',
+        payloadHash: 'payload'
+      }
+    })) as { dispatchId: string; state: string; next: string }
+
+    expect(result.state).toBe('ready')
+    expect(result.next).toBe(
+      reportsTurnStops
+        ? "Orca wakes you when workers report; end your turn when you're done."
+        : `Orca wakes you when workers report; end your turn when you're done. remote cannot report a worker that stops without worker_done, so if no report arrives, run \`orca orchestration worker-show --dispatch ${result.dispatchId}\`.`
+    )
   })
 })

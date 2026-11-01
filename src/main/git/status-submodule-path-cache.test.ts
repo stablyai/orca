@@ -38,7 +38,7 @@ describe('submodule path cache', () => {
     gitStreamStdoutMock.mockReset()
     gitExecFileAsyncMock.mockImplementation((_args: string[], options?: { cwd?: string }) =>
       Promise.resolve({
-        stdout: `submodule.lib.path ${String(options?.cwd ?? 'repo').replace(/^.*[/\\\\]/, '')}-lib\n`
+        stdout: `submodule.lib.path\n${String(options?.cwd ?? 'repo').replace(/^.*[/\\\\]/, '')}-lib\0`
       })
     )
   })
@@ -106,7 +106,7 @@ describe('submodule path cache', () => {
     const oldRead = listSubmodulePaths('/repo')
     expect(resolveOldRead).toBeTypeOf('function')
     clearSubmodulePathsCacheForTests()
-    resolveOldRead?.({ stdout: 'submodule.lib.path old-lib\n' })
+    resolveOldRead?.({ stdout: 'submodule.lib.path\nold-lib\0' })
 
     await expect(oldRead).resolves.toEqual(['old-lib'])
     expect(getSubmodulePathsCacheCountForTests()).toBe(0)
@@ -121,7 +121,7 @@ describe('submodule path cache', () => {
         modulePath = 'feature-lib'
         return Promise.resolve({ stdout: '' })
       }
-      return Promise.resolve({ stdout: `submodule.lib.path ${modulePath}\n` })
+      return Promise.resolve({ stdout: `submodule.lib.path\n${modulePath}\0` })
     })
     const runtime = { wslDistro: 'Ubuntu' }
 
@@ -153,7 +153,7 @@ describe('submodule path cache', () => {
         return Promise.resolve({ stdout: '' })
       }
       if (args[0] === 'config' && args.includes('.gitmodules')) {
-        return Promise.resolve({ stdout: `submodule.lib.path ${modulePath}\n` })
+        return Promise.resolve({ stdout: `submodule.lib.path\n${modulePath}\0` })
       }
       return Promise.resolve({ stdout: '' })
     })
@@ -179,7 +179,7 @@ describe('submodule path cache', () => {
         return Promise.resolve({ stdout: '' })
       }
       return Promise.resolve({
-        stdout: modulePath ? `submodule.lib.path ${modulePath}\n` : ''
+        stdout: modulePath ? `submodule.lib.path\n${modulePath}\0` : ''
       })
     })
 
@@ -203,7 +203,7 @@ describe('submodule path cache', () => {
       }
       if (args[0] === 'config' && args.includes('.gitmodules')) {
         return Promise.resolve({
-          stdout: recreated ? 'submodule.lib.path recreated-lib\n' : ''
+          stdout: recreated ? 'submodule.lib.path\nrecreated-lib\0' : ''
         })
       }
       return Promise.resolve({ stdout: '' })

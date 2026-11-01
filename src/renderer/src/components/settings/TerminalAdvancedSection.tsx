@@ -1,3 +1,5 @@
+import { TerminalLimitSetting } from './TerminalLimitSetting'
+import type { SettingsHostScope } from './settings-host-scope'
 import { useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal-word-separator'
@@ -20,8 +22,10 @@ import { matchesSettingsSearch } from './settings-search'
 import { getTerminalWindowsPowershellImplementationSearchEntry } from './terminal-windows-search'
 import { TerminalMacKeyboardSection } from './TerminalMacKeyboardSection'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 type TerminalAdvancedSectionProps = {
+  hostScope?: SettingsHostScope
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   scrollbackMode: 'preset' | 'custom'
@@ -41,6 +45,7 @@ function toWordSeparatorSetting(draft: string): string | undefined {
 }
 
 export function TerminalAdvancedSection({
+  hostScope,
   settings,
   updateSettings,
   scrollbackMode,
@@ -194,6 +199,8 @@ export function TerminalAdvancedSection({
           />
         </SearchableSetting>
 
+        {hostScope ? <TerminalLimitSetting scope={hostScope} /> : null}
+
         <SearchableSetting
           title={translate('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}
           description={translate(
@@ -288,6 +295,7 @@ export function TerminalAdvancedSection({
                     <a
                       href="https://github.com/PowerShell/PowerShell/releases/latest"
                       target="_blank"
+                      onClick={openAppHttpLinkFromAnchor}
                       rel="noopener noreferrer"
                       className="underline hover:text-foreground"
                     >

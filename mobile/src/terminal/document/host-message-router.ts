@@ -87,6 +87,13 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     reflow(scope, msg.cols!, msg.rows!)
   } else if (msg.type === 'write') {
     write(scope, msg.data!)
+  } else if (msg.type === 'scroll-to-bottom') {
+    scope.pendingReplayScrollAnchorRows = 0
+    suspendSurfaceTouchGestures(scope)
+    scope.committedTerm?.scrollToBottom()
+    if (scope.term !== scope.committedTerm) {
+      scope.term?.scrollToBottom()
+    }
   } else if (msg.type === 'clear') {
     scope.pendingReplayScrollAnchorRows = null
     scope.terminalGeneration++

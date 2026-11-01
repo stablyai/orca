@@ -30,12 +30,16 @@ vi.mock('./gh-utils', () => ({
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: vi.fn(),
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
-  githubRepoContext: vi.fn((repoPath: string, connectionId?: string | null) => ({
+  githubRepoContext: vi.fn((repoPath: string, connectionId?: string | null, options = {}) => ({
+    ...options,
     repoPath,
     connectionId: connectionId ?? null
   })),
-  ghRepoExecOptions: vi.fn((context: { repoPath: string; connectionId?: string | null }) =>
-    context.connectionId ? {} : { cwd: context.repoPath }
+  ghRepoExecOptions: vi.fn(
+    (context: { repoPath: string; connectionId?: string | null; wslDistro?: string }) =>
+      context.connectionId
+        ? {}
+        : { cwd: context.repoPath, ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}) }
   ),
   gitExecFileAsync: vi.fn(),
   extractExecError: extractExecErrorMock,

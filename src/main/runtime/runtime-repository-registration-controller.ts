@@ -53,7 +53,8 @@ export class RuntimeRepositoryRegistrationController {
     const gitInfo = kind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
     if (gitInfo && !gitInfo.isRepo) {
       throw new Error(
-        (await describeWslUncAccessDenied(path)) ?? `Not a valid git repository: ${path}`
+        (await describeWslUncAccessDenied(path, store.getSettings())) ??
+          `Not a valid git repository: ${path}`
       )
     }
     // Store Git's resolved toplevel; symlink aliases/subfolders hide the main checkout as external.
@@ -223,10 +224,13 @@ export class RuntimeRepositoryRegistrationController {
   ): Promise<RepoCreateFailure | null> {
     let step: 'init' | 'commit' = 'init'
     try {
-      await gitExecFileAsync(['init'], { cwd: targetPath })
+      // Host Git on purpose: the new repo has no project yet, even inside one.
+      await gitExecFileAsync(['init'], { cwd: targetPath, hostGit: true })
       step = 'commit'
       await gitExecFileAsync(['commit', '--allow-empty', '-m', 'Initial commit'], {
-        cwd: targetPath
+        cwd: targetPath,
+        // Host Git on purpose: the new repo has no project yet, even inside one.
+        hostGit: true
       })
       return null
     } catch (error) {

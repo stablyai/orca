@@ -3,6 +3,7 @@ import { GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-reac
 import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon } from '../../checks-panel/check-presentation'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 function hostedReviewStateClass(review: HostedReviewInfo): string {
   if (review.state === 'merged') {
@@ -82,7 +83,10 @@ export function HostedReviewHeaderLink({
       target="_blank"
       rel="noreferrer"
       className={className}
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation()
+        openAppHttpLinkFromAnchor(e)
+      }}
     >
       {label}
     </a>

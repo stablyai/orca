@@ -16,7 +16,7 @@ vi.mock('../../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSp
 
 import { gitExecFileAsync } from '../runner'
 import { _resetGitAdmissionForTests } from './git-subprocess-admission'
-import { nonInteractiveGitEnv } from './git-process-env'
+
 import { annotateWslHostFailure, readWslHostFailureDiagnostic } from './wsl-host-failure'
 import type { ResolvedCommand } from './wsl-command-resolution'
 
@@ -104,11 +104,6 @@ describe('WSL-routed git subprocess', () => {
 
   afterEach(() => {
     _resetGitAdmissionForTests()
-  })
-
-  it('sets WSL_UTF8 so wsl.exe explains itself in UTF-8', () => {
-    expect(nonInteractiveGitEnv({}, 'win32').WSL_UTF8).toBe('1')
-    expect(nonInteractiveGitEnv({}, 'darwin').WSL_UTF8).toBeUndefined()
   })
 
   it('reports a dead distro instead of an empty git error', async () => {

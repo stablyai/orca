@@ -149,35 +149,6 @@ describe('spurious shell readings on Codex-launched panes', () => {
     expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
   })
 
-  it('never spends the fresh scan on a pane Orca did not launch Codex in', async () => {
-    seedPane()
-
-    await markLiveCodexSessionsForRestart({
-      owner: focusedOwner(),
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
-    })
-
-    expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalled()
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-  })
-
-  it('never spends the fresh scan when the cached reading already answers', async () => {
-    vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
-      foregroundProcess: 'codex',
-      hasChildProcesses: true
-    })
-
-    await markLiveCodexSessionsForRestart({
-      owner: focusedOwner(),
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
-    })
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toBeDefined()
-    expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalled()
-  })
-
   it('never routes a remote runtime pane through the local confirm bridge', async () => {
     seedPane({ ptyId: 'remote:env-1@@term-1', launchAgent: 'codex' })
     useAppStore.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })

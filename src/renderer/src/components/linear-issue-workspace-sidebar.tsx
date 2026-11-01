@@ -8,7 +8,6 @@ import { buildContainedLinkedContextBlock } from '@/lib/linked-work-item-context
 import { translate } from '@/i18n/i18n'
 import { buildLinearIssueBranchName } from '@/components/linear-issue-workspace-text'
 import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
-import type { LinearProjectSummary } from '../../../shared/linear/project-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { copyLinearIssueText } from './linear-issue-clipboard'
 import { LinearIssueProjectSelector } from './linear-issue-project-selector'
@@ -129,8 +128,6 @@ export function LinearIssueWorkspaceSidebar({
   comments,
   editState,
   attachedWorkspaceLabel,
-  onEditStateChange,
-  onProjectChanged,
   onOpenAttachedWorkspace,
   sourceContext
 }: {
@@ -138,8 +135,6 @@ export function LinearIssueWorkspaceSidebar({
   comments: LinearComment[]
   editState: LinearEditState
   attachedWorkspaceLabel: string | null
-  onEditStateChange: (patch: Partial<LinearEditState>) => void
-  onProjectChanged: (project: LinearProjectSummary) => void
   onOpenAttachedWorkspace: () => void
   sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
@@ -148,15 +143,10 @@ export function LinearIssueWorkspaceSidebar({
       <LinearIssueEditSection
         issue={issue}
         editState={editState}
-        onEditStateChange={onEditStateChange}
         layout="properties"
         sourceContext={sourceContext}
       />
-      <LinearIssueProjectSelector
-        issue={issue}
-        onProjectChanged={onProjectChanged}
-        sourceContext={sourceContext}
-      />
+      <LinearIssueProjectSelector issue={issue} sourceContext={sourceContext} />
       <LinearIssueWorkspaceAttachmentCard
         label={attachedWorkspaceLabel}
         onOpen={onOpenAttachedWorkspace}

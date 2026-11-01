@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Button } from '@/components/ui/button'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageGitHubRows({
   model
 }: {
@@ -325,7 +326,7 @@ export function TaskPageGitHubRows({
                           {translate('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+                      <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
                         <ExternalLink className="size-4" />
                         {translate('auto.components.TaskPage.c1d1600362', 'Open in browser')}
                       </DropdownMenuItem>
@@ -386,7 +387,7 @@ export function TaskPageGitHubRows({
                           {translate('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+                      <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
                         <ExternalLink className="size-4" />
                         {translate('auto.components.TaskPage.c1d1600362', 'Open in browser')}
                       </DropdownMenuItem>

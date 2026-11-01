@@ -5,6 +5,7 @@ import { parseMessageTypes } from '../routing'
 import { checkRunMailbox } from './check-run'
 import { checkWorkerMailbox } from './check-worker'
 import { checkDirectMailbox } from './check-direct'
+import { withRunCheckNext } from '../receipt-next'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
 import { hasRunBindingKey } from '../../../../orchestration/orchestration-caller-identity'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
@@ -43,8 +44,9 @@ export const ORCHESTRATION_CHECK_METHODS = [
       })
       const paneKey = caller.paneKey ?? undefined
       const boundRun = hasRunBindingKey(caller) ? db.getCurrentRunForCoordinator(caller) : undefined
+      const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false
       if (params.run || boundRun) {
-        return checkRunMailbox({
+        const result = await checkRunMailbox({
           params,
           runtime,
           db,
@@ -58,6 +60,9 @@ export const ORCHESTRATION_CHECK_METHODS = [
           orchestrationCompatibilityEvidence,
           recordMutationReceipt
         })
+        return consumingCheck && !(params.ack && !params.wait)
+          ? withRunCheckNext(runtime, result)
+          : result
       }
 
       const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey)
@@ -91,10 +96,10 @@ export const ORCHESTRATION_CHECK_METHODS = [
           signal,
           activeDispatch,
           remoteAttachment,
-          recordMutationReceipt
+          recordMutationReceipt,
+          acknowledgeOnly: !params.wait
         })
       }
-      const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false
       // A superseded Attempt must receive a stop signal, not an empty checkpoint; this outranks pane rebind advice.
       const settledDispatch = consumingCheck ? db.getLatestDispatchForTerminal(handle) : undefined
       if (settledDispatch && isSupersededDispatch(settledDispatch)) {

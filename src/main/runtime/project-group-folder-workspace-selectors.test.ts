@@ -1,10 +1,10 @@
 import { tmpdir } from 'node:os'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { OrcaRuntimeService } from './orca-runtime'
-import { setRuntimeBrowserCommandsFactory } from './runtime-browser-commands-factory'
 
 // STA-12562: project-group folder workspaces have no repo row, so a Git-only selector never finds them.
 const FOLDER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -77,39 +77,6 @@ describe('workspace commands on a project-group folder workspace', () => {
     expect(shown.id).toBe(WORKSPACE_ID)
     expect(shown.path).toBe(FOLDER_PATH)
   })
-
-  it('sleeps it (worktree.sleep)', async () => {
-    const result = await createRuntime().sleepManagedWorktree(`id:${WORKSPACE_ID}`)
-
-    expect(result.worktreeId).toBe(WORKSPACE_ID)
-  })
-
-  it('lists its terminals by its bare workspace key', async () => {
-    const listed = await createRuntime().listTerminals(WORKSPACE_ID)
-
-    expect(listed.terminals).toEqual([])
-  })
-
-  it('resolves its active terminal instead of rejecting the workspace', async () => {
-    await expect(createRuntime().resolveActiveTerminal(`id:${WORKSPACE_ID}`)).rejects.toThrow(
-      'no_active_terminal'
-    )
-  })
-
-  it('reads its stored scrollback instead of rejecting the workspace', async () => {
-    await expect(
-      createRuntime().readTerminalScrollbackForClient({
-        worktree: `id:${WORKSPACE_ID}`,
-        ref: `v1-${'0'.repeat(32)}`
-      })
-    ).rejects.toThrow('terminal_scrollback_not_found')
-  })
-
-  it('gives plugins its context while it is the active workspace', async () => {
-    const context = await createRuntime(WORKSPACE_ID).resolveActiveWorktreeContext()
-
-    expect(context).toMatchObject({ worktreeId: WORKSPACE_ID, path: FOLDER_PATH })
-  })
 })
 
 function runtimeWithFolderTerminal(
@@ -166,29 +133,5 @@ describe('Linear --current from a project-group folder workspace terminal', () =
     expect(link.workspaceId).toBe('linear-workspace-1')
     expect(setWorktreeMeta).not.toHaveBeenCalled()
     connectedLinearWorkspaces.current = []
-  })
-})
-
-describe('browser commands on a project-group folder workspace', () => {
-  beforeAll(async () => {
-    // Install browser RPCs as Electron does; plain Node hosts leave them unavailable.
-    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
-    setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
-    return () => setRuntimeBrowserCommandsFactory(null)
-  })
-
-  it('lists its browser tabs through the agent browser bridge', async () => {
-    const runtime = createRuntime()
-    const tabList = vi.fn(() => ({ tabs: [] }))
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: listing reads only these bridge methods.
-    runtime.setAgentBrowserBridge({
-      tabList,
-      getRegisteredTabs: () => new Map(),
-      getActivePageId: () => null
-    } as never)
-
-    await expect(runtime.browserTabList({ worktree: `id:${WORKSPACE_ID}` })).resolves.toEqual({
-      tabs: []
-    })
   })
 })

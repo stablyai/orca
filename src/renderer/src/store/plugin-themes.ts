@@ -11,8 +11,9 @@ import { createPluginContentListStore } from './plugin-content-list-store'
 import { refreshedTerminalPluginPalettes } from '../lib/terminal-plugin-palettes'
 import { applyPluginAppTheme, readCachedPluginAppTheme } from '../lib/document-theme'
 import { useAppStore } from './index'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
 import { pluginAppThemeSlotUpdate } from '../../../shared/plugin-theme-settings'
+import { isPluginContentSwitchedOff } from '../../../shared/plugins/plugin-system-settings'
 
 const appThemes = createPluginContentListStore<PluginThemeRegistration>({
   kind: 'themes',
@@ -44,10 +45,6 @@ export function usePluginTerminalPaletteRefresh(): void {
   }, [settings, pluginTerminalThemes, updateSettings])
 }
 
-function pluginKeyOf(id: string): string {
-  return id.slice('plugin:'.length, id.lastIndexOf('/'))
-}
-
 /** Moves a legacy single plugin theme into its mode's slot and drops a startup paint the
  *  settings no longer back. */
 export function usePluginAppThemeSync(): void {
@@ -55,12 +52,9 @@ export function usePluginAppThemeSync(): void {
   const loaded = usePluginThemeStore((s) => s.loaded)
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const dark = useDocumentDarkTheme()
+  const dark = useSettingsDarkTheme()
   const selected = (dark ? settings?.pluginAppThemeDark : settings?.pluginAppThemeLight) ?? null
-  const disabled =
-    !selected ||
-    settings?.pluginSystemEnabled === false ||
-    (settings?.disabledPlugins ?? []).includes(pluginKeyOf(selected))
+  const disabled = !selected || isPluginContentSwitchedOff(settings ?? undefined, selected)
 
   useEffect(() => {
     const cached = readCachedPluginAppTheme()

@@ -79,12 +79,11 @@ async function readMarketplaceAtCommit(
   })
   const readBlob = (path: string, maxBytes: number): Promise<Buffer | null> =>
     readCatalogBlob(repository, commit, path, maxBytes)
-  const marketplace = await fillMonorepoReleaseImages(
+  return extractCatalogImages(
     parsePluginMarketplaceIndex(filename, bytes.stdout),
-    catalogUrl,
-    readBlob
+    readBlob,
+    (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read)
   )
-  return extractCatalogImages(marketplace, readBlob)
 }
 
 /** One file from the catalog commit, refused before reading when it is larger than allowed. */

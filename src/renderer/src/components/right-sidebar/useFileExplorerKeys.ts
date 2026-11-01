@@ -216,7 +216,8 @@ export function useFileExplorerKeys(opts: {
         const node =
           (focused !== null ? rowProjectionRef.current.getRowAtIndex(focused) : null) ??
           selectedNodeRef.current
-        if (node) {
+        // Rows listed through an outside folder link are browse-only; main refuses their writes.
+        if (node && !node.outsideProject) {
           if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
             e.preventDefault()
             startRenameRef.current(node)
@@ -230,7 +231,9 @@ export function useFileExplorerKeys(opts: {
           )
           if (wantsDelete) {
             e.preventDefault()
-            const selectedNodes = rowProjectionRef.current.getRowsByPaths(selectedPathsRef.current)
+            const selectedNodes = rowProjectionRef.current
+              .getRowsByPaths(selectedPathsRef.current)
+              .filter((selected) => !selected.outsideProject)
             requestDeleteAllRef.current(selectedNodes.length > 1 ? selectedNodes : [node])
             return
           }

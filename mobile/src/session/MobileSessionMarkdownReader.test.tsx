@@ -11,7 +11,7 @@ vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 }
 }))
-vi.mock('lucide-react-native', () => ({ RefreshCw: 'RefreshCw' }))
+vi.mock('lucide-react-native', () => ({ CircleAlert: 'Icon', RefreshCw: 'RefreshCw' }))
 vi.mock('../components/MobileRichMarkdownEditor', () => ({
   MobileRichMarkdownEditor: 'MobileRichMarkdownEditor'
 }))

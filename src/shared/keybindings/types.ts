@@ -40,6 +40,7 @@ export type KeybindingActionId =
   | 'workspace.selectByIndex'
   | 'voice.dictation'
   | 'view.tasks'
+  | 'view.plugins'
   | 'dashboard.toggle'
   | 'sidebar.left.toggle'
   | 'sidebar.right.toggle'
@@ -63,6 +64,7 @@ export type KeybindingActionId =
   | 'tab.newAgent'
   | AgentTabActionId
   | 'tab.newBrowser'
+  | 'tab.newBrowserSplitRight'
   | 'tab.newSimulator'
   | 'tab.newMarkdown'
   | 'tab.openMarkdown'

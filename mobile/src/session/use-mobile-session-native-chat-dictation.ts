@@ -18,10 +18,11 @@ import {
   fetchDictationSetup,
   isDictationSetupRequiredError
 } from '../dictation/mobile-dictation-setup'
-import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
+import { useMobileNativeChatController } from './native-chat/use-mobile-native-chat-controller'
 import { useMobileDictationLeaveHold } from './mobile-dictation-leave-hold'
 import { useMobileDictationHaptics } from './use-mobile-dictation-haptics'
-import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
+import { useMobileDictationSilenceStop } from './use-mobile-dictation-silence-stop'
+import { useMobileNativeChatReadability } from './native-chat/transcript/use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './native-chat/use-mobile-native-chat-input-lease'
 import { useMobileNativeChatSendError } from './native-chat/use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
@@ -221,6 +222,7 @@ export function useMobileSessionNativeChatDictation(
   ])
 
   const stopDictation = useMobileDictationHaptics(dictation)
+  useMobileDictationSilenceStop(dictation, scope.dictationMode, stopDictation, showToast)
 
   const cancelDictation = useCallback(() => {
     dictationRouteContextRef.current = null

@@ -1,6 +1,6 @@
 // Bind host sessions/store evidence to the projection while keeping shared projection code free of host types.
 
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   structuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWork,

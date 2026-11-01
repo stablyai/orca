@@ -5,13 +5,9 @@ import { colors } from '../../src/theme/mobile-theme'
 import { themedStyleSheet } from '../../src/theme/themed-styles'
 import { useMobileColorScheme } from '../../src/theme/use-mobile-color-scheme'
 import { useResponsiveLayout } from '../../src/layout/responsive-layout'
+import { useFoldSplit } from '../../src/layout/use-fold-split'
 import {
-  defaultHostSidebarWidth,
-  SPLIT_DETAIL_MIN_WIDTH
-} from '../../src/layout/responsive-layout-metrics'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useReleasedSideRail } from '../../src/layout/side-safe-area'
-import {
+  HOST_SIDEBAR_DEFAULT_WIDTH,
   HOST_SIDEBAR_MAX_WIDTH,
   HOST_SIDEBAR_MIN_WIDTH,
   loadHostSidebarWidth,
@@ -23,16 +19,17 @@ import { HostStack } from '../../src/navigation/host-stack'
 import { HostSidebarRevealContext } from '../../src/layout/host-sidebar-reveal'
 import { HostAreaServingContext } from '../../src/mobile-web-shell/host-area-serving'
 import { usePageOwnsHostArea } from '../../src/mobile-web-shell/page-owns-host-area'
-import { useReportedPageLocation } from '../../src/mobile-web-shell/page-location-report'
 import { isOverlayPageRoute } from '../../src/new-workspace/overlay-page-route'
 
+// Keep at least this much room for the detail pane when resizing the sidebar.
+const MIN_DETAIL_WIDTH = 320
 const RESIZE_EDGE_WIDTH = 24
 
 // Clamp restored sidebar width to current window so a smaller device retains usable detail space.
 function clampSidebarToWindow(width: number, windowWidth: number): number {
   const hardMax = Math.max(
     HOST_SIDEBAR_MIN_WIDTH,
-    Math.min(HOST_SIDEBAR_MAX_WIDTH, windowWidth - SPLIT_DETAIL_MIN_WIDTH)
+    Math.min(HOST_SIDEBAR_MAX_WIDTH, windowWidth - MIN_DETAIL_WIDTH)
   )
   return Math.min(hardMax, Math.max(HOST_SIDEBAR_MIN_WIDTH, Math.round(width)))
 }
@@ -45,12 +42,9 @@ export default function HostGroupLayout() {
   const pathname = usePathname()
   const overlayRoute = isOverlayPageRoute(pathname)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  // Keep the dragged width and clamp per render so a fold cannot shrink it for good.
-  const [savedSidebarWidth, setSidebarWidth] = useState<number | null>(null)
-  const sidebarWidth = clampSidebarToWindow(
-    savedSidebarWidth ?? defaultHostSidebarWidth(windowWidth),
-    windowWidth
-  )
+  // Keep the chosen width and clamp it per window, so a narrow pose (fold, rotation) never shrinks it for good.
+  const [chosenSidebarWidth, setSidebarWidth] = useState(HOST_SIDEBAR_DEFAULT_WIDTH)
+  const sidebarWidth = clampSidebarToWindow(chosenSidebarWidth, windowWidth)
 
   // Refs keep once-created PanResponder handlers reading current widths.
   const widthRef = useRef(sidebarWidth)
@@ -71,21 +65,27 @@ export default function HostGroupLayout() {
     }
   }, [])
 
-  // Host screens are pages that draw in the Duo's status-bar rail; the native sidebar pads itself.
-  useReleasedSideRail(Platform.OS !== 'web')
-  const railLeft = useSafeAreaInsets().left
   const hideSidebar = useCallback(() => setSidebarOpen(false), [])
   const revealSidebar = useCallback(() => setSidebarOpen(true), [])
   const [hostAreaServing, setHostAreaServing] = useState(false)
   const pageOwnsHostArea = usePageOwnsHostArea()
-  useReportedPageLocation()
   // One owner: the page only with its init fact; natively all but a host route its page is serving.
   const sidebarDrawnHere =
     Platform.OS === 'web' ? pageOwnsHostArea : !(pathname === `/h/${hostId}` && hostAreaServing)
   const showSidebar = isWideLayout && !!hostId && sidebarDrawnHere
   const detailHasContent = !!hostId && pathname !== `/h/${hostId}`
-  // Only the page's session header can reveal it again; a native sidebar beside a page detail could never come back.
-  const canCollapseSidebar = Platform.OS === 'web' && showSidebar && detailHasContent
+  // Book posture: the sidebar takes the half before the fold and the detail the half after it, so
+  // the terminal never runs across the crease.
+  const foldSplit = useFoldSplit()
+  const foldSidebarWidth =
+    showSidebar &&
+    foldSplit?.axis === 'vertical' &&
+    foldSplit.start >= HOST_SIDEBAR_MIN_WIDTH &&
+    foldSplit.size - foldSplit.end >= MIN_DETAIL_WIDTH
+      ? foldSplit.start
+      : null
+  const foldGap = foldSidebarWidth === null || !foldSplit ? 0 : foldSplit.end - foldSplit.start
+  const canCollapseSidebar = showSidebar && detailHasContent && foldSidebarWidth === null
 
   // Base host detail is a placeholder; hiding its sidebar would leave nothing useful.
   useEffect(() => {
@@ -122,22 +122,26 @@ export default function HostGroupLayout() {
   return (
     <HostProtocolGate hostId={hostId} transparentWhilePending={overlayRoute}>
       <View style={[styles.row, overlayRoute && styles.transparent]}>
-        {showSidebar && sidebarOpen ? (
-          <View style={[styles.sidebar, { width: sidebarWidth, paddingLeft: railLeft }]}>
+        {showSidebar && (sidebarOpen || foldSidebarWidth !== null) ? (
+          <View style={[styles.sidebar, { width: foldSidebarWidth ?? sidebarWidth }]}>
             <HostScreen
               embedded
               hostId={hostId}
               onHideSidebar={canCollapseSidebar ? hideSidebar : undefined}
-              actionsInRail={!detailHasContent}
             />
             {/* Edge drag handle captures Android gestures above the list. */}
-            <View style={styles.resizeHandle} {...resizer.panHandlers} />
+            {foldSidebarWidth === null ? (
+              <View style={styles.resizeHandle} {...resizer.panHandlers} />
+            ) : null}
           </View>
         ) : null}
+        {foldGap > 0 ? <View style={{ width: foldGap }} /> : null}
         <View style={styles.detail}>
           <HostAreaServingContext.Provider value={setHostAreaServing}>
             <HostSidebarRevealContext.Provider
-              value={showSidebar && !sidebarOpen ? revealSidebar : null}
+              value={
+                showSidebar && !sidebarOpen && foldSidebarWidth === null ? revealSidebar : null
+              }
             >
               <HostStack animation={showSidebar ? 'none' : 'default'} />
             </HostSidebarRevealContext.Provider>

@@ -23,6 +23,7 @@ function changeLiveInput(
 }
 
 type TerminalLiveInputCommitHarness = {
+  readonly failures: ReturnType<typeof vi.fn>
   readonly captures: readonly string[]
   readonly getHandlers: () => TerminalLiveInputCommitHandlers
   readonly handlers: TerminalLiveInputCommitHandlers
@@ -35,11 +36,13 @@ type TerminalLiveInputCommitHarness = {
 
 type TerminalLiveInputCommitHarnessOptions = {
   readonly sendResult?: boolean
+  readonly sender?: TerminalLiveInputSender
   readonly bracketedPaste?: boolean
 }
 
 function createTerminalLiveInputCommitHarness({
   sendResult = true,
+  sender,
   bracketedPaste = false
 }: TerminalLiveInputCommitHarnessOptions = {}): TerminalLiveInputCommitHarness {
   const activeHandle = 'terminal-a'
@@ -55,11 +58,12 @@ function createTerminalLiveInputCommitHarness({
     current: new Set([activeHandle])
   }
   const sent: string[] = []
+  const failures = vi.fn()
   let currentSendResult = sendResult
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
-    current: async (_handle, bytes) => {
+    current: async (handle, bytes) => {
       sent.push(bytes)
-      return currentSendResult
+      return sender ? sender(handle, bytes) : currentSendResult
     }
   }
   let currentActiveSessionTabType: string | undefined = 'terminal'
@@ -74,6 +78,7 @@ function createTerminalLiveInputCommitHarness({
       activeSessionTabType: currentActiveSessionTabType,
       activeSessionTabTypeRef,
       connected: currentConnected,
+      onSendFailure: failures,
       framesLivePaste: () => bracketedPaste,
       liveInputRef,
       liveInputTerminalHandles,
@@ -92,6 +97,7 @@ function createTerminalLiveInputCommitHarness({
   }
 
   return {
+    failures,
     captures,
     getHandlers: () => {
       if (!handlers) {
@@ -125,6 +131,65 @@ function createTerminalLiveInputCommitHarness({
 }
 
 describe('terminal live input commit hook', () => {
+  it.each(['refused', 'timed-out'] as const)(
+    'ends a %s field session once and drops edits and Return that depended on it',
+    async (failure) => {
+      let fail = (): void => {}
+      const pending = new Promise<boolean>((resolve, reject) => {
+        fail = () => (failure === 'refused' ? resolve(false) : reject(new Error('timeout')))
+      })
+      const sender = vi
+        .fn<TerminalLiveInputSender>()
+        .mockReturnValueOnce(pending)
+        .mockResolvedValue(true)
+      const { handlers, sent, captures, failures, unmount } = createTerminalLiveInputCommitHarness({
+        sender
+      })
+      changeLiveInput(handlers, 'abc', false)
+      changeLiveInput(handlers, 'ab', false)
+      const submit = handlers.handleLiveInputSubmit()
+
+      fail()
+      await expect(submit).resolves.toBe(false)
+      expect(sent).toEqual(['abc'])
+      expect(captures.at(-1)).toBe('')
+      expect(failures).toHaveBeenCalledTimes(1)
+
+      changeLiveInput(handlers, 'ab', false)
+      changeLiveInput(handlers, 'x', false)
+      await vi.waitFor(() => expect(sent).toEqual(['abc', 'x']))
+      changeLiveInput(handlers, '', false)
+      await vi.waitFor(() => expect(sent).toEqual(['abc', 'x', '\x7f']))
+      expect(failures).toHaveBeenCalledTimes(1)
+      unmount()
+    }
+  )
+
+  it('keeps a retired delivery failure from clearing or reporting in a fresh field session', async () => {
+    let rejectRetired = (_error: Error): void => {}
+    const retired = new Promise<boolean>((_resolve, reject) => {
+      rejectRetired = reject
+    })
+    const sender = vi
+      .fn<TerminalLiveInputSender>()
+      .mockReturnValueOnce(retired)
+      .mockResolvedValue(true)
+    const { getHandlers, captures, sent, failures, setConnected, unmount } =
+      createTerminalLiveInputCommitHarness({ sender })
+    changeLiveInput(getHandlers(), 'old', false)
+    setConnected(false)
+    setConnected(true)
+    changeLiveInput(getHandlers(), 'new', false)
+    await vi.waitFor(() => expect(sent).toEqual(['old', 'new']))
+
+    rejectRetired(new Error('retired timeout'))
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(captures.at(-1)).toBe('new')
+    expect(failures).not.toHaveBeenCalled()
+    unmount()
+  })
+
   it('frames a long OS paste, then ends the field session so later edits never erase into it', async () => {
     // Agents such as Codex collapse a framed paste into one token, so per-character DELs would desync.
     const { handlers, sent, captures } = createTerminalLiveInputCommitHarness({
@@ -339,9 +404,10 @@ describe('terminal live input commit hook', () => {
   })
 
   it('Given a failed mirrored Backspace When accessory input commits Then reports failure', async () => {
-    const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
+    const { handlers, sent, setSendResult } = createTerminalLiveInputCommitHarness()
     changeLiveInput(handlers, 'a', false)
     await vi.waitFor(() => expect(sent).toEqual(['a']))
+    setSendResult(false)
 
     const result = await handlers.handleLiveInputAccessoryBytes({
       bytes: '\x7f',

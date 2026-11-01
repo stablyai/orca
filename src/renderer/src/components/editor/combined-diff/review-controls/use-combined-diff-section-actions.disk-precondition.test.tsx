@@ -1,34 +1,46 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import type React from 'react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 import type { DiffSection } from '../../diff-section-types'
 import type { OpenFile } from '@/store/slices/editor'
-import type * as EditorFileOperationOwner from '@/lib/editor-file-operation-owner'
 import { useCombinedDiffSectionActions } from './use-combined-diff-section-actions'
 import { getStoredTextDiffResult } from '../../large-diff-section-content'
+import { useAppStore } from '@/store'
+import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { acquireCombinedDiffSectionOperation } from '../load-sections/combined-diff-section-connection'
+import { fetchCombinedDiffSection } from '../load-sections/fetch-combined-diff-section'
+import {
+  makeFolderWorkspace,
+  makeProjectGroup
+} from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
 
-const mocks = vi.hoisted(() => ({ writeRuntimeFile: vi.fn() }))
+const mocks = vi.hoisted(() => ({ writeRuntimeFile: vi.fn(), diff: vi.fn() }))
+vi.mock('@/runtime/runtime-git-diff-client', () => ({
+  getRuntimeGitDiff: mocks.diff,
+  getRuntimeGitBranchDiff: mocks.diff,
+  getRuntimeGitCommitDiff: mocks.diff
+}))
 
 vi.mock('@/runtime/runtime-file-mutation-client', () => ({
   writeRuntimeFile: mocks.writeRuntimeFile
 }))
-vi.mock('@/lib/editor-file-operation-owner', async (importOriginal) => ({
-  ...(await importOriginal<typeof EditorFileOperationOwner>()),
-  getEditorFileOperationContext: () => ({ target: { kind: 'local' } })
-}))
-vi.mock('@/store', () => {
-  const state = { worktreesByRepo: {}, openFile: vi.fn(), openBranchDiff: vi.fn() }
-  const useAppStore = Object.assign((select: (s: typeof state) => unknown) => select(state), {
-    getState: () => state
+beforeEach(() => {
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({
+    repos: [TEST_REPO],
+    worktreesByRepo: {
+      repo1: [makeWorktree({ id: 'wt-1', repoId: 'repo1', path: '/repo', hostId: 'local' })]
+    },
+    openFiles: [file]
   })
-  return { useAppStore }
 })
 
 afterEach(() => {
   cleanup()
   mocks.writeRuntimeFile.mockReset()
+  mocks.diff.mockReset()
 })
 
 const file: OpenFile = {
@@ -58,6 +70,7 @@ function section(): DiffSection {
       originalIsBinary: false,
       modifiedIsBinary: false
     },
+    operation: acquireCombinedDiffSectionOperation(file, 'a.ts'),
     largeDiffRenderLimit: null
   }
 }
@@ -273,3 +286,107 @@ it('applies a queued save to the section clicked even after rows are rebuilt', a
   expect(paths).toEqual(['/repo/b.ts', '/repo/b.ts'])
   expect(mocks.writeRuntimeFile.mock.calls[1]?.[4]).toBeUndefined()
 })
+
+it.each(['worktree', 'branch', 'commit'] as const)(
+  'retains a mixed-folder canonical SSH read through %s diff Save and refuses a retarget',
+  async (mode) => {
+    const template = section()
+    const combined = {
+      ...file,
+      worktreeId: 'folder:folder-workspace-1',
+      filePath: '/repo/platform'
+    }
+    const local = {
+      ...TEST_REPO,
+      id: 'local',
+      projectGroupId: 'group-1',
+      path: '/repo/platform/web'
+    }
+    const ssh = {
+      ...TEST_REPO,
+      id: 'ssh',
+      projectGroupId: 'group-1',
+      path: '/repo/platform/api',
+      executionHostId: 'ssh:box' as const
+    }
+    useAppStore.setState({
+      openFiles: [combined],
+      worktreesByRepo: {},
+      folderWorkspaces: [makeFolderWorkspace({ folderPath: combined.filePath })],
+      projectGroups: [makeProjectGroup()],
+      repos: [local, ssh],
+      sshConnectionStates: new Map(
+        ['box', 'other'].map((targetId) => [
+          targetId,
+          {
+            targetId,
+            status: 'connected' as const,
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 7
+          }
+        ])
+      )
+    })
+    mocks.diff.mockResolvedValue(template.diffResult)
+    const loaded = await fetchCombinedDiffSection({
+      file: combined,
+      entry: { path: 'api/a.ts', status: 'modified', area: 'unstaged' },
+      branchCompare: {
+        baseRef: 'main',
+        compareRef: 'branch',
+        baseOid: 'a',
+        headOid: 'b',
+        mergeBase: 'c',
+        compareVersion: '1'
+      },
+      commitCompare: {
+        baseRef: 'main',
+        compareRef: 'commit',
+        commitOid: 'a',
+        parentOid: 'b',
+        compareVersion: '1'
+      },
+      isAllMode: false,
+      isBranchMode: mode === 'branch',
+      isCommitMode: mode === 'commit'
+    })
+    expect(mocks.diff.mock.calls[0][0]).toMatchObject({
+      target: { kind: 'local' },
+      connectionId: 'box',
+      expectedExecutionHostId: 'ssh:box'
+    })
+    const sections = [
+      {
+        ...template,
+        key: 'api/a.ts',
+        path: 'api/a.ts',
+        diffResult: loaded.result,
+        operation: loaded.operation
+      }
+    ]
+    const sectionsRef = { current: sections }
+    const { result } = renderHook(() =>
+      useCombinedDiffSectionActions({
+        activeGroupId: undefined,
+        branchCompare: null,
+        commitCompare: null,
+        canOpenWorkspaceFileBrowserForPath: () => false,
+        file: combined,
+        isAllMode: false,
+        isBranchMode: false,
+        isCommitMode: false,
+        sections,
+        sectionsRef,
+        setSectionHeights: vi.fn(),
+        setSections: vi.fn()
+      })
+    )
+    mocks.writeRuntimeFile.mockResolvedValue({ ok: true })
+    await act(() => result.current.handleSectionSaveRef.current(0))
+    expect(mocks.writeRuntimeFile.mock.calls[0][0]).toMatchObject(mocks.diff.mock.calls[0][0])
+    useAppStore.setState({ repos: [local, { ...ssh, executionHostId: 'ssh:other' }] })
+    await act(() => result.current.handleSectionSaveRef.current(0))
+    expect(mocks.writeRuntimeFile).toHaveBeenCalledOnce()
+  }
+)

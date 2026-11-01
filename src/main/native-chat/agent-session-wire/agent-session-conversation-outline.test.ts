@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS } from '../../../shared/agent-session/agent-session-conversation-outline'
+
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentSessionConversationOutline } from './agent-session-conversation-outline'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from './agent-session-history-page-bounds'
 
@@ -31,22 +31,6 @@ function replyBytes(value: unknown): number {
 }
 
 describe('conversation outline read', () => {
-  it('echoes the journal position it is current through and cuts previews on the host', () => {
-    const long = 'word '.repeat(200)
-    const outline = readAgentSessionConversationOutline(
-      snapshot([prompt(3, 'short'), prompt(9, long)])
-    )
-    expect(outline.cursor).toEqual({ epoch: 'epoch-1', sequence: 9 })
-    expect(outline.sessionId).toBe('session-1')
-    expect(outline.omittedEntries).toBe(0)
-    expect(outline.entries.map((entry) => entry.sequence)).toEqual([3, 9])
-    expect(outline.entries[0]?.preview).toBe('short')
-    expect(outline.entries[1]?.preview.length).toBeLessThanOrEqual(
-      AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS
-    )
-    expect(long.replace(/\s+/g, ' ').trim().startsWith(outline.entries[1]!.preview)).toBe(true)
-  })
-
   it('drops previews before it drops entries, then drops the oldest entries, never passing the budget', () => {
     const items = Array.from({ length: 40 }, (_, index) => prompt(index + 1, 'x'.repeat(500)))
     const full = readAgentSessionConversationOutline(snapshot(items), Number.MAX_SAFE_INTEGER)

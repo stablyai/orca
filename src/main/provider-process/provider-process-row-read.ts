@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
+import { runPsInProcess } from '../../shared/libproc-process-table'
 import { parseProcessTable, type ProcessTableRow } from '../pty-process-table-parser'
 
 const PROCESS_ROW_TIMEOUT_MS = 2_000
@@ -43,14 +44,22 @@ async function readLinuxProcStatRow(pid: number): Promise<ProcessRowRead> {
 
 async function readPsProcessRow(pid: number): Promise<ProcessRowRead> {
   try {
-    const result = await runProcess({
-      program: 'ps',
-      args: ['-o', 'pid=,ppid=,pgid=,lstart=', '-p', String(pid)],
-      // Stable locale makes repeated start markers comparable.
-      env: { ...process.env, LANG: 'C', LC_ALL: 'C' },
-      timeoutMs: PROCESS_ROW_TIMEOUT_MS,
-      maxOutputBytes: 4096
-    })
+    const args = ['-o', 'pid=,ppid=,pgid=,lstart=', '-p', String(pid)]
+    // Stable locale makes repeated start markers comparable.
+    const env = { ...process.env, LANG: 'C', LC_ALL: 'C' }
+    const result =
+      (await runPsInProcess(args, {
+        env,
+        timeoutMs: PROCESS_ROW_TIMEOUT_MS,
+        maxOutputBytes: 4096
+      })) ??
+      (await runProcess({
+        program: 'ps',
+        args,
+        env,
+        timeoutMs: PROCESS_ROW_TIMEOUT_MS,
+        maxOutputBytes: 4096
+      }))
     const row = parseProcessTable(result.stdout).find((entry) => entry.pid === pid)
     if (row) {
       return { ...row, startResolution: 'second' }

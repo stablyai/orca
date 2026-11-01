@@ -88,25 +88,20 @@ describe('worker terminal custody is recorded at terminal creation', () => {
     })
   })
 
-  it('lets a keystroke during the boot wait take the pane, and release then retains it', async () => {
+  it('lets Keep open during the boot wait keep the pane, and release then retains it', async () => {
     h.setup()
     const held = await startHeldAtBootWait()
 
     await expect(
-      h.call('orchestration.workerTerminalUserInput', { paneKey: h.workerPaneKey })
-    ).resolves.toEqual({ changed: 1 })
+      h.call('orchestration.workerKeepOpen', { paneKey: h.workerPaneKey, keep: true })
+    ).resolves.toEqual({ autoClose: { kept: true } })
 
     held.finish()
     await expect(held.start).resolves.toMatchObject({ state: 'ready' })
-    expect(h.db.getWorkerTerminalResourceByOwner(held.dispatchId)).toMatchObject({
-      ownership_state: 'user_owned',
-      retained_reason: 'user_takeover'
-    })
-
     h.settle(held.taskId, held.dispatchId, 'succeeded')
     await expect(
       h.call('orchestration.workerRelease', { dispatch: held.dispatchId })
-    ).resolves.toMatchObject({ state: 'retained', reason: 'user_takeover', processAction: 'none' })
+    ).resolves.toMatchObject({ state: 'retained', reason: 'user_kept', processAction: 'none' })
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
   })
 

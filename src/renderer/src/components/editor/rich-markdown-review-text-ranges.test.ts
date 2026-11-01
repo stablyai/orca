@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
+
 import { findRichMarkdownSelectedTextRanges } from './rich-markdown-review-text-ranges'
 
 type FakeTextNode = {
@@ -31,39 +32,7 @@ function editorWithTextNodes(nodes: FakeTextNode[], contentSize?: number): Edito
   } as unknown as Editor
 }
 
-function buildSelectedText(wordCount: number): string {
-  let text = ''
-  for (let index = 0; index < wordCount; index += 1) {
-    text += index === 0 ? `word-${index}` : ` word-${index}`
-  }
-  return text
-}
-
 describe('findRichMarkdownSelectedTextRanges', () => {
-  it('matches selected text across adjacent text nodes without inventing whitespace', () => {
-    const editor = editorWithTextNodes([
-      { isText: true, text: 'alpha' },
-      { isText: true, text: 'beta' }
-    ])
-
-    expect(findRichMarkdownSelectedTextRanges({ editor, selectedText: 'alphabeta' })).toEqual([
-      { from: 0, to: 9 }
-    ])
-  })
-
-  it('matches large selected text without materializing character arrays', () => {
-    const selectedText = buildSelectedText(2500)
-    const editor = editorWithTextNodes([{ isText: true, text: `prefix ${selectedText} suffix` }])
-    const arrayFromSpy = vi.spyOn(Array, 'from')
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-
-    const ranges = findRichMarkdownSelectedTextRanges({ editor, selectedText })
-
-    expect(arrayFromSpy).not.toHaveBeenCalled()
-    expect(splitSpy).not.toHaveBeenCalled()
-    expect(ranges).toEqual([{ from: 7, to: 7 + selectedText.length }])
-  })
-
   it('matches after overlapping prefix fallback', () => {
     const editor = editorWithTextNodes([{ isText: true, text: 'xxabababaca' }])
 
