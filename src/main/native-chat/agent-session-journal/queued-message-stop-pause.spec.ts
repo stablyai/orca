@@ -30,7 +30,7 @@ export function registerQueuedMessageStopPauseTests(
           await journal.appendQueueResume(0)
         }
         expect(fixture.reason(journal)).toBe(resumed ? null : 'failed')
-        await journal.replaceEpochItems('handle_forked', 0, [{ identity, body }])
+        await journal.replaceEpochItems('handle_forked', 0, [{ identity, body, ownerFence: 0 }])
         expect(fixture.reason(journal)).toBe(resumed ? null : 'failed')
         expect(journal.queuedMessages.nextInputCard()?.messageId ?? null).toBe(
           resumed ? 'carried' : null
