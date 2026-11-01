@@ -13,9 +13,10 @@ import {
   getOpenFileExecutionHostId,
   hasOpenFileExecutionHostEvidence
 } from '@/lib/unified-tab-host-ownership'
+import { findIndexedReviewRepository } from '@/lib/repository-owner-index'
 import {
-  findIndexedReviewRepository,
-  findIndexedDetectedWorktrees
+  findIndexedDetectedWorktrees,
+  findIndexedWorktreeOwners
 } from '@/lib/worktree-runtime-owner-index'
 import { layoutFrameWorkspace } from '@/runtime/layout-frame-workspaces'
 import {
@@ -199,9 +200,7 @@ export function findCheckRunDetailsOwner(
     ? getTabRoute(file)
     : getFramedTabRoute(file)
   const rows = [
-    ...Object.values(selectWorktreesByRepo(state) ?? {}).flatMap((worktrees) =>
-      worktrees.filter((worktree) => worktree.id === file.worktreeId)
-    ),
+    ...findIndexedWorktreeOwners(selectWorktreesByRepo(state), file.worktreeId),
     ...findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), file.worktreeId)
   ]
   const matches = new Map<string, { worktree: WorktreeOperationOwnerRecord; repo: Repo | null }>()

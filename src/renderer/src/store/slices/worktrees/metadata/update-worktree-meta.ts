@@ -36,7 +36,7 @@ import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
 
-import { hasUniqueIndexedRepositoryHost } from '@/lib/worktree-runtime-owner-index'
+import { hasUniqueIndexedRepositoryHost } from '@/lib/repository-owner-index'
 import { resolveReviewRepository } from '@/lib/review-owner'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 export function createUpdateWorktreeMeta(

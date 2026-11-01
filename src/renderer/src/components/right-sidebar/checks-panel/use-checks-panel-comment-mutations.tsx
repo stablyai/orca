@@ -19,6 +19,7 @@ import { isMutablePRConversationComment } from '../../../../../shared/github/pr-
 import type { GitHubReactionContent, PRComment } from '../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { errorMessage } from '../../../../../shared/error-message'
 
 type ChecksPanelCommentMutationsInput = Pick<
   ChecksPanelControllerState,
@@ -65,9 +66,17 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         pr.prRepo,
         pr.headSha
       )
+      let repoOwnerExecutionHostId: string
+      try {
+        repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+      } catch (error) {
+        const failure = { ok: false as const, error: errorMessage(error) }
+        toast.error(codeHostErrorText(failure))
+        return failure
+      }
       const result = await addPRConversationComment(repo.path, prNumber, body, {
         repoId: repo.id,
-        repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+        repoOwnerExecutionHostId,
         prRepo: pr.prRepo
       })
       if (!isCurrentAsyncResult(requestKey)) {
@@ -232,10 +241,20 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
           parent: comment,
           existingComments: commentsRef.current
         }) ?? comment.threadId
+      let repoOwnerExecutionHostId: string
+      try {
+        repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+      } catch (error) {
+        const failure = { ok: false as const, error: errorMessage(error) }
+        if (notifyOnFailure) {
+          toast.error(codeHostErrorText(failure))
+        }
+        return failure
+      }
       const result = canPostPRReviewThreadReply(comment)
         ? await addPRReviewCommentReply(repo.path, prNumber, comment.id, body, {
             repoId: repo.id,
-            repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+            repoOwnerExecutionHostId,
             prRepo: pr.prRepo,
             threadId: parentThreadId,
             path: comment.path,
@@ -247,7 +266,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
             buildPRCommentConversationReplyBody(comment.author, body),
             {
               repoId: repo.id,
-              repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+              repoOwnerExecutionHostId,
               prRepo: pr.prRepo
             }
           )

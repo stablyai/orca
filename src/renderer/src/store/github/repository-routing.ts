@@ -7,7 +7,7 @@ import type {
 import type { Repo } from '../../../../shared/repo-types'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { hasUniqueIndexedRepositoryHost } from '@/lib/worktree-runtime-owner-index'
+import { hasUniqueIndexedRepositoryHost } from '@/lib/repository-owner-index'
 import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import {
   LOCAL_EXECUTION_HOST_ID,

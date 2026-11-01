@@ -12,6 +12,7 @@ import {
 import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
 import {
   buildPRRefreshCandidate,
+  findWorktreeReviewOwner,
   getWorktreeLookupIndex,
   findWorktreeById
 } from './worktree-refresh'
@@ -37,6 +38,7 @@ export function* getVisibleHostedReviewWorkspaces(
       ? [state.workspaceHostScope]
       : null)
   for (const id of options?.worktreeIds ?? state.visibleReviewWorktreeIds) {
+    const selectedOwner = id === state.activeWorktreeId ? findWorktreeReviewOwner(state, id) : null
     const owners = new Set(getWorktreeLookupIndex(state).byId.get(id)?.owners)
     for (const detected of findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), id)) {
       const workspace = findKnownWorktreeById(state, id, detected.hostId ?? 'local')
@@ -48,7 +50,12 @@ export function* getVisibleHostedReviewWorkspaces(
       if (worktree.isArchived || worktree.isBare) {
         continue
       }
-      const candidate = buildPRRefreshCandidate(state, worktree)
+      const candidate = buildPRRefreshCandidate(
+        state,
+        worktree,
+        undefined,
+        selectedOwner?.worktree === worktree ? selectedOwner.repo : undefined
+      )
       if (
         !candidate ||
         candidate.repoKind !== 'git' ||

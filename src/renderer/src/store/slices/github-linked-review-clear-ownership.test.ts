@@ -123,6 +123,7 @@ describe('linked review clearing retains workspace and credential identities', (
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it.each([100, 1000])(
@@ -272,6 +273,43 @@ describe('linked review clearing retains workspace and credential identities', (
           })
         })
       )
+    }
+  )
+
+  it.each(['removed', 'ambiguous'] as const)(
+    'handles a branch refetch whose owner becomes %s during unlinking',
+    async (ownerState) => {
+      const { store, update, options } = setup(true)
+      const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const mismatch = makePR({
+        number: 12,
+        state: 'open',
+        headSha: 'old-head',
+        headRefName: 'feature/old'
+      })
+      runtimeEnvironmentCall.mockImplementation(({ method }) => ({
+        id: method,
+        ok: true,
+        result: mismatch,
+        _meta: { runtimeId: 'server' }
+      }))
+      update.mockImplementationOnce(async () => {
+        store.setState({
+          repos: ownerState === 'removed' ? [] : [repository, { ...repository }]
+        })
+        return { ok: true }
+      })
+
+      await expect(
+        store.getState().fetchPRForBranch(repository.path, branch, options)
+      ).resolves.toEqual(mismatch)
+
+      expect(update).toHaveBeenCalledOnce()
+      expect(warning).toHaveBeenCalledWith(
+        'Branch-scoped PR refetch skipped:',
+        new Error('The repository is no longer available on its owning host. Reconnect and retry.')
+      )
+      expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
     }
   )
 

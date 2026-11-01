@@ -1,5 +1,5 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { resolveIndexedSshRepositoryHost } from './worktree-runtime-owner-index'
+import { resolveIndexedSshRepositoryHost } from './repository-owner-index'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type {
   WorktreeOperationOwnerRecord,

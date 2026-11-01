@@ -118,8 +118,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       isCurrentAsyncResult,
       setCommentsLoading,
       setComments,
-      setCommentsError,
-      activeWorktree
+      setCommentsError
     ]
   )
 

@@ -126,6 +126,60 @@ afterEach(() => {
 })
 
 describe('comment action ownership refusal', () => {
+  it('returns a failure for a new comment without posting or changing comments', async () => {
+    const input = makeInput({
+      activeWorktree: makeWorktree({ id: 'wt-1', repoId: 'repo-1', hostId: 'ssh:other-host' })
+    })
+    const { result, updates } = renderActions(input)
+
+    await act(async () => {
+      await expect(result.current.handleAddPRComment('New comment')).resolves.toEqual({
+        ok: false,
+        error: 'The repository does not match this workspace’s owning host.'
+      })
+    })
+
+    expect(result.current.comments).toEqual(comments)
+    expect(updates).toHaveLength(0)
+    expect(input.addPRConversationComment).not.toHaveBeenCalled()
+    expect(toastError).toHaveBeenCalledWith(
+      'The repository does not match this workspace’s owning host.'
+    )
+  })
+
+  it.each(['review', 'conversation'] as const)(
+    'returns a failure for a %s reply, honoring notification options',
+    async (kind) => {
+      const input = makeInput({
+        activeWorktree: makeWorktree({ id: 'wt-1', repoId: 'repo-1', hostId: 'ssh:other-host' })
+      })
+      const { result, updates } = renderActions(input)
+      const parent = kind === 'review' ? comments[0] : { ...comments[0], threadId: undefined }
+      const failure = {
+        ok: false,
+        error: 'The repository does not match this workspace’s owning host.'
+      }
+
+      await act(async () => {
+        await expect(result.current.handleReplyToComment(parent, 'Reply')).resolves.toEqual(failure)
+      })
+      expect(toastError).toHaveBeenCalledWith(failure.error)
+
+      toastError.mockClear()
+      await act(async () => {
+        await expect(
+          result.current.handleReplyToComment(parent, 'Reply', { notifyOnFailure: false })
+        ).resolves.toEqual(failure)
+      })
+
+      expect(toastError).not.toHaveBeenCalled()
+      expect(input.addPRReviewCommentReply).not.toHaveBeenCalled()
+      expect(input.addPRConversationComment).not.toHaveBeenCalled()
+      expect(result.current.comments).toEqual(comments)
+      expect(updates).toHaveLength(0)
+    }
+  )
+
   it('refuses a reaction before changing comments and reports failure', async () => {
     const input = makeInput({
       activeWorktree: makeWorktree({ id: 'wt-1', repoId: 'repo-1', hostId: 'ssh:other-host' })

@@ -89,6 +89,30 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('visible unselected workspace twins', () => {
+  it('refreshes a server-selected legacy SSH row when its direct copy also exists', async () => {
+    const store = twins('runtime:server')
+    const server = { ...repo, executionHostId: 'runtime:server' as const, connectionId: 'builder' }
+    const direct = { ...server, executionHostId: 'ssh:builder' as const }
+    store.setState({
+      repos: [direct, server],
+      worktreesByRepo: { [repo.id]: [{ ...card, hostId: 'ssh:builder', linkedPR: 22 }] },
+      activeRepoId: repo.id,
+      activeWorktreeId: card.id,
+      activeWorkspaceExecutionHostId: 'runtime:server',
+      visibleWorkspaceHostIds: ['runtime:server']
+    })
+    const ids = visibleReviewWorktreeIdsForState(store.getState())
+    expect(ids).toEqual([card.id])
+    await store.getState().reportVisibleGitHubPRRefreshCandidates(ids, 123)
+    expect(reportVisible.mock.calls[0][0].candidates).toEqual([])
+    const targets = getVisibleHostedReviewRefreshTargets(store.getState(), store.getState)
+    expect(targets.map((target) => target.key)).toEqual([`runtime:server::repo-1::${card.branch}`])
+    runtimeEnvironmentCall.mockResolvedValue({ id: 'pr', ok: true, result: makePR({ number: 22 }) })
+    expect(await targets[0].refresh()).toBe(true)
+    expect(store.getState().prCache[targets[0].key]?.data?.number).toBe(22)
+    expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['ssh:builder', 'all'],
     ['ssh:builder', 'local'],

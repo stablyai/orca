@@ -224,14 +224,16 @@ export function startPullRequestLookup(args: {
             true
           )
           // Re-resolve by branch now so Checks recover this refresh instead of serving the stale linked PR.
-          void get().fetchPRForBranch(repoPath, branch, {
-            force: true,
-            repoId,
-            repoOwnerExecutionHostId: executionHostId,
-            worktreeId: options.worktreeId,
-            reason: options.reason,
-            ...(options.userRefresh === true ? { userRefresh: true } : {})
-          })
+          void get()
+            .fetchPRForBranch(repoPath, branch, {
+              force: true,
+              repoId,
+              repoOwnerExecutionHostId: executionHostId,
+              worktreeId: options.worktreeId,
+              reason: options.reason,
+              ...(options.userRefresh === true ? { userRefresh: true } : {})
+            })
+            .catch((err) => console.warn('Branch-scoped PR refetch skipped:', err))
         }
       }
       if (

@@ -13,9 +13,9 @@ import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { resolveReviewRepository, reviewRepositoryMatchesWorkspace } from '@/lib/review-owner'
 import {
   findIndexedReviewRepository,
-  hasUniqueIndexedRepositoryHost,
-  worktreeOwnerHostIds
-} from '@/lib/worktree-runtime-owner-index'
+  hasUniqueIndexedRepositoryHost
+} from '@/lib/repository-owner-index'
+import { worktreeOwnerHostIds } from '@/lib/worktree-runtime-owner-index'
 import { prCacheKey } from './cache-identity'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from './pr-result-routing'
