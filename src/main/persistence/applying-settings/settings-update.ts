@@ -79,6 +79,9 @@ export function updateSettings(
   if ('showMenuBarIcon' in updates) {
     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
   }
+  if ('holdQuitWhileAgentsWork' in updates) {
+    sanitizedUpdates.holdQuitWhileAgentsWork = updates.holdQuitWhileAgentsWork === true
+  }
   if ('artifactSharingEnabled' in updates) {
     sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
   }

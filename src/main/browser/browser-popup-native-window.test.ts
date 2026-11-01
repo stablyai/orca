@@ -1,12 +1,28 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isNativeBrowserPopupWindow } from './native-browser-popup-windows'
+import {
+  getNativePopupQuitSurface,
+  isNativeBrowserPopupWindow
+} from './native-browser-popup-windows'
 
-const { events } = await vi.hoisted(async () => {
+const { events, FakeNoticeView } = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events')
-  return { events: new EventEmitter() }
+  class FakeNoticeView {
+    static instances: FakeNoticeView[] = []
+    webContents = Object.assign(new EventEmitter(), {
+      isDestroyed: () => false,
+      close: vi.fn(),
+      executeJavaScript: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
+    })
+    setBounds = vi.fn()
+    constructor(readonly options: unknown) {
+      FakeNoticeView.instances.push(this)
+    }
+  }
+  return { events: new EventEmitter(), FakeNoticeView }
 })
-vi.mock('electron', () => ({ app: events }))
+vi.mock('electron', () => ({ app: events, WebContentsView: FakeNoticeView }))
 
 import {
   allowNativeBrowserPopup,
@@ -16,6 +32,7 @@ import {
 
 afterEach(() => {
   events.removeAllListeners()
+  FakeNoticeView.instances = []
   vi.unstubAllEnvs()
 })
 
@@ -25,6 +42,7 @@ function nativeWindow() {
     mainFrame: { url: '', origin: '' },
     isDestroyed: vi.fn(() => false),
     close: vi.fn(),
+    executeJavaScript: vi.fn(),
     setWindowOpenHandler: vi.fn()
   })
   const window = Object.assign(new EventEmitter(), {
@@ -32,7 +50,9 @@ function nativeWindow() {
     isDestroyed: vi.fn(() => false),
     setTitle: vi.fn(),
     showInactive: vi.fn(),
-    destroy: vi.fn()
+    destroy: vi.fn(),
+    contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
+    getContentBounds: () => ({ x: 0, y: 0, width: 600, height: 400 })
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture implements every BrowserWindow member exercised by popup preparation.
   const browserWindow = window as unknown as Electron.BrowserWindow
@@ -40,6 +60,40 @@ function nativeWindow() {
 }
 
 describe('native popup admission', () => {
+  it('uses a separate trusted notice view without injecting into OAuth content or changing its origin title', () => {
+    const { browserWindow, window, contents } = nativeWindow()
+    contents.mainFrame.url = 'https://accounts.example/oauth?secret=synthetic'
+    prepareNativeBrowserPopup(browserWindow)
+    const surface = getNativePopupQuitSurface(contents)
+    expect(FakeNoticeView.instances).toHaveLength(0)
+    surface?.notice({ phase: 'starting' })
+    const view = FakeNoticeView.instances[0]
+    expect(view).toBeDefined()
+    expect(view?.options).toEqual({
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
+    })
+    view?.webContents.emit('did-finish-load')
+    expect(view?.webContents.executeJavaScript).toHaveBeenCalledWith(
+      expect.stringContaining('Agents are still working. Hold ⌘Q to quit.')
+    )
+    surface?.notice({ phase: 'holding' })
+    expect(view?.webContents.executeJavaScript).toHaveBeenLastCalledWith(
+      expect.stringContaining('"phase":"holding"')
+    )
+    surface?.notice({ phase: 'released' })
+    expect(FakeNoticeView.instances).toHaveLength(1)
+    expect(contents.executeJavaScript).not.toHaveBeenCalled()
+    expect(contents.close).not.toHaveBeenCalled()
+    expect(window.setTitle).toHaveBeenLastCalledWith('https://accounts.example')
+    surface?.notice({ phase: 'dismissed' })
+    expect(view?.webContents.close).toHaveBeenCalledOnce()
+    expect(window.contentView.removeChildView).toHaveBeenCalledWith(view)
+    expect(getNativePopupQuitSurface(contents)).toBe(surface)
+    window.emit('closed')
+    expect(getNativePopupQuitSurface(contents)).toBeUndefined()
+    surface?.notice({ phase: 'holding' })
+    expect(FakeNoticeView.instances).toHaveLength(1)
+  })
   it('uses the native path only for observed unnamed, featureless OpenURL dispositions', () => {
     for (const disposition of ['new-window', 'background-tab']) {
       expect(isNativeBrowserPopupRequest({ disposition, features: '', frameName: '' })).toBe(true)

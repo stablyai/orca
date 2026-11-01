@@ -6,7 +6,7 @@ import path from 'node:path'
 const repoRoot = path.resolve(import.meta.dirname, '../..')
 
 /** Builds a single-file Swift CLI helper from native/<nativeDir>/main.swift (universal unless --single-arch). */
-export function buildSwiftCliHelper({ nativeDir, executable, argv }) {
+export function buildSwiftCliHelper({ nativeDir, executable, argv, additionalSources = [] }) {
   if (process.platform !== 'darwin') {
     return
   }
@@ -26,6 +26,7 @@ export function buildSwiftCliHelper({ nativeDir, executable, argv }) {
         [
           '-O',
           sourcePath,
+          ...additionalSources.map((source) => path.join(repoRoot, 'native', nativeDir, source)),
           '-target',
           triple.replace('-apple-macosx', '-apple-macosx11.0'),
           '-o',
@@ -63,6 +64,7 @@ export function buildDevSwiftCliHelpers(macOsDir) {
       buildSwiftCliHelper({
         nativeDir,
         executable,
+        additionalSources: nativeDir === 'keyboard-layout-macos' ? ['QuitChordWatch.swift'] : [],
         argv: ['--single-arch', '--output', path.join(macOsDir, executable)]
       })
     } catch (error) {
