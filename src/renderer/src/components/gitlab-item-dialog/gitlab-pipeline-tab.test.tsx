@@ -32,6 +32,7 @@ const failedDetails = {
   pipeline: {
     id: 99,
     status: 'failed',
+    checkStatus: 'failure' as const,
     webUrl: 'https://gitlab.com/acme/app/-/pipelines/99'
   }
 }
@@ -94,19 +95,14 @@ it('keeps child jobs visible below the pipeline summary', () => {
 })
 
 it.each([
-  ['manual', 'UNKNOWN', 'Pending'],
-  ['manual', 'MERGEABLE', 'Neutral'],
-  ['canceled', 'UNKNOWN', 'Neutral']
+  ['manual', 'pending', 'Pending'],
+  ['canceled', 'neutral', 'Neutral']
 ] as const)(
-  'reads a %s parent pipeline on a %s MR with pipeline policy',
-  (status, mergeable, label) => {
+  'reads a %s parent pipeline by its %s pipeline verdict',
+  (status, checkStatus, label) => {
     render(
       <PipelineTab
-        data={{
-          ...failedDetails,
-          item: { ...item, mergeable },
-          pipeline: { ...failedDetails.pipeline, status }
-        }}
+        data={{ ...failedDetails, pipeline: { ...failedDetails.pipeline, status, checkStatus } }}
       />
     )
 

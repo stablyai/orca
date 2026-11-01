@@ -4,7 +4,12 @@ import type {
   GitLabWorkItemDetails
 } from '../../shared/gitlab-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
-import { mapIssueToWorkItem, mapMRToWorkItem } from './mappers'
+import {
+  derivePipelineStatus,
+  mapIssueToWorkItem,
+  mapMRToWorkItem,
+  settleManualPipelineStatus
+} from './mappers'
 import { mapGitLabUser, type GitLabRawUser } from './gitlab-assignable-user-mapping'
 import { encodedProject } from './project-path-encoding'
 import { fetchDiscussions, flattenDiscussions } from './mr-discussion-notes'
@@ -181,6 +186,8 @@ async function fetchMRDetails(
           pipeline: {
             id: pipelineId,
             status: rawPipeline?.status ?? '',
+            // The MR aggregate's own rule on this same reply, so both read one verdict.
+            checkStatus: settleManualPipelineStatus(mrRaw, derivePipelineStatus(rawPipeline)),
             webUrl: rawPipeline?.web_url ?? null
           }
         }

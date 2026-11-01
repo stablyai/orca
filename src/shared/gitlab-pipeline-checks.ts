@@ -1,4 +1,4 @@
-import type { GitLabPipeline, GitLabPipelineJob, MRMergeableState } from './gitlab-types'
+import type { GitLabPipeline, GitLabPipelineJob } from './gitlab-types'
 import type { PRCheckDetail } from './github/check-types'
 import type { CheckStatus } from './github/pull-request-types'
 
@@ -57,42 +57,6 @@ export function mapGitLabPipelineJobStatusToConclusion(
   return null
 }
 
-// Pipeline-level verdict: unlike job rows, a required manual pipeline still blocks and canceled/skipped are not failures.
-export function classifyGitLabPipelineStatus(status: string): CheckStatus {
-  const s = status.toLowerCase()
-  if (s === 'success') {
-    return 'success'
-  }
-  if (s === 'failed' || s === 'action_required') {
-    return 'failure'
-  }
-  // Pipeline manual means a required human trigger; report pending because merge can still be blocked.
-  if (s === 'manual') {
-    return 'pending'
-  }
-  // Preserve neutral skipped/canceled pipeline tones, independently of job-rollup classification.
-  if (
-    s === 'created' ||
-    s === 'pending' ||
-    s === 'running' ||
-    s === 'waiting_for_resource' ||
-    s === 'preparing' ||
-    s === 'scheduled'
-  ) {
-    return 'pending'
-  }
-  return 'neutral'
-}
-
-// A mergeable manual pipeline has no automatic work outstanding, but its manual stage has not passed.
-export function settleGitLabManualPipelineStatus(
-  rawStatus: string | undefined,
-  mergeable: boolean,
-  status: CheckStatus
-): CheckStatus {
-  return rawStatus?.toLowerCase() === 'manual' && mergeable ? 'neutral' : status
-}
-
 const PIPELINE_CONCLUSION: Record<CheckStatus, PRCheckDetail['conclusion']> = {
   success: 'success',
   failure: 'failure',
@@ -103,14 +67,10 @@ const PIPELINE_CONCLUSION: Record<CheckStatus, PRCheckDetail['conclusion']> = {
 /** The parent pipeline as a provider link, never a job row: its outcome follows pipeline-level policy. */
 export function gitLabPipelineToPRCheck(
   pipeline: GitLabPipeline,
-  mergeable: MRMergeableState | undefined,
   pipelineLabel = 'Pipeline'
 ): PRCheckDetail {
-  const verdict = settleGitLabManualPipelineStatus(
-    pipeline.status,
-    mergeable === 'MERGEABLE',
-    classifyGitLabPipelineStatus(pipeline.status)
-  )
+  // The host settles the verdict with the MR status rule; a reply without one claims no outcome.
+  const verdict = pipeline.checkStatus ?? 'neutral'
   return {
     name: `${pipelineLabel} #${pipeline.id}`,
     // Settled pipelines read as completed so shared classifiers agree with the pipeline verdict.

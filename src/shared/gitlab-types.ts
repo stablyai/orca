@@ -257,6 +257,8 @@ export type GitLabPipelineJob = {
 export type GitLabPipeline = {
   id: number
   status: string
+  /** Pipeline-level verdict, settled by the MR status rule from the same reply. */
+  checkStatus?: CheckStatus
   webUrl?: string | null
 }
 

@@ -33,6 +33,7 @@ vi.mock('./gl-utils', () => ({
 }))
 
 import { fetchMRFiles } from './mr-file-diffs'
+import { derivePipelineStatus, mapMRInfo } from './mappers'
 import { getWorkItemDetails } from './work-item-details'
 
 describe('getWorkItemDetails', () => {
@@ -92,6 +93,43 @@ describe('getWorkItemDetails', () => {
         pipelineJobs: []
       })
       expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(4)
+    }
+  )
+
+  it.each([
+    ['legacy', { merge_status: 'can_be_merged' }, 'pending'],
+    ['mergeable', { detailed_merge_status: 'mergeable' }, 'neutral']
+  ] as const)(
+    'reads a manual parent on a %s MR with the MR aggregate rule',
+    async (_label, mergeFacts, expected) => {
+      const mr = {
+        iid: 12,
+        title: 'Manual deploy',
+        state: 'opened',
+        has_conflicts: false,
+        ...mergeFacts,
+        head_pipeline: { id: 99, status: 'manual' }
+      }
+      glabExecFileAsyncMock.mockImplementation(async (args: string[]) => ({
+        stdout: args.at(-1) === 'projects/g%2Fp/merge_requests/12' ? JSON.stringify(mr) : '[]'
+      }))
+
+      const details = await getWorkItemDetails(
+        '/repo',
+        12,
+        'mr',
+        undefined,
+        null,
+        undefined,
+        {},
+        {
+          includeReviewDetails: false
+        }
+      )
+
+      const aggregate = mapMRInfo(mr, derivePipelineStatus(mr.head_pipeline)).pipelineStatus
+      expect(aggregate).toBe(expected)
+      expect(details?.pipeline?.checkStatus).toBe(aggregate)
     }
   )
 

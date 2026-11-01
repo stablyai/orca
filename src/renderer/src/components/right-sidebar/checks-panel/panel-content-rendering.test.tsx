@@ -334,10 +334,12 @@ describe('checks panel concrete content', () => {
       checks: gitLabPipelineJobsToPRChecks([
         { id: 7, name: 'unit', stage: 'test', status: 'success', webUrl: '', duration: 3 }
       ]),
-      gitLabPipelineCheck: gitLabPipelineToPRCheck(
-        { id: 99, status: 'failed', webUrl: pipelineUrl },
-        'MERGEABLE'
-      ),
+      gitLabPipelineCheck: gitLabPipelineToPRCheck({
+        id: 99,
+        status: 'failed',
+        checkStatus: 'failure',
+        webUrl: pipelineUrl
+      }),
       handleFixChecksWithAI: vi.fn(),
       sourceControlAiActionsVisible: true
     }
@@ -358,9 +360,20 @@ describe('checks panel concrete content', () => {
     // Zero jobs, or a job read that came back empty, still shows the parent.
     rerender(<ChecksPanelActiveContent model={{ ...model, checks: [] }} />)
     expect(screen.queryByText('No checks configured')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.getByRole('link', { name: /Pipeline #99/ })).toBeTruthy()
+    // A later failed MR-details read still reports itself beside the kept parent.
+    rerender(
+      <ChecksPanelActiveContent
+        model={{ ...model, checks: [], checksError: 'GitLab is unreachable. Try again.' }}
+      />
+    )
+    expect(screen.getByRole('alert').textContent).toBe('GitLab is unreachable. Try again.')
+    expect(screen.getByRole('link', { name: /Pipeline #99/ })).toBeTruthy()
+    expect(screen.queryByText('No checks configured')).toBeNull()
     await i18n.changeLanguage('es')
     rerender(<ChecksPanelActiveContent model={{ ...model, checks: [] }} />)
     expect(screen.getByText('Pipeline #99 falló')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Pipeline #99/ }).textContent).toContain('Falló')
   })
 })

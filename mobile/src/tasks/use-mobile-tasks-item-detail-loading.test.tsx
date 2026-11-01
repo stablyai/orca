@@ -51,18 +51,16 @@ describe('GitLab task detail hydration', () => {
     await fixture.transport.answer(
       success({
         ...GITLAB_DETAILS,
-        pipeline: { id: 99, status: 'failed', webUrl: 'https://gitlab.com/g/p/-/pipelines/99' }
+        pipeline: {
+          id: 99,
+          status: 'failed',
+          checkStatus: 'failure',
+          webUrl: 'https://gitlab.com/g/p/-/pipelines/99'
+        }
       })
     )
 
-    const checksSummary = {
-      state: 'failure',
-      total: 1,
-      passed: 0,
-      failed: 1,
-      pending: 0,
-      neutral: 0
-    }
+    const checksSummary = { state: 'failure', scope: 'pipeline' }
     expect(fixture.state().actionItem?.source).toMatchObject({ checksSummary })
     expect(fixture.state().items[0]?.source).toMatchObject({ checksSummary })
   })

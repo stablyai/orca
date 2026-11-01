@@ -6,19 +6,23 @@ import type { ProviderCheckSummary } from '../../../src/shared/github/pull-reque
 
 describe('buildGitHubCheckSummary', () => {
   it.each([
-    ['failed', undefined, '1 failing', 'danger'],
-    ['manual', undefined, '1 pending', 'warning'],
-    ['manual', 'MERGEABLE', 'Unresolved checks', 'neutral'],
-    ['canceled', undefined, 'Unresolved checks', 'neutral']
+    ['failure', 'Pipeline failed', 'danger'],
+    ['pending', 'Pipeline pending', 'warning'],
+    ['neutral', 'Pipeline unresolved', 'neutral']
   ] as const)(
-    'summarizes a %s GitLab parent pipeline over its passing jobs',
-    (status, mergeable, label, tone) => {
-      const jobs = Array.from({ length: 100 }, () => ({ status: 'success' }))
-      const checksSummary = buildGitLabCheckSummary(jobs, { id: 99, status }, mergeable)
+    'labels a GitLab parent pipeline %s verdict over its passing jobs',
+    (checkStatus, label, tone) => {
+      const jobs = Array.from({ length: 40 }, () => ({ status: 'success' }))
+      const checksSummary = buildGitLabCheckSummary(jobs, { id: 99, status: 'x', checkStatus })
       expect(getHostedChecksLabel({ checksSummary })).toBe(label)
       expect(getHostedReviewSignalTone({ checksSummary }, 'checks')).toBe(tone)
     }
   )
+
+  it('keeps job wording when the host sends no parent pipeline', () => {
+    const checksSummary = buildGitLabCheckSummary([{ status: 'success' }, { status: 'success' }])
+    expect(getHostedChecksLabel({ checksSummary })).toBe('2/2 passed')
+  })
 
   it('returns none for empty check lists', () => {
     expect(buildGitHubCheckSummary([])).toEqual({
