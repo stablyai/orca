@@ -372,6 +372,7 @@ describe('local watcher lifecycle (randomized model)', () => {
     expect(liveSubscriptions).toBe(0)
   })
 
+  // The default 1,000 seeded histories exercise 20–60 async watcher transitions each, requiring a longer budget.
   it('never leaks listeners, roots or native subscriptions across random watch histories', async () => {
     for (let run = 0; run < RUNS; run += 1) {
       const seed = 7_000_000 + run

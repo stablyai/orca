@@ -30,10 +30,12 @@ export class RuntimeMobileSpeechCatalog {
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
-    // Omit unsupported status variants; older phones could treat them as pickable models.
-    const runnable = hasLocalSpeechRecognizer()
-      ? SPEECH_MODEL_CATALOG
-      : SPEECH_MODEL_CATALOG.filter((manifest) => !isLocalSpeechModel(manifest))
+    const localAvailable = hasLocalSpeechRecognizer()
+    // Existing phones expose download/delete for every non-cloud provider.
+    const runnable = SPEECH_MODEL_CATALOG.filter(
+      (manifest) =>
+        manifest.provider !== 'macos-native' && (localAvailable || !isLocalSpeechModel(manifest))
+    )
     const models: RuntimeSpeechModelSummary[] = runnable.map((manifest) => {
       const state = stateById.get(manifest.id)
       return {
@@ -93,7 +95,10 @@ export class RuntimeMobileSpeechCatalog {
   }): Promise<RuntimeSpeechSetupState> {
     const store = this.requireWritableStore()
     const current = store.getSettings().voice ?? getDefaultVoiceSettings()
-    if (params.modelId !== undefined && params.modelId !== '' && !getCatalogModel(params.modelId)) {
+    if (
+      params.modelId === 'macos-native' ||
+      (params.modelId !== undefined && params.modelId !== '' && !getCatalogModel(params.modelId))
+    ) {
       throw new Error('voice_model_unknown')
     }
     const nextVoice: VoiceSettings = {

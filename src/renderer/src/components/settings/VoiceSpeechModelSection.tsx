@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type {
   VoiceSettings,
@@ -41,6 +41,14 @@ export function VoiceSpeechModelSection({
   onRefreshModelStates
 }: VoiceSpeechModelSectionProps): React.JSX.Element {
   const [pendingDeleteModelIds, setPendingDeleteModelIds] = useState<Set<string>>(() => new Set())
+  const [preparingSystemModel, setPreparingSystemModel] = useState(false)
+  const selectionRequest = useRef(0)
+  useEffect(
+    () => () => {
+      selectionRequest.current += 1
+    },
+    [voiceSettings.sttModel, voiceSettings.enabled]
+  )
   const getModelState = (id: string): SpeechModelState | undefined =>
     modelStates.find((s) => s.id === id)
 
@@ -82,9 +90,12 @@ export function VoiceSpeechModelSection({
             const mState = getModelState(manifest.id)
             const isReady = mState?.status === 'ready'
             const isDownloading =
-              mState?.status === 'downloading' || mState?.status === 'extracting'
+              mState?.status === 'downloading' ||
+              mState?.status === 'extracting' ||
+              (manifest.provider === 'macos-native' && preparingSystemModel)
             const isActive = voiceSettings.sttModel === manifest.id
             const isCloud = manifest.provider === 'openai'
+            const isLocal = manifest.provider === 'local'
             const deletePending = pendingDeleteModelIds.has(manifest.id)
             const sizeMb = manifest.sizeBytes ? Math.round(manifest.sizeBytes / 1_000_000) : null
 
@@ -93,11 +104,29 @@ export function VoiceSpeechModelSection({
                 key={manifest.id}
                 disabled={isDownloading}
                 onSelect={(event) => {
-                  if (isReady) {
+                  const request = ++selectionRequest.current
+                  if (manifest.provider === 'macos-native') {
+                    event.preventDefault()
+                    setPreparingSystemModel(true)
+                    void window.api.speech
+                      .downloadModel(manifest.id)
+                      .then(() => {
+                        if (selectionRequest.current === request) {
+                          onUpdateVoiceSettings({ sttModel: manifest.id })
+                        }
+                      })
+                      .catch((error: unknown) =>
+                        toast.error(describeSpeechModelDownloadError(error))
+                      )
+                      .finally(() => {
+                        setPreparingSystemModel(false)
+                        onRefreshModelStates()
+                      })
+                  } else if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
                   } else if (isCloud) {
                     onOpenOpenAiDialog(manifest.id)
-                  } else if (!isDownloading) {
+                  } else if (isLocal && !isDownloading) {
                     // Keep the menu open so download progress remains visible.
                     event.preventDefault()
                     void window.api.speech.downloadModel(manifest.id).catch((error: unknown) =>
@@ -128,7 +157,7 @@ export function VoiceSpeechModelSection({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium">{manifest.label}</span>
-                    {!isCloud && (
+                    {isLocal && (
                       <span className="text-[10px] px-1 py-px rounded-full leading-none bg-muted text-muted-foreground">
                         {manifest.streaming
                           ? translate('auto.components.settings.VoicePane.d504ab05f0', 'streaming')
@@ -148,7 +177,7 @@ export function VoiceSpeechModelSection({
                               'Extracting...'
                             )
                           : `${Math.round(mState.progress * 100)}%`
-                        : isCloud
+                        : !isLocal
                           ? null
                           : translate(
                               'auto.components.settings.VoicePane.91980ce124',
@@ -161,7 +190,7 @@ export function VoiceSpeechModelSection({
                     {speechModelDescription(manifest)}
                   </p>
                 </div>
-                {!isCloud && isReady ? (
+                {isLocal && isReady ? (
                   <Button
                     type="button"
                     variant="ghost"
@@ -216,7 +245,7 @@ export function VoiceSpeechModelSection({
                       <Trash2 className="size-3" />
                     )}
                   </Button>
-                ) : !isCloud && !isReady && !isDownloading ? (
+                ) : isLocal && !isReady && !isDownloading ? (
                   <span className="shrink-0 p-1 text-muted-foreground can-hover:opacity-0 group-hover:opacity-100 transition-opacity">
                     <Download className="size-3" />
                   </span>

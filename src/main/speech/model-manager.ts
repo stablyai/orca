@@ -16,6 +16,7 @@ import {
 import { SpeechModelDownloadTransport } from './speech-model-download-transport'
 import type { OpenSpeechDownloadRequest } from './speech-model-download-response'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { prepareMacosSpeech } from './macos-speech-session'
 import {
   removeModelDownloadFiles,
   removeModelDownloadStaging
@@ -83,12 +84,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   }
 
   async getModelStates(): Promise<SpeechModelState[]> {
-    const states: SpeechModelState[] = []
-    for (const manifest of SPEECH_MODEL_CATALOG) {
-      const state = await this.getModelState(manifest.id)
-      states.push(state)
-    }
-    return states
+    return Promise.all(SPEECH_MODEL_CATALOG.map((manifest) => this.getModelState(manifest.id)))
   }
 
   async getModelState(modelId: string): Promise<SpeechModelState> {
@@ -103,8 +99,9 @@ export class ModelManager extends SpeechModelDownloadTransport {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
 
-    if (manifest.provider === 'openai') {
-      return { id: modelId, status: this.hasOpenAiKey() ? 'ready' : 'not-downloaded' }
+    if (manifest.provider === 'openai' || manifest.provider === 'macos-native') {
+      const ready = manifest.provider === 'macos-native' || this.hasOpenAiKey()
+      return { id: modelId, status: ready ? 'ready' : 'not-downloaded' }
     }
 
     const modelDir = this.getModelDir(modelId)
@@ -159,6 +156,9 @@ export class ModelManager extends SpeechModelDownloadTransport {
       throw new Error(`Unknown model: ${modelId}`)
     }
     if (!isLocalSpeechModel(manifest)) {
+      if (manifest.provider === 'macos-native') {
+        return prepareMacosSpeech()
+      }
       throw new Error(`Model does not support downloads: ${modelId}`)
     }
     if (!manifest.downloadFiles?.length || !manifest.sizeBytes) {

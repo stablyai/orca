@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 
 const buildScript = fileURLToPath(new URL('./build-native-for-platform.mjs', import.meta.url))
-const BUILD_COUNT = 4
+const BUILD_COUNT = 5
 const directories = []
 const children = []
 const buildPids = new Set()
@@ -192,6 +192,18 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     const build = startBuild('success')
     await build.ready
     expect(build.events().map(({ event }) => event)).toEqual(Array(BUILD_COUNT).fill('started'))
+    expect(
+      build
+        .events()
+        .map(({ name }) => name)
+        .sort()
+    ).toEqual([
+      'build:computer-macos',
+      'build:keyboard-layout-macos',
+      'build:notification-status-macos',
+      'build:process-footprint-macos',
+      'build:speech-macos'
+    ])
     build.release()
     expect(await build.closed).toMatchObject({ code: 0, signal: null })
     expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(BUILD_COUNT)

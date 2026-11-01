@@ -42,6 +42,7 @@ import { withRolldownThreadLimit } from './rolldown-thread-limit.mjs'
 import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
 import { copyPrivateTree } from './space-sharing-copy.mjs'
 import { buildDevSwiftCliHelpers } from './swift-cli-helper-macos.mjs'
+import { createDevSpeechHelper } from './dev-macos-speech-helper.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
@@ -216,9 +217,14 @@ function prepareMacDevElectronApp() {
   const identityKey = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
   // v11 stabilizes Info.plist/cdhash; ignored stale marker fields permit schema narrowing without another bump.
   const bundleLayoutVersion = 'stable-cdhash-dock-name-from-bundle-dir-v11'
+  const speechBuildScript = path.join(repoRoot, 'config/scripts/build-speech-macos.mjs')
+  const speechFingerprint = createHash('sha256')
+    .update(readFileSync(speechBuildScript))
+    .update(readFileSync(path.join(repoRoot, 'native/speech-macos/main.swift')))
+    .digest('hex')
   const hash = createHash('sha1')
     .update(
-      `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
+      `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}\0${speechFingerprint}`
     )
     .digest('hex')
     .slice(0, 12)
@@ -239,6 +245,7 @@ function prepareMacDevElectronApp() {
       sourceAppPath,
       electronVersion,
       bundleLayoutVersion,
+      speechFingerprint,
       plistPatches: [...getDevBundlePlistPatches(), ...getDevHelperPlistPatches()]
     },
     null,
@@ -278,7 +285,10 @@ function prepareMacDevElectronApp() {
     )
   }
 
+  const speechHelper = createDevSpeechHelper({ repoRoot, appPath, distDir, markerPath })
+
   if (copiedAppIsUsable()) {
+    speechHelper.retryIfMissing()
     pruneStaleDevBundles(distDir)
     process.env.ELECTRON_EXEC_PATH = executablePath
     return
@@ -322,6 +332,8 @@ function prepareMacDevElectronApp() {
   for (const { key, value } of getDevHelperPlistPatches()) {
     setPlistValue(helperPlistPath, key, value)
   }
+
+  speechHelper.build()
 
   // Bundle notification helper with dev signing ID because macOS keys authorization by it; without swiftc use delivery-probe fallback.
   try {
