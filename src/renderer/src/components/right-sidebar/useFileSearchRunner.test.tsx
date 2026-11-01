@@ -51,6 +51,13 @@ function renderSearchRunner(state: Record<string, unknown>, worktreeId: string) 
   return { hook, updates }
 }
 
+const OWNER_RESULTS_QUERY = {
+  query: 'owner',
+  caseSensitive: false,
+  wholeWord: false,
+  useRegex: false
+}
+
 async function finishSearch(executeSearch: (query: string) => void): Promise<void> {
   await act(async () => {
     executeSearch('owner')
@@ -93,6 +100,7 @@ describe('useFileSearchRunner result ownership', () => {
     )
     expect(updates).toContainEqual({
       results: RESULTS,
+      resultsQuery: OWNER_RESULTS_QUERY,
       resultOwner: {
         worktreeId,
         runtimeEnvironmentId: 'search-runtime-a',
@@ -138,6 +146,7 @@ describe('useFileSearchRunner result ownership', () => {
     )
     expect(updates).toContainEqual({
       results: RESULTS,
+      resultsQuery: OWNER_RESULTS_QUERY,
       resultOwner: {
         worktreeId,
         runtimeEnvironmentId: null,
@@ -173,6 +182,7 @@ describe('useFileSearchRunner result ownership', () => {
     )
     expect(updates).toContainEqual({
       results: RESULTS,
+      resultsQuery: OWNER_RESULTS_QUERY,
       resultOwner: {
         worktreeId,
         runtimeEnvironmentId: null,
@@ -196,6 +206,7 @@ describe('useFileSearchRunner result ownership', () => {
 
     expect(updates).toContainEqual({
       results: RESULTS,
+      resultsQuery: OWNER_RESULTS_QUERY,
       resultOwner: {
         worktreeId,
         runtimeEnvironmentId: null,
