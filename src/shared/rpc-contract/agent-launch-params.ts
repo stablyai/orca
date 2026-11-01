@@ -3,8 +3,8 @@
 
 import { AGENT_LAUNCH_SURFACES } from '../agent-launch-surface'
 import { z } from 'zod'
-import { isAgentSessionOptions } from '../agent-session-record'
-import { parseAgentSessionOperationTimestamp } from '../agent-session-host-authority'
+import { isAgentSessionOptions } from '../agent-session/lifecycle/agent-session-record'
+import { parseAgentSessionOperationTimestamp } from '../agent-session/agent-session-host-authority'
 import { parsePaneKey } from '../stable-pane-id'
 import { isValidHostTerminalTabId } from '../terminal-tab-id'
 import { isTuiAgent } from '../tui-agent-config'
@@ -14,7 +14,7 @@ import { FolderWorkspaceCreate } from './folder-workspace-params'
 import { LaunchSourceParam } from './launch-source-param'
 import { TerminalTabIdParam } from './agent-session-params'
 import { SessionId } from './structured-agent-session-params'
-import { isStructuredAgentSessionIdFor } from '../structured-agent-session-create'
+import { isStructuredAgentSessionIdFor } from '../agent-session/structured-agent-session-create'
 import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
 
 const LaunchAgent = z.custom<TuiAgent>(isTuiAgent, { message: 'Unknown TUI agent' })

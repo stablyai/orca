@@ -12,11 +12,9 @@ import {
 
 import { delimiter } from 'node:path'
 import { homedir } from 'node:os'
-import {
-  agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleKey
-} from '../../shared/agent-session-provider-handle'
-import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import {
   checkAgentCliVersion,

@@ -1,7 +1,7 @@
 import { directoryAccountBinding } from '../acp/acp-account-binding'
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { GEMINI_ACP_DIALECT, readGeminiAcpSignInLine } from './gemini-acp-dialect'
-import { agentSessionSignInFor } from '../../shared/agent-session-sign-in'
+import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
 import { resumeInvocationFromOptions } from '../native-chat/structured-agent-cli-conversations'
 
 export const GEMINI_ACP_LAUNCH_SPEC: AcpLaunchSpec = {

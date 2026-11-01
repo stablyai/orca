@@ -1,6 +1,6 @@
 // Write typed facts with legacy text/reason sentences that released clients print directly. Set provider detail only at composition; later strings cannot prove authorship.
 
-import type { AgentSessionAccountKind } from '../../agent-session-availability'
+import type { AgentSessionAccountKind } from '../agent-session-availability'
 import {
   readAgentSessionArgumentProblem,
   type AgentSessionArgumentProblem

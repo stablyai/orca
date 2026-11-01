@@ -25,7 +25,7 @@ import { parseJournalRow, type JournalRow } from './journal-row-schema'
 import {
   agentSessionJournalProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalUnknownRowKindTests(): void {
   const UNLOADABLE = {

@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto'
 import { setImmediate } from 'node:timers/promises'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { agentSessionHostStatusBody } from '../../../shared/agent-session-host-status-rows'
+import { agentSessionHostStatusBody } from '../../../shared/agent-session/view/agent-session-host-status-rows'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalLifecycleIdentityMutationInput } from '../agent-session-journal/journal-lifecycle-mutation'

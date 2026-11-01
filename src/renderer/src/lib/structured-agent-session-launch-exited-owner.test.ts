@@ -3,7 +3,7 @@
 // gone reads as failed (with its refusal) and Retry starts it again; any other verdict stays unknown.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import type {
   AgentSessionOwnerVerdict,
   AgentSessionWireRefusal

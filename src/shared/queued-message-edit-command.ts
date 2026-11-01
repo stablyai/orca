@@ -1,9 +1,9 @@
 import type { AgentType } from './agent-status-types'
-import type { AgentSessionSlashCommand } from './agent-session-wire'
+import type { AgentSessionSlashCommand } from './agent-session/agent-session-wire'
 import {
   prepareStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionGoalCommand
-} from './structured-agent-session-composer'
+} from './agent-session/view/structured-agent-session-composer'
 
 /** Provider prompt commands remain content; host actions cannot replace a queued body. */
 export function queuedMessageEditAcceptsText(

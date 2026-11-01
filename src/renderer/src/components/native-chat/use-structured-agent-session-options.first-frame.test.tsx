@@ -27,7 +27,7 @@ vi.mock('@/lib/structured-agent-session-launch-options', async (original) => ({
 }))
 
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'

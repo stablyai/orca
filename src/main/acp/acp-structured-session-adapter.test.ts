@@ -5,7 +5,7 @@ import {
   SessionNotificationSchema
 } from './generated/acp-protocol.generated'
 import { afterEach, describe, expect, it } from 'vitest'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   SESSION

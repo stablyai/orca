@@ -1,6 +1,6 @@
 // Codes span situations with different next steps (cleared chat versus busy command). Name only a listed reason; otherwise omit it for the code fallback, as older hosts do.
 
-import type { AgentSessionAccountKind } from '../../agent-session-availability'
+import type { AgentSessionAccountKind } from '../agent-session-availability'
 import type { AgentJournalResolution } from '../journal/agent-session-journal-types'
 import {
   readAgentCliInstallationProblem,
@@ -18,7 +18,7 @@ import { isAgentJournalResolution } from '../journal/agent-session-journal-schem
 import {
   AGENT_SESSION_REWIND_REASONS,
   type AgentSessionRewindReason
-} from '../../agent-session-rewind'
+} from '../lifecycle/agent-session-rewind'
 import type { TuiAgent } from '../../tui-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../tui-agent-display-names'
 import type {

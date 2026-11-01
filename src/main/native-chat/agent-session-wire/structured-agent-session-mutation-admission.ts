@@ -7,15 +7,15 @@ import {
   agentSessionFingerprintConflict,
   agentSessionLedgerRefusal,
   computeAgentSessionPayloadFingerprint
-} from '../../../shared/agent-session-mutation-envelope'
+} from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type {
   AgentSessionOperationDecision,
   AgentSessionOperationRow
-} from '../../../shared/agent-session-operation-ledger'
+} from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   type AgentSessionWireRefusal,
   isAgentSessionRefusalError

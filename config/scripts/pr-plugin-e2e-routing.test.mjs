@@ -63,7 +63,22 @@ describe('plugin PR E2E routing', () => {
     ['src/main/plugins/panels/plugin-panel-controller.ts', 'plugin-panel-containment'],
     ['src/main/plugins/catalog/plugin-file-type-suggestion.ts', 'plugin-file-type-suggestion'],
     ['src/main/plugins/catalog/plugin-auto-updater.ts', 'plugin-update-review-toast'],
-    ['src/shared/plugins/manifest/plugin-manifest.ts', 'plugin-startup-budget']
+    ['src/shared/plugins/manifest/plugin-manifest.ts', 'plugin-startup-budget'],
+    ['src/main/plugins/panels/plugin-frame-module-transform.ts', 'plugin-buildless-tsx'],
+    ['src/cli/plugin-authoring/plugin-type-files.ts', 'plugin-buildless-tsx'],
+    ['examples/plugins/hello-tsx/src/panel.tsx', 'plugin-buildless-tsx'],
+    [
+      'src/shared/plugins/declarative/runtime/declarative-memory-retention.ts',
+      'plugin-components-hot-reload'
+    ],
+    [
+      'src/renderer/src/components/right-sidebar/PluginDeclarativePanelNotices.tsx',
+      'plugin-components-hot-reload'
+    ],
+    ['src/main/plugins/plugin-dev-watcher.ts', 'plugin-components-hot-reload'],
+    ['resources/plugins/declarative/orca-runtime.mjs', 'plugin-components-hot-reload'],
+    ['examples/plugins/hello-orca/main.mjs', 'plugin-demo'],
+    ['examples/plugins/test-fixtures/hostile-panel/panel.html', 'plugin-panel-containment']
   ])('routes %s to %s', (file, spec) => {
     expect(selectPrE2eSpecs([file])).toContain(`tests/e2e/${spec}.spec.ts`)
   })

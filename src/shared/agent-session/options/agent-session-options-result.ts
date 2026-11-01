@@ -1,13 +1,13 @@
 import type { AgentJournalCursor } from '../../agent-session-journal-identity'
 import type { AgentJournalThreadGoal } from '../journal/agent-session-journal-types'
 import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
-import type { AgentSessionContextUsage } from '../../agent-session-context-usage'
-import type { AgentSessionRewindSupport } from '../../agent-session-rewind'
+import type { AgentSessionContextUsage } from '../agent-session-context-usage'
+import type { AgentSessionRewindSupport } from '../lifecycle/agent-session-rewind'
 import type {
   AgentSessionFastModeState,
   AgentSessionFastModeSupport,
   AgentSessionModelOption
-} from '../../agent-session-wire'
+} from '../agent-session-wire'
 
 export type AgentSessionAcceptedInputSources = Partial<
   Record<'model' | 'effort' | 'fastMode' | 'serviceTier', 'saved' | 'seeded' | 'policy'>

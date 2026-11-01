@@ -5,7 +5,7 @@ import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../shared/structured-agent-session-projection'
+} from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 
 export type AgentSessionRecordReader = {

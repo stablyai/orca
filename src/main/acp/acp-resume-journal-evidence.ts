@@ -1,7 +1,7 @@
 import type { AcpStructuredLaunchPartDeps } from './acp-structured-launch-resolution'
-import type { AgentSessionProviderHandleChain } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionProviderHandleChain } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   isProviderTimelineTurnInNamespace,
