@@ -1,5 +1,10 @@
 import { hookOutcomeRowBody } from '../../shared/agent-session-hook-outcome'
 import type { AgentJournalPlainStatusItem } from '../../shared/agent-session-journal-types'
+import {
+  claudeRecord,
+  claudeText,
+  type ClaudeMessageEnvelope
+} from './claude-structured-item-translation'
 
 // Claude injects a blocking Stop hook's reason as a meta user turn; exit-2 hooks prefix it with their command.
 const STOP_HOOK_FEEDBACK = /^Stop hook feedback:\n/
@@ -14,4 +19,18 @@ export function claudeStopHookFeedbackRow(text: string): AgentJournalPlainStatus
     .split('\n')
     .map((line) => line.replace(/^\[[^\]\n]+\]: /, ''))
   return hookOutcomeRowBody('sent-back', [reasons.join('\n')])
+}
+
+/** The same row from a root-agent envelope; it continues the turn, so importers must not treat it as a prompt. */
+export function claudeEnvelopeStopHookFeedbackRow(
+  envelope: ClaudeMessageEnvelope
+): AgentJournalPlainStatusItem | null {
+  const [part] = envelope.content
+  const text = claudeText(claudeRecord(part)?.text)
+  return envelope.isInjectedUserTurn &&
+    envelope.parentToolUseId === null &&
+    envelope.content.length === 1 &&
+    text
+    ? claudeStopHookFeedbackRow(text)
+    : null
 }
