@@ -33,4 +33,29 @@ describe('source module entry engine floor', () => {
   it('leaves HTML entries at their own floor', () => {
     expect(parsePluginManifest(manifest('panel.html', '>=1.4.245')).ok).toBe(true)
   })
+
+  it('needs the same release for a .ts or .mts worker main', () => {
+    const tooLow = parsePluginManifest(worker('src/main.ts', '>=1.4.245'))
+    expect(tooLow.ok ? '' : tooLow.error).toContain(
+      `>=${PLUGIN_SOURCE_MODULES_SINCE} when main is a .ts or .mts file`
+    )
+    expect(parsePluginManifest(worker('main.mts', `>=${PLUGIN_SOURCE_MODULES_SINCE}`)).ok).toBe(
+      true
+    )
+    expect(parsePluginManifest(worker('main.mjs', '>=1.4.245')).ok).toBe(true)
+  })
+
+  it('refuses a JSX worker main, which Node cannot run', () => {
+    const parsed = parsePluginManifest(worker('main.tsx', `>=${PLUGIN_SOURCE_MODULES_SINCE}`))
+    expect(parsed.ok ? '' : parsed.error).toContain('no JSX')
+  })
 })
+
+function worker(main: string, engine: string) {
+  return {
+    ...manifest('panel.html', engine),
+    execution: 'trusted-worker',
+    main,
+    contributes: { commands: [{ id: 'run', title: 'Run' }] }
+  }
+}
