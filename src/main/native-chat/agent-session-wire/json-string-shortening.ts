@@ -1,7 +1,7 @@
 // Fit long strings to one common length; preserve identifiers because readers key and answer by them.
 // Mark clipped heads with truncated and other strings with an ellipsis.
 
-import type { AgentJournalBoundedPayload } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { isAgentJournalBoundedPayload } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const ELLIPSIS = '…'
 const ELLIPSIS_BYTES = Buffer.byteLength(ELLIPSIS, 'utf8')
@@ -14,17 +14,6 @@ export function jsonBytes(value: unknown): number {
 
 function isIdentifierKey(key: string): boolean {
   return key === 'id' || key.endsWith('Id')
-}
-
-function isBoundedPayload(value: unknown): value is AgentJournalBoundedPayload {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'head' in value &&
-    typeof value.head === 'string' &&
-    'byteLength' in value &&
-    'truncated' in value
-  )
 }
 
 function headOf(text: string, length: number): string {
@@ -47,7 +36,7 @@ function cutTo(value: unknown, length: number, key: string): unknown {
   if (typeof value !== 'object' || value === null) {
     return value
   }
-  if (isBoundedPayload(value)) {
+  if (isAgentJournalBoundedPayload(value)) {
     return value.head.length > length
       ? { ...value, head: headOf(value.head, length), truncated: true }
       : value

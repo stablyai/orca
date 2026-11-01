@@ -2,10 +2,7 @@ import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from '../../MobileNativeChatOwnedScrollView'
 import { ChevronRight } from 'lucide-react-native'
-import {
-  diffFromText,
-  diffFromToolCall
-} from '../../../../../src/shared/native-chat/tools/native-chat-diff'
+import { diffFromText } from '../../../../../src/shared/native-chat/tools/native-chat-diff'
 import type { NativeChatDiffLine } from '../../../../../src/shared/native-chat/tools/native-chat-diff'
 import {
   mcpToolIdentity,
@@ -15,12 +12,9 @@ import { nativeChatToolIconName } from '../../../../../src/shared/native-chat/to
 import { nativeChatToolRowVerbCopy } from './native-chat-tool-row-verb-copy'
 import {
   nativeChatToolLineInput,
-  nativeChatToolLineView
+  nativeChatToolLineView,
+  type NativeChatToolLineView
 } from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-view'
-import {
-  MAX_TOOL_DETAIL_LENGTH,
-  truncateToolDetail
-} from '../../../../../src/shared/native-chat/tools/native-chat-tool-summary'
 import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
@@ -121,47 +115,33 @@ function DiffView({ lines, fontScale }: { lines: NativeChatDiffLine[]; fontScale
 
 // Defer output diff, argument formatting and highlight work until its row opens.
 function ToolLineDetail({
-  call,
-  body,
-  commandLanguage,
-  hasInput,
-  results,
+  view,
   fontScale,
   disclosureKey,
   memberId
 }: {
-  call: NativeChatToolCallBlock | undefined
-  body: NativeChatToolResultBlock | undefined
-  commandLanguage: string | null
-  hasInput: boolean
-  results: NativeChatWebSearchResult[]
+  view: NativeChatToolLineView
   fontScale: number
   disclosureKey?: string
   memberId?: string
 }): React.JSX.Element {
   useMobileColorScheme()
-  const diff = call
-    ? diffFromToolCall(call.name, call.input)
-    : body
-      ? diffFromText(body.output)
-      : null
+  const { call, body, results, hasInput } = view
+  const diff = call ? view.diff : body ? diffFromText(body.output) : null
+  const commandLanguage = view.label?.commandLanguage ?? null
   const t = useMobileTranslation()
   const [inputExpanded, setInputExpanded] = useState(false)
   const input = useMemo(() => {
     if (!hasInput || !call) {
       return null
     }
-    const invocation = nativeChatToolLineInput(call, commandLanguage)
-    // Bound native text layout as opened output is bounded.
-    const clipped = !inputExpanded && invocation.text.length > MAX_TOOL_DETAIL_LENGTH
-    const text = clipped ? truncateToolDetail(invocation.text) : invocation.text
+    const invocation = nativeChatToolLineInput(call, commandLanguage, inputExpanded)
     const segments = invocation.language
-      ? highlightMobileCode(text, invocation.language).segments
+      ? highlightMobileCode(invocation.text, invocation.language).segments
       : null
-    return { text, segments, clipped, partial: invocation.partial }
+    return { ...invocation, segments }
   }, [hasInput, call, commandLanguage, inputExpanded])
-  const type = toolType(fontScale).code
-  const metaType = toolType(fontScale).meta
+  const { code: type, meta: metaType } = toolType(fontScale)
   const onLayout = useMobileNativeChatOpenedDetail()
   return (
     <View style={styles.detail} onLayout={onLayout}>
@@ -235,10 +215,8 @@ export function MobileNativeChatToolLine({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
-  const { call, label, body, resultPreview, failed, results, hasInput, hasDetail } = useMemo(
-    () => nativeChatToolLineView(block, result),
-    [block, result]
-  )
+  const view = useMemo(() => nativeChatToolLineView(block, result), [block, result])
+  const { call, label, resultPreview, failed, hasDetail } = view
   const fullCommand = label?.fullCommand ?? null
   const verb = label?.verb ? nativeChatToolRowVerbCopy(t)[label.verb] : null
   const commandAlone = label?.command === true && verb !== null && label.target.length > 0
@@ -316,11 +294,7 @@ export function MobileNativeChatToolLine({
         <ToolLineDetail
           memberId={memberId}
           disclosureKey={disclosureKey}
-          call={call}
-          body={body}
-          commandLanguage={label?.commandLanguage ?? null}
-          hasInput={hasInput}
-          results={results}
+          view={view}
           fontScale={fontScale}
         />
       ) : null}

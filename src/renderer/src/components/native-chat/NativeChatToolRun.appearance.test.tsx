@@ -51,6 +51,7 @@ import { i18n } from '@/i18n/i18n'
 
       fireEvent.click(screen.getByRole('button'))
       openToolRunMembers()
+      fireEvent.click(screen.getByRole('button', { name: 'Show full input' }))
 
       expect(container.querySelector('pre')).toHaveTextContent(command)
     })

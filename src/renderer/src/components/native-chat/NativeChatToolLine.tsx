@@ -8,6 +8,7 @@ import {
   isToolCallBlock,
   isToolResultBlock,
   type NativeChatBlock,
+  type NativeChatToolCallBlock,
   type NativeChatToolResultBlock
 } from '../../../../shared/native-chat/native-chat-types'
 import {
@@ -24,18 +25,10 @@ import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/t
 import {
   nativeChatToolLineInput,
   nativeChatToolLineView,
-  type NativeChatToolLineInput
+  type NativeChatToolLineView
 } from '../../../../shared/native-chat/tools/native-chat-tool-line-view'
 import { NATIVE_CHAT_TOOL_OUTPUT_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-output'
-import {
-  MAX_TOOL_DETAIL_LENGTH,
-  truncateToolDetail
-} from '../../../../shared/native-chat/tools/native-chat-tool-summary'
-import type { NativeChatWebSearchResult } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
-import {
-  diffFromText,
-  diffFromToolCall
-} from '../../../../shared/native-chat/tools/native-chat-diff'
+import { diffFromText } from '../../../../shared/native-chat/tools/native-chat-diff'
 import { NativeChatExpandable } from './NativeChatExpandable'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatToolOutput } from './NativeChatToolOutput'
@@ -43,11 +36,19 @@ import { NativeChatToolOutput } from './NativeChatToolOutput'
 const TARGET_CLASS =
   'min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong'
 
-/** A call's arguments, held to the inline output bound until asked for in full. */
-function ToolLineInput({ input }: { input: NativeChatToolLineInput }): React.JSX.Element {
+/** A call's arguments, held to the inline detail bound until asked for in full. */
+function ToolLineInput({
+  call,
+  commandLanguage
+}: {
+  call: NativeChatToolCallBlock
+  commandLanguage: string | null
+}): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
-  const clipped = !expanded && input.text.length > MAX_TOOL_DETAIL_LENGTH
-  const text = clipped ? truncateToolDetail(input.text) : input.text
+  const input = useMemo(
+    () => nativeChatToolLineInput(call, commandLanguage, expanded),
+    [call, commandLanguage, expanded]
+  )
   return (
     <div className="space-y-1">
       <pre
@@ -56,9 +57,9 @@ function ToolLineInput({ input }: { input: NativeChatToolLineInput }): React.JSX
         className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-chat-code-border bg-chat-code-surface p-2 font-mono text-chat-code text-chat-foreground scrollbar-sleek"
       >
         {input.language ? (
-          <NativeChatHighlightedCode code={text} language={input.language} />
+          <NativeChatHighlightedCode code={input.text} language={input.language} />
         ) : (
-          text
+          input.text
         )}
       </pre>
       {input.partial ? (
@@ -70,7 +71,7 @@ function ToolLineInput({ input }: { input: NativeChatToolLineInput }): React.JSX
           )}
         </p>
       ) : null}
-      {clipped ? (
+      {input.clipped ? (
         <Button type="button" variant="ghost" size="xs" onClick={() => setExpanded(true)}>
           {translate('components.native-chat.tool.showFullInput', 'Show full input')}
         </Button>
@@ -79,36 +80,27 @@ function ToolLineInput({ input }: { input: NativeChatToolLineInput }): React.JSX
   )
 }
 
-/** Mount detail separately so collapsed rows do no diff or argument formatting work. */
+/** Mount detail separately so collapsed rows do no argument formatting work. */
 function ToolLineDetail({
   block,
-  body,
-  commandLanguage,
-  hasInput,
-  results,
+  view,
   onLinkClick
 }: {
   block: NativeChatBlock
-  body: NativeChatToolResultBlock | undefined
-  commandLanguage: string | null
-  hasInput: boolean
-  results: NativeChatWebSearchResult[]
+  view: NativeChatToolLineView
   onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element {
-  const call = isToolCallBlock(block) ? block : null
-  const diff = call
-    ? diffFromToolCall(call.name, call.input)
-    : isToolResultBlock(block)
-      ? diffFromText(block.output)
-      : null
-  const input = hasInput && call ? nativeChatToolLineInput(call, commandLanguage) : null
+  const { call, body, results } = view
+  const diff = call ? view.diff : isToolResultBlock(block) ? diffFromText(block.output) : null
   return (
     <div className="ml-6 space-y-1.5 py-1">
       {/* The row's verb or MCP label stands in for the tool; name it exactly once opened. */}
       {call ? (
         <p className="break-all font-mono text-xs text-chat-foreground-faint">{call.name}</p>
       ) : null}
-      {input ? <ToolLineInput input={input} /> : null}
+      {call && view.hasInput ? (
+        <ToolLineInput call={call} commandLanguage={view.label?.commandLanguage ?? null} />
+      ) : null}
       {results.length > 0 ? (
         <NativeChatSearchResults results={results} onLinkClick={onLinkClick} />
       ) : null}
@@ -148,7 +140,7 @@ export function NativeChatToolLine({
   const name = isCall
     ? block.name
     : translate('components.native-chat.tool.result', NATIVE_CHAT_TOOL_ACTIVITY_COPY.result)
-  const { label: sharedLabel, body, resultPreview, failed, results, hasInput, hasDetail } = view
+  const { label: sharedLabel, resultPreview, failed, hasDetail } = view
   const label = sharedLabel && {
     ...sharedLabel,
     verb: sharedLabel.verb === null ? null : nativeChatToolRowVerb(sharedLabel.verb)
@@ -218,14 +210,7 @@ export function NativeChatToolLine({
       </button>
       {hasDetail ? (
         <NativeChatExpandable open={expanded}>
-          <ToolLineDetail
-            block={block}
-            body={body}
-            commandLanguage={sharedLabel?.commandLanguage ?? null}
-            hasInput={hasInput}
-            results={results}
-            onLinkClick={onLinkClick}
-          />
+          <ToolLineDetail block={block} view={view} onLinkClick={onLinkClick} />
         </NativeChatExpandable>
       ) : null}
     </div>

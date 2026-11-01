@@ -45,6 +45,19 @@ export type AgentJournalBoundedPayload = {
   truncated: boolean
 }
 
+export function isAgentJournalBoundedPayload(value: unknown): value is AgentJournalBoundedPayload {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'head' in value &&
+    typeof value.head === 'string' &&
+    'byteLength' in value &&
+    typeof value.byteLength === 'number' &&
+    'truncated' in value &&
+    typeof value.truncated === 'boolean'
+  )
+}
+
 // ─── Render-model items ─────────────────────────────────────────────────────
 
 /** How a user message reached the provider when it was not an ordinary turn

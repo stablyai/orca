@@ -378,6 +378,7 @@ describe('tool sentence rows', () => {
         }}
       />
     )
+    expect(container.textContent).not.toContain('digest')
     fireEvent.click(screen.getByRole('button'))
     expect(container.querySelector('pre[data-native-chat-tool-input]')?.textContent).toBe(
       '{"file_path":"/a'

@@ -22,19 +22,8 @@ describe('createToolInputDisplay', () => {
 
     expect(display.label).toBe('src/index.ts')
     expect(display.filePath).toBe('src/index.ts')
-    expect(display.hasDetail).toBe(true)
-    expect(display.formatDetail()).toBe(
-      '{\n  "file_path": "src/index.ts",\n  "description": "Read the entry point"\n}'
-    )
     expect(parse).toHaveBeenCalledTimes(1)
     parse.mockRestore()
-  })
-
-  it('only offers detail when the formatted input adds information', () => {
-    expect(createToolInputDisplay('x'.repeat(60)).hasDetail).toBe(false)
-    expect(createToolInputDisplay('x'.repeat(100)).hasDetail).toBe(true)
-    expect(createToolInputDisplay('{}').hasDetail).toBe(false)
-    expect(createToolInputDisplay('{"command":"ls"}').hasDetail).toBe(true)
   })
 
   it('bounds tool detail through the shared desktop and mobile cap', () => {

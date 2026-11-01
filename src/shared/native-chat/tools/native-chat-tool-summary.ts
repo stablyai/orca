@@ -5,6 +5,7 @@ import {
 } from './native-chat-tool-preview-prefix'
 import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
 import { isToolCallBlock, type NativeChatBlock } from '../native-chat-types'
+import { isAgentJournalBoundedPayload } from '../../agent-session/journal/agent-session-journal-types'
 
 const MAX_PREVIEW_STRING_INPUT = 160
 const MAX_PREVIEW_COLLECTION_ITEMS = 8
@@ -28,8 +29,6 @@ export const MAX_TOOL_DETAIL_LENGTH = 4000
 export type ToolInputDisplay = {
   label: string
   filePath: string | null
-  hasDetail: boolean
-  formatDetail: () => string
 }
 
 export function summarizeToolInput(input: unknown): string {
@@ -40,17 +39,11 @@ export function summarizeToolInput(input: unknown): string {
     : `${collapsed.slice(0, MAX_TOOL_PREVIEW_LENGTH - 1)}…`
 }
 
-/** Normalize row display once; format details lazily because collapsed mobile rows never need them. */
+/** Normalize row display once. */
 export function createToolInputDisplay(input: unknown): ToolInputDisplay {
   const normalized = normalizeToolInput(input)
   const filePath = normalizedToolFilePath(normalized)
-  const label = describeNormalizedToolInput(normalized, filePath)
-  return {
-    label,
-    filePath,
-    hasDetail: normalizedToolInputHasDetail(normalized, label),
-    formatDetail: () => truncateToolDetail(formatNormalizedToolInput(normalized))
-  }
+  return { label: describeNormalizedToolInput(normalized, filePath), filePath }
 }
 
 export function truncateToolDetail(text: string): string {
@@ -117,13 +110,6 @@ export function hasToolInput(input: unknown): boolean {
         isStructuredNormalizedToolInput(normalized)
 }
 
-function normalizedToolInputHasDetail(input: unknown, label: string): boolean {
-  if (isStructuredNormalizedToolInput(input)) {
-    return true
-  }
-  return typeof input === 'string' && collapsedToolInputPrefix(input) !== label
-}
-
 export function toolFilePath(input: unknown): string | null {
   return normalizedToolFilePath(normalizeToolInput(input))
 }
@@ -187,8 +173,12 @@ function isToolInputRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-/** Decode Codex JSON-string arguments for structural readers; retain prose strings. */
+/** Decode Codex JSON-string arguments for structural readers; retain prose strings.
+ *  An input the host cut to a bounded head reads as that head's text. */
 export function normalizeToolInput(input: unknown): unknown {
+  if (isAgentJournalBoundedPayload(input) && input.truncated) {
+    return input.head
+  }
   if (typeof input !== 'string') {
     return input
   }
