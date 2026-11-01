@@ -135,26 +135,30 @@ for (const theme of ['dark', 'light'] as const) {
             await cdp.detach()
           }
         }
-        // A toast raised while the modal is open comes forward, so its actions run above it.
         await pathField.click()
-        await clickToastControl(customToast.getByRole('button', { name: 'Later', exact: true }))
-        await expect(customToast).toBeHidden()
-        await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
-        await expect(pathField).toHaveValue(missingPath)
-        expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
-        await client.app.evaluate(({ BrowserWindow }) => {
-          BrowserWindow.getAllWindows()[0].webContents.send('star-nag:show', {
-            mode: 'web',
-            surface: 'toast'
-          })
-        })
-        await expect(customToast).toBeVisible()
         await clickToastControl(customToast.getByRole('button', { name: 'Dismiss', exact: true }))
         await expect(customToast).toBeHidden()
         await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
         await expect(pathField).toHaveValue(missingPath)
         expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
       }
+      // A toast raised while the modal is open comes forward, so its actions run above it.
+      await client.app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0].webContents.send('star-nag:show', {
+          mode: 'web',
+          surface: 'toast'
+        })
+      })
+      const raisedToast = page
+        .locator('[data-sonner-toast]')
+        .filter({ hasText: 'Onboarding completed!' })
+      await expect(raisedToast).toBeVisible()
+      await pathField.click()
+      await raisedToast.getByRole('button', { name: 'Later', exact: true }).click()
+      await expect(raisedToast).toBeHidden()
+      await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
+      await expect(pathField).toHaveValue(missingPath)
+      expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
       await page.screenshot({
         path: testInfo.outputPath(`toast-dismissed-modal-preserved-${theme}.png`),
         animations: 'disabled'
