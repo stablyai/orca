@@ -2,8 +2,8 @@ import type {
   AgentSessionOwnerObservation,
   AgentSessionConversationView
 } from '../../../shared/agent-session-conversation-view'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import { agentSessionOwnerObservationVerdict } from '../../../shared/agent-session-lease-adjudication'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionOwnerObservationVerdict } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { structuredAgentRuntimeMetadata } from '../../runtime/structured-agent-runtime-metadata'
 import {
   keysMayMatch,
@@ -12,6 +12,7 @@ import {
 } from '../structured-conversation-key'
 
 export type StructuredProviderSessionOwnership = {
+  wslDistro: string | null
   sessionId: string
   workspaceId: string
   provider: StructuredAgentId
@@ -38,6 +39,7 @@ export function listStructuredProviderSessionOwnership(
             ? [
                 {
                   sessionId: record.sessionId,
+                  wslDistro: record.location.wslDistro,
                   workspaceId: record.location.workspaceId,
                   provider: record.provider,
                   providerSessionId: history.rowSessionId(link),

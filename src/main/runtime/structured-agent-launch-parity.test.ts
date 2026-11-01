@@ -1,4 +1,4 @@
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 // Capture native-chat children at the spawn boundary with production wiring; launch-path refactors must preserve these snapshots.
 
 import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -111,13 +111,16 @@ vi.mock('electron', () => ({
 }))
 
 import { setAppEnvironment } from '../../shared/app-environment'
-import { AGENT_SESSION_RECORD_SCHEMA_VERSION } from '../../shared/agent-session-record'
-import type { AgentSessionAccountHome, AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
+import {
+  AGENT_SESSION_RECORD_SCHEMA_VERSION,
+  type AgentSessionRecord
+} from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,

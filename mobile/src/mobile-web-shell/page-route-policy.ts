@@ -1,4 +1,5 @@
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import { BRIDGE_TERMINAL_KEY_RAIL_GRANT } from './bridge/bridge-terminal-key'
 import { BRIDGE_EXTERNAL_NAVIGATION_GRANT } from './cancelled-navigation-target'
 import { BRIDGE_HAPTICS_GRANT } from './bridge/bridge-haptics-notify'
 import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
@@ -15,7 +16,11 @@ export const MOBILE_WEB_SHELL_GRANTS = [
   BRIDGE_HAPTICS_GRANT,
   // No page notify exists for cancelled browser navigation; this capability tells the page whether native can open those links externally.
   BRIDGE_EXTERNAL_NAVIGATION_GRANT,
-  // Derive advertised verbs from the handler table’s tuple so neither side can grow alone.
+  // The iPhone Duo key rail: the shell draws terminal keys in a side inset strip and forwards each
+  // press as a frame, which only a page declaring this knows.
+  BRIDGE_TERMINAL_KEY_RAIL_GRANT,
+  // Spread rather than restated: the verb table is keyed on this same tuple, so a verb cannot be
+  // advertised without a row and a row cannot exist without being advertised.
   ...BRIDGE_NATIVE_VERB_NAMES
 ] as const
 
@@ -108,10 +113,20 @@ export function routeViewOf(
   if (!servesWideLayout(entries, pathname, wide)) {
     return { pageRoutes: [], pageRouteGrants: [], routeGrants: [], ownsHostArea: false }
   }
-  const ownsHostArea = wide && pathname === root
-  // Omit the host-route pair in wide detail panes so returning to the host opens its owning session instead of another list beside it.
+  const canOwnHostArea =
+    root !== null &&
+    entries.some(
+      (route) =>
+        route.canOwnHostArea === true &&
+        matchesRoutePattern(root, route.pathname) &&
+        (wide || route.canOwnHostAreaAcrossLayouts === true)
+    )
+  // New pages keep ownership across rotation; legacy pages require the wide-only contract.
+  const ownsHostArea = canOwnHostArea && pathname === root
+  // No pair for the host route in an owned detail session, so a hop there goes to the shell, which
+  // opens it owning the area rather than as a second host list in this pane.
   const paired =
-    wide && !ownsHostArea && root !== null
+    canOwnHostArea && !ownsHostArea && root !== null
       ? entries.filter((route) => !matchesRoutePattern(root, route.pathname))
       : entries
   return {

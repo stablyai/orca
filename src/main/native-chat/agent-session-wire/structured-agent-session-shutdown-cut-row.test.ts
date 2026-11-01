@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
-import { readAgentSessionOrcaStop } from '../../../shared/agent-session-orca-stop'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentSessionOrcaStop } from '../../../shared/agent-session/lifecycle/agent-session-orca-stop'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'

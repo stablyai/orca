@@ -32,6 +32,8 @@ For diff status, file-tree decorations, and the changes view, use the `--git-dec
 
 Use these _only_ for git status. Don't reuse them for unrelated state colors — that breaks the convention.
 
+Diff hunks (line, changed-character and gutter tints in chat diffs and Monaco's diff editor) use `--diff-added` / `--diff-removed` and their `-background`, `-emphasis` and `-gutter` tints instead. The hues default to the matching decoration colors, so themes can tune diffs separately from file status. Diff _text_ in chat uses `text-chat-diff-added` / `text-chat-diff-removed`.
+
 ## List rows: hover, selected, current
 
 A common point of drift. Use these conventions for any list-style row (worktrees, command palette items, settings nav):

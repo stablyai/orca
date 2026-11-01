@@ -8,9 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
-} from '../../../shared/agent-session-host-authority'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+} from '../../../shared/agent-session/agent-session-host-authority'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { openCodexAppServerConnection } from '../../codex/codex-app-server-connection'
 import { adapterFor, fakeCodex } from '../../codex/codex-structured-session-adapter-fixture'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -26,7 +26,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 import * as journalFactory from '../agent-session-journal/journal-store-factory'
@@ -42,6 +45,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

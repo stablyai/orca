@@ -32,7 +32,7 @@ import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixtur
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { RuntimeAgentOrchestrationProjection } from './runtime-agent-orchestration-projection'
 import {
   installSqlVisitCounters,
@@ -714,7 +714,7 @@ it('reads reopened/backfilled assignments and committed clear facts from the alr
       { tabId: 'reserved-worker', sessionId: SESSION_Y }
     ]
   })
-  closeTestJournalHostDatabase(directory)
+  await closeTestJournalHostDatabase(directory)
   const path = join(directory, 'orchestration.sqlite')
   let db = new OrchestrationDb(path)
   let opened = false
@@ -771,7 +771,7 @@ it('reads reopened/backfilled assignments and committed clear facts from the alr
     }
   } finally {
     if (opened) {
-      ;(await releaseAgentSessionRecordStore())?.journalDatabase.close()
+      await (await releaseAgentSessionRecordStore())?.journalDatabase.close()
     }
     db.close()
     rmSync(directory, { recursive: true, force: true })

@@ -2,7 +2,7 @@ import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type {
   AgentSessionPromptResponse,
   AgentSessionQuestionAnswer
-} from '../../shared/agent-session-question-answer'
+} from '../../shared/agent-session/agent-session-question-answer'
 import type { StructuredAgentSessionAdapterStop } from '../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
 import {
   claudePromptQuestions,

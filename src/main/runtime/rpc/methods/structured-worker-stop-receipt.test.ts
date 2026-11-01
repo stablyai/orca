@@ -2,7 +2,7 @@ import { hostTestState } from '../../../native-chat/agent-session-wire/structure
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 /** An absent structured host cannot issue a close; receipts must not claim closed_agent_terminal and falsely tell coordinators its tab is gone. */
 
@@ -110,7 +110,8 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
         state: 'stop_unknown'
       }
     )
-    expect(close).toHaveBeenCalledWith(SESSION, 'evict')
+    // worker-stop is never refused, so it passes no admission.
+    expect(close).toHaveBeenCalledWith(SESSION, 'evict', undefined)
     expect(db.getWorkerDispatch(dispatchId)?.state).toBe('stop_unknown')
   })
 

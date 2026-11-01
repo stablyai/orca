@@ -1,4 +1,4 @@
-import { emitChange, syncTaskCheckboxesDisabled } from './editor-content'
+import { emitChange } from './editor-content'
 import {
   rememberSelection,
   restoreRememberedSelection,
@@ -16,6 +16,48 @@ const TASK_LIST_HTML =
   '<input type="checkbox" /></label><div><p>Task</p></div></li></ul>'
 
 const CODE_BLOCK_HTML = '<pre data-language=""><code>code</code></pre><p><br></p>'
+
+function drawsContent(node: Node): boolean {
+  return (
+    /[^ \t\r\n]/.test(node.textContent ?? '') ||
+    ((node instanceof Element || node instanceof DocumentFragment) &&
+      node.querySelector('img') !== null) ||
+    (node instanceof Element && node.tagName.toLowerCase() === 'img')
+  )
+}
+
+// Native insertHTML merges the fragment's first block into a block with content before the caret, so the PRE becomes prose.
+function caretFollowsContent(scope: RichMarkdownEditorScope): boolean {
+  const selection = scope.getSelection()
+  if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
+    return false
+  }
+  const caret = selection.getRangeAt(0)
+  const editor = editorElement(scope)
+  if (caret.startContainer === editor) {
+    const previous = editor.childNodes.item(caret.startOffset - 1)
+    return (
+      previous !== null &&
+      !(previous instanceof Element && previous.closest('table')) &&
+      drawsContent(previous)
+    )
+  }
+  const anchor =
+    caret.startContainer instanceof Element
+      ? caret.startContainer
+      : caret.startContainer.parentElement
+  if (!anchor || !editor.contains(anchor) || anchor.closest('table, pre')) {
+    return false
+  }
+  const block = anchor.closest('p, div, li, h1, h2, h3, h4, h5, h6, blockquote')
+  if (!block || block === editor || !editor.contains(block)) {
+    return false
+  }
+  const before = scope.getDocument().createRange()
+  before.setStart(block, 0)
+  before.setEnd(caret.startContainer, caret.startOffset)
+  return drawsContent(before.cloneContents())
+}
 
 function exec(scope: RichMarkdownEditorScope, command: string, value?: string) {
   scope.getDocument().execCommand(command, false, value)
@@ -81,7 +123,12 @@ const COMMANDS: Record<
     if (scope.getSelection()?.isCollapsed === false) {
       exec(scope, 'formatBlock', 'pre')
     } else {
-      exec(scope, 'insertHTML', CODE_BLOCK_HTML)
+      // A leading break ends the caret's line first; the stray root <br> it leaves saves as nothing.
+      exec(
+        scope,
+        'insertHTML',
+        caretFollowsContent(scope) ? `<br>${CODE_BLOCK_HTML}` : CODE_BLOCK_HTML
+      )
     }
   },
   link: (scope) => insertUrl(scope, 'link', 'createLink'),
@@ -109,6 +156,5 @@ export async function runCommand(
       return
     }
   }
-  syncTaskCheckboxesDisabled(scope)
   emitChange(scope)
 }

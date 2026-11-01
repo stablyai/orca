@@ -1,5 +1,5 @@
-import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
-import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
+import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
+import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session/failures/agent-session-refusal-retry'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
 import { translate } from '../i18n/mobile-i18n'

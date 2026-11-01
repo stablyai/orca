@@ -1,5 +1,8 @@
 // A missing subcommand is a durable capability result; other exits remain failures of this run.
-import { providerDiagnostic, withProviderDiagnostic } from '../../../shared/agent-session-failure'
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../../shared/agent-session/failures/agent-session-failure'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 import { CodexAppServerUnsupportedError } from '../codex-app-server-session'
 import { providerStderrForDisplay } from '../../provider-process/provider-spawn-failure-report'

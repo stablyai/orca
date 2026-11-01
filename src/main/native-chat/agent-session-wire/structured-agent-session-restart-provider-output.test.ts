@@ -3,13 +3,13 @@ import { createCodexJournalTranslator } from '../../codex/codex-structured-journ
 import { codexStreamingJournalItem } from '../../codex/codex-structured-item-translation'
 import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
-} from '../../../shared/structured-agent-session-turn-timing'
+} from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabases,
@@ -44,7 +44,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await rig.dispose()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
 })
 
 async function restartAfterCrash(): Promise<void> {
@@ -55,7 +55,7 @@ async function restartAfterCrash(): Promise<void> {
   await runtimeState.stopLeaseRenewal()
   runtimeState.currentEventSink(SESSION)?.close()
   await sessions.get(SESSION)?.journal.close()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   rig.clock.now = RESTARTED_AT
   rig.store = await openTestAgentSessionRecordStore(rig.root)
   rig.host = new StructuredAgentSessionHost({

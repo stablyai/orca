@@ -15,7 +15,7 @@ import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
@@ -142,7 +142,7 @@ export type IPtyProvider = {
   killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
-  attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence' | 'lastTitle'> | void>
+  attach(id: string): Promise<PtySpawnResult | void>
   hasPty?: (id: string) => boolean
   /** Read-only input availability, including retained unattached PTYs; null means unobserved. */
   getPtyAvailability?: (id: string) => boolean | null

@@ -1,11 +1,13 @@
 import {
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
-  AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY
-} from './structured-agent-session-surface-capabilities'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './agent-session-current-requests-capability'
-import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from './agent-session-create-capabilities'
-import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from './agent-session-optional-model-capability'
+  AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+} from './agent-session/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './agent-session/requests/agent-session-current-requests-capability'
+import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session/agent-session-background-task-child-views-capability'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from './agent-session/agent-session-create-capabilities'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from './agent-session/options/agent-session-optional-model-capability'
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
@@ -15,11 +17,9 @@ import {
   AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from './protocol-version'
+} from './agent-session/agent-session-runtime-capabilities'
 
 /** Desktop/browser chats share one handshake list; separate copies once omitted structured.v1 in browsers and made hosts refuse every chat. */
 export const STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES = [

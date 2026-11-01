@@ -3,7 +3,7 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { isRecord } from './rpc/orchestration-session-caller-test-fixture'
 

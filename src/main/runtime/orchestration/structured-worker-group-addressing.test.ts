@@ -1,12 +1,12 @@
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionLease } from '../../../shared/agent-session-record'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionLease } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { RunningStructuredSession } from './structured-session-lineage'
 
 const hostRef: { current: unknown } = { current: null }
@@ -234,6 +234,8 @@ describe('sendGroupMessage actually composes structured workers in', () => {
       getLegacyAdoptedRunMailboxOwner: () => null,
       getCurrentRunForPane: () => undefined,
       getCurrentRunForCoordinator: () => undefined,
+      runsBoundToCoordinator: () => [],
+      runsBoundToPane: () => [],
       getActiveDispatchMailboxOwners: () => [],
       getRunMailboxOwnerIdsForHandle: () => [],
       listWorkerTerminalResourcesByIncarnationPrefix: () => rows,
@@ -275,6 +277,7 @@ describe('sendGroupMessage actually composes structured workers in', () => {
       getLegacyAdoptedRunMailboxOwner: () => null,
       getCurrentRunForPane: () => undefined,
       getCurrentRunForCoordinator: () => undefined,
+      runsBoundToCoordinator: () => [],
       getActiveDispatchForIdentity: () => ({ run_id: 'run_1' }),
       getActiveDispatchMailboxOwners: () => [],
       getRunMailboxOwnerIdsForHandle: () => [],

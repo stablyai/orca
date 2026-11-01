@@ -275,11 +275,16 @@ describe('MobileSocketWiring', () => {
     const socket = onText.mock.calls[0]?.[0]
     expect(socket).toBeDefined()
     expect(socket.clientCapabilities).toEqual([])
+    const changed = vi.fn()
+    const stop = socket.capabilitySource?.observe(changed)
 
     expect(() => {
       socket.clientCapabilities = ['agent-session.structured.v1']
     }).not.toThrow()
     expect(socket.clientCapabilities).toEqual(['agent-session.structured.v1'])
+    expect(socket.capabilitySource?.current).toBe(socket.clientCapabilities)
+    expect(changed).toHaveBeenCalledOnce()
+    stop?.()
 
     // Later requests must read the updated channel set, not a detached copy.
     transport.receive(ws, encrypt('{"id":"rpc-2","method":"status.get"}', sharedKey))

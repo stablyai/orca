@@ -20,8 +20,8 @@ import { createNotificationDeliveryService } from '../notifications/notification
 import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
-import { isStructuredAttentionRead } from '../../shared/agent-session-attention'
-import { isAgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import { isStructuredAttentionRead } from '../../shared/agent-session/agent-session-attention'
+import { isAgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   getLastObservedDeliveryOutcome,
   hasTriggeredPermissionDialogThisSession,

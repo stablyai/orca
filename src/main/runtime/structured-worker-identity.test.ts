@@ -4,7 +4,7 @@ import { isTerminalLeafId, parsePaneKey } from '../../shared/stable-pane-id'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
 import { sealedChildEnv } from './structured-session-child-env.test-support'
 import {
@@ -19,7 +19,7 @@ import {
   structuredWorkerRecordIsCurrent
 } from './structured-worker-identity'
 import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { ExecutionHostId } from '../../shared/execution-host'
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'

@@ -90,6 +90,8 @@ export function TerminalSettingsPreview({
       settings.terminalUseSeparateLightTheme,
       settings.terminalDividerColorDark,
       settings.terminalDividerColorLight,
+      settings.terminalColorOverrides,
+      settings.terminalColorOverridesLight,
       systemPrefersDark
     ]
   )
@@ -98,12 +100,7 @@ export function TerminalSettingsPreview({
   const composedTheme = useMemo(
     () => composeActiveTerminalTheme(appearance.theme, settings),
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [
-      appearance,
-      settings.terminalColorOverrides,
-      settings.terminalBackgroundOpacity,
-      settings.terminalCursorOpacity
-    ]
+    [appearance, settings.terminalBackgroundOpacity, settings.terminalCursorOpacity]
   )
 
   const dividerThicknessPx = clampNumber(settings.terminalDividerThicknessPx, 1, 32)

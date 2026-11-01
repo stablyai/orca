@@ -10,7 +10,7 @@ import {
   type ResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAgentResumeArgv } from '../../../../../shared/agent-resume-argv'
 import { resolveAgentPaneAuthorityKey } from '../agent-pane-authority'
 import {
@@ -27,7 +27,7 @@ import { settleAttentionRemovedBy } from '../workspace-attention/attention-remov
 export function createAgentStatusProviderSessionActions(
   runtime: AgentStatusRuntime
 ): Pick<AgentStatusSlice, 'recordAgentProviderSession'> {
-  const { get, set, requestFreshness } = runtime
+  const { get, set, requestFreshness, projectConversation } = runtime
   return {
     recordAgentProviderSession: (
       paneKey: string,
@@ -148,8 +148,12 @@ export function createAgentStatusProviderSessionActions(
             nextLaunchConfigs = { ...nextLaunchConfigs }
             delete nextLaunchConfigs[paneKey]
           }
+          const nextConversations = projectConversation(s, { ...record, agentType: agent })
           return {
             agentStatusByPaneKey: nextLive,
+            ...(nextConversations !== s.agentConversationsByPaneKey
+              ? { agentConversationsByPaneKey: nextConversations }
+              : {}),
             retainedAgentsByPaneKey: nextRetained,
             sleepingAgentSessionsByPaneKey: {
               ...s.sleepingAgentSessionsByPaneKey,

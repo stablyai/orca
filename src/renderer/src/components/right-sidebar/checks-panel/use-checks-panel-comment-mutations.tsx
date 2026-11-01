@@ -99,7 +99,8 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         repo: pr.prRepo.repo,
         host: githubProjectHost(pr.prRepo.host),
         commentId: comment.id,
-        body
+        body,
+        wakeWslDistro: true
       })
       if (!result.ok) {
         toast.error(result.error.message)
@@ -134,7 +135,8 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         owner: pr.prRepo.owner,
         repo: pr.prRepo.repo,
         host: githubProjectHost(pr.prRepo.host),
-        commentId: comment.id
+        commentId: comment.id,
+        wakeWslDistro: true
       })
       if (!result.ok) {
         toast.error(result.error.message)

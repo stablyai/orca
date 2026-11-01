@@ -1,10 +1,11 @@
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import { isAgentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import type { AgentSessionOwnerProbe } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { isAgentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,
@@ -29,6 +30,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

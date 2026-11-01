@@ -153,7 +153,7 @@ export class RpcDispatcher {
     try {
       const result = await method.handler(
         params,
-        rpcContextFromTransport(this.runtime, request, options, caller),
+        rpcContextFromTransport(this.runtime, request, options, caller, params),
         emit
       )
       recordRuntimeFeatureInteraction(
@@ -192,7 +192,7 @@ export class RpcDispatcher {
     options: RpcDispatchStreamingOptions | undefined
   ): Promise<unknown> {
     const { runtime, orchestrationMutations, legacyOrchestration } = this
-    const context = rpcContextFromTransport(runtime, request, options, caller)
+    const context = rpcContextFromTransport(runtime, request, options, caller, params)
     // Runtime test fakes may omit client-hosted browser routing.
     const clientHostedBrowser = await (runtime.routeClientHostedBrowserRpc?.(
       request.method,

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { colors, typography } from '../theme/mobile-theme'
+import { colors, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { queuedMessageStyles } from './native-chat/input/mobile-native-chat-queued-message-styles'
@@ -42,6 +42,7 @@ export function MobileQueuedCardText({
   }
   const toggle = (
     <Pressable
+      style={({ pressed }) => pressed && pressedStyle}
       testID="queued-card-text"
       accessibilityRole="button"
       accessibilityState={{ expanded }}

@@ -92,7 +92,8 @@ export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService)
     () => app.getPath('userData'),
     (senderId) => getTrustedUIRendererWebContents()?.id === senderId,
     () => createWslMoveDriverDeps(store, runtime, 'user'),
-    () => createWslMoveUndoPorts(store, app.getPath('userData'))
+    () => createWslMoveUndoPorts(store, app.getPath('userData')),
+    () => store.getSettings()
   )
   registerWslMoveOrchestrator(store, () => createWslMoveDriverDeps(store, runtime, 'automatic'))
 }

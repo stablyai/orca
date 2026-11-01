@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
-import { ArrowUp, Check, CircleHelp } from 'lucide-react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Check, CircleHelp } from 'lucide-react-native'
 import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { mobileNativeChatInputStyles } from '../composer/mobile-native-chat-input-styles'
+import { MessageBox } from '../../../components/composer-input/MessageBox'
 import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
 import {
   formatQuestionAnswerByIndexes,
@@ -188,43 +188,25 @@ export function MobileNativeChatQuestion({
       ) : null}
 
       {allowOther ? (
-        <View style={styles.freeTextRow}>
-          <TextInput
-            ref={inputRef}
-            onFocus={revealReply}
-            style={mobileNativeChatInputStyles.freeInput}
-            value={freeText}
-            onChangeText={setFreeText}
-            placeholder={
-              question.freeTextInput?.placeholder ??
-              (hasOptions
-                ? t('chat.question.otherReplyPlaceholder', 'Or type a reply…')
-                : t('chat.question.replyPlaceholder', 'Type your reply…'))
-            }
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.accentBlue}
-            onSubmitEditing={submitFreeText}
-            returnKeyType="send"
-            // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
-            multiline={question.freeTextInput ? question.freeTextInput.multiline === true : true}
-          />
-          <Pressable
-            accessibilityLabel={t('chat.question.sendReply', 'Send reply')}
-            style={({ pressed }) => [
-              styles.freeSend,
-              !canSendFreeText && styles.freeSendDisabled,
-              pressed && canSendFreeText && styles.pressed
-            ]}
-            onPress={submitFreeText}
-            disabled={!canSendFreeText}
-          >
-            <ArrowUp
-              size={18}
-              color={canSendFreeText ? colors.bgBase : colors.textMuted}
-              strokeWidth={2.6}
-            />
-          </Pressable>
-        </View>
+        <MessageBox
+          inputRef={inputRef}
+          onFocus={revealReply}
+          value={freeText}
+          onChangeText={setFreeText}
+          placeholder={
+            question.freeTextInput?.placeholder ??
+            (hasOptions
+              ? t('chat.question.otherReplyPlaceholder', 'Or type a reply…')
+              : t('chat.question.replyPlaceholder', 'Type your reply…'))
+          }
+          onSubmitEditing={submitFreeText}
+          returnKeyType="send"
+          // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
+          multiline={question.freeTextInput ? question.freeTextInput.multiline === true : true}
+          onSend={submitFreeText}
+          canSend={canSendFreeText}
+          sendAccessibilityLabel={t('chat.question.sendReply', 'Send reply')}
+        />
       ) : null}
     </ScrollView>
   )
@@ -238,7 +220,7 @@ const styles = themedStyleSheet(() => ({
     marginHorizontal: spacing.lg,
     marginVertical: spacing.sm,
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },
@@ -269,7 +251,7 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
+    borderRadius: concentricRadius(radii.surface, spacing.xs),
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },
@@ -292,7 +274,7 @@ const styles = themedStyleSheet(() => ({
   checkbox: {
     width: 20,
     height: 20,
-    borderRadius: radii.button,
+    borderRadius: radii.mark,
     borderWidth: 1.5,
     borderColor: colors.textMuted,
     alignItems: 'center',
@@ -306,7 +288,7 @@ const styles = themedStyleSheet(() => ({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.accentBlue
   },
   submitDisabled: {
@@ -319,22 +301,6 @@ const styles = themedStyleSheet(() => ({
   },
   submitTextDisabled: {
     color: colors.textMuted
-  },
-  freeTextRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.sm
-  },
-  freeSend: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.textPrimary
-  },
-  freeSendDisabled: {
-    backgroundColor: colors.bgRaised
   },
   pressed: {
     opacity: 0.7

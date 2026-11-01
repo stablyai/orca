@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionAcquisitionReceipt } from './structured-agent-session-startup-attempt-contract'
 import type {
@@ -78,6 +78,28 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.capabilityOwner(input.record.sessionId, input.record.provider)?.adapter.forkForRewind?.(
       input
     ) ?? Promise.resolve({ ok: false, reason: 'unsupported' })
+
+  /** Routed by the record's agent so a chat at rest still reaches its adapter. */
+  nameProviderConversation: NonNullable<StructuredAgentSessionAdapter['nameProviderConversation']> =
+    (input) =>
+      this.capabilityOwner(
+        input.record.sessionId,
+        input.record.provider
+      )?.adapter.nameProviderConversation?.(input)
+
+  stopProviderNaming = (): void => {
+    for (const adapter of this.adapters()) {
+      adapter.stopProviderNaming?.()
+    }
+  }
+
+  renameProviderSession: NonNullable<StructuredAgentSessionAdapter['renameProviderSession']> = (
+    input
+  ) =>
+    this.capabilityOwner(
+      input.record.sessionId,
+      input.record.provider
+    )?.adapter.renameProviderSession?.(input) ?? Promise.resolve()
 
   recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
     this.owner(input.sessionId).recoverRewind?.(input) ??

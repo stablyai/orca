@@ -8,7 +8,7 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
@@ -19,7 +19,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 describe('structured session runtime provider-exit wiring', () => {

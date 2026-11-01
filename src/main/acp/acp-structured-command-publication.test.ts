@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import capture from '../../shared/__fixtures__/omp-native-commands.json'
-import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agent-session-wire'
 import { openHostRig, send } from './acp-structured-host.test-support'
 import { acpLaunchSpecFor } from './acp-launch-specs'
 import { FakeAcpChild, PROVIDER_SESSION, waitFor } from './acp-structured-adapter.test-support'
@@ -22,7 +22,7 @@ import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from '../runtime/rpc/methods/structured-agent-session-options-read'
 import { handleStructuredAgentSessionCreate } from '../runtime/rpc/methods/structured-agent-session-create-handler'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../shared/agent-session-create-capabilities'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-create-capabilities'
 import { deferred, tick } from './acp-scripted-agent.test-support'
 
 afterEach(closeProviderTimelineRigs)

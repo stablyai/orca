@@ -151,6 +151,17 @@ export function settleClaudeTaskNotification(
   }
 }
 
+/** A provider kill ends notification debt without claiming delivery. */
+export function stopOwingClaudeAgentTaskNotification(
+  tasks: ClaudeLaunchedBackgroundTasks | undefined,
+  taskId: string
+): void {
+  const task = tasks?.get(taskId)
+  if (task?.kind === 'agent' && tasks) {
+    stopOwingClaudeTaskNotification(tasks, taskId, task)
+  }
+}
+
 function stopOwingClaudeTaskNotification(
   tasks: ClaudeLaunchedBackgroundTasks,
   taskId: string,

@@ -111,6 +111,38 @@ describe('public assignment overload', () => {
     expect(highWater).toBe(2)
   })
 
+  it('refuses an oversized chunked body before parsing it, sparing only the reserve routes', async () => {
+    const resolve = vi.fn()
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: { resolve } as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true)
+    })
+    // No Content-Length: the per-route header check alone would let this whole body be buffered.
+    const chunked = (bytes: number): RequestInit & { duplex: 'half' } => ({
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('"'.padEnd(bytes, 'a')))
+          controller.close()
+        }
+      }),
+      duplex: 'half'
+    })
+    const refused = await app.request('/v1/resolve', chunked(64 * 1024))
+    expect(refused.status).toBe(413)
+    expect(await refused.json()).toEqual({ error: 'request_too_large' })
+    expect(resolve).not.toHaveBeenCalled()
+    // Reserve bodies may reach 16 KiB, so the 4 KiB app limit must not answer for them: this one
+    // reaches the route itself, which a director answers as unavailable.
+    const reserve = await app.request('/internal/reserve', chunked(6 * 1024))
+    expect(reserve.status).toBe(404)
+    expect(await reserve.json()).toEqual({ error: 'reserve_unavailable' })
+    expect((await app.request('/internal/reserve', chunked(20 * 1024))).status).toBe(413)
+  })
+
   it('reserves one bounded resolve lane while assignment work is saturated', async () => {
     const pendingAssignments = new Map<string, ReturnType<typeof deferred<RelayAssignment>>>()
     const pendingResolve = deferred<{ userId: string; relayDeviceId: string } | null>()

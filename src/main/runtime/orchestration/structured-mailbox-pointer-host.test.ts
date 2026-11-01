@@ -2,12 +2,12 @@ import { agentSessionConversationView } from '../../../shared/agent-session-conv
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 
 const hostRef: { current: unknown } = { current: null }
@@ -225,7 +225,8 @@ describe('structured mailbox pointer host', () => {
         operationId: 'op1',
         expectedRuntimeFence: 1,
         body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE },
-        holdWhileWorking: false
+        holdWhileWorking: false,
+        stillOwed: () => true
       })
     ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
     expect(send.mock.calls[0]![1]).toMatchObject({ body: { from: NOTICE_SOURCE } })

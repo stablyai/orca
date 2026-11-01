@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
-import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
@@ -9,7 +9,7 @@ import { resolveNativeChatVisualsSkillLocation } from '../native-chat/native-cha
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentCliVersionReader } from '../agent-cli-version-probe'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import {

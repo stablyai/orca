@@ -1,3 +1,8 @@
+import { observeAutomationChatRun } from './runtime-chat-run-observer'
+import { readAutomationRunReceipt } from './automation-run-receipt'
+import { publishedLaunchTarget } from './automation-agent-run-result'
+import { launchAutomationChatAgent } from './automation-chat-agent-launch'
+import { tuiAgentDisplayName } from '../../shared/tui-agent-display-names'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { Store } from '../persistence'
@@ -41,11 +46,94 @@ export function createRuntimeAutomationService(input: {
     codexUsage,
     terminalObserver: {
       ...observer,
-      resolveRunTerminal: (run) =>
-        (run.terminalPaneKey ? launchedHandles.get(run.terminalPaneKey) : undefined) ??
-        observer.resolveRunTerminal(run),
+      resolveRunTerminal: (run) => {
+        if (run.sessionKind === 'chat') {
+          return `automation:${run.id}`
+        }
+        if (run.status === 'dispatching') {
+          const records = runtime.openedAgentSessionRecordStore()
+          if (
+            (records && readAutomationRunReceipt(records, run)) ||
+            store.listAutomations().find((entry) => entry.id === run.automationId)?.surface ===
+              'chat'
+          ) {
+            return `automation:${run.id}`
+          }
+          if (!records) {
+            void runtime.openAgentSessionRecordStore().catch((error: unknown) => {
+              console.warn('[automations] could not read accepted Chat operation:', error)
+            })
+          }
+        }
+        return (
+          (run.terminalPaneKey ? launchedHandles.get(run.terminalPaneKey) : undefined) ??
+          observer.resolveRunTerminal(run)
+        )
+      },
       observeCompletion: async (handle, options) => {
-        const observation = await observer.observeCompletion(handle, options)
+        let run = options.run
+        if (run && handle.startsWith('automation:')) {
+          if (!run.chatSessionId) {
+            const records = await runtime.openAgentSessionRecordStore()
+            const receipt = readAutomationRunReceipt(records, run)
+            const agent =
+              tuiAgentDisplayName(
+                store.listAutomations().find((entry) => entry.id === run?.automationId)?.agentId ??
+                  'Agent'
+              ) ?? 'Agent'
+            if (!receipt) {
+              return {
+                status: 'dispatch_failed',
+                error: `${agent} could not confirm this run after Orca restarted. Open its workspace before running again.`
+              }
+            }
+            const target =
+              receipt.kind === 'terminal'
+                ? publishedLaunchTarget(runtime, receipt.launch)
+                : {
+                    workspaceId: receipt.workspaceId,
+                    sessionKind: 'chat' as const,
+                    chatSessionId: receipt.sessionId,
+                    terminalPaneKey: null,
+                    terminalSessionId: null,
+                    terminalPtyId: null
+                  }
+            run = await service.markDispatchResult({
+              ...target,
+              runId: run.id,
+              status: receipt.accepted ? 'dispatched' : 'dispatch_failed',
+              error: receipt.accepted
+                ? null
+                : `${agent} could not confirm this run's prompt. Open the run before trying again.`
+            })
+            if (!receipt.accepted) {
+              return { status: 'dispatch_failed', error: run.error }
+            }
+            if (receipt.kind === 'terminal') {
+              handle = receipt.launch.outcome.handle
+            }
+          }
+          if (run.sessionKind === 'chat') {
+            try {
+              return await observeAutomationChatRun(runtime, run, options.signal)
+            } catch (error) {
+              if (options.signal.aborted) {
+                throw error
+              }
+              console.error('[automations] chat run observation failed:', error)
+              const agent =
+                tuiAgentDisplayName(
+                  store.listAutomations().find((entry) => entry.id === run?.automationId)
+                    ?.agentId ?? 'Agent'
+                ) ?? 'Agent'
+              return {
+                status: 'dispatch_failed',
+                error: `${agent} stopped reporting this run's result. Open the chat before running again.`
+              }
+            }
+          }
+        }
+        const observation = await observer.observeCompletion(handle, { ...options, run })
         if (options.run && observation.error === AGENT_HOOKS_REVIEW_BLOCKED_ERROR) {
           const markDispatchResult = service.markDispatchResult.bind(service)
           void closeEarlierHookReviewRunTerminals(
@@ -60,6 +148,19 @@ export function createRuntimeAutomationService(input: {
     },
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
     allowRemoteHostScheduling: input.headless,
+    chatDispatcher: async (request) => {
+      const { terminalHandle, ...launch } = await launchAutomationChatAgent(runtime, {
+        ...request,
+        runs: store.listAutomationRuns(request.automation.id)
+      })
+      if (launch.terminalPaneKey && terminalHandle) {
+        launchedHandles.set(launch.terminalPaneKey, terminalHandle)
+        if (launchedHandles.size > MAX_REMEMBERED_LAUNCHES) {
+          launchedHandles.delete(launchedHandles.keys().next().value ?? '')
+        }
+      }
+      return launch
+    },
     headlessDispatcher: input.headless
       ? async (request) => {
           const { terminalHandle, ...launch } = await launchHeadlessAutomationAgent(runtime, {

@@ -1,9 +1,10 @@
+import { closeTestJournalHostDatabases } from '../agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { probeAgentSessionProcessIdentity } from '../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -17,6 +18,7 @@ const SESSION = 'session-held'
 const roots: string[] = []
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 

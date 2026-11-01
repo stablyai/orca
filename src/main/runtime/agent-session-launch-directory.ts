@@ -1,5 +1,5 @@
 import { stat } from 'node:fs/promises'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AgentSessionRecordStore } from './agent-session-record-store'

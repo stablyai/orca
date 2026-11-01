@@ -21,8 +21,10 @@ import type {
 } from './git-compare-reply-schema'
 import type { MobileGitBranchCompareSummary } from './mobile-branch-compare'
 import type { MobileGitStatusHostPayload } from './git-status-reply-schema'
+import type { ConflictResolution } from '../../../src/shared/source-control-entry-actions'
 import {
   canOpenMobileGitStatusEntry,
+  getMobileConflictResolutions,
   isMobileGitDiscardableEntry,
   isMobileGitStageableEntry,
   isMobileGitUnstageableEntry,
@@ -57,7 +59,9 @@ export type MobileGitStatusEntryView = MobileGitStatusEntry & {
   canOpen: boolean
   canStage: boolean
   canUnstage: boolean
+  conflictResolutions: ConflictResolution[]
   discardActionId: string
+  resolveActionId: string
   stageActionId: string
   unstageActionId: string
 }
@@ -72,7 +76,9 @@ export function buildMobileGitStatusEntryViews(
     canOpen: canOpenMobileGitStatusEntry(entry),
     canStage: isMobileGitStageableEntry(entry),
     canUnstage: isMobileGitUnstageableEntry(entry),
+    conflictResolutions: getMobileConflictResolutions(entry),
     discardActionId: `discard:${entry.path}`,
+    resolveActionId: `resolve:${entry.path}`,
     stageActionId: `stage:${entry.path}`,
     unstageActionId: `unstage:${entry.path}`
   }))

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View, Text, Pressable } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../components/BottomDrawer'
@@ -270,7 +270,7 @@ const styles = themedStyleSheet(() => ({
   backButton: {
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -282,7 +282,7 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     textAlign: 'center'
   },
-  pressed: { backgroundColor: colors.bgRaised },
+  pressed: { backgroundColor: colors.borderSubtle },
   editorDesc: { paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
   descText: { fontSize: 12, color: colors.textMuted }
 }))

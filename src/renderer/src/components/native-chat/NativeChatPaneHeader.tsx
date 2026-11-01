@@ -2,10 +2,9 @@ import { MessageSquarePlus, SquareSplitVertical, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
 import { agentForksConversations } from '../../../../shared/agent-resume-argv'
 import type { NativeChatTabSession } from '../tab-bar/tab-session-history-switch'
-import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
 import { NativeChatResumeInCliButton } from './NativeChatResumeInCliButton'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
@@ -35,11 +34,8 @@ export function NativeChatPaneHeader({
   handOff?: NativeChatHeaderHandOff
 }): React.JSX.Element {
   const actions = useStructuredChatPaneActions(tabId, worktreeId, groupId)
-  const theme = useAppStore((state) => state.settings?.theme)
-  const systemDark = useSystemPrefersDark()
-  const light = colorScheme
-    ? colorScheme === 'light'
-    : theme === 'light' || (theme === 'system' && !systemDark)
+  const documentDark = useDocumentDarkTheme()
+  const light = colorScheme ? colorScheme === 'light' : !documentDark
   const split = translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right')
   const handOffLabel = translate(
     'components.agentSessionContinuation.handOffToAnotherAgent',

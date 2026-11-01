@@ -10,7 +10,7 @@ import {
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
-} from '../../../src/shared/native-chat-types'
+} from '../../../src/shared/native-chat/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
 import { nativeChatSessionPageRead } from './mobile-session-read-operations'

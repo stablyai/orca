@@ -12,7 +12,7 @@ import {
   type NativeChatBlock,
   type NativeChatSubagentGroupBlock,
   type NativeChatToolCallBlock
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 import { isRenderableSubagentGroup } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import { nativeChatToolRunSentence } from './native-chat-tool-run-label'

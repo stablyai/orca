@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import {
@@ -34,7 +35,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
   it('opens new agent workspace terminals in native chat when configured', () => {
     const store = createMockStore({
       settings: {
-        experimentalNativeChat: true
+        nativeChatProviders: EVERY_AGENT_CHAT
       }
     })
 
@@ -67,7 +68,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
   ])('opens a %s draft startup payload accordingly', (_label, draftPrompt, expectedViewMode) => {
     const store = createMockStore({
       settings: {
-        experimentalNativeChat: true
+        nativeChatProviders: EVERY_AGENT_CHAT
       }
     })
 
@@ -101,7 +102,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     (_label, launchDraftText, expectedViewMode) => {
       const store = createMockStore({
         settings: {
-          experimentalNativeChat: true
+          nativeChatProviders: EVERY_AGENT_CHAT
         }
       })
 
@@ -131,7 +132,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     const store = createMockStore({
       createTab,
       settings: {
-        experimentalNativeChat: true
+        nativeChatProviders: EVERY_AGENT_CHAT
       }
     })
 
@@ -164,7 +165,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       const store = createMockStore({
         createTab,
         settings: {
-          experimentalNativeChat: true
+          nativeChatProviders: EVERY_AGENT_CHAT
         }
       })
 

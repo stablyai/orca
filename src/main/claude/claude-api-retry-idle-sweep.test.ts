@@ -16,9 +16,12 @@ import {
   resetHostTestOperationIds
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 
 const SWEEP_MS = 5
@@ -95,6 +98,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

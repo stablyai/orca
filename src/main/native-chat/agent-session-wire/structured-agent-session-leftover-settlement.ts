@@ -16,7 +16,7 @@ import {
   type StaleStructuredAgentSessionStateJournal
 } from './structured-agent-session-stale-state-settlement'
 import type { DeadGenerationJournal } from './structured-agent-session-unfinished-work'
-import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
+import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import {
   structuredAgentSessionLiveFence,

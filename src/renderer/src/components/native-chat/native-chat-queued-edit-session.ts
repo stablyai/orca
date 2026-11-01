@@ -19,11 +19,11 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { subscribeToNativeChatPendingAttachments } from './native-chat-pending-attachment-cache'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
+import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { QueuedEditLease } from './structured-agent-session-queued-edit-lease'
 import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'

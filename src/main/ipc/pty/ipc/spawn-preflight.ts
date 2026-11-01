@@ -35,7 +35,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       args.worktreeId,
       args.sessionId,
       localPtySpawnCwd(args),
-      args.wslPassiveRestore === true
+      args.wslPassiveRestore === true,
+      args.connectionId
     )
     if (admission) {
       await admission
@@ -49,7 +50,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       args.worktreeId,
       args.sessionId,
       localPtySpawnCwd(args),
-      args.wslPassiveRestore === true
+      args.wslPassiveRestore === true,
+      args.connectionId
     )
     if (admission) {
       await admission
@@ -91,7 +93,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     projectRuntimeSource: { kind: 'sent', projectRuntime: args.projectRuntime },
     preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
-    resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd,
+    resolveStartupCwd: (id, cwd, fallback) =>
+      ctx.deps.resolvePtySpawnStartupCwd(id, cwd, fallback, args.connectionId),
     ...(args.wslPassiveRestore === true
       ? {
           wslStartHold: {

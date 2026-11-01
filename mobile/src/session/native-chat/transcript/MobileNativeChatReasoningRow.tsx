@@ -8,8 +8,8 @@ import {
   nativeChatReasoningHeadline,
   nativeChatReasoningHeadlineText
 } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat-row-content'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
 import { useMobileNativeChatFullMessage } from '../../MobileNativeChatFullContent'
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
 import { colors } from '../../../theme/mobile-theme'

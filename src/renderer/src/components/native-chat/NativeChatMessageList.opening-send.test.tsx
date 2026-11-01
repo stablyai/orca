@@ -25,23 +25,23 @@ afterEach(() => {
   expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
-import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from '../../../../shared/agent-session-journal-types'
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
 import {
   projectStructuredAgentSessionMessages,
   type StructuredAgentSessionOptimisticMessage
-} from '../../../../shared/structured-agent-session-message-projection'
-import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
+} from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { selectStructuredAgentSettledTurns } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 
 describe('a message sent while the turn ahead is still opening', () => {
   let restoreViewport = (): void => {}

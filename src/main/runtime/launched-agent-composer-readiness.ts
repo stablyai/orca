@@ -1,3 +1,9 @@
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import {
+  classifyTerminalCreationFailure,
+  readTerminalStartFailure,
+  terminalExitError
+} from '../../shared/terminal-start-failure'
 /** Fresh-launch signals require shell handoff plus dialog/provisional-header vetoes; shells also enable bracketed paste.
  * Captured-marker agents wait for their marker; others may fall back to tui-idle within the remaining budget.
  * Readiness alone never authorizes writing: the foreground guard must still admit the agent. */
@@ -21,7 +27,41 @@ export function getLaunchedAgentReadinessLane(agent: TuiAgent): LaunchedAgentRea
 export type LaunchedAgentReadinessRuntime = Pick<
   OrcaRuntimeService,
   'waitForTerminal' | 'waitForFreshWorkerComposer'
+> &
+  Partial<Pick<OrcaRuntimeService, 'getPtyLivenessVerdict'>>
+
+export type TerminalReadinessCreation = Pick<
+  RuntimeTerminalCreate,
+  'handle' | 'ptyId' | 'incarnationId' | 'isReattach' | 'agentSessionDisposition'
 >
+
+function readinessFailure(
+  runtime: LaunchedAgentReadinessRuntime,
+  handle: string,
+  creation: TerminalReadinessCreation | undefined,
+  error: unknown
+): unknown {
+  if (readTerminalStartFailure(error)) {
+    return error
+  }
+  const verdict = creation?.ptyId ? runtime.getPtyLivenessVerdict?.(creation.ptyId) : null
+  if (
+    !creation ||
+    creation.handle !== handle ||
+    creation.isReattach ||
+    creation.agentSessionDisposition === 'adopted' ||
+    !creation.incarnationId ||
+    !creation.ptyId ||
+    verdict?.status !== 'exited' ||
+    verdict.incarnationId !== creation.incarnationId
+  ) {
+    return error
+  }
+  return classifyTerminalCreationFailure(error, {
+    id: creation.ptyId,
+    incarnationId: creation.incarnationId
+  })
+}
 
 /** Startup dialogs and hold anchors veto signals; Codex's provisional loading header discards input. */
 export function readFreshComposerHold(
@@ -110,23 +150,56 @@ function firstAnswer(
   })
 }
 
-export function waitForWorkerAgentReady(
+export async function waitForWorkerAgentReady(
   runtime: LaunchedAgentReadinessRuntime,
   handle: string,
-  args: { agent: TuiAgent | undefined; reusesTerminal: boolean; timeoutMs: number }
+  args: {
+    agent: TuiAgent | undefined
+    reusesTerminal: boolean
+    timeoutMs: number
+    creation?: TerminalReadinessCreation
+  }
 ): Promise<RuntimeTerminalWait> {
-  return args.agent && !args.reusesTerminal
-    ? waitForWorkerStartComposer(runtime, handle, args.agent, args.timeoutMs)
-    : runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: args.timeoutMs })
+  try {
+    const result = await (args.agent && !args.reusesTerminal
+      ? waitForWorkerStartComposer(runtime, handle, args.agent, args.timeoutMs)
+      : runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: args.timeoutMs }))
+    return args.reusesTerminal
+      ? result
+      : requireFreshReadiness(runtime, handle, args.creation, result)
+  } catch (error) {
+    throw args.reusesTerminal ? error : readinessFailure(runtime, handle, args.creation, error)
+  }
+}
+
+function requireFreshReadiness(
+  runtime: LaunchedAgentReadinessRuntime,
+  handle: string,
+  creation: TerminalReadinessCreation | undefined,
+  result: RuntimeTerminalWait
+): RuntimeTerminalWait {
+  if (result.status === 'exited') {
+    const error = readinessFailure(
+      runtime,
+      handle,
+      creation,
+      terminalExitError('terminal_exited', result.exitCause)
+    )
+    if (readTerminalStartFailure(error)) {
+      throw error
+    }
+  }
+  return result
 }
 
 /** Fall back from composer detection to tui-idle using only the remaining launch budget. */
-export async function waitForLaunchedAgentComposer(
+async function waitForLaunchedAgentComposerImpl(
   runtime: LaunchedAgentReadinessRuntime,
   handle: string,
   agent: TuiAgent,
   timeoutMs: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  creation?: TerminalReadinessCreation
 ): Promise<RuntimeTerminalWait> {
   const abort = signal ? { signal } : {}
   if (getLaunchedAgentReadinessLane(agent) === 'composer-marker') {
@@ -142,7 +215,11 @@ export async function waitForLaunchedAgentComposer(
       Math.min(timeoutMs, resolveDraftPasteReadyTimeoutMs(agent)),
       { requireComposerMarker: false, stopOnDialog: true, ...abort }
     )
-  } catch {
+  } catch (error) {
+    const failure = readinessFailure(runtime, handle, creation, error)
+    if (readTerminalStartFailure(failure)) {
+      throw failure
+    }
     // tui-idle classifies timeout/dialog/unreadable panes and rejects lost handles.
   }
   return runtime.waitForTerminal(handle, {
@@ -151,4 +228,20 @@ export async function waitForLaunchedAgentComposer(
     launchReadiness: true,
     ...abort
   })
+}
+
+export async function waitForLaunchedAgentComposer(
+  ...args: Parameters<typeof waitForLaunchedAgentComposerImpl>
+): Promise<RuntimeTerminalWait> {
+  const [runtime, handle, , , , creation] = args
+  try {
+    return requireFreshReadiness(
+      runtime,
+      handle,
+      creation,
+      await waitForLaunchedAgentComposerImpl(...args)
+    )
+  } catch (error) {
+    throw readinessFailure(runtime, handle, creation, error)
+  }
 }

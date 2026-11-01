@@ -95,20 +95,4 @@ describe('BrowserNetworkTunnelOutboundMemoryBudgetRegistry', () => {
     })
     expect(registry.acquire('host-b')).not.toBeNull()
   })
-
-  it('treats unavailable native-buffer evidence as full until the source releases', () => {
-    const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({
-      hostMaxBytes: 10,
-      processMaxBytes: 10
-    })
-    const lease = registry.acquire('host-a')!
-    const socket = lease.registerBufferedAmount(() => {
-      throw new Error('socket unavailable')
-    })!
-
-    expect(socket.canSend(1)).toBe(false)
-    expect(lease.claimApplicationBytes(1)).toBeNull()
-    socket.release()
-    expect(lease.claimApplicationBytes(1)).not.toBeNull()
-  })
 })

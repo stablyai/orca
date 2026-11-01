@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "orca",
+    "lib": ["ES2022", "DOM"],
+    "skipLibCheck": false
+  },
+  "files": ["../../../resources/plugins/declarative/orca.d.ts", "src/panel.tsx"]
+}

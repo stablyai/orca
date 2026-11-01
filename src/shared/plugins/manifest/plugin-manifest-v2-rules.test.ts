@@ -4,7 +4,10 @@ import { pluginEngineFloor } from './plugin-engine-floor'
 import { PLUGIN_ENUM_SINCE_KEY } from './plugin-engine-floor-keys'
 import { PLUGIN_SCHEMA_NEWEST_SINCE, pluginHostVersion } from '../installation/plugin-host-version'
 import { parseHostPluginManifest, parsePluginManifest } from './plugin-manifest'
-import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
+import {
+  PLUGIN_DERIVED_PUBLISHER_SINCE,
+  PLUGIN_MANIFEST_V2_SINCE
+} from './plugin-schema-field-docs'
 import { PLUGIN_RESERVED_CONTRIBUTION_POINTS } from '../contributions/plugin-contribution-points'
 
 function v2(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -21,6 +24,22 @@ function v2(overrides: Record<string, unknown> = {}): Record<string, unknown> {
 }
 
 describe('manifest format 2 rules', () => {
+  it('lets publisher be left out only where older Orca will say it needs a newer one', () => {
+    const { publisher: _publisher, ...withoutPublisher } = v2()
+    expect(parsePluginManifest(withoutPublisher)).toEqual({
+      ok: false,
+      error: `engines.orca: must be at least >=${PLUGIN_DERIVED_PUBLISHER_SINCE} when publisher is left out, because older Orca requires publisher`
+    })
+    expect(
+      parsePluginManifest({
+        ...withoutPublisher,
+        engines: { orca: `>=${PLUGIN_DERIVED_PUBLISHER_SINCE}` }
+      })
+    ).toMatchObject({ ok: true })
+    // Why the host still reads it: the floor only exists for older hosts.
+    expect(parseHostPluginManifest(withoutPublisher)).toMatchObject({ ok: true })
+  })
+
   it('defaults pluginApi and refuses it where no code calls the host API', () => {
     expect(parsePluginManifest(v2())).toMatchObject({ ok: true })
     expect(parsePluginManifest(v2({ pluginApi: 1 }))).toEqual({

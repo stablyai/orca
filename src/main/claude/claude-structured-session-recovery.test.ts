@@ -21,7 +21,7 @@ import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import {
   claudeProviderHandle,
   claudeProviderHandleLeafUuid
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
   it('shares concurrent close finalization and emits lifecycle once', async () => {

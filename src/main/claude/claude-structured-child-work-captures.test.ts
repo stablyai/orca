@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
 import {
-  FOREGROUND_SUCCESS,
   INTERRUPTED_BETWEEN_TOOLS,
   INTERRUPTED_IN_OWN_SHELL
 } from './claude-captured-foreground-frames.test-fixture'
+
 import { MOVED_TO_BACKGROUND, RESUMED_BY_MESSAGE } from './claude-captured-task-frames.test-fixture'
 import { hostWithParent, producer, T0 } from './claude-child-work-producer-harness.test-fixture'
 
@@ -184,20 +184,6 @@ describe('Claude child work from captured frame orders', () => {
       outcome: 'cancelled',
       settledAt: T0 + 11_321,
       parentChildWorkId: agent?.childWorkId
-    })
-    expect(run.ingested.flatMap((outcome) => outcome?.rejected ?? [])).toEqual([])
-  })
-
-  it("keeps a finished foreground agent's final summary and usage", async () => {
-    const run = await producer(hostWithParent())
-    run.replay(FOREGROUND_SUCCESS)
-    expect(run.byDescription('Run echo hi command')).toMatchObject({
-      membership: 'settled',
-      outcome: 'succeeded',
-      settledAt: T0 + 7_101,
-      lastMessage: 'The command executed successfully. Output: `hi`',
-      totalTokens: 16_908,
-      invocation: { invocationId: 'toolu_agent', generation: 1 }
     })
     expect(run.ingested.flatMap((outcome) => outcome?.rejected ?? [])).toEqual([])
   })

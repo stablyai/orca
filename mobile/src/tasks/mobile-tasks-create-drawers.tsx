@@ -8,7 +8,8 @@ import {
   Text,
   Pressable,
   ChevronDown,
-  TextInput,
+  MessageBox,
+  TextField,
   ActivityIndicator,
   PickerModal,
   Linking,
@@ -24,6 +25,7 @@ import {
   type LinearTeam,
   TASK_SECONDARY_DRAWER_Z_INDEX
 } from './mobile-tasks-legacy-foundation'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel) {
   const {
@@ -83,7 +85,11 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
             : translate('tasks.tasksCreateDrawers.team', 'Team')}
         </Text>
         <Pressable
-          style={styles.targetButton}
+          style={({ pressed }) => [
+            styles.targetButton,
+            styles.targetButtonOnSheet,
+            pressed && pressedStyle
+          ]}
           disabled={!taskUiReady}
           onPress={() => {
             if (!taskUiReady) {
@@ -137,9 +143,10 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
                 return (
                   <Pressable
                     key={preference}
-                    style={[
+                    style={({ pressed }) => [
                       styles.issueSourceSegmentButton,
-                      selected && styles.issueSourceSegmentButtonActive
+                      selected && styles.issueSourceSegmentButtonActive,
+                      pressed && pressedStyle
                     ]}
                     accessibilityState={{ selected }}
                     onPress={() =>
@@ -169,12 +176,10 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
         <Text style={styles.fieldLabel}>
           {translate('tasks.tasksCreateDrawers.title', 'Title')}
         </Text>
-        <TextInput
-          style={styles.input}
+        <TextField
           value={createTitle}
           onChangeText={setCreateTitle}
           placeholder={translate('tasks.tasksCreateDrawers.titlePlaceholder', 'Task title')}
-          placeholderTextColor={colors.textMuted}
           autoCapitalize="sentences"
           returnKeyType="next"
         />
@@ -182,20 +187,17 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
         <Text style={styles.fieldLabel}>
           {translate('tasks.tasksCreateDrawers.description', 'Description')}
         </Text>
-        <TextInput
-          style={[styles.input, styles.bodyInput]}
+        <MessageBox
           value={createBody}
           onChangeText={setCreateBody}
           placeholder={translate('tasks.tasksCreateDrawers.descriptionPlaceholder', 'Add context')}
-          placeholderTextColor={colors.textMuted}
-          multiline
-          textAlignVertical="top"
         />
 
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.createButton,
-            (!taskUiReady || !createTitle.trim() || creatingTask) && styles.createButtonDisabled
+            (!taskUiReady || !createTitle.trim() || creatingTask) && styles.createButtonDisabled,
+            pressed && pressedStyle
           ]}
           disabled={!taskUiReady || !createTitle.trim() || creatingTask}
           onPress={() => void createTask()}
@@ -294,8 +296,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
         <Text style={styles.fieldLabel}>
           {translate('tasks.tasksCreateDrawers.personalApiKey', 'Personal API key')}
         </Text>
-        <TextInput
-          style={styles.input}
+        <TextField
           value={linearApiKeyDraft}
           onChangeText={(next) => {
             setLinearApiKeyDraft(next)
@@ -305,7 +306,6 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
             }
           }}
           placeholder="lin_api_..."
-          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
           secureTextEntry
@@ -316,7 +316,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
           <Text style={styles.detailError}>{linearConnectError}</Text>
         ) : null}
         <Pressable
-          style={styles.inlineTextLink}
+          style={({ pressed }) => [styles.inlineTextLink, pressed && pressedStyle]}
           onPress={() => void Linking.openURL('https://linear.app/settings/account/security')}
         >
           <ExternalLink size={13} color={colors.textSecondary} />
@@ -337,10 +337,11 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
           </Text>
         </View>
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.createButton,
             (!linearApiKeyDraft.trim() || linearConnectState === 'connecting') &&
-              styles.createButtonDisabled
+              styles.createButtonDisabled,
+            pressed && pressedStyle
           ]}
           disabled={!linearApiKeyDraft.trim() || linearConnectState === 'connecting'}
           onPress={() => void connectLinearAccount()}

@@ -20,6 +20,8 @@ export type WslHostRuntimeCallPort = {
   /** Hosts a confirmed stop parked: no runtime call reconnects them until the distro runs again. */
   parked: Set<string>
   isVisible: () => boolean
+  /** Bumped by every ready publish, so a read that a newer connect overtook is retried, not shown. */
+  readyGeneration: () => number
   /** Shown as liveness shows a stop, so the host's panes offer Start. */
   publishStopped: (record: WslHostDeploymentRecord) => void
   publishReady: (record: WslHostDeploymentRecord, connection: WslOrcadConnection) => void
@@ -39,9 +41,14 @@ export async function ensureWslHostForRuntimeCall(
   if (!record || !connector) {
     return
   }
+  const generation = port.readyGeneration()
   const reachability = await connector.reachability(record.distro, environmentId)
   if (reachability === 'available') {
     return
+  }
+  // A Start or New Terminal connected during the read: its 'stopped' would mark live terminals exited.
+  if (port.readyGeneration() !== generation) {
+    return ensureWslHostForRuntimeCall(environmentId, port)
   }
   const refusal = wslHostRunRefusal(deps)
   if (refusal || port.removing.has(environmentId)) {

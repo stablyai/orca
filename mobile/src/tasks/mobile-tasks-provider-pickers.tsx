@@ -5,9 +5,8 @@ import {
   View,
   Text,
   Pressable,
-  Check,
-  colors,
-  ScrollView
+  ScrollView,
+  type TaskProvider
 } from './mobile-tasks-dependencies'
 import {
   normalizeGitHubPreset,
@@ -21,16 +20,17 @@ import {
   issueSourceSlug,
   GITHUB_KIND_OPTIONS
 } from './mobile-tasks-legacy-foundation'
+import { LIST_LEADING_INSET, ListGroup, ListRow } from '../components/list/ListGroup'
 import { styles } from './mobile-tasks-legacy-styles'
 import { normalizeJiraFilter } from './mobile-jira-issue-filters'
 import { translate as t } from '../i18n/mobile-i18n'
+import { pressedStyle } from '../theme/mobile-theme'
 
-export function renderMobileTasksProviderPicker(model: ConnectionPresentationModel) {
+// Restores the provider's last view and query so switching sources round-trips.
+export function selectMobileTasksProvider(model: ConnectionPresentationModel, next: TaskProvider) {
   const {
     githubPreset,
     persistTaskSource,
-    provider,
-    providerOptions,
     setAppliedQuery,
     setGithubKind,
     setGithubMode,
@@ -40,61 +40,47 @@ export function renderMobileTasksProviderPicker(model: ConnectionPresentationMod
     setJiraFilter,
     setProvider,
     setQuery,
-    setShowProviderPicker,
-    showProviderPicker,
-    taskResumeRef,
-    taskUiReady
+    taskResumeRef
   } = model
-  return (
-    <PickerModal
-      visible={taskUiReady && showProviderPicker}
-      title={t('tasks.providerPickers.taskSource', 'Task Source')}
-      options={providerOptions}
-      selected={provider}
-      onSelect={(next) => {
-        const resume = taskResumeRef.current
-        persistTaskSource(next)
-        setProvider(next)
-        setItems([])
-        if (next === 'github') {
-          const nextMode = resume.githubMode === 'project' ? 'project' : 'items'
-          setGithubMode(nextMode)
-          if (nextMode === 'project') {
-            setQuery('')
-            setAppliedQuery('')
-            return
-          }
-          const preset =
-            resume.githubItemsPreset === null
-              ? githubPreset
-              : normalizeGitHubPreset(resume.githubItemsPreset ?? githubPreset)
-          const nextQuery =
-            resume.githubItemsPreset === null
-              ? (resume.githubItemsQuery ?? '')
-              : getTaskPresetQuery(preset)
-          const nextKind = githubKindFromQuery(nextQuery, preset)
-          setGithubPreset(preset)
-          setGithubKind(nextKind)
-          setQuery(nextQuery)
-          setAppliedQuery(scopeGitHubTaskSearch(nextQuery, nextKind))
-        } else if (next === 'linear') {
-          const nextQuery = resume.linearQuery ?? ''
-          setLinearFilter(normalizeLinearFilter(resume.linearPreset))
-          setQuery(nextQuery)
-          setAppliedQuery(nextQuery.trim())
-        } else if (next === 'jira') {
-          const nextQuery = resume.jiraQuery ?? ''
-          setJiraFilter(normalizeJiraFilter(resume.jiraPreset))
-          setQuery(nextQuery)
-          setAppliedQuery(nextQuery.trim())
-        } else {
-          setQuery('')
-          setAppliedQuery('')
-        }
-      }}
-      onClose={() => setShowProviderPicker(false)}
-    />
-  )
+  const resume = taskResumeRef.current
+  persistTaskSource(next)
+  setProvider(next)
+  setItems([])
+  if (next === 'github') {
+    const nextMode = resume.githubMode === 'project' ? 'project' : 'items'
+    setGithubMode(nextMode)
+    if (nextMode === 'project') {
+      setQuery('')
+      setAppliedQuery('')
+      return
+    }
+    const preset =
+      resume.githubItemsPreset === null
+        ? githubPreset
+        : normalizeGitHubPreset(resume.githubItemsPreset ?? githubPreset)
+    const nextQuery =
+      resume.githubItemsPreset === null
+        ? (resume.githubItemsQuery ?? '')
+        : getTaskPresetQuery(preset)
+    const nextKind = githubKindFromQuery(nextQuery, preset)
+    setGithubPreset(preset)
+    setGithubKind(nextKind)
+    setQuery(nextQuery)
+    setAppliedQuery(scopeGitHubTaskSearch(nextQuery, nextKind))
+  } else if (next === 'linear') {
+    const nextQuery = resume.linearQuery ?? ''
+    setLinearFilter(normalizeLinearFilter(resume.linearPreset))
+    setQuery(nextQuery)
+    setAppliedQuery(nextQuery.trim())
+  } else if (next === 'jira') {
+    const nextQuery = resume.jiraQuery ?? ''
+    setJiraFilter(normalizeJiraFilter(resume.jiraPreset))
+    setQuery(nextQuery)
+    setAppliedQuery(nextQuery.trim())
+  } else {
+    setQuery('')
+    setAppliedQuery('')
+  }
 }
 
 export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) {
@@ -118,47 +104,35 @@ export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) 
         </Text>
       </View>
 
-      <View style={styles.repoPickerGroup}>
-        <Pressable
-          style={styles.repoPickerRow}
+      <ListGroup separatorInset={LIST_LEADING_INSET}>
+        <ListRow
+          key="all"
+          title={t('tasks.providerPickers.allRepositories', 'All repositories')}
+          subtitle={repositoryCount(hostedRepos.length)}
+          // An empty slot keeps the title in line with the repository names below.
+          leading={<View />}
+          selected={effectiveRepoIds.size === 0}
+          accessibilityRole="checkbox"
           onPress={() => {
             const allSelection = new Set<string>()
             setSelectedRepoIds(allSelection)
             persistRepoSelection(allSelection, hostedRepos)
           }}
-        >
-          <View style={styles.repoPickerTextWrap}>
-            <Text style={styles.repoPickerTitle}>
-              {t('tasks.providerPickers.allRepositories', 'All repositories')}
-            </Text>
-            <Text style={styles.repoPickerSubtitle}>{repositoryCount(hostedRepos.length)}</Text>
-          </View>
-          {effectiveRepoIds.size === 0 ? <Check size={15} color={colors.textPrimary} /> : null}
-        </Pressable>
-
-        {hostedRepos.map((repo) => {
-          const selected = effectiveRepoIds.has(repo.id)
-          return (
-            <View key={repo.id}>
-              <View style={styles.actionSeparator} />
-              <Pressable style={styles.repoPickerRow} onPress={() => toggleRepoSelection(repo.id)}>
-                <View
-                  style={[styles.pickerRepoDot, { backgroundColor: getRepoBadgeColor(repo) }]}
-                />
-                <View style={styles.repoPickerTextWrap}>
-                  <Text style={styles.repoPickerTitle} numberOfLines={1}>
-                    {repo.displayName}
-                  </Text>
-                  <Text style={styles.repoPickerSubtitle} numberOfLines={1}>
-                    {getTaskRepoDetail(repo, repoHostLabels)}
-                  </Text>
-                </View>
-                {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-              </Pressable>
-            </View>
-          )
-        })}
-      </View>
+        />
+        {hostedRepos.map((repo) => (
+          <ListRow
+            key={repo.id}
+            title={repo.displayName}
+            subtitle={getTaskRepoDetail(repo, repoHostLabels)}
+            leading={
+              <View style={[styles.pickerRepoDot, { backgroundColor: getRepoBadgeColor(repo) }]} />
+            }
+            selected={effectiveRepoIds.has(repo.id)}
+            accessibilityRole="checkbox"
+            onPress={() => toggleRepoSelection(repo.id)}
+          />
+        ))}
+      </ListGroup>
     </BottomDrawer>
   )
 }
@@ -227,9 +201,10 @@ export function renderMobileTasksGitHubIssueSourcePicker(model: ConnectionPresen
                       return (
                         <Pressable
                           key={preference}
-                          style={[
+                          style={({ pressed }) => [
                             styles.issueSourceSegmentButton,
-                            selected && styles.issueSourceSegmentButtonActive
+                            selected && styles.issueSourceSegmentButtonActive,
+                            pressed && pressedStyle
                           ]}
                           accessibilityState={{ selected }}
                           onPress={() => void setGitHubIssueSourcePreference(repo, preference)}
@@ -374,35 +349,25 @@ export function renderMobileTasksPagePicker(model: ConnectionPresentationModel) 
         </Text>
       </View>
       <ScrollView style={styles.pagePickerList}>
-        {githubPagePickerPages.map((index) => {
-          const selected = index === githubCurrentPage
-          const loaded = index < githubPages.length
-          return (
-            <Pressable
+        <ListGroup>
+          {githubPagePickerPages.map((index) => (
+            <ListRow
               key={`github-page:${index}`}
-              style={[styles.pickerRow, selected && styles.pickerRowSelected]}
+              title={t('tasks.providerPickers.pageNumber', 'Page {{page}}', { page: index + 1 })}
+              subtitle={
+                index < githubPages.length
+                  ? t('tasks.providerPickers.pageLoaded', 'Loaded')
+                  : t('tasks.providerPickers.pageNotLoaded', 'Loads older results')
+              }
+              selected={index === githubCurrentPage}
               disabled={githubPaginationLoading}
               onPress={() => {
                 setShowGitHubPagePicker(false)
                 void handleGitHubPageChange(index)
               }}
-            >
-              <View style={styles.pickerRowContent}>
-                <Text style={styles.pickerRowLabel}>
-                  {t('tasks.providerPickers.pageNumber', 'Page {{page}}', {
-                    page: index + 1
-                  })}
-                </Text>
-                <Text style={styles.pickerRowSubtitle}>
-                  {loaded
-                    ? t('tasks.providerPickers.pageLoaded', 'Loaded')
-                    : t('tasks.providerPickers.pageNotLoaded', 'Loads older results')}
-                </Text>
-              </View>
-              {selected ? <Check size={16} color={colors.textPrimary} /> : null}
-            </Pressable>
-          )
-        })}
+            />
+          ))}
+        </ListGroup>
       </ScrollView>
     </BottomDrawer>
   )

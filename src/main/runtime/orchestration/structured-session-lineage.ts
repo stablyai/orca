@@ -5,12 +5,13 @@ import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../shared/structured-agent-session-projection'
+} from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 
 export type AgentSessionRecordReader = {
   getRecord: (sessionId: string) => AgentSessionConversationView | null
   listRecords: () => AgentSessionConversationView[]
+  isSessionUnreadable?: (sessionId: string) => boolean
   /** Absent on a store that predates tab visibility; every session then counts as open. */
   getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
 }
@@ -24,10 +25,12 @@ export function readAgentSessionRecordStore(): AgentSessionRecordReader | null {
 export function conversationRecordReader(store: {
   getConversation: AgentSessionRecordReader['getRecord']
   listConversations: AgentSessionRecordReader['listRecords']
+  isSessionUnreadable?: AgentSessionRecordReader['isSessionUnreadable']
   getVisibleSessionTabIndex: NonNullable<AgentSessionRecordReader['getVisibleSessionTabIndex']>
 }): AgentSessionRecordReader {
   return {
     getRecord: store.getConversation,
+    isSessionUnreadable: store.isSessionUnreadable,
     listRecords: store.listConversations,
     getVisibleSessionTabIndex: store.getVisibleSessionTabIndex
   }

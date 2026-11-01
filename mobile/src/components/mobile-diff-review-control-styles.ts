@@ -1,7 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   footer: {
@@ -28,7 +27,7 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   navButton: {
     width: 44,
     minHeight: 44,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
@@ -40,7 +39,7 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   footerButtonText: {
@@ -56,7 +55,7 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary
   },
   primaryButtonDone: {
@@ -75,8 +74,11 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
+  },
+  sheetSecondaryButton: {
+    backgroundColor: colors.sheetGroup
   },
   secondaryButtonText: {
     color: colors.textSecondary,
@@ -91,9 +93,6 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   buttonPressed: {
     opacity: 0.76
   },
-  buttonDisabled: {
-    opacity: 0.45
-  },
   composerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -103,26 +102,13 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   },
   drawerTitle: {
     color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700'
+    fontSize: 16,
+    fontWeight: '600'
   },
   drawerSubtitle: {
     color: colors.textMuted,
     fontSize: typography.metaSize,
     marginTop: 2
-  },
-  composerInput: {
-    minHeight: 112,
-    borderRadius: radii.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    color: colors.textPrimary,
-    // Through the seam, as the commit bar is: 14px focuses into a zoomed page on iOS.
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    lineHeight: 20,
-    padding: spacing.md,
-    textAlignVertical: 'top'
   },
   drawerButtonRow: {
     flexDirection: 'row',

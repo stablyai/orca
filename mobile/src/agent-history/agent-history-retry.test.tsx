@@ -27,24 +27,61 @@ vi.mock('expo-router', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), canGoBack: () => false }),
   usePathname: () => '/'
 }))
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('react-native-reanimated', () => ({
+  Easing: { bezier: () => (t: number) => t },
+  default: { View: 'AnimatedView' },
+  useSharedValue: (initial: number) => ({ value: initial }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (to: number) => to
+}))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
   SectionList: 'SectionList',
   Text: 'Text',
   TextInput: 'TextInput',
   View: 'View',
+  Dimensions: { get: () => ({ width: 390, height: 844 }) },
+  Keyboard: { addListener: () => ({ remove() {} }), dismiss: () => {} },
   Platform: { OS: 'web', select: (choices: Record<string, unknown>) => choices.web },
   AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
-  StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }
+  StyleSheet: { absoluteFill: {}, create: (value: unknown) => value, hairlineWidth: 1 }
 }))
 vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: 'SafeAreaView',
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
-vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Play: 'Icon', RefreshCw: 'Icon' }))
+vi.mock('react-native-svg', () => ({
+  default: 'Svg',
+  Defs: 'Defs',
+  LinearGradient: 'LinearGradient',
+  Path: 'Path',
+  Rect: 'Rect',
+  Stop: 'Stop'
+}))
+vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'Icon',
+  ChevronLeft: 'Icon',
+  CircleAlert: 'Icon',
+  History: 'Icon',
+  RefreshCw: 'Icon',
+  Search: 'Icon',
+  SearchX: 'Icon',
+  TriangleAlert: 'Icon',
+  WifiOff: 'Icon',
+  X: 'Icon'
+}))
+// Reanimated needs native modules; the eased height is not under test.
+vi.mock('../components/AutoHeight', () => ({
+  AutoHeight: ({ children, open = true }: { children: unknown; open?: boolean }) =>
+    open ? children : null
+}))
+vi.mock('../components/DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
+}))
 vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: () => {} }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('../navigation/route-handoff', async () => await import('../navigation/route-handoff.web'))
@@ -102,7 +139,7 @@ function retryControls(rendered: ReactTestRenderer): ReactTestInstance[] {
     .filter((node) =>
       node
         .findAll((text) => String(text.type) === 'Text')
-        .some((text) => text.props.children === 'Retry')
+        .some((text) => text.props.children === 'Reconnect')
     )
 }
 
@@ -110,7 +147,7 @@ describe("the agent-history panel's Retry while the host is unreachable", () => 
   it('is absent on the page, where nothing can re-dial', async () => {
     const rendered = await mountPanel()
     expect(
-      rendered.root.findAll((node) => node.props.children === 'Waiting for host…')
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop')
     ).not.toHaveLength(0)
     expect(retryControls(rendered)).toHaveLength(0)
   })

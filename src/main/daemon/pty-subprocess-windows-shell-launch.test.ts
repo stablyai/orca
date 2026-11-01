@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { setImmediate as nextNativeTurn } from 'node:timers/promises'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
 const {
@@ -68,7 +69,11 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
-import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+import {
+  createPtyProcessEventEmitter,
+  mockPtyProcess,
+  useDaemonPtySubprocessEnv
+} from './pty-subprocess-test-harness'
 
 const POWERSHELL_OSC133_COMMAND_ARGS = ['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)]
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
@@ -83,22 +88,24 @@ describe('createPtySubprocess', () => {
   })
 
   it('delivers output and exit that land while ConPTY startup is still being confirmed', async () => {
-    const proc = mockPtyProcess()
-    // The shell dies before ConPTY announces its input reader, so nothing has subscribed yet.
-    // Each event is emitted once, to whoever listens at that moment, as node-pty does.
-    proc.onData.mockImplementationOnce((cb: (data: string) => void) => {
-      queueMicrotask(() => cb('\x1b[1t'))
-      return { dispose: vi.fn() }
-    })
-    proc.onExit.mockImplementationOnce((cb: (e: { exitCode: number }) => void) => {
-      queueMicrotask(() => queueMicrotask(() => cb({ exitCode: 7 })))
-      return { dispose: vi.fn() }
-    })
+    const proc = { ...mockPtyProcess(), ...createPtyProcessEventEmitter() }
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32' })
     try {
-      const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+      let published = false
+      const pending = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 }).then(
+        (handle) => {
+          published = true
+          return handle
+        }
+      )
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+      await nextNativeTurn()
+      expect(published).toBe(false)
+      proc._simulateData('\x1b[1t')
+      proc._simulateExit(7)
+      const handle = await pending
       const data: string[] = []
       const exitCode = new Promise<number>((resolve) => handle.onExit((code) => resolve(code)))
       handle.onData((chunk) => data.push(chunk))

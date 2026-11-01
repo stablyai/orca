@@ -5,7 +5,7 @@ import type {
 } from '../../shared/runtime-terminal-contracts'
 import { RuntimeMachineName } from './runtime-machine-name'
 import { OrcaRuntimeService } from './orca-runtime'
-import { makeTuiIdleLeaf, makeTuiIdlePty } from './tui-idle-wait-test-harness'
+import { makeTuiIdlePty } from './tui-idle-wait-test-harness'
 import { readFileSync } from 'node:fs'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { join } from 'node:path'
@@ -473,6 +473,19 @@ describe('Screen rule readiness scope', () => {
   })
 })
 
+/** Stands in for a mailbox with work pending, which these timer mechanics take as given. */
+function withPendingDelivery(runtime: OrcaRuntimeService): OrcaRuntimeService {
+  runtime['getOrchestrationMailboxTerminal'] = (ptyId) => ({
+    ptyId,
+    handle: 'term_pending',
+    paneKeys: [],
+    lastAgentStatus: 'idle',
+    lastAgentStatusObservedLive: true
+  })
+  vi.spyOn(runtime['orchestrationMailboxNotifications'], 'hasDeliverableMail').mockReturnValue(true)
+  return runtime
+}
+
 describe('terminal wait ownership', () => {
   beforeEach(() => {
     vi.spyOn(RuntimeMachineName.prototype, 'start').mockImplementation(() => {})
@@ -550,37 +563,41 @@ describe('terminal wait ownership', () => {
     expect(await second).toBeNull()
   })
 
-  it('rechecks current leaf evidence before delivery and coalesces repeated refusals', async () => {
-    let leaf = makeTuiIdleLeaf({ lastOutputAt: Date.now(), lastAgentStatus: 'working' })
+  it('rechecks current terminal evidence before delivery and coalesces repeated refusals', async () => {
+    const pty = makeTuiIdlePty({
+      lastOutputAt: Date.now(),
+      lastAgentStatus: 'idle',
+      lastOscTitle: 'Codex'
+    })
     const deliver = vi.fn()
-    const runtime = new OrcaRuntimeService()
-    const key = runtime['getLeafKey'](leaf.tabId, leaf.leafId)
-    runtime['leaves'].set(key, leaf)
-    runtime['deliverPendingMessagesForLeaf'] = deliver
-    expect(runtime['checkDeliverySettledAndArmRecheck'](leaf)).toBe(false)
-    expect(runtime['checkDeliverySettledAndArmRecheck'](leaf)).toBe(false)
+    const runtime = withPendingDelivery(new OrcaRuntimeService())
+    runtime['ptysById'].set(pty.ptyId, pty)
+    runtime['deliverPendingMessagesForPty'] = deliver
+    expect(runtime['checkDeliverySettledAndArmRecheck'](pty.ptyId)).toBe(false)
+    expect(runtime['checkDeliverySettledAndArmRecheck'](pty.ptyId)).toBe(false)
     expect(vi.getTimerCount()).toBe(1)
-    leaf = makeTuiIdleLeaf({ lastOutputAt: Date.now(), lastAgentStatus: 'idle' })
-    runtime['leaves'].set(key, leaf)
+    pty.lastOscTitle = null
     await vi.advanceTimersByTimeAsync(3050)
-    expect(deliver).toHaveBeenCalledOnce()
-    expect(deliver).toHaveBeenCalledWith(leaf)
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(pty.ptyId)
     expect(vi.getTimerCount()).toBe(0)
   })
 
   it('cancels only the delivery recheck belonging to its runtime', async () => {
-    const leaf = makeTuiIdleLeaf({ lastOutputAt: Date.now(), lastAgentStatus: 'working' })
-    const first = new OrcaRuntimeService()
-    const second = new OrcaRuntimeService()
-    const key = first['getLeafKey'](leaf.tabId, leaf.leafId)
-    first['leaves'].set(key, leaf)
-    second['leaves'].set(key, leaf)
-    first['checkDeliverySettledAndArmRecheck'](leaf)
-    second['checkDeliverySettledAndArmRecheck'](leaf)
+    const pty = makeTuiIdlePty({
+      lastOutputAt: Date.now(),
+      lastAgentStatus: 'idle',
+      lastOscTitle: 'Codex'
+    })
+    const first = withPendingDelivery(new OrcaRuntimeService())
+    const second = withPendingDelivery(new OrcaRuntimeService())
+    first['ptysById'].set(pty.ptyId, pty)
+    second['ptysById'].set(pty.ptyId, pty)
+    first['checkDeliverySettledAndArmRecheck'](pty.ptyId)
+    second['checkDeliverySettledAndArmRecheck'](pty.ptyId)
     expect(vi.getTimerCount()).toBe(2)
-    first['clearDeliveryRecheck'](key)
+    first['clearDeliveryRecheck'](pty.ptyId)
     expect(vi.getTimerCount()).toBe(1)
-    second['clearDeliveryRecheck'](key)
+    second['clearDeliveryRecheck'](pty.ptyId)
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -608,6 +625,7 @@ describe('terminal wait ownership', () => {
     const pending = Promise.withResolvers<RuntimeTerminalWait>()
     const waiter: TerminalWaiter = {
       handle: 'handle-1',
+      ptyId: 'pty-1',
       condition: 'tui-idle',
       resolve: pending.resolve,
       reject: pending.reject,
@@ -615,7 +633,6 @@ describe('terminal wait ownership', () => {
       cancelIdlePoll: null,
       abortCleanup: null
     }
-    runtime['handleByPtyId'].set('pty-1', waiter.handle)
     runtime['terminalWaiters'].add(waiter)
     const verdict = vi.fn<OrcaRuntimeService['evaluateTuiIdleForPty']>(() => ({
       kind: 'ready-strong'

@@ -161,6 +161,21 @@ function StructuredChatTab({
             timestamp: 1,
             source: 'transcript',
             blocks: [{ type: 'text', text: 'Keep the task context' }]
+          },
+          {
+            id: 'start',
+            role: 'system',
+            timestamp: 2,
+            source: 'transcript',
+            agentStart: true,
+            blocks: [{ type: 'text', text: 'Do not export this worker assignment' }]
+          },
+          {
+            id: 'answer',
+            role: 'assistant',
+            timestamp: 3,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: 'Keep the answer' }]
           }
         ]
       : [],
@@ -437,7 +452,7 @@ describe('a structured chat tab', () => {
     view.rerender(<StructuredChatTab inWorkspace fallback />)
     await act(async () => openMenuHandOff())
     expect(handOff.dialog.mock.lastCall?.[0].request.source).toMatchObject({
-      capturedText: 'user: Keep the task context',
+      capturedText: 'user: Keep the task context\n\nassistant: Keep the answer',
       transcriptPath: undefined
     })
     fireEvent.click(screen.getByText('Close hand-off'))
@@ -445,7 +460,7 @@ describe('a structured chat tab', () => {
     handOff.options.mockResolvedValue({ status: 'current', transcriptPath: '/native.jsonl' })
     await act(async () => openMenuHandOff())
     expect(handOff.dialog.mock.lastCall?.[0].request.source).toMatchObject({
-      capturedText: 'user: Keep the task context',
+      capturedText: 'user: Keep the task context\n\nassistant: Keep the answer',
       transcriptPath: undefined
     })
     fireEvent.click(screen.getByText('Close hand-off'))
@@ -475,6 +490,12 @@ describe('a structured chat tab', () => {
       if (fallback) {
         expect(handOff.dialog.mock.lastCall?.[0].request.source.capturedText).toContain(
           'Keep the task context'
+        )
+        expect(handOff.dialog.mock.lastCall?.[0].request.source.capturedText).toContain(
+          'Keep the answer'
+        )
+        expect(handOff.dialog.mock.lastCall?.[0].request.source.capturedText).not.toContain(
+          'worker assignment'
         )
         fireEvent.click(screen.getByText('Close hand-off'))
       } else {

@@ -1,4 +1,4 @@
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { isFloatingWorkspaceId } from '../../shared/floating-workspace-worktree'
 
 /** First pin wins: resolving workspace settings again must not silently move an existing conversation. */

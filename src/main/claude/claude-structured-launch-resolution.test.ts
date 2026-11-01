@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
@@ -20,7 +20,7 @@ import {
   createClaudeCliFlagSupport,
   type ClaudeCliFlag
 } from './claude-cli-flag-support'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'orca-session-1'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<

@@ -1,10 +1,11 @@
-import { codeFenceFor } from './markdown-code-fence'
+import { codeBlockMarkdown } from './html-code-block-markdown'
 import { escapeTableCell } from './markdown-table-rows'
 import {
   inlineChildren,
   inlineMarkdown,
   inlineNodesMarkdown,
-  textContent
+  textContent,
+  trailingLineBreaks
 } from './html-inline-markdown'
 import { holdsUnownedList, listMarkdown } from './html-list-markdown'
 
@@ -139,6 +140,15 @@ function headingCodeMarkdown(element: Element): string {
   return blocks.join('\n\n')
 }
 
+// A lone trailing <br> is the browser's caret placeholder (a cleared cell keeps one); a run of two is authored spacing.
+function tableCellMarkdown(cell: Element): string {
+  const markdown = inlineChildren(cell, 'cell')
+    .replace(/\r\n?|\n/g, ' ')
+    .trim()
+  const trailing = trailingLineBreaks(markdown)
+  return trailing.count === 1 ? markdown.slice(0, trailing.start).trimEnd() : markdown
+}
+
 // Unknown block elements serialize inline content so browser-created tags cannot lose user text.
 export function blockMarkdown(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) {
@@ -164,11 +174,7 @@ export function blockMarkdown(node: Node): string {
     return quoteMarkdown(node)
   }
   if (tag === 'pre') {
-    const language = node.getAttribute('data-language') ?? ''
-    // Drop trailing newlines: browsers leave a placeholder <br> after Enter at the end of a block.
-    const code = textContent(node).replace(/\n+$/, '')
-    const fence = codeFenceFor(code)
-    return `${fence}${language}\n${code}\n${fence}`
+    return codeBlockMarkdown(node)
   }
   if (tag === 'ul' || tag === 'ol') {
     return listMarkdown(node, 0)
@@ -179,7 +185,7 @@ export function blockMarkdown(node: Node): string {
       return ''
     }
     const cellsFor = (row: Element) =>
-      Array.from(row.children).map((cell) => escapeTableCell(inlineChildren(cell).trim()))
+      Array.from(row.children).map((cell) => escapeTableCell(tableCellMarkdown(cell)))
     const headers = cellsFor(rows[0]!)
     const bodyRows = rows.slice(1).map(cellsFor)
     const separator = headers.map(() => '---').join(' | ')

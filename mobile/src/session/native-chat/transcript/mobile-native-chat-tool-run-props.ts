@@ -1,7 +1,7 @@
 import type {
   NativeChatBlock,
   NativeChatToolCallBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 
 export type MobileNativeChatToolRunAsides = {
   before: ReadonlyMap<NativeChatBlock, readonly React.JSX.Element[]>

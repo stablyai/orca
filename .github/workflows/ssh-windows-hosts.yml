@@ -135,6 +135,7 @@ jobs:
           # mobile: the template ships the mobile web page, which builds from mobile/.
           sparse-checkout: |
             .github
+            cloud
             config
             mobile
             native

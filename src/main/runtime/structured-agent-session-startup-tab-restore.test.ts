@@ -6,11 +6,11 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
 import {
   closeTestJournalHostDatabase,
@@ -24,8 +24,8 @@ import { publishJournalSessionEpoch } from '../native-chat/agent-session-journal
 import { createQueuedRigProvider } from '../native-chat/agent-session-wire/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { createStructuredSessionObservationClock } from '../native-chat/agent-session-wire/structured-agent-session-observation-clock.test-fixture'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { mintAgentSessionOperationId } from './orchestration/structured-pointer-operation-id'
 import { journalIdentityFor } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { attachParamsForRecord } from '../native-chat/agent-session-wire/structured-agent-session-conversation-open'
@@ -43,8 +43,8 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 // `failing` fails every record write; `grants` lets that many more through, then fails.
 const writes = vi.hoisted(() => ({ failing: false, grants: Infinity, refused: 0 }))
@@ -78,7 +78,7 @@ beforeEach(async () => {
 afterEach(async () => {
   Object.assign(writes, { failing: false, grants: Infinity, refused: 0 })
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
@@ -162,7 +162,7 @@ async function seedProfile(
     })
     await journal.close()
   }
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   if (options.newer) {
     await seedTestAgentSessionStoreFromNewerBuild(root)
   }
@@ -275,7 +275,7 @@ describe('restoring the chat tabs open at quit', () => {
     for (const row of recordedRows) {
       insertTestJournalRowJson(database.db, sessionId, row.seq, row.json, row.ts)
     }
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
 
     const installs: {
       host: StructuredAgentSessionHost
@@ -352,7 +352,7 @@ describe('restoring the chat tabs open at quit', () => {
       clock.restore()
       await stopStructuredAgentSessionRuntime()
       expect(firstDatabase.isClosed).toBe(true)
-      closeTestJournalHostDatabases()
+      await closeTestJournalHostDatabases()
       opens.mockClear()
       const nextRuntime = startupRuntime({
         profileChats: [sessionId],

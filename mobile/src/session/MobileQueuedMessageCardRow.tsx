@@ -10,7 +10,7 @@ import {
   Send,
   Trash2
 } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { queuedMessageCardSteers } from '../../../src/shared/structured-agent-session-queued-cards'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
@@ -27,6 +27,8 @@ type QueuedMessageCardRowProps = {
   busy: boolean
   editBlocked: boolean
   steerHeld: boolean
+  /** Steer only into a running turn; an idle agent's card reads Send. */
+  agentWorking: boolean
   onSend: () => void
   onDelete: () => void
   onMore: () => void
@@ -59,6 +61,7 @@ function QueuedMessageCardContents({
   busy,
   editBlocked,
   steerHeld,
+  agentWorking,
   onSend,
   onDelete,
   onMore,
@@ -68,7 +71,7 @@ function QueuedMessageCardContents({
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const returned = card.state === 'returned'
-  const steers = queuedMessageCardSteers(card)
+  const steers = agentWorking && queuedMessageCardSteers(card)
   const count = card.images?.length ?? 0
   return (
     <View testID="queued-card-row" style={[styles.card, styles.divided]}>
@@ -186,6 +189,7 @@ function QueuedMessageCardContents({
         <View style={styles.expandedBody}>
           {expanded ? (
             <Pressable
+              style={({ pressed }) => pressed && pressedStyle}
               accessibilityRole="button"
               accessibilityState={{ expanded: true }}
               accessibilityHint={t(

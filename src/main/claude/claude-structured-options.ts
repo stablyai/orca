@@ -10,7 +10,7 @@ import {
 } from './claude-structured-session-options'
 import type { ClaudeSession } from './structured/claude-structured-session-state'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from '../../shared/agent-session/options/structured-agent-session-option-codec'
 
 import { beginClaudeOptionMutation } from './claude-structured-execution-observations'
 import {

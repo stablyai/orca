@@ -1,6 +1,6 @@
 // Install lazily after Electron finalizes the profile path; runtimes without structured requests need no store. Journal-open failures install a refusal.
 
-import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
+import type { AgentSessionResumeTrigger } from '../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import {
   structuredAgentSessionTeardownTrigger,
   tearDownRuntime,
@@ -10,6 +10,7 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { stopAgentSessionAttachments } from './structured-agent-session-attachment-wiring'
 import {
+  closeAgentSessionRecordStoreDatabase,
   openAgentSessionRecordStoreOnce,
   releaseAgentSessionRecordStore
 } from './agent-session-record-store-slot'
@@ -73,13 +74,16 @@ export async function stopStructuredAgentSessionRuntime(options?: {
   }
   // A store admission opened with no host built on it has no teardown to close its database.
   const recordStore = await releaseAgentSessionRecordStore()
-  if (
+  const failures: unknown[] = []
+  const standalone =
     recordStore &&
     !outstanding.some((runtime) => runtime.journalDatabase === recordStore.journalDatabase)
-  ) {
-    recordStore.journalDatabase.close()
+
+  try {
+    await closeAgentSessionRecordStoreDatabase(standalone ? recordStore.journalDatabase : undefined)
+  } catch (error) {
+    failures.push(error)
   }
-  const failures: unknown[] = []
   for (const runtime of outstanding) {
     try {
       await tearDownRuntime(runtime, trigger)

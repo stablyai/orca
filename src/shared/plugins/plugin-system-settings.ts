@@ -16,6 +16,8 @@ export type PluginSystemSettings = {
   pluginConsents: Record<string, string>
   /** Local directories loaded as dev-mode plugins (manifest hot-reload). */
   devPluginPaths: string[]
+  /** Qualified plugin key → hosts the person always allows its frames to open. Main-only. */
+  pluginExternalHostGrants?: Record<string, string[]>
 }
 
 type PluginSystemDefaultOnSettings = Pick<
@@ -32,4 +34,21 @@ export function normalizePluginSystemEnabledDefaultOn(
       settings?.pluginSystemDefaultedOn === true ? settings.pluginSystemEnabled !== false : true,
     pluginSystemDefaultedOn: true
   }
+}
+
+/** Whether `plugin:<key>/<name>` content comes from a plugin that is switched off. */
+export function isPluginContentSwitchedOff(
+  settings:
+    | Partial<Pick<PluginSystemSettings, 'pluginSystemEnabled' | 'disabledPlugins'>>
+    | undefined,
+  contentId: string
+): boolean {
+  if (!contentId.startsWith('plugin:')) {
+    return false
+  }
+  const pluginKey = contentId.slice('plugin:'.length, contentId.lastIndexOf('/'))
+  return (
+    settings?.pluginSystemEnabled === false ||
+    (Array.isArray(settings?.disabledPlugins) && settings.disabledPlugins.includes(pluginKey))
+  )
 }

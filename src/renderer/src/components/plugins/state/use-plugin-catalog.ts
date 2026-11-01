@@ -7,6 +7,7 @@ import type {
 import { translate } from '@/i18n/i18n'
 import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
 import { PluginPreviewCache } from './plugin-preview-cache'
+import { requestPluginInstallCounts } from '@/store/plugin-install-counts'
 
 /** A plugin page's manifest read; a failure means nothing is known, not "nothing needed". */
 export type PluginPagePreview =
@@ -55,6 +56,7 @@ export function usePluginCatalog({
 
   const loadMarketplaceData = useCallback(async (): Promise<void> => {
     const requestId = ++requestRef.current
+    requestPluginInstallCounts()
     try {
       const [nextSources, nextListings] = await Promise.all([
         window.api.plugins.listMarketplaces(),

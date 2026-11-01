@@ -196,6 +196,8 @@ function initialState(): MobileSourceControlContentState {
     openHistory: noop,
     checkoutBranch: unusedAsync,
     abortConflictOperation: unusedAsync,
+    resolveConflict: unusedAsync,
+    completeMerge: unusedAsync,
     runActionSheetCommit: unusedAsync,
     runActionSheetCommitSequence: unusedAsync,
     runActionSheetCommitSync: unusedAsync,

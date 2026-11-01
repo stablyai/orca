@@ -110,6 +110,14 @@ export function isWebContentsLoading(wc: WebContents): boolean {
   }
 }
 
+export function isLoadingMainFrame(wc: WebContents): boolean {
+  try {
+    return wc.isLoadingMainFrame()
+  } catch {
+    return false
+  }
+}
+
 export function waitForAbortedNavigationReplacement(
   wc: WebContents,
   browserPageId: string,

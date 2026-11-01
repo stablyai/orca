@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { setImmediate as nextNativeTurn } from 'node:timers/promises'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
 const {
@@ -69,7 +70,22 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
-import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+import {
+  createPtyProcessEventEmitter,
+  mockPtyProcess,
+  useDaemonPtySubprocessEnv,
+  type MockPtyProcess
+} from './pty-subprocess-test-harness'
+
+async function announceConptyStartup(
+  proc: MockPtyProcess,
+  pending: ReturnType<typeof createPtySubprocess>
+) {
+  await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+  await nextNativeTurn()
+  proc._simulateData('\x1b[c')
+  return pending
+}
 
 describe('createPtySubprocess', () => {
   useDaemonPtySubprocessEnv({
@@ -479,7 +495,7 @@ describe('createPtySubprocess', () => {
   it('keeps menu startup agent foreground through early negative shell enrichment', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))
-    const proc = mockPtyProcess()
+    const proc = { ...mockPtyProcess(), ...createPtyProcessEventEmitter() }
     proc.process = 'powershell.exe'
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -487,13 +503,16 @@ describe('createPtySubprocess', () => {
     resolveAgentForegroundProcessMock.mockResolvedValue('powershell.exe')
 
     try {
-      const handle = await createPtySubprocess({
-        sessionId: 'test',
-        cols: 80,
-        rows: 24,
-        cwd: 'C:\\repo\\orca',
-        command: 'codex'
-      })
+      const handle = await announceConptyStartup(
+        proc,
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\repo\\orca',
+          command: 'codex'
+        })
+      )
 
       expect(handle.getForegroundProcess()).toBe('codex')
       expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
@@ -521,7 +540,7 @@ describe('createPtySubprocess', () => {
   it('keeps menu startup agent foreground during a slow Windows shell enrichment window', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))
-    const proc = mockPtyProcess()
+    const proc = { ...mockPtyProcess(), ...createPtyProcessEventEmitter() }
     proc.process = 'powershell.exe'
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -534,13 +553,16 @@ describe('createPtySubprocess', () => {
     )
 
     try {
-      const handle = await createPtySubprocess({
-        sessionId: 'repo::C:\\repo\\orca@@deadbeef',
-        cols: 80,
-        rows: 24,
-        cwd: 'C:\\repo\\orca',
-        command: 'codex'
-      })
+      const handle = await announceConptyStartup(
+        proc,
+        createPtySubprocess({
+          sessionId: 'repo::C:\\repo\\orca@@deadbeef',
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\repo\\orca',
+          command: 'codex'
+        })
+      )
 
       expect(handle.getForegroundProcess()).toBe('codex')
       expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(

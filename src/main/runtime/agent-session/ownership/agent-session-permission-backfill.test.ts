@@ -2,20 +2,24 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { foundAgentSessionRecord } from '../../agent-session-record-founding'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from '../../agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 
 let root: string
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-permission-backfill-'))
 })
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

@@ -7,6 +7,7 @@ import {
   type AgentCommandLease,
   type AgentPointerInput
 } from './browser-agent-activity'
+import { BrowserPageEvents, type BrowserPageEvent } from './browser-page-events'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
   private readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
@@ -17,9 +18,28 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     worktreeForPage: (browserPageId) => this.worktreeIdByTabId.get(browserPageId) ?? null
   })
 
+  protected readonly pageEvents = new BrowserPageEvents()
+
+  /** Tabs requested, popup outcomes and downloads attributed to the page, as they happen. */
+  observePageEvents(
+    browserPageId: string,
+    listener: (event: BrowserPageEvent) => void
+  ): () => void {
+    return this.pageEvents.observe(browserPageId, listener)
+  }
+
   /** Holds the page's agent marking for one queued command, from queueing until it settles. */
   beginAgentCommand(browserPageId: string): AgentCommandLease {
     return this.agentActivity.beginCommand(browserPageId)
+  }
+
+  handOverAgentActivity(fromPageId: string, toPageId: string): void {
+    this.agentActivity.handOver(fromPageId, toPageId)
+  }
+
+  /** The page shows "An agent is using this page": a command is queued or one settled within the idle window. */
+  isAgentUsingPage(browserPageId: string): boolean {
+    return this.agentActivity.isActive(browserPageId)
   }
 
   // Show the agent's pointer landing before the input it precedes reaches the page.

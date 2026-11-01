@@ -7,7 +7,7 @@ import {
   buildClaudeModelListArgs,
   CLAUDE_MODEL_LIST_STDIN
 } from '../../shared/claude-model-list-probe'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { runClaudeBackgroundAttempts } from '../../shared/claude-background-run-isolation'
 import {
   isCompleteClaudeModelListing,

@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrchestrationStructuredMailboxPointerDelivery,
-  type StructuredMailboxPointerHost
-} from './structured-mailbox-pointer-delivery'
+import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
+import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-host-contract'
 import type { StructuredPointerOperationRow } from './db/messages/structured-pointer-operation-store'
 import {
   structuredPointerBatchFingerprint,
@@ -10,6 +8,8 @@ import {
 } from './structured-pointer-operation-id'
 import type { StructuredWorkerIdentity } from '../structured-worker-identity'
 import { RuntimeMessageWaiters } from '../runtime-message-waiters'
+
+import { verifyHeldLocalWorkerDone } from './structured-mailbox-held-worker-report.test-fixture'
 
 const IDENTITY: StructuredWorkerIdentity = {
   handle: 'structworker_1',
@@ -46,18 +46,26 @@ function harness(options: {
     { id: 'm1', type: 'status', sequence: 3, from_handle: 'term_coord', run_id: 'run_1' }
   ]
   const pointed = new Set<string>()
+  const consumed = new Set<string>()
+  const turns: string[] = []
+  let journalRead: Promise<void> = Promise.resolve()
   const markAsDelivered = vi.fn((ids: string[]) => {
     for (const id of ids) {
       pointed.add(id)
     }
   })
-  const send: StructuredMailboxPointerHost['send'] = vi.fn(async () =>
-    awaitingHuman
-      ? { kind: 'held' as const }
-      : options.queued
-        ? { kind: 'queued' as const }
-        : { kind: 'sent' as const, state: options.dispatchState ?? ('accepted' as const) }
-  )
+  const send: StructuredMailboxPointerHost['send'] = vi.fn(async (input) => {
+    if (!input.stillOwed()) {
+      return { kind: 'obsolete' as const }
+    }
+    if (awaitingHuman) {
+      return { kind: 'held' as const }
+    }
+    turns.push(input.operationId)
+    return options.queued
+      ? { kind: 'queued' as const }
+      : { kind: 'sent' as const, state: options.dispatchState ?? ('accepted' as const) }
+  })
   const sendMock = vi.mocked(send)
   const readContext = vi.fn<StructuredMailboxPointerHost['currentContextClearOperationId']>(
     () => undefined
@@ -85,9 +93,11 @@ function harness(options: {
       mail.filter(
         (message) =>
           !pointed.has(message.id) &&
+          !consumed.has(message.id) &&
           !input.excludeTypes.includes(message.type) &&
           !input.excludeIds?.includes(message.id)
       ),
+    areUnreadMessages: (_handle: string, ids: string[]) => ids.every((id) => !consumed.has(id)),
     markAsDelivered,
     getStructuredPointerOperation: (key: string) => stored.get(key),
     putStructuredPointerOperation: (row: StructuredPointerOperationRow) =>
@@ -100,9 +110,15 @@ function harness(options: {
     resolveStructuredTarget: (mailboxHandle) =>
       mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
     getCliCommand: () => 'orca-dev',
-    senderName: (party) => (party.address === 'term_coord' ? 'Coordinator' : null),
+    senderSnapshot: (party) => ({
+      name: party.address === 'term_coord' ? 'Coordinator' : null,
+      agent: null
+    }),
     host: {
-      readSessionFacts: async () => (attached ? { submissions } : null),
+      readSessionFacts: async () => {
+        await journalRead
+        return attached ? { submissions } : null
+      },
       hasActionablePromptNow: () => awaitingHuman,
       isWorkingNow: () => working,
       currentFence: () => 4,
@@ -131,6 +147,17 @@ function harness(options: {
     },
     setWorking: (next: boolean) => {
       working = next
+    },
+    turns,
+    /** A consuming check: marks the mail read. */
+    consume: (id: string) => consumed.add(id),
+    /** Holds every journal read until the returned release runs. */
+    holdJournalRead: () => {
+      let release = () => {}
+      journalRead = new Promise((resolve) => {
+        release = resolve
+      })
+      return () => release()
     }
   }
 }
@@ -239,6 +266,21 @@ describe('structured mailbox pointer delivery', () => {
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
     expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
+  })
+
+  it('starts no turn for mail a check consumed while the journal read was in flight', async () => {
+    const { delivery, markAsDelivered, turns, consume, receive, holdJournalRead } = harness({})
+    const release = holdJournalRead()
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    consume('m1')
+    receive('m2', 4)
+    release()
+    await flush()
+    await flush()
+    expect(turns).toHaveLength(1)
+    expect(markAsDelivered).toHaveBeenCalledTimes(1)
+    expect(markAsDelivered).toHaveBeenCalledWith(['m2'], 'dispatch:d1')
   })
 
   it.each([false, true])(
@@ -561,7 +603,7 @@ describe('forgetting one settled worker', () => {
           : null
       },
       getCliCommand: () => 'orca',
-      senderName: () => null,
+      senderSnapshot: () => ({ name: null, agent: null }),
       host: {
         readSessionFacts: async () => (attached ? { submissions: [] } : null),
         hasActionablePromptNow: () => false,
@@ -661,7 +703,7 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
       getMessageWaiters: () => undefined,
       resolveStructuredTarget: () => ({ sessionId: target, dispatchId: 'd1' }),
       getCliCommand: () => 'orca-dev',
-      senderName: () => null,
+      senderSnapshot: () => ({ name: null, agent: null }),
       host: {
         readSessionFacts: async () => ({ submissions: [] }),
         hasActionablePromptNow: () => false,
@@ -737,3 +779,8 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
     expect(send).toHaveBeenCalledTimes(1)
   })
 })
+
+it.each(['gone', 'live-other-kind', 'metadata-read-fails'])(
+  'delivers held local worker_done with exact durable identity after terminal loss (%s)',
+  verifyHeldLocalWorkerDone
+)

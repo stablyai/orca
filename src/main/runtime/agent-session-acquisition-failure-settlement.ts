@@ -2,12 +2,10 @@ import {
   agentSessionOperationKey,
   settleAgentSessionOperation,
   type AgentSessionOperationOutcome
-} from '../../shared/agent-session-operation-ledger'
-import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
-import type {
-  AgentSessionDeathEvidence,
-  AgentSessionRecord
-} from '../../shared/agent-session-record'
+} from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import { nextAgentSessionFence } from '../../shared/agent-session/lifecycle/agent-session-next-fence'
+import type { AgentSessionDeathEvidence } from '../../shared/agent-session-death-evidence'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { assertFence, withLease } from './agent-session/ownership/agent-session-lease-transitions'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 

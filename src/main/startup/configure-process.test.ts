@@ -19,7 +19,8 @@ vi.mock('electron', () => {
         appendSwitch: vi.fn(),
         getSwitchValue: vi.fn(() => '')
       }
-    }
+    },
+    shell: { openExternal: vi.fn() }
   }
 })
 

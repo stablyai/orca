@@ -224,7 +224,13 @@ export class InMemoryOrchestrationMessages {
   ):
     | { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
     | undefined {
-    return [...this.runs.values()].find((run) => run.coordinator_pane_key === paneKey)
+    return this.runsBoundToPane(paneKey)[0]
+  }
+
+  runsBoundToPane(
+    paneKey: string
+  ): { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }[] {
+    return [...this.runs.values()].filter((run) => run.coordinator_pane_key === paneKey)
   }
 
   listSessionDispatchesForPresentation(): never[] {

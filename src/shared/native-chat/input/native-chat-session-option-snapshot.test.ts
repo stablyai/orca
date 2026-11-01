@@ -3,14 +3,14 @@ import {
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor
 } from './native-chat-session-options'
-import { mergeDiscoveredAuthoritativeModels } from '../../agent-session-option-catalog'
+import { mergeDiscoveredAuthoritativeModels } from '../../agent-session/options/agent-session-option-catalog'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
-} from '../../agent-session-option-catalog-claude-codex'
-import { CURSOR_SESSION_OPTION_CATALOG } from '../../agent-session-option-catalog-gemini-cursor'
-import { GROK_SESSION_OPTION_CATALOG } from '../../agent-session-option-catalog-grok'
-import { resolveAgentSessionOptionLaunch } from '../../agent-session-option-launch'
+} from '../../agent-session/options/agent-session-option-catalog-claude-codex'
+import { CURSOR_SESSION_OPTION_CATALOG } from '../../agent-session/options/agent-session-option-catalog-gemini-cursor'
+import { GROK_SESSION_OPTION_CATALOG } from '../../agent-session/options/agent-session-option-catalog-grok'
+import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/agent-session-option-launch'
 import {
   createNativeChatSessionOptionRecord,
   type NativeChatSessionOptionRecord
@@ -177,7 +177,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       expect(snapshot.length).toBeGreaterThan(1)
     })
 
-    it('labels a wholly unknown tracked model by its id rather than dropping it', () => {
+    it('formats an unlisted model label while preserving its exact id in the details', () => {
       const record = claudeRecord()
       record.model = { value: 'experimental-model', source: 'reported' }
       const reconciled = withTrackedNativeChatModel(
@@ -187,7 +187,8 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       )
       expect(reconciled.at(-1)).toEqual({
         id: 'experimental-model',
-        label: 'experimental-model',
+        label: 'Experimental Model',
+        description: 'experimental-model',
         options: []
       })
     })

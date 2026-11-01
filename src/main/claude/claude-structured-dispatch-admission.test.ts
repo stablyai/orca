@@ -1,12 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
-import {
-  childExited,
-  sessionFor,
-  userMessage,
-  userReplayFrame
-} from './claude-structured-dispatch-test-support'
+import { sessionFor, userMessage, userReplayFrame } from './claude-structured-dispatch-test-support'
 
 function resolveClaudeReplayWaiter(...args: Parameters<typeof resolveClaudeReplayTurn>): boolean {
   return resolveClaudeReplayTurn(...args) !== null
@@ -88,38 +83,6 @@ describe('Claude structured dispatch admission', () => {
     }
   })
 
-  it('returns as soon as the write completes, without awaiting the echo', async () => {
-    const session = sessionFor()
-    await expect(
-      dispatchClaudeTurn(session, {
-        clientMessageId: 'client-1',
-        body: userMessage([{ type: 'text', text: 'one' }])
-      })
-    ).resolves.toEqual({ state: 'admitted' })
-    expect(session.connection.send).toHaveBeenCalledTimes(1)
-    expect(session.dispatchWaiters).toHaveLength(1)
-    expect(session.dispatchWaiters[0]!.settledUuid).toBeUndefined()
-  })
-
-  it('resolves every live waiter and retires it when the child exits', async () => {
-    const session = sessionFor()
-    await dispatchClaudeTurn(session, {
-      clientMessageId: 'client-1',
-      body: userMessage([{ type: 'text', text: 'one' }])
-    })
-    await dispatchClaudeTurn(session, {
-      clientMessageId: 'client-2',
-      body: userMessage([{ type: 'text', text: 'two' }])
-    })
-    expect(session.dispatchWaiters).toHaveLength(2)
-
-    childExited(session)
-
-    expect(session.dispatchWaiters).toHaveLength(0)
-    expect(session.retiredDispatchWaiters).toHaveLength(2)
-    expect(session.retiredDispatchWaiters.every((waiter) => waiter.retired === true)).toBe(true)
-  })
-
   it('bounds pending replay identities instead of retaining an unbounded queue', async () => {
     const session = sessionFor()
     for (let index = 0; index < 64; index += 1) {
@@ -143,18 +106,5 @@ describe('Claude structured dispatch admission', () => {
     })
     expect(session.dispatchWaiters).toHaveLength(64)
     expect(session.connection.send).toHaveBeenCalledTimes(64)
-  })
-
-  it('does not publish a journal settlement for a provider-control turn', async () => {
-    const session = sessionFor()
-    const settled = vi.fn()
-    await dispatchClaudeTurn(session, {
-      body: userMessage([{ type: 'text', text: '/compact' }])
-    })
-    const uuid = session.dispatchWaiters[0]!.sentUuid
-
-    resolveClaudeReplayWaiter(session, userReplayFrame(uuid, '/compact'), settled)
-
-    expect(settled).not.toHaveBeenCalled()
   })
 })

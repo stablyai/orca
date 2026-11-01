@@ -1,4 +1,4 @@
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 // Journal-open refusal leaves the file intact and other runtime work available.
@@ -9,7 +9,7 @@ import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isAgentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { isAgentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import { JOURNAL_DB_SCHEMA_VERSION } from '../native-chat/agent-session-journal/journal-database-schema'
 import {
   JournalHostDatabase,
@@ -384,7 +384,7 @@ describe('stopping', () => {
         connectionClose ??= vi.spyOn(this.db, 'close').mockImplementationOnce(() => {
           throw new Error('unable to close due to unfinalized statements')
         })
-        close.call(this)
+        return close.call(this)
       })
     const journal = () => journalClose.mock.contexts[0]
 

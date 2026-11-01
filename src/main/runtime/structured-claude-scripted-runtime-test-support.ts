@@ -4,7 +4,10 @@ import {
   CLAUDE_CLI_FLAG_PROBE_BUDGET_MS,
   createClaudeCliFlagSupport
 } from '../claude/claude-cli-flag-support'
-import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -162,6 +165,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
           announce()
           return Promise.resolve(initialized)
         },
+        renameSession: () => Promise.resolve(),
         getContextUsage: () => {
           child.calls.push('get_context_usage')
           return Promise.resolve({})

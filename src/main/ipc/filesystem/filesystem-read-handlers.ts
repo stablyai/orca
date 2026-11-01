@@ -14,7 +14,8 @@ import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cach
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
   resolveDesktopAuthorizedPath,
-  resolveLocalFileRequestPath
+  resolveLocalFileRequestPath,
+  resolveLocalListRequestPath
 } from '../local-file-access-resolution'
 import { isPathAbsentError } from './filesystem-path-containment'
 import { listMarkdownDocuments } from '../markdown-documents'
@@ -48,6 +49,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         followSymlinks?: boolean
         /** A user act (open or Retry); may start a stopped WSL distro. */
         wakeWslDistro?: boolean
+        access?: LocalFileAccess
       }
     ): Promise<DirEntry[]> => {
       // Record throw site and redacted path shape because fs:readDir IPC errors otherwise lack context.
@@ -60,14 +62,14 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         return await guardWslUncPathAccess(
           args.dirPath,
           async () => {
-            const dirPath = await resolveDesktopAuthorizedPath(args.dirPath, store)
+            const dirPath = await resolveLocalListRequestPath(args.dirPath, args.access, store)
             throwSite = 'readdir'
             const entries = await readdir(windowsFsPath(dirPath), { withFileTypes: true })
             const mapped = await classifyFilesystemDirectoryEntries(
               args.dirPath,
               entries,
               args.followSymlinks ?? store.getSettings().followSymlinkedDirectories ?? false,
-              (path) => resolveDesktopAuthorizedPath(path, store)
+              (path) => resolveLocalListRequestPath(path, args.access, store)
             )
             return sortDirEntries(mapped)
           },

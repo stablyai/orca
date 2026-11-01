@@ -700,7 +700,12 @@ describe('terminal send RPC', () => {
         enter: true,
         interrupt: false
       },
-      { inputKind: 'driving', inputSource: 'programmatic', beforeWrite: expect.any(Function) }
+      {
+        inputKind: 'driving',
+        inputSource: 'programmatic',
+        beforeWrite: expect.any(Function),
+        waitForLaunchComposer: true
+      }
     )
   })
 

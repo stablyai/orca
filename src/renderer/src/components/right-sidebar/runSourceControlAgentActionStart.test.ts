@@ -1,3 +1,6 @@
+import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
+import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab-args'
 import { sourceControlActionRecipeEntry } from '../../../../shared/source-control-action-selection'
 import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import type * as RuntimeGitStatusClientModule from '@/runtime/runtime-git-status-client'
@@ -79,6 +82,62 @@ describe('runSourceControlAgentActionStart', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.mutationInFlight.mockResolvedValue({ inFlight: false })
+  })
+
+  it('keeps dialog Start literal ownership and drops old-model effort for a typed action', async () => {
+    const settings = {
+      ...getDefaultSettings('/test'),
+      agentPermissionDefault: 'own' as const,
+      agentLaunchChoices: { claude: { model: 'opus', options: { effort: 'high' } } }
+    }
+    const plans: ReturnType<typeof buildAgentStartupPlan>[] = []
+    mocks.launchAgentInNewTab.mockImplementation((args: LaunchAgentInNewTabArgs) => {
+      plans.push(
+        buildAgentStartupPlan({
+          ...resolveAgentStartupPlanInputs({
+            agent: args.agent,
+            settings,
+            agentArgs: args.agentArgs,
+            sessionOptions: args.sessionOptions,
+            sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+            platform: 'linux',
+            shell: 'posix',
+            isRemote: false
+          }),
+          prompt: '',
+          allowEmptyPromptLaunch: true
+        })
+      )
+      return {
+        surface: { kind: 'local-terminal', tabId: 'proof' },
+        promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+      }
+    })
+    for (const recipe of [
+      { agentId: null, agentArgs: '--model literal' },
+      {
+        agentId: 'claude',
+        agentArgs: '--verbose',
+        launchPreferences: {
+          agentId: 'claude',
+          modelSelection: { base: 'default', model: { agentId: 'claude', value: 'sonnet' } }
+        }
+      }
+    ] as const) {
+      await expect(
+        runSourceControlAgentActionStart(buildArgs({ settings, selectedAgent: 'claude', recipe }))
+      ).resolves.toBe(true)
+    }
+    expect(plans.map((plan) => plan?.launchCommand)).toEqual([
+      "claude '--model' 'literal'",
+      "claude '--verbose' '--model' 'sonnet'"
+    ])
+    expect(plans.map((plan) => plan?.launchConfig.agentArgs)).toEqual([
+      '--model literal',
+      '--verbose'
+    ])
+    expect(mocks.onLaunched).toHaveBeenCalledTimes(2)
+    expect(mocks.onClose).toHaveBeenCalledTimes(2)
   })
 
   it('rejects conflict recovery before creating a tab when Git is still running', async () => {

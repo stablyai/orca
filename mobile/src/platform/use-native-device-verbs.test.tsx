@@ -44,6 +44,7 @@ vi.mock('expo-keep-awake', () => ({
   }
 }))
 vi.mock('expo-image-picker', () => ({
+  UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
   launchImageLibraryAsync: device.picker.launchImageLibraryAsync
 }))
 vi.mock('expo-file-system', () => ({

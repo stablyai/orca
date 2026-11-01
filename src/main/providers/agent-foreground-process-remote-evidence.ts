@@ -85,7 +85,9 @@ export function resolveRemoteForegroundEvidenceFromRows(
         name: NonNullable<ReturnType<typeof recognizeAgentProcessFromCommandLine>>
       } => Boolean(entry.name)
     )
-  if (recognized.length > 1) {
+  // One agent can hold two rows (npm Codex: node codex.js spawning native codex; Gemini relaunching itself in node):
+  // that names it, and the outermost row is its fence. Two different agents prove neither.
+  if (new Set(recognized.map((entry) => entry.name.agent)).size > 1) {
     return { ...metadata, verdict: 'unverifiable', reason: 'ambiguous_foreground_group' }
   }
   const candidate = recognized[0]

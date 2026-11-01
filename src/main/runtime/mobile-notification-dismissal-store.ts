@@ -7,7 +7,7 @@ import type { DeliveredNotificationIdentity } from '../../shared/mobile-notifica
 import {
   isStructuredAttentionOrigin,
   type StructuredAttentionOrigin
-} from '../../shared/agent-session-attention'
+} from '../../shared/agent-session/agent-session-attention'
 
 export type DeliveredNotificationRecord = DeliveredNotificationIdentity & {
   structuredOrigin?: StructuredAttentionOrigin

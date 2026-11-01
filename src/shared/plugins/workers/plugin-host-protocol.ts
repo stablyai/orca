@@ -6,6 +6,7 @@ import {
 } from '../manifest/plugin-manifest'
 import { PLUGIN_CAPABILITY_KINDS } from '../capabilities/plugin-capabilities'
 import { pluginEvent, type PluginEvent } from '../frames/plugin-protocol'
+import { pluginWorkerPanelPostSchema } from './plugin-panel-bridge-protocol'
 
 /**
  * The worker fork channel, on the shared envelope (plugin-protocol.ts). Validate both sides:
@@ -20,13 +21,19 @@ export const WORKER_EVENTS = {
   ready: 'ready',
   log: 'log',
   fatal: 'fatal',
-  shutdown: 'shutdown'
+  shutdown: 'shutdown',
+  /** worker → host, {@link PluginWorkerPanelPost}: `orca.panels.post`. */
+  panelPost: 'panel.post',
+  /** host → worker, {@link PluginDataChanged}: a panel or the person changed storage or settings. */
+  dataChanged: 'data.changed'
 } as const
 
 /** host → worker requests; the worker answers each with a `res`. */
 export const WORKER_METHODS = {
   invokeCommand: 'command.invoke',
-  deliverEvent: 'event.deliver'
+  deliverEvent: 'event.deliver',
+  /** A panel's `plugin.request`, answered by the handler from `orca.panels.handle`. */
+  panelRequest: 'panel.request'
 } as const
 
 export const pluginWorkerInitSchema = z.object({
@@ -65,7 +72,8 @@ export type PluginWorkerInit = z.infer<typeof pluginWorkerInitSchema>
 const pluginWorkerChildEventSchema = z.discriminatedUnion('event', [
   z.object({ event: z.literal(WORKER_EVENTS.ready), payload: pluginWorkerReadySchema }),
   z.object({ event: z.literal(WORKER_EVENTS.log), payload: pluginWorkerLogSchema }),
-  z.object({ event: z.literal(WORKER_EVENTS.fatal), payload: pluginWorkerFatalSchema })
+  z.object({ event: z.literal(WORKER_EVENTS.fatal), payload: pluginWorkerFatalSchema }),
+  z.object({ event: z.literal(WORKER_EVENTS.panelPost), payload: pluginWorkerPanelPostSchema })
 ])
 
 /** A worker → host lifecycle event, or null for anything else. */

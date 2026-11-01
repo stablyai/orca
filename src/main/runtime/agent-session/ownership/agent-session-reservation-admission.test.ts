@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type {
   AgentSessionExecutionLocation,
   AgentSessionRecord
-} from '../../../../shared/agent-session-record'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session-provider-handle'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   applyAgentSessionReservation,
   type AgentSessionReserveRequest
@@ -17,7 +17,7 @@ import type { AgentSessionStoreState } from '../../agent-session-store-state'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../../shared/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const LEASE_TTL_MS = 60_000

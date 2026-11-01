@@ -1,5 +1,6 @@
 // Retry crash-interrupted create ids at the next fence only after recovery releases the old reservation; held reservations replay unchanged.
 
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,13 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
-} from '../../../../shared/agent-session-host-authority'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionLease } from '../../../../shared/agent-session-record'
+} from '../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionLease } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
-import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -29,6 +30,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

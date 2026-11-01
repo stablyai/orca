@@ -11,6 +11,11 @@ import {
   satisfiesOrcaEngineRange,
   type PluginManifest
 } from '../../shared/plugins/manifest/plugin-manifest'
+import {
+  localPluginPublisher,
+  withPluginPublisher
+} from '../../shared/plugins/installation/plugin-publisher-derivation'
+import { splitQualifiedPluginKey } from '../../shared/plugins/catalog/plugin-marketplace'
 import { pluginManifestCompatibilityError } from '../../shared/plugins/manifest/plugin-manifest-compatibility'
 import {
   fingerprintPluginConsent,
@@ -21,6 +26,7 @@ import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
 import { readPluginManifestText } from './plugin-manifest-file'
 import { readPluginCurrentPointer } from './installation/plugin-current-pointer'
 import { hashPluginTree } from './plugin-content-hash'
+import { pluginDevChangeCount } from './plugin-dev-revision'
 
 export { PLUGIN_CURRENT_POINTER_FILENAME } from './installation/plugin-current-pointer'
 
@@ -31,6 +37,7 @@ const INSTALLED_PLUGIN_DISCOVERY_CONCURRENCY = 8
 export type ValidDiscoveredPlugin = {
   pluginKey: string
   rootDir: string
+  /** `publisher` is always the derived one (the install directory's or the dev folder's). */
   manifest: PluginManifest
   /** Fingerprint of the capabilities and trusted-worker execution tier. */
   consentFingerprint: string
@@ -38,6 +45,10 @@ export type ValidDiscoveredPlugin = {
   consentContentHash?: string | null
   /** Null for mutable dev trees. */
   contentHash: string | null
+  /** Dev worker plugins: hash of the working tree, so a save restarts the worker. */
+  devRevision?: string | null
+  /** Dev folders: the watcher's change count when this discovery read the folder. */
+  devChangeCount?: number
   isDev: boolean
 }
 
@@ -45,6 +56,7 @@ export type InvalidDiscoveredPlugin = {
   pluginKey?: string
   rootDir: string
   error: string
+  devChangeCount?: number
   isDev: boolean
 }
 
@@ -68,6 +80,8 @@ async function readManifestDir(
   rootDir: string,
   hostVersion: string,
   isDev: boolean,
+  /** Installed trees take it from their directory name; dev folders derive it. */
+  installedPublisher?: string,
   installedContentHash?: string
 ): Promise<DiscoveredPlugin> {
   let rawText: string
@@ -99,7 +113,10 @@ async function readManifestDir(
     const incompatible = pluginManifestCompatibilityError(raw, hostVersion)
     return { rootDir, error: incompatible ?? `invalid manifest: ${parsed.error}`, isDev }
   }
-  const manifest = parsed.manifest
+  const manifest = withPluginPublisher(
+    parsed.manifest,
+    installedPublisher ?? localPluginPublisher(parsed.manifest.publisher)
+  )
   const pluginKey = qualifiedPluginKey(manifest)
   if (!satisfiesOrcaEngineRange(hostVersion, manifest.engines.orca)) {
     return {
@@ -124,12 +141,18 @@ async function readManifestDir(
   }
   // Why dev trees bind only instructions: dev code is the author's working copy, and
   // binding it would re-prompt on every save.
+  let devRevision: string | null = null
   if (isDev && hasDeclarativePluginContributions(manifest)) {
-    const treeHash = await hashPluginTree(rootDir)
+    const treeHash = await hashPluginTree(rootDir, { devFolder: true })
     if (!treeHash.ok) {
       return { pluginKey, rootDir, error: treeHash.error, isDev }
     }
     consentContentIdentity = treeHash.hash
+    devRevision = treeHash.hash
+  } else if (isDev && manifest.main) {
+    const treeHash = await hashPluginTree(rootDir, { devFolder: true })
+    // Why not an error: an oversized tree still runs; only edit-triggered restarts are lost.
+    devRevision = treeHash.ok ? treeHash.hash : null
   }
   return {
     pluginKey,
@@ -143,6 +166,7 @@ async function readManifestDir(
     ),
     consentContentHash: consentContentIdentity ?? null,
     contentHash: null,
+    ...(isDev && manifest.main ? { devRevision } : {}),
     isDev
   }
 }
@@ -182,7 +206,8 @@ async function readInstalledPlugin(
     }
   }
   const versionDir = join(pluginDir, contentHash)
-  const discovered = await readManifestDir(versionDir, hostVersion, false, contentHash)
+  const publisher = splitQualifiedPluginKey(dirName)?.publisher ?? ''
+  const discovered = await readManifestDir(versionDir, hostVersion, false, publisher, contentHash)
   if (isInvalidDiscoveredPlugin(discovered)) {
     return { ...discovered, pluginKey: dirName }
   }
@@ -191,7 +216,7 @@ async function readInstalledPlugin(
     return {
       pluginKey: dirName,
       rootDir: versionDir,
-      error: `manifest identity "${discovered.pluginKey}" does not match install directory "${dirName}"`,
+      error: `manifest id "${discovered.manifest.id}" does not match install directory "${dirName}"`,
       isDev: false
     }
   }
@@ -243,7 +268,12 @@ export async function discoverPlugins(options: {
     ...(await readInstalledPlugins(options.pluginsDir, installedEntries, options.hostVersion))
   )
   for (const devPath of options.devPluginPaths) {
-    const plugin = await readManifestDir(devPath, options.hostVersion, true)
+    // Why read the count first: a save during the read bumps it again and schedules another refresh.
+    const devChangeCount = pluginDevChangeCount(devPath)
+    const plugin = {
+      ...(await readManifestDir(devPath, options.hostVersion, true)),
+      devChangeCount
+    }
     // Dev paths override installed identities; two dev paths still cannot claim one identity.
     if (!isInvalidDiscoveredPlugin(plugin)) {
       const collision = discovered.find(

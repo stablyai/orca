@@ -1,7 +1,7 @@
 import type { AgentSessionHandoverContext } from './structured-agent-session-host-types'
 import type { AgentSessionDispatchOutcome } from './structured-agent-session-adapter'
 import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'

@@ -10,7 +10,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { AgentSessionRecordStore } from '../../../runtime/agent-session-record-store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { finishPtyShutdown } from '../provider/liveness'

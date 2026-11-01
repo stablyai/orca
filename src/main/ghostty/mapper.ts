@@ -24,6 +24,15 @@ const PALETTE_INDEX_MAP: Record<number, keyof TerminalColorOverrides> = {
 
 type FieldAssignment = { key: keyof GlobalSettings; value: unknown }
 
+// Accepts `background-blur` (bool, radius, macos-glass-*) and its legacy `background-blur-radius` spelling.
+function mapGhosttyBackgroundBlur(v: string): FieldAssignment | null {
+  const radius = v === 'true' ? 1 : v === 'false' ? 0 : parseStrictInt(v)
+  if (v.startsWith('macos-glass-') || (radius !== null && radius > 0)) {
+    return { key: 'windowMaterial', value: 'blur' }
+  }
+  return radius === 0 ? { key: 'windowMaterial', value: 'translucent' } : null
+}
+
 type FieldResult =
   | FieldAssignment
   | FieldAssignment[]
@@ -130,13 +139,9 @@ export function mapGhosttyToOrca(
       return { colorOverrides: overrides }
     },
 
-    'background-blur-radius': (v) => {
-      const num = parseStrictInt(v)
-      if (num === null || num < 0) {
-        return null
-      }
-      return { key: 'windowBackgroundBlur', value: num > 0 }
-    },
+    // Ghostty shows the desktop through background-opacity either way; blur only adds the filter.
+    'background-blur': (v) => mapGhosttyBackgroundBlur(v),
+    'background-blur-radius': (v) => mapGhosttyBackgroundBlur(v),
 
     'split-divider-color': (v) => {
       if (!HEX_COLOR_RE.test(v)) {
@@ -295,12 +300,10 @@ export function mapGhosttyToOrca(
 
     // Orca preserves only whether blur is enabled; report radius loss only for nonzero values.
     if (
-      key === 'background-blur-radius' &&
-      !Array.isArray(result) &&
-      'key' in result &&
-      result.value === true
+      (key === 'background-blur' || key === 'background-blur-radius') &&
+      (parseStrictInt(value) ?? 0) > 0
     ) {
-      unsupportedKeys.push('background-blur-radius (radius value not preserved)')
+      unsupportedKeys.push(`${key} (radius value not preserved)`)
     }
 
     if (Array.isArray(result)) {

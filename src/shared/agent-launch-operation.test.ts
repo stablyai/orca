@@ -5,7 +5,7 @@ import {
   computeAgentLaunchFingerprint,
   type AgentLaunchFingerprintInput
 } from './agent-launch-operation'
-import { canonicalAgentSessionDigest } from './agent-session-mutation-envelope'
+import { canonicalAgentSessionDigest } from './agent-session/lifecycle/agent-session-mutation-envelope'
 
 const BASE = {
   agent: 'claude',

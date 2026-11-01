@@ -333,10 +333,13 @@ function resolveStyleKey(mobileDir, file, exportName, key, seen = new Set()) {
 
 // Numeric literals at/above floor are valid without seam binding; forcing larger fields onto seam could shrink them.
 // Do not evaluate expressions: theme arithmetic can drift and census must not become second renderer.
-function isLiteralAtOrAboveFloor(mobileDir, initializer) {
+// A same-module const naming a literal (the composer's text size) is still a literal.
+function isLiteralAtOrAboveFloor(mobileDir, parsed, initializer) {
+  const value = ts.isIdentifier(initializer) ? declarationOf(parsed, initializer.text) : initializer
   return (
-    ts.isNumericLiteral(initializer) &&
-    Number(initializer.text) >= textInputFontSizeFloor(mobileDir)
+    value !== null &&
+    ts.isNumericLiteral(value) &&
+    Number(value.text) >= textInputFontSizeFloor(mobileDir)
   )
 }
 
@@ -349,7 +352,7 @@ function fontSizeIn(mobileDir, parsed, file, object) {
         line: parsed.getLineAndCharacterOfPosition(entry.getStart(parsed)).line + 1,
         onSeam:
           isSeamBinding(mobileDir, parsed, file, entry.initializer) ||
-          isLiteralAtOrAboveFloor(mobileDir, entry.initializer)
+          isLiteralAtOrAboveFloor(mobileDir, parsed, entry.initializer)
       }
     }
   }

@@ -1,12 +1,12 @@
 import { extname } from 'node:path'
 import { resolveJsonlRpcPeerOptions } from '../jsonl-rpc/peer-limits'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import type { NativeChatImageRefBlock } from '../../shared/native-chat-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatImageRefBlock } from '../../shared/native-chat/native-chat-types'
 import {
   agentSessionFailureFact,
   type AgentSessionAttachmentProblem,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   ClaudeDispatchContentError,
   readClaudeImage

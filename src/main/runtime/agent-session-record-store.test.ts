@@ -2,15 +2,15 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import type {
   AgentSessionExecutionLocation,
   AgentSessionLease,
   AgentSessionProcessIdentity,
   AgentSessionRecord
-} from '../../shared/agent-session-record'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
-import type { PersistedAgentSessionRecord } from '../../shared/agent-session-legacy-handoff-lease'
+} from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { PersistedAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
   editPersistedTestAgentSessionStore,
@@ -19,12 +19,15 @@ import {
   seedTestAgentSessionStoreFromNewerBuild
 } from './agent-session-record-store-test-harness'
 import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session/ownership/agent-session-claim-key-retention'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 
@@ -150,6 +153,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

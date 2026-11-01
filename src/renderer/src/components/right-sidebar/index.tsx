@@ -29,6 +29,7 @@ import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items
 import { useRightSidebarTabRouting } from './use-right-sidebar-tab-routing'
 import { useWindowWidth } from './use-window-width'
 import { useRightSidebarReturnFocus } from './use-right-sidebar-return-focus'
+import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
@@ -40,7 +41,10 @@ function RightSidebarInner(): React.JSX.Element {
   })
   const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
-  const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
+  const userRightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
+  // `orca plugin shot --width` sizes the panel for one capture without touching the saved width.
+  const captureWidth = usePluginViewCaptureStore((s) => s.panelWidth)
+  const rightSidebarWidth = captureWidth ?? userRightSidebarWidth
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
   const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))

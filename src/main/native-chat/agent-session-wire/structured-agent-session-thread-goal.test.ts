@@ -3,18 +3,20 @@ import {
   sweepAgentSessionAttachments,
   UNCLAIMED_ATTACHMENT_MAX_AGE_MS
 } from '../agent-session-attachments/agent-session-attachment-sweep'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalThreadGoal,
+  type AgentJournalMessageItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
-  AgentJournalThreadGoal,
   AgentJournalItemIdentity,
-  AgentJournalMessageItem,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   closeTestJournalHostDatabase,
@@ -29,7 +31,7 @@ import { performThreadGoalChange, threadGoalPlan } from './structured-agent-sess
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -386,9 +388,9 @@ it.each([1, 10])(
       }
     )
     await journal.close()
-    closeTestJournalHostDatabase(root ?? '')
+    await closeTestJournalHostDatabase(root ?? '')
     journal = await openJournal()
-    const reopened = openTestJournalHostDatabase(root ?? '').db
+    const reopened = openTestJournalHostDatabase(root ?? '')
     const store = new AgentSessionAttachmentStore(agentSessionAttachmentStoreRoot(root ?? ''), {
       hasSession: () => true
     })
@@ -397,7 +399,11 @@ it.each([1, 10])(
     )
     const swept = await sweepAgentSessionAttachments(
       store,
-      { database: () => reopened, recordedSessionIds: () => new Set([IDENTITY.sessionId]) },
+      {
+        database: () => reopened.db,
+        write: (run) => reopened.writeAutocommit(run),
+        recordedSessionIds: () => new Set([IDENTITY.sessionId])
+      },
       Math.max(...uploadModifiedAt) + UNCLAIMED_ATTACHMENT_MAX_AGE_MS + 1000
     )
     expect(swept.removed).toHaveLength(count - 1)
@@ -548,7 +554,7 @@ it.each([
   }
   if (kind === 'unknown') {
     await journal.close()
-    closeTestJournalHostDatabase(root ?? '')
+    await closeTestJournalHostDatabase(root ?? '')
     const reopened = await openJournal()
     await expect(journal.withdrawGoalObjective(identity, { fence: 1 })).rejects.toThrow()
     await reopened.withdrawGoalObjective(identity, { fence: 1 })
@@ -684,7 +690,7 @@ it.each(['step', 'batch'] as const)(
     failPublication = false
     expect(claims()).toHaveLength(1)
     await journal.close()
-    closeTestJournalHostDatabase(root ?? '')
+    await closeTestJournalHostDatabase(root ?? '')
     const reopened = await openJournal()
     expect(reopened.snapshot().items.map((item) => item.body)).toContainEqual(file.body)
     expect(

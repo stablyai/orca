@@ -1,4 +1,4 @@
-import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
 import { agentSessionOwnerBindingsEqual } from '../../../../shared/claimed-agent-pty-owner'
 import { addNodePtyRecoveryHint } from '../../../daemon/node-pty-error-hints'
 import type { Store } from '../../../persistence'

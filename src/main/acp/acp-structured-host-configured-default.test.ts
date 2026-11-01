@@ -2,13 +2,13 @@ import { agentSessionConversationView } from '../../shared/agent-session-convers
 // Regression: initialize listed Grok 4.7 while new sessions actually ran Grok 4.6.
 
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentSessionModelCatalogResult } from '../../shared/agent-session-wire'
-import { structuredAgentSessionSeedCatalog } from '../../shared/structured-agent-session-seed-catalog'
+import type { AgentSessionModelCatalogResult } from '../../shared/agent-session/agent-session-wire'
+import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot
-} from '../../shared/structured-agent-session-options'
+  createStructuredAgentSessionOptionState
+} from '../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -29,7 +29,7 @@ import { AcpSessionRuntime } from './acp-session-runtime'
 import { GROK, GROK_CONFIG_OPTIONS } from './acp-structured-adapter.test-support'
 import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { createTestParams } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
-import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import { attachParams, launch, openHostRig } from './acp-structured-host.test-support'
 
 const GROK_HOME = { variable: 'GROK_HOME', path: '/grok' }

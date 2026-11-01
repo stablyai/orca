@@ -2,7 +2,7 @@
 // Unknown/older-build/terminal owners retain generic guidance instead of an invented cause.
 
 import { randomUUID } from 'node:crypto'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 
 let incarnation = randomUUID()

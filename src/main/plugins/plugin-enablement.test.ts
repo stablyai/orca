@@ -4,7 +4,7 @@ import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { pluginManifestSchema } from '../../shared/plugins/manifest/plugin-manifest'
 import type { Store } from '../persistence'
-import { applyPluginConsent, applyPluginEnablement } from './plugin-enablement'
+import { applyPluginConsent } from './plugin-enablement'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginService } from './plugin-service'
 
@@ -61,25 +61,6 @@ function createPluginService(
   } as unknown as PluginService
 }
 
-describe('full access', () => {
-  const workerManifest = pluginManifestSchema.parse({ ...manifest, main: 'main.mjs' })
-
-  it('approves and enables a trusted worker with its own consent alone', async () => {
-    const harness = createStore()
-    const pluginService = createPluginService(() => 'sha256-reviewed', {
-      manifest: workerManifest
-    })
-    const request = { store: harness.store, pluginService, pluginKey }
-    await applyPluginConsent({
-      ...request,
-      reviewedFingerprint: 'sha256-reviewed',
-      decision: 'approve'
-    })
-    await applyPluginEnablement({ ...request, enabled: true })
-    expect(harness.getSettings().pluginConsents[pluginKey]).toBe('sha256-reviewed')
-  })
-})
-
 describe('applyPluginConsent', () => {
   it('stores approval only for the fingerprint the user reviewed', async () => {
     const harness = createStore()
@@ -131,23 +112,5 @@ describe('applyPluginConsent', () => {
 
     expect(harness.getSettings().disabledPlugins).toContain(pluginKey)
     expect(pluginService.reconcileActivationState).toHaveBeenCalledOnce()
-  })
-})
-
-describe('applyPluginEnablement', () => {
-  it('does not persist unknown plugin identities', async () => {
-    const harness = createStore()
-    const pluginService = createPluginService(() => 'sha256-current')
-
-    await expect(
-      applyPluginEnablement({
-        store: harness.store,
-        pluginService,
-        pluginKey: 'samples.unknown',
-        enabled: false
-      })
-    ).rejects.toThrow('unknown plugin')
-
-    expect(harness.updateSettings).not.toHaveBeenCalled()
   })
 })

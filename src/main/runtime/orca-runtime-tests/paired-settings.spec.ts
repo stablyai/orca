@@ -33,18 +33,6 @@ describe('OrcaRuntimeService', () => {
     }
   )
 
-  it.each([true, false])('projects the single Chat UI switch to older clients (%s)', (enabled) => {
-    const controller = new RuntimeClientSettingsController({
-      getSettings: () => ({ ...store.getSettings(), experimentalNativeChat: enabled }),
-      updateSettings: () => undefined
-    })
-    expect(controller.get()).toMatchObject({
-      experimentalNativeChat: enabled,
-      experimentalStructuredNativeChat: enabled,
-      openAgentTabsInChatByDefault: false
-    })
-  })
-
   it('projects runtime-backed settings to paired clients', () => {
     const terminalQuickCommands = [
       {

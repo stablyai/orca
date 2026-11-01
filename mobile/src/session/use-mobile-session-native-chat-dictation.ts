@@ -22,7 +22,7 @@ import { useMobileNativeChatController } from './use-mobile-native-chat-controll
 import { useMobileDictationLeaveHold } from './mobile-dictation-leave-hold'
 import { useMobileDictationHaptics } from './use-mobile-dictation-haptics'
 import { useMobileDictationSilenceStop } from './use-mobile-dictation-silence-stop'
-import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
+import { useMobileNativeChatReadability } from './native-chat/transcript/use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './native-chat/use-mobile-native-chat-input-lease'
 import { useMobileNativeChatSendError } from './native-chat/use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'

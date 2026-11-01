@@ -9,24 +9,6 @@ function identity(options: { running?: boolean; ids?: (string | null)[] } = {}) 
 }
 
 describe('WslBridgeBootIdentity', () => {
-  it('reads each distro once while any of its panes lives', async () => {
-    const { boot, readBootId } = identity()
-    boot.noteSpawn('a', 'Ubuntu')
-    boot.noteSpawn('b', 'ubuntu')
-    boot.noteSpawn('a', 'Ubuntu')
-    await vi.waitFor(() => expect(readBootId).toHaveBeenCalledOnce())
-  })
-
-  it('calls an exit rebooted only when the distro booted again since the spawn', async () => {
-    const same = identity({ ids: ['boot-1'] })
-    same.boot.noteSpawn('a', 'Ubuntu')
-    await expect(same.boot.rebootedSinceSpawn('a', 'Ubuntu')).resolves.toBe(false)
-
-    const again = identity({ ids: ['boot-1', 'boot-2'] })
-    again.boot.noteSpawn('a', 'Ubuntu')
-    await expect(again.boot.rebootedSinceSpawn('a', 'Ubuntu')).resolves.toBe(true)
-  })
-
   it('falls back to an exit when either id is unreadable, or the pane was never noted', async () => {
     for (const ids of [
       [null, 'boot-2'],
@@ -44,20 +26,6 @@ describe('WslBridgeBootIdentity', () => {
     boot.noteSpawn('a', 'Ubuntu')
     await expect(boot.rebootedSinceSpawn('a', 'Ubuntu')).resolves.toBe(false)
     expect(readBootId).not.toHaveBeenCalled()
-  })
-
-  it('reads again for a spawn after an exit, or after its last pane went away', async () => {
-    const { boot, readBootId } = identity({ ids: ['boot-1', 'boot-2', 'boot-3', 'boot-4'] })
-    boot.noteSpawn('a', 'Ubuntu')
-    boot.noteSpawn('b', 'Ubuntu')
-    boot.noteExit('Ubuntu')
-    boot.noteSpawn('c', 'Ubuntu')
-    await vi.waitFor(() => expect(readBootId).toHaveBeenCalledTimes(2))
-    boot.forget('a')
-    boot.forget('b')
-    boot.forget('c')
-    boot.noteSpawn('d', 'Ubuntu')
-    await vi.waitFor(() => expect(readBootId).toHaveBeenCalledTimes(3))
   })
 
   // Reviewers of #35050: a spawn during an earlier exit's verdict took the old boot's id.

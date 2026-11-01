@@ -23,7 +23,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
     radius?: number,
     modifiers?: BrowserMouseModifier[]
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (_sessionName, target) => {
@@ -102,13 +102,17 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+    const run = async (sessionName: string): Promise<unknown> => {
       const args = ['find', locator, value, action]
       if (text) {
         args.push(text)
       }
       return await this.execAgentBrowser(sessionName, args)
-    })
+    }
+    // `text` reads the element; every other find action acts on it.
+    return action === 'text'
+      ? this.enqueueTargetedCommand(worktreeId, browserPageId, run)
+      : this.enqueuePageAction(worktreeId, browserPageId, run)
   }
 
   async setDevice(name: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {

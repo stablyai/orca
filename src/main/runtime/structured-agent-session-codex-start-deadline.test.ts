@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { codexScriptedChild } from '../codex/codex-scripted-child.test-fixture'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION,
   hostTestAttachParams,
@@ -15,7 +15,7 @@ import {
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { recordAgentSessionStartup } from '../observability/agent-session-instrumentation'
 import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../native-chat/agent-session-wire/structured-agent-session-startup-attempt-contract'
-import { readWholeAgentSessionFailureFact } from '../../shared/agent-session-failure'
+import { readWholeAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type { ScriptedAgentChild } from './structured-agent-scripted-child.test-fixture'
 import {
   ensureStructuredAgentSessionHost,

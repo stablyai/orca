@@ -7,13 +7,13 @@ import {
   isPersistedAgentSessionRecord,
   isPersistedAgentSessionObservationRecord,
   type AgentSessionLease
-} from '../../shared/agent-session-record'
-import { decodePersistedAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
+} from '../../shared/agent-session/lifecycle/agent-session-record'
+import { decodePersistedAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import type Database from '../sqlite/sync-database'
 import type { SqliteRow } from '../sqlite/sqlite-statement'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { AgentSessionStoreRowWrites } from './agent-session-store-draft'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   isReadableAgentSessionStoreOperation,
   isReadableAgentSessionStoreRecord,

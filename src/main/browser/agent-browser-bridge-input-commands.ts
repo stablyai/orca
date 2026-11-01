@@ -1,49 +1,36 @@
-import type {
-  BrowserTypeResult,
-  BrowserSelectResult,
-  BrowserScrollResult
-} from '../../shared/runtime-types'
+import type { BrowserSelectResult, BrowserScrollResult } from '../../shared/runtime-types'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
 import { iterateBrowserTextInsertionChunks } from '../../shared/browser-text-insertion-chunks'
 import { AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES } from './agent-browser-bridge-types'
 import { AgentBrowserBridgeCoreCommands } from './agent-browser-bridge-core-commands'
+import { SELECT_OPTION_TARGET_FUNCTION } from './browser-element-functions'
 
 export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridgeCoreCommands {
-  async type(
-    input: string,
-    worktreeId?: string,
-    browserPageId?: string
-  ): Promise<BrowserTypeResult> {
-    await assertClipboardTextWriteWithinLimitWithYield(input)
-    return this.enqueueTargetedCommand(
-      worktreeId,
-      browserPageId,
-      async (sessionName) => {
-        for (const chunk of iterateBrowserTextInsertionChunks(
-          input,
-          AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
-        )) {
-          await this.execAgentBrowser(sessionName, ['keyboard', 'type', chunk])
-        }
-        return { typed: true } as BrowserTypeResult
-      },
-      { requireScopedTarget: true }
-    )
-  }
-
   async select(
     element: string,
     value: string,
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserSelectResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, [
-        'select',
-        element,
-        value
-      ])) as BrowserSelectResult
-    })
+    return this.enqueuePageAction(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        // The helper reports success for any element; only a <select> has options to choose.
+        await this.actOnElement(
+          sessionName,
+          element,
+          'select an option in',
+          SELECT_OPTION_TARGET_FUNCTION
+        )
+        return (await this.execAgentBrowser(sessionName, [
+          'select',
+          element,
+          value
+        ])) as BrowserSelectResult
+      },
+      { elements: [element] }
+    )
   }
 
   async scroll(
@@ -52,7 +39,7 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserScrollResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
       const args = ['scroll', direction]
       if (amount != null) {
         args.push(String(amount))
@@ -66,9 +53,14 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['scrollintoview', element])
-    })
+    return this.enqueuePageAction(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        return await this.execAgentBrowser(sessionName, ['scrollintoview', element])
+      },
+      { elements: [element] }
+    )
   }
 
   async get(
@@ -77,13 +69,18 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['get', what]
-      if (selector) {
-        args.push(selector)
-      }
-      return await this.execAgentBrowser(sessionName, args)
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        const args = ['get', what]
+        if (selector) {
+          args.push(selector)
+        }
+        return await this.execAgentBrowser(sessionName, args)
+      },
+      { elements: [selector] }
+    )
   }
 
   async is(
@@ -92,9 +89,14 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['is', what, selector])
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        return await this.execAgentBrowser(sessionName, ['is', what, selector])
+      },
+      { elements: [selector] }
+    )
   }
 
   async keyboardInsertText(
@@ -103,7 +105,7 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     browserPageId?: string
   ): Promise<unknown> {
     await assertClipboardTextWriteWithinLimitWithYield(text)
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {

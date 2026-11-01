@@ -33,7 +33,8 @@ async function runPs(pid: number): Promise<string> {
   // A native read stuck behind a busy pool leaves ps its full timeout before signalling.
   const inProcess = await runPsInProcess(args, {
     timeoutMs: inProcessSliceMs(PROCESS_TABLE_QUERY_TIMEOUT_MS),
-    maxOutputBytes: PROCESS_TABLE_MAX_BYTES
+    maxOutputBytes: PROCESS_TABLE_MAX_BYTES,
+    callerRunsPs: true
   })
   const result =
     inProcess && !inProcess.timedOut

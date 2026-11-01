@@ -9,6 +9,7 @@ import { registerDictationComposerTarget } from '../dictation/dictation-insertio
 import { insertNativeChatComposerDraftText } from './native-chat-composer-draft-insertion'
 import { registerNativeChatComposerDestination } from './native-chat-composer-destination'
 import type {
+  NativeChatComposerSendIntent,
   NativeChatComposerProps,
   NativeChatComposerHandle,
   NativeChatStructuredComposerTransport
@@ -40,7 +41,7 @@ export function useNativeChatComposerEditSession({
   setNotice: (text: string) => void
   disabled: boolean
   sendHeld: boolean
-  sendMessage: () => void
+  sendMessage: (intent?: NativeChatComposerSendIntent) => void
   completeItem: (item: NativeChatPickerItem) => void
 }) {
   const sessionCommands = structuredTransport?.sessionCommands
@@ -86,15 +87,18 @@ export function useNativeChatComposerEditSession({
     },
     [editSession, setNotice, acceptsText]
   )
-  const send = useCallback(() => {
-    if (!editSession) {
-      sendMessage()
-      return
-    }
-    if (!disabled && !sendHeld && editSession.canSave) {
-      editSession.save()
-    }
-  }, [disabled, editSession, sendHeld, sendMessage])
+  const send = useCallback(
+    (intent?: NativeChatComposerSendIntent) => {
+      if (!editSession) {
+        sendMessage(intent)
+        return
+      }
+      if (!disabled && !sendHeld && editSession.canSave) {
+        editSession.save()
+      }
+    },
+    [disabled, editSession, sendHeld, sendMessage]
+  )
   const chooseEditItem = useCallback(
     (item: Parameters<typeof completeItem>[0]) => {
       if (item.kind === 'command' && refuseEditCommand(`/${item.name}`)) {

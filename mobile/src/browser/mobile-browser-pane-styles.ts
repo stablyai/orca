@@ -69,7 +69,7 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontSize: 13,
@@ -87,7 +87,7 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
   dialogCard: {
     width: '100%',
     maxWidth: 360,
-    borderRadius: radii.card,
+    borderRadius: radii.floating,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
@@ -121,7 +121,7 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
   },
   dialogButton: {
     minHeight: 34,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.md,
     alignItems: 'center',
@@ -159,7 +159,7 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     height: 34,
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
-    borderRadius: radii.input,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.md,
     // Use text-input seam: native keeps body size; web floor 16px prevents focus zoom that keyboard seam mistakes for no keyboard.
     fontSize: TEXT_INPUT_FONT_SIZE,
@@ -169,7 +169,7 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
   sendButton: {
     width: 34,
     height: 34,
-    borderRadius: 17,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised

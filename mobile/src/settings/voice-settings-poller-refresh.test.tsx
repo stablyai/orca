@@ -6,16 +6,24 @@ import type { VoiceSettingsOperations } from './voice-settings-operations'
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 // Use the real focus-gated poller to verify rejected saves trigger a load; the sibling state test stubs it.
+vi.mock(
+  './settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',
   Pressable: 'Pressable',
-  Switch: 'Switch',
   ScrollView: 'ScrollView',
   ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) }
 }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))

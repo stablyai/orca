@@ -3,10 +3,10 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-  type AgentJournalItemBody,
-  type AgentJournalTurnScope
-} from '../../../src/shared/agent-session-journal-types'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
+  type AgentJournalItemBody
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../src/shared/agent-session-journal-turn-scope'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import {
   hostJournalFrames,

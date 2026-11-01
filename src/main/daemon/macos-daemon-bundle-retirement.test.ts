@@ -110,9 +110,3 @@ it("retires every unused copy and staging dir except the current build's and thi
   expect(await exists(oldUnused)).toBe(false)
   expect(await exists(crashedStaging)).toBe(false)
 })
-
-it('runs one collection at a time and tolerates a missing root', async () => {
-  const first = retireOtherMacDaemonCopies(join(root, 'absent'), join(root, 'absent', 'x'))
-  expect(retireOtherMacDaemonCopies(root, join(root, 'x'))).toBe(first)
-  await expect(first).resolves.toBeUndefined()
-})

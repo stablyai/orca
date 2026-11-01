@@ -1,4 +1,4 @@
-import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { ForegroundProcessEvidence } from '../../shared/foreground-process-evidence'
 

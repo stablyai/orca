@@ -218,6 +218,7 @@ function makePostRevealWorkerRecoveryHarness(
     listSessionDispatchesForPresentation: () => [],
     reconcileMissingWorkerTerminal: vi.fn(),
     getActiveDispatchForTerminal: () => undefined,
+    findActiveRemoteAttachmentForPane: () => undefined,
     listLegacyWorkerTerminalRecoveryRows: () => [
       {
         dispatch_id: 'dispatch-post-reveal',

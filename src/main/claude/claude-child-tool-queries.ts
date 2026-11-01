@@ -1,4 +1,4 @@
-import type { AgentJournalProducerLinkage } from '../../shared/agent-session-journal-types'
+import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeToolUse } from './claude-structured-item-translation'
 import type {

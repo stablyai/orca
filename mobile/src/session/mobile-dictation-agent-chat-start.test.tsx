@@ -46,7 +46,7 @@ vi.mock('../platform/haptics', () => ({
   triggerEdgeBump: () => {},
   triggerSelection: () => {}
 }))
-vi.mock('./use-mobile-native-chat-readability', () => ({
+vi.mock('./native-chat/transcript/use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => true
 }))
 vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({

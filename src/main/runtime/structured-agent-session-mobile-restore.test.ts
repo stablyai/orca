@@ -39,6 +39,7 @@ function wire(host: StructuredAgentSessionHost, controller: RuntimeMobileNotific
     }),
     readWorkspaceLabels: () => ({}),
     isWorkspaceMuted: () => false,
+    readOrchestration: () => undefined,
     dispatch: (event) => controller.dispatch(event),
     reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
     now: () => NOW

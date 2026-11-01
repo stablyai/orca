@@ -9,11 +9,14 @@ import {
   setAppEnvironment,
   type AppEnvironment
 } from '../../../shared/app-environment'
-import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agent-session-record'
+import type {
+  AgentSessionLease,
+  AgentSessionRecord
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { formatOrcaSessionAddress, type OrcaSessionId } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 
@@ -250,6 +253,7 @@ describe('the idle edge after a restart, before any orchestration call', () => {
       _orchestrationDb: null,
       ensureOrchestrationFederationRelay: vi.fn(),
       scheduleRestoredMessageRepoints: vi.fn(),
+      continueRestoredWorkerMail: vi.fn(),
       deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
       notifyStructuredSessionJournalActivity: vi.fn()
     })

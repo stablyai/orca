@@ -2,13 +2,13 @@ import { useCallback, useMemo, useState } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalThreadGoal
-} from '../../../../shared/agent-session-journal-types'
-import { currentAgentSessionThreadGoal } from '../../../../shared/agent-session-thread-goal'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { currentAgentSessionThreadGoal } from '../../../../shared/agent-session/agent-session-thread-goal'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../../shared/agent-session-thread-goal-wire'
+} from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 
 export type StructuredAgentSessionThreadGoal = {

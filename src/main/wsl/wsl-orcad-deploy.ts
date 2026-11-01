@@ -21,6 +21,7 @@ import type { OrcadUpdateIntent } from '../managed-server/lifecycle/orcad-manage
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import { errorMessage } from '../../shared/error-message'
 import { pruneWslOrcadVersionsUntilClean } from './wsl-orcad-version-gc-memo'
+import { pruneSupersededOrcadCandidates } from '../managed-server/lifecycle/orcad-managed-version-gc'
 import { wakeAlreadyActiveOrcad } from '../ssh/orcad-already-active-wake'
 import { OrcadActiveReadinessError } from '../ssh/orcad-active-readiness'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
@@ -258,6 +259,7 @@ async function launchOverTransport(
         fullVersion: incumbentVersion,
         readiness: incumbent.readiness
       }
+      await pruneSupersededOrcadCandidates(slot, context.serverTarget, deployed.fullVersion)
       return { ...(await readyLaunch(serving)), deferredUpdate }
     }
     return { outcome: 'deferred', distro: name, ...deferredUpdate }

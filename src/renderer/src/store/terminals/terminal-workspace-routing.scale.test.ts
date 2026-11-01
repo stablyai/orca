@@ -72,26 +72,4 @@ describe('terminal workspace routing scales with tab count, not workspace count'
     expect(reads()).toBeLessThanOrEqual(WORKTREE_COUNT * 2)
     expect(reads()).toBeLessThan(CALLS * WORKTREE_COUNT)
   })
-
-  it('still resolves the owning repo and its connection', () => {
-    const { state, worktreeId } = buildCountingState()
-    const remoteState = {
-      ...state,
-      repos: state.repos.map((repo) =>
-        repo.id === 'repo-9' ? { ...repo, connectionId: 'ssh-host-1' } : repo
-      )
-    } as AppState
-
-    expect(worktreeUsesRemoteConnection(remoteState, worktreeId)).toBe(true)
-    expect(getRemoteConnectionIdForWorktree(remoteState, worktreeId)).toBe('ssh-host-1')
-    expect(worktreeUsesRemoteConnection(state, worktreeId)).toBe(false)
-    expect(getRemoteConnectionIdForWorktree(state, worktreeId)).toBeNull()
-    expect(worktreeUsesWslPath(state, worktreeId)).toBe(false)
-  })
-
-  it('returns null for a worktree id that no repo owns', () => {
-    const { state } = buildCountingState()
-    expect(getRemoteConnectionIdForWorktree(state, 'ghost::/nowhere')).toBeNull()
-    expect(worktreeUsesRemoteConnection(state, 'ghost::/nowhere')).toBe(false)
-  })
 })

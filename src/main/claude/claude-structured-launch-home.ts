@@ -1,9 +1,8 @@
 import { join } from 'node:path'
 import type { ClaudeProfileRouter } from '../claude-accounts/claude-profile-router'
-import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { resolveStructuredClaudeAccountHomePath } from '../runtime/structured-agent-account-home'
+import { prepareClaudeReceivingAccount } from './claude-receiving-account'
 
 /** Follow the current account selection and pin its environment for this launch. */
 export async function resolveClaudeStructuredLaunchHome(
@@ -11,21 +10,7 @@ export async function resolveClaudeStructuredLaunchHome(
   env: Record<string, string>,
   recordHome: string
 ): Promise<string> {
-  if (!router) {
-    return recordHome
-  }
-  const preparation = await router.prepareLaunch()
-  // Read before patching: System default preserves the launch environment's CLAUDE_CONFIG_DIR.
-  const launchHome =
-    preparation.provenance === 'system'
-      ? resolveStructuredClaudeAccountHomePath({
-          launchEnv: env,
-          wslDistro: null,
-          getClaudeConfigDirectory: () => router.systemDefaultHome()
-        })
-      : preparation.configDir
-  applyClaudeEnvPatch(env, preparation.envPatch)
-  return launchHome
+  return (await prepareClaudeReceivingAccount(router, env, recordHome)).home
 }
 
 async function claudeTranscriptExists(input: {
@@ -44,6 +29,7 @@ export async function claudeLaunchResumesTranscript(input: {
   leafUuid: string | null
   providerSessionId: string
   claudeConfigDir: string
+  recordHome: string
   hasTranscript?: typeof claudeTranscriptExists
 }): Promise<boolean> {
   const { router, providerSessionId, claudeConfigDir } = input
@@ -57,7 +43,9 @@ export async function claudeLaunchResumesTranscript(input: {
   if (input.leafUuid === null) {
     return false
   }
-  const otherHomes = router ? [...router.accountHomes(), router.systemDefaultHome()] : []
+  const otherHomes = router
+    ? [input.recordHome, ...router.accountHomes(), router.systemDefaultHome()]
+    : []
   for (const home of otherHomes.filter((home) => home !== claudeConfigDir)) {
     if (await hasTranscript({ providerSessionId, claudeConfigDir: home })) {
       throw new AgentSessionPreSpawnError(

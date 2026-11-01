@@ -29,7 +29,12 @@ function quoteMarkup(probe: () => Element, quote: string[], structured: string):
 }
 
 // Read fenced/table/list blocks by their own consumed line runs, not flat replacements; empty source still needs paragraph for placeholder.
-export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string): string {
+// Inside a list item paragraphs read `<br>` tokens, the item writer's only line-break spelling.
+export function markdownToHtml(
+  scope: RichMarkdownEditorScope,
+  markdown: string,
+  insideListItem = false
+): string {
   let lines = markdown.replace(/\r\n?/g, '\n').split('\n')
   let html: string[] = []
   let index = 0
@@ -96,11 +101,11 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
         rows.push(splitTableRow(lines[index] ?? ''))
         index += 1
       }
-      const head = headers.map((cell) => `<th>${renderInline(cell)}</th>`).join('')
+      const head = headers.map((cell) => `<th>${renderInline(cell, true)}</th>`).join('')
       const body = rows
         .map(
           (row) =>
-            `<tr>${headers.map((_, cellIndex) => `<td>${renderInline(row[cellIndex] ?? '')}</td>`).join('')}</tr>`
+            `<tr>${headers.map((_, cellIndex) => `<td>${renderInline(row[cellIndex] ?? '', true)}</td>`).join('')}</tr>`
         )
         .join('')
       html.push(`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`)
@@ -129,7 +134,9 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       const list = parseListTree(lines, index)
       // Empty marker produces no list item and no index progress; fall through as text instead of continuing forever.
       if (list.nextIndex > index) {
-        html.push(renderListItems(scope, list.items))
+        html.push(
+          renderListItems(scope, list.items, (content) => markdownToHtml(scope, content, true))
+        )
         index = list.nextIndex
         continue
       }
@@ -153,7 +160,9 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       paragraph.push(lines[index] ?? '')
       index += 1
     }
-    html.push(`<p>${renderInline(paragraph.join('\n')).replace(/\n/g, '<br />')}</p>`)
+    html.push(
+      `<p>${renderInline(paragraph.join('\n'), insideListItem).replace(/\n/g, '<br />')}</p>`
+    )
   }
   return html.join('\n') || '<p class="is-empty"><br /></p>'
 }

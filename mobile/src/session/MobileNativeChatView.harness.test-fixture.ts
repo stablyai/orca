@@ -2,7 +2,7 @@ import { resolveMobileNativeChatRowProps } from './native-chat/transcript/use-mo
 import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 import { setMobileNativeChatDraftText } from './native-chat/composer/mobile-native-chat-draft-store'
 import {

@@ -1,12 +1,14 @@
 // Adding a manifest entry exercises both skew directions and requires declaring the older peer’s behavior.
 
-import { attachFingerprintFields } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
-import type { AgentSessionAttachParams } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
-import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
+import {
+  attachFingerprintFields,
+  type AgentSessionAttachParams
+} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
+import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   structuredAgentSessionMessageSendMutation,
   structuredAgentSessionSendBody
-} from '../../../src/shared/structured-agent-session-send-mutation'
+} from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 
 import {
   SESSION,

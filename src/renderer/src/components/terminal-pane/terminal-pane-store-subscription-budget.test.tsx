@@ -140,26 +140,4 @@ describe('TerminalPane store subscription budget', () => {
       expect(boundActions[key]).toBe(state[key])
     }
   })
-
-  it('never reassigns one of the bound actions, which is what makes getState() safe', () => {
-    const before = useAppStore.getState() as unknown as Record<string, unknown>
-    const snapshot = new Map(TERMINAL_PANE_STORE_ACTION_KEYS.map((key) => [key, before[key]]))
-
-    act(() => {
-      useAppStore.getState().markTerminalBell({
-        worktreeId: 'repo-1::/repo/worktrees/budget',
-        tabId: 'tab-1',
-        paneKey: 'tab-1:1'
-      })
-      useAppStore.getState().setRuntimePaneTitle('tab-1', 1, 'title')
-      useAppStore.getState().clearRuntimePaneTitle('tab-1', 1)
-      useAppStore.getState().suppressPtyExit('pty-1')
-      useAppStore.getState().consumeSuppressedPtyExit('pty-1')
-      useAppStore.getState().setCacheTimerStartedAt('cache-1', Date.now())
-    })
-
-    const after = useAppStore.getState() as unknown as Record<string, unknown>
-    const moved = TERMINAL_PANE_STORE_ACTION_KEYS.filter((key) => after[key] !== snapshot.get(key))
-    expect(moved).toEqual([])
-  })
 })

@@ -40,12 +40,21 @@ export function newCounts() {
   const views: ViewWork[] = []
   const execution: ExecutionPass[] = []
   const snapshots: { phase: string; rows: number }[] = []
+  const correctedDividers: string[] = []
+  const resolvedKeys: string[] = []
   return {
     native: 0,
     suffix: 0,
     membership: 0,
     tree: 0,
     matching: 0,
+    dividerKeyBuilds: 0,
+    compositionReads: 0,
+    compositionWrites: 0,
+    catchUp: 0,
+    expectations: 0,
+    correctedDividers,
+    resolvedKeys,
     copies: 0,
     adopted: 0,
     views,

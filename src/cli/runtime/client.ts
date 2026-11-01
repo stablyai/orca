@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
-import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import {
   isDurableMutation,
   isOrchestrationMutation,
@@ -9,11 +8,21 @@ import {
   orchestrationMigrationData
 } from '../../shared/orchestration-rpc-contract'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
-import { launchOrcaApp } from './launch'
+import { openLocalOrca } from './open-local-orca'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
-import { getCliStatus, projectRemoteAppStatus } from './status'
+import {
+  getCliStatus,
+  getOfflineRuntimeAdmission,
+  type OfflineRuntimeAdmission,
+  projectRemoteAppStatus
+} from './status'
 import { sendRequest } from './transport'
-import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+import {
+  RuntimeClientError,
+  RuntimeRpcFailureError,
+  type RuntimeRpcSuccess,
+  type RuntimeCallOptions
+} from './types'
 import {
   attachDurableMutationRecovery,
   attachLegacyTerminalPromptRecovery,
@@ -47,7 +56,6 @@ const loadWebSocketTransport = async () => await import('./websocket-transport.j
 
 export class RuntimeClient {
   readonly userDataPath: string
-  private readonly requestTimeoutMs: number
   private readonly remote: PairedRuntimeConnection | null
   readonly environmentSelector: string | null
   private readonly cliExecutable: string
@@ -62,14 +70,13 @@ export class RuntimeClient {
   // Browser session cold starts can take 15–30 seconds; allow time for initialization.
   constructor(
     userDataPath = getDefaultUserDataPath(),
-    requestTimeoutMs = 60_000,
+    private readonly requestTimeoutMs = 60_000,
     remotePairingCode = process.env.ORCA_PAIRING_CODE ?? process.env.ORCA_REMOTE_PAIRING ?? null,
     environmentSelector = process.env.ORCA_ENVIRONMENT ?? null,
     cliExecutable = resolveOrchestrationCliExecutable(),
     originalArgs?: readonly string[]
   ) {
     this.userDataPath = userDataPath
-    this.requestTimeoutMs = requestTimeoutMs
     this.environmentSelector = environmentSelector
     this.cliExecutable = cliExecutable
     this.originalArgs = originalArgs ? [...originalArgs] : undefined
@@ -85,11 +92,7 @@ export class RuntimeClient {
   async call<TResult>(
     method: string,
     params?: unknown,
-    options?: {
-      timeoutMs?: number
-      legacyTerminalPrompt?: true
-      terminalPromptPreflight?: { runtimeId: string | null }
-    } & RuntimeOrchestrationEnvelope
+    options?: RuntimeCallOptions
   ): Promise<RuntimeRpcSuccess<TResult>> {
     const effectiveTimeoutMs = options?.timeoutMs ?? this.resolveMethodTimeoutMs(method, params)
     const orchestrationMutation = isOrchestrationMutation(method, params)
@@ -147,7 +150,8 @@ export class RuntimeClient {
           method,
           params,
           timeoutMs: effectiveTimeoutMs,
-          envelope
+          envelope,
+          requestSelection: options?.requestSelection
         })
       } catch (error) {
         throw recover(error, null)
@@ -173,7 +177,8 @@ export class RuntimeClient {
         params,
         effectiveTimeoutMs,
         envelope,
-        expectedRuntimeSource
+        expectedRuntimeSource,
+        options?.requestSelection ? { requestSelection: options.requestSelection } : undefined
       )
     } catch (error) {
       throw recover(error, metadata.runtimeId ?? null)
@@ -197,6 +202,10 @@ export class RuntimeClient {
       }
       const readiness = resolveWorkerStartReadinessTimeoutMs(requested)
       return Math.max(resolveWorkerStartClientTimeoutMs(readiness), this.requestTimeoutMs)
+    }
+    // A send to a finished worker starts its follow-up, which waits as worker-start does.
+    if (method === 'orchestration.send') {
+      return Math.max(resolveWorkerStartClientTimeoutMs(), this.requestTimeoutMs)
     }
     if (
       (method === 'orchestration.check' && isWaitingCheck(params)) ||
@@ -249,6 +258,18 @@ export class RuntimeClient {
     return getCliStatus(this.userDataPath)
   }
 
+  async getOfflineRuntimeAdmission(): Promise<OfflineRuntimeAdmission> {
+    if (this.remote) {
+      const status = await this.getCliStatus()
+      return {
+        reachable: status.result.runtime.reachable,
+        legacyPidRunning: status.result.app.running,
+        pid: status.result.app.pid ?? null
+      }
+    }
+    return getOfflineRuntimeAdmission(this.userDataPath)
+  }
+
   private async ensureOrchestrationContractCompatible(timeoutMs: number): Promise<void> {
     if (!this.orchestrationContractCheck) {
       this.orchestrationContractCheck = this.checkOrchestrationContractCompatibility(
@@ -277,44 +298,6 @@ export class RuntimeClient {
   }
 
   async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-    const initial = await this.getCliStatus()
-    if (this.remote) {
-      return initial
-    }
-
-    // A blocked runtime cannot open a window; a second app would only hit its instance lock.
-    if (initial.result.app.desktopWindowStatus === 'blocked') {
-      throwDesktopActivationBlocked()
-    }
-    launchOrcaApp()
-    if (initial.result.app.desktopWindowStatus === 'available') {
-      return initial
-    }
-
-    const startedAt = Date.now()
-    while (Date.now() - startedAt < timeoutMs) {
-      const status = await this.getCliStatus()
-      if (status.result.app.desktopWindowStatus === 'blocked') {
-        throwDesktopActivationBlocked()
-      }
-      if (status.result.app.desktopWindowStatus === 'available') {
-        return status
-      }
-      await delay(250)
-    }
-
-    throw new RuntimeClientError(
-      'runtime_open_timeout',
-      'Timed out waiting for an Orca desktop window. The runtime may still be running headlessly.'
-    )
+    return this.remote ? this.getCliStatus() : openLocalOrca(() => this.getCliStatus(), timeoutMs)
   }
 }
-
-function throwDesktopActivationBlocked(): never {
-  throw new RuntimeClientError(
-    'desktop_activation_blocked',
-    'Orca is running headlessly, but it cannot open a desktop window safely because the persistent terminal provider is unavailable. Quit Orca normally and start the app again; do not use open -n.'
-  )
-}
-
-const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))

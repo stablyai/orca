@@ -2,20 +2,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { mobileE2EETextPayloadAdmissionBytes } from '../../runtime/rpc/mobile-e2ee-outbound-admission'
 import {
+  type AgentJournalItemBody,
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -25,14 +21,14 @@ import {
 } from '../agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from './agent-session-history-page'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'wire-admission-session'
 const LARGE_TEXT = 'x'.repeat(250 * 1024)
 
 let root: string
 let journal: AgentSessionJournal
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ legacyInputs: true })
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-wire-admission-'))
@@ -181,7 +177,7 @@ async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentS
     }
     opened.db.exec('COMMIT')
   } finally {
-    opened.close()
+    await opened.close()
   }
   return journals.open({
     identity: {

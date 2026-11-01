@@ -2,21 +2,117 @@ import type { BrowserTabInfo, BrowserTabListResult } from '../../shared/runtime-
 import { BrowserError } from './cdp-bridge'
 import type { ResolvedBrowserCommandTarget } from './agent-browser-bridge-types'
 import { AgentBrowserBridgeState } from './agent-browser-bridge-state'
+import { isAgentRpcCaller } from '../runtime/rpc/rpc-caller-identity'
+import { getActiveRpcCaller } from '../runtime/rpc/rpc-active-caller'
 
 export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   setActiveTab(webContentsId: number, worktreeId?: string): void {
-    this.activeWebContentsId = webContentsId
-    if (worktreeId) {
-      this.activeWebContentsPerWorktree.set(worktreeId, webContentsId)
+    if (isAgentRpcCaller(getActiveRpcCaller())) {
+      this.pointAgentAt(webContentsId, worktreeId)
+    } else {
+      this.selectForPerson(webContentsId, worktreeId)
     }
     this.options.onTabsChanged?.(worktreeId)
+  }
+
+  protected pointAgentAt(webContentsId: number, worktreeId?: string): void {
+    for (const key of routingKeys(worktreeId)) {
+      this.setRoutedWebContentsId(key, webContentsId)
+    }
+    // Mark the new tab now, or a person's pick before the agent's next command would take it.
+    const browserPageId = this.resolveTabIdSafe(webContentsId)
+    if (browserPageId) {
+      this.browserManager.beginAgentCommand(browserPageId).end()
+    }
+    this.watchPopupClose(webContentsId)
+  }
+
+  protected abstract watchPopupClose(webContentsId: number): void
+
+  // A person's pick never pulls an agent off the tab it is driving; it applies once that tab goes idle.
+  private selectForPerson(webContentsId: number, worktreeId?: string): void {
+    for (const key of routingKeys(worktreeId)) {
+      const current = this.routedWebContentsId(key)
+      if (current !== null && current !== webContentsId && this.isAgentUsingTab(current)) {
+        this.heldPersonSelections.set(key, webContentsId)
+      } else {
+        this.setRoutedWebContentsId(key, webContentsId)
+        this.heldPersonSelections.delete(key)
+      }
+    }
+  }
+
+  protected applyHeldPersonSelections(worktreeId?: string): void {
+    for (const key of routingKeys(worktreeId)) {
+      const held = this.heldPersonSelections.get(key)
+      const current = this.routedWebContentsId(key)
+      if (held === undefined || (current !== null && this.isAgentUsingTab(current))) {
+        continue
+      }
+      this.heldPersonSelections.delete(key)
+      if (this.getWebContents(held)) {
+        this.setRoutedWebContentsId(key, held)
+      }
+    }
+  }
+
+  protected recordRefPage(browserPageId: string): void {
+    this.refPageByWorktree.set(
+      this.browserManager.getWorktreeIdForTab(browserPageId),
+      browserPageId
+    )
+  }
+
+  // Refs are numbered per page, so another page's ref would silently match an element here.
+  protected assertRefsFromPage(
+    browserPageId: string,
+    elements: readonly (string | undefined)[]
+  ): void {
+    const ref = elements.find((element) => element !== undefined && isSnapshotRef(element))
+    if (!ref) {
+      return
+    }
+    const snapshotPageId = this.refPageByWorktree.get(
+      this.browserManager.getWorktreeIdForTab(browserPageId)
+    )
+    if (!snapshotPageId || snapshotPageId === browserPageId) {
+      return
+    }
+    // The latest snapshot may have been a pinned look elsewhere, so the snapshot hint comes first.
+    const pinnedRetry = this.browserManager.getWebContentsIdByTabId().has(snapshotPageId)
+      ? `, or pass --page ${snapshotPageId} if ${ref} came from that page's snapshot`
+      : ''
+    throw new BrowserError(
+      'browser_stale_ref',
+      `The latest snapshot was of page ${snapshotPageId}, not the current tab (page ${browserPageId}), so ${ref} may point at the wrong element. Run snapshot to get refs for page ${browserPageId}${pinnedRetry}.`
+    )
+  }
+
+  private isAgentUsingTab(webContentsId: number): boolean {
+    const browserPageId = this.resolveTabIdSafe(webContentsId)
+    return browserPageId !== null && this.browserManager.isAgentUsingPage(browserPageId)
+  }
+
+  private routedWebContentsId(key: string | undefined): number | null {
+    return key === undefined
+      ? this.activeWebContentsId
+      : (this.activeWebContentsPerWorktree.get(key) ?? null)
+  }
+
+  private setRoutedWebContentsId(key: string | undefined, webContentsId: number): void {
+    if (key === undefined) {
+      this.activeWebContentsId = webContentsId
+    } else {
+      this.activeWebContentsPerWorktree.set(key, webContentsId)
+    }
   }
 
   protected selectFallbackActiveWebContents(
     worktreeId: string,
     excludedWebContentsId?: number
   ): number | null {
-    for (const [, wcId] of this.getRegisteredTabs(worktreeId)) {
+    // A closing tab's popups close with it, so only tabs can take over.
+    for (const [, wcId] of this.registeredTabsWithoutPopups(worktreeId)) {
       if (wcId === excludedWebContentsId) {
         continue
       }
@@ -53,25 +149,21 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     }
   }
   onTabChanged(webContentsId: number, worktreeId?: string): void {
-    this.activeWebContentsId = webContentsId
-    if (worktreeId) {
-      this.activeWebContentsPerWorktree.set(worktreeId, webContentsId)
-    }
+    this.selectForPerson(webContentsId, worktreeId)
     this.options.onTabsChanged?.(worktreeId)
   }
-  getRegisteredTabs(worktreeId?: string): Map<string, number> {
-    const all = this.browserManager.getWebContentsIdByTabId()
-    if (!worktreeId) {
-      return all
-    }
-
-    const filtered = new Map<string, number>()
-    for (const [tabId, wcId] of all) {
-      if (this.browserManager.getWorktreeIdForTab(tabId) === worktreeId) {
-        filtered.set(tabId, wcId)
+  getRegisteredTabs(
+    worktreeId?: string,
+    popupPages = this.browserManager.getPopupPages()
+  ): Map<string, number> {
+    const tabs = this.registeredTabsWithoutPopups(worktreeId)
+    // Popups list after the tabs and share their opener's scope.
+    for (const popup of popupPages) {
+      if (tabs.has(popup.openerBrowserPageId)) {
+        tabs.set(popup.browserPageId, popup.webContentsId)
       }
     }
-    return filtered
+    return tabs
   }
 
   /** Tab list results omit workspace ownership. */
@@ -82,7 +174,12 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   }
 
   tabList(worktreeId?: string): BrowserTabListResult {
-    const tabs = this.getRegisteredTabs(worktreeId)
+    this.applyHeldPersonSelections(worktreeId)
+    const popupPages = this.browserManager.getPopupPages()
+    const tabs = this.getRegisteredTabs(worktreeId, popupPages)
+    const popupOpeners = new Map(
+      popupPages.map((popup) => [popup.browserPageId, popup.openerBrowserPageId])
+    )
     // Match command routing without changing active-tab selection during discovery.
     let activeWcId =
       (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId)) ?? this.activeWebContentsId
@@ -98,6 +195,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       if (firstLiveWcId === null) {
         firstLiveWcId = wcId
       }
+      const openerBrowserPageId = popupOpeners.get(tabId)
       const loadError = this.browserManager.getBrowserPageLoadError(tabId)
       const certificateFailure = this.browserManager.getBrowserPageCertificateFailure(tabId)
       result.push({
@@ -109,7 +207,8 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
         title: wc.getTitle() ?? '',
         active: wcId === activeWcId,
         loadError,
-        certificateFailure
+        certificateFailure,
+        ...(openerBrowserPageId ? { openerBrowserPageId } : {})
       })
     }
     // Infer an active tab for display without changing command routing.
@@ -162,6 +261,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   }
 
   protected resolveActiveTab(worktreeId?: string): ResolvedBrowserCommandTarget {
+    this.applyHeldPersonSelections(worktreeId)
     const tabs = this.getRegisteredTabs(worktreeId)
 
     if (tabs.size === 0) {
@@ -232,4 +332,13 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     const [onlyWorktreeId] = worktreesWithLiveTabs
     return this.resolveActiveTab(onlyWorktreeId)
   }
+}
+
+function routingKeys(worktreeId: string | undefined): (string | undefined)[] {
+  return worktreeId ? [undefined, worktreeId] : [undefined]
+}
+
+// agent-browser reads `@e3`, `ref=e3` and bare `e3` as snapshot refs.
+function isSnapshotRef(element: string): boolean {
+  return /^(?:@|ref=)?e\d+$/.test(element)
 }

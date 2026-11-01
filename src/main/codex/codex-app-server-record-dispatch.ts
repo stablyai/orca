@@ -18,7 +18,7 @@ export type CodexPendingRequest = {
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout> | undefined
   /** Runs on reply/timeout before promise continuations; replies retain stdout notification order. */
-  onReply?: () => void
+  onReply?: (result?: unknown) => void
 }
 
 export function createCodexAppServerRecordDispatcher(input: {
@@ -105,8 +105,8 @@ export function createCodexAppServerRecordDispatcher(input: {
     }
     pending.delete(message.id)
     clearTimeout(waiter.timer)
-    waiter.onReply?.()
     const error = message.error
+    waiter.onReply?.(isProviderRecord(error) ? undefined : message.result)
     if (isProviderRecord(error)) {
       const detail = typeof error.message === 'string' ? error.message : 'unknown error'
       waiter.reject(

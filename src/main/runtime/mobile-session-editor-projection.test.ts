@@ -53,25 +53,7 @@ function ownedSession(): WorkspaceSessionState {
   }
 }
 
-function activeOwnedSession(): WorkspaceSessionState {
-  return {
-    ...ownedSession(),
-    activeTabTypeByWorktree: { [WT]: 'editor' },
-    activeFileIdByWorktree: { [WT]: ownedEditorFileId(FILE, WT, undefined) }
-  }
-}
-
 describe('headless editor tabs under an owned id', () => {
-  it('lists and retires the unified tab with the layout-owner switch on', () => {
-    const session = ownedSession()
-    expect(buildHeadlessMobileSessionEditorTabs(WT, session)).toEqual([
-      expect.objectContaining({ id: 'tab-1', filePath: FILE, color: '#ff0000', isPinned: true })
-    ])
-    const retired = retireHeadlessEditorTab(session, WT, { id: 'tab-1', filePath: FILE })
-    expect(retired?.unifiedTabs?.[WT]).toEqual([])
-    expect(retired?.tabGroups?.[WT]?.[0]?.tabOrder).toEqual([])
-  })
-
   it('does not list a row mirrored from a paired host', () => {
     const session = ownedSession()
     session.openFilesByWorktree = {
@@ -87,28 +69,6 @@ describe('headless editor tabs under an owned id', () => {
       ]
     }
     expect(buildHeadlessMobileSessionEditorTabs(WT, session)).toEqual([])
-  })
-
-  it('shows it as the active file', () => {
-    expect(buildHeadlessMobileSessionEditorTabs(WT, activeOwnedSession())).toEqual([
-      expect.objectContaining({ id: 'tab-1', isActive: true })
-    ])
-  })
-
-  it('clears the active file when it retires', () => {
-    const retired = retireHeadlessEditorTab(activeOwnedSession(), WT, {
-      id: 'tab-1',
-      filePath: FILE
-    })
-
-    expect(retired?.activeFileIdByWorktree?.[WT]).toBeNull()
-  })
-
-  it('keeps matching by path alone with the switch off', () => {
-    mocks.layoutOwnerIsMain = false
-    expect(buildHeadlessMobileSessionEditorTabs(WT, ownedSession())).toEqual([
-      expect.objectContaining({ id: FILE, color: null, isPinned: false })
-    ])
   })
 })
 

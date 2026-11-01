@@ -1,7 +1,7 @@
 // The profile lock proves replaced host runtimes lost their pipes, not that provider processes died.
 // Attribute only runtimes this host replaced; terminal claims and unknown owners provide no such evidence.
 
-import type { AgentSessionOrcaStopCause } from '../../../shared/agent-session-orca-stop'
+import type { AgentSessionOrcaStopCause } from '../../../shared/agent-session/lifecycle/agent-session-orca-stop'
 import {
   listAgentSessionConversations,
   type AgentSessionStoreState

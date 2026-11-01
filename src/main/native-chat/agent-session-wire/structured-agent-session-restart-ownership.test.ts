@@ -1,10 +1,10 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import {
   AgentSessionRecoveryCapsule,
   AGENT_SESSION_RECOVERY_CAPSULE_FILE
 } from '../../runtime/agent-session-recovery-capsule'
-import { parseAgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import { parseAgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -12,7 +12,7 @@ import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE
-} from '../../../shared/agent-session-restart-continuation'
+} from '../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
 import { STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER } from './structured-agent-session-restart-resume-wiring'
 import {
   interruptedRestart,
@@ -35,8 +35,8 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { inspect } from 'node:util'
 
 afterEach(() => vi.useRealTimers())
@@ -142,8 +142,9 @@ it('replays the same logical continuation through the durable send ledger', asyn
   expect(dispatch).toHaveBeenCalledTimes(1)
 })
 
-it('keeps a continuation unconfirmed when its accepted message cannot be read back', async () => {
-  const { host, store } = await interruptedRestart()
+// The row commits with its fold or not at all, and dispatch reads only committed sends.
+it('refuses a continuation whose message cannot be recorded, without handing it to the agent', async () => {
+  const { host, dispatch } = await interruptedRestart()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   expect(await host.restartResume.list()).toHaveLength(1)
   continuationCannotFold()
@@ -152,17 +153,10 @@ it('keeps a continuation unconfirmed when its accepted message cannot be read ba
     .continueAfterRestart([SESSION], 'modal')
     .finally(() => vi.restoreAllMocks())
 
-  expect(result.continued).toMatchObject([{ sessionId: SESSION, outcome: 'unknown' }])
-  expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'unconfirmed' }])
-  expect(await statusNotes(host)).toContainEqual({
-    text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
-    tone: 'warning'
-  })
-  expect(
-    store
-      .listOperationRows()
-      .find((row) => row.callerKey === STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER)
-  ).toMatchObject({ outcome: { status: 'succeeded' } })
+  expect(result.continued).toMatchObject([{ sessionId: SESSION, outcome: 'refused' }])
+  expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'refused' }])
+  expect((await host.journalSnapshot(SESSION)).submissions).toEqual([])
+  expect(dispatch).not.toHaveBeenCalled()
 })
 
 it('reports a continuation delivered when its send throws after its message is in the chat', async () => {

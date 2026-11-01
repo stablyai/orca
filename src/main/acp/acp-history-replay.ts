@@ -1,7 +1,7 @@
 // Replay grouping uses provider message/turn IDs and preserves source arrival order.
 
 import { z } from 'zod'
-import type { NativeChatBlock } from '../../shared/native-chat-types'
+import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 
 /** What one load may keep for catch-up; a larger history is not caught up at all. */
 const LOAD_HISTORY_MAX_FRAMES = 20_000

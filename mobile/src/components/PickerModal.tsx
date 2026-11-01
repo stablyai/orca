@@ -1,10 +1,12 @@
-import type { ReactNode } from 'react'
-import { View, Text, Pressable, StyleSheet } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useState, type ReactNode } from 'react'
+import { View, Text } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
+import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListGroup, ListRow } from './list/ListGroup'
+import { MobileSearchField } from './MobileSearchField'
 
 export type PickerOption<T extends string = string> = {
   value: T
@@ -25,11 +27,12 @@ type Props<T extends string = string> = {
   onClose: () => void
   onAfterClose?: () => void
   zIndex?: number
+  searchable?: boolean
 }
 
 type PickerModalContentProps<T extends string = string> = Pick<
   Props<T>,
-  'options' | 'selected' | 'onSelect' | 'onLongSelect' | 'onClose'
+  'options' | 'selected' | 'onSelect' | 'onLongSelect' | 'onClose' | 'searchable'
 >
 
 export function PickerModal<T extends string = string>({
@@ -42,7 +45,8 @@ export function PickerModal<T extends string = string>({
   onLongSelect,
   onClose,
   onAfterClose,
-  zIndex
+  zIndex,
+  searchable
 }: Props<T>) {
   useMobileColorScheme()
   return (
@@ -58,6 +62,7 @@ export function PickerModal<T extends string = string>({
         onSelect={onSelect}
         onLongSelect={onLongSelect}
         onClose={onClose}
+        searchable={searchable}
       />
     </BottomDrawer>
   )
@@ -68,120 +73,78 @@ function PickerModalContent<T extends string = string>({
   selected,
   onSelect,
   onLongSelect,
-  onClose
+  onClose,
+  searchable
 }: PickerModalContentProps<T>) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
+  const [query, setQuery] = useState('')
+  const visibleOptions = searchable
+    ? options.filter((option) =>
+        `${option.label} ${option.subtitle ?? ''}`
+          .toLocaleLowerCase()
+          .includes(query.trim().toLocaleLowerCase())
+      )
+    : options
   // Put option rows in shown child; closed BottomDrawer returns null, avoiding hidden-content rebuilds on parent renders.
+  const hasIcons = visibleOptions.some((opt) => opt.renderIcon !== undefined)
   return (
-    <View style={styles.group}>
-      {options.map((opt, i) => {
-        const isSelected = opt.value === selected
-        return (
-          <View key={opt.value}>
-            {i > 0 && <View style={styles.separator} />}
-            <Pressable
-              accessible
-              accessibilityRole="button"
-              accessibilityState={{ disabled: Boolean(opt.disabled), selected: isSelected }}
+    <View style={styles.content}>
+      {searchable ? (
+        <MobileSearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t('automations.mobile.searchOptions', 'Search options')}
+        />
+      ) : null}
+      <ListGroup separatorInset={hasIcons ? LIST_LEADING_INSET : LIST_ROW_PADDING}>
+        {visibleOptions.map((opt) => {
+          const isSelected = opt.value === selected
+          return (
+            <ListRow
+              key={opt.value}
+              title={opt.label}
+              subtitle={opt.subtitle}
+              leading={opt.renderIcon?.(isSelected)}
+              selected={isSelected}
               disabled={opt.disabled}
-              style={({ pressed }) => [
-                styles.row,
-                pressed && !opt.disabled && styles.rowPressed,
-                opt.disabled && styles.rowDisabled
-              ]}
+              accessibilityRole="button"
               onPress={() => {
-                if (opt.disabled) {
-                  return
-                }
                 onSelect(opt.value)
                 onClose()
               }}
               onLongPress={
                 onLongSelect
                   ? () => {
-                      if (opt.disabled) {
-                        return
-                      }
                       onLongSelect(opt.value)
                       onClose()
                     }
                   : undefined
               }
-            >
-              {opt.renderIcon ? (
-                <View style={styles.rowIcon}>{opt.renderIcon(isSelected)}</View>
-              ) : null}
-              <View style={styles.rowContent}>
-                <Text style={[styles.rowLabel, isSelected && styles.rowLabelSelected]}>
-                  {opt.label}
-                </Text>
-                {opt.subtitle ? <Text style={styles.rowSubtitle}>{opt.subtitle}</Text> : null}
-              </View>
-              {isSelected && <Check size={16} color={colors.textPrimary} />}
-            </Pressable>
-          </View>
-        )
-      })}
+            />
+          )
+        })}
+      </ListGroup>
     </View>
   )
 }
 
 const styles = themedStyleSheet(() => ({
   header: {
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: LIST_ROW_PADDING,
     paddingBottom: spacing.sm
   },
   title: {
     fontSize: 13,
     fontWeight: '500',
-    color: colors.textMuted
+    color: colors.textSecondary
   },
   subtitle: {
-    fontSize: 11,
+    fontSize: typography.metaSize,
     color: colors.textMuted,
     marginTop: 2
   },
-  group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  rowDisabled: {
-    opacity: 0.45
-  },
-  rowContent: {
-    flex: 1,
-    minWidth: 0
-  },
-  rowIcon: {
-    width: 22,
-    alignItems: 'center',
-    marginRight: spacing.sm
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  rowLabelSelected: {
-    fontWeight: '600'
-  },
-  rowSubtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1
+  content: {
+    gap: spacing.sm
   }
 }))

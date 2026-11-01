@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 import {
   isAgentSessionOwnerBinding,
   type AgentSessionOwnerBinding
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
 import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { recordAuthenticatedInventory } from './daemon-audit-classifier'

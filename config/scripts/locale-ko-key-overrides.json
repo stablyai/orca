@@ -1208,15 +1208,6 @@
   "auto.components.mobile.PhoneCarousel.93217b41c1": {
     "ko": "워크트리 목록"
   },
-  "auto.components.mobile.slides.HomeSlide.0bad5b07c8": {
-    "ko": "GitHub 및 Linear"
-  },
-  "auto.components.mobile.slides.HomeSlide.0bc1881bc4": {
-    "ko": "연결됨 · 워크트리 40개 · 활성 5개"
-  },
-  "auto.components.mobile.slides.HomeSlide.c0e2e9dcd9": {
-    "ko": "다시 오신 것을 환영합니다"
-  },
   "auto.components.mobile.slides.TerminalSlide.2defc05141": {
     "ko": "dev@mac"
   },
@@ -4136,9 +4127,6 @@
   "auto.store.slices.jira.856083302c": {
     "ko": "더 새로운 요청이 있어 Jira 연결 요청을 건너뛰었습니다."
   },
-  "auto.store.slices.linear.37d36984d0": {
-    "ko": "더 새로운 요청이 있어 Linear 연결 요청을 건너뛰었습니다."
-  },
   "auto.store.slices.repos.e649269645": {
     "ko": "선택한 호스트에 경로를 입력하려면 프로젝트 추가를 사용하세요."
   },
@@ -4325,9 +4313,6 @@
   "auto.components.settings.TerminalWindowSection.25e2f8e8e1": {
     "ko": "터미널 그리드 주변의 수평 패딩(픽셀)입니다."
   },
-  "auto.components.settings.TerminalWindowSection.97950bb087": {
-    "ko": "터미널 창에 배경 흐림을 적용합니다. 다시 시작해야 합니다."
-  },
   "auto.components.settings.TerminalWindowSection.809f37738d": {
     "ko": "터미널 배경의 투명도를 제어합니다. 1은 완전히 불투명하고, 0은 완전히 투명합니다."
   },
@@ -4360,9 +4345,6 @@
   },
   "auto.components.settings.terminal.search.75691e4911": {
     "ko": "터미널 그리드 주변의 수평 패딩(픽셀)입니다."
-  },
-  "auto.components.settings.terminal.search.bc2054657a": {
-    "ko": "터미널 창에 배경 흐림을 적용합니다. 다시 시작해야 합니다."
   },
   "auto.components.settings.terminal.search.4c643695aa": {
     "ko": "터미널 배경의 투명도를 제어합니다."

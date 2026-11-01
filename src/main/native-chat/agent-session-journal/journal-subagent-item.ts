@@ -1,14 +1,17 @@
 // Child IDs key reusable rows so later runs revise them directly instead of duplicating or scanning.
 
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import { subagentFallbackText } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import { MAX_SUBAGENT_FIELD_CHARS } from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
-import { isSubagentBlock, type NativeChatSubagentBlock } from '../../../shared/native-chat-types'
+import {
+  isSubagentBlock,
+  type NativeChatSubagentBlock
+} from '../../../shared/native-chat/native-chat-types'
 import { boundSubagentEntryId } from '../subagent-entry-id-bounds'
 
 export function subagentJournalItemIdentity(id: string): AgentJournalItemIdentity {

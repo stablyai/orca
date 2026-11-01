@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { normalizeNativeChatTaskList } from '../../shared/native-chat/input/native-chat-task-list'
-import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
+import { projectStructuredItemsToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexTurnOrdinals } from './codex-structured-item-translation'
 import {
@@ -16,7 +14,7 @@ import {
 } from './codex-structured-journal-translation'
 import { MAX_CODEX_WORDLESS_ROWS_PER_TURN } from './codex-structured-journal-limits'
 import { CODEX_COMMAND_APPROVAL_METHOD } from './codex-structured-prompt-replies'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'

@@ -1,10 +1,8 @@
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { expect, vi } from 'vitest'
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -18,7 +16,7 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { codexTurnLifecycleFake } from './codex-turn-lifecycle-fake'
 import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export const CODEX_TEST_THREAD_ID = 'thread-abc'
 
@@ -60,10 +58,14 @@ export function fakeCodexAppServer(routes: Record<string, CodexTestRoute> = {}):
       calls: [],
       pid: 4321,
       closed: false,
-      request: async (method, params) => {
+      request: async (method, params, options) => {
         connection.calls.push({ method, params })
         const route = routes[method] ?? (method === 'turn/steer' ? refuseUnroutedSteer : undefined)
-        return route?.(params) ?? {}
+        const routed = route?.(params) ?? {}
+        const result = routed instanceof Promise ? await routed : routed
+        // The real dispatcher runs onReply at receipt, before the caller's continuation.
+        options?.onReply?.(result)
+        return result
       },
       notify: () => {},
       respond: () => {},
