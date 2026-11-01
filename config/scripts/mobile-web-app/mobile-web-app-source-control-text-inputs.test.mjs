@@ -177,6 +177,34 @@ describe('the size a text input declares, as the census reads it', () => {
     }
   })
 
+  it('reads a style-forwarding input at its call sites, not as a hole in its own module', () => {
+    const root = plant({
+      'src/ui/FieldTextInput.tsx': [
+        "import { styles } from './field-styles'",
+        'export function FieldTextInput({ style }) {',
+        '  return <TextInput style={[styles.input, style]} />',
+        '}'
+      ].join('\n'),
+      'src/ui/Form.tsx': 'export const Form = () => <FieldTextInput style={{ fontSize: 14 }} />',
+      'src/ui/field-styles.ts': [SEAM_IMPORT, 'export const styles = { input: {} }'].join('\n'),
+      ...SEAM_SOURCE
+    })
+    try {
+      const closure = {
+        local: [
+          'src/ui/FieldTextInput.tsx',
+          'src/ui/Form.tsx',
+          'src/ui/field-styles.ts',
+          ...Object.keys(SEAM_SOURCE)
+        ]
+      }
+      expect(textInputFontSizeOffenders(root, closure)).toEqual(['src/ui/Form.tsx:1'])
+      expect(unresolvedTextInputStyles(root, closure)).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('reads an inline literal beside a style key, and the condition between them', () => {
     // Follow style arrays and && right operand used by real inputs.
     const root = plant({

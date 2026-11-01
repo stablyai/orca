@@ -19,7 +19,7 @@ import { shutdownManagedSimulatorIfNoPane } from '@/lib/simulator-pane-shutdown-
 import { buildPrelaunchedEmulatorSessionState } from './emulator-prelaunched-session'
 import { useEmulatorPaneManualLaunchEvents } from './use-emulator-pane-manual-launch-events'
 import { buildEmulatorPaneSessionView } from './emulator-pane-session-view'
-import { resolveEmulatorAttachTarget } from './emulator-attach-target'
+import { attachWithAvdFallback } from './emulator-attach-target'
 import { useEmulatorPaneLifecycle } from './use-emulator-pane-lifecycle'
 import { useEmulatorPaneShutdown } from './use-emulator-pane-shutdown'
 import {
@@ -160,6 +160,12 @@ export function useEmulatorPaneSession({
     [devices, resetVisualOrientation, selectedUdid, session, tabId]
   )
 
+  // Unlike iOS MJPEG, a dead Android stream never reconnects itself; show it disconnected so Connect restarts it.
+  const markStreamLost = useCallback(() => {
+    liveTargetRef.current = null
+    setSession((s) => s && { ...s, attached: false })
+  }, [])
+
   const attach = useCallback(
     async (deviceTarget?: string) => {
       if (loading) {
@@ -180,17 +186,15 @@ export function useEmulatorPaneSession({
         if (list.length === 0 && deviceRefreshErrorRef.current) {
           throw deviceRefreshErrorRef.current
         }
-        const target = resolveEmulatorAttachTarget({
-          configuredDefaultUdid,
-          devices: list,
-          deviceTarget,
-          selectedUdid
-        })
-        if (!target) {
+        if (list.length === 0 && !deviceTarget && !configuredDefaultUdid) {
           throw noEmulatorDevicesError()
         }
+        // Untargeted attaches let the host choose so a live workspace session is kept.
+        const target = deviceTarget
         requestedTarget = target
-        setSelectedUdid(target)
+        if (target) {
+          setSelectedUdid(target)
+        }
         if (target !== liveTargetRef.current) {
           // Clear the old device’s frame so switching shows a connecting state.
           setSession(null)
@@ -198,11 +202,12 @@ export function useEmulatorPaneSession({
           liveTargetRef.current = null
           resetVisualOrientation()
         }
-        const res = (await callRuntimeRpc({ kind: 'local' }, 'emulator.attach', {
-          device: target,
-          worktree: worktreeId,
-          focus: false
-        })) as { attached?: boolean; info?: EmulatorPaneSession['info'] }
+        const res = await attachWithAvdFallback(list, target, setSelectedUdid, (device) =>
+          callRuntimeRpc({ kind: 'local' }, 'emulator.attach', {
+            device,
+            worktree: worktreeId
+          })
+        )
         if (!mountedRef.current) {
           // Attach may finish after unmount cleanup ran before the session was registered.
           await shutdownManagedSimulatorIfNoPane(worktreeId, tabId)
@@ -241,7 +246,6 @@ export function useEmulatorPaneSession({
       loading,
       refreshDevices,
       resetVisualOrientation,
-      selectedUdid,
       tabId,
       worktreeId
     ]
@@ -294,12 +298,11 @@ export function useEmulatorPaneSession({
     devices,
     selectedUdid,
     setSelectedUdid,
-    session,
     loading,
     error,
     attach,
+    markStreamLost,
     shutdown,
-    refreshDevices,
     sendTap,
     sendButton,
     sendGesture,
@@ -309,7 +312,6 @@ export function useEmulatorPaneSession({
     previewUrl: view.previewUrl,
     wsUrl: view.wsUrl,
     streamKey: streamKey ?? undefined,
-    isLive: view.isLive,
-    selectedDevice: view.selectedDevice
+    isLive: view.isLive
   }
 }

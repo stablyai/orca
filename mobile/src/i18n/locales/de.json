@@ -1491,40 +1491,17 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "Aktion erforderlich",
-      "cancelled": "Abgebrochen",
-      "checkDetails": "Details zum Check {{name}}",
-      "failed": "Fehlgeschlagen",
       "failing": "{{count}} fehlgeschlagen",
-      "failingChecks_one": "{{count}} fehlgeschlagener Check",
-      "failingChecks_other": "{{count}} fehlgeschlagene Checks",
-      "fix": "Beheben",
-      "fixFailing": "Fehlgeschlagene Checks mit KI beheben",
-      "inProgress": "In Bearbeitung",
-      "inspectOrFix": "Details prüfen oder einen KI-Korrekturdurchlauf starten.",
-      "loadDetailsFailed": "Check-Details konnten nicht geladen werden.",
-      "neutral": "Neutral",
-      "neutralCount": "{{count}} neutral",
       "noChecks": "Keine Checks",
       "openOnWeb": "{{name}} im Web öffnen",
       "passed": "{{count}} bestanden",
-      "pending": "Ausstehend",
-      "pendingCount": "{{count}} ausstehend",
-      "queued": "In der Warteschlange",
-      "rerunFailing": "Fehlgeschlagene Checks erneut ausführen",
-      "skipped": "Übersprungen",
-      "successful": "Erfolgreich",
-      "timedOut": "Zeitüberschreitung",
-      "title": "Checks",
-      "unavailable": "Checks nicht verfügbar"
+      "title": "Checks"
     },
     "commentCard": {
       "daysAgo_one": "vor {{count}} Tag",
       "daysAgo_other": "vor {{count}} Tagen",
-      "deleteComment": "Kommentar löschen",
       "deleteConfirmMessage": "Dadurch wird der Kommentar auf GitHub dauerhaft gelöscht.",
       "deleteConfirmTitle": "Kommentar löschen?",
-      "editComment": "Kommentar bearbeiten",
       "editPlaceholder": "Kommentar bearbeiten…",
       "hoursAgo_one": "vor {{count}} Std.",
       "hoursAgo_other": "vor {{count}} Std.",
@@ -1533,53 +1510,20 @@
       "minutesAgo_other": "vor {{count}} Min.",
       "monthsAgo_one": "vor {{count}} Monat",
       "monthsAgo_other": "vor {{count}} Monaten",
-      "openOnGitHub": "Kommentar auf GitHub öffnen",
       "reply": "Antworten",
-      "replyPlaceholder": "Antwort schreiben…",
-      "replyToComment": "Auf Kommentar antworten",
       "resolve": "Erledigen",
-      "resolveThread": "Thread als erledigt markieren",
-      "resolved": "erledigt",
       "unresolve": "Als ungelöst markieren",
-      "unresolveThread": "Thread als ungelöst markieren",
       "yearsAgo_one": "vor {{count}} Jahr",
       "yearsAgo_other": "vor {{count}} Jahren"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "Kommentar hinzufügen…",
-      "all": "Alle",
-      "bots": "Bots",
       "comment": "Kommentieren",
-      "commentsLoadFailed": "Kommentare konnten nicht geladen werden. Zum erneuten Laden auf „Aktualisieren“ tippen.",
       "description": "Beschreibung",
       "descriptionLoadFailed": "Beschreibung konnte nicht geladen werden. Zum erneuten Laden auf „Aktualisieren“ tippen.",
-      "humans": "Menschen",
-      "noBotComments": "Keine Kommentare von Bots.",
       "noComments": "Noch keine Kommentare.",
       "noDescription": "Keine Beschreibung angegeben.",
-      "noHumanComments": "Keine Kommentare von Menschen.",
-      "resolvedCommentCount": "Erledigter Kommentar von {{author}} ({{count}})",
-      "resolvedCommentSingle": "Erledigter Kommentar von {{author}}",
-      "resolvedThreadCount": "Erledigter Thread von {{author}} ({{count}})",
-      "resolvedThreadSingle": "Erledigter Thread von {{author}}",
       "showMore": "{{count}} weitere anzeigen",
-      "showMoreOf": "{{count}} weitere von {{remaining}} anzeigen",
       "title": "Kommentare"
-    },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} Commit im Rückstand (Basis-Commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} Commits im Rückstand (Basis-Commit: {{baseCommit}})",
-      "copyCommands": "Befehle kopieren",
-      "copyFailed": "Text konnte nicht kopiert werden",
-      "copyRefreshCommands": "Befehle zum Aktualisieren der Merge-Fähigkeit kopieren",
-      "detailsUnavailable": "Details zu Dateien mit Konflikten sind nicht verfügbar",
-      "filesHeading": "Dateien mit Konflikten",
-      "localMergeClean": "GitHub meldet Konflikte, die mit lokalem Git nicht reproduziert werden konnten. PR aktualisieren oder Branch pushen, um die Merge-Fähigkeit neu zu berechnen.",
-      "mustResolve": "Dieser Branch enthält Konflikte, die gelöst werden müssen",
-      "refreshing": "Konfliktdetails werden aktualisiert…",
-      "resolveWithAi": "Konflikte mit KI lösen",
-      "runFromWorktree": "Aus diesem Worktree ausführen",
-      "title": "Konflikte"
     },
     "linkPrForm": {
       "linkButton": "Pull Request verknüpfen",
@@ -1592,27 +1536,14 @@
       "details": "Details"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "Automatisches Mergen umschalten",
-      "autoMergeLabel": "Automatisch mergen, sobald bereit",
-      "autoMergeOff": "Aus",
-      "autoMergeOn": "Ein",
-      "closeAccessibilityLabel": "Pull Request schließen",
       "closeConfirmMessage": "#{{number}} wird ohne Merge geschlossen.",
       "closeConfirmTitle": "Pull Request schließen?",
-      "markReadyAccessibilityLabel": "Pull Request als bereit für das Review markieren",
       "markReadyButton": "Für das Review freigeben",
-      "mergeAccessibilityLabel": "Pull Request mergen",
-      "mergeButton": "Mergen",
-      "mergeConfirmTitle": "Pull Request mergen?",
-      "recheckAccessibilityLabel": "Merge-Status erneut prüfen",
-      "recheckButton": "Erneut prüfen",
       "reopenAccessibilityLabel": "Pull Request erneut öffnen",
       "reopenButton": "Erneut öffnen",
       "reopenConfirmMessage": "#{{number}} wird erneut geöffnet.",
       "reopenConfirmTitle": "Pull Request erneut öffnen?",
-      "unlinkAccessibilityLabel": "Verknüpfung zum Pull Request aufheben",
-      "unlinkButton": "Verknüpfung aufheben",
-      "unlinkFailed": "Die Verknüpfung zum Pull Request konnte nicht aufgehoben werden."
+      "unlinkButton": "Verknüpfung aufheben"
     },
     "prActionsState": {
       "behindHint": "Branch vor dem Mergen aktualisieren",
@@ -1705,25 +1636,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} ist mit keinem offenen PR verknüpft.",
-      "branchRequired": "Vor dem Erstellen eines Pull Requests einen Branch auschecken.",
-      "createFailed": "Pull Request konnte nicht erstellt werden.",
-      "createPr": "PR erstellen",
-      "createPullRequest": "Pull Request erstellen",
       "currentBranchNotLinked": "Der aktuelle Branch ist mit keinem offenen PR verknüpft.",
-      "linkExistingPr": "Bestehenden PR verknüpfen",
       "linkExistingPullRequest": "Bestehenden Pull Request verknüpfen",
       "linkedPrUnavailable": "Verknüpfter PR #{{number}} nicht verfügbar",
-      "noOpenPullRequest": "Kein offener Pull Request",
-      "refreshOrCreate": "Zum erneuten Prüfen aktualisieren oder einen neuen PR für diesen Branch erstellen.",
-      "refreshPullRequest": "Pull Request aktualisieren",
-      "title": "Pull Request"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "Titelbearbeitung abbrechen",
-      "editTitle": "PR-Titel bearbeiten",
-      "openInBrowser": "Pull Request #{{number}} im Browser öffnen",
-      "openOnWeb": "Pull Request #{{number}} im Web öffnen",
-      "saveTitle": "Titel speichern"
+      "refreshOrCreate": "Zum erneuten Prüfen aktualisieren oder einen neuen PR für diesen Branch erstellen."
     },
     "prViewPanel": {
       "branchUnavailable": "Aktueller Branch nicht verfügbar.",
@@ -1731,20 +1647,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Personen konnten nicht geladen werden.",
-      "noMatches": "Keine passenden Personen",
-      "removeReviewer": "{{login}} entfernen",
-      "requestReviewer": "Review von {{login}} anfordern",
-      "searchPeople": "Personen suchen",
-      "title": "Prüfer"
+      "noMatches": "Keine passenden Personen"
     },
     "reviewersSection": {
-      "addOrRemove": "Prüfer hinzufügen oder entfernen",
       "approved": "Genehmigt",
       "changesRequested": "Änderungen angefordert",
       "commented": "Kommentiert",
       "dismissed": "Verworfen",
-      "loadFailed": "Prüfer konnten nicht geladen werden. Zum erneuten Laden auf „Aktualisieren“ tippen.",
-      "loading": "Prüfer werden geladen…",
       "noReviewers": "Keine Prüfer angefordert",
       "pending": "Ausstehend",
       "removeReviewer": "{{login}} entfernen",
@@ -2131,7 +2040,8 @@
       "promptUnconfirmed": "Der Agent wurde gestartet, aber der Versand des Prompts konnte nicht bestätigt werden."
     },
     "prActionsEngine": {
-      "mergeFailed": "Pull Request konnte nicht gemergt werden."
+      "mergeFailed": "Pull Request konnte nicht gemergt werden.",
+      "refreshFailed": "Pull Request konnte nicht aktualisiert werden."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agent gestartet",
@@ -2423,8 +2333,7 @@
       "actionFailed": "Kommentaraktion fehlgeschlagen"
     },
     "usePrTitleAction": {
-      "disconnected": "Keine Verbindung zum Desktop.",
-      "updateFailed": "Titel konnte nicht aktualisiert werden."
+      "disconnected": "Keine Verbindung zum Desktop."
     },
     "useQuickCommands": {
       "loadFailed": "Schnellbefehle konnten nicht geladen werden",
@@ -2746,7 +2655,6 @@
       "checkingReviewStatus": "Review-Status wird geprüft.",
       "checkoutBeforePublish": "Vor dem Veröffentlichen von Commits einen Branch auschecken.",
       "commitStagedChanges": "Vorgemerkte Änderungen committen.",
-      "commits": "Commits",
       "committing": "Commit läuft.",
       "createPr": "PR erstellen",
       "enterCommitMessage": "Zum Committen eine Commit-Nachricht eingeben.",
@@ -2774,23 +2682,11 @@
       "resolveFailed": "Branch-Basis konnte nicht ermittelt werden."
     },
     "branchCard": {
-      "branchCount": "{{count}} auf Branch",
-      "changedCount": "{{count}} geändert",
-      "cherryPickState": "Cherry-pick",
-      "mergeState": "Merge",
-      "rebaseState": "Rebase",
-      "stagedCount": "{{count}} vorgemerkt",
       "completingMerge": "Wird abgeschlossen…",
       "completeMerge": "Merge abschließen"
     },
     "branchCompare": {
-      "commits_one": "{{count}} Commit",
-      "commits_other": "{{count}} Commits",
-      "files_one": "{{count}} Datei",
-      "files_other": "{{count}} Dateien",
-      "sectionTitle": "Auf Branch committet",
-      "summary": "{{files}} – gegenüber {{baseRef}}",
-      "summaryWithCommits": "{{files}} – {{commits}} – gegenüber {{baseRef}}"
+      "sectionTitle": "Auf Branch committet"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "Basis-Branch für den Vergleich konnte nicht ermittelt werden.",
@@ -2849,11 +2745,8 @@
       "emptyMessage": "Der Worktree ist sauber.",
       "emptyTitle": "Keine lokalen Änderungen",
       "generateMessage": "Commit-Nachricht mit KI generieren",
-      "openActions": "Aktionen der Quellcodeverwaltung öffnen",
       "reconnecting": "Verbindung zum Desktop wird wiederhergestellt…",
-      "regenerateHint": "Nachricht leeren, um sie neu zu generieren.",
-      "stageAll": "Alle vormerken",
-      "unstageAll": "Alle Vormerkungen aufheben"
+      "regenerateHint": "Nachricht leeren, um sie neu zu generieren."
     },
     "createPrAction": {
       "checkingStatus": "Review-Status wird geprüft…",
@@ -2882,20 +2775,15 @@
       "titleUnpublishedForcePushCount_one": "Push von {{count}} Branch-Commit mit Lease erzwingen und bei Bedarf einen Upstream festlegen.",
       "titleUnpublishedForcePushCount_other": "Push von {{count}} Branch-Commits mit Lease erzwingen und bei Bedarf einen Upstream festlegen."
     },
-    "fileList": {
-      "committedSection": "Auf Branch committet"
-    },
     "fileRows": {
       "addedByThem": "Von ihnen hinzugefügt",
       "addedByUs": "Von uns hinzugefügt",
       "bothAdded": "Beidseitig hinzugefügt",
       "bothDeleted": "Beidseitig gelöscht",
       "bothModified": "Beidseitig geändert",
-      "committedSection": "Auf Branch committet",
       "committedUnavailable": "Committete Änderungen nicht verfügbar.",
       "deletedByThem": "Von ihnen gelöscht",
       "deletedByUs": "Von uns gelöscht",
-      "discardFile": "Änderungen an {{path}} verwerfen",
       "loadingCommitted": "Committete Änderungen werden geladen…",
       "openChangedFile": "Geänderte Datei {{path}} öffnen",
       "openCommittedChange": "Committete Änderung an {{path}} öffnen",
@@ -2928,9 +2816,7 @@
       "waitingForDesktop": "Warten auf Desktop…"
     },
     "gitStatus": {
-      "changes": "Änderungen",
-      "conflicts": "Konflikte",
-      "stagedChanges": "Vorgemerkte Änderungen"
+      "conflicts": "Konflikte"
     },
     "header": {
       "backToSession": "Zurück zur Sitzung",
@@ -2998,7 +2884,6 @@
       "waitingForDesktop": "Warten auf den Desktop…"
     },
     "modals": {
-      "actionsTitle": "Quellcodeverwaltung",
       "currentBranch": "aktuell",
       "discardButton": "Verwerfen",
       "discardConfirmMessage": "Änderungen an „{{path}}“ verwerfen? Dies kann nicht rückgängig gemacht werden.",
@@ -3010,15 +2895,6 @@
     },
     "panel": {
       "unavailableTitle": "Quellcodeverwaltung nicht verfügbar"
-    },
-    "prChip": {
-      "createPr": "Pull Request erstellen",
-      "loading": "Pull Request wird geladen…",
-      "loadingLabel": "Pull Request wird geladen",
-      "openLabel": "Pull Request #{{number}}, {{state}}, {{checks}}. Pull Request öffnen.",
-      "openWithComments_one": "Pull Request #{{number}}, {{state}}, {{checks}}, {{count}} ungelöster Kommentar. Pull Request öffnen.",
-      "openWithComments_other": "Pull Request #{{number}}, {{state}}, {{checks}}, {{count}} ungelöste Kommentare. Pull Request öffnen.",
-      "unavailableLabel": "Pull Request nicht verfügbar: {{message}}"
     },
     "prCreate": {
       "authRequired": "Vor dem Erstellen eines {{reviewLabel}}s ist eine Authentifizierung erforderlich.",
@@ -3107,7 +2983,6 @@
       "noBranch": "Kein Branch"
     },
     "state": {
-      "noUpstream": "Kein Upstream",
       "syncStatus": "{{ahead}} voraus, {{behind}} zurück"
     },
     "textGenerationFailure": {
@@ -3196,9 +3071,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "Commit-Nachricht konnte nicht generiert werden."
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "Vor dem Erstellen eines Pull Requests einen Branch auschecken."
     },
     "useMobileGitRequests": {
       "actionFailed": "Aktion der Quellcodeverwaltung fehlgeschlagen",

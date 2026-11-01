@@ -169,10 +169,6 @@
     }
   },
   "pullRequest": {
-    "checksSection": {
-      "failingChecks_one": "{{count}} failing check",
-      "failingChecks_other": "{{count}} failing checks"
-    },
     "commentCard": {
       "daysAgo_one": "{{count}}d ago",
       "daysAgo_other": "{{count}}d ago",
@@ -185,9 +181,25 @@
       "yearsAgo_one": "{{count}}y ago",
       "yearsAgo_other": "{{count}}y ago"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} commit behind (base commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commits behind (base commit: {{baseCommit}})"
+    "emptyState": {
+      "commitsReady_one": "{{count}} commit on {{branch}} is ready to go into {{base}}.",
+      "commitsReady_other": "{{count}} commits on {{branch}} are ready to go into {{base}}."
+    },
+    "gates": {
+      "approvals_one": "{{count}} approval",
+      "approvals_other": "{{count}} approvals",
+      "checksFailing_one": "{{count}} check failing",
+      "checksFailing_other": "{{count}} checks failing",
+      "checksPassed_one": "{{count}} check passed",
+      "checksPassed_other": "{{count}} checks passed",
+      "checksRunning_one": "{{count}} check running",
+      "checksRunning_other": "{{count}} checks running",
+      "conflictFiles_one": "{{count}} file",
+      "conflictFiles_other": "{{count}} files",
+      "fromBots_one": "{{count}} from a bot",
+      "fromBots_other": "{{count}} from bots",
+      "unresolvedThreads_one": "{{count}} unresolved thread",
+      "unresolvedThreads_other": "{{count}} unresolved threads"
     },
     "prActionsState": {
       "mergeThrough_one": "Merge through #{{number}} · {{count}} PR",
@@ -204,6 +216,18 @@
       "passed_other": "{{count}} passed",
       "pending_one": "{{count}} pending",
       "pending_other": "{{count}} pending"
+    },
+    "reviewersSheet": {
+      "approvals_one": "{{count}} approval",
+      "approvals_other": "{{count}} approvals"
+    },
+    "screens": {
+      "threadSubtitle_one": "{{author}} · {{count}} message",
+      "threadSubtitle_other": "{{author}} · {{count}} messages"
+    },
+    "tab": {
+      "filesChanged_one": "{{count}} file changed",
+      "filesChanged_other": "{{count}} files changed"
     }
   },
   "session": {
@@ -279,11 +303,11 @@
       "pushCommits_one": "Push {{count}} commit.",
       "pushCommits_other": "Push {{count}} commits."
     },
-    "branchCompare": {
+    "changesHeader": {
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
-      "files_one": "{{count}} file",
-      "files_other": "{{count}} files"
+      "filesNeedDecision_one": "{{count}} file needs a decision before you can finish.",
+      "filesNeedDecision_other": "{{count}} files need a decision before you can finish."
     },
     "commitDetail": {
       "files_one": "{{count}} file",
@@ -326,10 +350,6 @@
       "checksFailing_other": "{{count}} checks failing",
       "checksRunning_one": "{{count}} check still running",
       "checksRunning_other": "{{count}} checks still running"
-    },
-    "prChip": {
-      "openWithComments_one": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.",
-      "openWithComments_other": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request."
     },
     "primaryAction": {
       "commitFiles_one": "Commit {{count}} file",

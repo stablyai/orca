@@ -40,6 +40,7 @@ function fakeMutations(overrides: Partial<PrActionMutations> = {}): PrActionMuta
     setPRAutoMerge: vi.fn(ok),
     updatePRState: vi.fn(ok),
     markReadyForReview: vi.fn(ok),
+    markDraft: vi.fn(ok),
     requestReviewers: vi.fn(ok),
     removeReviewers: vi.fn(ok),
     rerunChecks: vi.fn(ok),
@@ -163,7 +164,7 @@ describe('PrActionsEngine — merge', () => {
     expect(engine.busy).toBeNull()
   })
 
-  it('transient merge failure sets a non-blocking error and rereads', async () => {
+  it('transient merge failure sets a non-blocking error and no refetch', async () => {
     const mutations = fakeMutations({
       mergePR: vi.fn(async () => ({ ok: false as const, error: 'network timeout' }))
     })
@@ -171,7 +172,7 @@ describe('PrActionsEngine — merge', () => {
     await engine.merge('squash')
     expect(engine.error).toBe('network timeout')
     expect(engine.blocked).toBeNull()
-    expect(refetch).toHaveBeenCalledOnce()
+    expect(refetch).not.toHaveBeenCalled()
   })
 })
 
@@ -263,7 +264,7 @@ describe('PrActionsEngine — rerun checks', () => {
 })
 
 describe('PrActionsEngine — permanent failure (403)', () => {
-  it('routes a permission denial to blocked, clears optimism, rereads without retrying', async () => {
+  it('routes a permission denial to blocked, clears optimism, no auto-retry/refetch', async () => {
     const mutations = fakeMutations({
       setPRAutoMerge: vi.fn(async () => ({ ok: false as const, error: 'HTTP 403: forbidden' }))
     })
@@ -272,7 +273,7 @@ describe('PrActionsEngine — permanent failure (403)', () => {
     expect(engine.blocked).toBe('HTTP 403: forbidden')
     expect(engine.error).toBeNull()
     expect(engine.resolveAutoMerge(false)).toBe(false)
-    expect(refetch).toHaveBeenCalledOnce()
+    expect(refetch).not.toHaveBeenCalled()
     expect(mutations.setPRAutoMerge).toHaveBeenCalledOnce()
   })
 })

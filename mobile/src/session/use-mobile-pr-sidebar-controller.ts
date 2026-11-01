@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { GitHubPRFileViewedState } from '../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { backgroundReadFailed, useForegroundFirstLoad } from './pr-sidebar-load-result'
 import {
   fetchGithubRepoSlug,
   fetchHostedReviewForBranch,
@@ -35,9 +36,8 @@ type PrSidebarControllerInput = {
 // Load body/comments only when the PR segment opens; the hub chip needs just PR/checks.
 export type PrSidebarLoadOptions = {
   includeDetails?: boolean
-  // A write's follow-up read: on failure keep this branch's ready PR; the write's outcome is the feedback.
-  // Manual Recheck/Retry and HEAD refreshes still show a failed read.
-  reconcile?: boolean
+  /** A poll the user did not ask for: a failed read leaves the shown PR in place. */
+  background?: boolean
 }
 
 // Keep HEAD out of identity: commits soft-refresh checks without clearing ready UI.
@@ -68,9 +68,6 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   // Detached HEAD still needs repo eligibility; branching the probe would strand its spinner.
   const probeReady = client !== null && connState === 'connected'
   const identity = buildMobilePrSidebarIdentity({ worktreeId, branch })
-  // Live identity, so a load closure captured for an earlier branch cannot claim the current one.
-  const identityRef = useRef(identity)
-  identityRef.current = identity
 
   const buildDeps = useCallback((): PrSidebarLoadDeps | null => {
     if (!client) {
@@ -134,13 +131,13 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
   }, [identity])
 
-  const load = useCallback(
+  const loadOnce = useCallback(
     async (options?: PrSidebarLoadOptions) => {
       const includeDetails = options?.includeDetails ?? true
       const deps = buildDeps()
       const loadIdentity = identity
-      if (!deps || !branch || !loadIdentity || loadIdentity !== identityRef.current) {
-        return
+      if (!deps || !branch || !loadIdentity) {
+        return 'stale'
       }
       const seq = loadSeqRef.current + 1
       loadSeqRef.current = seq
@@ -159,12 +156,12 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
       if (
         !shouldApplyResult(seq, loadSeqRef.current) ||
-        stateIdentityRef.current !== loadIdentity ||
-        (options?.reconcile &&
-          (next.kind === 'error' || next.kind === 'blocked') &&
-          stateRef.current.kind === 'ready')
+        stateIdentityRef.current !== loadIdentity
       ) {
-        return
+        return 'stale'
+      }
+      if (options?.background && backgroundReadFailed(stateRef.current, next)) {
+        return 'failed'
       }
       stateIdentityRef.current = loadIdentity
 
@@ -180,12 +177,12 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (next.kind === 'ready' && priorDetails != null) {
         setState({ kind: 'ready', data: { ...next.data, details: priorDetails } })
         if (!includeDetails) {
-          return
+          return 'applied'
         }
       } else {
         setState(next)
         if (next.kind !== 'ready' || !includeDetails) {
-          return
+          return next.kind === 'ready' || next.kind === 'none' ? 'applied' : 'failed'
         }
       }
 
@@ -204,7 +201,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         stateRef.current.kind !== 'ready' ||
         stateRef.current.data.pr.number !== next.data.pr.number
       ) {
-        return
+        return 'applied'
       }
       // Replace nonfatal null with a placeholder so details cannot spin forever.
       const details = resolvePrSidebarDetailsAfterPhase2({
@@ -213,9 +210,12 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         pr: stateRef.current.data.pr
       })
       setState({ kind: 'ready', data: { ...stateRef.current.data, details } })
+      return 'applied'
     },
     [buildDeps, branch, headSha, identity, worktreeId]
   )
+
+  const load = useForegroundFirstLoad(loadOnce)
 
   const ensurePrSidebarDetails = useCallback(async () => {
     const current = stateRef.current

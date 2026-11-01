@@ -83,7 +83,8 @@ export type AgentSessionHistoryPage = {
   removedItemIds: string[]
   /** Include overlapping submissions so uncertain bubbles retain their dispatch state. */
   submissions: AgentJournalSubmission[]
-  /** Return the next same-direction request cursor; keep the request cursor on empty pages. */
+  /** Return the next same-direction request cursor. An empty page keeps the request cursor, except
+   *  that an `after` page moves past newer writes that saved no history. */
   window: {
     oldest: AgentJournalCursor | null
     newest: AgentJournalCursor | null

@@ -22,19 +22,13 @@ export function buildUpdatePRTitleParams(
   return { prNumber, title: draft.trim() }
 }
 
-// Why: Save resolves after its reread, so only the latest edit may close the editor; a newer keystroke,
-// Save or edit start supersedes an older Save's completion (and keeps a newer failure visible).
-export function createPrTitleEditOwnership() {
-  let seq = 0
-  return {
-    touch: (): void => {
-      seq += 1
-    },
-    save: async (run: () => Promise<boolean>): Promise<boolean> => {
-      seq += 1
-      const mine = seq
-      const ok = await run()
-      return ok && mine === seq
-    }
-  }
+export type UpdatePRBodyParams = { prNumber: number; body: string }
+
+// An empty description is a valid edit; only an unchanged one is skipped.
+export function buildUpdatePRBodyParams(
+  prNumber: number,
+  draft: string,
+  current: string
+): UpdatePRBodyParams | null {
+  return draft.trim() === current.trim() ? null : { prNumber, body: draft.trim() }
 }

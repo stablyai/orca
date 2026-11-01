@@ -1,6 +1,6 @@
 import { BrowserError } from '../browser/browser-error'
-import { agentBrowserSetMediaArguments } from '../browser/agent-browser-set-media-arguments'
-import { agentBrowserWaitArguments } from '../browser/agent-browser-wait-arguments'
+import { agentBrowserSetMediaArguments } from '../browser/agent-browser/agent-browser-set-media-arguments'
+import { agentBrowserWaitArguments } from '../browser/agent-browser/agent-browser-wait-arguments'
 const TARGET_OVERRIDE_FLAGS: Record<string, true> = {
   '--args': true,
   '--cdp': true,

@@ -15,7 +15,7 @@ import {
   ExternalChromiumBrowserSession,
   externalChromiumAgentBrowserEnvironment
 } from './external-chromium-browser-session'
-import { agentBrowserCommandOf } from '../browser/agent-browser-bridge-test-harness'
+import { agentBrowserCommandOf } from '../browser/agent-browser/agent-browser-bridge-test-harness'
 
 const BASE = {
   executablePath: '/opt/orca/chromium',
