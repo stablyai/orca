@@ -25,7 +25,7 @@ export type MarkdownDiskFile = { content: string; byteLength: number }
 
 type MarkdownFileAddress = Pick<
   PersistedOpenFile,
-  'filePath' | 'relativePath' | 'externalSshTargetId'
+  'filePath' | 'relativePath' | 'externalSshTargetId' | 'readOnly'
 >
 
 export type MarkdownTabDiskHost = Pick<MarkdownFileIo, 'readFile'> & {
@@ -75,7 +75,8 @@ function savedEditorFile(
       filePath: sourceFilePath,
       relativePath: tab.sourceRelativePath,
       worktreeId,
-      language: 'markdown'
+      language: 'markdown',
+      readOnly: true
     }
   }
   if (!file || (file.language !== 'markdown' && tab.mode !== 'markdown-preview')) {

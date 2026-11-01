@@ -30,7 +30,7 @@ import { resolveLocalFileRequestPath } from '../../ipc/filesystem/access/local-f
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { filePreviewForPath } from '../../../shared/file-preview-kind'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
-import type { ResolveAuthorizedPathOptions } from '../../ipc/filesystem/filesystem-auth'
+import type { ResolveAuthorizedPathOptions } from '../../ipc/filesystem/access/filesystem-auth'
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
