@@ -73,6 +73,7 @@ function makeInput(overrides: Partial<Input> = {}): Input {
     prNumber: 42,
     activeReview: null,
     activeGitLabReview: null,
+    activeGiteaReview: null,
     asyncResultKeyRef: {
       current: checksPanelAsyncResultKey('repo-cache', 'feature', 42, pr.prRepo, pr.headSha)
     },
