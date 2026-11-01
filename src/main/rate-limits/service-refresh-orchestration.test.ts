@@ -9,6 +9,7 @@ import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { fetchZcodeRateLimits } from './zcode-usage-fetcher'
 import { readGrokAuthSession } from './grok-auth'
+import { GROK_ACCESS_TOKEN_REFRESH_LEAD_MS } from './grok-auth-expiry'
 import { fetchOpenCodeGoUsage } from './opencode-go-usage-source-selection'
 import {
   deferred,
@@ -672,5 +673,33 @@ describe('RateLimitService', () => {
     expect(state.opencodeGo?.status).toBe('error')
     expect(state.opencodeGo?.session).toBeNull()
     expect(state.opencodeGo?.error).toBe('No workspace ID found')
+  })
+
+  it('rechecks Grok before the access token expires, even without a focused window', async () => {
+    vi.useFakeTimers()
+    const expiresAtMs = Date.now() + GROK_ACCESS_TOKEN_REFRESH_LEAD_MS + 5_000
+    vi.mocked(readGrokAuthSession).mockReturnValue({
+      status: 'ok',
+      session: {
+        accessToken: 'token',
+        userId: null,
+        email: null,
+        teamId: null,
+        expiresAtMs,
+        oidcClientId: null
+      }
+    })
+    vi.mocked(fetchGrokRateLimits).mockResolvedValue(okProvider('grok', 42))
+    const service = new RateLimitService()
+    try {
+      service.start({ fetchImmediately: false })
+      await vi.advanceTimersByTimeAsync(4_999)
+      expect(fetchGrokRateLimits).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fetchGrokRateLimits).toHaveBeenCalledTimes(1)
+    } finally {
+      service.stop()
+      vi.useRealTimers()
+    }
   })
 })

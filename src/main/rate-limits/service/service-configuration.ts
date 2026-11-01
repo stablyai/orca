@@ -2,6 +2,12 @@ import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
+import { readGrokAuthSession } from '../grok-auth'
+import {
+  bindGrokTokenRefreshSchedule,
+  clearGrokTokenRefreshSchedule,
+  noteGrokAuthForScheduledRefresh
+} from '../grok-token-refresh-schedule'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
 import {
   type CodexAccountSelectionTarget,
@@ -23,6 +29,14 @@ import {
 } from './service-types'
 
 export abstract class RateLimitServiceConfiguration extends RateLimitServiceAccountRefresh {
+  protected bindGrokAccessTokenRefresh(): void {
+    bindGrokTokenRefreshSchedule(() => {
+      void this.fetchGrokOnly({ force: true })
+    })
+    // Arm from the file even when the window is unfocused; the poll does not run then.
+    noteGrokAuthForScheduledRefresh(readGrokAuthSession(), false)
+  }
+
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {
     this.codexHomePathResolver = resolver
   }
@@ -111,6 +125,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   }
 
   start(options: { fetchImmediately?: boolean } = {}): void {
+    this.bindGrokAccessTokenRefresh()
     if (options.fetchImmediately !== false) {
       void this.fetchAll()
     } else {
@@ -120,6 +135,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   }
 
   stop(): void {
+    clearGrokTokenRefreshSchedule()
     this.abortActiveFetchCycle()
     this.clearQueuedFetches()
     this.inactiveClaudeFetching.clear()
