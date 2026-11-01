@@ -7,7 +7,7 @@ import {
   type CodexResetCreditExpectedScope
 } from '../../shared/codex-reset-credit-scope'
 import type { RateLimitState, RateLimitRuntimeTarget } from '../../shared/rate-limit-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexResetCreditRejectedBeforeProviderReason } from './codex-account-service-types'
 import type { CodexManagedHomePath } from './codex-managed-home-path'

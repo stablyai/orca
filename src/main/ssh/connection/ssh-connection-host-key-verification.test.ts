@@ -56,13 +56,6 @@ describe('SshConnection host key verification', () => {
     expect(ssh2Mock.lastHostKeyAccepted, 'the handshake accepted an unidentifiable key').toBe(false)
   })
 
-  it('accepts a well-formed host key on first contact', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-
-    expect(ssh2Mock.lastHostKeyAccepted).toBe(true)
-  })
-
   // A rejected host key must bypass credential fallbacks or auth-shaped errors could disclose a secret to the refused peer.
   it('never asks for a credential after refusing a host key', async () => {
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')

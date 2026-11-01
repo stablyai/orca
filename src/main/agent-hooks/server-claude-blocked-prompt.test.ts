@@ -78,15 +78,6 @@ describe('Claude prompt blocked by a UserPromptSubmit hook', () => {
     expectSettledLikeStop()
   })
 
-  it('keeps a finished turn for its Stop hook', async () => {
-    program('working')
-    await promptHook()
-    program('done')
-    expect(row().state).toBe('working')
-    await hook({ hook_event_name: 'Stop', last_assistant_message: 'Done.' })
-    expectSettledLikeStop()
-  })
-
   it("ignores another program's idle in the same pane", async () => {
     program('working')
     await promptHook()

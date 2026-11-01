@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
-import { recordAgentSessionRuntimeEnd } from './runtime/agent-session-runtime-end-record'
+import { recordAgentSessionRuntimeEnd } from './runtime/agent-session/records/agent-session-runtime-end-record'
 
 // Leave time for normal checkpoints, but do not strand the installer behind a wedged shutdown.
 export const UPDATE_INSTALL_EXIT_TIMEOUT_MS = 20_000

@@ -22,7 +22,7 @@ import { setInlineImagesEnabled } from './pane-inline-images'
 import { fitAllPanesInternal } from './pane-tree-ops'
 import { collectPublicPanes, toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
-import { rebuildAttachedWebgl } from './pane-webgl-reattach'
+import { detachPanesWebglForRebuild, rebuildAttachedWebgl } from './pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
   clearPaneWebglTextureAtlases,
@@ -115,7 +115,7 @@ export class PaneManager {
       requestPaneReparentFrame: (callback) => this.reparentFrames.request(callback)
     }
     // Atlas recovery must reach every manager (resetAndRefreshAllTerminalWebglAtlases explains shared generations).
-    registerLivePaneManager(this)
+    registerLivePaneManager(this, () => detachPanesWebglForRebuild(this.panes.values()))
   }
 
   createInitialPane(opts?: { focus?: boolean; leafId?: string }): ManagedPane {

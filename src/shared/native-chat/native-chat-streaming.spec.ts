@@ -4,7 +4,7 @@ import {
   nativeChatStreamingMessage,
   NATIVE_CHAT_STREAMING_ID
 } from './native-chat-streaming'
-import type { NativeChatMessage } from '../native-chat-types'
+import type { NativeChatMessage } from './native-chat-types'
 
 const assistant = (text: string): NativeChatMessage => ({
   id: `a-${text.length}`,

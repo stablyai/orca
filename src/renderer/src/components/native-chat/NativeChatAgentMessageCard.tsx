@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import {
   agentMessageHeading,
@@ -28,10 +28,17 @@ import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
 
-function heading(from: AgentMessageSource, agentStart: boolean): string {
-  switch (agentMessageHeading(from, agentStart)) {
+function heading(from: AgentMessageSource, message: NativeChatMessage): string {
+  switch (agentMessageHeading(from, message)) {
     case 'started':
       return translate('components.native-chat.agentMessage.startedWorker', 'Started worker')
+    case 'handed-off':
+      return translate(
+        'components.native-chat.agentMessage.handedOffToAgent',
+        'Handed off to agent'
+      )
+    case 'started-agent':
+      return translate('components.native-chat.agentMessage.startedAgent', 'Started agent')
     case 'task':
       return translate(
         'components.native-chat.agentMessage.taskFromCoordinator',
@@ -95,7 +102,7 @@ export function NativeChatAgentMessageCard({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>{heading(from, message.agentStart === true)}</span>
+          <span>{heading(from, message)}</span>
           <div className="flex items-center gap-1">
             {agentMessageCanCopy(text) ? (
               // Why: -my-1 keeps the 24px button inside the text-xs header line, so copy costs no row of its own.

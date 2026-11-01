@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatSubagentRow } from '../../../../shared/native-chat-transcript-projection'
-import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import { chooseNativeChatExpanded } from './native-chat-expanded-keys'
 import {
   NO_NATIVE_CHAT_SUBAGENT_CHOICES,

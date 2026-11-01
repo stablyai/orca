@@ -1,9 +1,19 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 const KEY_HEIGHT = 32
+const KEY_ROW_HEIGHT = 46
+const KEY_GAP = spacing.sm
 const KEY_RADIUS = radii.control
+
+/** Grows each 32 pt key to the row's height and halfway into its neighbours' gaps. */
+export const TERMINAL_KEY_HIT_SLOP = {
+  top: (KEY_ROW_HEIGHT - KEY_HEIGHT) / 2,
+  bottom: (KEY_ROW_HEIGHT - KEY_HEIGHT) / 2,
+  left: KEY_GAP / 2,
+  right: KEY_GAP / 2
+} as const
 
 const key = {
   height: KEY_HEIGHT,
@@ -25,26 +35,26 @@ export const terminalDockStyles = themedStyleSheet(() => ({
   keysBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: spacing.sm,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: 6
+    paddingBottom: spacing.sm
   },
   liveField: {
     flex: 1,
     minWidth: 0
   },
   composer: {
-    marginHorizontal: spacing.sm,
+    marginHorizontal: spacing.md,
     marginTop: spacing.sm,
-    marginBottom: 6
+    marginBottom: spacing.sm
   },
   keyRow: {
-    height: 46,
+    height: KEY_ROW_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 6,
+    gap: KEY_GAP,
+    paddingHorizontal: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
@@ -55,8 +65,8 @@ export const terminalDockStyles = themedStyleSheet(() => ({
   },
   keyScrollContent: {
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 7
+    gap: KEY_GAP,
+    paddingVertical: (KEY_ROW_HEIGHT - KEY_HEIGHT) / 2
   },
   // Every key carries the one-shot outline's width so arming ctrl doesn't nudge the row.
   key: {
@@ -72,7 +82,7 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     fontFamily: typography.monoFamily
   },
   keyPressed: {
-    opacity: 0.7
+    opacity: feedback.pressedOpacity
   },
   keyOnce: {
     borderColor: colors.accentBlue
@@ -112,7 +122,7 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     fontWeight: '600'
   },
   disabled: {
-    opacity: 0.35
+    opacity: feedback.disabledOpacity
   },
   arrowPad: {
     width: 66,
@@ -172,20 +182,13 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     fontSize: 14,
     fontWeight: '500'
   },
-  sheetHeading: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase'
-  },
   sheetKey: {
     backgroundColor: colors.sheetGroup
   },
   sheetGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6
+    gap: KEY_GAP
   },
   sheetEmpty: {
     color: colors.textMuted,

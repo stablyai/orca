@@ -6,7 +6,7 @@ import type {
   AcpDeclaredEffortFixtureModule,
   DeclaredEffortCase
 } from '../../shared/acp-declared-effort.test-fixture-contract'
-import type { AgentSessionModelCatalogResult } from '../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../shared/agent-session/agent-session-wire'
 import recordedGrok from './fixtures/grok-v1-model.json'
 import { AcpStructuredOptions, readAcpLiveOptions } from './acp-structured-options'
 import { grokModelCatalogFromState, grokModelEfforts } from './acp-dialects/grok-model-catalog'
@@ -19,6 +19,7 @@ import {
   agentModelCatalogResultFromEntry,
   entryWithConfiguredDefault
 } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
+import { hostTestCatalogReadOperation } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
 import { openStructuredAgentSessionConversationJournal } from '../native-chat/agent-session-wire/structured-agent-session-conversation-open'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -29,7 +30,7 @@ import { agentSessionRecordFixture } from '../native-chat/agent-session-record-t
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../runtime/agent-session-record-store-test-harness'
+} from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase
@@ -174,6 +175,7 @@ export async function readRecordedAcpOptions(
       journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'test-key',
       modelCatalog: {
+        captureRead: hostTestCatalogReadOperation,
         read: async () => catalog,
         snapshot: () => catalog,
         prepareSaved: async () => catalog,

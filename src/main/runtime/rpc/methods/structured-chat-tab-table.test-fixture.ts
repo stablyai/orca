@@ -1,3 +1,4 @@
+import { availableRevealWorkspace } from '../../session-tabs/structured-workspace-authority.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
 /** Drive chat tab pointers through real disk records, structured host, runtime and RPC; fake only the provider. */
 
@@ -5,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import {
@@ -18,8 +19,8 @@ import {
   resetHostTestOperationIds
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
@@ -31,7 +32,7 @@ import {
   openTestJournalHostDatabase
 } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 
 export const WORKTREE = `id:${HOST_TEST_LOCATION.workspaceId}`
@@ -191,7 +192,10 @@ beforeEach(async () => {
   closeSession = vi.fn(async () => true)
   directory = await mkdtemp(join(tmpdir(), 'orca-chat-tab-table-'))
   runtime = new OrcaRuntimeService()
-
+  vi.spyOn(runtime, 'prepareStructuredAgentSessionRevealWorkspace').mockImplementation(
+    availableRevealWorkspace
+  )
+  vi.spyOn(runtime['workspaceSessions'], 'tryGetHostId').mockReturnValue('local')
   dispatcher = new RpcDispatcher({
     runtime,
     methods: [...STRUCTURED_AGENT_SESSION_METHODS, ...SESSION_TAB_METHODS]

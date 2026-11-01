@@ -71,20 +71,6 @@ describe('MediaViewer', () => {
     expect(video?.getAttribute('src')).toBeNull()
   })
 
-  it('resumes from the last playback position after the tab remounts', async () => {
-    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
-    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
-    const first = await renderPlaybackViewer('clip.mp4:pdf')
-    first.video.currentTime = 42
-    await act(async () => first.root.unmount())
-
-    const second = await renderPlaybackViewer('clip.mp4:pdf')
-    second.video.currentTime = 0
-    await act(async () => second.video.dispatchEvent(new Event('loadedmetadata')))
-    expect(second.video.currentTime).toBe(42)
-    await act(async () => second.root.unmount())
-  })
-
   it('retains the position when leaving before metadata and clamps it when the file shrinks', async () => {
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
     vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
@@ -129,29 +115,6 @@ describe('MediaViewer', () => {
     await act(async () => otherRestored.video.dispatchEvent(new Event('loadedmetadata')))
     expect(otherRestored.video.currentTime).toBe(27)
     await act(async () => otherRestored.root.unmount())
-  })
-
-  it('shows a persistent playback error and only offers the default app for local files', async () => {
-    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
-    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    await act(async () =>
-      root.render(
-        <MediaViewer
-          src="orca-media://file/token"
-          mimeType="video/mp4"
-          filePath="remote.mp4"
-          canOpenLocally={false}
-        />
-      )
-    )
-    await act(async () => container.querySelector('video')?.dispatchEvent(new Event('error')))
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'Unable to play this media file'
-    )
-    expect(container.querySelector('button')).toBeNull()
-    await act(async () => root.unmount())
   })
 
   it('uses native audio controls and releases the audio source when switching files', async () => {

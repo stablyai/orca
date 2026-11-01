@@ -105,24 +105,26 @@ function readSource(state: AppState, location: SenderLocation): Source {
   return source
 }
 
-/** Share the sidebar projection before notifying cards; only subscription leases retain a source. */
-export function useAgentMessageSenderSource(locate: LocateSender): AgentMessageSenderView {
+/** Share the sidebar projection before notifying cards; only subscription leases retain a source.
+ *  `savedAgent`: the kind written on the message, drawn when no live row names the agent. */
+export function useAgentMessageSenderSource(
+  locate: LocateSender,
+  savedAgent?: AgentMessageSenderView['agentType']
+): AgentMessageSenderView {
   const selected = useMemo(() => {
     let previous = EMPTY_VIEW
     return (state: AppState) => {
       const location = locate(state)
-      const next = location
-        ? agentMessageSenderView(
-            readSource(state, location).read(state, location.paneKey),
-            location.agentType
-          )
-        : EMPTY_VIEW
+      const next = agentMessageSenderView(
+        location ? readSource(state, location).read(state, location.paneKey) : undefined,
+        location?.agentType ?? savedAgent
+      )
       if (!equalView(previous, next)) {
         previous = next
       }
       return previous
     }
-  }, [locate])
+  }, [locate, savedAgent])
   const subscribe = useCallback(
     (notify: () => void) => {
       let lease: { key: string; source: Source } | undefined

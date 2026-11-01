@@ -22,14 +22,14 @@ import {
   tick,
   type RenderProps
 } from './use-structured-agent-session-options.test-fixture'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import { act, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   structuredAgentSessionSendSelection,
   structuredAgentSessionMessageSelection
-} from '../../../../shared/structured-agent-session-option-view'
+} from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import {
   forgetStructuredSessionSelection,
   structuredSessionSelectionController
@@ -60,7 +60,7 @@ describe('useStructuredAgentSessionOptions', () => {
       })),
       current: { model, ...(effort ? { effort } : {}) }
     })
-    const initial = menu('family')
+    const initial = { ...menu('family'), acceptsImages: true }
     const older = Promise.withResolvers<AgentSessionOptionsResult>()
     const latest = Promise.withResolvers<AgentSessionOptionsResult>()
     let reads = 0
@@ -91,9 +91,10 @@ describe('useStructuredAgentSessionOptions', () => {
     rerender({ ...REOPENED, agent: 'antigravity', hidden: true })
     rerender({ ...REOPENED, agent: 'antigravity' })
     await waitFor(() => expect(reads).toBe(3))
-    await act(async () => latest.resolve(menu('newer', 'high')))
+    await act(async () => latest.resolve({ ...menu('newer', 'high'), acceptsImages: true }))
     await waitFor(() => expect(currentValue(result.current.optionSnapshot, 'effort')).toBe('high'))
-    await act(async () => older.resolve(menu('family', 'low')))
+    await act(async () => older.resolve({ ...menu('family', 'low'), acceptsImages: false }))
+    expect(result.current.acceptsImages).toBe(true)
     expect(currentValue(result.current.optionSnapshot, 'model')).toBe('newer')
     expect(descriptor(result.current.optionSnapshot, 'effort')).toMatchObject({
       settable: true,

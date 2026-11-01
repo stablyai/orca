@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalRenderItem
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../shared/agent-session-turn-record'
-import { describeNativeChatTurnStatus } from '../../shared/native-chat-turn-status'
-import { selectStructuredAgentSettledTurns } from '../../shared/structured-agent-session-turn-timing'
+} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { describeNativeChatTurnStatus } from '../../shared/native-chat/transcript/native-chat-turn-status'
+import { selectStructuredAgentSettledTurns } from '../../shared/agent-session/view/structured-agent-session-turn-timing'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { JournalStopEvent } from '../native-chat/agent-session-journal/journal-row-schema'
 import {
@@ -19,8 +19,8 @@ import {
 } from '../native-chat/agent-session-journal/journal-stop-turn-end'
 import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
 import { claudeResultOutcome } from './claude-result-outcome'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import { claudeResultFailure } from './claude-structured-provider-fallback'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
+import { claudeResultFailure } from './structured/launch/claude-structured-provider-fallback'
 import { claudeTurnEndForResult, claudeTurnLifecycleItem } from './claude-turn-lifecycle-item'
 
 function sinkState() {

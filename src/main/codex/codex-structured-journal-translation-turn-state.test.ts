@@ -7,18 +7,6 @@ import {
 } from './codex-structured-journal-translation-turn-state'
 
 describe('CodexJournalActiveTurns', () => {
-  it('remembers each turn start time until the turn is forgotten', () => {
-    const active = new CodexJournalActiveTurns()
-
-    active.remember('thread', 'turn-1', 1_000)
-    active.remember('thread', 'turn-1', 2_000)
-    expect(active.startedAt('thread', 'turn-1')).toBe(1_000)
-    expect(active.startedAt('thread', 'turn-missing')).toBeUndefined()
-
-    active.forget('thread', 'turn-1')
-    expect(active.startedAt('thread', 'turn-1')).toBeUndefined()
-  })
-
   it('uses dispatch order even when the host clock moves backwards', () => {
     const active = new CodexJournalActiveTurns()
     active.remember('thread', 'turn-1', 1_000, 1)

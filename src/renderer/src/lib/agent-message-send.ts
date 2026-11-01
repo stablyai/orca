@@ -1,7 +1,7 @@
 import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
 import type { AgentMessageTarget } from './agent-message-target'
 import { sendNotesToActiveAgentSession } from './active-agent-note-send'
-import { relaunchFailedStructuredAgentSessionWithMessage } from './structured-agent-session-launch-message'
+import { relaunchFailedStructuredAgentSessionWithMessage } from './agent-session/launch/structured-agent-session-launch-message'
 import { getStructuredAgentSessionLaunchLifecycle } from './agent-session/launch/structured-agent-session-launch-registry'
 import { sendStructuredAgentSessionMessage } from '@/components/native-chat/structured-agent-session-message-sender'
 import { structuredAgentSessionTargetForTab } from '@/runtime/structured-agent-session-owner'

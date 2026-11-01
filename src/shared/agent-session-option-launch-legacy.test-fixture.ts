@@ -1,10 +1,13 @@
 import type { AgentType } from './agent-status-types'
-import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-option-catalog'
-import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
+import {
+  findCatalogModel,
+  getAgentSessionOptionCatalog
+} from './agent-session/options/agent-session-option-catalog'
+import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session/options/agent-session-option-catalog-opencode'
 import type {
   AgentSessionOptionCatalog,
   CatalogOptionApply
-} from './agent-session-option-catalog-types'
+} from './agent-session/options/agent-session-option-catalog-types'
 import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 
 export type ResolvedSessionOptionLaunch = {

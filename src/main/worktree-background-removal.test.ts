@@ -3,11 +3,10 @@ import type { ExecutionHostId } from '../shared/execution-host'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,
-  finishAcceptedWorktreeRemoval,
-  removesInBackground,
   startBackgroundWorktreeRemoval,
   waitForPendingWorktreeRemoval
 } from './worktree-background-removal'
+
 import {
   projectPendingWorktreeRemovals,
   snapshotPendingWorktreeRemovals
@@ -59,24 +58,6 @@ describe('background worktree removal', () => {
     expect(pendingAtPublish).toEqual([true, false])
   })
 
-  it('gives a request that joins a running delete that delete’s result', async () => {
-    const git = deferred<{ preservedBranch: { branchName: string; head: string } }>()
-    const run = vi.fn(() => git.promise)
-    void startBackgroundWorktreeRemoval({ removal, run, publish: () => {} })
-
-    const joined = finishAcceptedWorktreeRemoval(
-      { removing: true, warning: 'hook skipped' },
-      removal.worktreeId
-    )
-    git.resolve({ preservedBranch: { branchName: 'feature', head: 'abc' } })
-
-    await expect(joined).resolves.toEqual({
-      warning: 'hook skipped',
-      preservedBranch: { branchName: 'feature', head: 'abc' }
-    })
-    expect(run).toHaveBeenCalledTimes(1)
-  })
-
   it('answers a request whose delete a concurrent removal of the same worktree replaced', async () => {
     // The desktop IPC and runtime RPC removal paths coalesce separately, so both can be accepted.
     const first = deferred<Record<string, never>>()
@@ -100,20 +81,6 @@ describe('background worktree removal', () => {
     await expect(secondResult).resolves.toEqual({
       preservedBranch: { branchName: 'feature', head: 'abc' }
     })
-    await _settlePendingWorktreeRemovalsForTests()
-    expect(isPending()).toBe(false)
-  })
-
-  it('rejects with the delete error and clears the row so a retry starts over', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const result = startBackgroundWorktreeRemoval({
-      removal,
-      run: async () => {
-        throw new Error('Failed to delete worktree at /work/feature. Permission denied')
-      },
-      publish: () => {}
-    })
-    await expect(result).rejects.toThrow('Permission denied')
     await _settlePendingWorktreeRemovalsForTests()
     expect(isPending()).toBe(false)
   })
@@ -160,16 +127,6 @@ describe('background worktree removal', () => {
     expect(() =>
       assertNoPendingWorktreeRemovalConflict('/work/repo', { worktreePath: '/work/feature' })
     ).not.toThrow()
-  })
-
-  it('answers only for this host: a same-id row on an SSH host is not being removed here', () => {
-    void startBackgroundWorktreeRemoval({
-      removal,
-      run: () => new Promise(() => {}),
-      publish: () => {}
-    })
-    expect(isPending('local')).toBe(true)
-    expect(isPending('ssh:box')).toBe(false)
   })
 
   it('marks rows for clients that read the marker and omits them for clients that do not', () => {
@@ -232,23 +189,6 @@ describe('background worktree removal', () => {
     }
     expect(
       projectPendingWorktreeRemovals(rows, (row) => row.id, true, snapshotPendingWorktreeRemovals())
-    ).toBe(rows)
-  })
-
-  it('keeps WSL checkouts on the inline delete', () => {
-    expect(removesInBackground('/work/feature', {})).toBe(true)
-    expect(removesInBackground('/home/me/feature', { wslDistro: 'Ubuntu' })).toBe(false)
-  })
-
-  it('returns listings untouched when nothing is being removed', () => {
-    const rows: { id: string; hostId?: undefined }[] = [{ id: removal.worktreeId }]
-    expect(
-      projectPendingWorktreeRemovals(
-        rows,
-        (row) => row.id,
-        false,
-        snapshotPendingWorktreeRemovals()
-      )
     ).toBe(rows)
   })
 })

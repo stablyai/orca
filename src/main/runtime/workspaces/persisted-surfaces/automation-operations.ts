@@ -1,10 +1,18 @@
+import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
+import {
+  readCrewRuntimeInputs,
+  watchCrewRuntimeSources
+} from '../../orchestration/crew/crew-runtime-watch'
+import { CrewReadModel } from '../../orchestration/crew/crew-read-model'
+import { getPublishedHostDescriptor } from '../../host-descriptor'
 import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../orchestration/worker-terminal-auto-release-scheduler'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { OrcaRuntimeWithPtyForegroundProcessReads } from '../../client/runtime-client-state'
+import { OrcaRuntimeWithOrchestrationDatabaseBinding } from './orchestration-database-binding'
 import type {
   AutomationOwnerPrecondition,
-  AutomationDestination
+  AutomationDestination,
+  AutomationUpdatePreconditions
 } from '../../../../shared/automation-owner-precondition'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import type {
@@ -17,25 +25,22 @@ import {
   type AutomationListResult
 } from '../../../../shared/automation-list-scope'
 import { OrchestrationDb } from '../../orchestration/db'
-import { orchestrationDbFile } from '../../orchestration/db/orchestration-db-file'
 import {
   committedHandBackTypes,
   type MailHandBack
 } from '../../orchestration/db/messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
-import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orchestration-legacy-worker-terminal-recovery'
 import type { LegacyWorkerTerminalRecoveryResult } from '../../runtime-legacy-worker-terminal-recovery-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
-// Keyed by runtime, not a field: the database can open while the runtime is still constructing.
-const runtimesWatchingAutoReleaseSetting = new WeakSet<object>()
+export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {
+  abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
 
-export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForegroundProcessReads {
   abstract notifyAutomationsChanged(payload?: AutomationsChangedPayload): void
   abstract ensureOrchestrationFederationRelay(runId?: string): void
   protected abstract scheduleRestoredMessageRepoints(): void
+  /** Mail a worker left unread when it reported before a restart still continues it. */
+  protected abstract continueRestoredWorkerMail(db: OrchestrationDb): void
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
   protected abstract getLeafKey(tabId: string, leafId: string): string
 
@@ -111,7 +116,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
   updateAutomation(
     id: string,
     updates: RuntimeAutomationUpdateInput,
-    options?: { expectedOwner?: AutomationOwnerPrecondition; destination?: AutomationDestination }
+    options?: AutomationUpdatePreconditions
   ): Promise<Automation> {
     return this.automation.withExternalProbePriority(() => {
       const source = this.automationChangeSelector(id)
@@ -157,11 +162,13 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     if (!this._orchestrationDb) {
       this._orchestrationDb = new OrchestrationDb(this.orchestrationDbPath())
       this.bindMailHandBack(this._orchestrationDb)
+      this.bindCrewChanges(this._orchestrationDb)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
       this.bindWorkerTerminalAutoRelease(this._orchestrationDb)
       // Recover deadlines armed before a restart.
       getWorkerTerminalAutoReleaseScheduler(this).rearm()
+      this.continueRestoredWorkerMail(this._orchestrationDb)
     }
     return this._orchestrationDb
   }
@@ -173,38 +180,51 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
       : null
   }
 
-  private orchestrationDbPath(): string {
-    return orchestrationDbFile(getAppEnvironment().getPath('userData'))
-  }
-
   setOrchestrationDb(db: OrchestrationDb): void {
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db
     this.bindMailHandBack(db)
+    this.bindCrewChanges(db)
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
     this.bindWorkerTerminalAutoRelease(db)
   }
 
-  private bindWorkerTerminalAutoRelease(db: OrchestrationDb): void {
-    db.workerTerminalAutoReleaseListener = () => {
-      if (this._orchestrationDb === db) {
-        getWorkerTerminalAutoReleaseScheduler(this).rearm()
-      }
-    }
-    db.workerAutoReleaseEnabled = () =>
-      this.store?.getSettings?.()?.orchestrationWorkerAutoReleaseEnabled !== false
-    if (this.store?.onSettingsChanged && !runtimesWatchingAutoReleaseSetting.has(this)) {
-      runtimesWatchingAutoReleaseSetting.add(this)
-      // Turning the setting off drops the timer; turning it on finds the deadlines still due.
-      this.store.onSettingsChanged((updates) => {
-        if ('orchestrationWorkerAutoReleaseEnabled' in updates && this._orchestrationDb) {
-          getWorkerTerminalAutoReleaseScheduler(this).rearm()
-        }
-      })
-    }
+  private unwatchCrewDb: (() => void) | undefined
+
+  private bindCrewChanges(db: OrchestrationDb): void {
+    this.unwatchCrewDb?.()
+    this.unwatchCrewDb = db.crewChanges.subscribe(this.crewChanges.notify)
+    this.crewChanges.notify()
   }
+
+  private readonly crewReadModel = new CrewReadModel(
+    (previous) =>
+      readCrewRuntimeInputs(
+        this.crewRuntimeReaders(),
+        this._orchestrationDb,
+        existsSync(this.orchestrationDbPath()),
+        getPublishedHostDescriptor(this.runtimeId)?.installationId ?? this.runtimeId,
+        previous
+      ),
+    (wake) =>
+      watchCrewRuntimeSources(
+        {
+          store: this.store,
+          watchChanges: this.crewChanges.subscribe,
+          watchTransitions: (listener) => this.agentTransitions.subscribe(listener),
+          watchClient: (listener) => this.onClientEvent(listener)
+        },
+        wake
+      )
+  )
+
+  getOrchestrationCrewSnapshot(party: string) {
+    return this.crewReadModel.read(party)
+  }
+
+  watchOrchestrationCrew = (wake: () => void) => this.crewReadModel.subscribe(wake)
 
   private bindMailHandBack(db: OrchestrationDb): void {
     db.mailHandBackListener = (handBack) => this.offerHandedBackMail(db, handBack)
@@ -275,43 +295,5 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     if (!inventory) {
       throw new Error('terminal_liveness_unavailable')
     }
-  }
-
-  protected hasExactTerminalSurfaceIdentity(expected: {
-    worktreeId: string
-    tabId: string
-    leafId: string
-    ptyId: string
-    terminalHandle: string
-    incarnationId: string
-  }): boolean {
-    if (this.graphStatus !== 'ready') {
-      return false
-    }
-    const pty = this.ptysById.get(expected.ptyId)
-    if (
-      !pty?.connected ||
-      pty.incarnationId !== expected.incarnationId ||
-      this.paneOfPty(pty).tabId !== expected.tabId ||
-      this.paneOfPty(pty).paneKey !== makePaneKey(expected.tabId, expected.leafId) ||
-      !worktreeIdsEqual(pty.worktreeId, expected.worktreeId) ||
-      this.handleByPtyId.get(expected.ptyId) !== expected.terminalHandle
-    ) {
-      return false
-    }
-    const tab = this.tabs.get(expected.tabId)
-    const leaf = this.leaves.get(this.getLeafKey(expected.tabId, expected.leafId))
-    const ptyLeaves = this.getLeavesForPty(expected.ptyId)
-    return (
-      Boolean(tab && worktreeIdsEqual(tab.worktreeId, expected.worktreeId)) &&
-      Boolean(
-        leaf &&
-        leaf.ptyId === expected.ptyId &&
-        worktreeIdsEqual(leaf.worktreeId, expected.worktreeId)
-      ) &&
-      ptyLeaves.length === 1 &&
-      ptyLeaves[0]?.tabId === expected.tabId &&
-      ptyLeaves[0]?.leafId === expected.leafId
-    )
   }
 }

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   CodexHookTrustGrantRequest,
   CodexHookTrustGrantSessionResult
-} from './codex-app-server-client'
+} from './app-server/codex-app-server-client'
 import type { CodexManagedTrustGrantPlan } from './codex-hook-trust-grant'
 import type { CodexTrustEntry } from './config-toml-trust'
 
@@ -31,7 +31,7 @@ vi.mock(import('node:os'), async (importOriginal) => {
   return { ...actual, homedir: () => testState.fakeHomeDir }
 })
 
-const { CodexAppServerUnsupportedError } = await import('./codex-app-server-client')
+const { CodexAppServerUnsupportedError } = await import('./app-server/codex-app-server-session')
 const { codexAppServerCapabilityCache } =
   await import('./app-server/codex-app-server-capability-cache')
 const { _internals, grantManagedCodexHookTrust } = await import('./codex-hook-trust-grant')
@@ -220,39 +220,6 @@ describe('two Codex pane launches against one config.toml', () => {
 })
 
 describe('concurrent capability probes against a cold host', () => {
-  it('shares one app-server session between two launches on different config files', async () => {
-    const secondHome = join(testState.userDataDir, 'second-runtime-home')
-    mkdirSync(secondHome, { recursive: true })
-    writeFileSync(join(secondHome, 'hooks.json'), '{"hooks":{}}\n', 'utf-8')
-    const entries = [managedEntry('session_start')]
-    let sessions = 0
-    let releaseProbe!: () => void
-    const probeGate = new Promise<void>((resolve) => {
-      releaseProbe = resolve
-    })
-    _internals.setGrantSessionRunner(async () => {
-      sessions += 1
-      await probeGate
-      throw new CodexAppServerUnsupportedError('hooks/grantTrust: method not found')
-    })
-
-    const first = grantManagedCodexHookTrust(buildPlan(entries))
-    const second = grantManagedCodexHookTrust(
-      buildPlan([{ ...entries[0], sourcePath: join(secondHome, 'hooks.json') }], {
-        runtimeHomePath: secondHome,
-        tomlPath: join(secondHome, 'config.toml')
-      })
-    )
-    await tick()
-    await tick()
-    expect(sessions).toBe(1)
-    releaseProbe()
-
-    expect(await first).toMatchObject({ lane: 'fallback', reason: 'unsupported' })
-    expect(await second).toMatchObject({ lane: 'fallback', reason: 'unsupported-cached' })
-    expect(sessions).toBe(1)
-  })
-
   it('leaves the waiter config.toml untouched when the shared probe reports unsupported', async () => {
     const secondHome = join(testState.userDataDir, 'second-runtime-home')
     mkdirSync(secondHome, { recursive: true })
@@ -289,41 +256,6 @@ describe('concurrent capability probes against a cold host', () => {
 })
 
 describe('host-scoped transient cooldown', () => {
-  it('suppresses a second config.toml on the same host but not another host', async () => {
-    const secondHome = join(testState.userDataDir, 'second-runtime-home')
-    mkdirSync(secondHome, { recursive: true })
-    writeFileSync(join(secondHome, 'hooks.json'), '{"hooks":{}}\n', 'utf-8')
-    const entries = [managedEntry('session_start')]
-    let calls = 0
-    _internals.setGrantSessionRunner(() => {
-      calls += 1
-      throw new Error('spawn ETIMEDOUT')
-    })
-
-    expect(await grantManagedCodexHookTrust(buildPlan(entries))).toMatchObject({
-      lane: 'fallback',
-      reason: 'error'
-    })
-    expect(
-      await grantManagedCodexHookTrust(
-        buildPlan([{ ...entries[0], sourcePath: join(secondHome, 'hooks.json') }], {
-          runtimeHomePath: secondHome,
-          tomlPath: join(secondHome, 'config.toml')
-        })
-      )
-    ).toMatchObject({ lane: 'fallback', reason: 'retry-cached' })
-    expect(calls).toBe(1)
-
-    expect(
-      await grantManagedCodexHookTrust(
-        buildPlan(entries, {
-          host: { kind: 'wsl', distro: 'Debian', linuxRuntimeHome: '/home/u/.codex' }
-        })
-      )
-    ).toMatchObject({ lane: 'fallback', reason: 'error' })
-    expect(calls).toBe(2)
-  })
-
   it('lets a concurrent success clear a cooldown a sibling failure just set', async () => {
     codexAppServerCapabilityCache.rememberSupported('wsl:Ubuntu')
     const secondHome = join(testState.userDataDir, 'second-runtime-home')

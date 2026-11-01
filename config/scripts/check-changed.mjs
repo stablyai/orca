@@ -186,7 +186,12 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
       tasks.push({
         name: 'oxlint',
         steps: [
-          step(oxlint.command, [...oxlint.prefixArgs, '--quiet', ...(wholeTree ? [] : lintable)]),
+          step(oxlint.command, [
+            ...oxlint.prefixArgs,
+            '--quiet',
+            '--no-error-on-unmatched-pattern',
+            ...(wholeTree ? [] : lintable)
+          ]),
           ...(antiSlop.length > 0
             ? [
                 step(node, ['config/scripts/sync-anti-slop-plugin.mjs']),

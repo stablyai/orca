@@ -1,6 +1,6 @@
 import pg from 'pg'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayCellConfig } from './config.js'
 import {
   openInMemoryRelayDatabase,

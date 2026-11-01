@@ -9,7 +9,7 @@ import {
 } from '@orca-cloud/relay-contract'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type WebSocket from 'ws'
-import type { RelayAssignmentStore } from './assignment-store.js'
+import type { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { RelayStoreError, type RelayCredentialStore } from './credential-store.js'
 import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from './control-renewal-batch.js'

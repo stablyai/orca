@@ -13,13 +13,13 @@ import { reconcileAgentChoiceArgs } from '../../../../shared/agent-choice-reconc
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
-} from '../../../../shared/agent-session-option-catalog'
+} from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { SourceControlActionLaunchPreferences } from '../../../../shared/source-control-ai-actions'
 import {
   sourceControlActionAgentPicksModel,
   sourceControlActionOptions
 } from '../../../../shared/source-control-action-launch-preferences'
-import { encodeCatalogOptionValue } from '../../../../shared/structured-agent-session-option-codec'
+import { encodeCatalogOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AgentChoiceMenu } from './AgentChoiceMenu'
 import { sourceControlActionRouteHint } from './SourceControlActionOptionField'

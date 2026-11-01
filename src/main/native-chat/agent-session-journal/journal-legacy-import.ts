@@ -8,11 +8,11 @@ import {
 import type { AgentType } from '../../../shared/agent-status-types'
 import type {
   AgentJournalCursor,
-  AgentJournalItemBody,
   AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
-import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat-agent-support'
+} from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../session-file-resolver'
 import {
   decodeClaudeTranscriptLine,
@@ -22,13 +22,12 @@ import {
 } from '../transcript-line-decoders'
 import { readLegacyImportTranscript } from './journal-legacy-transcript-stream'
 import { readOpenCodeNativeChatTranscriptFull } from '../transcript-opencode'
-import { boundSubagentEntryId } from '../subagent-entry-id-bounds'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { createNewestItemWindow } from './journal-newest-item-window'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import {
-  boundInlineText,
+  boundLegacyImportBlock,
   boundToolInput,
   type JournalPayloadLimits
 } from './journal-payload-bounds'
@@ -47,7 +46,6 @@ export type LegacyImportOptions = ResolveSessionFileOptions & {
 const MAX_LEGACY_IMPORT_RECORD_BYTES = 16 * 1024 * 1024
 // Keep only recent history in memory; the provider resumes the complete source transcript.
 const MAX_LEGACY_IMPORT_RETAINED_BYTES = 16 * 1024 * 1024
-const MAX_LEGACY_IMPORT_SUBAGENTS = 64
 
 export type LegacyImportResult =
   | {
@@ -295,31 +293,8 @@ export function legacyItemBody(
   return {
     kind: 'message',
     role: message.role,
-    blocks: limits ? message.blocks.map((block) => boundBlock(block, limits)) : message.blocks
+    blocks: limits
+      ? message.blocks.map((block) => boundLegacyImportBlock(block, limits))
+      : message.blocks
   }
-}
-
-/** Bound every bulk-bearing block, including mixed-message tool calls; the transcript retains full content. */
-function boundBlock(block: NativeChatBlock, limits: JournalPayloadLimits): NativeChatBlock {
-  if (block.type === 'text') {
-    return { ...block, text: boundInlineText(block.text, limits).text }
-  }
-  if (block.type === 'tool-result') {
-    return { ...block, output: boundInlineText(block.output, limits).text }
-  }
-  if (block.type === 'tool-call') {
-    return { ...block, input: boundToolInput(block.input, limits) }
-  }
-  if (block.type === 'subagent-group') {
-    return {
-      ...block,
-      agents: block.agents.slice(0, MAX_LEGACY_IMPORT_SUBAGENTS).map((agent) => ({
-        ...agent,
-        // Digest-based roster IDs keep children with shared prefixes distinct.
-        id: boundSubagentEntryId(agent.id),
-        label: boundInlineText(agent.label, limits).text
-      }))
-    }
-  }
-  return block
 }

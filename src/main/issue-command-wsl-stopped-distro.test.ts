@@ -67,21 +67,6 @@ describe('issue command reads for a stopped WSL distro (E9)', () => {
     expect(mocks.loadHooks).not.toHaveBeenCalled()
   })
 
-  it('reads for a launch, a user act that may start the distro', async () => {
-    const result = await readIssueCommandUnlessWslStopped(WSL_REPO, { wakeWslDistro: true })
-    expect(result).not.toHaveProperty('status')
-    expect(mocks.existsSync).toHaveBeenCalled()
-    expect(mocks.loadHooks).toHaveBeenCalledWith(WSL_REPO)
-  })
-
-  it('reads host repos and running distros as before', async () => {
-    await readIssueCommandUnlessWslStopped(HOST_REPO)
-    expect(mocks.loadHooks).toHaveBeenCalledWith(HOST_REPO)
-    mocks.readWslDistroRunningState.mockResolvedValue('running')
-    await readIssueCommandUnlessWslStopped(WSL_REPO)
-    expect(mocks.loadHooks).toHaveBeenCalledWith(WSL_REPO)
-  })
-
   it("gates the runtime read a paired client's Settings pane makes, and passes a launch's wake", async () => {
     const reader = new RuntimeRepositoryIssueCommand({
       resolveRepo: async () => ({

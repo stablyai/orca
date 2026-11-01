@@ -23,6 +23,8 @@ const paletteMeasurementFile =
 const measurementFiles = [measurementFile, paletteMeasurementFile]
 const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
 const transforms = {
+  // Auto-discovery climbs past the repo for files no in-repo tsconfig owns, into an enclosing checkout.
+  tsconfig: resolve(import.meta.dirname, 'tsconfig.vitest-transform.json'),
   oxc: { exclude: [/\.js$/, phoneContractPattern] },
   plugins: [
     {

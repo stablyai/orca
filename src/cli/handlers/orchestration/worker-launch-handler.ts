@@ -17,7 +17,7 @@ import {
   reportOrchestrationFailure
 } from './agent-view'
 import { explainOlderRuntimeRunRequired } from './older-runtime-run-binding'
-import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation-recovery'
+import { withResolvedNextCommands } from '../../orchestration-mutation-recovery'
 import { readTextOrFileFlag } from '../../command-body-input'
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
@@ -86,22 +86,15 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       process.exitCode = 1
     }
     const keepOpenState =
-      flags.has('keep-open') &&
+      (flags.has('keep-open') || startsInNewWorkspace(flags)) &&
       (result.result.state === 'ready' || isUnobservedTurnStart(result.result))
         ? await keepWorkerOpen(client, result.result.dispatchId)
         : undefined
     const renderedResult = {
       ...result,
       result: {
-        ...result.result,
-        ...(keepOpenState === 'retained' ? { keptOpen: true as const } : {}),
-        ...(result.result.nextCommands
-          ? {
-              nextCommands: result.result.nextCommands.map((command) =>
-                renderResolvedOrchestrationCommand(command)
-              )
-            }
-          : {})
+        ...withResolvedNextCommands(result.result),
+        ...(keepOpenState === 'retained' ? { keptOpen: true as const } : {})
       }
     }
     if (flags.has('full')) {
@@ -114,7 +107,8 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     } else {
       printOrchestrationResult(renderedResult, json, WORKER_START_VIEW)
     }
-    if (keepOpenState && keepOpenState !== 'retained') {
+    // Only an explicit --keep-open fails the start; a new workspace's default is best effort.
+    if (flags.has('keep-open') && keepOpenState && keepOpenState !== 'retained') {
       const dispatchId = result.result.dispatchId
       // The worker runs either way, so the next step never starts it again.
       const verb =
@@ -129,6 +123,12 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       })
     }
   }
+}
+
+// A worker given its own new workspace is that workspace's chat; closing it frees no space.
+function startsInNewWorkspace(flags: Map<string, string | boolean>): boolean {
+  const worktree = getOptionalStringFlag(flags, 'worktree')
+  return worktree === 'new-child' || worktree === 'new-top-level'
 }
 
 // Every host version serves workerRetain, so older servers keep the worker open too.

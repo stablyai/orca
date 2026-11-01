@@ -1,19 +1,13 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback } from 'react'
 import { Copy, ExternalLink, Eye, FolderOpen } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { getWorkspaceEditorSshHost } from '@/lib/workspace-editor-ssh-target'
-import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
@@ -21,20 +15,12 @@ import {
   getWorkspaceFileRevealOwner,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
-import {
-  getRouteForLocalPathOpenOwner,
-  isRevealOrEditorOpenBlocked
-} from '@/lib/local-path-open-guard'
+import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import type { ConflictResolution } from '../../../../../../shared/source-control-entry-actions'
 import { CONFLICT_RESOLUTION_ICONS, getLocalizedConflictResolutionLabel } from './conflict-label'
-import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
-import {
-  getOpenInEntryAvailability,
-  openOpenInAppsSettings,
-  openWorktreePath
-} from '@/components/sidebar/WorktreeOpenInMenu'
+import { OpenInContextSubmenu } from '@/components/right-sidebar/open-in-context-submenu'
 
 type SourceControlEntryContextMenuProps = {
   currentWorktreeId: string
@@ -64,9 +50,6 @@ export function SourceControlEntryContextMenu({
   onOpenChange,
   children
 }: SourceControlEntryContextMenuProps): React.JSX.Element {
-  const openInApplications = useAppStore(
-    (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
-  )
   // Resolve the repo owner; OS reveal cannot distinguish another host's path from an identically named local path.
   const runtimeEnvironmentId = useAppStore((s) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(s, currentWorktreeId)
@@ -75,10 +58,6 @@ export function SourceControlEntryContextMenu({
     getWorkspaceFileRevealOwner(s, currentWorktreeId, { connectionId, runtimeEnvironmentId })
   )
   const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
-  const openInRoute = useMemo(() => getRouteForLocalPathOpenOwner(revealOwner), [revealOwner])
-  const runtimeSshHost = useAppStore(
-    useShallow((s) => getWorkspaceEditorSshHost(s, { workspaceId: currentWorktreeId }))
-  )
 
   const handleCopyPath = useCallback(() => {
     if (!absolutePath) {
@@ -106,22 +85,6 @@ export function SourceControlEntryContextMenu({
       void revealInFileManager(absolutePath, revealOwner)
     }
   }, [absolutePath, revealOwner])
-
-  const handleOpenInApplication = useCallback(
-    (command: string) => {
-      if (!absolutePath) {
-        return
-      }
-      void openWorktreePath({
-        target: 'external-editor',
-        worktreePath: absolutePath,
-        ...openInRoute,
-        workspace: { workspaceId: currentWorktreeId },
-        command
-      })
-    },
-    [absolutePath, currentWorktreeId, openInRoute]
-  )
 
   return (
     <ContextMenu onOpenChange={onOpenChange}>
@@ -161,49 +124,11 @@ export function SourceControlEntryContextMenu({
           )}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuSub>
-          <ContextMenuSubTrigger disabled={!absolutePath}>
-            <FolderOpen className="size-3.5" />
-            {translate('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
-          </ContextMenuSubTrigger>
-          <ContextMenuSubContent className="w-52">
-            {openInApplications.map((application) => {
-              const availability = getOpenInEntryAvailability(
-                { ...application, target: 'external-editor' },
-                openInRoute.connectionId,
-                openInRoute.runtimeEnvironmentId,
-                openInRoute.ownerUnresolved,
-                runtimeSshHost
-              )
-              return (
-                <ContextMenuItem
-                  key={application.id}
-                  onSelect={() => handleOpenInApplication(application.command)}
-                  disabled={!absolutePath || availability.disabled}
-                >
-                  {application.command ? (
-                    <OpenInApplicationIcon application={application} size={14} />
-                  ) : (
-                    <ExternalLink className="size-3.5" />
-                  )}
-                  <span className="min-w-0 truncate">{application.label}</span>
-                  {availability.metadata ? (
-                    <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
-                      {availability.metadata}
-                    </span>
-                  ) : null}
-                </ContextMenuItem>
-              )
-            })}
-            {openInApplications.length > 0 ? <ContextMenuSeparator /> : null}
-            <ContextMenuItem onSelect={openOpenInAppsSettings}>
-              {translate(
-                'auto.components.sidebar.WorktreeOpenInMenu.1417fd8380',
-                'Customize apps...'
-              )}
-            </ContextMenuItem>
-          </ContextMenuSubContent>
-        </ContextMenuSub>
+        <OpenInContextSubmenu
+          path={absolutePath}
+          workspaceId={currentWorktreeId}
+          owner={revealOwner}
+        />
         <ContextMenuItem
           onSelect={handleRevealInFileManager}
           disabled={!absolutePath || !hasWorkingTreeFile || revealBlocked}

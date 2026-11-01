@@ -4,7 +4,7 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
-import { eraseRpcMethods, type RpcContext } from '../../../core'
+import { isStreamingMethod, eraseRpcMethods, type RpcContext } from '../../../core'
 import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 
 const COORDINATOR = 'term_coordinator'
@@ -183,7 +183,7 @@ describe('manual Dispatch release', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     return method.handler(method.params!.parse(params), { runtime })
@@ -233,7 +233,10 @@ describe('orchestration.workerAbandon', () => {
   async function abandon(dispatchId: string, ctx: Partial<RpcContext>) {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (m) => m.name === 'orchestration.workerAbandon'
-    )!
+    )
+    if (!method || isStreamingMethod(method)) {
+      throw new Error('Method not found: orchestration.workerAbandon')
+    }
     return method.handler(method.params!.parse({ dispatch: dispatchId }), { runtime, ...ctx })
   }
 
