@@ -148,7 +148,9 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
       .array(z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS))
       .max(PAGE_STORAGE_MAX_ENTRIES)
       .optional()
-      .catch(undefined)
+      .catch(undefined),
+    // Pages that read `connectionPath` frames say so; older pages never receive one.
+    connectionPathFrames: z.literal(true).optional().catch(undefined)
   }),
   z.object({
     v: versionSchema,
@@ -224,6 +226,12 @@ const BridgeHostMessageSchema = z.union([
   z.object({
     v: versionSchema,
     type: z.literal('state'),
+    connection: BridgeConnectionSnapshotSchema
+  }),
+  // The same snapshot after a path-only change; unlike `state`, it is not a connection transition.
+  z.object({
+    v: versionSchema,
+    type: z.literal('connectionPath'),
     connection: BridgeConnectionSnapshotSchema
   }),
   // Back names no destination; only the native stack knows what screen lies beneath.
