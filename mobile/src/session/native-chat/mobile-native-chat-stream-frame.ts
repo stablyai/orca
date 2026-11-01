@@ -4,7 +4,7 @@ import type { NativeChatMerger } from '../../../../src/shared/native-chat/native
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
-} from '../../../../src/shared/native-chat-types'
+} from '../../../../src/shared/native-chat/native-chat-types'
 
 export type MobileNativeChatStreamFrame = {
   type?: string

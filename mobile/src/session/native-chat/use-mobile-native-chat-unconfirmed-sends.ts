@@ -1,7 +1,7 @@
 // Lost acknowledgements may hide delivered sends: hold them quietly until transcript confirmation or deadline, without restoring drafts. Structured sends own a separate hold.
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
-import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import {
   findLandedUnconfirmedSends,
   type UnconfirmedSend

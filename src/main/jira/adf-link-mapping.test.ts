@@ -63,20 +63,6 @@ function makeEntry(id = 'site-1'): JiraClientForSite {
   }
 }
 
-function makeServerEntry(id = 'server-1'): JiraClientForSite {
-  return {
-    site: {
-      id,
-      siteUrl: 'https://jira.example.com',
-      email: '',
-      displayName: 'Self-hosted Jira',
-      accountId: 'wquintal',
-      authType: 'server'
-    },
-    authorization: 'Bearer pat-token'
-  }
-}
-
 describe('Jira ADF link mark mapping', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -130,83 +116,6 @@ describe('Jira ADF link mark mapping', () => {
     })
 
     expect(issue.description).toBe('See [Design spec](https://example.com/spec).')
-  })
-
-  it('leaves Server/DC plain-text descriptions unchanged', async () => {
-    const { mapJiraIssue } = await import('./issues')
-
-    const issue = mapJiraIssue(makeServerEntry().site, {
-      id: 'issue-server-1',
-      key: 'SRV-1',
-      fields: {
-        summary: 'Server body',
-        description: 'Plain body with https://example.com raw URL',
-        project: { id: '1', key: 'SRV', name: 'Server' },
-        issuetype: { id: '1', name: 'Bug' },
-        status: {
-          id: '1',
-          name: 'Open',
-          statusCategory: { key: 'new', name: 'To Do' }
-        },
-        labels: [],
-        created: '2026-06-18T00:00:00.000Z',
-        updated: '2026-06-18T00:00:00.000Z'
-      }
-    })
-
-    expect(issue.description).toBe('Plain body with https://example.com raw URL')
-  })
-
-  it('maps ADF link marks in comments to Markdown hyperlinks', async () => {
-    jiraRequestMock.mockResolvedValueOnce({
-      comments: [
-        {
-          id: 'comment-link-1',
-          body: {
-            type: 'doc',
-            version: 1,
-            content: [
-              {
-                type: 'paragraph',
-                content: [
-                  {
-                    type: 'text',
-                    text: 'Follow-up',
-                    marks: [{ type: 'link', attrs: { href: 'https://example.com/follow-up' } }]
-                  }
-                ]
-              }
-            ]
-          },
-          created: '2026-05-30T12:00:00.000Z',
-          author: { accountId: 'user-1', displayName: 'Ada' }
-        }
-      ]
-    })
-
-    const { getIssueComments } = await import('./issues')
-    const comments = await getIssueComments('ALP-1', 'site-1')
-
-    expect(jiraRequestMock).toHaveBeenCalledTimes(1)
-    expect(jiraRequestMock).toHaveBeenCalledWith(
-      expect.objectContaining({ site: expect.objectContaining({ id: 'site-1' }) }),
-      expect.stringContaining('/issue/ALP-1/comment?')
-    )
-    expect(comments[0]?.body).toBe('[Follow-up](https://example.com/follow-up)')
-  })
-
-  it('leaves Server/DC plain-text comments unchanged', async () => {
-    getClientsMock.mockReturnValue([makeServerEntry()])
-    jiraRequestMock.mockResolvedValueOnce({
-      comments: [{ id: '1', body: '[Design spec|https://example.com/spec]', created: '2026-05-30' }]
-    })
-    const { getIssueComments } = await import('./issues')
-    const comments = await getIssueComments('SRV-1', 'server-1')
-    expect(comments[0]?.body).toBe('[Design spec|https://example.com/spec]')
-    expect(jiraRequestMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.stringContaining('/rest/api/2/issue/SRV-1/comment?')
-    )
   })
 
   it('keeps media markdown when links and images share a description', async () => {

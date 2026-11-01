@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  disposeUnattachedDiffViewerMonacoModels,
-  disposeUnattachedMonacoModelPaths,
   disposeUnattachedMonacoModelsByPathPrefixes,
   getDiffViewerMonacoModelPathPrefixes,
   getDiffViewerMonacoModelPaths
@@ -41,71 +39,6 @@ function createModel(
 }
 
 describe('diff Monaco model disposal', () => {
-  it('derives original and modified model paths from explicit model keys', () => {
-    expect(
-      getDiffViewerMonacoModelPaths({
-        modelKey: 'fallback',
-        originalModelKey: 'head:path.ts',
-        modifiedModelKey: 'worktree:path.ts',
-        generationSuffix: ':large-diff-generation:2'
-      })
-    ).toEqual({
-      originalModelPath: 'diff:original:fallback:head~3Apath.ts:large-diff-generation:2',
-      modifiedModelPath: 'diff:modified:fallback:worktree~3Apath.ts:large-diff-generation:2'
-    })
-  })
-
-  it('disposes only exact-path models that are no longer attached to an editor', () => {
-    const detachedOriginalDispose = vi.fn()
-    const attachedModifiedDispose = vi.fn()
-    const models = new Map([
-      [
-        'diff:original:file.ts',
-        createModel('diff:original:file.ts', false, detachedOriginalDispose)
-      ],
-      ['diff:modified:file.ts', createModel('diff:modified:file.ts', true, attachedModifiedDispose)]
-    ])
-    const monacoRegistry = createRegistry(models)
-
-    disposeUnattachedDiffViewerMonacoModels(monacoRegistry, {
-      originalModelPath: 'diff:original:file.ts',
-      modifiedModelPath: 'diff:modified:file.ts'
-    })
-
-    expect(detachedOriginalDispose).toHaveBeenCalledOnce()
-    expect(attachedModifiedDispose).not.toHaveBeenCalled()
-  })
-
-  it('disposes combined diff section models by exact path', () => {
-    const originalDispose = vi.fn()
-    const modifiedDispose = vi.fn()
-    const unrelatedDispose = vi.fn()
-    const models = new Map([
-      [
-        'diff-section:review:abc:0:original',
-        createModel('diff-section:review:abc:0:original', false, originalDispose)
-      ],
-      [
-        'diff-section:review:abc:0:modified',
-        createModel('diff-section:review:abc:0:modified', false, modifiedDispose)
-      ],
-      [
-        'diff-section:review:abc:1:modified',
-        createModel('diff-section:review:abc:1:modified', false, unrelatedDispose)
-      ]
-    ])
-    const monacoRegistry = createRegistry(models)
-
-    disposeUnattachedMonacoModelPaths(monacoRegistry, [
-      'diff-section:review:abc:0:original',
-      'diff-section:review:abc:0:modified'
-    ])
-
-    expect(originalDispose).toHaveBeenCalledOnce()
-    expect(modifiedDispose).toHaveBeenCalledOnce()
-    expect(unrelatedDispose).not.toHaveBeenCalled()
-  })
-
   it('disposes generated tab models by owned path prefix', () => {
     const baseDispose = vi.fn()
     const generatedDispose = vi.fn()

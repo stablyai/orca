@@ -9,8 +9,7 @@ import {
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
   readBridgeClientMessage,
-  type BridgeClientMessage,
-  type BridgeConnectionSnapshot
+  type BridgeClientMessage
 } from './bridge/bridge-envelope'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
@@ -21,6 +20,7 @@ import { createBridgeNotifyForwarder } from './bridge-host-notify'
 import { createBridgeHostRoute } from './bridge-host-route'
 import { pageStorageForReader } from './page-storage-keys'
 import { BRIDGE_TERMINAL_KEY_FRAME } from './bridge/bridge-terminal-key'
+import { readBridgeConnectionSnapshot } from './bridge/bridge-connection-snapshot'
 import type { BridgeHost, BridgeHostOptions } from './bridge-host-contract'
 
 export type { BridgeHost, BridgeHostDiagnostic, BridgeHostOptions } from './bridge-host-contract'
@@ -65,6 +65,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   // What the page's init reader accepts, carried across a rebuild because the page does not
   // re-handshake. Null is a page older than `storageKeys`, which gets the legacy keys only.
   let pageStorageKeys: readonly string[] | null = options.sessionBack?.storageKeys ?? null
+  let pageReadsConnectionPath = options.sessionBack?.connectionPathFrames === true
 
   const frames = createBridgeHostFrames({
     post: options.post,
@@ -87,15 +88,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   })
 
   // Use the event’s state; listeners can run before the mirrored getter updates.
-  function snapshot(state?: ConnectionState): BridgeConnectionSnapshot {
-    return {
-      state: state ?? client.getState(),
-      reconnectAttempt: client.getReconnectAttempt(),
-      lastConnectedAt: client.getLastConnectedAt(),
-      lastInboundAt: client.getLastInboundAt?.() ?? null,
-      generation: client.getGeneration?.() ?? null
-    }
-  }
+  const snapshot = (state?: ConnectionState) => readBridgeConnectionSnapshot(client, state)
 
   /**
    * Posts `init`, and answers nothing (ruling 34).
@@ -140,6 +133,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           granted,
           host,
           ownsHostArea: options.ownsHostArea === true,
+          hostStatus: options.readHostStatus?.() ?? null,
           ...pageStorageForReader(options.readStorage(), pageStorageKeys),
           refreshTerminalShortcuts
         })
@@ -219,6 +213,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     settleAll(true)
     closed = true
     unsubscribeState()
+    unsubscribeConnectionPath()
   }
 
   function dispatch(message: BridgeClientMessage): void {
@@ -226,6 +221,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     if (message.type === 'ready') {
       serving = true
       pageStorageKeys = message.storageKeys ?? null
+      pageReadsConnectionPath = message.connectionPathFrames === true
       back.readReady()
       // Dropped like the Back claim: a page still showing a terminal claims again on this `init`.
       reportRailClaim(false)
@@ -280,6 +276,13 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const unsubscribeState = client.onStateChange((state) => {
     send({ v: BRIDGE_PROTOCOL_VERSION, type: 'state', connection: snapshot(state) })
   })
+  // A relay dial can start or fail without a state change; the page labels the dial from these.
+  const unsubscribeConnectionPath =
+    client.onConnectionPathChange?.(() => {
+      if (pageReadsConnectionPath) {
+        send({ v: BRIDGE_PROTOCOL_VERSION, type: 'connectionPath', connection: snapshot() })
+      }
+    }) ?? (() => {})
 
   if (routes.current() === null) {
     // Report invalid routes at construction so recovery does not depend on a blank page producing a frame.
@@ -332,6 +335,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     readSessionBack: () => ({
       ...back.read(),
       ...(pageStorageKeys === null ? {} : { storageKeys: pageStorageKeys }),
+      ...(pageReadsConnectionPath ? { connectionPathFrames: true as const } : {}),
       ...(railClaimed ? { terminalKeyRailClaim: { inputOwner: railOwner } } : {})
     }),
     dispose

@@ -1,6 +1,6 @@
 // Use status previews until transcript replies catch up; share desktop/mobile visibility to avoid duplicate bubbles.
 
-import type { NativeChatMessage } from '../native-chat-types'
+import type { NativeChatMessage } from './native-chat-types'
 
 /** Stable preview id across ticks lets the real turn replace it without key churn. */
 export const NATIVE_CHAT_STREAMING_ID = 'streaming'

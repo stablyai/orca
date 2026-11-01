@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from './agent-session-wire'
 import {
-  newestSteerableQueuedMessageCard,
+  headSteerableQueuedMessageCard,
   projectQueuedMessageCards,
   queuedMessagesQueuePause
 } from './structured-agent-session-queued-cards'
@@ -173,7 +173,8 @@ describe('queued message cards', () => {
       ['text of a', false],
       ['/compact', true]
     ])
-    expect(newestSteerableQueuedMessageCard(cards)).toBeNull()
+    // A command at the head steers nothing, and the chord never reaches past it.
+    expect(headSteerableQueuedMessageCard([cards[1]!, cards[0]!])).toBeNull()
     // While the agent works it offers no send; a message card is unaffected.
     const working = projectQueuedMessageCards([draft('a', 1), compact], [], {
       ...IDLE,
@@ -181,5 +182,14 @@ describe('queued message cards', () => {
     })
     expect(working.map((card) => card.waitsForAgent ?? false)).toEqual([false, true])
     expect(cards[1]).not.toHaveProperty('waitsForAgent')
+  })
+
+  it('the steer chord takes the head card only, and nothing when the head cannot steer', () => {
+    const cards = projectQueuedMessageCards([draft('a', 1), draft('b', 2)], [], IDLE)
+    expect(headSteerableQueuedMessageCard(cards)?.messageId).toBe('a')
+    for (const hold of ['sending', 'paused', 'returned'] as const) {
+      expect(headSteerableQueuedMessageCard([{ ...cards[0]!, hold }, cards[1]!])).toBeNull()
+    }
+    expect(headSteerableQueuedMessageCard([])).toBeNull()
   })
 })

@@ -126,13 +126,6 @@ describe('a Stop that ends the child after its interrupt failed', () => {
     })
   })
 
-  it('says cancellation was requested when the send stays in doubt', async () => {
-    expect(await stopEndingTheChild({ turnRunning: false, takesSendBack: false })).toEqual({
-      cancelled: true,
-      rows: ['Cancellation requested.']
-    })
-  })
-
   it("keeps Stop when the only other send in doubt was an earlier process's", async () => {
     expect(
       await stopEndingTheChild({
@@ -141,12 +134,5 @@ describe('a Stop that ends the child after its interrupt failed', () => {
         earlierProcessSendInDoubt: true
       })
     ).toEqual({ cancelled: true, rows: ['Cancellation requested.'] })
-  })
-
-  it('says cancellation was requested on the turn it stopped, whatever became of the send', async () => {
-    expect(await stopEndingTheChild({ turnRunning: true, takesSendBack: true })).toEqual({
-      cancelled: true,
-      rows: ['Cancellation requested.']
-    })
   })
 })

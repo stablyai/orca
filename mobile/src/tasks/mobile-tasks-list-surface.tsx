@@ -1,19 +1,12 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { translate } from '../i18n/mobile-i18n'
-import {
-  View,
-  Text,
-  ActivityIndicator,
-  colors,
-  TaskProviderLogo,
-  Pressable,
-  type MobileColorScheme
-} from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
+import { colors, TaskProviderLogo, type MobileColorScheme } from './mobile-tasks-dependencies'
 import { renderMobileTasksGitHubProjectList } from './mobile-tasks-github-project-list'
 import { renderMobileTasksLinearList } from './mobile-tasks-linear-list'
 import { renderMobileTasksProviderItemList } from './mobile-tasks-provider-item-list'
 import { JiraConnectPrompt } from '../components/JiraConnectPrompt'
+import { MobileStateView } from '../components/MobileStateView'
+import { renderMobileTasksSupportState } from './mobile-tasks-list-state'
 
 export function renderMobileTasksListSurface(
   model: ConnectionPresentationModel,
@@ -32,32 +25,16 @@ export function renderMobileTasksListSurface(
     setLinearConnectState,
     setShowLinearConnect,
     taskUiReady,
-    tasksSupported,
-    tasksUnsupported
+    tasksSupported
   } = model
   return !tasksSupported ? (
-    tasksUnsupported ? (
-      <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
-        <Text style={styles.emptyText}>
-          {translate('tasks.listSurface.updateDesktopTitle', 'Update Orca desktop')}
-        </Text>
-        <Text style={styles.centeredHint}>
-          {translate(
-            'tasks.listSurface.updateDesktopMessage',
-            'This mobile Tasks view needs a newer desktop runtime.'
-          )}
-        </Text>
-      </View>
-    ) : (
-      <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-    )
+    renderMobileTasksSupportState(model, bottomBarHeight)
   ) : provider === 'jira' && !jiraConnection.connected ? (
     <JiraConnectPrompt
       credentialError={jiraConnection.credentialError}
       unavailableReason={jiraConnection.unavailableReason}
       disabled={!taskUiReady}
+      bottomInset={bottomBarHeight}
       onCheckAgain={() => {
         void refreshJiraConnection().catch((err: unknown) => {
           setError(
@@ -69,35 +46,28 @@ export function renderMobileTasksListSurface(
       }}
     />
   ) : provider === 'linear' && !linearConnected ? (
-    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
-      <TaskProviderLogo provider="linear" size={32} color={colors.textSecondary} />
-      <Text style={styles.emptyText}>
-        {translate('tasks.listSurface.connectLinearTitle', 'Connect your Linear account')}
-      </Text>
-      <Text style={styles.centeredHint}>
-        {translate(
-          'tasks.listSurface.connectLinearMessage',
-          'Browse and start work on your assigned Linear issues directly from Tasks.'
-        )}
-      </Text>
-      <Pressable
-        style={[styles.targetButton, styles.centerActionButton]}
-        disabled={!taskUiReady}
-        onPress={() => {
-          if (!taskUiReady) {
-            return
-          }
-          setLinearApiKeyDraft('')
-          setLinearConnectState('idle')
-          setLinearConnectError('')
-          setShowLinearConnect(true)
-        }}
-      >
-        <Text style={styles.targetButtonText}>
-          {translate('tasks.listSurface.connectLinearButton', 'Connect Linear')}
-        </Text>
-      </Pressable>
-    </View>
+    <MobileStateView
+      iconElement={<TaskProviderLogo provider="linear" size={24} color={colors.textMuted} />}
+      title={translate('tasks.listSurface.connectLinearTitle', 'Connect your Linear account')}
+      message={translate(
+        'tasks.listSurface.connectLinearMessage',
+        'Browse and start work on your assigned Linear issues directly from Tasks.'
+      )}
+      action={
+        taskUiReady
+          ? {
+              label: translate('tasks.listSurface.connectLinearButton', 'Connect Linear'),
+              onPress: () => {
+                setLinearApiKeyDraft('')
+                setLinearConnectState('idle')
+                setLinearConnectError('')
+                setShowLinearConnect(true)
+              }
+            }
+          : null
+      }
+      bottomInset={bottomBarHeight}
+    />
   ) : provider === 'github' && githubMode === 'project' ? (
     renderMobileTasksGitHubProjectList(model, colorScheme, bottomBarHeight)
   ) : (

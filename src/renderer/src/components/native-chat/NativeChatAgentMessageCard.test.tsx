@@ -10,13 +10,12 @@ import {
   status,
   resetSenderStore
 } from './native-chat-agent-sender.test-fixture'
-import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../shared/agent-session-write-notice-copy'
 import * as terminalLinks from '@/components/terminal-pane/terminal-handle-links'
 import * as markdown from './NativeChatMarkdown'
 import * as display from '../../../../shared/agent-session/agent-message-display-text'
 import type * as SonnerModule from 'sonner'
 import type * as RuntimeRpc from '@/runtime/runtime-rpc-client'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
@@ -37,7 +36,7 @@ import { projectStructuredItemToNativeChat } from '../../../../shared/structured
 import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session-journal-schemas'
 import { agentMessageHeading } from '../../../../shared/agent-session/agent-message-presentation'
 import { nativeChatTurnFoldRow } from '../../../../shared/native-chat/transcript/native-chat-turn-fold'
-import { isNoiseMessage } from '../../../../shared/native-chat-noise'
+import { isNoiseMessage } from '../../../../shared/native-chat/native-chat-noise'
 import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native-chat-trailing-run'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 
@@ -108,9 +107,14 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
   navigation.rpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_0' } })
   const focus = vi.spyOn(terminalLinks, 'focusRendererTerminalHandle').mockReturnValue(true)
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build cards' })))
-  expect(navigation.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'orchestration.partyLocation', {
-    address: 'term_0'
-  })
+  expect(navigation.rpc).toHaveBeenCalledWith(
+    { kind: 'local' },
+    'orchestration.partyLocation',
+    {
+      address: 'term_0'
+    },
+    { timeoutMs: 5000 }
+  )
   expect(focus).toHaveBeenCalledWith('term_0', null)
 })
 
@@ -169,6 +173,41 @@ it('renders unreadable worker metadata with the existing unnamed fallback and no
   expect(screen.getByText('an agent')).toBeInTheDocument()
   expect(screen.getByText('Keep the complete task')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'an agent' })).toBeNull()
+})
+
+it.each([
+  { agent: 'codex', unknown: false },
+  { agent: undefined, unknown: true }
+])('draws a worker no live row names by its saved agent=$agent', ({ agent, unknown }) => {
+  const raw: unknown = {
+    itemId: 'start:gone',
+    revision: 1,
+    sequence: 1,
+    observedAt: 1,
+    body: {
+      kind: 'agent-start',
+      dispatchId: 'gone',
+      task: 'Port the parser',
+      worker: {
+        party: { address: 'term_gone', terminalHandle: 'term_gone', orcaSessionId: null },
+        name: 'Parser port',
+        ...(agent ? { agent } : {})
+      }
+    }
+  }
+  if (!isAdmissibleAgentJournalRenderItem(raw)) {
+    throw new Error('start item was refused')
+  }
+  render(
+    <MessageRow
+      message={projectStructuredAgentStartItem(raw)!}
+      expandSignal={false}
+      onScrollMessageToTop={() => {}}
+      runtimeContext={context}
+    />
+  )
+  expect(screen.getByText('Parser port')).toBeInTheDocument()
+  expect(screen.queryByText('?') !== null).toBe(unknown)
 })
 
 it.each([false, true])(
@@ -390,17 +429,23 @@ it.each(['task', 'mail'] as const)(
     vi.stubGlobal('api', { ui: { writeClipboardText } })
     navigation.rpc.mockRejectedValue(new Error('unreachable'))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build cards' })))
-    expect(navigation.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'orchestration.partyLocation', {
-      address: 'term_0'
-    })
+    expect(navigation.rpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'orchestration.partyLocation',
+      {
+        address: 'term_0'
+      },
+      { timeoutMs: 5000 }
+    )
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Other sender' })))
     expect(navigation.rpc).toHaveBeenLastCalledWith(
       { kind: 'local' },
       'orchestration.partyLocation',
-      { address: 'term_1' }
+      { address: 'term_1' },
+      { timeoutMs: 5000 }
     )
     expect(navigation.toast).toHaveBeenCalledWith(
-      `${AGENT_SESSION_WRITE_NOTICE_COPY.unreachable} ${AGENT_SESSION_WRITE_NOTICE_COPY.tryAgain}`
+      'The structured agent session is not available yet. Retry in a moment.'
     )
     expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull()
     act(() => {

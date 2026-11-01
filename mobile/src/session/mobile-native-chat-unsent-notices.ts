@@ -1,7 +1,7 @@
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
-import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionRecordedRejectionParts } from '../../../src/shared/structured-agent-session-rejection-words'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'

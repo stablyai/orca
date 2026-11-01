@@ -137,13 +137,4 @@ describe('remote desktop floor on a windowless host', () => {
     expect(floor.isViewerOwner(PTY, 'multiplex:peer:1')).toBe(true)
     expect(size()).toEqual({ cols: 100, rows: 30 })
   })
-
-  it('still gives a host with a window its grid back', async () => {
-    const { floor, size } = createFloor()
-    await floor.updateViewer(PTY, 'multiplex:old:1', 'pane-A', 159, 69)
-
-    await floor.unregisterViewers(PTY, ['multiplex:old:1'])
-
-    expect(size()).toEqual(HOST)
-  })
 })

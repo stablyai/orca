@@ -8,9 +8,9 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { agentSessionSendSubmission } from '../../../shared/agent-session-wire'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
+import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { nativeChatRowsInDrawOrder } from '../../../shared/native-chat/transcript/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
+import { nativeChatTurnMembership } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
   fakeClaude,

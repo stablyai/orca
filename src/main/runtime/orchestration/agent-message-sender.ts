@@ -3,24 +3,33 @@ import {
   agentMessageSenderName,
   type AgentMessageSender
 } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentType } from '../../../shared/agent-status-types'
 import type { OrchestrationDb } from './db'
 import { resolveOrchestrationParty } from './orchestration-party'
 
-/** Use recorded names, never agent-painted titles; reportedDispatchId comes from worker_done. */
-export type SenderNameResolver = (
+/** What a sender is now: its recorded name, never an agent-painted title, and its agent. */
+export type SenderSnapshot = { name: string | null; agent: AgentType | null }
+
+/** reportedDispatchId comes from worker_done. */
+export type SenderSnapshotResolver = (
   party: AgentMessageSender['party'],
   reportedDispatchId?: string
-) => string | null
+) => SenderSnapshot
 
-/** Snapshot the sender name before its party disappears. */
+/** Snapshot the sender's name and agent before its party disappears. */
 export function agentMessageSender(
   address: string,
   db: OrchestrationDb | null,
-  senderName: SenderNameResolver,
+  senderSnapshot: SenderSnapshotResolver,
   reportedDispatchId?: string
 ): AgentMessageSender {
   const party = senderParty(address, db)
-  return { party, name: snapshotName(senderName, party, reportedDispatchId) }
+  const snapshot = snapshotSender(senderSnapshot, party, reportedDispatchId)
+  return {
+    party,
+    name: agentMessageSenderName(snapshot.name),
+    ...(snapshot.agent ? { agent: snapshot.agent } : {})
+  }
 }
 
 function senderParty(address: string, db: OrchestrationDb | null): AgentMessageSender['party'] {
@@ -33,15 +42,15 @@ function senderParty(address: string, db: OrchestrationDb | null): AgentMessageS
   }
 }
 
-function snapshotName(
-  senderName: SenderNameResolver,
+function snapshotSender(
+  senderSnapshot: SenderSnapshotResolver,
   party: AgentMessageSender['party'],
   reportedDispatchId: string | undefined
-): string | null {
+): SenderSnapshot {
   try {
-    return agentMessageSenderName(senderName(party, reportedDispatchId))
+    return senderSnapshot(party, reportedDispatchId)
   } catch {
     // Failure to resolve a label must not block delivery.
-    return null
+    return { name: null, agent: null }
   }
 }

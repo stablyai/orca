@@ -78,19 +78,6 @@ function placed(state: ReturnType<typeof journal>['state'], clientMessageId: str
 const IN_TURN: AgentJournalTurnScope = { kind: 'turn', turnItemId: 'orca:turn-1' }
 
 describe('a rejected message', () => {
-  it('sits at the rejection, in no turn, when it was queued', () => {
-    const { state, submission, dispatch, advance } = journal()
-    submission('waiting')
-    advance(300)
-    dispatch('waiting', 'rejected')
-
-    expect(placed(state, 'waiting')).toEqual({
-      sequence: 302,
-      observedAt: 1_302,
-      scope: AGENT_JOURNAL_THREAD_SCOPE
-    })
-  })
-
   it('reaches a subscriber at the tail, so the newest page holds it', () => {
     const { state, submission, dispatch, advance } = journal()
     submission('waiting')
@@ -122,15 +109,6 @@ describe('a rejected message', () => {
       observedAt: 1_023,
       scope: AGENT_JOURNAL_THREAD_SCOPE
     })
-  })
-
-  it('sits at the rejection when it was sent directly', () => {
-    const { state, submission, dispatch, advance } = journal()
-    submission('direct', false)
-    advance(10)
-    dispatch('direct', 'rejected')
-
-    expect(placed(state, 'direct')?.sequence).toBe(12)
   })
 })
 

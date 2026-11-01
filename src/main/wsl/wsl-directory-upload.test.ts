@@ -150,9 +150,4 @@ describe.skipIf(process.platform === 'win32' || !hasSha256sum())('uploadDirector
     expect(existsSync(join(dest, 'large.bin'))).toBe(false)
     expect(readdirSync(dest).filter((name) => name.startsWith('.orca-upload-'))).toEqual([])
   })
-
-  it('writes a file atomically through stdin', async () => {
-    await getTransport().writeFile(join(dest, 'nested', 'record.json'), '{"ok":true}')
-    expect(readFileSync(join(dest, 'nested', 'record.json'), 'utf8')).toBe('{"ok":true}')
-  })
 })

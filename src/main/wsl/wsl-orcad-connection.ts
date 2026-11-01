@@ -29,6 +29,7 @@ import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { resolveWslOrcadPairing } from './wsl-orcad-pairing-identity'
 import { trackWslOrcadHostEnvironment } from './wsl-orcad-host-environments'
 import { listenWslOrcadStdioBridgeOnPreferredPort } from './wsl-orcad-stdio-bridge'
+import { wslConnectDeploySpawns } from './wsl-orcad-connect-stop-fence'
 
 export type {
   WslOrcadConnection,
@@ -194,12 +195,12 @@ export class WslOrcadConnectionManager {
     // Taken before any await, so a close during the running-list read still supersedes this.
     const generation = this.generation(key)
     const stillCurrent = (): boolean => this.generation(key) === generation
-    const requireRunning = options.requireRunning
-    await assertWslDistroMayStart(distro, requireRunning, stillCurrent)
+    await assertWslDistroMayStart(distro, options.requireRunning, stillCurrent)
     const environmentId = options.environmentId ?? defaultWslOrcadEnvironmentId(distro)
     const label = options.label ?? distro
     const target = { kind: 'wsl', id: environmentId, distro, label } as const
     const transport = (this.dependencies.createTransport ?? defaultTransport)(target)
+    const spawns = wslConnectDeploySpawns(distro, transport, this.dependencies, options)
     // Relaunch stopped orcad on each connect so distro restarts recover.
     const launch = await (this.dependencies.deployAndLaunch ?? deployAndLaunchWslOrcad)(distro, {
       environmentId,
@@ -207,10 +208,8 @@ export class WslOrcadConnectionManager {
       intent: options.intent,
       pairedOffer: this.enrolledOffer(key, environmentId),
       signal: options.signal,
-      holder: this.dependencies.holder,
-      createTransport: () => transport,
-      ...(requireRunning ? { requireRunning: () => requireRunning(distro) } : {})
-    })
+      ...spawns.options
+    }).finally(spawns.dispose)
     if (launch.outcome === 'deferred') {
       throw new WslOrcadLaunchDeferredError(launch)
     }
