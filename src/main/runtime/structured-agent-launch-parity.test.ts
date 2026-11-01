@@ -608,6 +608,8 @@ beforeAll(async () => {
   deps = {
     ...production,
     stateDirectory: join(root, 'state'),
+    // Synthetic selections match the fixture homes; account routing has its own integration tests.
+    launchAccountHome: async (record) => record.accountHome,
     logger: { warn: () => {}, error: () => {} },
     resolveWorkspacePath: async (workspaceId) =>
       join(root, workspaceId === FLOATING_TERMINAL_WORKTREE_ID ? 'floating' : 'worktree'),
