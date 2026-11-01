@@ -22,6 +22,13 @@ export async function disconnectRegisteredSshTarget(targetId: string): Promise<v
   await runTargetLifecycle(targetId, () => teardownSshTargetTransport(targetId))
 }
 
+/** The same, for a caller already holding the target's lifecycle queue, where queueing deadlocks. */
+export async function disconnectRegisteredSshTargetInLifecycle(targetId: string): Promise<void> {
+  invalidateConnectAttempt(targetId)
+  clearSshHostServerStatus(targetId)
+  await teardownSshTargetTransport(targetId)
+}
+
 export async function removeRegisteredSshTarget(targetId: string): Promise<void> {
   const store = getSshTargetRegistryStore()
   if (!store) {

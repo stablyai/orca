@@ -1,6 +1,7 @@
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
 import {
   getOrcadSshDeployment,
+  getRuntimeSshAccess,
   type KnownRuntimeEnvironment
 } from '../../../shared/runtime-environments'
 import { classifyRuntimeEnvironmentHost } from '../../../shared/runtime-environment-host-kind'
@@ -129,9 +130,10 @@ async function prepareNetworkServerForCall(
   }
 }
 
-// The tunnel proves the host served even when no update check or start publishes its status (#32484).
+// The tunnel proves the host served even when no update check or start publishes its status (#32484);
+// a paired server's SSH access tunnel never publishes one.
 function restoreForwardsOverTunnel(environment: KnownRuntimeEnvironment): void {
-  const targetId = getOrcadSshDeployment(environment)?.sshTargetId
+  const targetId = getRuntimeSshAccess(environment)?.sshTargetId
   if (targetId) {
     void restoreManagedHostPortForwards(targetId, { tunnelUp: true })
   }

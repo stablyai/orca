@@ -8,7 +8,11 @@ import type { SshTarget } from '../../../../shared/ssh-types'
 import type { ManagedOrcadPreloadApi } from '../../../../preload/api/managed-orcad-api'
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import type { UpdateCheckOptions } from '../../../../shared/update-status-types'
-import { getRuntimeServerProblemLine, getRuntimeServerRoute } from './runtime-server-row-meta'
+import {
+  getRuntimeServerPortsRoute,
+  getRuntimeServerProblemLine,
+  getRuntimeServerRoute
+} from './runtime-server-row-meta'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { LoadingSpinner } from '../LoadingSpinner'
@@ -105,7 +109,8 @@ export function RuntimeServerRow({
   rechecking = false
 }: RuntimeServerRowProps): React.JSX.Element {
   const [repairOpen, setRepairOpen] = useState(false)
-  const [sshDialogOpen, setSshDialogOpen] = useState(false)
+  // Why a mode: an unlinked server offers both SSH uses; a linked one shows the use it has.
+  const [sshDialog, setSshDialog] = useState<'connection' | 'ports' | null>(null)
   const [expanded, setExpanded] = useState(false)
   const row = useRuntimeServerRowState(environment, details)
   const actionBusy = connecting || switching || disconnecting || removing
@@ -153,6 +158,7 @@ export function RuntimeServerRow({
     environment.endpoints[0]?.endpoint ??
     null
   const sshRoute = getRuntimeServerRoute(environment, sshTargets)
+  const portsRoute = getRuntimeServerPortsRoute(environment, sshTargets)
   const address = formatRuntimeEndpointAddress(endpoint ?? undefined)
   const problemLine = getRuntimeServerProblemLine({
     environment,
@@ -175,7 +181,7 @@ export function RuntimeServerRow({
     (managed?.status?.availableUpdate
       ? translate('auto.components.settings.RemoteServerUpdateStatus.available', 'Update available')
       : null)
-  const infoParts = [sshRoute ?? address, versionText].filter((part): part is string =>
+  const infoParts = [sshRoute ?? address, portsRoute, versionText].filter((part): part is string =>
     Boolean(part)
   )
 
@@ -300,7 +306,7 @@ export function RuntimeServerRow({
                 {translate('auto.components.settings.serverList.defaultChip', 'Default')}
               </ServerRowChip>
             ) : null}
-            {!deployment && (sshAccess || environment.connectionDependency === 'ssh-tunnel') ? (
+            {!deployment && environment.connectionDependency === 'ssh-tunnel' ? (
               <ServerRowChip>
                 {translate('auto.components.settings.serverList.sshTunnelChip', 'SSH tunnel')}
               </ServerRowChip>
@@ -331,7 +337,11 @@ export function RuntimeServerRow({
             onCheckForUpdates={onCheckForUpdates}
             onSshAccess={() => {
               onRefreshSshTargets?.()
-              setSshDialogOpen(true)
+              setSshDialog('connection')
+            }}
+            onSshPorts={() => {
+              onRefreshSshTargets?.()
+              setSshDialog('ports')
             }}
             onToggleDetails={() => setExpanded((v) => !v)}
             onRemove={() => onRemove(environment)}
@@ -347,11 +357,16 @@ export function RuntimeServerRow({
       />
       {showSshAccess && sshAccessApi ? (
         <RuntimeSshAccessDialog
-          open={sshDialogOpen}
+          open={sshDialog !== null}
           api={sshAccessApi}
           environment={environment}
           targets={sshTargets}
-          onOpenChange={setSshDialogOpen}
+          portsOnly={sshAccess ? sshAccess.portsOnly === true : sshDialog === 'ports'}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSshDialog(null)
+            }
+          }}
           onChanged={() => onChanged?.()}
         />
       ) : null}

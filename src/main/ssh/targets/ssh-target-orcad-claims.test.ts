@@ -134,6 +134,31 @@ describe('managed orcad SSH target claims', () => {
     expect(current().orcadProvisioning).toBeUndefined()
   })
 
+  it('claims a target with saved port forwards for a claimer that restores them', () => {
+    const { claims } = setup({
+      target: { portForwards: [{ localPort: 1, remoteHost: 'localhost', remotePort: 2 }] }
+    })
+    const claimed = claims.claim('ssh-1', 'environment-1', {
+      ownerRecorded: false,
+      allowSavedPortForwards: true
+    })
+    expect(getManagedOrcadFenceEnvironmentId(claimed)).toBe('environment-1')
+  })
+
+  it('still refuses other blockers for a claimer that restores saved port forwards', () => {
+    const { claims, current } = setup({
+      target: { portForwards: [{ localPort: 1, remoteHost: 'localhost', remotePort: 2 }] },
+      repos: [{ id: 'repo-1', path: '/srv/app', displayName: 'app' }]
+    })
+    expect(() =>
+      claims.claim('ssh-1', 'environment-1', {
+        ownerRecorded: false,
+        allowSavedPortForwards: true
+      })
+    ).toThrow('repositories or folder workspaces')
+    expect(current().orcadFence).toBeUndefined()
+  })
+
   it('counts terminated and expired leases too, since they still name this host', () => {
     const { claims } = setup({
       leases: [

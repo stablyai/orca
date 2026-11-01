@@ -50,6 +50,7 @@ describe('independent runtime SSH access coordinator', () => {
   let environmentId: string
   let target: SshTarget
   let events: string[]
+  let claimOptions: unknown
   const request = () => ({
     selector: environmentId,
     requestId: 'request',
@@ -65,6 +66,10 @@ describe('independent runtime SSH access coordinator', () => {
         invalidateTransport: () => {
           events.push('invalidate')
           expect(current().sshAccess).toBeUndefined()
+        },
+        endSshSession: async (sshTargetId) => {
+          expect(current().sshAccess).toBeUndefined()
+          events.push(`end-session:${sshTargetId}`)
         }
       }
     )
@@ -96,9 +101,10 @@ describe('independent runtime SSH access coordinator', () => {
         listTargets: () => [target],
         preflight: mocks.preflight,
         flush: mocks.flush,
-        claim: () => {
+        claim: (_targetId: string, _environmentId: string, options: unknown) => {
           expect(current().pendingSshAccessOperation?.operation).toBe('link')
           events.push('claim')
+          claimOptions = options
           target = { ...target, orcadFence: { environmentId: environmentId } }
           return target
         },
@@ -195,6 +201,22 @@ describe('independent runtime SSH access coordinator', () => {
     expect(events).not.toContain('claim')
   })
 
+  it('links an SSH target whose saved port forwards the linked host restores', async () => {
+    mocks.preflight.mockReturnValue({
+      blockers: [
+        {
+          code: 'orcad_migration_saved_port_forwards',
+          category: 'client-owned-state',
+          portForwards: [{ localPort: 3000, remoteHost: 'localhost', remotePort: 3000 }]
+        }
+      ]
+    })
+    const result = await linkRuntimeSshAccess(userDataPath, request())
+    expect(result.sshAccess?.sshTargetId).toBe('target')
+    // The claim's own empty-target check must let them through too.
+    expect(claimOptions).toMatchObject({ allowSavedPortForwards: true })
+  })
+
   it('cancels a pending connect and starts no tunnel when the link is aborted', async () => {
     const controller = new AbortController()
     mocks.connect.mockImplementationOnce(
@@ -229,6 +251,24 @@ describe('independent runtime SSH access coordinator', () => {
     await linkRuntimeSshAccess(userDataPath, request(), { invalidateTransport })
     await linkRuntimeSshAccess(userDataPath, request(), { invalidateTransport })
     expect(invalidateTransport).toHaveBeenCalledTimes(2)
+  })
+
+  it('proves a ports-only host reaches the server, then leaves the server connection alone', async () => {
+    const invalidateTransport = vi.fn()
+    const portsOnly = { ...request(), portsOnly: true as const }
+    const result = await linkRuntimeSshAccess(userDataPath, portsOnly, { invalidateTransport })
+    expect(events).toEqual(['flush', 'claim', 'flush', 'connect', 'tunnel', 'verify', 'close'])
+    expect(result.sshAccess).toMatchObject({ sshTargetId: 'target', portsOnly: true })
+    expect(result.connectionDependency).toBeUndefined()
+    // A retried link changes nothing either.
+    await linkRuntimeSshAccess(userDataPath, portsOnly, { invalidateTransport })
+    await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow('different')
+    expect(mocks.ensure).not.toHaveBeenCalled()
+
+    events = []
+    await unlink()
+    expect(events).toEqual(['close', 'end-session:target', 'release', 'flush'])
+    expect(invalidateTransport).not.toHaveBeenCalled()
   })
 
   it('rejects changed request tuple after a completed link', async () => {
@@ -274,7 +314,7 @@ describe('independent runtime SSH access coordinator', () => {
     await linkRuntimeSshAccess(userDataPath, request())
     events = []
     await unlink()
-    expect(events).toEqual(['invalidate', 'close', 'release', 'flush'])
+    expect(events).toEqual(['invalidate', 'close', 'end-session:target', 'release', 'flush'])
     expect(current().endpoints[0].endpoint).toBe(pairing.endpoint)
     expect(current().sshAccess).toBeUndefined()
     expect(target.orcadFence).toBeUndefined()
@@ -339,9 +379,30 @@ describe('independent runtime SSH access coordinator', () => {
     mocks.flush.mockRejectedValueOnce(new Error('disk full'))
     await expect(unlink()).rejects.toThrow('disk full')
     expect(target.orcadFence).toBeUndefined()
+    // The link already left the Ports tab, so its session and forwards ended before the failure.
+    expect(events).toContain('end-session:target')
     await unlink()
     expect(events.filter((event) => event === 'release')).toHaveLength(1)
     expect(current().pendingSshAccessOperation).toBeUndefined()
+  })
+
+  it('ends the session even when invalidating the transport fails after the link left', async () => {
+    await linkRuntimeSshAccess(userDataPath, request())
+    const endSshSession = vi.fn(async () => {})
+    await expect(
+      unlinkRuntimeSshAccess(
+        userDataPath,
+        { selector: environmentId, requestId: 'unlink' },
+        {
+          invalidateTransport: () => {
+            throw new Error('transport busy')
+          },
+          endSshSession
+        }
+      )
+    ).rejects.toThrow('transport busy')
+    expect(current().sshAccess).toBeUndefined()
+    expect(endSshSession).toHaveBeenCalledExactlyOnceWith('target')
   })
 
   it('does not release a new owner when retrying an interrupted unlink', async () => {

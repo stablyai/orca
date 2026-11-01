@@ -140,6 +140,16 @@ describe('resolving a managed runtime for a call', () => {
     }
   )
 
+  it("restores the saved forwards of the SSH host a paired server's access tunnel rides", async () => {
+    mocks.environments['env-linked'] = {
+      id: 'env-linked',
+      sshAccess: { sshTargetId: 'linked-host', sshTargetGeneration: 1 }
+    }
+    mocks.verify.mockResolvedValue({ state: 'serving' })
+    await resolveManagedRuntimeEnvironment('/u', 'env-linked')
+    expect(mocks.restoreForwards).toHaveBeenCalledWith('linked-host', { tunnelUp: true })
+  })
+
   it('leaves a serving server to the once-per-session update check', async () => {
     mocks.verify.mockResolvedValue({ state: 'serving' })
     await resolveManagedRuntimeEnvironment('/u', 'env-1')

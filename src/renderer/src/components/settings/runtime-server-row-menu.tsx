@@ -1,6 +1,7 @@
 import {
   ArrowUpCircle,
   Info,
+  Plug,
   RefreshCw,
   Server,
   ServerOff,
@@ -18,7 +19,7 @@ type RuntimeServerRowMenuProps = {
   showConnect: boolean
   showDisconnect: boolean
   showMakeDefault: boolean
-  /** null hides the item; otherwise whether the route is already linked. */
+  /** null hides the items; otherwise whether the route is already linked. */
   sshAccessLinked: boolean | null
   detailsExpanded: boolean
   actionBusy: boolean
@@ -32,6 +33,7 @@ type RuntimeServerRowMenuProps = {
   onMakeDefault: () => void
   onCheckForUpdates?: (options: UpdateCheckOptions) => void
   onSshAccess: () => void
+  onSshPorts: () => void
   onToggleDetails: () => void
   onRemove: () => void
 }
@@ -53,6 +55,7 @@ export function RuntimeServerRowMenuItems({
   onMakeDefault,
   onCheckForUpdates,
   onSshAccess,
+  onSshPorts,
   onToggleDetails,
   onRemove
 }: RuntimeServerRowMenuProps): React.JSX.Element {
@@ -89,6 +92,12 @@ export function RuntimeServerRowMenuItems({
           {sshAccessLinked
             ? translate('auto.components.settings.serverList.sshAccessLinked', 'SSH route…')
             : translate('auto.components.settings.serverList.sshAccess', 'Connect through SSH…')}
+        </DropdownMenuItem>
+      ) : null}
+      {sshAccessLinked === false ? (
+        <DropdownMenuItem onSelect={onSshPorts}>
+          <Plug />
+          {translate('auto.components.settings.serverList.sshPorts', 'Forward ports through SSH…')}
         </DropdownMenuItem>
       ) : null}
       {onCheckForUpdates ? (

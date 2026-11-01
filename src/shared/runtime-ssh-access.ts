@@ -7,7 +7,8 @@ const AccessRequest = z.object({
 
 export const RuntimeSshAccessLinkRequestSchema = AccessRequest.extend({
   sshTargetId: z.string().trim().min(1).max(1024),
-  remotePort: z.number().int().min(1).max(65_535)
+  remotePort: z.number().int().min(1).max(65_535),
+  portsOnly: z.literal(true).optional()
 }).strict()
 export const RuntimeSshAccessUnlinkRequestSchema = AccessRequest.strict()
 

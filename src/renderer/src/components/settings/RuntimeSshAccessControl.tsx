@@ -18,16 +18,19 @@ type RuntimeSshAccessControlProps = {
   environment: PublicKnownRuntimeEnvironment
   targets: SshTarget[]
   onChanged: () => void
+  /** Links an SSH host only for port forwards, leaving the server connection as it is. */
+  portsOnly?: boolean
   /** Rendered before the submit button, e.g. a dialog's Cancel. */
   footerStart?: React.ReactNode
 }
 
-/** Reaches an already-paired server through an SSH tunnel instead of its network address. */
+/** Reaches an already-paired server through an SSH tunnel, or forwards its ports through one. */
 export function RuntimeSshAccessControl({
   api,
   environment,
   targets,
   onChanged,
+  portsOnly = false,
   footerStart
 }: RuntimeSshAccessControlProps): React.JSX.Element {
   const [targetId, setTargetId] = useState(targets.length === 1 ? (targets[0]?.id ?? '') : '')
@@ -59,7 +62,8 @@ export function RuntimeSshAccessControl({
             selector: environment.id,
             requestId,
             sshTargetId: pending.sshTargetId,
-            remotePort: pending.remotePort
+            remotePort: pending.remotePort,
+            ...(pending.portsOnly ? { portsOnly: true as const } : {})
           })
         : api.unlinkSshAccess({ selector: environment.id, requestId })
     return (
@@ -112,7 +116,8 @@ export function RuntimeSshAccessControl({
             selector: environment.id,
             requestId,
             sshTargetId: targetId,
-            remotePort: Number(remotePort)
+            remotePort: Number(remotePort),
+            ...(portsOnly ? { portsOnly: true as const } : {})
           })
     )
   }
@@ -122,14 +127,20 @@ export function RuntimeSshAccessControl({
     return (
       <div className="flex flex-wrap items-center gap-3">
         <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-          {translate(
-            'auto.components.settings.managedServers.access.linkedRoute',
-            'Reached through {{host}}, server port {{port}}.',
-            {
-              host: linkedTarget?.label ?? linked.sshTargetId,
-              port: linked.remotePort
-            }
-          )}
+          {linked.portsOnly
+            ? translate(
+                'auto.components.settings.managedServers.access.linkedPorts',
+                'Ports forwarded through {{host}}.',
+                { host: linkedTarget?.label ?? linked.sshTargetId }
+              )
+            : translate(
+                'auto.components.settings.managedServers.access.linkedRoute',
+                'Reached through {{host}}, server port {{port}}.',
+                {
+                  host: linkedTarget?.label ?? linked.sshTargetId,
+                  port: linked.remotePort
+                }
+              )}
         </p>
         <Button
           type="button"
