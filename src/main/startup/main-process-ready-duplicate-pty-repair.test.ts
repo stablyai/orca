@@ -79,7 +79,7 @@ vi.mock('../star-nag/service', () => ({
     registerIpcHandlers = vi.fn()
   }
 }))
-vi.mock('../browser/agent-browser-bridge', () => ({
+vi.mock('../browser/agent-browser/agent-browser-bridge', () => ({
   AgentBrowserBridge: class {
     sweepOrphanedSessions = vi.fn()
   }

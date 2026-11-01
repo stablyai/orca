@@ -204,6 +204,29 @@ describe('WslHostAutomationWake', () => {
     )
   })
 
+  it("doesn't wake a host whose entry a learn cleared while an earlier host's wake ran", async () => {
+    const h = harness({ due: { 'wsl:a': due(9 * HOUR), 'wsl:b': due(9 * HOUR) } })
+    let finishWake: () => void = () => {}
+    h.wake.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishWake = resolve
+        })
+    )
+    h.subject.start()
+    const fired = h.runTimer(9 * HOUR + 30 * MINUTE)
+    await vi.waitFor(() => expect(h.wake).toHaveBeenCalledWith('wsl:a'))
+    // b's automations were all deleted meanwhile: a learn finds none and clears its entry.
+    h.automations.mockResolvedValueOnce([])
+    await h.subject.learn('wsl:b')
+    finishWake()
+    await fired
+    await vi.waitFor(() => expect(h.timerAt()).toBe(10 * HOUR))
+
+    expect(h.wake).toHaveBeenCalledExactlyOnceWith('wsl:a')
+    expect(h.saved.at(-1)).not.toHaveProperty('wsl:b')
+  })
+
   it('a deleted or disabled automation no longer wakes the host once this desktop re-learns', async () => {
     const h = harness({ due: { 'wsl:ubuntu': due(5 * HOUR) } })
     h.automations.mockResolvedValueOnce([automation({ enabled: false })])

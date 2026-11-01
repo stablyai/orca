@@ -23311,6 +23311,7 @@
       "serveSimUnavailable": "serve-sim is unavailable.",
       "serveSimNoEndpoints": "serve-sim did not return stream endpoints.",
       "serveSimEndpointUnreachable": "serve-sim started but its stream endpoint is not reachable.",
+      "deviceHubInputBlocked": "Xcode's Device Hub has taken over input for this simulator, so taps and typing won't reach it. Quit Device Hub, then attach the simulator again.",
       "androidSdkMissing": "Android SDK not found. Install Android Studio and set ANDROID_HOME.",
       "adbUnavailable": "adb is unavailable.",
       "noAndroidDevices": "No Android devices or AVDs found. Create one in Android Studio.",

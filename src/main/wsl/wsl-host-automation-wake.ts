@@ -182,9 +182,9 @@ export class WslHostAutomationWake {
   private async fire(): Promise<void> {
     const now = this.now()
     for (const [environmentId, snapshot] of Object.entries(this.due)) {
-      // A learn during an earlier host's wake may have refreshed this entry; read it now.
-      const entry = this.due[environmentId] ?? snapshot
-      if (entry.nextRunAt > now) {
+      // A learn or forget during an earlier host's wake may have refreshed or cleared this entry.
+      const entry = this.due[environmentId]
+      if (!entry || entry.nextRunAt > now) {
         continue
       }
       const missed = missedRunAfterLastReady(entry, now)

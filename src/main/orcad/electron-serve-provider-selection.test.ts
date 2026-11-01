@@ -20,7 +20,7 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
 vi.mock('./orcad-browser-install-park', () => ({ openOrcadBrowserInstallPark: () => null }))
 
 import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
-import { agentBrowserCommandOf } from '../browser/agent-browser-bridge-test-harness'
+import { agentBrowserCommandOf } from '../browser/agent-browser/agent-browser-bridge-test-harness'
 
 const FAKE_SIDECAR = join(import.meta.dirname, '__fixtures__', 'fake-orcad-electron-sidecar.cjs')
 const INSTALLED_EXECUTABLE = join('/Applications', 'Orca.app', 'Contents', 'MacOS', 'Orca')
