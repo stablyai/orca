@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { Tab } from '../../../../shared/tab-types'
@@ -122,8 +122,12 @@ export const newCards = defineFixture({
   width: 288,
   store: {
     ...store,
-    agentStatusEpoch: 4,
-    settings: { ...getDefaultSettings('/preview'), experimentalNewWorktreeCardStyle: true }
+    agentStatusEpoch: 4
+  },
+  setup: () => {
+    useAppStore.setState(({ settings }) => ({
+      settings: settings && { ...settings, experimentalNewWorktreeCardStyle: true }
+    }))
   },
   render: () => <Preview expanded />
 })
