@@ -1,7 +1,7 @@
 import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { useMobileNativeChatRowRenderer } from './use-mobile-native-chat-row-renderer'
 
 vi.mock('./MobileNativeChatRowItemSource', () => ({
