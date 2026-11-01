@@ -110,6 +110,7 @@
       ],
       "expo-notifications",
       "./plugins/android-respect-rotation-lock.js",
+      "./plugins/android-window-density.js",
       "./plugins/ios-pod-deployment-target-floor.js",
       "./plugins/ios-scene-lifecycle.js",
       [
