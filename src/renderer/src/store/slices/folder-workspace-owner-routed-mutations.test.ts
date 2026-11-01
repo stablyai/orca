@@ -697,7 +697,7 @@ import {
 } from '@/components/native-chat/native-chat-pending-attachment-cache'
 
 it.each([10, 100])(
-  'retires launch records/chips/submissions through %i real folder removals, including intermediate twins',
+  'retires launch submissions through %i real folder removals, including intermediate twins',
   async (count) => {
     composerDrafts.clearNativeChatComposerDraftsForTests()
     clearNativeChatPendingAttachmentsForTests()
@@ -762,8 +762,11 @@ it.each([10, 100])(
     composerDrafts.updateNativeChatComposerDraft(recreated, { text: 'new lifetime' }, 'immediate')
     folders.forEach((folder, i) => {
       const key = scope(folder.id)
-      expect(nativeChatPendingAttachmentSnapshot(key)).toHaveLength(0)
-      expect(settleNativeChatPendingAttachment(key, key, '/late.png')).toBe(false)
+      // A same-ID survivor skips ordinary cleanup as on main, so only that folder's chip stays.
+      expect(nativeChatPendingAttachmentSnapshot(key)).toHaveLength(i === 0 ? 1 : 0)
+      if (i > 0) {
+        expect(settleNativeChatPendingAttachment(key, key, '/late.png')).toBe(false)
+      }
       composerDrafts.finishNativeChatComposerSubmission(key, attempts[i], true)
     })
     expect(composerDrafts.readNativeChatComposerDraft(recreated).text).toBe('new lifetime')

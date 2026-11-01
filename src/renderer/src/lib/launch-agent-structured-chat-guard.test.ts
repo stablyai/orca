@@ -371,9 +371,11 @@ describe('structured chat adoption guard on the launch path', () => {
       promptDelivery: 'submit-after-ready'
     })
 
+    // Not delivered; the handed-back prompt waits in the failed chat's composer.
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: false,
-      failureNotified: true
+      failureNotified: true,
+      inComposer: true
     })
     await expect(result?.structuredSettlement).resolves.toMatchObject({
       kind: 'failed'

@@ -1,5 +1,3 @@
-import { deleteWorkspaceChatDraftOwners } from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -38,31 +36,4 @@ export function applyProjectGroupDeleteCascade(
     ),
     folderWorkspacePathStatuses: {}
   }
-}
-
-export function retireDroppedGroupFolderDrafts(
-  state: Pick<RepoSlice, 'folderWorkspaces' | 'projectGroups'>,
-  remaining: RepoSlice['folderWorkspaces']
-): void {
-  const kept = new Set(remaining)
-  deleteWorkspaceChatDraftOwners({
-    owners: state.folderWorkspaces
-      .filter((folder) => !kept.has(folder))
-      .map((folder) => ({
-        workspaceId: folderWorkspaceKey(folder.id),
-        executionHostId: getFolderWorkspaceHostId(folder, state.projectGroups)
-      })),
-    conversations: [],
-    terminalTabIds: []
-  })
-}
-
-export function applyCommittedProjectGroupDeleteCascade(
-  state: Pick<RepoSlice, 'folderWorkspaces' | 'projectGroups' | 'repos'>,
-  groupId: string,
-  ownerHostId: ExecutionHostId | null
-) {
-  const cascade = applyProjectGroupDeleteCascade(state, groupId, ownerHostId)
-  retireDroppedGroupFolderDrafts(state, cascade.folderWorkspaces)
-  return cascade
 }

@@ -56,6 +56,9 @@ describe('TabBar PowerShell launch wiring', () => {
 
   it('passes pwsh.exe when the PowerShell menu item uses the PowerShell 7+ implementation', async () => {
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(false),
@@ -129,6 +132,9 @@ describe('TabBar PowerShell launch wiring', () => {
       ]
     }
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(true),
@@ -197,6 +203,9 @@ describe('TabBar PowerShell launch wiring', () => {
       ]
     }
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(true),
@@ -245,6 +254,9 @@ describe('TabBar PowerShell launch wiring', () => {
 
   it('shows the Git Bash terminal row when shared Windows capabilities find bash.exe', async () => {
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(false),
