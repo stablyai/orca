@@ -2,9 +2,9 @@
 // user values. `batch` parses commands from stdin without that scan.
 export const AGENT_BROWSER_BATCH_ARGS = ['batch', '--json'] as const
 
-export function agentBrowserBatchInput(command: readonly string[]): string {
+export function agentBrowserBatchInput(...commands: readonly (readonly string[])[]): string {
   // serde_json rejects lone surrogates; argv used to turn them into U+FFFD.
-  return JSON.stringify([command.map((token) => token.toWellFormed())])
+  return JSON.stringify(commands.map((command) => command.map((token) => token.toWellFormed())))
 }
 
 export type AgentBrowserEnvelope = { success?: boolean; data?: unknown; error?: string }

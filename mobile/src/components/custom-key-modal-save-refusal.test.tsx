@@ -59,7 +59,12 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios }
 }))
 vi.mock('./MobileSwitch', () => ({ MobileSwitch: hosts.Switch }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: hosts.View }))
+vi.mock('lucide-react-native', () => ({
+  Check: hosts.View,
+  ChevronDown: hosts.View,
+  ChevronLeft: hosts.View,
+  ChevronRight: hosts.View
+}))
 vi.mock('./BottomDrawer', () => ({ BottomDrawer: hosts.View }))
 
 import { CustomKeyModal } from './CustomKeyModal'

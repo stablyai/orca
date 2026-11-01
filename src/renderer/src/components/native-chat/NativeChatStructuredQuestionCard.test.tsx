@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestionCard'
-import type { AgentJournalQuestion } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalQuestion } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot>

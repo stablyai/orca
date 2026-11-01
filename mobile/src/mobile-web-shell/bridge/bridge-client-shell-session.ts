@@ -170,7 +170,8 @@ export function createBridgeClientShellSession(args: {
               foldDivision,
               terminalKeyRail,
               colorScheme,
-              uiLocale
+              uiLocale,
+              hostStatus: message.hostStatus ?? null
             }
       // Re-primed either way, because a second `init` is also how the page recovers a cache it has
       // refused a `state` frame into: the shell rebuilt under it publishes a generation the page's

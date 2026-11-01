@@ -8,33 +8,33 @@ import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-  type AgentJournalCursor,
   type AgentJournalMessageItem
-} from '../../src/shared/agent-session-journal-types'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../src/shared/agent-session-current-requests-capability'
+} from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../src/shared/agent-session-journal-identity'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../src/shared/agent-session/requests/agent-session-current-requests-capability'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryRequest,
   type AgentSessionHistoryResult,
   type AgentSessionSubscribeEvent
-} from '../../src/shared/agent-session-wire'
+} from '../../src/shared/agent-session/agent-session-wire'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../src/shared/mobile-bridge-frame-bytes'
 import {
   AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY
-} from '../../src/shared/protocol-version'
+} from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeRpcResponse } from '../../src/shared/runtime-rpc-envelope'
 import { withNativeChatCutTurnNotices } from '../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { nativeChatRowsInDrawOrder } from '../../src/shared/native-chat/transcript/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from '../../src/shared/native-chat-turn-membership'
-import { projectStructuredAgentSessionMessages } from '../../src/shared/structured-agent-session-message-projection'
+import { nativeChatTurnMembership } from '../../src/shared/native-chat/transcript/native-chat-turn-membership'
+import { projectStructuredAgentSessionMessages } from '../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../src/shared/structured-agent-session-reducer'
-import { selectStructuredAgentSettledTurns } from '../../src/shared/structured-agent-session-turn-timing'
+} from '../../src/shared/agent-session/structured-agent-session-reducer'
+import { selectStructuredAgentSettledTurns } from '../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { restoreJournal } from '../../src/main/native-chat/agent-session-journal/journal-open'
 import { journalOutcomeSource } from '../../src/main/native-chat/agent-session-journal/journal-outcome-format'
@@ -60,7 +60,7 @@ import { MAX_TIMER_DELAY_MS } from '../../src/shared/timer-delay'
 import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages
-} from '../../mobile/src/session/mobile-native-chat-render-data'
+} from '../../mobile/src/session/native-chat/mobile-native-chat-render-data'
 import { NativeChatMessageList } from '../../src/renderer/src/components/native-chat/NativeChatMessageList'
 import { render } from '../../src/renderer/src/components/native-chat/native-chat-tooltip-test-harness'
 import { installNativeChatMessageListTestViewport } from '../../src/renderer/src/components/native-chat/native-chat-message-list-test-viewport'

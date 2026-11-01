@@ -5,7 +5,7 @@ import type {
   NativeChatSubscriptionFrame,
   PreloadApi
 } from '../api-types'
-import type { AgentType } from '../../shared/native-chat-types'
+import type { AgentType } from '../../shared/agent-status-types'
 
 export const nativeChatApi = {
   readSession: (

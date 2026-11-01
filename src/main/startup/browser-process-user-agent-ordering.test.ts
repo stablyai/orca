@@ -153,7 +153,7 @@ vi.mock('../ipc/filesystem/watchers/filesystem-watcher', () => ({
   }
 }))
 vi.mock('../network/proxy-settings')
-vi.mock('../persistence', () => ({
+vi.mock('../persistence/loading-store/user-data-path', () => ({
   initDataPath: () => mocks.events.push('init-data-path'),
   getCanonicalUserDataPath: () => '/canonical-user-data'
 }))

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { setFlagsFromString } from 'node:v8'
 import { runInNewContext } from 'node:vm'
+import { gzipSync } from 'node:zlib'
 import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,
@@ -11,6 +12,7 @@ import {
   openMobileE2EEV2Frame,
   sealMobileE2EEV2Frame
 } from '../../../src/shared/mobile-e2ee-v2-framing'
+import { encodeCompressedFrame } from '../../../src/shared/paired-e2ee-compressed-frame'
 
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (length: number) => new Uint8Array(length).fill(9)
@@ -202,6 +204,32 @@ describe('mobile E2EE v2 physical channel', () => {
     releaseBinary(binary)
     await Promise.all([first, second])
     expect(ctx.events).toEqual(['binary:7', 'text:later'])
+    expect(ctx.onError).not.toHaveBeenCalled()
+  })
+
+  it('delivers compressed frames as what they carry, in counter order with plain frames', async () => {
+    const ctx = setup(async (raw) => (raw instanceof Uint8Array ? raw : null))
+    await authenticate(ctx)
+    ctx.events.length = 0
+
+    const reply = JSON.stringify({ id: 'rpc-1', ok: true, result: { note: 'é'.repeat(4096) } })
+    const utf8 = Buffer.from(reply, 'utf8')
+    const text = encodeCompressedFrame({
+      payloadKind: 'text',
+      inflatedByteLength: utf8.byteLength,
+      gzipped: gzipSync(utf8)
+    })
+    const terminal = new Uint8Array(2048).fill(0x74)
+    const binary = encodeCompressedFrame({
+      payloadKind: 'binary',
+      inflatedByteLength: terminal.byteLength,
+      gzipped: gzipSync(terminal)
+    })
+    await ctx.channel.handleMessage(serverFrame(text, 'binary', 1n, ctx.schedule))
+    await ctx.channel.handleMessage(serverFrame(binary, 'binary', 2n, ctx.schedule))
+    await ctx.channel.handleMessage(serverFrame(new Uint8Array([7]), 'binary', 3n, ctx.schedule))
+
+    expect(ctx.events).toEqual([`text:${reply}`, 'binary:116', 'binary:7'])
     expect(ctx.onError).not.toHaveBeenCalled()
   })
 

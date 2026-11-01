@@ -1,6 +1,9 @@
 import { useMemo } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import type { NativeChatBlock, NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatToolCallBlock
+} from '../../../../shared/native-chat/native-chat-types'
 import { pairNativeChatToolResults } from '../../../../shared/native-chat/tools/native-chat-tool-pairing'
 import { nativeChatToolLineIdentity } from '../../../../shared/native-chat/tools/native-chat-tool-line-identity'
 import { NativeChatDiffCard } from './NativeChatDiffCard'

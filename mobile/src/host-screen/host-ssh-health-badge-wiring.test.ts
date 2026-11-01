@@ -151,6 +151,82 @@ describe('SSH host health on the host list rows', () => {
     expect(rows[0].hostContextLabel).toBeUndefined()
     expect(rows[0].hostContextHealthLabel).toBeUndefined()
   })
+
+  it('keeps the repos an unchanged reply names and still refreshes host health', async () => {
+    const client = new FakeSession('connected')
+    let sshConnected = true
+    const repoParams: unknown[] = []
+    client.sendRequest.mockImplementation(async (method: string, params?: unknown) => {
+      switch (method) {
+        case 'repo.list':
+          repoParams.push(params)
+          return repoParams.length === 1
+            ? reply({
+                repos: [{ id: 'repo-ssh', displayName: 'api', connectionId: 'devbox' }],
+                snapshotId: 'repos-1'
+              })
+            : reply({ unchanged: true, snapshotId: 'repos-1' })
+        case 'ssh.listTargetSummaries':
+          return reply({
+            targets: [
+              {
+                id: 'devbox',
+                label: 'devbox',
+                connected: sshConnected,
+                connectionStatus: sshConnected ? 'connected' : 'disconnected'
+              }
+            ]
+          })
+        default:
+          return reply({ platform: 'darwin' })
+      }
+    })
+    const seen: {
+      rows: Worktree[]
+      repoCount: number
+      clearRepos?: () => void
+      refresh?: (options: { force: boolean }) => Promise<void>
+    } = { rows: [], repoCount: 0 }
+    let setWorktrees: ((rows: Worktree[]) => void) | undefined
+    function Probe(): null {
+      const state = useHostScreenState('host-1')
+      state.clientRef.current = client
+      setWorktrees = state.setWorktrees
+      seen.repoCount = state.desktopRepos.length
+      seen.clearRepos = () => state.setDesktopRepos([])
+      seen.refresh = useHostRepoMetadata({
+        client,
+        connState: 'connected',
+        hostId: 'host-1',
+        state
+      })
+      seen.rows = useHostDisplayWorktrees(
+        'connected',
+        state,
+        useResolvedHostPlatform(state, 'host-1')
+      )
+      return null
+    }
+    await act(async () => {
+      create(createElement(Probe))
+    })
+    await act(async () => {
+      setWorktrees?.([row('a', 'repo-ssh')])
+      await seen.refresh?.({ force: true })
+    })
+    sshConnected = false
+    // As a host switch away and back does: the shown repos clear while the client keeps its token.
+    act(() => seen.clearRepos?.())
+    await act(async () => {
+      await seen.refresh?.({ force: true })
+    })
+    expect(seen.repoCount).toBe(1)
+
+    expect(repoParams).toEqual([{ afterSnapshotId: null }, { afterSnapshotId: 'repos-1' }])
+    expect(seen.rows.map((r) => [r.hostContextLabel, r.hostContextHealthLabel])).toEqual([
+      ['devbox', 'Disconnected']
+    ])
+  })
 })
 
 afterEach(unmountRenderers)

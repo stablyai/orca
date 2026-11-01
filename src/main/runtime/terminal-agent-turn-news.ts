@@ -1,5 +1,6 @@
 // Share desktop completion/input timing and hook rows; phone/connector listeners choose wording and transport.
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
+import { mainAgentTurnInterrupted } from '../../shared/agent-lead-status-fold'
 import { agentTurnEndedOnPurpose } from '../../shared/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import { AGENT_DONE_QUIET_MS } from '../../shared/agent-transitions'
@@ -23,6 +24,8 @@ export type TerminalAgentTurnNewsDeps<Prepared> = {
   stopped?: (news: TerminalAgentTurnNewsItem) => void
   /** Opt-in: a finish is news only once the pane's children settle too, not when its lead agent does. */
   allClearOnly?: true
+  /** Opt-in: every turn the lead agent ends is news, even one the host holds back from notifications while children run. */
+  everyLeadTurn?: true
 }
 
 type PendingFinish = {
@@ -60,10 +63,11 @@ export class TerminalAgentTurnNews<Prepared> {
     const finished = transition === 'turn-finished' || transition === 'errored'
     const row = finished || transition === 'needs-input' ? this.deps.readHookRow(paneKey) : null
     // The all-clear of a turn announced when its lead agent finished: that finish still stands.
+    const leadTurnEndedAt = row ? this.leadTurnEndedAt(row) : undefined
     if (
       finished &&
-      row?.turnCompletedAt !== undefined &&
-      this.finishedTurnByPane.get(paneKey) === row.turnCompletedAt
+      leadTurnEndedAt !== undefined &&
+      this.finishedTurnByPane.get(paneKey) === leadTurnEndedAt
     ) {
       return
     }
@@ -116,7 +120,7 @@ export class TerminalAgentTurnNews<Prepared> {
     if (!row || row.state !== 'working' || !worktreeId) {
       return
     }
-    const { turnCompletedAt } = row
+    const turnCompletedAt = this.leadTurnEndedAt(row)
     if (turnCompletedAt === undefined || this.deps.allClearOnly) {
       this.workingSeen.add(paneKey)
       return
@@ -140,12 +144,24 @@ export class TerminalAgentTurnNews<Prepared> {
   private seed(paneKey: string): void {
     const row = this.deps.readHookRow(paneKey)
     // An all-clear listener never heard the lead's finish, so its stamp announces nothing.
-    if (row?.turnCompletedAt !== undefined && !this.deps.allClearOnly) {
-      this.finishedTurnByPane.set(paneKey, row.turnCompletedAt)
+    const leadTurnEndedAt = row ? this.leadTurnEndedAt(row) : undefined
+    if (leadTurnEndedAt !== undefined && !this.deps.allClearOnly) {
+      this.finishedTurnByPane.set(paneKey, leadTurnEndedAt)
     }
     if (row?.state === 'working') {
       this.workingSeen.add(paneKey)
     }
+  }
+
+  /** The host's announce stamp; for every-lead-turn listeners, else the end of a lead turn its children still hold open. */
+  private leadTurnEndedAt(row: AgentStatusIpcPayload): number | undefined {
+    if (row.turnCompletedAt !== undefined || !this.deps.everyLeadTurn) {
+      return row.turnCompletedAt
+    }
+    const lead = row.mainAgent
+    return lead?.state === 'done' && !mainAgentTurnInterrupted(lead)
+      ? lead.stateStartedAt
+      : undefined
   }
 
   private announce(

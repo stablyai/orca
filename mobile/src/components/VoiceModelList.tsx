@@ -1,8 +1,9 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Check, Download, Trash2 } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { ListGroup, ListRow } from './list/ListGroup'
 import type { Translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -65,138 +66,132 @@ export function VoiceModelList({
   const t = useMobileTranslation()
   return (
     <View style={disabled ? styles.disabled : undefined} pointerEvents={disabled ? 'none' : 'auto'}>
-      {setup.models.map((model, idx) => {
-        const anyBusy = busyAction !== null
-        const action = dictationModelRowAction(model, setup.selectedModelId)
-        const rowBusy = busyAction?.modelId === model.id
-        const selectBusy = rowBusy && busyAction?.type === 'select'
-        const downloadBusy = rowBusy && busyAction?.type === 'download'
-        const deleteBusy = rowBusy && busyAction?.type === 'delete'
-        return (
-          <View key={model.id}>
-            {idx > 0 && <View style={styles.separator} />}
-            <View style={styles.modelRow}>
-              <View style={styles.modelInfo}>
-                <View style={styles.modelTitleRow}>
-                  <Text style={styles.modelLabel} numberOfLines={1}>
-                    {model.label}
+      <ListGroup>
+        {setup.models.map((model) => {
+          const anyBusy = busyAction !== null
+          const action = dictationModelRowAction(model, setup.selectedModelId)
+          const rowBusy = busyAction?.modelId === model.id
+          const selectBusy = rowBusy && busyAction?.type === 'select'
+          const downloadBusy = rowBusy && busyAction?.type === 'download'
+          const deleteBusy = rowBusy && busyAction?.type === 'delete'
+          return (
+            <ListRow
+              key={model.id}
+              title={model.label ?? model.id}
+              subtitle={modelMeta(model, t) || undefined}
+              detail={
+                model.recommended ? (
+                  <Text style={styles.recommended}>
+                    {t('components.voiceModelList.recommended', 'Recommended')}
                   </Text>
-                  {model.recommended ? (
-                    <Text style={styles.recommended}>
-                      {t('components.voiceModelList.recommended', 'Recommended')}
-                    </Text>
-                  ) : null}
-                </View>
-                <Text style={styles.modelMeta}>{modelMeta(model, t)}</Text>
-              </View>
-              {action === 'needs-api-key' ? (
-                <Text style={styles.modelStateText}>{cloudModelNeedsKey()}</Text>
-              ) : action === 'in-use' || action === 'use' ? (
-                <View style={styles.readyActions}>
-                  {action === 'in-use' ? (
-                    <View style={styles.selectedTag}>
-                      <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
-                      <Text style={styles.selectedText}>
-                        {t('components.voiceModelList.inUse', 'In use')}
-                      </Text>
-                    </View>
-                  ) : (
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.actionButton,
-                        pressed && styles.actionPressed
-                      ]}
-                      disabled={anyBusy}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('components.voiceModelList.useModel', 'Use {{label}}', {
-                        label: model.label
-                      })}
-                      accessibilityState={{ disabled: anyBusy }}
-                      onPress={() => onUseModel(model)}
-                    >
-                      {selectBusy ? (
-                        <ActivityIndicator size="small" color={colors.textSecondary} />
-                      ) : (
-                        <Text style={styles.actionText}>
-                          {t('components.voiceModelList.use', 'Use')}
+                ) : undefined
+              }
+              accessory={
+                action === 'needs-api-key' ? (
+                  <Text style={styles.modelStateText}>{cloudModelNeedsKey()}</Text>
+                ) : action === 'in-use' || action === 'use' ? (
+                  <View style={styles.readyActions}>
+                    {action === 'in-use' ? (
+                      <View style={styles.selectedTag}>
+                        <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
+                        <Text style={styles.selectedText}>
+                          {t('components.voiceModelList.inUse', 'In use')}
                         </Text>
-                      )}
-                    </Pressable>
-                  )}
-                  {/* A cloud model has nothing on this computer to delete. */}
-                  {model.provider === 'openai' ? null : (
-                    <Pressable
-                      style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
-                      disabled={anyBusy}
-                      onPress={() => onDelete(model)}
-                      accessibilityLabel={t(
-                        'components.voiceModelList.deleteModel',
-                        'Delete {{label}}',
-                        {
-                          label: model.label
-                        }
-                      )}
-                    >
-                      {deleteBusy ? (
-                        <ActivityIndicator size="small" color={colors.statusRed} />
-                      ) : (
-                        <Trash2 size={18} color={colors.statusRed} strokeWidth={2.2} />
-                      )}
-                    </Pressable>
-                  )}
-                </View>
-              ) : action === 'downloading' ? (
-                <ActivityIndicator size="small" color={colors.textSecondary} />
-              ) : (
-                <Pressable
-                  style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
-                  disabled={anyBusy}
-                  onPress={() => onDownload(model)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t(
-                    'components.voiceModelList.downloadModel',
-                    'Download {{label}}',
-                    {
-                      label: model.label
-                    }
-                  )}
-                  accessibilityState={{ disabled: anyBusy }}
-                >
-                  {downloadBusy ? (
-                    <ActivityIndicator size="small" color={colors.textSecondary} />
-                  ) : (
-                    <Download size={18} color={colors.textSecondary} strokeWidth={2.2} />
-                  )}
-                </Pressable>
-              )}
-            </View>
-          </View>
-        )
-      })}
+                      </View>
+                    ) : (
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.actionButton,
+                          pressed && styles.actionPressed
+                        ]}
+                        disabled={anyBusy}
+                        hitSlop={ACTION_HIT_SLOP}
+                        accessibilityRole="button"
+                        accessibilityLabel={t(
+                          'components.voiceModelList.useModel',
+                          'Use {{label}}',
+                          {
+                            label: model.label
+                          }
+                        )}
+                        accessibilityState={{ disabled: anyBusy }}
+                        onPress={() => onUseModel(model)}
+                      >
+                        {selectBusy ? (
+                          <ActivityIndicator size="small" color={colors.textSecondary} />
+                        ) : (
+                          <Text style={styles.actionText}>
+                            {t('components.voiceModelList.use', 'Use')}
+                          </Text>
+                        )}
+                      </Pressable>
+                    )}
+                    {/* A cloud model has nothing on this computer to delete. */}
+                    {model.provider === 'openai' ? null : (
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.iconButton,
+                          pressed && styles.actionPressed
+                        ]}
+                        disabled={anyBusy}
+                        hitSlop={ACTION_HIT_SLOP}
+                        onPress={() => onDelete(model)}
+                        accessibilityLabel={t(
+                          'components.voiceModelList.deleteModel',
+                          'Delete {{label}}',
+                          {
+                            label: model.label
+                          }
+                        )}
+                      >
+                        {deleteBusy ? (
+                          <ActivityIndicator size="small" color={colors.statusRed} />
+                        ) : (
+                          <Trash2 size={18} color={colors.statusRed} strokeWidth={2.2} />
+                        )}
+                      </Pressable>
+                    )}
+                  </View>
+                ) : action === 'downloading' ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : (
+                  <Pressable
+                    style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
+                    disabled={anyBusy}
+                    hitSlop={ACTION_HIT_SLOP}
+                    onPress={() => onDownload(model)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t(
+                      'components.voiceModelList.downloadModel',
+                      'Download {{label}}',
+                      {
+                        label: model.label
+                      }
+                    )}
+                    accessibilityState={{ disabled: anyBusy }}
+                  >
+                    {downloadBusy ? (
+                      <ActivityIndicator size="small" color={colors.textSecondary} />
+                    ) : (
+                      <Download size={18} color={colors.textSecondary} strokeWidth={2.2} />
+                    )}
+                  </Pressable>
+                )
+              }
+            />
+          )
+        })}
+      </ListGroup>
     </View>
   )
 }
 
+// Grows the 34 pt action buttons to 44 pt tall without overlapping across their 4 pt gap.
+const ACTION_HIT_SLOP = { top: 5, bottom: 5, left: 2, right: 2 } as const
+
 const styles = themedStyleSheet(() => ({
-  disabled: { opacity: 0.5 },
-  modelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  modelInfo: { flex: 1, minWidth: 0 },
-  modelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  modelLabel: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    flexShrink: 1
-  },
-  recommended: { color: colors.statusGreen, fontSize: 10, fontWeight: '700' },
-  modelMeta: { color: colors.textMuted, fontSize: typography.metaSize, marginTop: 2 },
+  disabled: { opacity: feedback.disabledOpacity },
+  recommended: { color: colors.statusGreen, fontSize: 11, fontWeight: '700' },
   modelStateText: { color: colors.textMuted, fontSize: typography.metaSize, flexShrink: 1 },
   actionButton: {
     flexDirection: 'row',
@@ -205,9 +200,9 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radii.control,
-    backgroundColor: colors.sheetGroup
+    backgroundColor: colors.translucentFill
   },
-  actionPressed: { opacity: 0.7 },
+  actionPressed: { opacity: feedback.pressedOpacity },
   actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },
   iconButton: {
     width: 34,
@@ -215,14 +210,9 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.sheetGroup
+    backgroundColor: colors.translucentFill
   },
   readyActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
+  selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' }
 }))

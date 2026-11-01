@@ -3,8 +3,7 @@ import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   gitBranchCompareResultSchema,
-  gitCommitCompareResultSchema,
-  gitDiffResultSchema
+  gitCommitCompareResultSchema
 } from './git-compare-reply-schema'
 import { gitHistoryResultSchema } from './git-history-reply-schema'
 import { gitStatusHostPayloadSchema, gitStatusProjectionSchema } from './git-status-reply-schema'
@@ -65,15 +64,5 @@ export const gitBranchCompareRead = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('branch-compare', gitBranchCompareResultSchema)
-  })
-)
-
-export const gitBranchDiffRead = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'git.branch-diff',
-    method: 'git.branchDiff',
-    acceptance: 'require-result-or-throw-message',
-    barrier: 'after-caller-barrier',
-    read: rpcResultVariant('branch-diff', gitDiffResultSchema)
   })
 )

@@ -1,22 +1,22 @@
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useMemo, useState } from 'react'
-import type { AgentSessionUnavailable } from '../../../../shared/agent-session-availability'
-import { readAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import type { AgentSessionUnavailable } from '../../../../shared/agent-session/agent-session-availability'
+import { readAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { inSendOrder } from '../../../../shared/native-chat/native-chat-send-order'
-import { agentSessionRefusalReasonWords } from '../../../../shared/agent-session-refusal-reason-words'
-import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
-import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/structured-agent-session-start-failure-row-key'
+import { agentSessionRefusalReasonWords } from '../../../../shared/agent-session/failures/agent-session-refusal-reason-words'
+import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import {
   cliMissingSentence,
   notSignedInSentence
-} from '../../../../shared/agent-session-availability-sentences'
+} from '../../../../shared/agent-session/agent-session-availability-sentences'
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 

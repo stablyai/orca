@@ -1,5 +1,5 @@
 import type { createFixture } from './journal-epoch-replacement-contract-test-fixture'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import type { JournalLoad } from './journal-open'

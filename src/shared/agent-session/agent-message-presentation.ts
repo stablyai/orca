@@ -1,6 +1,6 @@
 import type { AgentMessageSender, AgentMessageSource } from './agent-session-message-source'
 import type { AgentStatusEntry } from '../agent-status-types'
-import type { NativeChatMessage } from '../native-chat-types'
+import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import { agentMessageTranscriptText } from './agent-message-display-text'
 
 export const AGENT_MESSAGE_FOLDED_LINES = 3

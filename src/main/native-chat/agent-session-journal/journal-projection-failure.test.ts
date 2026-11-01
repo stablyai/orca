@@ -3,8 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase

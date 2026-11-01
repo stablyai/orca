@@ -1,11 +1,9 @@
-import type {
-  AgentJournalTurnLifecycle,
-  AgentJournalTurnOutcome
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalTurnLifecycle } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnOutcome } from '../../shared/agent-turn-outcome'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   CODEX_JOURNAL_ADMITTED,

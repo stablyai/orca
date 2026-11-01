@@ -11,7 +11,7 @@ function admitFetched(
   snapshots: WorktreeCatalogSnapshotClient,
   fetched: WorktreeCatalogFetchResult
 ) {
-  return snapshots.admit(fetched.kind === 'response' ? fetched.pending : null)
+  return fetched.kind === 'response' ? snapshots.admit(fetched.pending) : null
 }
 
 describe('admitWorktreeCatalogResponse', () => {
@@ -223,6 +223,27 @@ describe('WorktreeCatalogSnapshotClient', () => {
       afterSnapshotId: 'snapshot-2',
       acceptRowDelta: true
     })
+  })
+
+  // A slow reply from before an A→B→A switch names a token whose rows were replaced.
+  it('drops a late unchanged reply that answers a token this client no longer holds', async () => {
+    const rows = [{ worktreeId: 'worktree-2' }]
+    const clientA = clientWithResults(
+      { worktrees: [{ worktreeId: 'worktree-1' }], snapshotId: 'snapshot-1' },
+      { unchanged: true, snapshotId: 'snapshot-1' },
+      { worktrees: rows, snapshotId: 'snapshot-2' },
+      { unchanged: true, snapshotId: 'snapshot-2' }
+    )
+    const clientB = clientWithResults({ worktrees: [], snapshotId: 'snapshot-b' })
+    const snapshots = new WorktreeCatalogSnapshotClient()
+
+    admitFetched(snapshots, await snapshots.fetch(clientA, 'host-1'))
+    const late = await snapshots.fetch(clientA, 'host-1')
+    admitFetched(snapshots, await snapshots.fetch(clientB, 'host-1'))
+    admitFetched(snapshots, await snapshots.fetch(clientA, 'host-1'))
+
+    expect(admitFetched(snapshots, late)).toBeNull()
+    expect(admitFetched(snapshots, await snapshots.fetch(clientA, 'host-1'))).toEqual(rows)
   })
 
   // Catalog failure must remain distinct from an empty host (STA-3123).

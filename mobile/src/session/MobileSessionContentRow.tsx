@@ -2,7 +2,7 @@ import { View, Text, Pressable } from 'react-native'
 import { AlertTriangle, X } from 'lucide-react-native'
 import { SessionDockColumn } from './SessionDockColumn'
 import { dismissMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
@@ -25,8 +25,6 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     setCreateWarningState,
     createWarning,
     dictation,
-    handleFileOpenStart,
-    handleOpenedFileDiff,
     handleSessionContentRowLayout
   } = controller
   return (
@@ -37,7 +35,7 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
             <AlertTriangle size={16} color={colors.statusAmber} strokeWidth={2.2} />
             <Text style={styles.createWarningText}>{createWarning}</Text>
             <Pressable
-              style={styles.createWarningDismiss}
+              style={({ pressed }) => [styles.createWarningDismiss, pressed && pressedStyle]}
               onPress={() => setCreateWarningState(dismissMobileSessionCreateWarningState)}
               accessibilityLabel={t(
                 'session.contentRow.dismissCreationWarning',
@@ -62,8 +60,6 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
           name={worktreeName || ''}
           availableWidth={sessionContentRowWidth}
           onRequestClose={() => setActivePanel(null)}
-          onFileOpenStart={handleFileOpenStart}
-          onOpenedFileDiff={handleOpenedFileDiff}
         />
       )}
     </View>

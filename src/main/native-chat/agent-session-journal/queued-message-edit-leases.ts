@@ -1,6 +1,6 @@
 // Ephemeral edit leases block automatic delivery; reads revalidate against deadlines and current cards.
 
-import type { AgentSessionQueuedMessageEditHoldResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionQueuedMessageEditHoldResult } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { isUnsettledQueuedMessage, type QueuedMessageRow } from './queued-message-table'
 
 export const QUEUED_MESSAGE_EDIT_LEASE_MS = 120_000

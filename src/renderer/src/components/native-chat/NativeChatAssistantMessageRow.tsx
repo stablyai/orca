@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
 import { NativeChatPacedMarkdown } from './NativeChatPacedMarkdown'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from './native-chat-quote-selection'
@@ -132,6 +132,7 @@ function toolRunProps(
     activeTurnIsWorking: props.activeTurnIsWorking,
     trailing: props.trailingRun,
     disclosureId: props.message.id,
-    asides: run?.asides
+    asides: run?.asides,
+    runtimeContext: props.runtimeContext
   }
 }

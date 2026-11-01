@@ -10,8 +10,8 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
-import { AgentSessionRecordStore } from '../../../runtime/agent-session-record-store'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { finishPtyShutdown } from '../provider/liveness'
 import { listStructuredProviderSessionOwnership } from '../../../native-chat/agent-session-wire/structured-provider-session-ownership'

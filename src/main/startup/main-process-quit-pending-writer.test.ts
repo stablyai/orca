@@ -25,7 +25,9 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../agent-hooks/managed-agent-hook-controls': {
     removeManagedAgentHooksAsync: vi.fn(async () => [])
   },
-  '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime },
+  '../runtime/agent-session/structured-agent-session-runtime': {
+    stopStructuredAgentSessionRuntime
+  },
   '../runtime/agent-session/structured-agent-session-runtime-teardown': {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
@@ -53,7 +55,9 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../terminal-history-gc': { cancelHistoryGc: idle() },
   './window-all-closed-quit-policy': { shouldQuitWhenAllWindowsClosed: vi.fn(() => false) },
   './configure-process': { isDevParentShutdownRequested: vi.fn(() => false) },
-  '../persistence': { getCanonicalUserDataPath: vi.fn(() => '/unused') }
+  '../persistence/loading-store/user-data-path': {
+    getCanonicalUserDataPath: vi.fn(() => '/unused')
+  }
 }
 
 afterEach(() => {

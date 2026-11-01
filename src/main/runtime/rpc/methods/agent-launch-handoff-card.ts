@@ -4,7 +4,7 @@ import {
   ORCA_SESSION_ADDRESS_PREFIX
 } from '../../../../shared/orca-session-address'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
-import { prepareAgentCreationCard } from '../../orchestration/worker-start-card'
+import { prepareAgentCreationCard, startedAgentSender } from '../../orchestration/worker-start-card'
 import type { RpcContext } from '../core'
 import { isAgentRpcCaller } from '../rpc-caller-identity'
 
@@ -51,7 +51,7 @@ function prepareHandoffRecord(
     publish(() => ({
       kind: 'agent-handoff',
       launchId: params.operationId,
-      agent: context.runtime.orchestrationSenderNames.sender(address),
+      agent: startedAgentSender(context.runtime, address, params.agent),
       task
     }))
   }

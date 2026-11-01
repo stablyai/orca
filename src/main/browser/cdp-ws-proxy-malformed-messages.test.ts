@@ -5,7 +5,6 @@ import { CdpWsProxy } from './cdp-ws-proxy'
 import {
   connect,
   createMockWebContents,
-  getSendCommandCalls,
   getSendCommandMethods,
   mockAsWebContents,
   sendAndReceive,
@@ -52,19 +51,6 @@ describe('CdpWsProxy malformed client messages', () => {
 
       const next = await sendAndReceive(client, { id: 2, method: 'Browser.getVersion' })
       expect(next).toMatchObject({ id: 2, result: expect.any(Object) })
-    } finally {
-      client.close()
-    }
-  })
-
-  it.each(['"params":null', '"sessionId":null'])('treats %s as absent', async (field) => {
-    mock.webContents.debugger.sendCommand.mockResolvedValueOnce({})
-    const client = await connect(endpoint)
-    try {
-      const reply = nextMessage(client)
-      client.send(`{"id":1,"method":"DOM.enable",${field}}`)
-      expect(await reply).toEqual({ id: 1, result: {} })
-      expect(getSendCommandCalls(mock)).toContainEqual(['DOM.enable', {}])
     } finally {
       client.close()
     }

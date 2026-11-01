@@ -72,10 +72,7 @@ function fileListState(count: number, dirty: boolean): FileListState {
     branchCompareState: { kind: 'ready', result: branchCompareResult },
     branchCompareResult,
     busyAction: null,
-    openingPath: null,
-    openingBranchPath: null,
-    openFile: vi.fn(async () => {}),
-    openBranchDiff: vi.fn(async () => {}),
+    openDiffForFile: vi.fn(),
     runGitAction: vi.fn(async () => true),
     resolveConflict: vi.fn(async () => {}),
     setDiscardTarget: vi.fn()
@@ -126,7 +123,11 @@ describe('source-control file virtualization in the mobile web page', () => {
           throw new Error('No committed change mounted')
         }
         await act(async () => first.click())
-        expect(state.openBranchDiff).toHaveBeenCalledExactlyOnceWith(state.branchEntries[0])
+        expect(state.openDiffForFile).toHaveBeenCalledExactlyOnceWith({
+          kind: 'changes',
+          filePath: state.branchEntries[0]?.path,
+          area: 'branch'
+        })
       }
       expect(mountedCounts[1]).toBe(mountedCounts[0])
     }

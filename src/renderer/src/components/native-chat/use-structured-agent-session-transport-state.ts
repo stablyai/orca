@@ -3,15 +3,15 @@ import {
   runningStructuredAgentSessionTurnId,
   structuredAgentSessionHostSaysWorking,
   structuredAgentSessionQueueSendsNext
-} from '../../../../shared/structured-agent-session-live-turn'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../../shared/structured-agent-session-main-agent-working'
-import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
-import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
+} from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
+import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
 import { structuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
 import { structuredSessionForegroundCommands } from '../../../../shared/structured-session-foreground-commands'
 import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing'
-import { agentSessionCurrentContextRows } from '../../../../shared/agent-session-context-clear'
+import { agentSessionCurrentContextRows } from '../../../../shared/agent-session/agent-session-context-clear'
 
 const NO_JOURNAL_ITEMS: StructuredAgentSessionState['items'] = []
 const NO_SUBMISSIONS: StructuredAgentSessionState['submissions'] = []

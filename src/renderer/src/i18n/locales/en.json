@@ -102,8 +102,7 @@
       "quitDuringMoveConfirm": "Quit anyway"
     },
     "startupWorktreeRefresh": {
-      "loading": "Discovering workspaces…",
-      "description": "More workspaces may appear while local and remote projects load."
+      "loading": "Loading workspaces…"
     },
     "createProject": {
       "errors": {
@@ -207,7 +206,10 @@
         "unconfirmed_other": "All {{count}} agents unconfirmed",
         "needsAttention_one": "{{count}} agent needs attention",
         "needsAttention_other": "All {{count}} agents needs attention"
-      }
+      },
+      "idleChildCount": "{{count}} idle",
+      "hideIdleChildren": "Hide {{count}} idle child agents",
+      "showIdleChildren": "Show {{count}} idle child agents"
     },
     "cardProperties": {
       "agentModel": "Agent model"
@@ -215,7 +217,8 @@
     "wslHostOffer": {
       "title": "Run {{distro}} as a host (recommended)",
       "why": "Git, files and terminals then run natively in Linux instead of across the Windows file share.",
-      "accept": "Run as host"
+      "accept": "Run as host",
+      "projectNotFound": "Could not find the added project to move. Use \"Move to {{distro}} host…\" on the project in the sidebar."
     }
   },
   "app": {
@@ -672,6 +675,32 @@
         "sharper": "Sharper",
         "terminalControlledHint": "Set by terminal interface.",
         "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this."
+      },
+      "editorTheme": {
+        "light": "Light editor theme",
+        "lightDescription": "Code editor, diff and notebook colors while the app is light.",
+        "dark": "Dark editor theme",
+        "darkDescription": "Code editor, diff and notebook colors while the app is dark.",
+        "followApp": "Same as app theme",
+        "title": "Editor theme",
+        "description": "Code editor, diff and notebook colors, apart from the app theme.",
+        "keyword": {
+          "editor": "editor",
+          "code": "code",
+          "monaco": "monaco",
+          "syntax": "syntax"
+        }
+      },
+      "reduceVisualEffects": {
+        "title": "Reduce Visual Effects",
+        "description": "Turn off blur behind dialogs and menus, and window translucency after a restart. Helps remote desktops and machines without a GPU.",
+        "keywords": {
+          "blur": "blur",
+          "transparency": "transparency",
+          "performance": "performance",
+          "remote": "remote",
+          "gpu": "gpu"
+        }
       }
     },
     "browser": {
@@ -1013,6 +1042,22 @@
         "notPng": "Repo icons must be PNG files.",
         "tooLarge": "Repo icon image must be 256KB or smaller."
       }
+    },
+    "windowMaterial": {
+      "title": "Window Material",
+      "description": "What shows behind translucent terminals. Requires restart.",
+      "off": "Opaque",
+      "translucent": "Translucent",
+      "acrylic": "Acrylic blur",
+      "blur": "Blurred",
+      "reducedEffects": "Off while Reduce Visual Effects or the system Reduce Transparency setting is on.",
+      "needsOpacity": "Lower Background Opacity below 1 to see the desktop through terminals.",
+      "linuxCompositor": "Your compositor decides whether to blur it. Requires restart.",
+      "restartDescription": "Restart Orca to apply the window material change.",
+      "keywords": {
+        "acrylic": "acrylic"
+      },
+      "windowsUnsupported": "Requires Windows 11 version 22H2 or later."
     }
   },
   "menu": {
@@ -1817,7 +1862,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet.",
           "webClientUnavailable": "Document previews aren't available in the web client."
         }
       },
@@ -3741,7 +3785,8 @@
           },
           "PendingNativeChatCreation": {
             "sendBlockedFailed": "Retry creating the worktree to send",
-            "sendBlockedHeld": "Sends when the worktree is ready"
+            "sendBlockedHeld": "Sends when the worktree is ready",
+            "openingChat": "Opening chat…"
           },
           "WorktreeSetupSteps": {
             "prepare": "Prepare workspace",
@@ -5867,6 +5912,14 @@
           "removed": "{{removed}} removed.",
           "removedPreserved_one": "{{removed}} removed · {{count}} modified skill preserved.",
           "removedPreserved_other": "{{removed}} removed · {{count}} modified skills preserved."
+        },
+        "skillFreshnessAutoUpdate": {
+          "strandedTitle": "Orca couldn't back up your edits to {{value0}}",
+          "strandedDescription": "Your edits are still in {{value0}}. Copy them somewhere safe before updating again.",
+          "preservedTitle": "Your edits to {{value0}} were saved separately",
+          "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
+          "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
+          "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
         }
       },
       "sidebar": {
@@ -6628,15 +6681,17 @@
           "remoteRuntimeEditorHint": "Apps on this computer can open this server’s files only when Orca reaches it over SSH.",
           "remotePathInvalid": "Path is not valid for the SSH host.",
           "remotePathInvalidDetail": "Refresh the workspace before trying again.",
-          "remoteLaunchFailed": "Could not open the path in the editor.",
-          "remoteLaunchFailedDetail": "Check the editor command configured on this machine.",
+          "pathLaunchFailed": "Could not open the path in the editor.",
+          "pathLaunchFailedDetail": "Check the editor command configured on this machine.",
           "1417fd8380": "Customize apps...",
           "8009ab69a6": "Open in",
           "bd0e8159f8": "Check the editor command or file manager configuration on this machine.",
           "9a5381eb09": "Could not open workspace folder.",
           "0bed8727db": "It may have been moved or deleted. Refresh workspaces or remove it from Orca.",
           "3921d3d9a5": "Workspace folder was not found.",
+          "pathNotFound": "File or folder not found. It may have been moved or deleted.",
           "f387af445b": "Workspace path is not a valid local path.",
+          "pathInvalid": "Path is not a valid local path.",
           "wsl": "WSL"
         },
         "WorktreeTitleInlineRename": {
@@ -7657,14 +7712,13 @@
           "932ff1fbff": "Theme",
           "leftSidebarAppearance": {
             "title": "Left Sidebar Appearance",
-            "rowDescription": "Make the left sidebar match your terminal, stay default, or use a tint.",
             "default": "Default",
-            "matchTerminal": "Match Terminal",
             "tinted": "Tinted",
             "tintColor": "Sidebar Tint",
             "tintColorDescription": "The color mixed into the left sidebar surface.",
             "tintOpacity": "Tint Strength",
-            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar."
+            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar.",
+            "tintDescription": "Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme."
           },
           "interfaceDefaultFont": "Default font",
           "terminalDefaultFont": "Default font",
@@ -8439,7 +8493,9 @@
           "98d70fb261": "Custom notification sound could not be played",
           "c83b05a055": "Notifications are not supported on this system",
           "6e6df3a09a": "Choose Custom File",
-          "76e02467b8": "Change Custom File"
+          "76e02467b8": "Change Custom File",
+          "63fc5ec9d2": "Agent Needs Input",
+          "e1b1724793": "A coding agent asks for permission or has a question."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Save Key",
@@ -9415,10 +9471,7 @@
           "1afcc1d973": "Vertical Padding",
           "25e2f8e8e1": "Horizontal padding around the terminal grid in pixels.",
           "36b8402015": "Horizontal Padding",
-          "53ce336e15": "Restart Orca to apply the window blur change.",
           "c65bb9ce63": "Restart required",
-          "97950bb087": "Apply background blur to the terminal window. Requires restart.",
-          "2b82242f43": "Window Blur",
           "809f37738d": "Controls the transparency of the terminal background. 1 is fully opaque, 0 is fully transparent.",
           "ea7b1a158e": "Background Opacity",
           "03acb60aa0": "Controls the transparency of the terminal background.",
@@ -9847,11 +9900,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Left Sidebar Appearance",
-              "description": "Make the left sidebar match your terminal, stay default, or use a tint.",
               "project": "project",
-              "terminal": "terminal",
               "background": "background",
-              "tint": "tint"
+              "tint": "tint",
+              "tintDescription": "Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme."
             },
             "workspaceCardLayout": {
               "title": "Workspace Card Layout",
@@ -9904,7 +9956,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "match terminal"
           }
         },
         "auto": {
@@ -10379,7 +10432,7 @@
             "e61157e926": "Editor Word Wrap",
             "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
             "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+            "editorFontFamilyDesc": "Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.",
             "collapseUnchanged": "Collapse Unchanged Regions",
             "collapseUnchangedDesc": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
             "collapseUnchangedKw": "collapse",
@@ -10714,7 +10767,12 @@
             "host": "host",
             "remote": "remote",
             "ssh": "ssh",
-            "mute": "mute"
+            "mute": "mute",
+            "d46216d768": "Agent Needs Input",
+            "c9b2b656e0": "Notify when a coding agent asks for permission or has a question.",
+            "b8bf5471d1": "permission",
+            "5b9dafd570": "question",
+            "009548060d": "input"
           }
         },
         "orchestration": {
@@ -11076,8 +11134,6 @@
             "f6dd9ff606": "background",
             "71eb45e293": "blur",
             "0838b3717b": "window",
-            "bc2054657a": "Apply background blur to the terminal window. Requires restart.",
-            "72d0482137": "Window Blur",
             "7db59c4738": "alpha",
             "46d99ef4bb": "opacity",
             "4c643695aa": "Controls the transparency of the terminal background.",
@@ -11882,7 +11938,7 @@
         },
         "EditorFontFamilySetting": {
           "title": "Editor Font Family",
-          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+          "description": "Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.",
           "placeholder": "Same as terminal font"
         },
         "GeneralRemoteServerUpdates": {
@@ -13082,7 +13138,9 @@
           }
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "Use its terminal colors"
+          "useTerminalTheme": "Use its terminal colors",
+          "matchTerminal": "Match Terminal",
+          "dynamic": "dynamic"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -13349,7 +13407,8 @@
           "worktreeCreated": "When a workspace is created",
           "worktreeRemoved": "When a workspace is removed",
           "agentStatusChanged": "When an agent’s status changes",
-          "detail": "Background code runs"
+          "detail": "Background code runs",
+          "workspaceChanged": "When you switch workspace or its terminals change"
         },
         "pluginInstallAction": {
           "installed": "{{value0}} installed",
@@ -13448,6 +13507,43 @@
           "cancel": "Cancel",
           "addFolder": "Add folder",
           "install": "Install"
+        },
+        "editorTypography": {
+          "fontSizeUnit": "px",
+          "lineHeightAuto": "Auto",
+          "ligaturesAutoEnabled": "Auto - enabled for \"{{value0}}\".",
+          "ligaturesAutoDisabled": "Auto - disabled for \"{{value0}}\".",
+          "ligaturesOff": "Off",
+          "ligaturesAuto": "Auto",
+          "ligaturesOn": "On",
+          "fontSmoothingGrayscale": "Grayscale",
+          "fontSmoothingNative": "Native",
+          "typographyKw": "typography",
+          "fontSize": "Editor Font Size",
+          "fontSizeDesc": "Base size for file editors and diff views. Leave empty to follow the terminal font size.",
+          "sizeKw": "size",
+          "fontWeight": "Editor Font Weight",
+          "fontWeightDesc": "Weight for file editors and diff views. Leave empty for regular weight (400).",
+          "weightKw": "weight",
+          "boldKw": "bold",
+          "lineHeight": "Editor Line Height",
+          "lineHeightDesc": "Line spacing as a multiple of the editor font size; values of 8 or more are read as pixels. Leave empty or 0 for automatic spacing.",
+          "lineHeightKw": "line height",
+          "spacingKw": "spacing",
+          "ligatures": "Editor Font Ligatures",
+          "ligaturesDesc": "Render ligatures such as => and !== in file editors and diff views.",
+          "ligaturesKw": "ligatures",
+          "ligatureKw": "ligature",
+          "fontFeaturesKw": "font features",
+          "fontSmoothing": "Font Smoothing",
+          "fontSmoothingDesc": "How terminals and code editors smooth text. Native draws heavier glyphs, closer to other macOS terminals.",
+          "smoothingKw": "smoothing",
+          "antialiasingKw": "antialiasing",
+          "thinKw": "thin text"
+        },
+        "PluginSettingsSection": {
+          "reset": "Reset",
+          "title": "Settings"
         }
       },
       "right": {
@@ -14893,7 +14989,9 @@
             "unavailable": "This plugin panel is no longer available.",
             "loading": "Loading plugin panel...",
             "unresponsive": "This plugin panel stopped responding and was suspended.",
-            "loadFailed": "The plugin panel could not be loaded."
+            "loadFailed": "The plugin panel could not be loaded.",
+            "needsDesktop": "This panel runs only in the Orca desktop app.",
+            "needsIsolatedFrames": "This panel is not available: it needs isolated plugin frames, which are turned off."
           },
           "activityBar": {
             "error": "Error"
@@ -18311,6 +18409,14 @@
           "actionsUnavailable": "Plugin actions are not available in this client.",
           "messageTooLarge": "Message exceeds the size limit.",
           "tooManyRequests": "Too many requests."
+        },
+        "PluginDeclarativePanel": {
+          "dismissLoadError": "Dismiss",
+          "invalidTree": "The panel sent a layout Orca cannot show.",
+          "loadFailed": "{{value0}} failed to load.",
+          "loadFailedKeptLastGood": "{{value0}} failed to load. Showing the last version that loaded.",
+          "pluginMessage": "Message from {{value0}}: {{value1}}",
+          "reloaded": "Reloaded"
         }
       },
       "link": {
@@ -19001,6 +19107,26 @@
         },
         "pluginInstallCount": {
           "installs": "{{value0}} installs"
+        },
+        "declarative": {
+          "PluginDeclarativeView": {
+            "unsupported": "{{value0}} is not available in this version of Orca"
+          },
+          "KeyValue": {
+            "yes": "Yes",
+            "no": "No"
+          },
+          "Skeleton": {
+            "loading": "Loading"
+          },
+          "Table": {
+            "yes": "Yes",
+            "empty": "No rows",
+            "loading": "Loading more…"
+          },
+          "Tree": {
+            "loading": "Loading…"
+          }
         }
       }
     },
@@ -19720,9 +19846,18 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Update Orca on this host to continue in Chat UI.",
-        "exitUnconfirmedFromTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal, then open this conversation from Session History.",
-        "exitUnconfirmed": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal, then open this conversation from Session History.",
-        "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies."
+        "exitUnconfirmedFromTerminal": "{{agent}} is still running this conversation in this terminal. Quit {{agent}} here, then open this conversation from Session History.",
+        "exitUnconfirmed": "{{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then try again.",
+        "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
+        "historyUnavailable": "Orca couldn't read the conversation",
+        "chatHeld": "another chat or terminal is using it",
+        "startFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open: {{reason}}. Your conversation is saved. Open it from Session History.",
+        "notSavedAfterClose": "{{agent}}'s terminal was closed, but {{agent}} hadn't saved this conversation yet, so it can't continue in chat. Start a new chat instead.",
+        "otherTerminalAfterClose": "{{agent}}'s terminal was closed, but {{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History.",
+        "chatFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open. Your conversation is saved. Open it from Session History.",
+        "terminalChanged": "The terminal running {{agent}} changed before it closed, so Orca left it open. Try again.",
+        "terminalExitUnproven": "Orca closed {{agent}}'s terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History.",
+        "resumeFailed": "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again."
       },
       "state": {
         "loading": {
@@ -19976,7 +20111,8 @@
         "continue": "Continue",
         "failed": "Couldn't continue this chat. Try again, or send a message.",
         "explanation": "Continue, and the agent first checks whether its last step finished.",
-        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again."
+        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
+        "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
       },
       "antigravitySignIn": {
         "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
@@ -20140,6 +20276,13 @@
       },
       "webPeek": {
         "unavailable": "No preview for this page."
+      },
+      "usageLimitActions": {
+        "continueNow": "Continue Now",
+        "leadIn": "Continue this chat without waiting:",
+        "switchAccount": "Switch Account",
+        "addAccount": "Add Account…",
+        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
       }
     },
     "tab": {
@@ -23265,5 +23408,17 @@
   "wslDistroHold": {
     "terminalStopped": "The WSL distro {{distro}} is stopped, so Orca didn't start this terminal. Start the distro, then try again.",
     "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
+  },
+  "plugins": {
+    "frameSaveAs": {
+      "title": "Save File",
+      "allFiles": "All Files"
+    },
+    "frameOpenExternal": {
+      "open": "Open",
+      "cancel": "Cancel",
+      "message": "{{plugin}} wants to open {{host}}",
+      "alwaysAllow": "Always allow {{host}} for this plugin"
+    }
   }
 }

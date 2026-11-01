@@ -1,16 +1,16 @@
-import { createAgentSessionCurrentRequestsReader } from '../../../shared/agent-session-current-requests-reader'
+import { createAgentSessionCurrentRequestsReader } from '../../../shared/agent-session/requests/agent-session-current-requests-reader'
 import { afterEach, expect, it, vi } from 'vitest'
-import { selectAgentSessionCurrentRequests } from '../../../shared/agent-session-current-requests'
+import { selectAgentSessionCurrentRequests } from '../../../shared/agent-session/requests/agent-session-current-requests'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalResolution
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
 import { createStructuredAgentSessionEventCoalescer } from '../../../shared/agent-session/structured-agent-session-coalescer'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
-} from '../../../shared/structured-agent-session-reducer'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,

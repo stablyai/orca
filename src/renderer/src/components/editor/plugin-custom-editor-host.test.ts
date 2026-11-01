@@ -404,7 +404,8 @@ describe('custom editor document channel', () => {
     expect(onKeyChord).not.toHaveBeenCalled()
     send(keydown({ key: 's', code: 'KeyS', metaKey: true }))
     expect(onKeyChord).toHaveBeenCalledWith(
-      expect.objectContaining({ key: 's', metaKey: true, ctrlKey: false })
+      expect.objectContaining({ key: 's', metaKey: true, ctrlKey: false }),
+      { userActivation: false, transport: 'iframe' }
     )
   })
 
