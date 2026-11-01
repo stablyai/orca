@@ -60,6 +60,7 @@ type MobileSocketWiringOptions = {
   onBinary: (socket: AuthenticatedMobileSocket, bytes: Uint8Array<ArrayBufferLike>) => void
   onClose: (socket: AuthenticatedMobileSocket | null, hasOtherConnections: boolean) => void
   onReady?: (socket: AuthenticatedMobileSocket) => void
+  onDevicesPruned?: (deviceIds: readonly string[]) => void
   // Why: stale keys and missing registry entries both fail before RPC can explain the re-pair action.
   onUnpairedDeviceAuthFailure?: (metadata: MobileSocketTransportMetadata) => void
 }
@@ -78,6 +79,7 @@ export class MobileSocketWiring {
   private readonly onBinary: MobileSocketWiringOptions['onBinary']
   private readonly onClose: MobileSocketWiringOptions['onClose']
   private readonly onReady: MobileSocketWiringOptions['onReady']
+  private readonly onDevicesPruned: MobileSocketWiringOptions['onDevicesPruned']
   private readonly onUnpairedDeviceAuthFailure: MobileSocketWiringOptions['onUnpairedDeviceAuthFailure']
   private readonly ephemeralSweep: ReturnType<typeof setInterval>
   private readonly channels = new Map<WebSocket, E2EEChannel>()
@@ -93,6 +95,7 @@ export class MobileSocketWiring {
     this.onBinary = options.onBinary
     this.onClose = options.onClose
     this.onReady = options.onReady
+    this.onDevicesPruned = options.onDevicesPruned
     this.onUnpairedDeviceAuthFailure = options.onUnpairedDeviceAuthFailure
     this.ephemeralSweep = setInterval(
       () => this.sweepIdleEphemeralDevices(Date.now()),
@@ -111,7 +114,7 @@ export class MobileSocketWiring {
     let removed: string[] = []
     try {
       removed = this.deviceRegistry.pruneIdleEphemeralDevices(now, (deviceId) =>
-        this.hasAuthenticatedSocket(deviceId)
+        this.hasLiveConnection(deviceId)
       )
     } catch (error) {
       console.error('[mobile] Failed to prune idle browser-session devices:', error)
@@ -119,10 +122,13 @@ export class MobileSocketWiring {
     for (const deviceId of removed) {
       this.terminateDeviceConnections(deviceId)
     }
+    if (removed.length > 0) {
+      this.onDevicesPruned?.(removed)
+    }
     return removed
   }
 
-  private hasAuthenticatedSocket(deviceId: string): boolean {
+  hasLiveConnection(deviceId: string): boolean {
     return Array.from(this.authenticatedSockets.values()).some(
       (socket) => socket.device.deviceId === deviceId
     )
