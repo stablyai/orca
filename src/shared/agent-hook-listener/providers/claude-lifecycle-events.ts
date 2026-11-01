@@ -139,12 +139,17 @@ export function buildClaudeCachedLeadStatusPayload(
     workingChildEvidence?: boolean
     endedChildWork?: boolean
     endedRuntimeChildWork?: boolean
+    inTurnEvidence?: boolean
   } = {}
 ): ParsedAgentStatusPayload | null {
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   let leadState = lead?.state
   if (!leadState) {
-    if (evidence.workingChildEvidence || evidence.endedRuntimeChildWork) {
+    if (
+      evidence.workingChildEvidence ||
+      evidence.endedRuntimeChildWork ||
+      evidence.inTurnEvidence
+    ) {
       // Current-runtime child endings wake the parent; only cached lead boundaries can prove pane completion.
       leadState = 'working'
     } else if (evidence.endedChildWork) {

@@ -1,4 +1,4 @@
-import { invalidateRejectedClaudeHook } from '../shared/agent-hook-listener/claude-permission-state'
+import { invalidateRejectedClaudeHook } from '../shared/agent-hook-listener/claude-permission-table'
 import { checkHookOwnerPresence } from '../shared/agent-hook-owner-presence'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'

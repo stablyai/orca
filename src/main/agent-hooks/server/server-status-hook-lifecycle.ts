@@ -3,7 +3,7 @@ import { resolveHookSource } from '../../../shared/agent-hook-listener/source-ro
 import {
   invalidateClaudePermissions,
   invalidateRejectedClaudeHook
-} from '../../../shared/agent-hook-listener/claude-permission-state'
+} from '../../../shared/agent-hook-listener/claude-permission-table'
 import { drainAgentHookSpoolAsync, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 import { ClaudeAgentViewBridge } from '../../claude/agent-view-bridge'

@@ -1,4 +1,4 @@
-import type { ClaudePermissionTable } from './claude-permission-state'
+import type { ClaudePermissionTable } from './claude-permission-table'
 import type { AgentMainAgentStatus } from '../agent-status-types'
 import type { AgentChildWorkKind } from '../agent-status-child-work'
 import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'

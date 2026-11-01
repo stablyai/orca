@@ -9,7 +9,39 @@ export type ClaudePermissionState = {
   pending?: Omit<ClaudeSettledRequest, 'toolUseId'> & { toolUseId?: string }
 }
 
-export function readClaudePermissionState(value: unknown): ClaudePermissionState | undefined {
+/** The row's own hook identity, carried aside on the wire while legacy fields name the pending request. */
+type ClaudePermissionCause = {
+  hookEventName?: string
+  toolUseId?: string
+  toolAgentId?: string
+  toolAgentType?: string
+}
+
+export type ClaudePermissionWireState = ClaudePermissionState & { cause?: ClaudePermissionCause }
+
+function readIdentity<K extends string>(
+  value: Record<string, unknown>,
+  keys: readonly K[]
+): Partial<Record<K, string>> | undefined {
+  const identity: Partial<Record<K, string>> = {}
+  for (const key of keys) {
+    const field = value[key]
+    if (field !== undefined) {
+      if (typeof field !== 'string' || !field.trim() || field.length > 256) {
+        return undefined
+      }
+      identity[key] = field.trim()
+    }
+  }
+  return identity
+}
+
+const PENDING_KEYS = ['toolUseId', 'toolAgentId', 'toolAgentType'] as const
+const CAUSE_KEYS = ['hookEventName', ...PENDING_KEYS] as const
+
+export function readClaudePermissionState(
+  value: unknown
+): { state: ClaudePermissionState; cause?: ClaudePermissionCause } | undefined {
   if (
     !isRecord(value) ||
     value.version !== 1 ||
@@ -17,23 +49,15 @@ export function readClaudePermissionState(value: unknown): ClaudePermissionState
   ) {
     return undefined
   }
-  let pending: ClaudePermissionState['pending']
-  if (value.pending !== undefined) {
-    if (!isRecord(value.pending)) {
-      return undefined
-    }
-    pending = {}
-    for (const key of ['toolUseId', 'toolAgentId', 'toolAgentType'] as const) {
-      const field = value.pending[key]
-      if (field !== undefined) {
-        if (typeof field !== 'string' || !field.trim() || field.length > 256) {
-          return undefined
-        }
-        pending[key] = field.trim()
-      }
-    }
+  const pending = isRecord(value.pending) ? readIdentity(value.pending, PENDING_KEYS) : undefined
+  const cause = isRecord(value.cause) ? readIdentity(value.cause, CAUSE_KEYS) : undefined
+  if ((value.pending !== undefined && !pending) || (value.cause !== undefined && !cause)) {
+    return undefined
   }
-  return { version: 1, knowledge: value.knowledge, ...(pending ? { pending } : {}) }
+  return {
+    state: { version: 1, knowledge: value.knowledge, ...(pending ? { pending } : {}) },
+    ...(cause ? { cause } : {})
+  }
 }
 
 /** Project the request's own card while unrelated hooks continue updating the underlying lead. */
@@ -45,15 +69,16 @@ export function projectClaudePermissionState(
   if (!table || event.source !== 'claude') {
     return event
   }
-  const pending = table.pending.at(-1)
+  const tracked = table.pending.at(-1)
+  const pending = tracked ?? table.overflow
   const lead = state.claudeLeadStateByPaneKey.get(event.paneKey)
   if (lead?.state === 'waiting') {
     return { ...event, claudePermissionState: { version: 1, knowledge: 'unknown' } }
   }
   const descriptor = pending
     ? {
-        ...(pending.candidates.size === 1
-          ? { toolUseId: table.calls.get([...pending.candidates][0])?.id }
+        ...(tracked?.candidates.size === 1
+          ? { toolUseId: table.calls.get([...tracked.candidates][0])?.id }
           : {}),
         ...(pending.call.owner ? { toolAgentId: pending.call.owner } : {}),
         ...(pending.agentType ? { toolAgentType: pending.agentType } : {})
@@ -93,4 +118,16 @@ export function projectClaudePermissionState(
           : event.payload.mainAgent
     }
   }
+}
+
+/** Execution-host restatements derive the projection from current state; a hook's proof never carries over. */
+export function restateClaudePermissionRow(
+  state: HookListenerState,
+  row: AgentHookEventPayload
+): AgentHookEventPayload {
+  return projectClaudePermissionState(state, {
+    ...row,
+    claudeSettledRequests: undefined,
+    claudePermissionState: undefined
+  })
 }

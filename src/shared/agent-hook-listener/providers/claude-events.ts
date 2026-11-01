@@ -8,7 +8,6 @@ import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inv
 import {
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasRuntimeWorkingSubagent,
-  foldClaudeBackgroundTasksIntoRoster,
   isClaudeChildTurnEndEvent,
   reapUnconfirmedRestoredClaudeSubagents,
   upsertWorkingClaudeSubagent
@@ -22,6 +21,7 @@ import {
   normalizeClaudeSubagentLifecycleEvent
 } from './claude-lifecycle-events'
 import {
+  foldClaudeBackgroundInventory,
   getOrCreateClaudeSubagentRoster,
   resolveClaudePaneStatus,
   setClaudeMainAgentTurnState,
@@ -79,7 +79,10 @@ export function normalizeClaudeEvent(
     })
   }
   if (observePermissions && eventName === 'PostToolBatch') {
-    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
+    // A batch fires mid-turn once its calls resolve, so even a cold host publishes the proof it carries.
+    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+      inTurnEvidence: true
+    })
   }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   // Only Stop/StopFailure carries a turn verdict; cancellation never retires surviving shell/cron/subagent work.
@@ -236,12 +239,7 @@ export function normalizeClaudeEvent(
   if (isTurnBoundary && eventAgentId === undefined) {
     // Teammates can report running while idle; trust only unambiguous background_tasks entries and retain tracking for older builds.
     if (backgroundTasks.present) {
-      foldClaudeBackgroundTasksIntoRoster(
-        getOrCreateClaudeSubagentRoster(state, paneKey),
-        backgroundTasks.tasks,
-        Date.now(),
-        { inventoryComplete: !backgroundTasks.truncated }
-      )
+      foldClaudeBackgroundInventory(state, paneKey, backgroundTasks)
     }
   }
   // Preserve the original lead stash through multiple child waits.

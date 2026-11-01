@@ -1,4 +1,4 @@
-import { retireClaudePermissions } from '../../../shared/agent-hook-listener/claude-permission-state'
+import { retireClaudePermissions } from '../../../shared/agent-hook-listener/claude-permission-table'
 import { retainHookRootContext } from '../../../shared/agent-hook-listener/pane-provider-session'
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import { previewHookPresence } from '../../../shared/agent-hook-presence-transition'

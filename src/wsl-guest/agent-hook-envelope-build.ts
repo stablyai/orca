@@ -6,6 +6,40 @@ import { pickHostTurnEnd } from '../shared/agent-status-types'
 
 // Why: cap metadata to prevent a misbehaving CLI growing the cache unboundedly.
 const MAX_HOOK_META_LEN = 64
+// Rows main's producer sent as PermissionRequest or as held working; lifecycle rows keep their meaning.
+const PERMISSION_SNAPSHOT_CAUSES = new Set([
+  undefined,
+  'PermissionRequest',
+  'PreToolUse',
+  'PostToolUse',
+  'PostToolUseFailure',
+  'PostToolBatch'
+])
+
+/** Older receivers hold a wait only behind a PermissionRequest row, so they see the pending request's own identity. */
+function claudeHookIdentity(event: AgentHookEventPayload) {
+  const hook = {
+    hookEventName: event.hookEventName,
+    toolUseId: event.toolUseId,
+    toolAgentId: event.toolAgentId,
+    toolAgentType: event.toolAgentType
+  }
+  const permission = event.claudePermissionState
+  if (
+    !permission?.pending ||
+    event.payload.state !== 'waiting' ||
+    !PERMISSION_SNAPSHOT_CAUSES.has(event.hookEventName)
+  ) {
+    return { ...hook, claudePermissionState: permission }
+  }
+  return {
+    hookEventName: 'PermissionRequest',
+    toolUseId: permission.pending.toolUseId,
+    toolAgentId: permission.pending.toolAgentId,
+    toolAgentType: permission.pending.toolAgentType,
+    claudePermissionState: { ...permission, cause: hook }
+  }
+}
 
 export function buildRelayHookEnvelope(
   event: AgentHookEventPayload,
@@ -33,16 +67,12 @@ export function buildRelayHookEnvelope(
     connectionId: null,
     hasExplicitPrompt: event.hasExplicitPrompt,
     promptInteractionKey: event.promptInteractionKey,
-    hookEventName: event.hookEventName,
     providerPromptId: event.providerPromptId,
     grokPromptBoundary: event.grokPromptBoundary,
     compactTrigger: event.compactTrigger,
-    toolUseId: event.toolUseId,
-    claudePermissionState: event.claudePermissionState,
+    ...claudeHookIdentity(event),
     claudeSettledRequests: event.claudeSettledRequests,
-    toolAgentId: event.toolAgentId,
     teammateName: event.teammateName,
-    toolAgentType: event.toolAgentType,
     claudeRunningNonAgentTask: event.claudeRunningNonAgentTask,
     ...(event.providerSession ? { providerSession: event.providerSession } : {}),
     ...(event.providerSessionOnly ? { providerSessionOnly: true } : {}),

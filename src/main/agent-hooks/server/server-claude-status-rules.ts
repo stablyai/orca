@@ -82,9 +82,8 @@ export function shouldKeepClaudePermissionVisible(
   if (
     previous?.payload.agentType !== 'claude' ||
     !pendingClaudePermission(previous) ||
-    (next.source === 'claude' &&
-      next.hookEventName !== undefined &&
-      next.claudePermissionState?.knowledge === 'complete') ||
+    // Hook rows and host restatements alike carry the host's current table; OSC rows carry none.
+    (next.source === 'claude' && next.claudePermissionState?.knowledge === 'complete') ||
     next.payload.agentType !== 'claude' ||
     next.payload.state !== 'working'
   ) {

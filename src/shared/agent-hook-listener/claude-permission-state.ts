@@ -1,38 +1,19 @@
-import type { IncomingHttpHeaders } from 'node:http'
-import { mergeAgentHookRequestHeaders } from './hook-envelope'
 import { createHash } from 'node:crypto'
 import { isRecord } from '../agent-status-child-work-value-guards'
 import { isAskUserQuestionTool } from '../agent-question-answered-intent'
-import type { ParsedAgentStatusPayload } from '../agent-status-types'
 import type { ClaudeSettledRequest } from './claude-settled-permission-requests'
 import type { HookListenerState } from './listener-state'
 import { extractClaudeToolFields } from './providers/claude-tool-fields'
 import { readString } from './tool-input-preview'
-
-type ToolCall = {
-  id: string
-  owner?: string
-  session?: string
-  prompt?: string
-  fingerprint?: string
-  settled: boolean
-}
-type Permission = {
-  call: Omit<ToolCall, 'id' | 'settled'>
-  candidates: Set<string>
-  snapshot: ParsedAgentStatusPayload
-  startedAt: number
-  agentType?: string
-}
-export type ClaudePermissionTable = {
-  session?: string
-  launchToken?: string
-  complete: boolean
-  calls: Map<string, ToolCall>
-  pending: Permission[]
-}
-
-const MAX_CALLS = 512
+import {
+  addClaudePermission,
+  admitClaudeCall,
+  retireClaudePermissions,
+  retireClaudeSessionPermissions,
+  sameClaudeCall,
+  type ClaudeCallIdentity,
+  type ClaudePermissionTable
+} from './claude-permission-table'
 
 function fingerprint(raw: Record<string, unknown>): string | undefined {
   const tool = readString(raw, 'tool_name')
@@ -51,65 +32,25 @@ function fingerprint(raw: Record<string, unknown>): string | undefined {
   return createHash('sha256').update(`${tool}\0${input}`).digest('hex')
 }
 
-function sameCall(a: Omit<ToolCall, 'id' | 'settled'>, b: ToolCall): boolean {
-  return (
-    a.owner === b.owner &&
-    a.session === b.session &&
-    a.prompt === b.prompt &&
-    a.fingerprint !== undefined &&
-    a.fingerprint === b.fingerprint
-  )
-}
-
 function callKey(owner: string | undefined, id: string): string {
   return JSON.stringify([owner, id])
 }
 
-/** Retire only the owner whose turn ended; parallel children may still need an answer. */
-export function retireClaudePermissions(
-  state: HookListenerState,
-  paneKey: string,
-  owns: (owner: string | undefined) => boolean
-): void {
-  const table = state.claudePermissionByPaneKey.get(paneKey)
-  if (!table) {
-    return
-  }
-  table.pending = table.pending.filter((pending) => !owns(pending.call.owner))
-  for (const call of table.calls.values()) {
-    if (owns(call.owner)) {
-      call.settled = true
-    }
-  }
-}
-
-export function invalidateClaudePermissions(state: HookListenerState, paneKey?: string): void {
-  if (paneKey !== undefined) {
-    const table = state.claudePermissionByPaneKey.get(paneKey)
-    if (table) {
-      table.complete = false
-    }
-  } else {
-    for (const table of state.claudePermissionByPaneKey.values()) {
-      table.complete = false
-    }
-  }
-}
-
-/** The caller has authenticated the transport; only existing header attribution can identify a gap. */
-export function invalidateRejectedClaudeHook(
-  state: HookListenerState,
-  headers: IncomingHttpHeaders,
-  resolvePaneKey: (paneKey: string) => string = (paneKey) => paneKey
-): void {
-  const envelope = mergeAgentHookRequestHeaders({}, headers)
-  if (!isRecord(envelope) || typeof envelope.paneKey !== 'string') {
-    return
-  }
-  const table = state.claudePermissionByPaneKey.get(resolvePaneKey(envelope.paneKey))
-  if (table && table.launchToken === envelope.launchToken) {
-    table.complete = false
-  }
+function coalesces(
+  table: ClaudePermissionTable,
+  call: ClaudeCallIdentity,
+  toolName: string | undefined
+): boolean {
+  return table.pending.some(
+    (pending) =>
+      sameClaudeCall(pending.call, call) ||
+      (call.fingerprint === undefined &&
+        pending.call.fingerprint === undefined &&
+        pending.call.owner === call.owner &&
+        pending.call.session === call.session &&
+        pending.call.prompt === call.prompt &&
+        pending.snapshot.toolName === toolName)
+  )
 }
 
 /** Observe full raw batches before the display/relay preview limits discard tool bodies. */
@@ -133,17 +74,8 @@ export function observeClaudePermissionEvent(
     table = { session, launchToken, complete: boundary && !replay, calls: new Map(), pending: [] }
     state.claudePermissionByPaneKey.set(paneKey, table)
   } else if (session && owner === undefined && table.session !== session) {
-    const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
-    const survives = (id: string | undefined): boolean =>
-      id !== undefined && roster?.get(id)?.confirmedTeammate === true
-    table.pending = table.pending.filter((pending) => survives(pending.call.owner))
-    for (const [key, call] of table.calls) {
-      if (!survives(call.owner)) {
-        table.calls.delete(key)
-      }
-    }
+    retireClaudeSessionPermissions(state, paneKey)
     table.session = session
-    table.complete = false
   }
   if (replay || !session) {
     table.complete = false
@@ -152,11 +84,9 @@ export function observeClaudePermissionEvent(
     event === 'UserPromptSubmit' ||
     event === 'Stop' ||
     event === 'StopFailure' ||
+    event === 'SubagentStop' ||
     (event === 'PostCompact' && raw.trigger === 'manual')
   ) {
-    retireClaudePermissions(state, paneKey, (id) => id === owner)
-  }
-  if (event === 'SubagentStop') {
     retireClaudePermissions(state, paneKey, (id) => id === owner)
   }
 
@@ -171,47 +101,34 @@ export function observeClaudePermissionEvent(
     event === 'PermissionRequest' && !isAskUserQuestionTool(readString(raw, 'tool_name'))
   if ((event === 'PreToolUse' || permission) && id) {
     const key = callKey(owner, id)
-    if (!table.calls.has(key)) {
-      if (table.calls.size >= MAX_CALLS) {
-        table.complete = false
-      } else {
-        table.calls.set(key, { ...call, id, settled: false })
-      }
-    }
-    for (const pending of table.pending) {
-      const tracked = table.calls.get(key)
-      if (tracked && sameCall(pending.call, tracked)) {
-        pending.candidates.add(key)
+    if (!table.calls.has(key) && admitClaudeCall(table, key, { ...call, id, settled: false })) {
+      for (const pending of table.pending) {
+        if (sameClaudeCall(pending.call, call)) {
+          pending.candidates.add(key)
+          pending.bound = true
+        }
       }
     }
   }
-  const matches = [...table.calls.entries()].filter(([, tracked]) =>
-    permission && id
-      ? tracked.id === id && tracked.owner === owner && tracked.session === session
-      : sameCall(call, tracked)
-  )
-  const candidates = matches.filter(([, tracked]) => !tracked.settled)
-  const toolUseId = permission && candidates.length === 1 ? candidates[0][1].id : undefined
-  // Retain bounded settled correspondence so delayed hooks cannot resurrect answered requests.
-  if (permission && !(matches.length > 0 && candidates.length === 0)) {
-    if (
-      !table.pending.some(
-        (pending) =>
-          sameCall(pending.call, { ...call, id: '', settled: false }) ||
-          (call.fingerprint === undefined &&
-            pending.call.fingerprint === undefined &&
-            pending.call.owner === owner &&
-            pending.call.session === session &&
-            pending.call.prompt === call.prompt &&
-            pending.snapshot.toolName === readString(raw, 'tool_name'))
-      )
-    ) {
+  let toolUseId: string | undefined
+  if (permission) {
+    const matches = [...table.calls].filter(([, tracked]) =>
+      id
+        ? tracked.id === id && tracked.owner === owner && tracked.session === session
+        : sameClaudeCall(call, tracked)
+    )
+    const candidates = matches.filter(([, tracked]) => !tracked.settled)
+    toolUseId = candidates.length === 1 ? candidates[0][1].id : undefined
+    // Only an identified repeat is a duplicate; equal input never proves an anonymous request already ended.
+    const duplicate = id !== undefined && matches.length > 0 && candidates.length === 0
+    if (!duplicate && !coalesces(table, call, readString(raw, 'tool_name'))) {
       if (!call.fingerprint || !session || candidates.length === 0) {
         table.complete = false
       }
-      table.pending.push({
+      addClaudePermission(table, {
         call,
         candidates: new Set(candidates.map(([key]) => key)),
+        bound: candidates.length > 0,
         snapshot: {
           agentType: 'claude',
           state: 'waiting',
@@ -237,34 +154,38 @@ export function observeClaudePermissionEvent(
   }
   const settled: ClaudeSettledRequest[] = []
   for (const item of resolutions) {
-    if (!isRecord(item)) {
-      table.complete = false
-      continue
-    }
-    const resolvedId = readString(item, 'tool_use_id')
-    if (!resolvedId) {
+    const resolvedId = isRecord(item) ? readString(item, 'tool_use_id') : undefined
+    if (!isRecord(item) || !resolvedId) {
       table.complete = false
       continue
     }
     const key = callKey(owner, resolvedId)
-    let tracked = table.calls.get(key)
-    if (!tracked && table.calls.size < MAX_CALLS) {
-      tracked = { ...call, fingerprint: fingerprint(item), id: resolvedId, settled: true }
-      table.calls.set(key, tracked)
-    }
-    if (tracked && tracked.session === session) {
-      tracked.settled = true
-    } else {
+    const tracked = table.calls.get(key)
+    let wasPending = false
+    if (tracked && tracked.session !== session) {
       table.complete = false
-    }
-    if (tracked && tracked.session === session) {
+    } else if (!tracked?.settled) {
+      // A fresh resolution can bind a request that had no correspondence; settled history never does.
+      const resolved = {
+        ...call,
+        ...tracked,
+        fingerprint: fingerprint(item) ?? tracked?.fingerprint
+      }
       for (const pending of table.pending) {
-        if (sameCall(pending.call, tracked)) {
-          pending.candidates.add(key)
+        if (
+          pending.candidates.delete(key) ||
+          (!pending.bound && sameClaudeCall(pending.call, resolved))
+        ) {
+          pending.bound = true
+          wasPending = true
         }
       }
+      if (tracked) {
+        tracked.settled = true
+      } else {
+        admitClaudeCall(table, key, { ...resolved, id: resolvedId, settled: true })
+      }
     }
-    const wasPending = table.pending.some((pending) => pending.candidates.has(key))
     const proof = {
       toolUseId: resolvedId,
       ...(owner ? { toolAgentId: owner } : {}),
@@ -276,10 +197,6 @@ export function observeClaudePermissionEvent(
       settled.push(proof)
     }
   }
-  table.pending = table.pending.filter(
-    (pending) =>
-      pending.candidates.size === 0 ||
-      [...pending.candidates].some((key) => table.calls.get(key)?.settled !== true)
-  )
+  table.pending = table.pending.filter((pending) => !pending.bound || pending.candidates.size > 0)
   return { permission, toolUseId, ...(settled.length ? { settled: settled.slice(0, 16) } : {}) }
 }

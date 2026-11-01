@@ -654,7 +654,7 @@ describe('recorded Claude decline and continuation', () => {
   )
 })
 
-it('holds OSC working behind a projected request and preserves the existing done fallback without resurrecting the prompt', async () => {
+it('holds OSC working behind a projected request and preserves the existing done fallback', async () => {
   const server = new AgentHookServer()
   await server.start({ env: 'production' })
   try {
@@ -682,7 +682,10 @@ it('holds OSC working behind a projected request and preserves the existing done
     })
     expect(server.getStatusSnapshot()[0].state).toBe('done')
     vi.useRealTimers()
+    // A delayed anonymous repeat is indistinguishable from a fresh prompt; it shows until the owner's next end.
     await postHookEvent(server, buildBody(captures.claudeParallel[3]))
+    expect(server.getStatusSnapshot()[0].state).toBe('waiting')
+    await postHookEvent(server, buildBody(captures.claudeParallel[14]))
     expect(server.getStatusSnapshot()[0].state).toBe('done')
   } finally {
     vi.useRealTimers()

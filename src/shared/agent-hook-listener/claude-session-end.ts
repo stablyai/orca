@@ -4,7 +4,7 @@ import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 import type { ParsedHookEnvelope } from './hook-envelope'
 import { readString } from './tool-input-preview'
-import { retireClaudePermissions, invalidateClaudePermissions } from './claude-permission-state'
+import { retireClaudeSessionPermissions } from './claude-permission-table'
 
 const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
   'prompt_input_exit',
@@ -32,8 +32,7 @@ export function normalizeClaudeSessionEnd(
   ) {
     return null
   }
-  retireClaudePermissions(state, envelope.paneKey, (owner) => owner === undefined)
-  invalidateClaudePermissions(state, envelope.paneKey)
+  retireClaudeSessionPermissions(state, envelope.paneKey)
   const payload =
     previous?.payload ??
     normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })

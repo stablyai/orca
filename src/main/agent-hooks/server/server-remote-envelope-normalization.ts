@@ -85,11 +85,16 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   providerSession?: unknown
 }): RemoteEnvelopeFields {
   const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
+  const permission =
+    source === 'claude' ? readClaudePermissionState(envelope.claudePermissionState) : undefined
+  // Legacy fields name a pending request for older receivers; this receiver reads the row's own hook.
+  const hook = permission?.cause ?? envelope
+  const hookEventName =
+    typeof hook.hookEventName === 'string' && hook.hookEventName.trim().length > 0
+      ? hook.hookEventName.trim()
+      : undefined
   return {
-    hookEventName:
-      typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
-        ? envelope.hookEventName.trim()
-        : undefined,
+    hookEventName,
     source,
     providerPromptId:
       source === 'claude'
@@ -114,33 +119,30 @@ export function normalizeRemoteEnvelopeFields(envelope: {
         ? envelope.promptInteractionKey.trim()
         : undefined,
     toolUseId:
-      typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
-        ? envelope.toolUseId.trim()
+      typeof hook.toolUseId === 'string' && hook.toolUseId.trim().length > 0
+        ? hook.toolUseId.trim()
         : undefined,
-    claudePermissionState:
-      source === 'claude' && envelope.hookEventName
-        ? readClaudePermissionState(envelope.claudePermissionState)
-        : undefined,
+    claudePermissionState: permission?.state,
     // Only settlement hooks or exact cached replays carry resolution proof.
     claudeSettledRequests:
       source === 'claude' &&
       (envelope.isReplay === true ||
-        envelope.hookEventName === 'PostToolBatch' ||
-        envelope.hookEventName === 'PostToolUse' ||
-        envelope.hookEventName === 'PostToolUseFailure')
+        hookEventName === 'PostToolBatch' ||
+        hookEventName === 'PostToolUse' ||
+        hookEventName === 'PostToolUseFailure')
         ? readClaudeSettledRequests(envelope.claudeSettledRequests)
         : undefined,
     toolAgentId:
-      typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0
-        ? envelope.toolAgentId.trim()
+      typeof hook.toolAgentId === 'string' && hook.toolAgentId.trim().length > 0
+        ? hook.toolAgentId.trim()
         : undefined,
     teammateName:
       typeof envelope.teammateName === 'string' && envelope.teammateName.trim().length > 0
         ? envelope.teammateName.trim()
         : undefined,
     toolAgentType:
-      typeof envelope.toolAgentType === 'string' && envelope.toolAgentType.trim().length > 0
-        ? envelope.toolAgentType.trim()
+      typeof hook.toolAgentType === 'string' && hook.toolAgentType.trim().length > 0
+        ? hook.toolAgentType.trim()
         : undefined,
     providerSession: normalizeAgentProviderSession(envelope.providerSession) ?? undefined
   }

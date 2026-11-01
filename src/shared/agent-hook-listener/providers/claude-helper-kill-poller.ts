@@ -1,4 +1,4 @@
-import { projectClaudePermissionState } from '../claude-permission-projection'
+import { restateClaudePermissionRow } from '../claude-permission-projection'
 import { dirname, basename, join, posix, win32 } from 'node:path'
 import { AgentTranscriptPollScheduler } from '../../agent-transcript-poll-scheduler'
 import {
@@ -267,9 +267,8 @@ export class ClaudeHelperKillPoller {
       return
     }
     this.host.publish(
-      projectClaudePermissionState(this.state, {
+      restateClaudePermissionRow(this.state, {
         ...anchor,
-        claudeSettledRequests: undefined,
         payload,
         hasExplicitPrompt: undefined,
         hookEventName: 'SubagentStop',
