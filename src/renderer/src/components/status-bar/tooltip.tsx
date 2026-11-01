@@ -243,13 +243,16 @@ export function ProviderPanel({
   inverted = false,
   className,
   showResetCredits = true,
-  usagePercentageDisplay = 'used'
+  usagePercentageDisplay = 'used',
+  embedded = false
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
   className?: string
   showResetCredits?: boolean
   usagePercentageDisplay?: UsagePercentageDisplay
+  /** Inside an account card that already names the provider; tracks must contrast with the card. */
+  embedded?: boolean
 }): React.JSX.Element {
   const windowSections = p ? getWindowSections(p) : []
   const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
@@ -257,7 +260,7 @@ export function ProviderPanel({
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
   const faintClass = inverted ? 'text-background/50' : 'text-muted-foreground/80'
   const dividerClass = inverted ? 'border-background/15' : 'border-border/70'
-  const emptyBarClass = inverted ? 'bg-background/20' : 'bg-muted'
+  const emptyBarClass = inverted ? 'bg-background/20' : embedded ? 'bg-foreground/10' : 'bg-muted'
 
   if (!p) {
     return (
@@ -272,10 +275,12 @@ export function ProviderPanel({
   if (p.status === 'unavailable') {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
-        <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
+        {embedded ? null : (
+          <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
+            <ProviderIcon provider={p.provider} />
+            {name}
+          </div>
+        )}
         <div className={mutedClass}>
           {p.error ?? translate('auto.components.status.bar.tooltip.1292d4f2ee', 'Unavailable')}
         </div>
@@ -286,11 +291,13 @@ export function ProviderPanel({
   if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
-        <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
-        <div className="mt-2">
+        {embedded ? null : (
+          <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
+            <ProviderIcon provider={p.provider} />
+            {name}
+          </div>
+        )}
+        <div className={embedded ? undefined : 'mt-2'}>
           <ErrorMessage
             label={getProviderUsageStatusLabel(p)}
             message={getProviderUsageErrorMessage(p)}
@@ -317,7 +324,7 @@ export function ProviderPanel({
 
   return (
     <div className={`${className ?? 'w-full'} space-y-3 text-xs`}>
-      <div>
+      <div hidden={embedded}>
         <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
           <ProviderIcon provider={p.provider} />
           {name}
@@ -335,7 +342,7 @@ export function ProviderPanel({
         {resetCreditExpiry ? <div className={faintClass}>{resetCreditExpiry}</div> : null}
       </div>
 
-      <div className={`border-t ${dividerClass}`} />
+      {embedded ? null : <div className={`border-t ${dividerClass}`} />}
 
       {windowSections.map((s) => (
         <ProviderRateLimitWindowSection
