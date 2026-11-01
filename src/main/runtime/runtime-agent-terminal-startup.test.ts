@@ -123,7 +123,11 @@ describe('host agent planner', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
     const planHost = { ...host, store: store as never }
     const plan = resolveAgentTerminalCreateOptions(scope, { startupAgent: 'claude' }, planHost)
-    await expect(plan).rejects.toThrow('Agent claude is disabled')
+    await expect(plan).rejects.toMatchObject({
+      name: 'OrchestrationError',
+      code: 'agent_unconfigured',
+      message: 'Agent claude is disabled. Choose an enabled agent.'
+    })
   })
 
   it("rewrites Qoder once, probing where the fact's PTY runs (C2 skips the window copy)", async () => {
