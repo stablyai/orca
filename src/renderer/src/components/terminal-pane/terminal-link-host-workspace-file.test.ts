@@ -85,6 +85,44 @@ describe('a paired-server link outside its own workspace', () => {
     }
   })
 
+  it('keeps HTML from a host that cannot re-grant it in the editor', async () => {
+    hostAnswers({
+      worktree: 'wt-feat',
+      relativePath: null,
+      absolutePath: '/tmp/report.html',
+      exists: true,
+      isDirectory: false,
+      openTarget: {
+        kind: 'absolute-file',
+        provider: 'local',
+        absolutePath: '/tmp/report.html',
+        grantId: 'file-grant',
+        readOnly: true
+      }
+    })
+    const previewPlan = vi
+      .spyOn(filePreview, 'getWorkspaceFilePreviewPlan')
+      .mockReturnValue({ status: 'doc-preview' })
+    const openPreview = vi.spyOn(filePreview, 'openFileInBrowserTab')
+    try {
+      openDetectedFilePath('/tmp/report.html', null, null, featureWorktree)
+      await flushDoubleRaf()
+
+      expect(openPreview).not.toHaveBeenCalled()
+      expect(openFileMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: '/tmp/report.html',
+          terminalArtifactGrantId: 'file-grant',
+          readOnly: true
+        }),
+        expect.anything()
+      )
+    } finally {
+      previewPlan.mockRestore()
+      openPreview.mockRestore()
+    }
+  })
+
   it('retains the host-resolved HTML owner when opening in another workspace', async () => {
     storeState.unifiedTabsByWorktree = {
       'wt-feat': [
