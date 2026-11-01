@@ -2498,7 +2498,7 @@ html.native-shell .app-layout {
   width: 2px;
   height: 1em;
   transform: translateY(-50%);
-  background: currentColor;
+  background: color-mix(in srgb, currentColor 85%, transparent);
   pointer-events: none;
   animation: tab-entry-caret 850ms step-end infinite;
 }
