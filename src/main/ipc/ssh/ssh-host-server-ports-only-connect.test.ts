@@ -41,7 +41,10 @@ beforeEach(() => vi.clearAllMocks())
 describe('connecting the SSH host a paired server uses only for its ports', () => {
   it.each([
     ['linked', { sshAccess: { ...access, portsOnly: true } }],
-    ['still linking', { pendingSshAccessOperation: { ...access, portsOnly: true } }]
+    [
+      'still linking',
+      { pendingSshAccessOperation: { ...access, operation: 'link', portsOnly: true } }
+    ]
   ])('dials only the SSH connection when %s, never deciding a server', async (_state, link) => {
     mocks.environments = [{ id: 'env-1', ...link }]
     await expect(decideHostServer(target)).resolves.toEqual({
@@ -49,6 +52,21 @@ describe('connecting the SSH host a paired server uses only for its ports', () =
       environmentId: 'env-1'
     })
     expect(mocks.connect).toHaveBeenCalledWith(target)
+    expect(mocks.resolve).not.toHaveBeenCalled()
+  })
+
+  it('refuses the host while stopping its SSH access is unfinished, so no forwards restore', async () => {
+    mocks.environments = [
+      {
+        id: 'env-1',
+        name: 'Lab',
+        pendingSshAccessOperation: { ...access, operation: 'unlink', portsOnly: true }
+      }
+    ]
+    await expect(decideHostServer(target)).rejects.toThrow(
+      'Stopping SSH access for Lab did not finish.'
+    )
+    expect(mocks.connect).not.toHaveBeenCalled()
     expect(mocks.resolve).not.toHaveBeenCalled()
   })
 

@@ -1,6 +1,7 @@
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
+import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject,
@@ -22,11 +23,17 @@ import { isSshSessionStartFailure } from '../../ssh/ssh-session-start-failure'
 import { describeSshConnectFailure } from '../../ssh/ssh-connect-failure-next-step'
 
 export async function decideHostServer(target: SshTarget): Promise<HostServerOnConnectResult> {
-  const portsOnlyEnvironmentId = portsOnlyEnvironmentOf(target)
-  if (portsOnlyEnvironmentId) {
+  const portsOnly = portsOnlyEnvironmentOf(target)
+  if (portsOnly?.pendingSshAccessOperation?.operation === 'unlink') {
+    // Why: the Ports tab left with the access, so a connect would restore forwards nothing shows.
+    throw new Error(
+      `Stopping SSH access for ${portsOnly.name} did not finish. Retry it in Settings before connecting ${target.label}.`
+    )
+  }
+  if (portsOnly) {
     // It runs no server to decide: its connection carries only that paired server's forwards.
     await connectionManager!.connect(target)
-    return { route: 'managed', environmentId: portsOnlyEnvironmentId }
+    return { route: 'managed', environmentId: portsOnly.id }
   }
   // Load managed-server deploy/migration/tunnel dependencies only when connecting.
   const [{ resolveHostServerOnConnect }, { hostServerOnConnectDeps }] = await Promise.all([
@@ -39,15 +46,15 @@ export async function decideHostServer(target: SshTarget): Promise<HostServerOnC
   )
 }
 
-/** The paired server whose SSH access, linked or still linking, uses this host only for forwards. */
-function portsOnlyEnvironmentOf(target: SshTarget): string | null {
+/** The paired server whose SSH access, linked or pending, uses this host only for forwards. */
+function portsOnlyEnvironmentOf(target: SshTarget): KnownRuntimeEnvironment | undefined {
   const environmentId = getManagedOrcadFenceEnvironmentId(target)
   const environment = environmentId
     ? listEnvironments(getAppEnvironment().getPath('userData')).find((e) => e.id === environmentId)
     : undefined
   return (environment?.sshAccess ?? environment?.pendingSshAccessOperation)?.portsOnly
-    ? environmentId
-    : null
+    ? environment
+    : undefined
 }
 
 /** Rechecks a host another desktop's update held during this connect, until the fence clears. */
