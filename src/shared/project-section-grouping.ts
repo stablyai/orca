@@ -271,6 +271,7 @@ export function buildProjectSections<
   pendingRepoIds?: Iterable<string>
   repoOrder: ReadonlyMap<string, number> | undefined
   projectOrderBy: ProjectOrderBy
+  isRunningSection?: (section: ProjectSectionEntry<Item, R>) => boolean
 }): [string, ProjectSectionEntry<Item, R>][] {
   const { repoMap, projectIndex } = args
   const sections = new Map<string, ProjectSectionEntry<Item, R>>()
@@ -300,5 +301,11 @@ export function buildProjectSections<
   for (const [key, section] of sections) {
     section.activityItems = ownership.get(key)?.items ?? []
   }
-  return orderProjectSections(sections, repoMap, args.repoOrder, args.projectOrderBy)
+  return orderProjectSections(
+    sections,
+    repoMap,
+    args.repoOrder,
+    args.projectOrderBy,
+    args.isRunningSection
+  )
 }

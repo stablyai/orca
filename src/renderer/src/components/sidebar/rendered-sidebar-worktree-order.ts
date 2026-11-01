@@ -1,3 +1,4 @@
+import { getRunningWorktreeIds } from './running-worktree-ids'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
@@ -99,7 +100,9 @@ export function computeRenderedSidebarRows(
     // Why no hostLabelById: it only feeds display-only host context labels, never row order.
     defaultHostId,
     pinnedDisplayPolicy,
-    filterRepoIds: state.filterRepoIds
+    filterRepoIds: state.filterRepoIds,
+    runningWorktreeIds: getRunningWorktreeIds(state),
+    runningProjectsFirst: state.runningProjectsFirst
   }).render(state.collapsedGroups)
 
   // Build the host registry only when sections may affect order; zero/one-host cases still safely no-op.

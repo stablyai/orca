@@ -14,6 +14,7 @@ import type { OrderedGroupEntry } from './worktree-group-entry'
 import {
   compareRecentRank,
   createRecentRankLookup,
+  partitionRunningFirst,
   withRepoSectionDisplayLabels
 } from '../project-section-order'
 import { buildFolderWorkspaceRow } from './row-builders'
@@ -29,7 +30,7 @@ export function appendProjectGroupSections(
   }
 ): void {
   const { orderedGroups, projectGroups, folderWorkspaces, projectOrderBy, repoOrder } = args
-  const { result, collapsedGroups } = ctx
+  const { result, collapsedGroups, runningSectionKeys, runningProjectsFirst } = ctx
 
   const groupByProjectGroupId = new Map<string | null, OrderedGroupEntry[]>()
   for (const entry of orderedGroups) {
@@ -40,7 +41,7 @@ export function appendProjectGroupSections(
     groupByProjectGroupId.set(projectGroupId, list)
   }
 
-  const sortRepoEntriesWithinGroup = (entries: OrderedGroupEntry[]): OrderedGroupEntry[] => {
+  const sortByProjectOrder = (entries: OrderedGroupEntry[]): OrderedGroupEntry[] => {
     if (projectOrderBy === 'recent') {
       if (entries.length < 2) {
         return [...entries]
@@ -50,12 +51,25 @@ export function appendProjectGroupSections(
         compareRecentRank(getRecentRank(left), getRecentRank(right))
       )
     }
+    if (projectOrderBy === 'name') {
+      return [...entries].sort(
+        (left, right) =>
+          compareSidebarText(left[1].label, right[1].label) || compareCodePoints(left[0], right[0])
+      )
+    }
     // Use projectGroupOrder with repoOrder fallback so drag midpoint ranks match rendered order.
     return [...entries].sort((left, right) => {
       const leftRank = getEffectiveProjectGroupManualRank(left[1].repo, repoOrder)
       const rightRank = getEffectiveProjectGroupManualRank(right[1].repo, repoOrder)
       return leftRank - rightRank
     })
+  }
+
+  const sortRepoEntriesWithinGroup = (entries: OrderedGroupEntry[]): OrderedGroupEntry[] => {
+    const sorted = sortByProjectOrder(entries)
+    return runningProjectsFirst && runningSectionKeys
+      ? partitionRunningFirst(sorted, ([key]) => runningSectionKeys.has(key))
+      : sorted
   }
 
   const projectGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
@@ -101,6 +115,10 @@ export function appendProjectGroupSections(
     )
   }
 
+  const hasRunningProject = (groupId: string): boolean =>
+    (groupByProjectGroupId.get(groupId) ?? []).some(([key]) => runningSectionKeys?.has(key)) ||
+    (childGroupsByParentId.get(groupId) ?? []).some((child) => hasRunningProject(child.id))
+
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
@@ -112,7 +130,8 @@ export function appendProjectGroupSections(
       count: getProjectGroupSubtreeCount(projectGroup.id),
       icon: { kind: 'project' },
       projectGroup,
-      projectGroupDepth: depth
+      projectGroupDepth: depth,
+      ...(hasRunningProject(projectGroup.id) ? { running: true } : {})
     })
     if (!collapsedGroups.has(key)) {
       for (const pair of folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []) {
