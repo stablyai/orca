@@ -184,7 +184,12 @@ async function verifyMissingBlobPath(
   }
 }
 
-export async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult> {
+export async function readWorkingTreeFile(
+  filePath: string,
+  worktreePath?: string,
+  relativePath?: string,
+  options: GitRuntimeOptions = {}
+): Promise<GitBlobReadResult> {
   let fileStat
   try {
     fileStat = await stat(filePath)
@@ -202,9 +207,51 @@ export async function readWorkingTreeFile(filePath: string): Promise<GitBlobRead
   }
   try {
     const buffer = await readFile(filePath)
-    return bufferToBlob(buffer, filePath)
+    const rawBlob = bufferToBlob(buffer, filePath)
+    if (rawBlob.isBinary && worktreePath && relativePath && shouldApplyTextconv(relativePath)) {
+      const textconvBlob = await tryReadWorkingTreeTextconv(
+        worktreePath,
+        filePath,
+        relativePath,
+        options
+      )
+      if (textconvBlob && !textconvBlob.isBinary) {
+        return textconvBlob
+      }
+    }
+    return rawBlob
   } catch {
     return { content: '', isBinary: false, exists: true, failed: true }
+  }
+}
+
+async function tryReadWorkingTreeTextconv(
+  worktreePath: string,
+  filePath: string,
+  relativePath: string,
+  options: GitRuntimeOptions
+): Promise<GitBlobReadResult | null> {
+  const gitPath = relativePath.replace(/\\/g, '/')
+  const readOptions = {
+    ...gitReadOptionsForWorktree(worktreePath, options),
+    maxBuffer: MAX_GIT_SHOW_BYTES
+  }
+  try {
+    const { stdout: hashStdout } = await gitExecFileAsyncBuffer(
+      ['hash-object', '-w', '--', gitPath],
+      readOptions
+    )
+    const oid = hashStdout.toString('utf8').trim()
+    if (!oid || oid.length !== 40) {
+      return null
+    }
+    const { stdout: textconvStdout } = await gitExecFileAsyncBuffer(
+      ['cat-file', '--textconv', `--path=${gitPath}`, oid],
+      readOptions
+    )
+    return { ...bufferToBlob(textconvStdout, filePath), exists: true }
+  } catch {
+    return null
   }
 }
 

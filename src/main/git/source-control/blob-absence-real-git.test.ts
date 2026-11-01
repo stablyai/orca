@@ -174,4 +174,21 @@ describe('real Git missing paths and failed blob reads', () => {
     expect(indexBlob.isBinary).toBe(false)
     expect(indexBlob.content).toBe('decrypted-text\n')
   })
+
+  it('applies textconv to the working-tree side of unstaged diffs for binary files', async () => {
+    await writeFile(path.join(repo, '.gitattributes'), 'secret.bin diff=stripper\n')
+    await git(['config', 'diff.stripper.textconv', "tr -d '\\0' <"])
+    await writeFile(path.join(repo, 'secret.bin'), 'seed\0-text\n')
+    gitCommit(repo, 'add initial')
+
+    await writeFile(path.join(repo, 'secret.bin'), 'seed\0-text\nmodified\0-text\n')
+    const result = await getDiff(repo, 'secret.bin', false)
+    expect(result).toMatchObject({
+      kind: 'text',
+      originalContent: 'seed-text\n',
+      modifiedContent: 'seed-text\nmodified-text\n',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    })
+  })
 })

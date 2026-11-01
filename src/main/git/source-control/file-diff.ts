@@ -172,7 +172,12 @@ async function loadDiff(
           ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
           : readUnstagedLeftBlob(worktreePath, filePath, options),
         hostWorktreePath
-          ? readWorkingTreeFile(path.join(hostWorktreePath, filePath))
+          ? readWorkingTreeFile(
+              path.join(hostWorktreePath, filePath),
+              worktreePath,
+              filePath,
+              options
+            )
           : Promise.resolve(UNSPELLABLE_WORKING_TREE_READ)
       ])
       originalContent = leftBlob.content
