@@ -92,11 +92,20 @@ function presentDesktopStructuredSession(
 ): void {
   if (result.kind === 'opened') {
     const workspace = result.target.worktreeId
-    if (
-      useAppStore.getState().activeWorktreeId !== workspace &&
-      !activateWslMovedWorkspace(workspace)
-    ) {
-      activateAndRevealWorktree(workspace)
+    if (useAppStore.getState().activeWorktreeId !== workspace) {
+      // Why: a retained chat can point at a workspace id the current catalog no longer
+      // knows (for example after its project directory is re-registered). Ignoring the
+      // failed activation reports success while Jump to Original Pane does nothing.
+      const activated =
+        activateWslMovedWorkspace(workspace) || activateAndRevealWorktree(workspace) !== false
+      if (!activated) {
+        toast.error(
+          translate(
+            'auto.store.slices.worktrees.c6cf133786',
+            'This workspace is no longer available.'
+          )
+        )
+      }
     }
   } else if (result.kind === 'failed') {
     const agent = source.kind === 'sender' ? (source.displayName ?? '') : (source.agent ?? '')

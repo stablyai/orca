@@ -8,6 +8,13 @@ import {
   type StructuredSessionRevealOutcome
 } from './activate-ai-vault-structured-session'
 import type { StructuredSessionOpenTab } from '../../../shared/open-structured-agent-session'
+import { activateAndRevealWorktree } from './worktree-activation'
+import type * as WorktreeActivation from './worktree-activation'
+
+vi.mock('./worktree-activation', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorktreeActivation>()
+  return { ...actual, activateAndRevealWorktree: vi.fn(() => false) }
+})
 
 const session = { structuredSession: { sessionId: 'session-1', workspaceId: 'workspace-1' } }
 const owner = { kind: 'local' } as const
@@ -66,6 +73,20 @@ it.each([
   ).toMatchObject({ kind: 'failed' })
   expect(r.parts[feedback]).toHaveBeenCalledOnce()
 })
+it('reports an unavailable workspace instead of silently ignoring a failed activation', async () => {
+  const error = vi.spyOn(toast, 'error').mockImplementation(() => 'toast')
+  try {
+    const { parts } = rig()
+    const result = await openDesktopStructuredSession({ kind: 'history', ...session }, owner, parts)
+
+    expect(result).toMatchObject({ kind: 'opened' })
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('workspace-1')
+    expect(error).toHaveBeenCalledWith('This workspace is no longer available.')
+  } finally {
+    error.mockRestore()
+  }
+})
+
 it('coalesces the same owned History attempt and releases it after completion', async () => {
   const r = rig()
   const held = Promise.withResolvers<void>()
