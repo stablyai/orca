@@ -5,9 +5,9 @@ import { z } from 'zod'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem,
-  type AgentJournalSnapshot,
-  type AgentSessionJournalIdentity
-} from '../../../src/shared/agent-session-journal-types'
+  type AgentJournalSnapshot
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../src/shared/agent-session-journal-identity'
 import {
   claudeProviderHandle,
   codexProviderHandle

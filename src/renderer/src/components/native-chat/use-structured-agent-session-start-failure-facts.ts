@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   sameAgentSessionFailureFact,
   structuredAgentSessionStartFailureFacts

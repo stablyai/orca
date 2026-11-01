@@ -19,6 +19,7 @@ import { createRoot } from 'react-dom/client'
 import { Text, View } from 'react-native'
 import { MobileNativeChatComposer } from './src/session/native-chat/composer/MobileNativeChatComposer'
 import { activateMobileUiLocale } from './src/i18n/mobile-i18n'
+import { queuedMessageStyles } from './src/session/native-chat/input/mobile-native-chat-queued-message-styles'
 
 await activateMobileUiLocale(location.hash.slice(1) || 'en')
 function Edit() {
@@ -26,6 +27,8 @@ function Edit() {
   const [saved, setSaved] = useState(0)
   const [cancelled, setCancelled] = useState(0)
   return <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+    <View testID="queued-edit-container" style={[queuedMessageStyles.list, queuedMessageStyles.inlineList]}>
+    <View style={[queuedMessageStyles.box, queuedMessageStyles.inlineBox]}>
     <Text testID="edit-results">{saved + ':' + cancelled}</Text>
     <MobileNativeChatComposer value={text} onChangeText={setText}
       onSend={async () => { setSaved(n => n + 1); return true }}
@@ -34,6 +37,8 @@ function Edit() {
       editSession={{ cancel: () => setCancelled(n => n + 1), locked: false, refuseCommand: () => false }}
       onAttachImage={() => {}} onMicPress={() => {}}
     />
+    </View>
+    </View>
   </View>
 }
 createRoot(document.getElementById('root')).render(<Edit />)
@@ -85,42 +90,62 @@ describeActions.each(['en', 'ru', 'de'])('queued edit actions (%s)', (locale) =>
       await page.goto(`${origin}/#${locale}`)
       const row = page.getByTestId('native-chat-composer-actions')
       await row.waitFor()
-      for (const width of [390, 320, 240]) {
-        await page.setViewportSize({ width, height: 480 })
-        const bounds = await row.evaluate((node) => {
-          const parent = node.getBoundingClientRect()
-          const controls = [...node.children].slice(-2).map((button) => {
-            const rect = button.getBoundingClientRect()
-            const range = document.createRange()
-            range.selectNodeContents(button)
-            const text = range.getBoundingClientRect()
+      for (const fontSize of [16, 32]) {
+        for (const width of [390, 320, 240]) {
+          await page.setViewportSize({ width, height: 480 })
+          await row.getByRole('button').evaluateAll((buttons, size) => {
+            for (const button of buttons) {
+              for (const child of button.querySelectorAll('div, span')) {
+                child.style.fontSize = `${size}px`
+              }
+            }
+          }, fontSize)
+          const bounds = await row.evaluate((node) => {
+            const parent = node.getBoundingClientRect()
+            const controls = [...node.children].slice(-2).map((button) => {
+              const rect = button.getBoundingClientRect()
+              const range = document.createRange()
+              range.selectNodeContents(button)
+              const text = range.getBoundingClientRect()
+              return {
+                left: rect.left,
+                right: rect.right,
+                top: rect.top,
+                bottom: rect.bottom,
+                textLeft: text.left,
+                textRight: text.right,
+                textTop: text.top,
+                textBottom: text.bottom
+              }
+            })
+            const container = node
+              .closest('[data-testid="queued-edit-container"]')
+              .getBoundingClientRect()
             return {
-              left: rect.left,
-              right: rect.right,
-              top: rect.top,
-              bottom: rect.bottom,
-              textLeft: text.left,
-              textRight: text.right,
-              textTop: text.top,
-              textBottom: text.bottom
+              left: parent.left,
+              right: parent.right,
+              containerLeft: container.left,
+              containerRight: container.right,
+              controls
             }
           })
-          return { left: parent.left, right: parent.right, controls }
-        })
-        for (const button of bounds.controls) {
-          expect(button.textLeft).toBeGreaterThanOrEqual(button.left - 1)
-          expect(button.textRight).toBeLessThanOrEqual(button.right + 1)
-          expect(button.left).toBeGreaterThanOrEqual(bounds.left - 1)
-          expect(button.right).toBeLessThanOrEqual(bounds.right + 1)
+          expect(bounds.left).toBeGreaterThanOrEqual(bounds.containerLeft)
+          expect(bounds.right).toBeLessThanOrEqual(bounds.containerRight)
+          for (const button of bounds.controls) {
+            expect(button.textLeft).toBeGreaterThanOrEqual(button.left - 1)
+            expect(button.textRight).toBeLessThanOrEqual(button.right + 1)
+            expect(button.left).toBeGreaterThanOrEqual(bounds.left - 1)
+            expect(button.right).toBeLessThanOrEqual(bounds.right + 1)
+          }
+          const [cancel, save] = bounds.controls
+          expect(save.left >= cancel.right || save.top >= cancel.bottom).toBe(true)
         }
-        const [cancel, save] = bounds.controls
-        expect(save.left >= cancel.right || save.top >= cancel.bottom).toBe(true)
       }
-      await row.locator(':scope > *').last().click()
+      await row.getByRole('button').last().click()
       await expect.poll(() => page.getByTestId('edit-results').textContent()).toBe('1:0')
       await row
-        .locator(':scope > *')
-        .nth((await row.locator(':scope > *').count()) - 2)
+        .getByRole('button')
+        .nth((await row.getByRole('button').count()) - 2)
         .click()
       await expect.poll(() => page.getByTestId('edit-results').textContent()).toBe('1:1')
     } finally {

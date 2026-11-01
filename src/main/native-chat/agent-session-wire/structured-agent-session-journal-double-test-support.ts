@@ -1,9 +1,7 @@
 // Run journal-double steps immediately, as on an idle write queue.
 
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type { JournalStep } from '../agent-session-journal/journal-step-writer'
 import type {
   JournalItemAppendOptions,

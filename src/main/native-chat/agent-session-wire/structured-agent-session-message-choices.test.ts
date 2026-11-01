@@ -6,7 +6,7 @@ import type { ClaudeSession } from '../../claude/structured/claude-structured-se
 import { dispatchClaudeMessage } from '../../claude/claude-structured-message-options'
 import { createClaudeUserMessageQueue } from '../../claude/claude-agent-sdk-user-message-queue'
 import { ClaudeControlRequestError } from '../../claude/claude-stream-json-connection'
-import { AgentJournalSubmissionSchema } from '../../../shared/agent-session-journal-submission-schema'
+import { AgentJournalSubmissionSchema } from '../../../shared/agent-session/journal/agent-session-journal-submission-schema'
 import {
   structuredAgentSessionRecordedRejectionParts,
   structuredAgentSessionAttemptFailureParts
@@ -17,7 +17,7 @@ import {
   readWholeAgentSessionFailureFact,
   withProviderDiagnostic
 } from '../../../shared/agent-session-failure'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createQueuedMessageTestRig,
   eventually,

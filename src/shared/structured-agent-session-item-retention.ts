@@ -1,6 +1,9 @@
-import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
-import { isRootAgentJournalItem } from './agent-session-journal-producer'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from './agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from './agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from './agent-session/journal/agent-session-journal-producer'
 
 // Above initial 300-row reads plus a page; trims remain pageable. Count own rows so hidden child output cannot crowd out the conversation.
 export const MAX_RETAINED_OWN_ITEMS = 1024

@@ -5,7 +5,7 @@
 import { useEffect, useMemo } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { AgentJournalTurnOutcome } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalTurnOutcome } from '../../../../shared/agent-turn-outcome'
 import type {
   AgentSessionStatusEvent,
   AgentSessionTurnCompletion,

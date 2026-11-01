@@ -4,7 +4,7 @@ import {
 } from './native-chat-message-list.test-support'
 import { useImperativeHandle } from 'react'
 import { vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
