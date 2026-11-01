@@ -3,6 +3,7 @@ import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
 import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
+import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 
 import {
   HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS,
@@ -14,6 +15,18 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { PendingHiddenOutputRestoreChunk } from './pending-hidden-output-restore-chunk'
 
 export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): void {
+  // The restore succeeded: retire the latch, drop the deadline, and present once the
+  // transaction's last byte parses so a reveal racing the render-pause latch cannot keep
+  // stale pixels on screen (#33684). Presenting at write time would paint a pre-parse
+  // buffer; the barrier callback runs after every earlier queued write parsed (FIFO).
+  session.finishHiddenOutputRestore = function (): void {
+    session.hiddenOutputRestoreNeeded = false
+    session.hiddenOutputRestorePtyId = null
+    session.clearHiddenOutputRestoreForegroundDeadlineTimer()
+    void waitForTerminalOutputParsed(session.pane.terminal).then(() => {
+      session.presentRestoredViewport()
+    })
+  }
   // 'drained' = painted all queued bytes; 'overflow' = queue blew its cap (stream outran fetch+replay); 'refetch' = offsets unmappable, need a fresher snapshot.
   session.drainPendingLiveChunksAfterSnapshot = function (
     snapshotSeq: number | undefined

@@ -228,9 +228,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
         const needsFreshSnapshot = unhideCoverage.consumeSnapshotRequirement(session, snapshot.seq)
         const drainOutcome = session.drainPendingLiveChunksAfterSnapshot(snapshot.seq)
         if (drainOutcome === 'drained' && !needsFreshSnapshot) {
-          session.hiddenOutputRestoreNeeded = false
-          session.hiddenOutputRestorePtyId = null
-          session.clearHiddenOutputRestoreForegroundDeadlineTimer()
+          session.finishHiddenOutputRestore()
           return
         }
         if (!shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
