@@ -39,6 +39,20 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('value')).toBe('')
   })
 
+  it('keeps a valued pin flag through a bare repeat but lets a bare --dry-run win', () => {
+    const parsed = parseArgs([
+      'worktree',
+      'set',
+      '--pin=false',
+      '--pin',
+      '--dry-run=0',
+      '--dry-run'
+    ])
+
+    expect(parsed.flags.get('pin')).toBe('false')
+    expect(parsed.flags.get('dry-run')).toBe(true)
+  })
+
   it('still parses boolean flags and space-separated values', () => {
     const parsed = parseArgs(['tab', 'create', '--json', '--url', 'https://example.com'])
 
