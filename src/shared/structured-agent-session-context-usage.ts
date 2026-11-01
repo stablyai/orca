@@ -15,6 +15,8 @@ import {
 } from './agent-session-context-clear'
 
 export type StructuredAgentContextUsage = {
+  /** The report's model, never the current picker selection; absent for estimates. */
+  model?: string
   usedTokens: number
   windowTokens: number
   /** Rounded and unclamped, so an over-limit session reads above 100. */
@@ -79,6 +81,7 @@ function summarizeStructuredAgentContextFacts({
 }: AgentSessionContextUsage): StructuredAgentContextUsage | null {
   if (fact?.kind === 'report') {
     return {
+      model: fact.model,
       usedTokens: fact.usedTokens,
       windowTokens: fact.windowTokens,
       percentage: fact.percentage,

@@ -3,6 +3,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { selectStructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
+import { summarizeContextUsage } from './native-chat-context-usage-summary'
 import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -98,10 +100,49 @@ function pointer(type: 'pointerover' | 'pointerout', pointerType: string): Point
 }
 
 describe('NativeChatContextUsageRing', () => {
+  it('attributes the last report rather than implying it describes the selected model', async () => {
+    for (const model of ['gpt-6-astra', 'unknown', 'gpt-6.1-sol']) {
+      const windowTokens = model === 'gpt-6.1-sol' ? 475_000 : 258_400
+      const usage = selectStructuredAgentContextUsage([], {
+        used: {
+          kind: 'report',
+          model,
+          usedTokens: 39_235,
+          windowTokens,
+          percentage: Math.round((39_235 / windowTokens) * 100),
+          categories: [],
+          capturedAt: 1
+        }
+      })
+      if (!usage) {
+        throw new Error('Expected context report')
+      }
+      const trigger = await renderRing(summarizeContextUsage(usage))
+      await click(trigger)
+      const attribution = model === 'unknown' ? 'Model not reported' : `Reported model: ${model}`
+      expect(card()?.textContent).toContain('Last reported context')
+      expect(card()?.textContent).toContain(attribution)
+      expect(trigger.getAttribute('aria-label')).toContain(attribution)
+      expect(card()?.textContent).toContain('May differ from the selected model.')
+      expect(card()?.textContent).toContain(model === 'gpt-6.1-sol' ? '39.2k/475k' : '39.2k/258.4k')
+    }
+  })
+
+  it('keeps response estimates distinct from provider reports', async () => {
+    const trigger = await renderRing({ ...USAGE, estimated: true })
+    await click(trigger)
+    expect(card()?.textContent).toContain('Estimated from the last response.')
+    expect(card()?.textContent).not.toContain('Last reported context')
+    expect(card()?.textContent).not.toContain('Model not reported')
+    expect(trigger.getAttribute('aria-label')).toBe('Context 42k of 200k tokens, 21% used')
+  })
+
   it('writes a million-token window with a capital M, in the label and the card', async () => {
     const trigger = await renderRing({ ...USAGE, usedTokens: 26_400, windowTokens: 1_000_000 })
 
-    expect(trigger.getAttribute('aria-label')).toBe('Context 26.4k of 1M tokens, 21% used')
+    expect(trigger.getAttribute('aria-label')).toBe(
+      'Last reported context. Model not reported. Context 26.4k of 1M tokens, 21% used'
+    )
     await click(trigger)
     expect(card()?.textContent).toContain('26.4k/1M')
   })

@@ -2,6 +2,7 @@ import type { StructuredAgentContextUsage } from '../../../../shared/structured-
 
 /** Reduce provider context breakdowns to the rows shown by the composer ring. */
 export type NativeChatContextUsageSummary = {
+  model?: string
   usedTokens: number
   windowTokens: number
   percentage: number
@@ -18,6 +19,7 @@ export function summarizeContextUsage(
   usage: StructuredAgentContextUsage
 ): NativeChatContextUsageSummary {
   return {
+    model: usage.model,
     usedTokens: usage.usedTokens,
     windowTokens: usage.windowTokens,
     percentage: usage.percentage,
