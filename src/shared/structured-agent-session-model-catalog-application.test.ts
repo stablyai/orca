@@ -209,6 +209,37 @@ describe('structured option state from the host model catalog', () => {
       expect(canSetStructuredAgentSessionOption(fast, 'fastMode', true)).toBe(true)
     }
   )
+
+  it('a running chat that lists its own models keeps its menus while the host listing runs', () => {
+    const seed = structuredAgentSessionSeedCatalog('grok')!
+    const efforts = [
+      { value: 'low', label: 'Low' },
+      { value: 'high', label: 'High' }
+    ]
+    const listing: AgentSessionModelCatalogResult = { origin: 'unknown', listingInProgress: true }
+    const started = applyStructuredAgentSessionModelCatalog(
+      createStructuredAgentSessionOptionState('grok', seed),
+      seed,
+      listing,
+      LAUNCH
+    )
+    const answered = applyStructuredAgentSessionOptions(
+      started,
+      seed,
+      {
+        models: [{ id: 'A', label: 'A', isDefault: true, efforts }],
+        current: { model: 'A', effort: 'low', defaulted: [] }
+      },
+      LAUNCH
+    )
+    const relisted = applyStructuredAgentSessionModelCatalog(answered, seed, listing, {
+      newLaunch: false
+    })
+    for (const state of [answered, relisted]) {
+      const effort = structuredAgentSessionOptionSnapshot(state).find(({ id }) => id === 'effort')
+      expect(effort).toMatchObject({ settable: true })
+    }
+  })
 })
 
 it('keeps one flat selection across inventory/answer arrival order and child replacement', () => {

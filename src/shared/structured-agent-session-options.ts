@@ -131,7 +131,9 @@ export function applyStructuredAgentSessionModelCatalog(
   options: { newLaunch: boolean; coherentCatalog?: boolean }
 ): StructuredAgentSessionOptionState {
   const installed = usesInstalledAgentModelCatalog(state.record.agent, options.coherentCatalog)
-  const listingInProgress = catalog.listingInProgress === true
+  // A running chat that lists its own models keeps its menus while the host's listing runs.
+  const listingInProgress =
+    catalog.listingInProgress === true && (installed || state.catalogSource !== 'live')
   if (Boolean(state.listingInProgress) !== listingInProgress) {
     state = { ...state, listingInProgress }
   }
@@ -211,6 +213,8 @@ export function applyStructuredAgentSessionOptions(
     catalog: keepCatalog
       ? state.catalog
       : structuredAgentSessionOptionCatalog(seed, result, state.record.agent),
+    // The chat's own answer now supplies its menus, so the host's listing no longer holds them.
+    listingInProgress: keepCatalog ? state.listingInProgress : false,
     fastModeRestricted:
       installed &&
       result.fastModeSupport?.supported === false &&
