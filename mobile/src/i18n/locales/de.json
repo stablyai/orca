@@ -1491,40 +1491,17 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "Aktion erforderlich",
-      "cancelled": "Abgebrochen",
-      "checkDetails": "Details zum Check {{name}}",
-      "failed": "Fehlgeschlagen",
       "failing": "{{count}} fehlgeschlagen",
-      "failingChecks_one": "{{count}} fehlgeschlagener Check",
-      "failingChecks_other": "{{count}} fehlgeschlagene Checks",
-      "fix": "Beheben",
-      "fixFailing": "Fehlgeschlagene Checks mit KI beheben",
-      "inProgress": "In Bearbeitung",
-      "inspectOrFix": "Details prüfen oder einen KI-Korrekturdurchlauf starten.",
-      "loadDetailsFailed": "Check-Details konnten nicht geladen werden.",
-      "neutral": "Neutral",
-      "neutralCount": "{{count}} neutral",
       "noChecks": "Keine Checks",
       "openOnWeb": "{{name}} im Web öffnen",
       "passed": "{{count}} bestanden",
-      "pending": "Ausstehend",
-      "pendingCount": "{{count}} ausstehend",
-      "queued": "In der Warteschlange",
-      "rerunFailing": "Fehlgeschlagene Checks erneut ausführen",
-      "skipped": "Übersprungen",
-      "successful": "Erfolgreich",
-      "timedOut": "Zeitüberschreitung",
-      "title": "Checks",
-      "unavailable": "Checks nicht verfügbar"
+      "title": "Checks"
     },
     "commentCard": {
       "daysAgo_one": "vor {{count}} Tag",
       "daysAgo_other": "vor {{count}} Tagen",
-      "deleteComment": "Kommentar löschen",
       "deleteConfirmMessage": "Dadurch wird der Kommentar auf GitHub dauerhaft gelöscht.",
       "deleteConfirmTitle": "Kommentar löschen?",
-      "editComment": "Kommentar bearbeiten",
       "editPlaceholder": "Kommentar bearbeiten…",
       "hoursAgo_one": "vor {{count}} Std.",
       "hoursAgo_other": "vor {{count}} Std.",
@@ -1533,37 +1510,19 @@
       "minutesAgo_other": "vor {{count}} Min.",
       "monthsAgo_one": "vor {{count}} Monat",
       "monthsAgo_other": "vor {{count}} Monaten",
-      "openOnGitHub": "Kommentar auf GitHub öffnen",
       "reply": "Antworten",
-      "replyPlaceholder": "Antwort schreiben…",
-      "replyToComment": "Auf Kommentar antworten",
       "resolve": "Erledigen",
-      "resolveThread": "Thread als erledigt markieren",
-      "resolved": "erledigt",
       "unresolve": "Als ungelöst markieren",
-      "unresolveThread": "Thread als ungelöst markieren",
       "yearsAgo_one": "vor {{count}} Jahr",
       "yearsAgo_other": "vor {{count}} Jahren"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "Kommentar hinzufügen…",
-      "all": "Alle",
-      "bots": "Bots",
       "comment": "Kommentieren",
-      "commentsLoadFailed": "Kommentare konnten nicht geladen werden. Zum erneuten Laden auf „Aktualisieren“ tippen.",
       "description": "Beschreibung",
       "descriptionLoadFailed": "Beschreibung konnte nicht geladen werden. Zum erneuten Laden auf „Aktualisieren“ tippen.",
-      "humans": "Menschen",
-      "noBotComments": "Keine Kommentare von Bots.",
       "noComments": "Noch keine Kommentare.",
       "noDescription": "Keine Beschreibung angegeben.",
-      "noHumanComments": "Keine Kommentare von Menschen.",
-      "resolvedCommentCount": "Erledigter Kommentar von {{author}} ({{count}})",
-      "resolvedCommentSingle": "Erledigter Kommentar von {{author}}",
-      "resolvedThreadCount": "Erledigter Thread von {{author}} ({{count}})",
-      "resolvedThreadSingle": "Erledigter Thread von {{author}}",
       "showMore": "{{count}} weitere anzeigen",
-      "showMoreOf": "{{count}} weitere von {{remaining}} anzeigen",
       "title": "Kommentare"
     },
     "conflictingFilesSection": {
@@ -1592,27 +1551,14 @@
       "details": "Details"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "Automatisches Mergen umschalten",
-      "autoMergeLabel": "Automatisch mergen, sobald bereit",
-      "autoMergeOff": "Aus",
-      "autoMergeOn": "Ein",
-      "closeAccessibilityLabel": "Pull Request schließen",
       "closeConfirmMessage": "#{{number}} wird ohne Merge geschlossen.",
       "closeConfirmTitle": "Pull Request schließen?",
-      "markReadyAccessibilityLabel": "Pull Request als bereit für das Review markieren",
       "markReadyButton": "Für das Review freigeben",
-      "mergeAccessibilityLabel": "Pull Request mergen",
-      "mergeButton": "Mergen",
-      "mergeConfirmTitle": "Pull Request mergen?",
-      "recheckAccessibilityLabel": "Merge-Status erneut prüfen",
-      "recheckButton": "Erneut prüfen",
       "reopenAccessibilityLabel": "Pull Request erneut öffnen",
       "reopenButton": "Erneut öffnen",
       "reopenConfirmMessage": "#{{number}} wird erneut geöffnet.",
       "reopenConfirmTitle": "Pull Request erneut öffnen?",
-      "unlinkAccessibilityLabel": "Verknüpfung zum Pull Request aufheben",
-      "unlinkButton": "Verknüpfung aufheben",
-      "unlinkFailed": "Die Verknüpfung zum Pull Request konnte nicht aufgehoben werden."
+      "unlinkButton": "Verknüpfung aufheben"
     },
     "prActionsState": {
       "behindHint": "Branch vor dem Mergen aktualisieren",
@@ -1705,25 +1651,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} ist mit keinem offenen PR verknüpft.",
-      "branchRequired": "Vor dem Erstellen eines Pull Requests einen Branch auschecken.",
-      "createFailed": "Pull Request konnte nicht erstellt werden.",
-      "createPr": "PR erstellen",
-      "createPullRequest": "Pull Request erstellen",
       "currentBranchNotLinked": "Der aktuelle Branch ist mit keinem offenen PR verknüpft.",
-      "linkExistingPr": "Bestehenden PR verknüpfen",
       "linkExistingPullRequest": "Bestehenden Pull Request verknüpfen",
       "linkedPrUnavailable": "Verknüpfter PR #{{number}} nicht verfügbar",
-      "noOpenPullRequest": "Kein offener Pull Request",
-      "refreshOrCreate": "Zum erneuten Prüfen aktualisieren oder einen neuen PR für diesen Branch erstellen.",
-      "refreshPullRequest": "Pull Request aktualisieren",
-      "title": "Pull Request"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "Titelbearbeitung abbrechen",
-      "editTitle": "PR-Titel bearbeiten",
-      "openInBrowser": "Pull Request #{{number}} im Browser öffnen",
-      "openOnWeb": "Pull Request #{{number}} im Web öffnen",
-      "saveTitle": "Titel speichern"
+      "refreshOrCreate": "Zum erneuten Prüfen aktualisieren oder einen neuen PR für diesen Branch erstellen."
     },
     "prViewPanel": {
       "branchUnavailable": "Aktueller Branch nicht verfügbar.",
@@ -1731,20 +1662,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Personen konnten nicht geladen werden.",
-      "noMatches": "Keine passenden Personen",
-      "removeReviewer": "{{login}} entfernen",
-      "requestReviewer": "Review von {{login}} anfordern",
-      "searchPeople": "Personen suchen",
-      "title": "Prüfer"
+      "noMatches": "Keine passenden Personen"
     },
     "reviewersSection": {
-      "addOrRemove": "Prüfer hinzufügen oder entfernen",
       "approved": "Genehmigt",
       "changesRequested": "Änderungen angefordert",
       "commented": "Kommentiert",
       "dismissed": "Verworfen",
-      "loadFailed": "Prüfer konnten nicht geladen werden. Zum erneuten Laden auf „Aktualisieren“ tippen.",
-      "loading": "Prüfer werden geladen…",
       "noReviewers": "Keine Prüfer angefordert",
       "pending": "Ausstehend",
       "removeReviewer": "{{login}} entfernen",
@@ -2424,8 +2348,7 @@
       "actionFailed": "Kommentaraktion fehlgeschlagen"
     },
     "usePrTitleAction": {
-      "disconnected": "Keine Verbindung zum Desktop.",
-      "updateFailed": "Titel konnte nicht aktualisiert werden."
+      "disconnected": "Keine Verbindung zum Desktop."
     },
     "useQuickCommands": {
       "loadFailed": "Schnellbefehle konnten nicht geladen werden",
@@ -3197,9 +3120,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "Commit-Nachricht konnte nicht generiert werden."
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "Vor dem Erstellen eines Pull Requests einen Branch auschecken."
     },
     "useMobileGitRequests": {
       "actionFailed": "Aktion der Quellcodeverwaltung fehlgeschlagen",

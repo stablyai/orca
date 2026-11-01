@@ -1,3 +1,5 @@
+import { crewWorkspaceNames } from '../../orchestration/crew/crew-workspace-names'
+import { isDeepStrictEqual } from 'node:util'
 import { OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity } from '../persisted-surfaces/has-exact-persisted-terminal-surface-identity'
 import type {
   OrchestrationEnvironmentCallOptions,
@@ -196,7 +198,11 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExac
   }
 
   setWorkspaceSessionForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
+    const before = crewWorkspaceNames(this.workspaceSessions.get(worktreeId))
     this.workspaceSessions.setForWorktree(worktreeId, session)
+    if (!isDeepStrictEqual(before, crewWorkspaceNames(this.workspaceSessions.get(worktreeId)))) {
+      this.crewChanges.notify(new Set(['names']))
+    }
   }
 
   protected getKnownWorkspaceSessionWorktreeIds(): Set<string> {

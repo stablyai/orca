@@ -31,6 +31,7 @@ export type MobileSourceControlAction = {
   hint?: string
   loading?: boolean
   skipAutoClose?: boolean
+  closeBeforePress?: boolean
   onPress: () => void
 }
 
@@ -118,7 +119,8 @@ export function buildMobileSourceControlActions(
       disabled: busy || !args.prAvailable,
       hint: args.prHint,
       loading: args.busyAction === 'create-pr',
-      skipAutoClose: true,
+      // The sheet presents only after this one has closed; iOS refuses a second modal mid-close.
+      closeBeforePress: true,
       onPress: handlers.createPr
     },
     {
@@ -128,7 +130,8 @@ export function buildMobileSourceControlActions(
       disabled: busy || push.disabled || !args.prAvailable,
       hint: args.prHint ?? (push.disabled ? push.title : undefined),
       loading: args.busyAction === 'push-create-pr',
-      skipAutoClose: true,
+      // The sheet presents only after this one has closed; iOS refuses a second modal mid-close.
+      closeBeforePress: true,
       onPress: handlers.pushAndCreatePr
     },
     row(pull, 'pull', 'pull', handlers.pull),
