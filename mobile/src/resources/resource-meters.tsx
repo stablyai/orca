@@ -72,22 +72,19 @@ export function CpuSparkline({ samples }: { samples: readonly number[] }) {
         importantForAccessibility="no-hide-descendants"
         style={styles.sparkline}
       >
-        {samples.map((value, index) => {
-          const latest = index === samples.length - 1
-          return (
-            <View key={index} style={styles.sparkTrack}>
-              <View
-                style={[
-                  styles.sparkFill,
-                  {
-                    height: `${clampPercent(value)}%`,
-                    backgroundColor: latest ? usageBandColor(value) : colors.textMuted
-                  }
-                ]}
-              />
-            </View>
-          )
-        })}
+        {samples.map((value, index) => (
+          <View key={index} style={styles.sparkTrack}>
+            <View
+              style={[
+                styles.sparkFill,
+                {
+                  height: `${clampPercent(value)}%`,
+                  backgroundColor: usageBandColor(value)
+                }
+              ]}
+            />
+          </View>
+        ))}
       </View>
     </View>
   )
@@ -95,28 +92,46 @@ export function CpuSparkline({ samples }: { samples: readonly number[] }) {
 
 export function CoreBars({ cores }: { cores: readonly { percent: number | null }[] }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   if (cores.length === 0) {
     return null
   }
   return (
-    <View
-      style={styles.cores}
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-    >
-      {cores.map((core, index) => (
-        <View key={index} style={styles.coreTrack}>
-          <View
-            style={[
-              styles.coreFill,
-              {
-                width: `${core.percent === null ? 0 : clampPercent(core.percent)}%`,
-                backgroundColor: usageBandColor(core.percent)
-              }
-            ]}
-          />
-        </View>
-      ))}
+    <View style={styles.coreBlock}>
+      <Text style={styles.meta}>{t('resources.screen.coresHeading', 'Cores')}</Text>
+      <View
+        style={styles.cores}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        {cores.map((core, index) => (
+          <View key={index} style={styles.coreTrack}>
+            <View
+              style={[
+                styles.coreFill,
+                {
+                  width: `${core.percent === null ? 0 : clampPercent(core.percent)}%`,
+                  backgroundColor: usageBandColor(core.percent)
+                }
+              ]}
+            />
+          </View>
+        ))}
+      </View>
+      <View style={styles.legend}>
+        <BandLegend percent={0} label={t('resources.screen.bandLow', 'Under 60%')} />
+        <BandLegend percent={60} label={t('resources.screen.bandMid', '60–79%')} />
+        <BandLegend percent={80} label={t('resources.screen.bandHigh', '80%+')} />
+      </View>
+    </View>
+  )
+}
+
+function BandLegend({ percent, label }: { percent: number; label: string }) {
+  return (
+    <View style={styles.legendItem}>
+      <View style={[styles.legendSwatch, { backgroundColor: usageBandColor(percent) }]} />
+      <Text style={styles.meta}>{label}</Text>
     </View>
   )
 }

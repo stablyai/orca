@@ -173,7 +173,18 @@ describe('MobileResourcesScreen', () => {
         'CPU over recent samples'
       ])
     )
-    expect(text(tree)).toEqual(expect.arrayContaining(['Resources', '2 cores', 'Test CPU', 'Home']))
+    expect(text(tree)).toEqual(
+      expect.arrayContaining([
+        'Resources',
+        '2 cores',
+        'Test CPU',
+        'Home',
+        'Cores',
+        'Under 60%',
+        '60–79%',
+        '80%+'
+      ])
+    )
   })
 
   it('stops polling when an older server refuses the method', async () => {

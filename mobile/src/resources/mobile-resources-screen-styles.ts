@@ -99,6 +99,9 @@ export const styles = themedStyleSheet(() => ({
   sparkFill: {
     width: '100%'
   },
+  coreBlock: {
+    gap: spacing.xs
+  },
   cores: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -106,10 +109,25 @@ export const styles = themedStyleSheet(() => ({
   },
   coreTrack: {
     width: 18,
-    height: 4,
+    height: 8,
     borderRadius: 2,
     backgroundColor: colors.bgRaised,
     overflow: 'hidden'
+  },
+  legend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  legendSwatch: {
+    width: 10,
+    height: 10,
+    borderRadius: radii.mark
   },
   coreFill: {
     height: '100%'
