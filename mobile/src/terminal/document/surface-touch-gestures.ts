@@ -22,10 +22,14 @@ import {
 import { updateTransform } from './viewport-transform'
 import { viewportPoint } from './viewport-cell'
 import { attachSurfaceWheelHandler } from './wheel-scroll'
+import { updateTouchVelocity } from './touch-velocity'
+import { markSwipeStart, reportSwipeRelease, terminalPansHorizontally } from './surface-swipe-down'
 
 const RELEASE_VELOCITY_MAX_AGE_MS = 100
 
-type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: boolean }
+type TerminalGestureSurface = HTMLElement & {
+  __orcaSurfaceHandlersAttached?: boolean
+}
 
 export type TerminalTouchState = {
   active: boolean
@@ -40,21 +44,9 @@ export type TerminalTouchState = {
   pinchScale: number
   pinchSurfX: number
   pinchSurfY: number
-}
-
-export function updateTouchVelocity(scope: TerminalDocumentScope, deltaY: number, dt: number) {
-  if (dt <= 0) {
-    return
-  }
-  const instantVelocity = deltaY / dt
-  if (!Number.isFinite(instantVelocity)) {
-    return
-  }
-  // Smooth uneven WebView event cadence so momentum does not inherit a one-frame spike or pause.
-  scope.touchGesture.velY =
-    scope.touchGesture.velY === 0
-      ? instantVelocity
-      : scope.touchGesture.velY * 0.55 + instantVelocity * 0.45
+  /** Where the current one-finger gesture began; null once a second finger joins. */
+  swipeStartX: number | null
+  swipeStartY: number | null
 }
 
 export function getDistance(a: Touch, b: Touch) {
@@ -114,6 +106,7 @@ export function attachSurfaceEventHandlers(
         stopSurfaceTouchGestures(scope)
         resetSmoothScrollOffset(scope)
         scope.touchGesture.isPinching = true
+        markSwipeStart(scope, null)
         scope.touchGesture.pinchDist = getDistance(touches[0], touches[1])
         scope.touchGesture.pinchScale = scope.userScale
         const mid = pinchMidpoint(scope, touches[0], touches[1])
@@ -124,6 +117,7 @@ export function attachSurfaceEventHandlers(
         scope.touchGesture.isPinching = false
         scope.touchGesture.lastX = touches[0].clientX
         scope.touchGesture.lastY = touches[0].clientY
+        markSwipeStart(scope, touches[0])
         scope.touchGesture.lastTime = Date.now()
         scope.touchGesture.velY = 0
         scope.touchGesture.accumDelta = 0
@@ -176,10 +170,7 @@ export function attachSurfaceEventHandlers(
           dt = now - scope.touchGesture.lastTime
 
         // Pan horizontally only on overflow; vertical gestures always drive buffer scroll to keep scrollback reachable.
-        if (
-          scope.term.element &&
-          scope.term.element.scrollWidth * getTotalScale(scope) > scope.viewportRect().width + 1
-        ) {
+        if (terminalPansHorizontally(scope)) {
           scope.panX += x - scope.touchGesture.lastX
           clampPan(scope)
           updateTransform(scope)
@@ -249,6 +240,7 @@ export function attachSurfaceEventHandlers(
       }
 
       if (touches.length === 0) {
+        reportSwipeRelease(scope, e)
         scope.touchGesture.active = false
         // A finger resting after its last move has no remaining momentum to launch.
         const rested = Date.now() - scope.touchGesture.lastTime > RELEASE_VELOCITY_MAX_AGE_MS

@@ -10,6 +10,7 @@ import { useTerminalLiveInputFocus } from './use-terminal-live-input-focus'
 type HarnessProps = {
   readonly activeHandleRef: RefObject<string | null>
   readonly canSend: boolean
+  readonly dismissKeyboard?: () => void
   readonly inputRef: RefObject<TerminalLiveInputFocusTarget | null>
   readonly commandInputRef: RefObject<TerminalLiveInputFocusTarget | null>
   readonly keyboardHeight?: number
@@ -53,6 +54,7 @@ function createHarness(initialProps: HarnessProps): {
   function Harness(props: HarnessProps): null {
     handlers = useTerminalLiveInputFocus({
       ...props,
+      dismissKeyboard: props.dismissKeyboard ?? (() => {}),
       keyboardHeight: props.keyboardHeight ?? 0
     })
     return null
@@ -248,5 +250,49 @@ describe('terminal live input focus hook', () => {
 
     expect(input.focus).toHaveBeenCalledTimes(1)
     harness.unmount()
+  })
+
+  describe('dismissing the keyboard from the terminal', () => {
+    it('puts the keyboard away on a tap instead of refocusing the live input', () => {
+      const input = createFocusTarget(true)
+      const dismissKeyboard = vi.fn()
+      const timerRef = createTimerRef()
+      const harness = createHarness({
+        ...connectedProps({ current: input }, timerRef),
+        keyboardHeight: 320,
+        dismissKeyboard
+      })
+      harness.handlers().handleTerminalTap('terminal-a')
+      expect(dismissKeyboard).toHaveBeenCalledTimes(1)
+      expect(input.blur).toHaveBeenCalled()
+      expect(timerRef.current).toBeNull()
+      harness.unmount()
+    })
+
+    it('puts the keyboard away on a downward swipe, and only while it is up', () => {
+      const input = createFocusTarget()
+      const dismissKeyboard = vi.fn()
+      const props = { ...connectedProps({ current: input }), dismissKeyboard }
+      const harness = createHarness(props)
+      harness.handlers().handleTerminalSwipeDown('terminal-a')
+      expect(dismissKeyboard).not.toHaveBeenCalled()
+      harness.render({ ...props, keyboardHeight: 320 })
+      harness.handlers().handleTerminalSwipeDown('terminal-a')
+      expect(dismissKeyboard).toHaveBeenCalledTimes(1)
+      harness.unmount()
+    })
+
+    it('ignores gestures from a pane that is not the active terminal', () => {
+      const dismissKeyboard = vi.fn()
+      const harness = createHarness({
+        ...connectedProps({ current: createFocusTarget(true) }),
+        keyboardHeight: 320,
+        dismissKeyboard
+      })
+      harness.handlers().handleTerminalTap('terminal-b')
+      harness.handlers().handleTerminalSwipeDown('terminal-b')
+      expect(dismissKeyboard).not.toHaveBeenCalled()
+      harness.unmount()
+    })
   })
 })

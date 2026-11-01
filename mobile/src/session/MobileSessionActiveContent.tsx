@@ -59,6 +59,8 @@ export function MobileSessionActiveContent({
     toastMessage,
     handleTerminalInteraction,
     handleTerminalTap,
+    handleTerminalSwipeDown,
+    requestLeaveSession,
     browserScreencastSupported,
     showToast,
     nativeChatSendError,
@@ -311,6 +313,8 @@ export function MobileSessionActiveContent({
             onTerminalQueryReply={handleTerminalQueryReply}
             onTerminalInteraction={handleTerminalInteraction}
             onTerminalTap={handleTerminalTap}
+            onTerminalSwipeDown={handleTerminalSwipeDown}
+            onTerminalSwipeBack={requestLeaveSession}
             onFileTap={handleFileTap}
             onOpenUrl={handleTerminalOpenUrl}
           />
