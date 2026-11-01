@@ -19907,7 +19907,16 @@
         "skip": "Skip setup",
         "description": "選擇是否在建立此工作區前執行設定。",
         "cancel": "取消",
-        "retry": "重試"
+        "retry": "重試",
+        "setupScript": "設定指令碼",
+        "defaultTabCommands": "預設分頁指令",
+        "setupAndDefaultTabs": "設定及預設分頁指令",
+        "askRunSetup": "立即執行設定？",
+        "askRunDefaultTabs": "立即執行預設分頁指令？",
+        "askRunSetupAndDefaultTabs": "立即執行設定及預設分頁指令？",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + 本機",
+        "localSource": "本機設定"
       }
     },
     "JiraIssueWorkspace": {

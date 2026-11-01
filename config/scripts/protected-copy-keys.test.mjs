@@ -132,7 +132,12 @@ import { plain } from '../plain/Plain'
         .filter((key) => paths.has(key))
         .every((key) => contribution.keys.includes(key) && isProtectedCopyPath(key))
     ).toBe(true)
-    for (const name of ['SetupCommandPreview.tsx', 'WorkspaceSetupChoice.tsx']) {
+    for (const name of [
+      'SetupCommandPreview.tsx',
+      'WorkspaceSetupChoice.tsx',
+      'WorkspaceSetupSection.tsx',
+      'workspace-setup-section-model.ts'
+    ]) {
       const copy = collectKeyLiterals(sources.get(path.join(directory, name)), {
         literals: new Set(),
         dynamicPrefixes: new Set()

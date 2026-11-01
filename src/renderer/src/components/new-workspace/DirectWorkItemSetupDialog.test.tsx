@@ -78,6 +78,15 @@ it.each(Object.entries(catalogs))(
     fireEvent.click(screen.getByRole('button', { name: catalog.common.retry }))
     await act(async () => retry.resolve(recovered))
     expect(screen.getByText('echo prepared')).toBeTruthy()
+    expect(
+      screen.getByText(catalog.auto.components.NewWorkspaceComposerCard.setupConfigSetupScript)
+    ).toBeTruthy()
+    expect(
+      screen.getByText(catalog.auto.components.NewWorkspaceComposerCard.askRunSetup)
+    ).toBeTruthy()
+    expect(
+      screen.getByText(catalog.auto.components.NewWorkspaceComposerCard['23bb365554'])
+    ).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Run setup' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Skip setup' }))
     await expect(result).resolves.toBe('skip')

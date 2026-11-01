@@ -4,7 +4,7 @@ import {
   resolveDirectSetupDecision,
   type DirectSetupInspection
 } from './launch-work-item-direct-preflight'
-import { ensureHooksConfirmed } from './ensure-hooks-confirmed'
+import { confirmWorkspaceSetupDecision } from './workspace-setup-trust'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { SetupDecision } from '../../../shared/worktree/create-types'
@@ -91,17 +91,13 @@ export async function prepareDirectWorkItemSetup(
   if (decision === 'cancelled' || signal?.aborted) {
     return 'cancelled'
   }
-  const trust = await ensureHooksConfirmed(
+  const confirmed = await confirmWorkspaceSetupDecision(
     useAppStore.getState(),
     repo.id,
-    'setup',
+    decision,
     ownerHostId,
-    undefined,
     () => signal?.aborted === true,
     signal
   )
-  if (signal?.aborted) {
-    return 'cancelled'
-  }
-  return trust === 'skip' ? 'skip' : decision
+  return confirmed === 'cancelled' ? 'cancelled' : confirmed.setupDecision
 }

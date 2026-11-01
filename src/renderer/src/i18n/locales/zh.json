@@ -19655,7 +19655,16 @@
         "skip": "Skip setup",
         "description": "选择是否在创建此工作区前运行设置。",
         "cancel": "取消",
-        "retry": "重试"
+        "retry": "重试",
+        "setupScript": "设置脚本",
+        "defaultTabCommands": "默认标签页命令",
+        "setupAndDefaultTabs": "设置及默认标签页命令",
+        "askRunSetup": "立即运行设置？",
+        "askRunDefaultTabs": "立即运行默认标签页命令？",
+        "askRunSetupAndDefaultTabs": "立即运行设置及默认标签页命令？",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + 本地",
+        "localSource": "本地设置"
       }
     },
     "JiraIssueWorkspace": {

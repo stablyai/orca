@@ -20909,7 +20909,16 @@
         "skip": "Skip setup",
         "description": "Выберите, выполнять ли настройку перед созданием этого рабочего пространства.",
         "cancel": "Отмена",
-        "retry": "Повторить"
+        "retry": "Повторить",
+        "setupScript": "Скрипт настройки",
+        "defaultTabCommands": "Команды вкладок по умолчанию",
+        "setupAndDefaultTabs": "Настройка и команды вкладок по умолчанию",
+        "askRunSetup": "Выполнить настройку сейчас?",
+        "askRunDefaultTabs": "Выполнить команды вкладок по умолчанию сейчас?",
+        "askRunSetupAndDefaultTabs": "Выполнить настройку и команды вкладок по умолчанию сейчас?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + локальные",
+        "localSource": "локальные настройки"
       }
     },
     "JiraIssueWorkspace": {

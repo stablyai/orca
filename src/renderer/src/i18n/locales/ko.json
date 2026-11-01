@@ -19654,7 +19654,16 @@
         "skip": "Skip setup",
         "description": "이 워크스페이스를 만들기 전에 설정을 실행할지 여부를 선택하세요.",
         "cancel": "취소",
-        "retry": "다시 시도"
+        "retry": "다시 시도",
+        "setupScript": "설정 스크립트",
+        "defaultTabCommands": "기본 탭 명령",
+        "setupAndDefaultTabs": "설정 및 기본 탭 명령",
+        "askRunSetup": "지금 설정을 실행할까요?",
+        "askRunDefaultTabs": "지금 기본 탭 명령을 실행할까요?",
+        "askRunSetupAndDefaultTabs": "지금 설정 및 기본 탭 명령을 실행할까요?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + 로컬",
+        "localSource": "로컬 설정"
       }
     },
     "JiraIssueWorkspace": {

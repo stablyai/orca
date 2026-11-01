@@ -21,16 +21,11 @@ import {
   planAgentSessionLaunch,
   type AgentSessionLaunchRequest
 } from './agent-session-launch-plan'
-import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
-import { getDefaultSetupDecision, getSetupConfig } from '../../../shared/orca-hook-setup-config'
-import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import type { Repo } from '../../../shared/repo-types'
-import type { OrcaHooks, RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
-import type { SetupDecision } from '../../../shared/worktree/create-types'
 import type { GitHubPrStartPoint } from '../../../shared/worktree/types'
 import type { LaunchWorkItemDirectArgs } from './launch-work-item-direct-types'
 
@@ -55,45 +50,8 @@ export async function resolveDirectPrStartPoint(
   })
 }
 
-export type DirectSetupInspection =
-  | { kind: 'decided'; decision: SetupDecision }
-  | { kind: 'needs-modal'; setupConfig: NonNullable<ReturnType<typeof getSetupConfig>> }
-  | { kind: 'unavailable' }
-
-export async function resolveDirectSetupDecision(
-  repoId: string,
-  repo: { hookSettings?: RepoHookSettings },
-  ownerHostId: ExecutionHostId
-): Promise<DirectSetupInspection> {
-  let yamlHooks: OrcaHooks | null = null
-  try {
-    // Only inspect shared configuration when the effective source uses it.
-    if (
-      resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
-        hasLocalScript: Boolean(repo.hookSettings?.scripts?.setup?.trim())
-      }) !== 'local-only'
-    ) {
-      // Why: the same owner host as the PR start point and createWorktree, never focus.
-      const result = await checkRuntimeHooks(ownerHostId, repoId)
-      if (result.status === 'error' || result.unavailable || (result.hasHooks && !result.hooks)) {
-        return { kind: 'unavailable' }
-      }
-      yamlHooks = (result.hooks as OrcaHooks | null) ?? null
-    }
-  } catch {
-    return { kind: 'unavailable' }
-  }
-  const setupConfig = getSetupConfig(repo, yamlHooks)
-  if (!setupConfig) {
-    // No configured setup means no setup decision, matching callers that omit it.
-    return { kind: 'decided', decision: 'inherit' }
-  }
-  const decision = getDefaultSetupDecision(
-    true,
-    repo.hookSettings?.setupRunPolicy ?? 'run-by-default'
-  )
-  return decision ? { kind: 'decided', decision } : { kind: 'needs-modal', setupConfig }
-}
+export { inspectRequiredWorkspaceSetup as resolveDirectSetupDecision } from './workspace-setup-preparation'
+export type { WorkspaceSetupInspection as DirectSetupInspection } from './workspace-setup-preparation'
 
 export type DirectLaunchOwnerRow = {
   repo: Repo

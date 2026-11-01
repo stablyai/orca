@@ -20551,7 +20551,16 @@
         "skip": "Skip setup",
         "description": "Choose whether to run setup before creating this workspace.",
         "cancel": "Cancel",
-        "retry": "Retry"
+        "retry": "Retry",
+        "setupScript": "Setup script",
+        "askRunSetup": "Run setup now?",
+        "defaultTabCommands": "Default tab commands",
+        "askRunDefaultTabs": "Run default tab commands now?",
+        "setupAndDefaultTabs": "Setup and default tab commands",
+        "askRunSetupAndDefaultTabs": "Run setup and default tab commands now?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + local",
+        "localSource": "local settings"
       }
     },
     "JiraIssueWorkspace": {
