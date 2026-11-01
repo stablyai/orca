@@ -7,12 +7,12 @@ import { agentSessionConversationView } from '../../shared/agent-session-convers
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { createRestTestRig } from '../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import {
   proveAgentSessionOwner,
   withLease

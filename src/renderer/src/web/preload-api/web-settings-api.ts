@@ -1,4 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
+import { legacyMatchTerminalSidebarWrite } from '../../../../shared/plugin-theme-settings'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
@@ -76,11 +77,13 @@ export function createWebSettingsApi(): Pick<Partial<PreloadApi>, 'agentAwake'> 
             )
           )
         }
+        const stored = getStoredSettings()
+        Object.assign(sanitizedUpdates, legacyMatchTerminalSidebarWrite(stored, sanitizedUpdates))
         const localUpdates = { ...sanitizedUpdates }
         if (runtimeEnvironment) {
           delete localUpdates.worktreeVisibilityDefaults
         }
-        const next = mergeSettings(getStoredSettings(), localUpdates, {
+        const next = mergeSettings(stored, localUpdates, {
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
         })
         writeStoredSettings(next)

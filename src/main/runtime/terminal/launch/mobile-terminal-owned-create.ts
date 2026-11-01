@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithResolveMobileSessionTerminalCommand } from './mobile-terminal-startup'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsSnapshot,
@@ -131,7 +131,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         deferMobileSessionPublish: true,
         signal: opts.signal,
         ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {}),
-        ...(opts.resumesSleepingRecord ? { resumesSleepingRecord: true } : {})
+        ...(opts.resumesSleepingRecord ? { resumesSleepingRecord: true } : {}),
+        ...(opts.reopensPane ? { reopensPane: true } : {})
       })
     const terminal = opts.createMutation
       ? await this.dedupeTerminalCreate(

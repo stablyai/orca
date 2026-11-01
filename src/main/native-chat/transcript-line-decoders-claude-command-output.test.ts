@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { surfaceNativeChatCommandOutputs } from '../../shared/native-chat/tools/native-chat-command-output'
 import { stripNoiseMessages } from '../../shared/native-chat/native-chat-noise'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 
 // OpenClaude 0.31.0: /context, /cost, /context without model calls; session ID/cwd scrubbed.

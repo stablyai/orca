@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   isPaneSleepRecord,
   type SleepingAgentSessionRecord as SleepingRecord
-} from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../shared/runtime-session-contracts'
 import type { RestoredPaneTrigger } from './terminal/recovery/restored-pane-start'

@@ -1,6 +1,6 @@
 import { existsSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { acquiredAgentSessionAccount } from '../../../shared/agent-session-acquired-account'
 import { describe, expect, it, vi } from 'vitest'
 import { dispatchReportMailbox } from '../../runtime/orchestration/dispatch-report-mailbox'

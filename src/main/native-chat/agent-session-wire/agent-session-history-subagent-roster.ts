@@ -3,11 +3,11 @@
 import {
   agentJournalItemSubagentId,
   isRootAgentJournalItem
-} from '../../../shared/agent-session-journal-producer'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubagentRosterEntry } from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSubagentRosterEntry } from '../../../shared/agent-session/agent-session-wire'
 import { namedSubagents } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
-import type { NativeChatSubagentEntry } from '../../../shared/native-chat-types'
+import type { NativeChatSubagentEntry } from '../../../shared/native-chat/native-chat-types'
 
 const MAX_ENTRIES = 64
 const MAX_BYTES = 16 * 1024

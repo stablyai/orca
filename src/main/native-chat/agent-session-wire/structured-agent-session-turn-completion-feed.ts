@@ -1,16 +1,24 @@
 // Derive attention edges on the host so background chats work without a renderer reader.
 // Completion and prompt events are live-only; late subscribers receive no replay.
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionTurnCompletion,
   AgentSessionTurnCompletionEvent
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import type {
   AgentSessionAttentionEdge,
   StructuredAttentionState
-} from '../../../shared/agent-session-attention'
-import type { StructuredAgentSessionLatestRequest } from '../../../shared/structured-agent-session-latest-request'
+} from '../../../shared/agent-session/agent-session-attention'
+import {
+  foldAgentLeadStatus,
+  heldTurnCountsAsFinished
+} from '../../../shared/agent-lead-status-fold'
+import {
+  agentChildWorkLiveness,
+  type AgentChildWorkLivenessCandidate
+} from '../../../shared/agent-status-child-work-liveness'
+import type { StructuredAgentSessionLatestRequest } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionStatusState } from './structured-agent-session-status-feed'
 
@@ -38,6 +46,7 @@ export type StructuredAgentSessionTurnCompletionFeedDeps = {
     sessionId: string,
     journal?: AgentSessionJournal
   ) => StructuredAgentSessionStatusState | null
+  readChildWork: (sessionId: string) => readonly AgentChildWorkLivenessCandidate[] | undefined
 }
 
 type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
@@ -173,7 +182,8 @@ export class StructuredAgentSessionTurnCompletionFeed {
     if (
       state.owesWork ||
       !request ||
-      (baseline.settled?.kind === request.kind && baseline.settled.id === request.id)
+      (baseline.settled?.kind === request.kind && baseline.settled.id === request.id) ||
+      this.heldByLiveWork(sessionId, state, request)
     ) {
       return null
     }
@@ -191,6 +201,25 @@ export class StructuredAgentSessionTurnCompletionFeed {
       // Include attention here: remote clients receive status and completion streams unordered.
       ...(state.summary.status === 'attention' ? { awaitingUser: true as const } : {})
     }
+  }
+
+  /** A successful turn is finished only when the combined row would be done; a held request stays unaccounted so a later observe can announce it. */
+  private heldByLiveWork(
+    sessionId: string,
+    state: StructuredAgentSessionStatusState,
+    request: StructuredAgentSessionLatestRequest
+  ): boolean {
+    if (request.outcome !== 'success' || state.summary.status === 'attention') {
+      return false
+    }
+    const held = foldAgentLeadStatus({
+      leadState: 'done',
+      childWorkLiveness: agentChildWorkLiveness(this.deps.readChildWork(sessionId))
+    })
+    return (
+      held.stateName !== 'done' &&
+      !heldTurnCountsAsFinished(held, request.outcome, request.selfStarted === true)
+    )
   }
 
   private broadcast(

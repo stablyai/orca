@@ -1,5 +1,8 @@
-import { refuse, type AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
-import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
+import {
+  refuse,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/agent-session/failures/structured-agent-session-read-refusal'
 
 export const AGENT_SESSION_NOT_ATTACHED: AgentSessionWireRefusal = refuse(
   AGENT_SESSION_UNATTACHED_REFUSAL_CODE,

@@ -4,7 +4,7 @@ import {
 } from '../agent-model-catalog/agent-model-catalog-store'
 import type { AgentModelCatalogProbe } from '../agent-model-catalog/agent-model-catalog-discovery'
 import { expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { REST_TEST_CALLER } from './structured-agent-session-rest-test-rig'
 import { hostTestOperationId } from './structured-agent-session-host-test-data'
 import { catalogMutationDeadline as settled } from './structured-agent-session-catalog-mutation.test-support'

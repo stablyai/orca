@@ -1,6 +1,6 @@
 import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { ACP_LAUNCH_SPECS } from './acp-launch-specs'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 

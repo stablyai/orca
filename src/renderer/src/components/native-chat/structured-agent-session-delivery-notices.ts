@@ -2,13 +2,13 @@ import {
   agentSessionFailureDetailText,
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
-import { agentSessionFailureStatedByRow } from '../../../../shared/agent-session-visible-failures'
-import { classifyDispatchRejection } from '../../../../shared/structured-agent-session-dispatch-rejection'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import { structuredAgentSessionRecordedRejectionParts } from '../../../../shared/structured-agent-session-rejection-words'
-import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/structured-agent-session-message-projection'
+} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureStatedByRow } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
+import { classifyDispatchRejection } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionRecordedRejectionParts } from '../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
+import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
@@ -16,12 +16,6 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 /** One shared value, so a rebuilt map re-renders no row still sending. */
 const STRUCTURED_AGENT_SESSION_DELIVERY_SENDING: NativeChatDeliveryNotice = { sending: true }
 const NO_COMMANDS: ReadonlySet<string> = new Set()
-
-export {
-  agentSessionVisibleFailureFacts as structuredAgentSessionStartFailureFacts,
-  agentSessionFailureStatedByRow as agentSessionFailureStatedByStartRow,
-  sameAgentSessionFailureFact
-} from '../../../../shared/agent-session-visible-failures'
 
 /** Show sending until host rows arrive and host-worded rejections afterward; unconfirmed sends explain their return in the composer instead. */
 export function structuredAgentSessionDeliveryNotices(args: {

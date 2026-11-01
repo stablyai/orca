@@ -8,8 +8,7 @@ import {
   PickerModal,
   ActivityIndicator
 } from './mobile-tasks-dependencies'
-import { ListGroup } from '../components/list/ListGroup'
-import { ListRow } from '../components/list/ListRow'
+import { ListGroup, ListRow } from '../components/list/ListGroup'
 import { linearWorkspaceSelect } from './mobile-task-runtime-operations'
 import { styles } from './mobile-tasks-legacy-styles'
 import { JIRA_FILTER_OPTIONS } from './mobile-task-view-options'
@@ -259,6 +258,7 @@ export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationM
 export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentationModel) {
   const {
     linearStates,
+    linearStatesError,
     linearStatesLoading,
     linearStatusPickerItem,
     mutatingStatus,
@@ -289,6 +289,8 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
               {translate('tasks.filterPickers.loadingStates', 'Loading states...')}
             </Text>
           </View>
+        ) : linearStatesError ? (
+          <Text style={[styles.emptyInlineText, styles.errorText]}>{linearStatesError}</Text>
         ) : linearStates.length === 0 ? (
           <Text style={styles.emptyInlineText}>
             {translate('tasks.filterPickers.noStates', 'No states available')}

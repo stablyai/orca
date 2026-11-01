@@ -1,5 +1,5 @@
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
-import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session/agent-session-wire'
 import {
   getNativeChatAgentProfile,
   type NativeChatAgentProfile
@@ -18,7 +18,7 @@ import type {
   NativeChatSessionSkill,
   SlashCommandSuggestion
 } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
-import { structuredSessionSlashCommands } from '../../../../../src/shared/structured-agent-session-composer'
+import { structuredSessionSlashCommands } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { getMobileNativeChatCommands } from '../mobile-native-chat-send-classification'
 
 // Why: the menu is a plain ScrollView right above a streaming transcript, so it mounts a bounded

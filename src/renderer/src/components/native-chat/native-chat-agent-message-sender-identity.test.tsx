@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import type {
   AgentSessionConversationName,
   AgentSessionStatusSummary
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
   foldAgentSessionConversationNames,
   type AgentSessionConversationNames

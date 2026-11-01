@@ -5,13 +5,13 @@ import {
   type AttachAttempt
 } from './structured-agent-session-attach-publish'
 
-import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
-import { refuse } from '../../../shared/agent-session-wire-refusals'
+import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { randomUUID } from 'node:crypto'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { performAttach } from './structured-agent-session-attach-flow'
 import { endStructuredAgentSessionReleasedChild } from './structured-agent-session-attach-failure'

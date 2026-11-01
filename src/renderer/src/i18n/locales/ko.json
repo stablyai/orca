@@ -1320,7 +1320,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "워크스페이스 외부의 파일은 아직 페어링된 서버에서 미리 볼 수 없습니다.",
           "webClientUnavailable": "문서 미리보기는 웹 클라이언트에서 사용할 수 없습니다."
         }
       },
@@ -5888,7 +5887,9 @@
           "9a5381eb09": "워크스페이스 폴더를 열 수 없습니다.",
           "0bed8727db": "이동되었거나 삭제되었을 수 있습니다. 워크스페이스를 새로고침하거나 Orca에서 제거하세요.",
           "3921d3d9a5": "워크스페이스 폴더를 찾을 수 없습니다.",
+          "pathNotFound": "파일 또는 폴더를 찾을 수 없습니다. 이동되었거나 삭제되었을 수 있습니다.",
           "f387af445b": "워크스페이스 경로가 유효한 로컬 경로가 아닙니다.",
+          "pathInvalid": "경로가 유효한 로컬 경로가 아닙니다.",
           "localOnly": "Local only",
           "remoteSsh": "Remote SSH",
           "remoteRuntimeUnsupported": "로컬 앱에서는 이 경로를 열 수 없습니다.",
@@ -5903,8 +5904,8 @@
           "remoteEditorUnsupportedDetail": "VS Code, Cursor 또는 Zed를 선택하거나 앱을 로컬에서 사용하세요.",
           "remotePathInvalid": "SSH 호스트에 대한 경로가 유효하지 않습니다.",
           "remotePathInvalidDetail": "워크스페이스의 새로고침을 실행한 후 다시 시도하세요.",
-          "remoteLaunchFailed": "편집기에서 경로를 열 수 없습니다.",
-          "remoteLaunchFailedDetail": "이 컴퓨터에 구성된 편집기 명령을 확인하세요.",
+          "pathLaunchFailed": "편집기에서 경로를 열 수 없습니다.",
+          "pathLaunchFailedDetail": "이 컴퓨터에 구성된 편집기 명령을 확인하세요.",
           "wsl": "WSL",
           "remoteRuntimeEditorHint": "Orca가 SSH로 이 서버에 연결된 경우에만 이 컴퓨터의 앱에서 서버 파일을 열 수 있습니다.",
           "remoteEditorHint": "VS Code, Cursor, Zed만 SSH 호스트의 폴더를 열 수 있습니다."
@@ -6934,14 +6935,13 @@
           "932ff1fbff": "테마",
           "leftSidebarAppearance": {
             "title": "왼쪽 사이드바 모양",
-            "rowDescription": "왼쪽 사이드바를 terminal에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다.",
             "default": "기본값",
-            "matchTerminal": "Terminal에 맞춤",
             "tinted": "색조 적용",
             "tintColor": "사이드바 색조",
             "tintColorDescription": "왼쪽 사이드바 표면에 섞을 색상입니다.",
             "tintOpacity": "색조 강도",
-            "tintOpacityDescription": "사이드바에 색조를 얼마나 강하게 섞을지 조절합니다."
+            "tintOpacityDescription": "사이드바에 색조를 얼마나 강하게 섞을지 조절합니다.",
+            "tintDescription": "왼쪽 사이드바를 기본값으로 두거나 색조를 적용합니다. 터미널을 따르려면 라이트 또는 다크 테마로 Terminal에 맞춤을 선택하세요."
           },
           "interfaceDefaultFont": "기본 글꼴",
           "terminalDefaultFont": "기본 글꼴",
@@ -8645,10 +8645,7 @@
           "1afcc1d973": "수직 패딩",
           "25e2f8e8e1": "터미널 그리드 주변의 수평 패딩(픽셀)입니다.",
           "36b8402015": "수평 패딩",
-          "53ce336e15": "창 흐림 변경 사항을 적용하려면 Orca를 다시 시작하십시오.",
           "c65bb9ce63": "다시 시작해야 함",
-          "97950bb087": "터미널 창에 배경 흐림을 적용합니다. 다시 시작해야 합니다.",
-          "2b82242f43": "창 흐림",
           "809f37738d": "터미널 배경의 투명도를 제어합니다. 1은 완전히 불투명하고, 0은 완전히 투명합니다.",
           "ea7b1a158e": "배경 불투명도",
           "03acb60aa0": "터미널 배경의 투명도를 제어합니다.",
@@ -9075,11 +9072,10 @@
             },
             "leftSidebarAppearance": {
               "title": "왼쪽 사이드바 모양",
-              "description": "왼쪽 사이드바를 terminal에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다.",
               "project": "프로젝트",
-              "terminal": "터미널",
               "background": "배경",
-              "tint": "색조"
+              "tint": "색조",
+              "tintDescription": "왼쪽 사이드바를 기본값으로 두거나 색조를 적용합니다. 터미널을 따르려면 라이트 또는 다크 테마로 Terminal에 맞춤을 선택하세요."
             },
             "9a115966d3": "닫을 때 트레이로 최소화",
             "4d5b9427b5": "활성화하면 창을 닫아도 Orca가 종료되지 않고 시스템 트레이에서 계속 실행됩니다.",
@@ -9134,7 +9130,8 @@
             "zcodeUsageDescription": "상태 표시줄에 ZCode Coding Plan 할당량 사용량을 표시합니다.",
             "zcode": "zcode",
             "zai": "zai",
-            "glm": "glm"
+            "glm": "glm",
+            "matchTerminal": "Terminal에 맞춤"
           }
         },
         "auto": {
@@ -10310,8 +10307,6 @@
             "f6dd9ff606": "배경",
             "71eb45e293": "흐림",
             "0838b3717b": "창",
-            "bc2054657a": "터미널 창에 배경 흐림을 적용합니다. 다시 시작해야 합니다.",
-            "72d0482137": "창 흐림",
             "7db59c4738": "알파",
             "46d99ef4bb": "불투명도",
             "4c643695aa": "터미널 배경의 투명도를 제어합니다.",
@@ -12398,7 +12393,9 @@
           "searchLabel": "빌드 검색"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "이 테마의 터미널 색상 사용"
+          "useTerminalTheme": "이 테마의 터미널 색상 사용",
+          "matchTerminal": "Terminal에 맞춤",
+          "dynamic": "동적"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -19021,6 +19018,8 @@
         "unnamedSender": "Agent",
         "messageFromCoordinator": "코디네이터의 메시지",
         "startedWorker": "워커 시작됨",
+        "handedOffToAgent": "에이전트에게 넘김",
+        "startedAgent": "에이전트 시작됨",
         "taskFromCoordinator": "코디네이터의 작업",
         "updateFromWorker": "워커의 업데이트"
       },
@@ -20216,8 +20215,7 @@
       "quitDuringMoveConfirm": "그래도 종료"
     },
     "startupWorktreeRefresh": {
-      "loading": "워크스페이스를 찾는 중…",
-      "description": "로컬 및 원격 프로젝트를 불러오는 동안 워크스페이스가 더 표시될 수 있습니다."
+      "loading": "워크스페이스를 찾는 중…"
     },
     "createProject": {
       "errors": {
@@ -20305,7 +20303,8 @@
     "wslHostOffer": {
       "title": "{{distro}}을(를) 호스트로 실행(권장)",
       "why": "Git, 파일, 터미널이 Windows 파일 공유를 거치지 않고 Linux에서 기본으로 실행됩니다.",
-      "accept": "호스트로 실행"
+      "accept": "호스트로 실행",
+      "projectNotFound": "이동할 추가된 프로젝트를 찾을 수 없습니다. 사이드바의 프로젝트에서 \"{{distro}} 호스트로 이동…\"을 사용하세요."
     }
   },
   "editor": {
@@ -22693,6 +22692,7 @@
       "androidDeviceNotRunning": "\"{{device}}\" Android 장치가 실행 중이 아닙니다. 먼저 부팅하세요.",
       "unknownDeviceOrAvd": "\"{{device}}\" 항목은 실행 중인 장치도, 알려진 AVD도 아닙니다.",
       "avdBootTimeout": "AVD \"{{avdName}}\"의 부팅이 제한 시간 내에 완료되지 않았습니다.",
+      "avdExitedBeforeBoot": "AVD \"{{avdName}}\"이(가) 부팅을 마치기 전에 중지되었습니다: {{detail}}",
       "scrcpyDownloadFailed": "scrcpy 서버를 다운로드하지 못했습니다: {{detail}}",
       "scrcpyServerInvalid": "다운로드한 scrcpy 서버가 유효하지 않거나 불완전했습니다."
     },

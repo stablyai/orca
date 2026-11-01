@@ -14,7 +14,7 @@ import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup
 import { buildDetectedGitWorktrees } from '../ipc/worktrees/listing/ssh-worktree-fallback'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type * as HostTreeRemoval from '../host-tree-removal'
 import { removeHostTree } from '../host-tree-removal'
 import * as nativeFs from '../asar-transparent-fs'

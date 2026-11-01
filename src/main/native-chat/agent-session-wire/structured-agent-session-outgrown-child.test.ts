@@ -2,8 +2,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { acquiredAgentSessionAccount } from '../../../shared/agent-session-acquired-account'
-import { agentSessionAccountHome } from '../../../shared/agent-session-account-home'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import {
+  agentSessionAccountHome,
+  type LegacyAgentSessionAccountHome
+} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { installClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
 import {
   ClaudeProfileRouter,
@@ -11,11 +14,11 @@ import {
 } from '../../claude-accounts/claude-profile-router'
 import type { ClaudeProfileSetupReport } from '../../claude-accounts/claude-profile-setup'
 import { prepareClaudeLaunchAccount } from '../../claude/claude-launch-account'
-import { CLAUDE_STRUCTURED_AGENT } from '../../claude/claude-structured-agent-definition'
+import { CLAUDE_STRUCTURED_AGENT } from '../../claude/structured/claude-structured-agent-definition'
 import { resolveStructuredClaudeAccountHomePath } from '../../runtime/structured-agent-account-home'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   acceptedDispatch,
   createRestTestRig,
@@ -38,10 +41,9 @@ import type { StructuredAgentSessionProviderChild } from './structured-agent-ses
 import type {
   AgentJournalItemBody,
   AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { JournalItemLinkageVisitor } from '../agent-session-journal/journal-store-contracts'
-import type { LegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 
 const accountHome = (path: string): LegacyAgentSessionAccountHome => ({
   variable: 'CODEX_HOME',

@@ -13,7 +13,7 @@ import {
   repoIconPickFailure,
   type RepoIconPickResult
 } from '../../shared/repo-icon-pick-failure-copy'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
   launchExternalEditor,

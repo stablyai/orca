@@ -1,4 +1,5 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
+import { checkRunDetailsOwnerScope } from '../check-run-details-owner-scope'
 import type { Tab } from '../tab-types'
 import { normalizeTerminalLayoutPtyOwnership } from '../terminal-layout-pty-ownership'
 import { sanitizeTerminalLayoutPaneTitles } from '../terminal-pane-title-sanitization'
@@ -255,6 +256,32 @@ export function loadWorkspace(args: WorkspaceLoadArgs): WorkspaceLayout {
   }
   const editorViews = loadEditorViews(args, tabs)
   if (editorViews) {
+    const storedTabById = new Map<string, Tab>()
+    for (const entry of session.unifiedTabs?.[key] ?? []) {
+      if (!storedTabById.has(entry.id)) {
+        storedTabById.set(entry.id, entry)
+      }
+    }
+    for (const tab of tabs) {
+      const editorView = editorViews[tab.id]
+      const prefix = `${worktreeId}::check-details::`
+      if (tab.kind !== 'check-details' || !editorView || !tab.entityId.startsWith(prefix)) {
+        continue
+      }
+      const entry = storedTabById.get(tab.id)
+      const scope = checkRunDetailsOwnerScope(
+        entry?.executionHostId ?? args.hostId,
+        editorView.file.runtimeEnvironmentId
+      )
+      if (scope) {
+        // Keep tab IDs stable so group order, active selection and recent tabs still name the same tab.
+        tab.entityId = `${worktreeId}::check-details@${scope}::${tab.entityId.slice(prefix.length)}`
+        editorViews[tab.id] = {
+          ...editorView,
+          file: { ...editorView.file, filePath: tab.entityId }
+        }
+      }
+    }
     workspace.editorViews = editorViews
   }
   return workspace

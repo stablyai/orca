@@ -1,4 +1,4 @@
-import type { NativeChatSubagentState } from '../../shared/native-chat-types'
+import type { NativeChatSubagentState } from '../../shared/native-chat/native-chat-types'
 import { readCodexSubagentAnnouncements } from './codex-subagent-activity'
 import { codexChildTurnState, type CodexSubagentExecutions } from './codex-subagent-executions'
 import { readRecord } from './codex-item-field-readers'

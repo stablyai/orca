@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { deriveNativeChatContextUsage } from './native-chat-context-usage'
-import type { AgentSessionTokenUsage } from '../agent-session-context-usage'
-import type { NativeChatMessage } from '../native-chat-types'
+import type { AgentSessionTokenUsage } from '../agent-session/agent-session-context-usage'
+import type { NativeChatMessage } from './native-chat-types'
 
 function assistant(
   id: string,

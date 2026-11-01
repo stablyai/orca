@@ -1,5 +1,6 @@
+import { AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE } from './agent-session/agent-session-attachments'
 import { getRuntimePathBasename } from './cross-platform-path'
-import type { NativeChatImageRefBlock } from './native-chat-types'
+import type { NativeChatImageRefBlock } from './native-chat/native-chat-types'
 
 export type NativeChatImageLabelCopy = {
   pastedImage: string
@@ -11,10 +12,15 @@ export const NATIVE_CHAT_IMAGE_LABEL_ENGLISH: NativeChatImageLabelCopy = {
   imageCount: (count) => `${count} images`
 }
 
+const PASTED_IMAGE_NAME = new RegExp(
+  `^orca-paste-.+${AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE}$`,
+  'i'
+)
+
 /** Use friendly UI labels for Orca clipboard-image temp filenames. */
 export function isNativeChatPastedImagePath(path: string): boolean {
   const base = path.split(/[\\/]/).findLast(Boolean) ?? path
-  return /^orca-paste-.+\.png$/i.test(base)
+  return PASTED_IMAGE_NAME.test(base)
 }
 
 /** What a chat image is called where it is not drawn: its alt text, else its file's name. */

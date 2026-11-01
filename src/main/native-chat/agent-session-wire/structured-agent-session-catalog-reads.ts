@@ -1,7 +1,7 @@
 import type { AgentModelCatalogReadParams } from '../agent-model-catalog/agent-model-catalog-service-contract'
 import { withinAgentModelCatalogRead } from '../agent-model-catalog/agent-model-catalog-operation'
 import { resolveAgentModelCatalogReadRecords } from '../agent-model-catalog/agent-model-catalog-running-account'
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession

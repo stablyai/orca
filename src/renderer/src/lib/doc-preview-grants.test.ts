@@ -15,7 +15,12 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => (mocks.ambiguous ? null : mocks.environmentId)
 }))
 
-import { ensureDocPreviewGrant, releaseDocPreviewGrant } from './doc-preview-grants'
+import {
+  buildDocPreviewGrantRequest,
+  ensureDocPreviewGrant,
+  releaseDocPreviewGrant
+} from './doc-preview-grants'
+import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -139,4 +144,31 @@ describe('doc preview grant lifetime', () => {
       grantId: 'grant-1'
     })
   })
+})
+
+describe('outside-workspace document grants', () => {
+  it.each([
+    ['/srv/repo', '/tmp/reports/proposal.html', '/tmp/reports'],
+    ['C:/repo', 'C:/reports/proposal.html', 'C:/reports']
+  ])(
+    'keeps %s as the source workspace while granting only the opened document',
+    (workspaceRoot, filePath, root) => {
+      mocks.environmentId = 'env-1'
+      const state = createTestStore().getState()
+      state.getKnownWorktreeById = () =>
+        makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: workspaceRoot })
+      expect(buildDocPreviewGrantRequest(state, 'wt-1', filePath)).toEqual({
+        owner: {
+          kind: 'runtime',
+          environmentId: 'env-1',
+          worktreeSelector: 'id:wt-1',
+          worktreeRoot: workspaceRoot,
+          fileAccess: 'terminal-artifact'
+        },
+        requestBase: root,
+        root,
+        entryRelativePath: 'proposal.html'
+      })
+    }
+  )
 })
