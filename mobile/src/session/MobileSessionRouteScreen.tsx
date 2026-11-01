@@ -5,12 +5,14 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
+import { useSessionPageBackToHostList } from '../navigation/use-session-page-back-to-host-list'
 
 // Keep the screen importable by the page; native route modules mount the shell.
 export function MobileSessionRouteScreen() {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const controller = useMobileSessionController()
+  useSessionPageBackToHostList()
   // Readiness stays true on refocus so returning from Settings preserves mounted panes.
   if (
     !controller.terminalPreferencesReady ||

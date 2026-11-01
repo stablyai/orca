@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   coordinateHostStackNavigation,
   navigateToHostStackRoute,
+  sessionHostStackLevel,
+  withHostSessionListBeneath,
+  type HostStackNavigationRoute,
   type HostStackNavigationState
 } from './host-stack-navigation'
 
@@ -215,8 +218,140 @@ describe('host stack navigation', () => {
     harness.setState(committedHostState('host/one'))
 
     expect(harness.navigation.dispatch).toHaveBeenCalledTimes(1)
-    expect(harness.navigation.dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ payload: OTHER_TARGET })
+    expect(harness.navigation.dispatch).toHaveBeenCalledWith({
+      type: 'PUSH',
+      target: '/h',
+      payload: OTHER_TARGET
+    })
+  })
+
+  it('pushes a session onto a host list that is already mounted, without pushing that host again', () => {
+    const harness = navigationHarness(committedHostState('host/one'))
+    const push = vi.fn()
+
+    const controller = navigateToHostStackRoute(
+      harness.navigation,
+      { push, replace: vi.fn() },
+      'host/one',
+      OTHER_TARGET
     )
+
+    expect(push).not.toHaveBeenCalled()
+    expect(harness.navigation.dispatch).toHaveBeenCalledWith({
+      type: 'PUSH',
+      target: '/h',
+      payload: OTHER_TARGET
+    })
+    expect(controller.isActive()).toBe(false)
+    expect(harness.listenerCount()).toBe(0)
+  })
+
+  it('still replaces an already mounted host list when the target is not a session', () => {
+    const harness = navigationHarness(committedHostState('host/one'))
+    const push = vi.fn()
+    const replace = vi.fn()
+
+    navigateToHostStackRoute(harness.navigation, { push, replace }, 'host/one', TARGET)
+
+    expect(push).not.toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalled()
+    expect(harness.navigation.dispatch).toHaveBeenCalledWith({
+      type: 'REPLACE',
+      target: '/h',
+      source: 'host-index',
+      payload: TARGET
+    })
+  })
+
+  it('pushes the session href when the host route has no child stack yet', () => {
+    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+    const push = vi.fn()
+    const replace = vi.fn()
+
+    navigateToHostStackRoute(harness.navigation, { push, replace }, 'host/one', OTHER_TARGET)
+    harness.setState({
+      index: 0,
+      routes: [{ name: 'h', params: { hostId: 'host/one' } }]
+    })
+
+    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalled()
+    expect(push).toHaveBeenNthCalledWith(1, '/h/host%2Fone')
+    expect(push).toHaveBeenNthCalledWith(2, {
+      pathname: '/h/[hostId]/session/[worktreeId]',
+      params: OTHER_TARGET.params
+    })
+  })
+})
+
+const SESSION = '[hostId]/session/[worktreeId]'
+
+function sessionRoute(hostId: string, key = 'session'): HostStackNavigationRoute {
+  return { key, name: SESSION, params: { hostId, worktreeId: 'wt' } }
+}
+
+describe('host session list beneath a session', () => {
+  it('inserts the host list before a session and keeps the screens above it', () => {
+    const server = { key: 'server', name: 'index' }
+    const session = sessionRoute('host/one')
+    const settings = { key: 'settings', name: 'settings' }
+    const level = { key: 'host-stack', index: 2, routes: [server, session, settings] }
+
+    expect(withHostSessionListBeneath(level, 'host/one')).toEqual({
+      index: 3,
+      routes: [
+        server,
+        {
+          key: 'host-session-list:host/one',
+          name: '[hostId]/index',
+          params: { hostId: 'host/one' }
+        },
+        session,
+        settings
+      ]
+    })
+    expect(sessionHostStackLevel(level, 'host/one')).toBe(level)
+  })
+
+  it('reads the host list from the focused host stack rather than the root', () => {
+    const session = sessionRoute('host-1')
+    const nested = { key: 'nested', index: 0, routes: [session] }
+    const root = {
+      index: 0,
+      routes: [{ name: 'h', state: nested }]
+    }
+
+    expect(sessionHostStackLevel(root, 'host-1')).toBe(nested)
+  })
+
+  it('does not insert a second host list when that host is already underneath', () => {
+    const hostList = {
+      key: 'host-index',
+      name: '[hostId]/index',
+      params: { hostId: 'host%2Fone' }
+    }
+    const session = sessionRoute('host/one')
+
+    expect(
+      withHostSessionListBeneath({ index: 1, routes: [hostList, session] }, 'host/one')
+    ).toBeNull()
+  })
+
+  it('does not insert a list for a different host, and copies the session host param', () => {
+    const session = sessionRoute('host%2Fone', 'encoded-session')
+    const other = sessionRoute('host-2', 'other-session')
+
+    expect(withHostSessionListBeneath({ index: 0, routes: [other] }, 'host/one')).toBeNull()
+    expect(withHostSessionListBeneath({ index: 0, routes: [session] }, 'host/one')).toEqual({
+      index: 1,
+      routes: [
+        {
+          key: 'host-session-list:host/one',
+          name: '[hostId]/index',
+          params: { hostId: 'host%2Fone' }
+        },
+        session
+      ]
+    })
   })
 })
