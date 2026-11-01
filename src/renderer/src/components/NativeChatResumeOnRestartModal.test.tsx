@@ -589,6 +589,8 @@ it('lists a chat the resume could not carry on when the dialog reopens, with wha
 
   activate.mockImplementationOnce(actual.activateAiVaultStructuredSession)
   useAppStore.setState({
+    // Only a workspace the window can show opens; this one is already showing.
+    activeWorktreeId: 'workspace',
     unifiedTabsByWorktree: {
       workspace: [
         {

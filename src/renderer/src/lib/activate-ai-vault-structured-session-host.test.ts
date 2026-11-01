@@ -315,6 +315,7 @@ it.each([false, true])(
 
 it('navigates before selecting once per open and preserves moved-workspace activation', async () => {
   const session = { structuredSession: { workspaceId: 'workspace', sessionId: 'sender' } }
+  mocks.state.activeWorktreeId = 'elsewhere'
   mocks.state.unifiedTabsByWorktree.workspace.push(tab('current', 'local'))
   mocks.navigate.mockImplementation(() => {
     expect(mocks.activateTab).not.toHaveBeenCalled()
@@ -372,6 +373,45 @@ it('reports a registered blocked folder once despite repeated activation attempt
   expect(mocks.navigate).toHaveBeenCalledOnce()
   expect(toast.error).toHaveBeenCalledExactlyOnceWith('Cannot open folder workspace')
   expect(mocks.activateTab).not.toHaveBeenCalled()
+})
+
+it('still reports a missing folder once when only another host registers its ID', async () => {
+  const workspace = 'folder:changed-owner'
+  mocks.state.folderWorkspaces = [
+    {
+      id: 'changed-owner',
+      projectGroupId: 'group',
+      executionHostId: 'runtime:other-host',
+      name: 'Other host folder',
+      folderPath: '/project',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 0,
+      updatedAt: 0
+    }
+  ]
+  mocks.state.unifiedTabsByWorktree[workspace] = [
+    { ...tab('retained-chat', 'local'), worktreeId: workspace }
+  ]
+  // Folder activation returns false without a toast when no folder belongs to this host.
+  mocks.navigate.mockReturnValue(false)
+  mocks.call.mockImplementation(async (_host, method) =>
+    method === 'orchestration.partyLocation'
+      ? { location: { kind: 'chat', sessionId: 'sender', worktreeId: workspace } }
+      : { ok: false, refusal: { code: 'agent_session_workspace_removed' } }
+  )
+  expect(
+    await activateAiVaultStructuredSession({
+      structuredSession: { sessionId: 'sender', workspaceId: workspace },
+      executionHostId: 'local'
+    })
+  ).toBe(false)
+  expect(toast.error).toHaveBeenCalledExactlyOnceWith('This workspace is no longer available.')
 })
 
 it('routes retired History by its saved host and prunes only its old placement after reveal', async () => {

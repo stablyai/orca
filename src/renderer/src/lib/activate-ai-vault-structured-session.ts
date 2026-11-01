@@ -21,7 +21,7 @@ import {
   executionHostIdForStructuredTarget
 } from '@/runtime/structured-agent-session-owner'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 export {
   revealStructuredSession,
   type StructuredSessionRevealOutcome
@@ -98,22 +98,14 @@ export function openDesktopStructuredSession(
   const activate: StructuredSessionOpenAdapterDeps['activate'] = (args) => {
     let opened = navigated.get(args.worktreeId)
     if (opened === undefined) {
-      const scope = parseWorkspaceKey(args.worktreeId)
-      const registeredFolder =
-        scope?.type === 'folder' &&
-        selectFolderWorkspaces(useAppStore.getState()).some(
-          (row) => row.id === scope.folderWorkspaceId
-        )
+      // Re-activating the current workspace would wake its unrelated sleeping agents.
       opened =
+        useAppStore.getState().activeWorktreeId === args.worktreeId ||
         activateWslMovedWorkspace(args.worktreeId) ||
-        activateAndRevealWorkspace(args.worktreeId, {
-          providesInitialSurface: true,
-          ...(args.target
-            ? { executionHostId: executionHostIdForStructuredTarget(args.target) }
-            : {})
-        }) !== false
+        navigateToWorkspace(args, () => {
+          navigationReported = true
+        })
       navigated.set(args.worktreeId, opened)
-      navigationReported ||= !opened && !!registeredFolder
     }
     return opened && desktopStructuredSessionOpenDeps.activate(args)
   }
@@ -127,6 +119,27 @@ export function openDesktopStructuredSession(
       }
     }
   })
+}
+
+/** Folder activation toasts its own refusal once it resolves the host's folder; other failures stay with the opener. */
+function navigateToWorkspace(
+  args: { worktreeId: string; target?: RuntimeClientTarget },
+  reported: () => void
+): boolean {
+  const executionHostId = args.target ? executionHostIdForStructuredTarget(args.target) : undefined
+  const scope = parseWorkspaceKey(args.worktreeId)
+  const folderReports =
+    scope?.type === 'folder' &&
+    findFolderWorkspaceOwner(useAppStore.getState(), scope.folderWorkspaceId, executionHostId)
+  const opened =
+    activateAndRevealWorkspace(args.worktreeId, {
+      providesInitialSurface: true,
+      ...(executionHostId ? { executionHostId } : {})
+    }) !== false
+  if (!opened && folderReports) {
+    reported()
+  }
+  return opened
 }
 
 function presentDesktopStructuredSession(

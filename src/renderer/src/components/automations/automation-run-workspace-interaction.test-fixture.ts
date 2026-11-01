@@ -189,7 +189,7 @@ export function installAutomationRunInteractionCases<T>({
       expect(mocks.state.activeWorktreeId).toBe(actualWorkspace)
       expect(mocks.activate.mock.calls).toEqual(
         historyFirst
-          ? [[actualWorkspace]]
+          ? [[actualWorkspace, { providesInitialSurface: true, executionHostId: `runtime:${ENV}` }]]
           : [
               [
                 WT,

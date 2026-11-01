@@ -5,7 +5,8 @@ import {
   B,
   openAuthorityRuntime,
   reveal,
-  inWorkspace
+  inWorkspace,
+  physicalReload
 } from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
 import { acquireWatcherRemovalGate } from '../../src/main/ipc/watcher-removal-gate'
 import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
@@ -129,6 +130,67 @@ it.each([false, true])(
     })
   }
 )
+
+it.each([
+  {
+    conversationCommand: {
+      command: 'compact' as const,
+      phase: 'prepared' as const,
+      state: 'unknown' as const,
+      operationId: 'old-compact',
+      callerKey: 'old-window'
+    }
+  },
+  {
+    conversationCommand: {
+      command: 'compact' as const,
+      phase: 'committed' as const,
+      state: 'unknown' as const,
+      operationId: 'old-compact',
+      callerKey: 'old-window'
+    }
+  },
+  {
+    rewind: {
+      operationId: 'old-rewind',
+      callerKey: 'old-window',
+      itemId: 'codex:retained-provider:retained-reply:0',
+      expectedEpoch: 'epoch-before-rewind',
+      phase: 'provider-succeeded' as const
+    }
+  },
+  {
+    rewind: {
+      operationId: 'old-rewind',
+      callerKey: 'old-window',
+      itemId: 'codex:retained-provider:retained-reply:0',
+      expectedEpoch: 'epoch-before-rewind',
+      phase: 'prepared' as const
+    }
+  }
+])('saved in-doubt work from an earlier process does not block recovery: %j', async (saved) => {
+  const rig = await retiredChat()
+  await rig.store.transitionHandoff(B, (record) => ({ ...record, ...saved }))
+  const repo = storeRepo({ id: 'current-project', path: root, kind: 'folder' })
+  rig.profile.addRepo(repo)
+  const destination = getRepoMainWorktreeId(repo)
+  const opened = { ok: true, result: { ok: true, sessionId: B, workspaceId: destination } }
+  expect(await reveal(rig)).toMatchObject(opened)
+  expect(await reveal(rig)).toMatchObject(opened)
+  const fresh = await physicalReload(rig)
+  expect(await reveal(fresh)).toMatchObject(opened)
+  const record = fresh.store.getRecord(B)
+  expect(record?.location.workspaceId).toBe(destination)
+  if ('conversationCommand' in saved) {
+    // A legacy result stays recorded so its operation still replays it.
+    expect(record?.conversationCommand).toEqual(saved.conversationCommand)
+  } else {
+    // Only a provider-confirmed rewind settles without the provider; a prepared one stays in doubt.
+    expect(record?.rewind?.phase).toBe(
+      saved.rewind.phase === 'provider-succeeded' ? 'completed' : 'prepared'
+    )
+  }
+})
 
 it('recovers a retired repo registration into a current scoped folder without reviving deleted scoped folders', async () => {
   const input = await inWorkspace(`retired-project::${root}`, 'folder')

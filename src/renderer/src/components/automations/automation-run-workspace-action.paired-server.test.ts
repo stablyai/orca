@@ -69,7 +69,8 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: mocks.toastMessage } }))
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activate,
-  activateAndRevealFolderWorkspace: mocks.activate
+  activateAndRevealFolderWorkspace: mocks.activate,
+  activateAndRevealWorkspace: mocks.activate
 }))
 vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: mocks.ownerActivate

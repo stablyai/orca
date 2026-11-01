@@ -49,15 +49,13 @@ function createStructuredSessionWorkspaceRebinder(context: () => WorkspaceRebind
       const session = sessions.get(sessionId)
       await deps.store.rebindWorkspace(sessionId, original, location, (record) => {
         check()
-        const rewind = record.rewind?.phase
+        // Refuse only live work. Rewinds and commands run in this session lane, so a saved
+        // in-doubt rewind or legacy command result is history; the open that follows settles it.
         if (
           record.lease.unreconciled ||
           record.lease.claimStatus !== 'released' ||
           record.lease.ownerProcess ||
           commands.pending.has(sessionId) ||
-          (rewind && rewind !== 'completed' && rewind !== 'refused') ||
-          record.conversationCommand?.phase === 'prepared' ||
-          record.conversationCommand?.state === 'unknown' ||
           (session && !structuredAgentSessionConversationClosable(session))
         ) {
           throw agentSessionRefusalError('agent_session_operation_unknown', {})
