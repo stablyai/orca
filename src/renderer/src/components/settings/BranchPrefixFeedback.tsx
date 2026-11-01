@@ -1,12 +1,20 @@
 import type { ReactNode } from 'react'
-import { getBranchPrefixIssue, normalizeBranchPrefix } from '../../../../shared/branch-prefix'
+import {
+  getBranchPrefixIssue,
+  normalizeBranchPrefix,
+  type GitUsernamePrefixOmission
+} from '../../../../shared/branch-prefix'
 import { translate } from '@/i18n/i18n'
 
 type BranchPrefixFeedbackProps = {
   rawPrefix: string
+  omission?: GitUsernamePrefixOmission | null
 }
 
-export function BranchPrefixFeedback({ rawPrefix }: BranchPrefixFeedbackProps): ReactNode {
+export function BranchPrefixFeedback({
+  rawPrefix,
+  omission = null
+}: BranchPrefixFeedbackProps): ReactNode {
   const issue = getBranchPrefixIssue(rawPrefix)
   const normalized = normalizeBranchPrefix(rawPrefix)
 
@@ -27,6 +35,15 @@ export function BranchPrefixFeedback({ rawPrefix }: BranchPrefixFeedbackProps): 
           'auto.components.settings.BranchPrefixFeedback.64d70b156a',
           'Branches will be named {{example}}',
           { example: `${normalized}/feature` }
+        )}
+      </span>
+    )
+  } else if (omission === 'lowercase-lock') {
+    message = (
+      <span className="text-muted-foreground">
+        {translate(
+          'auto.components.settings.BranchPrefixFeedback.c478cf4ec7',
+          'No prefix will be applied because lowercasing this username ends in .lock, which Git rejects.'
         )}
       </span>
     )
