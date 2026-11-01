@@ -136,6 +136,8 @@ export function createProviderAccountServices(
   rateLimits.setAntigravityUsageEnabledResolver(() =>
     store.getUI().statusBarItems.includes('antigravity')
   )
+  // Reuse the meter switch so hidden Claude usage does not query api.anthropic.com.
+  rateLimits.setClaudeUsageEnabledResolver(() => store.getUI().statusBarItems.includes('claude'))
   setAntigravityNativeCredentialChangeListener(() =>
     rateLimits.invalidateAntigravityCredentialState()
   )

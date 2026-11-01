@@ -8,6 +8,7 @@ import { readCursorAuthSession } from '../cursor-auth'
 import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
 import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
 import { antigravityUsageDisabledSnapshot } from '../antigravity-usage-snapshot'
+import { claudeUsageDisabledSnapshot } from '../claude-usage-snapshot'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/zcode-plan-sites'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
@@ -127,6 +128,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (this.antigravityUsageEnabledResolver?.() ?? true) &&
       (options?.force || !this.shouldSkipAutomatedFetch('antigravity', previousState.antigravity))
 
+    const claudeFetchAllowed =
+      this.isClaudeUsageEnabled() &&
+      (options?.force || !this.shouldSkipAutomatedFetch('claude', previousState.claude))
+
     const zcodePlanConfigResult = this.resolveZcodePlanConfig()
     const zcodePlanApiKey = zcodePlanConfigResult.config.apiKey
     // Hash credentials because only changes matter, never retain the raw key here.
@@ -148,7 +153,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
 
     this.updateState({
       ...previousState,
-      claude: this.withFetchingStatus(previousState.claude, 'claude'),
+      claude: claudeFetchAllowed
+        ? this.withFetchingStatus(previousState.claude, 'claude')
+        : (previousState.claude ?? claudeUsageDisabledSnapshot()),
       // A gated slot makes no attempt and cannot settle a fetching chip.
       codex: codexFetchGated
         ? codexStateBeforeFetch
@@ -211,21 +218,19 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (reason) => ({ status: 'rejected', reason }) as const
     )
 
-    // Live display does not waive automated Retry-After gates.
-    const claudeFetchGated =
-      !options?.force && this.shouldSkipAutomatedFetch('claude', previousState.claude)
+    const claudeFetchGated = !claudeFetchAllowed
 
     const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
       await Promise.allSettled([
-        claudeFetchGated
-          ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchClaudeRateLimits({
+        claudeFetchAllowed
+          ? fetchClaudeRateLimits({
               authPreparation: claudeAuthPreparation,
               allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
               allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
               networkProxySettings: this.networkProxySettingsResolver?.(),
               signal
-            }),
+            })
+          : Promise.resolve(previousState.claude ?? claudeUsageDisabledSnapshot()),
         codexFetchGated
           ? Promise.resolve(previousState.codex as ProviderRateLimits)
           : (missingWslCodexHome ??

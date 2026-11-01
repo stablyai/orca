@@ -82,7 +82,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     signal: AbortSignal,
     options?: { force?: boolean }
   ): Promise<void> {
-    if (signal.aborted) {
+    if (signal.aborted || !this.isClaudeUsageEnabled()) {
       return
     }
     // Why: automated checks must honor the endpoint's Retry-After even when live display is available.
