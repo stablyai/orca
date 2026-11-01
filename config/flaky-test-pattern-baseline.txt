@@ -539,7 +539,7 @@
 1 test-no-real-time-wait:src/wsl-guest/agent-hook-canonical-status.test.ts
 6 test-no-real-time-wait:src/wsl-guest/agent-hook-server.test.ts
 1 test-no-real-time-wait:tests/e2e/accumulated-workspace-status-fixture.ts
-2 test-no-real-time-wait:tests/e2e/agent-session-live-force-exit-resume.spec.ts
+1 test-no-real-time-wait:tests/e2e/agent-session-live-force-exit-resume.spec.ts
 3 test-no-real-time-wait:tests/e2e/agent-session-log-tail-stability.spec.ts
 1 test-no-real-time-wait:tests/e2e/artificial-opencode-pane-interactions.ts
 1 test-no-real-time-wait:tests/e2e/artificial-opencode-revisit-pressure-scenario.ts
@@ -578,13 +578,13 @@
 4 test-no-real-time-wait:tests/e2e/helpers/computer-driver.ts
 1 test-no-real-time-wait:tests/e2e/helpers/daemon-generation-processes.ts
 1 test-no-real-time-wait:tests/e2e/helpers/electron-main-evaluate-retry.ts
-2 test-no-real-time-wait:tests/e2e/helpers/electron-process-shutdown.ts
+1 test-no-real-time-wait:tests/e2e/helpers/electron-process-shutdown.ts
 1 test-no-real-time-wait:tests/e2e/helpers/headless-layout-oracle-hosts.ts
 1 test-no-real-time-wait:tests/e2e/helpers/hold-window-graph-publication.ts
 2 test-no-real-time-wait:tests/e2e/helpers/layout-compat-baseline.ts
 2 test-no-real-time-wait:tests/e2e/helpers/legacy-relay-docker-host.ts
 1 test-no-real-time-wait:tests/e2e/helpers/orca-app.ts
-2 test-no-real-time-wait:tests/e2e/helpers/orca-restart.ts
+1 test-no-real-time-wait:tests/e2e/helpers/orca-restart.ts
 1 test-no-real-time-wait:tests/e2e/helpers/orca-serve-cli-host.ts
 1 test-no-real-time-wait:tests/e2e/helpers/orcad-convert-flow.ts
 1 test-no-real-time-wait:tests/e2e/helpers/packaged-old-orca.ts
@@ -630,7 +630,6 @@
 2 test-no-real-time-wait:tests/e2e/paired-two-client-emptied-workspace-reseed.spec.ts
 1 test-no-real-time-wait:tests/e2e/pdf-find-counter.spec.ts
 1 test-no-real-time-wait:tests/e2e/pdf-viewer-rebuild-recovery.spec.ts
-1 test-no-real-time-wait:tests/e2e/persisted-session-production-upgrade.spec.ts
 1 test-no-real-time-wait:tests/e2e/project-group-manual-sort.spec.ts
 2 test-no-real-time-wait:tests/e2e/relaunch-first-terminal.spec.ts
 4 test-no-real-time-wait:tests/e2e/relaunch-sleeping-agents-resume-on-view.spec.ts

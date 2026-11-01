@@ -50,7 +50,7 @@ describe('local worktree path presence', () => {
       if (pathValue === '/permission-denied') {
         throw fsError('EACCES')
       }
-      return {}
+      return { isDirectory: () => true }
     })
 
     const result = await localWorktreePathsExistOrAreUnverifiable([
@@ -81,7 +81,7 @@ describe('local worktree path presence', () => {
           maximumActive = Math.max(maximumActive, active)
           pending.push(() => {
             active -= 1
-            resolve({})
+            resolve({ isDirectory: () => true })
           })
         })
     )
@@ -123,7 +123,7 @@ describe('local worktree path presence', () => {
     statMock.mockImplementation(() =>
       returnMissing
         ? Promise.reject(fsError('ENOENT'))
-        : new Promise((resolve) => releaseStats.push(() => resolve({})))
+        : new Promise((resolve) => releaseStats.push(() => resolve({ isDirectory: () => true })))
     )
 
     try {
@@ -173,7 +173,7 @@ describe('local worktree path presence', () => {
     const timeoutControllers = installFakeAbortSignalTimeout()
     const releaseStats: (() => void)[] = []
     statMock.mockImplementation(
-      () => new Promise((resolve) => releaseStats.push(() => resolve({})))
+      () => new Promise((resolve) => releaseStats.push(() => resolve({ isDirectory: () => true })))
     )
     const controller = new AbortController()
     const paths = ['/abort-1', '/abort-2', '/abort-3']
