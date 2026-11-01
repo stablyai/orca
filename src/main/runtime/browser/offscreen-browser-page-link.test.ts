@@ -24,11 +24,11 @@ describe('openOffscreenBrowserPageLink', () => {
       pairedDeviceId: null
     })
 
-    const behind = [{ ...tab, activate: false }, { leavesAgentTab: true }]
+    const behind = [{ ...tab, activate: false }, { opensPageLink: true }]
     expect(browserTabCreate.mock.calls).toEqual([
       [
         { ...tab, activate: true, navigation: 'caller' },
-        { pairedDeviceId: 'desk-1', follows: true }
+        { opensPageLink: true, pairedDeviceId: 'desk-1' }
       ],
       behind,
       behind

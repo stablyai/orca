@@ -12,6 +12,8 @@ import {
   launchPairedElectronClient,
   type PairedElectronClient
 } from './helpers/paired-electron-client'
+import { waitForPairedClientWorktree } from './helpers/paired-client-host-session'
+import { readHostBrowserPageIds } from './helpers/host-session-tabs'
 
 // #36804: a click on a target=_blank link in a streamed server page opens a new Orca tab.
 
@@ -49,23 +51,12 @@ test('a target=_blank click in a streamed server page opens a new Orca tab', asy
     const page = client.page
     const environmentId = client.environmentId
 
-    await expect
-      .poll(() => page.evaluate(() => window.__store?.getState().allWorktrees().length ?? 0), {
-        timeout: 60_000
-      })
-      .toBeGreaterThan(0)
-    const worktreeId = await page.evaluate(
-      () => window.__store?.getState().allWorktrees()[0]?.id ?? null
-    )
-    if (!worktreeId) {
-      throw new Error('paired client did not receive the host worktree')
-    }
+    const worktreeId = await waitForPairedClientWorktree(page)
 
     // Server-side calls carry no paired client, like an agent driving the page.
-    const worktree = `id:${worktreeId}`
     const created = (
       await host.client.call<{ browserPageId: string }>('browser.tabCreate', {
-        worktree,
+        worktree: `id:${worktreeId}`,
         url: `${origin}/`
       })
     ).result
@@ -79,12 +70,7 @@ test('a target=_blank click in a streamed server page opens a new Orca tab', asy
     await expect(remoteFrame).toBeVisible({ timeout: 60_000 })
     await expect(addressBar).toHaveValue(`${origin}/`, { timeout: 60_000 })
 
-    const listPages = async (): Promise<string[]> =>
-      (
-        await host.client.call<{ tabs: { browserPageId: string }[] }>('browser.tabList', {
-          worktree
-        })
-      ).result.tabs.map((tab) => tab.browserPageId)
+    const listPages = (): Promise<string[]> => readHostBrowserPageIds(host.client, testRepoPath)
     // The client lists the server's new tab, whether or not it moved to it.
     const waitForOpenedTab = async (before: string[]): Promise<void> => {
       await expect
@@ -100,7 +86,7 @@ test('a target=_blank click in a streamed server page opens a new Orca tab', asy
     // A scripted click names no client, so the tab opens without moving anyone's view.
     let before = await listPages()
     await host.client.call('browser.eval', {
-      worktree,
+      worktree: `id:${worktreeId}`,
       page: created.browserPageId,
       expression: "document.getElementById('blank-link').click()"
     })

@@ -52,8 +52,7 @@ export class RuntimeBrowserTabCreation {
     caller?: {
       pairedDeviceId?: string
       clientKind?: 'mobile' | 'runtime'
-      follows?: boolean
-      leavesAgentTab?: boolean
+      opensPageLink?: boolean
     }
   ): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
@@ -123,8 +122,7 @@ export class RuntimeBrowserTabCreation {
         worktreeId,
         focus,
         ...(caller?.pairedDeviceId ? { clientNavigationId: caller.pairedDeviceId } : {}),
-        ...(caller?.follows ? { callerFollows: true } : {}),
-        ...(caller?.leavesAgentTab ? { leavesAgentTab: true } : {}),
+        ...(caller?.opensPageLink ? { opensPageLink: true } : {}),
         targetGroupId: params.targetGroupId
       })
       return { browserPageId: created.browserPageId }

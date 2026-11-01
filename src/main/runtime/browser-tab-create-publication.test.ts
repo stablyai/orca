@@ -253,7 +253,7 @@ describe('publishCreatedBrowserSessionTab', () => {
       browserPageId: 'page-1',
       worktreeId: 'wt-1',
       focus: resolveBrowserTabCreateFocus({ activate: false }),
-      leavesAgentTab: true
+      opensPageLink: true
     })
 
     expect(setActiveTab).not.toHaveBeenCalled()

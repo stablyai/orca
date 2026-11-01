@@ -14,8 +14,8 @@ export function openOffscreenBrowserPageLink(
       ...(profileId ? { profileId } : {}),
       ...(follower ? { activate: true, navigation: 'caller' as const } : { activate: false })
     },
-    // A background open moves no view, not even the agent's.
-    follower ? { pairedDeviceId: follower, follows: true } : { leavesAgentTab: true }
+    // Only the client that brought it forward moves to it; a background open moves no view, not even the agent's.
+    { opensPageLink: true, ...(follower ? { pairedDeviceId: follower } : {}) }
   ).catch((error: unknown) => {
     console.warn('[browser] could not open a page link as a tab:', error)
   })

@@ -10,7 +10,7 @@ import {
 import { BrowserPageEvents, type BrowserPageEvent } from './browser-page-events'
 import { BrowserPageInputCredit } from './browser-page-input-credit'
 import { browserPopupPageId } from './browser-popup-page-id'
-import { getActiveRpcCaller } from '../runtime/rpc/rpc-active-caller'
+import type { RpcCallerIdentity } from '../runtime/rpc/rpc-caller-identity'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
   private readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
@@ -32,20 +32,26 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     return this.pageEvents.observe(browserPageId, listener)
   }
 
-  /** Holds the page's agent marking for one queued command, from queueing until it settles; input it delivers is credited to its caller. */
+  /** Holds the page's agent marking for one queued command, from queueing until it settles. */
   beginAgentCommand(browserPageId: string): AgentCommandLease {
-    // A queued command runs under the caller ahead of it, so its own caller is read at enqueue.
-    const caller = getActiveRpcCaller()
-    const lease = this.agentActivity.beginCommand(browserPageId)
-    return {
-      ...lease,
-      run: (execute) => lease.run(() => this.pageInputCredit.during(browserPageId, caller, execute))
-    }
+    return this.agentActivity.beginCommand(browserPageId)
+  }
+
+  /** Runs one queued page command so input it delivers is credited to its caller. */
+  runPageCommand<T>(
+    browserPageId: string,
+    caller: RpcCallerIdentity | undefined,
+    execute: () => Promise<T>
+  ): Promise<T> {
+    return this.pageInputCredit.during(browserPageId, caller, execute)
   }
 
   /** Credits a guest's activating input (or a DOM-activated tap) to the command delivering it, under the tab a link it opens would join. */
   creditPageInput(guestWebContentsId: number): void {
-    const ownerTabId = this.resolvePopupOwnerContext(guestWebContentsId)?.browserTabId
+    if (this.pageInputCredit.idle) {
+      return
+    }
+    const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
     if (ownerTabId) {
       const pageId =
         this.tabIdByWebContentsId.get(guestWebContentsId) ?? browserPopupPageId(guestWebContentsId)

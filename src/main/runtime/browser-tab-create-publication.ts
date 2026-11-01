@@ -42,10 +42,8 @@ export type BrowserTabCreatePublication = {
   worktreeId?: string
   focus: BrowserTabCreateFocusResolution
   clientNavigationId?: string
-  /** The client is named for input it sent, not a create it asked for, so it has no pending focus of its own. */
-  callerFollows?: boolean
-  /** A tab no one picked, such as a link an agent's click opened, must not take over the agent's routing. */
-  leavesAgentTab?: boolean
+  /** A link a page opened, not a create anyone asked for: its client has no pending focus, and no one picked it otherwise. */
+  opensPageLink?: boolean
   targetGroupId?: string
 }
 
@@ -182,13 +180,15 @@ export function publishCreatedBrowserSessionTab(
   publication: BrowserTabCreatePublication
 ): void {
   const rules = BROWSER_TAB_CREATE_PUBLICATION_RULES[publication.placementKind]
-  // Bridge selection announces the tab itself; a tab that leaves the agent where it is still must appear.
-  const announces =
-    rules.notifiesSessionTabsChanged || (rules.activatesBridgeTab && publication.leavesAgentTab)
-  if (announces && publication.worktreeId !== undefined) {
+  // A page link no client brought forward must not take over the agent's routing, yet must still appear.
+  const leavesAgentTab = publication.opensPageLink === true && !publication.focus.selects
+  if (
+    (rules.notifiesSessionTabsChanged || (rules.activatesBridgeTab && leavesAgentTab)) &&
+    publication.worktreeId !== undefined
+  ) {
     host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
   }
-  if (rules.activatesBridgeTab && !publication.leavesAgentTab) {
+  if (rules.activatesBridgeTab && !leavesAgentTab) {
     const bridge = host.getAgentBrowserBridge()
     const webContentsId = bridge
       ?.getRegisteredTabs(publication.worktreeId)
@@ -209,7 +209,7 @@ export function publishCreatedBrowserSessionTab(
             caller: {
               clientNavigationId: publication.clientNavigationId,
               navigation: publication.focus.navigation,
-              ...(publication.callerFollows ? { follows: true } : {})
+              ...(publication.opensPageLink ? { follows: true } : {})
             }
           }
         : {})
