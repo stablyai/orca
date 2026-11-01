@@ -114,6 +114,9 @@ export abstract class RuntimeConstructionServices {
   protected abstract readHeadlessVisibleTerminalState(
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null>
+  protected abstract readCurrentTerminalWaitScreen(
+    ptyId: string
+  ): Promise<RuntimeVisibleTerminalState | null | undefined>
   protected abstract getLeafKey(tabId: string, leafId: string): string
   /** L80: sole reader of a PTY record's tab/pane copies. */
   protected abstract paneOfPty(pty: PtyPaneSource | null | undefined): PtyPane
@@ -173,9 +176,6 @@ export abstract class RuntimeConstructionServices {
     typeof readOrchestrationFleetAgentStatusSnapshot
   >
   protected abstract assertStableReadyGraph(expectedGraphEpoch: number): void
-  protected abstract getValidatedExplicitWorktreeIdSelector(
-    selector: string | undefined
-  ): string | null
   abstract getExplicitSessionWorktreeIdSelector(selector: string | undefined): string | null
   protected abstract buildResolvedWorktreeFromId(worktreeId: string): ResolvedWorktree | null
   protected abstract listKnownResolvedWorktreesForExplicitTarget(

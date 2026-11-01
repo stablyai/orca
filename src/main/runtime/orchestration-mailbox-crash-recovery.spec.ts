@@ -75,10 +75,11 @@ describe('orchestration mailbox crash recovery', () => {
     restartedDb.close()
   })
   it.each([
-    ['submits the pointer it finds still typed', (pointer: string) => pointer, 1],
-    ['leaves a pointer the user added to', (pointer: string) => `${pointer} also fix CI`, 0],
-    ['does not retype into an empty composer', () => '', 0]
-  ])('after a crash between pointer and Enter, %s', async (_name, draftOf, enters) => {
+    ['submits the pointer it finds still typed', (pointer: string) => pointer, 1, false],
+    ['submits it from the daemon screen on reattach', (pointer: string) => pointer, 1, true],
+    ['leaves a pointer the user added to', (pointer: string) => `${pointer} also fix CI`, 0, false],
+    ['does not retype into an empty composer', () => '', 0, false]
+  ])('after a crash between pointer and Enter, %s', async (_name, draftOf, enters, reattach) => {
     vi.useFakeTimers()
     const directory = mkdtempSync(join(tmpdir(), 'orca-mailbox-pointer-crash-'))
     temporaryDirectories.push(directory)
@@ -108,18 +109,38 @@ describe('orchestration mailbox crash recovery', () => {
       pointer_enter_pending: MAILBOX_POINTER_WRITE_ATTEMPTED
     })
     const restarted = createRuntime(restartedDb)
+    const reattachWrite = vi.fn((_ptyId: string, _data: string) => true)
     await restarted.runtime.listTerminals()
     // The surviving PTY still shows its composer, with whatever the crash left in it.
-    restarted.runtime.onPtyData(
-      PTY_ID,
-      `\x1b[2J\x1b[H${'\u2500'.repeat(40)}\r\n\u276F ${draftOf(pointer.trim())}`,
-      1
-    )
+    const screen = `\x1b[2J\x1b[H${'\u2500'.repeat(40)}\r\n\u276F ${draftOf(pointer.trim())}`
+    if (reattach) {
+      // Only the daemon holds the screen; main's model starts partial after reattach.
+      restarted.runtime.setPtyController({
+        write: reattachWrite,
+        writeWithSettlement: settledWriteStub(reattachWrite),
+        kill: vi.fn(),
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer: async () => ({
+          data: screen,
+          cols: 80,
+          rows: 24,
+          seq: 10_000,
+          source: 'headless' as const
+        })
+      })
+      restarted.runtime.synchronizePtyOutputSequenceFromProvider(PTY_ID, {
+        value: 5_000,
+        generation: 'continued'
+      })
+    } else {
+      restarted.runtime.onPtyData(PTY_ID, screen, 1)
+    }
     await driveToLiveIdle(restarted.runtime)
     await vi.advanceTimersByTimeAsync(500)
 
-    expect(pointerCount(restarted.write)).toBe(0)
-    expect(restarted.write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(enters)
+    const writes = reattach ? reattachWrite.mock.calls : restarted.write.mock.calls
+    expect(writes.filter(([, data]) => isMailboxPointer(data))).toHaveLength(0)
+    expect(writes.filter(([, data]) => data === '\r')).toHaveLength(enters)
     expect(restartedDb.getMessageById(message.id)).toMatchObject({
       read: 0,
       delivered_at: expect.any(String),

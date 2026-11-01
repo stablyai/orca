@@ -99,6 +99,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         terminal,
         mailboxHandle,
         messages: pending,
+        enterDelayMs: pointerEnterDelayMs(),
         settle: (settledPtyId, flight) => this.settle(settledPtyId, flight),
         redrive: (redriveMailbox, force) => this.redrive(redriveMailbox, force)
       })

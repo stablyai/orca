@@ -369,6 +369,7 @@ describe('orchestration mailbox pointer submit', () => {
       terminal: current,
       mailboxHandle: 'run:run-1',
       messages,
+      enterDelayMs: 0,
       settle: vi.fn(),
       redrive: vi.fn()
     })
@@ -516,6 +517,7 @@ describe('orchestration mailbox pointer submit', () => {
       state: new OrchestrationMailboxPointerState(),
       terminal,
       mailboxHandle: 'run:run-surviving',
+      enterDelayMs: 0,
       settle: vi.fn(),
       redrive: vi.fn(),
       messages: [
@@ -537,6 +539,57 @@ describe('orchestration mailbox pointer submit', () => {
       [MAILBOX_POINTER_WRITE_ATTEMPTED, MAILBOX_POINTER_ENTER_ATTEMPTED]
     )
     expect(releaseMailboxPointerEnter).not.toHaveBeenCalled()
+  })
+
+  it('settles a typed pointer it cannot read back after restart, freeing the terminal', async () => {
+    const ptyId = 'pty-unreadable'
+    const mailboxHandle = 'run:run-unreadable'
+    const terminal = {
+      ptyId,
+      handle: 'term-unreadable',
+      paneKeys: ['tab-unreadable:leaf-unreadable'],
+      lastAgentStatus: 'idle' as const,
+      lastAgentStatusObservedLive: true
+    }
+    const target = { terminal, processIncarnation: 'inc-unreadable' }
+    const state = new OrchestrationMailboxPointerState()
+    const settleMailboxPointerEnter = vi.fn()
+    const settle = vi.fn((settledPtyId: string, flight) => state.settleFlight(settledPtyId, flight))
+    const resumed = resumePendingOrchestrationMailboxPointer({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unreadable composer reaches only these deps.
+      deps: {
+        getDb: () => ({ settleMailboxPointerEnter }),
+        resolveSubmitTarget: () => target,
+        getCliCommand: () => 'orca',
+        readComposerDraft: async () => undefined
+      } as never,
+      state,
+      terminal,
+      mailboxHandle,
+      enterDelayMs: 0,
+      settle,
+      redrive: vi.fn(),
+      messages: [
+        {
+          id: 'msg-unreadable',
+          type: 'status',
+          sequence: 1,
+          pointer_enter_pending: MAILBOX_POINTER_WRITE_ATTEMPTED,
+          pointer_pty_id: ptyId,
+          pointer_process_incarnation: target.processIncarnation
+        }
+      ]
+    })
+
+    expect(resumed).toBe(true)
+    await vi.waitFor(() => expect(settle).toHaveBeenCalledOnce())
+    expect(settleMailboxPointerEnter).toHaveBeenCalledWith(
+      ['msg-unreadable'],
+      { ptyId, processIncarnation: target.processIncarnation },
+      [MAILBOX_POINTER_WRITE_ATTEMPTED]
+    )
+    expect(state.hasFlight(ptyId)).toBe(false)
+    expect(state.hasActiveWatermark(mailboxHandle)).toBe(false)
   })
 
   describe('a pointer whose mail a check read before Enter', () => {

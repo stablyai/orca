@@ -27,6 +27,7 @@ type ResumePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   terminal: OrchestrationMailboxTerminal
   mailboxHandle: string
   messages: readonly OrchestrationMailboxPointerMessage[]
+  enterDelayMs: number
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
@@ -122,15 +123,16 @@ function submitPointerLeftInComposer<TWaiter extends OrchestrationMessageWaiter>
   const { ptyId } = args.terminal
   const target = { ptyId, processIncarnation: expectedTarget.processIncarnation }
   const messageIds = args.messages.map((message) => message.id)
-  const flight = args.state.beginFlight(ptyId)
-  flight.processIncarnation = target.processIncarnation
-  flight.stagedMessageIds = messageIds
-  args.state.setWatermark(args.mailboxHandle, newestSequence, ptyId)
+  // Before the flight: a throw here must not strand a flight that parks this terminal's mail.
   const cliCommand = args.deps.getCliCommand(expectedTarget.terminal.handle)
   const heldDeliveryId = args.deps.getDb()?.getOutstandingMailboxDelivery?.(args.mailboxHandle)?.id
   const pointers = [undefined, heldDeliveryId].map((held) =>
     formatMessagePointer(args.messages.length, args.mailboxHandle, cliCommand, held)
   )
+  const flight = args.state.beginFlight(ptyId)
+  flight.processIncarnation = target.processIncarnation
+  flight.stagedMessageIds = messageIds
+  args.state.setWatermark(args.mailboxHandle, newestSequence, ptyId)
   // The flight holds this terminal's other mail, so a stalled screen read must not hold it long.
   void withTimeout(args.deps.readComposerDraft(ptyId), COMPOSER_DRAFT_READ_TIMEOUT_MS, undefined)
     .then((draft) => {
@@ -138,9 +140,9 @@ function submitPointerLeftInComposer<TWaiter extends OrchestrationMessageWaiter>
         return
       }
       if (pointers.some((pointer) => isHeldAgentPromptDraft(draft, pointer, 0))) {
-        // Resume as if the write just settled; the text has waited long enough for its Enter.
+        // Resume as if the write just settled, so Enter keeps its usual delay and idle deferral.
         finishPointerWriteAndStageEnter(
-          { ...args, newestSequence, enterDelayMs: 0 },
+          { ...args, newestSequence },
           ptyId,
           flight,
           expectedTarget,
