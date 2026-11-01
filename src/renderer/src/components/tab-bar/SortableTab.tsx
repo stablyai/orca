@@ -3,10 +3,8 @@ import { useCallback, useEffect } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
-import { getAgentLabel } from '@/lib/agent-catalog'
-import { basename } from '@/lib/path'
 import { Input } from '@/components/ui/input'
-import { TabHoverCard } from './TabHoverCard'
+import { TerminalTabHoverCard } from './TerminalTabHoverCard'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
@@ -368,15 +366,11 @@ export default function SortableTab({
           {isEditing || menuOpen ? (
             tabRoot
           ) : (
-            <TabHoverCard
+            <TerminalTabHoverCard
+              tab={tab}
               title={displayTitle}
-              programName={
-                tabAgent
-                  ? getAgentLabel(tabAgent)
-                  : shellForIcon
-                    ? basename(shellForIcon)
-                    : translate('tabHoverCard.terminal', 'Terminal')
-              }
+              agent={tabAgent}
+              shell={shellForIcon}
               icon={
                 <TerminalTabLeadingIcon
                   agent={tabAgent}
@@ -394,7 +388,7 @@ export default function SortableTab({
               }
             >
               {tabRoot}
-            </TabHoverCard>
+            </TerminalTabHoverCard>
           )}
         </div>
       </ContextMenuTrigger>

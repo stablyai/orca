@@ -243,6 +243,7 @@ const SLEEPING = {
   mainAgent: resumeRecord('mainAgent'),
   connectionId: resumeRecord('connectionId'),
   launchConfig: resumeRecord('launchConfig'),
+  claudeAccountId: resumeRecord('claudeAccountId'),
   origin: resumeRecord('origin'),
   restoreOnTabOpenOnly: resumeRecord('restoreOnTabOpenOnly')
 } as const satisfies Record<keyof SleepingAgentSessionRecord, DiskFieldWritten>

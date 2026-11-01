@@ -41,6 +41,7 @@ export type WorkerFollowUpPlacement = {
   agent?: string
   model?: string
   effort?: string
+  account?: string
   /** Earlier task and report, for a fresh agent that cannot reopen the conversation. */
   earlierWork?: string
   reopen?: WorkerFollowUp['reopen']
@@ -96,8 +97,10 @@ export async function chooseWorkerFollowUpPlacement(
           delivery: 'reopened',
           worktreeId,
           agent: session.agent,
+          ...(options.account ? { account: options.account } : {}),
           earlierWork: earlierWork(db, latest),
-          reopen: (dispatchId) => reopenWorkerTerminal(runtime, worktreeId, session, dispatchId)
+          reopen: (dispatchId) =>
+            reopenWorkerTerminal(runtime, worktreeId, session, dispatchId, options.account)
         }
   }
   if (!options.agent) {
@@ -109,6 +112,7 @@ export async function chooseWorkerFollowUpPlacement(
     agent: options.agent,
     ...(options.model ? { model: options.model } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
+    ...(options.account ? { account: options.account } : {}),
     earlierWork: earlierWork(db, latest)
   }
 }

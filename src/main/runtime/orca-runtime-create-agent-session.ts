@@ -78,7 +78,8 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
           request.viewMode ?? null,
-          ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
+          ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : []),
+          ...(request.claudeAccountId ? ['claude-account', request.claudeAccountId] : [])
         ])
       )
       .digest('base64url')
@@ -144,7 +145,8 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
             request.viewMode ?? null,
-            ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
+            ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : []),
+            ...(request.claudeAccountId ? ['claude-account', request.claudeAccountId] : [])
           ])
         )
         .digest('base64url')
@@ -187,6 +189,9 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           // Account env is re-prepared per attempt; exclude from fingerprints and let first spawn win.
           accountEnv: request.accountEnv,
           terminalImageViewerSupported: caller.terminalImageViewerSupported,
+          ...(request.claudeAccountId && request.agent === 'claude'
+            ? { launchClaudeAccountId: request.claudeAccountId }
+            : {}),
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
           cwd: startupCwd,
           presentation: request.presentation ?? 'background',

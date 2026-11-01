@@ -80,9 +80,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         const agentTeams = await teamAllocation
           .prepare(
             {
-              launchConfig: launchOpts.launchConfig,
-              command: launchOpts.command,
-              claudeAgentTeamsSourceCommand: launchOpts.claudeAgentTeamsSourceCommand,
+              launch: launchOpts,
               claudeAgentTeamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
               baseEnv: { ...process.env, ...baseEnv },
               adoptedBeforeLaunch: null
@@ -130,6 +128,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               launchOpts.envToDelete,
               agentTeamsPlan?.envToDelete
             ),
+            ...dependencies.terminalCreateClaudeAccountIdField(launchOpts),
             resumeProviderSession: launchOpts.resumeProviderSession,
             ...(launchOpts.resumeOrigin ? { resumeOrigin: launchOpts.resumeOrigin } : {}),
             telemetry: launchOpts.telemetry,

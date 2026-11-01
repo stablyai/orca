@@ -30,7 +30,8 @@ import type {
 } from './agent-status-bridge-types'
 import {
   normalizeAgentStatusEvent,
-  normalizeAgentStatusMetadata
+  normalizeAgentStatusMetadata,
+  normalizeMainClaudeAccountId
 } from './normalize-agent-status-event'
 import {
   applyProgramStatusOnlyUpdate,
@@ -183,18 +184,15 @@ export function createAgentStatusEventApplicator(args: {
     const statusPayload = data.orchestration
       ? { ...resolvedPayload, orchestration: data.orchestration }
       : resolvedPayload
-    const statusPayloadWithTurnBoundary = data.promptInteractionKey
-      ? { ...statusPayload, promptInteractionKey: data.promptInteractionKey }
-      : statusPayload
-    const statusPayloadWithProvenance =
-      data.restoredUnconfirmed === true
-        ? { ...statusPayloadWithTurnBoundary, restoredUnconfirmed: true }
-        : statusPayloadWithTurnBoundary
-    const statusPayloadWithObservation = data.observation
-      ? { ...statusPayloadWithProvenance, observation: data.observation }
-      : statusPayloadWithProvenance
-    // Why null: main stitches the pane's current facet onto every publish, so absence means cleared.
-    const statusPayloadWithProgramStatus = { ...statusPayloadWithObservation, programStatus }
+    const statusPayloadWithProgramStatus = {
+      ...statusPayload,
+      ...(data.promptInteractionKey ? { promptInteractionKey: data.promptInteractionKey } : {}),
+      ...(data.restoredUnconfirmed === true ? { restoredUnconfirmed: true } : {}),
+      ...(data.observation ? { observation: data.observation } : {}),
+      claudeAccountId: normalizeMainClaudeAccountId(data),
+      // Why null: main stitches the pane's current facet onto every publish, so absence means cleared.
+      programStatus
+    }
     if (
       existingStatus &&
       isInheritedFromActivePane(existingStatus, data, statusPayload.agentType, {

@@ -23,6 +23,32 @@ import {
   agentLaunchNeedsPreparedCommand,
   toAgentLaunchPreferences
 } from '../../../shared/agent-launch-preferences'
+import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
+import { describeClaudePinnedLaunchError } from '@/components/terminal-pane/claude-pinned-launch-error-copy'
+
+function toastWebHostLaunchFailure(
+  message: string | undefined,
+  fallbackMessage: string,
+  relaunch: ((claudeAccountId?: string) => void) | undefined
+): void {
+  const pinned = message ? describeClaudePinnedLaunchError(message) : null
+  if (!pinned) {
+    toast.error(fallbackMessage)
+    return
+  }
+  const action = !relaunch
+    ? undefined
+    : pinned.offerActiveAccount
+      ? {
+          label: translate(
+            'auto.components.terminal.pane.TerminalErrorToast.startOnActiveAccount',
+            'Start on active account'
+          ),
+          onClick: () => relaunch(ACTIVE_CLAUDE_ACCOUNT)
+        }
+      : undefined
+  toast.error(pinned.message, action ? { action } : undefined)
+}
 
 /** Paired web tabs are host-owned; never create a local tab, and return tabId:null. */
 export async function launchAgentInWebHostTab(args: {
@@ -40,6 +66,8 @@ export async function launchAgentInWebHostTab(args: {
   /** False opens the host's tab without selecting it. */
   activate?: boolean
   onPromptDelivered?: () => void
+  /** Starts the same launch again, optionally on another Claude account, from a refusal toast. */
+  relaunch?: (claudeAccountId?: string) => void
 }): Promise<{ delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion> {
   const {
     agent,
@@ -51,7 +79,8 @@ export async function launchAgentInWebHostTab(args: {
     promptDelivery,
     agentArgs,
     viewMode,
-    onPromptDelivered
+    onPromptDelivered,
+    relaunch
   } = args
   const failureMessage = translate(
     'agentLaunch.terminalPreparationFailed',
@@ -137,7 +166,7 @@ export async function launchAgentInWebHostTab(args: {
     hostTabId?: string
   }): { delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion => {
     if (outcome.status === 'failed') {
-      toast.error(failureMessage)
+      toastWebHostLaunchFailure(outcome.message, failureMessage, relaunch)
       return { delivered: false, failureNotified: true, outcome }
     }
     if (args.activate !== false) {

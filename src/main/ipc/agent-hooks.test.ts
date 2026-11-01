@@ -149,6 +149,37 @@ describe('agentStatus:getSnapshot IPC', () => {
     expect(handler!({})).toEqual(snapshot)
   })
 
+  it("stamps a restored pane's pinned Claude account from the pinned PTY registry", async () => {
+    const row = {
+      paneKey: PANE_KEY,
+      connectionId: null,
+      state: 'done',
+      prompt: '',
+      agentType: 'claude',
+      receivedAt: 1_700_000_000_000,
+      stateStartedAt: 1_699_999_999_000
+    }
+    getStatusSnapshot.mockReturnValue([row])
+    const registry = await import('../claude-accounts/claude-pinned-pty-registry')
+    registry.seedPinnedClaudePtysFromPersistence({ 'wt@@pty-1': 'acct-b' })
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    // The renderer has not reattached the pane yet; only the persisted layout names its PTY.
+    registerAgentHookHandlers(undefined, {
+      getPtyIdForPaneKey: () => undefined,
+      workspaceSession: {
+        getWorkspaceSession: () => ({
+          terminalLayoutsByTabId: {
+            'tab-1': { ptyIdsByLeafId: { '11111111-1111-4111-8111-111111111111': 'wt@@pty-1' } }
+          }
+        })
+      }
+    })
+
+    expect(handleHandlers.get('agentStatus:getSnapshot')!({})).toEqual([
+      { ...row, claudeAccountId: 'acct-b' }
+    ])
+  })
+
   // Keep one writer per pane while the renderer feed bridge owns structured rows.
   it('omits structured rows the renderer feed bridge still owns', async () => {
     getStatusSnapshot.mockReturnValue([

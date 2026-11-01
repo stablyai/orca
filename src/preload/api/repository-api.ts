@@ -1,6 +1,7 @@
 import type { RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
+import type { RepoAgentAccounts } from '../../shared/claude/project-claude-account-preference'
 import type {
   NestedRepoScanResult,
   ProjectGroup,
@@ -69,6 +70,7 @@ export type RepositoryApi = {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
+      agentAccounts?: RepoAgentAccounts | null
     }
   }) => Promise<Repo>
   pickFolder: () => Promise<string | null>

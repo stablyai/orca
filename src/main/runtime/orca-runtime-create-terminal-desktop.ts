@@ -13,6 +13,10 @@ export async function createDesktopTerminal(
   opts: dependencies.TerminalCreateOptions,
   presentation: RuntimeTerminalPresentation | undefined
 ): Promise<dependencies.RuntimeTerminalCreate> {
+  if (opts.claudeAccountId) {
+    // Why: only the background lane reaches the PTY spawn that honours the pinned account.
+    throw new Error('A Claude --account launch requires a workspace selector.')
+  }
   // Without a workspace there is no host on which to resolve a shell.
   if (opts.shellOverride) {
     throw new Error(

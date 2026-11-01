@@ -8,7 +8,9 @@ export function TabHoverCard({
   icon,
   programName,
   description,
-  alert
+  alert,
+  showWhenTitleFits = false,
+  onOpenChange
 }: {
   children: ReactNode
   title: string
@@ -17,19 +19,23 @@ export function TabHoverCard({
   description?: string
   /** Controls below the program row; the card then stays open under the pointer. */
   alert?: ReactNode | ((dismiss: () => void) => ReactNode)
+  /** The card carries details beyond the title, so it opens even when the title is not clipped. */
+  showWhenTitleFits?: boolean
+  onOpenChange?: (open: boolean) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLElement>(null)
   // Remove the portal before navigation can start rendering a slower destination.
   const dismiss = () => flushSync(() => setOpen(false))
   const interactive = alert !== undefined && alert !== null
+  const opensUnclipped = interactive || showWhenTitleFits
   const canOpen = (): boolean => {
     const label = triggerRef.current?.querySelector<HTMLElement>('.tab-label')
-    return interactive || !!(label && label.scrollWidth > label.clientWidth)
+    return opensUnclipped || !!(label && label.scrollWidth > label.clientWidth)
   }
 
   useEffect(() => {
-    if (!open || interactive) {
+    if (!open || opensUnclipped) {
       return
     }
     const label = triggerRef.current?.querySelector<HTMLElement>('.tab-label')
@@ -43,12 +49,16 @@ export function TabHoverCard({
     })
     observer.observe(label)
     return () => observer.disconnect()
-  }, [open, interactive, title])
+  }, [open, opensUnclipped, title])
 
   return (
     <Tooltip
       open={open}
-      onOpenChange={(nextOpen) => setOpen(nextOpen && canOpen())}
+      onOpenChange={(nextOpen) => {
+        const next = nextOpen && canOpen()
+        setOpen(next)
+        onOpenChange?.(next)
+      }}
       disableHoverableContent={!interactive}
     >
       <TooltipTrigger

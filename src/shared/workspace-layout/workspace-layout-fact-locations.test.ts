@@ -140,6 +140,7 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
     record('mainAgent', { state: 'done' })
     record('connectionId', 'conn-1')
     record('launchConfig', { agentArgs: '', agentEnv: {} })
+    record('claudeAccountId', 'acct-b')
     record('restoreOnTabOpenOnly', true)
   }
   fill(loaded, 'carried.unplacedSleepingRecords', {

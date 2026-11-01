@@ -80,6 +80,10 @@ export type RuntimePtyController = {
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
     envToDelete?: string[]
+    /** `--account`: the managed host Claude account this launch must run on. */
+    claudeAccountId?: string
+    /** The launch config's recorded account (or ACTIVE_CLAUDE_ACCOUNT); the project default applies below it. */
+    launchConfigClaudeAccountId?: string
     resumeProviderSession?: AgentProviderSessionMetadata
     resumeOrigin?: 'saved'
     telemetry?: WorktreeStartupLaunch['telemetry']

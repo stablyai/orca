@@ -1,6 +1,7 @@
 import type { WslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { GhAccountBinding } from '../../../../shared/github/account-binding'
+import type { RepoAgentAccounts } from '../../../../shared/claude/project-claude-account-preference'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type {
@@ -63,6 +64,7 @@ export type RepoUpdate = Partial<
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   ghAccount?: GhAccountBinding | null
+  agentAccounts?: RepoAgentAccounts | null
 }
 
 export type ProjectUpdate = ProjectUpdateArgs['updates']

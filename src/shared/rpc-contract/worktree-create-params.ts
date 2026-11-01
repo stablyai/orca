@@ -116,6 +116,8 @@ export const WorktreeCreate = z
     // Quote agent launches on the execution host because SSH shells can differ from the client’s.
     startupAgent: OptionalTuiAgent,
     startupPrompt: OptionalString,
+    // Why: `--account <id|email>` resolves on the host that owns the Claude accounts, never here.
+    startupClaudeAccount: OptionalString,
     // Which surface asked for the agent the host launches from `startupAgent` or `startupDraft`.
     launchSource: LaunchSourceParam.optional(),
     // Task-driven mobile creation uses desktop-equivalent host defaults and linked issue/PR draft URLs.
@@ -145,6 +147,12 @@ export const WorktreeCreate = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose either one parent selector or --no-parent.'
+      })
+    }
+    if (params.startupClaudeAccount !== undefined && params.startupAgent !== 'claude') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'startupClaudeAccount requires startupAgent claude'
       })
     }
     if (params.startupPrompt !== undefined && params.startupAgent === undefined) {

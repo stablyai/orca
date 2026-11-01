@@ -14,7 +14,7 @@ function renderTabs(): void {
             <span className="tab-label">first tab</span>
           </button>
         </TabHoverCard>
-        <TabHoverCard title="Codex Chat" icon={<span />} programName="Codex">
+        <TabHoverCard title="Codex Chat" icon={<span />} programName="Codex" showWhenTitleFits>
           <button>
             <span className="tab-label">second tab</span>
           </button>
@@ -56,6 +56,13 @@ describe('TabStripTooltipProvider', () => {
     expect(screen.queryByText('Build')).toBeNull()
     act(() => screen.getByRole('button', { name: 'first tab' }).focus())
     expect(screen.queryByText('Build')).toBeNull()
+  })
+
+  it('still shows a preview with details beyond the title when the title fits', () => {
+    Object.defineProperty(screen.getByText('second tab'), 'clientWidth', { value: 100 })
+    hover('second tab')
+    advance(TAB_TOOLTIP_DELAY_MS)
+    expect(screen.getAllByText('Codex Chat').length).toBeGreaterThan(0)
   })
 
   it('remeasures the title when a tab shrinks before the next hover', () => {

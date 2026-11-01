@@ -68,6 +68,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupAgent?: TuiAgent
   terminalImageViewerSupported?: boolean
   startupLaunchPreferences?: AgentLaunchPreferences
+  /** `--account <id|email>` for a `startupAgent: 'claude'` launch; resolved before any create. */
+  startupClaudeAccount?: string
   startupPrompt?: string
   /** Main-only: caller delivers any uncarried startupPrompt through a compatible typed line and receives delivery status. */
   onStartupPromptCarry?: (carried: boolean) => void

@@ -58,15 +58,19 @@ export async function assertExplicitWorkerTerminalUsable(args: {
 export async function assertExplicitWorkerUsable(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
-  terminal: OrchestrationParty
+  terminal: OrchestrationParty | null
   from: string
   coordinator: OrchestrationCallerIdentity | null
   resolvedWorktreeId: string | undefined
 }): Promise<void> {
-  const chat = chatAssigneeOf(args.terminal)
+  const { terminal } = args
+  if (!terminal) {
+    return
+  }
+  const chat = chatAssigneeOf(terminal)
   await (chat
     ? assertExplicitWorkerChatUsable({ ...args, chat })
-    : assertExplicitWorkerTerminalUsable({ ...args, terminal: args.terminal.address }))
+    : assertExplicitWorkerTerminalUsable({ ...args, terminal: terminal.address }))
 }
 
 /** The same refusals for a chat named by its Orca session ID: itself, unreachable, another worktree. */

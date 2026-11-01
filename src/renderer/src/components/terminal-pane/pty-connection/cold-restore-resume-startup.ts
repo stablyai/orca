@@ -73,13 +73,14 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     ) {
       return null
     }
-    const matchingSleepingLaunchConfig =
-      sleepingRecord?.launchConfig &&
+    const matchingSleepingRecord =
+      sleepingRecord &&
       (!useLiveEntry ||
         (sleepingRecord.agent === agent &&
           agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)))
-        ? sleepingRecord.launchConfig
+        ? sleepingRecord
         : undefined
+    const matchingSleepingLaunchConfig = matchingSleepingRecord?.launchConfig
     const launchConfig =
       (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
       matchingSleepingLaunchConfig
@@ -116,6 +117,12 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       providerSession,
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
       ...resolveResumeLaunchRecipe(launchConfig),
+      ...((launchConfig?.claudeAccountId ?? matchingSleepingRecord?.claudeAccountId)
+        ? {
+            claudeAccountId:
+              launchConfig?.claudeAccountId ?? matchingSleepingRecord?.claudeAccountId
+          }
+        : {}),
       platform: resumeTarget.platform,
       agentHostPlatform: resumeTarget.agentHostPlatform,
       shell: resumeTarget.shell,

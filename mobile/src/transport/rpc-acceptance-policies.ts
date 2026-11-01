@@ -1,4 +1,5 @@
 import type { RpcResponse, RpcSuccess } from './types'
+import { stripClaudePinnedLaunchMarker } from '../../../src/shared/claude/claude-pinned-launch-error'
 
 // Keep acceptance policies distinct until every caller is proven compatible with any widened/narrowed reply set.
 
@@ -32,7 +33,7 @@ export function isStreamingOpenerReply(
 /** New-tab errors historically show the host message without its diagnostic code. */
 export function requireRpcResultOrThrowMessage(response: RpcResponse): unknown {
   if (!response.ok) {
-    throw new Error(response.error.message)
+    throw new Error(stripClaudePinnedLaunchMarker(response.error.message))
   }
   return response.result
 }
