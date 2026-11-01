@@ -205,7 +205,7 @@ internal class OrcaMobileWebShellView(
   // B4 requires device proofs: no network, persistent state, file/content access, cleartext or navigation escape.
   @Suppress("DEPRECATION")
   private fun createWebView(): WebView {
-    val view = WebView(context)
+    val view = MobileWebShellSelectionView(context)
     view.setBackgroundColor(Color.TRANSPARENT)
     view.settings.apply {
       javaScriptEnabled = true
