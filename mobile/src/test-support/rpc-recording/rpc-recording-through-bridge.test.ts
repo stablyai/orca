@@ -19,6 +19,7 @@ import {
 } from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { isKeyedObject, withReplyMeta } from '../bridged-parity/divergence-evidence'
 import { pilotMountAdapters } from './pilot-mount-adapters'
+import { GITHUB_ISSUE_ITEM } from './adapters/task-item-checks-status-mount-adapters'
 import type { RecordingScenario, MountedOperation } from './recording-scenario'
 import { readScenarios } from './scenario-input'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
@@ -80,6 +81,7 @@ async function probeCase(
   lifecycle: ProbeLifecycle,
   mutation?: OperationMutation
 ) {
+  const context = `${source.id}/${partition}/${lifecycle}/${mode}`
   const selected = materializeScenario(source, 'bridge')
   const declaration = selected.steps.find((step) => step.bridgeSite === true)
   if (!declaration || !('complete' in declaration)) {
@@ -259,7 +261,9 @@ async function probeCase(
       await clock.flush()
       active.check()
       if (lateProbeReply) {
-        expect(active.lateReply(declaration.complete, lateProbeReply.value)).toBe(false)
+        expect(
+          active.lateReply(declaration.complete, declaration.params, lateProbeReply.value)
+        ).toBe(false)
       }
       if ('checkpoint' in originalStep) {
         checkpoints.push({ id: originalStep.checkpoint, state: captureValue(mounted.state()) })
@@ -364,18 +368,26 @@ async function probeCase(
         source: { number: 12, prRepo: { owner: 'owner', repo: 'repo', host: 'github.com' } }
       })
     } else if (source.id === 'tk-item-status-gitlab') {
-      // The edit opens the GitHub issue first; a cutover after its claim leaves only that selection.
-      expect(baseline).toBeDefined()
-      expect(checkpoint.state).toEqual({
-        ...(isKeyedObject(baseline) ? baseline : {}),
-        item: checkpoint.state.item,
-        error: lifecycle === 'before-probe' && !allowed ? probeFailure(partition, lifecycle) : ''
-      })
-      expect(checkpoint.state.item).toMatchObject(
+      // The edit opens the GitHub issue first. Its failure publishes while the claim is current: before the probe, or
+      // a deadline that rejects 30 seconds before the later cutover. A cutover first leaves only the selection.
+      const published =
+        (lifecycle === 'before-probe' && !allowed) ||
+        (lifecycle === 'between-probe-and-operation' && partition === 'deadline')
+      const issue = captureValue(
         allowed
-          ? { title: 'Renamed', source: { id: 'github:issue:9', labels: ['triage'] } }
-          : { title: 'An issue', source: { id: 'github:issue:9', labels: ['bug'] } }
+          ? {
+              ...GITHUB_ISSUE_ITEM,
+              title: 'Renamed',
+              source: { ...GITHUB_ISSUE_ITEM.source, title: 'Renamed', labels: ['triage'] }
+            }
+          : GITHUB_ISSUE_ITEM
       )
+      expect(baseline, context).toBeDefined()
+      expect(checkpoint.state, context).toEqual({
+        ...(isKeyedObject(baseline) ? baseline : {}),
+        item: issue,
+        error: published ? probeFailure(partition, lifecycle) : ''
+      })
     } else {
       // These actions target an unselected item; the committed selected detail/row must survive either outcome.
       expect(baseline).toBeDefined()
@@ -413,7 +425,7 @@ async function probeCase(
     const cleanups = [
       () => mounted?.dispose(),
       ...(started ? [() => clock.flush()] : []),
-      () => transport?.dispose(),
+      () => transport?.dispose(started ? () => clock.flush() : undefined),
       ...(started ? [() => clock.flush()] : []),
       () => transport?.causality.assertTransparentCalls(),
       () => transport?.causality.close(),

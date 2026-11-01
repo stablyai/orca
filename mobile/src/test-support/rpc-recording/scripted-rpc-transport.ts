@@ -204,8 +204,8 @@ export class ScriptedRpcTransport {
     }
   }
 
-  lateReply(name: string, reply: unknown): boolean {
-    return scriptedLateReply(this, name, reply)
+  lateReply(name: string, params: unknown, reply: unknown): boolean {
+    return scriptedLateReply(this, name, params, reply)
   }
 
   async cutover(): Promise<void> {
@@ -226,11 +226,14 @@ export class ScriptedRpcTransport {
     this.fault.check()
   }
 
-  async dispose(): Promise<void> {
+  // Native first, as the native connection ends under a live page: its rejections relay through the
+  // bridge (given the flush) before the page and every wrapper close. Each phase runs even after a failure.
+  async dispose(flushAfterNative?: () => void | Promise<void>): Promise<void> {
     const errors: unknown[] = []
     for (const cleanup of [
-      () => this.client?.close(),
       () => this.logical?.close(),
+      ...(flushAfterNative ? [flushAfterNative] : []),
+      () => this.client?.close(),
       ...this.wrapperCleanup.splice(0)
     ]) {
       try {

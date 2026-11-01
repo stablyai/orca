@@ -55,7 +55,7 @@ async function replay(
       const recording = await runRecording(
         scenario,
         pilotMountAdapters(root, { device: scenario }).adapters[scenario.operation]!,
-        vitestRecordingScheduler(),
+        vitestRecordingScheduler({ producer: id, scenario: scenario.id }),
         mode === 'native'
           ? undefined
           : (rpc, observation) => {

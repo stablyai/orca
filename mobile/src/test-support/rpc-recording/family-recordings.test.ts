@@ -27,7 +27,7 @@ async function certify(id: string, scenarios: RecordingScenario[]) {
         const recording = await runRecording(
           scenario,
           adapters[scenario.operation],
-          vitestRecordingScheduler()
+          vitestRecordingScheduler({ producer: id, scenario: scenario.id })
         )
         for (const checkpoint of recording.checkpoints) {
           checkpoints.push({ ...checkpoint, id: `${scenario.id}:${checkpoint.id}` })

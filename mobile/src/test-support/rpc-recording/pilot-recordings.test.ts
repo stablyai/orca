@@ -32,7 +32,7 @@ describe('RPC main recordings', () => {
           const recording = await runRecording(
             scenario,
             adapters[scenario.operation],
-            vitestRecordingScheduler()
+            vitestRecordingScheduler({ producer: id, scenario: scenario.id })
           )
           if (id === 'b1') {
             expect(visibleState(recording)).toEqual({ files: ['third.ts'] })

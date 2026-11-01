@@ -35,6 +35,8 @@ type ScenarioStepValue =
       optional?: true
       // Params built from two parallel replies change with whichever reply a matrix diverges.
       paramsFollowDivergence?: true
+      // A reply that deliberately arrives after its request ended; it must resolve nothing.
+      late?: true
     }
   | { frame: string; params: unknown; reply: unknown }
   | { bind: string; request: string; params: unknown; optional?: true }

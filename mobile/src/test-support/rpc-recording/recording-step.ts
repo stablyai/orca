@@ -44,6 +44,11 @@ export function recordingStep(
         rejectedSettlement(error, scheduler.elapsed())
       )
     }
+  } else if ('complete' in step && step.late) {
+    if (step.reject || step.optional) {
+      throw new Error(`A late reply is a required response: ${step.complete}`)
+    }
+    transport.lateReply(step.complete, step.params, step.reply)
   } else if ('complete' in step) {
     const pending = transport.outstanding(step.complete)
     if (!step.optional || pending) {

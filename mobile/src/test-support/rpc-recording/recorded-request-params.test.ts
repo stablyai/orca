@@ -279,11 +279,12 @@ describe('recorded requests against the host params contract', () => {
       if (!observed.action || !observed.mounted) {
         throw new Error('Missing original mounted search action')
       }
-      await expect(observed.action).rejects.toBeInstanceOf(BridgeClientClosedError)
+      // Ordinary cleanup closes the native connection first, so the page caller gets its relayed rejection.
+      await expect(observed.action).rejects.toMatchObject({ message: 'Connection closed' })
       if (!observed.outcome || !('error' in observed.outcome)) {
         throw new Error('Original search action did not reject during ordinary cleanup')
       }
-      expect(observed.outcome.error).toMatchObject({ message: 'the page bridge was closed' })
+      expect(observed.outcome.error).not.toBeInstanceOf(BridgeClientClosedError)
       expect(isRpcDeliveryUnknown(observed.outcome.error)).toBe(true)
       const finalState = observed.mounted.state()
       expect(finalState).toEqual({})

@@ -72,7 +72,7 @@ const GITHUB_PR_ITEM = {
   }
 } as const
 
-const GITHUB_ISSUE_ITEM = {
+export const GITHUB_ISSUE_ITEM = {
   provider: 'github',
   title: 'An issue',
   source: {

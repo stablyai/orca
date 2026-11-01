@@ -206,15 +206,20 @@ export function scriptedComplete(
   }
 }
 
+// The same alias and params identity as an ordinary completion, delivered only to a request that already ended.
 export function scriptedLateReply(
   owner: ScriptedRpcTransport,
   name: string,
+  params: unknown,
   reply: unknown
 ): boolean {
   return owner.fault.capture('explicit late reply', () => {
-    const binding = owner.bindings.get(name)
+    const binding = owner.bindings.get(owner.aliases.get(name) ?? name)
     if (!binding || binding.child.settlement.status === 'pending') {
-      throw new Error('Late reply requires an actually terminated request')
+      throw new Error(`Late reply requires an actually terminated request: ${name}`)
+    }
+    if (JSON.stringify(captureValue(binding.params)) !== JSON.stringify(captureValue(params))) {
+      throw new Error(`Late reply params mismatch: ${name}`)
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the explicit test supplies response fields and this binding supplies the actual physical ID.
     const resolved = owner.tracker.resolve({ ...(reply as object), id: binding.id } as RpcResponse)

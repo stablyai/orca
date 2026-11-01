@@ -76,7 +76,10 @@ export async function runRecording(
           effect('streams-registered-at-teardown', streams)
         }
       })
-      await attempt(() => transport!.dispose())
+      // The native rejection reaches the page through the existing scheduler before the page closes.
+      await attempt(() =>
+        transport!.dispose(schedulerStarted ? () => scheduler.flush() : undefined)
+      )
       if (schedulerStarted) {
         await attempt(() => scheduler.flush())
       }

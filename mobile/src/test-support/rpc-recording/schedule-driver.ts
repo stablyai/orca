@@ -21,6 +21,12 @@ export const REQUIRED_SCHEDULES = [
   'reject-peer-pending'
 ] as const
 
+// preflight.check runs on the default 30-second deadline, so the sibling timeout ends it before its reply.
+const SIBLING_TIMEOUT_LATE_REPLIES: Readonly<Record<string, readonly string[]>> = {
+  'settings-workspace-context-fulfilled': ['preflight.check#1'],
+  'settings-task-hydration-fulfilled': ['preflight.check#1']
+}
+
 export function siblingSchedules(
   base: RecordingScenario,
   first: Completion,
@@ -37,8 +43,16 @@ export function siblingSchedules(
   const rejected = (step: Completion): Completion => ({
     ...step,
     reply: undefined,
-    reject: { message: `${step.complete} rejected`, deliveryUnknown: true }
+    // The stable logical site names the request in every execution mode.
+    reject: { message: `${step.site ?? step.complete} rejected`, deliveryUnknown: true }
   })
+  // Only the declared reply a 30-second deadline has already ended arrives late; the rest stay live.
+  const lateAfterTimeout = SIBLING_TIMEOUT_LATE_REPLIES[base.lineage?.baseScenario ?? base.id] ?? []
+  const timeoutSuffix = suffix.map((step): ScenarioStep =>
+    'complete' in step && lateAfterTimeout.includes(step.site ?? step.complete)
+      ? { ...step, late: true }
+      : step
+  )
   const variants: Record<string, ScenarioStep[]> = {
     forward: [first, checkpoint, second],
     reverse: [second, checkpoint, first],
@@ -54,7 +68,12 @@ export function siblingSchedules(
     id: `${base.id}.${schedule}`,
     schedules: [schedule],
     ...(base.lineage ? { lineage: { ...base.lineage, schedule } } : {}),
-    steps: [...prefix, ...steps, ...suffix, { checkpoint: 'settled' }]
+    steps: [
+      ...prefix,
+      ...steps,
+      ...(schedule === 'timeout' ? timeoutSuffix : suffix),
+      { checkpoint: 'settled' }
+    ]
   }))
 }
 
@@ -136,7 +155,12 @@ export function interruptionSchedules(base: RecordingScenario): RecordingScenari
             ? { advance: 30_000 }
             : { action: interruption, id: interruption },
           { checkpoint: 'interrupted' },
-          ...base.steps.slice(completion)
+          // The interruption ended the in-flight request, so its scripted reply now arrives late.
+          ...base.steps
+            .slice(completion)
+            .map((step, index): ScenarioStep =>
+              index === 0 && interruption !== 'cutover' ? { ...step, late: true } : step
+            )
         ]
       }
     }))
