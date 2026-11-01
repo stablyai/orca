@@ -611,6 +611,7 @@ describe('readable Claude thinking', () => {
       expect(asked?.env).not.toHaveProperty('ANTHROPIC_API_KEY')
       expect(launch.env).toMatchObject({ ANTHROPIC_API_KEY: 'sk-user' })
       expect(launch.options.extraArgs).toEqual({
+        'prompt-suggestions': null,
         'replay-user-messages': null,
         'thinking-display': 'summarized'
       })
@@ -643,6 +644,14 @@ describe('readable Claude thinking', () => {
       await expect(cliFlag(CLAUDE_APPLY_FLAG_SETTINGS_CONTROL)).resolves.toBe(control)
     }
   )
+
+  it('lets saved Arguments turn prompt suggestions off', async () => {
+    const launch = await launchWith({ check: async () => 'supported' }, undefined, [
+      '--prompt-suggestions',
+      'false'
+    ])
+    expect(launch.options.extraArgs).toMatchObject({ 'prompt-suggestions': 'false' })
+  })
 
   it('keeps saved Arguments beside readable thinking, with the display left to Orca', async () => {
     const launch = await launchWith(

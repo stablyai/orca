@@ -213,7 +213,7 @@ export function claudeStructuredLaunchPart(
       probeLaunch
     )
     const configured = claudeStructuredLaunchArgs(await deps.resolveLaunchArgs())
-    const { thinkingDisplayArgs, visuals } = await launchFlags
+    const { thinkingDisplayArgs, promptSuggestionArgs, visuals } = await launchFlags
     const additionalDirectories = [
       ...configured.additionalDirectories,
       ...(deps.attachmentDirectory ? [deps.attachmentDirectory] : []),
@@ -275,6 +275,8 @@ export function claudeStructuredLaunchPart(
           ...(additionalDirectories.length ? { additionalDirectories } : {}),
           ...(visuals?.pluginDir ? { plugins: [{ type: 'local', path: visuals.pluginDir }] } : {}),
           extraArgs: {
+            // Configured args follow so a user's --prompt-suggestions false wins.
+            ...promptSuggestionArgs,
             ...configured.extraArgs,
             ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs,
             ...permission.extraArgs,

@@ -8,6 +8,11 @@ export const CLAUDE_THINKING_DISPLAY_FLAG: ClaudeCliFlag = {
   firstVersion: '2.1.94'
 }
 
+export const CLAUDE_PROMPT_SUGGESTIONS_FLAG: ClaudeCliFlag = {
+  option: '--prompt-suggestions',
+  firstVersion: '2.1.154'
+}
+
 export const CLAUDE_PLUGIN_DIR_FLAG: ClaudeCliFlag = {
   option: '--plugin-dir',
   firstVersion: '2.0.25'
