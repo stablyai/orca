@@ -136,13 +136,11 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   }
 
   const subscriptions = new BridgeClientSubscriptions({
-    send: (frame) => posted(frame),
+    send: posted,
     onDroppedBinaryFrame: () => report({ kind: 'binary-frame-dropped' })
   })
 
-  const handshake = createBridgeInitHandshake(() => {
-    sendFrame(createPageReadyFrame())
-  })
+  const handshake = createBridgeInitHandshake(() => sendFrame(createPageReadyFrame()))
 
   // Before-init calls expose mount-order bugs; after-close calls stay inert because teardown callers generally have no catch.
   function requireSession(): void {
@@ -160,9 +158,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       requests.closeAll(replaced)
       subscriptions.failAll(replaced.message)
     },
-    prime: (connection) => {
-      cache.prime(connection)
-    }
+    prime: (connection) => cache.prime(connection)
   })
 
   function acceptState(outcome: BridgeSnapshotOutcome): void {

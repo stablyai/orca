@@ -99,7 +99,32 @@ function note(key: string, value: string | null, source: MirroredWriteSource): v
   }
 }
 
-// Mirror only accepted writes; page stores can refuse route keys or oversized values, and callers need the refusal.
+function isSubscribableStorage(value: object): value is {
+  subscribe: (listener: (key: string, value: string | null) => void) => () => void
+} {
+  return 'subscribe' in value && typeof value.subscribe === 'function'
+}
+
+if (
+  typeof AsyncStorage === 'object' &&
+  AsyncStorage !== null &&
+  isSubscribableStorage(AsyncStorage)
+) {
+  AsyncStorage.subscribe(note)
+}
+
+/**
+ * The one way a mirrored key is written, and the only thing that notes the map (ruling 35).
+ *
+ * Noted on an accepted write and on nothing else. The store is what accepts: inside the page it is
+ * the bridge's adapter, which refuses a key this route was never given and a value past the frame
+ * cap, and on the device it is AsyncStorage, which refuses neither. Deciding here rather than in
+ * fourteen writers is the whole point — twelve of them noted first and never looked again, so a
+ * refused page write left this map holding a value no store had taken and the next `init` handed
+ * the page exactly that. There is nothing to undo, because nothing is written until the answer.
+ *
+ * Returns the store's own promise so callers can report refusals.
+ */
 export function persistMirrored(key: string, value: string | null): Promise<void> {
   const write = value === null ? AsyncStorage.removeItem(key) : AsyncStorage.setItem(key, value)
   // Read back before noting: the page adapter can resolve a refused write, so requested value is not proof of persistence.
