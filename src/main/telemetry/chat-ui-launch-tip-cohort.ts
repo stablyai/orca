@@ -2,11 +2,14 @@ import { randomInt } from 'node:crypto'
 import type { Store } from '../persistence/loading-store/store'
 import { resolveConsent } from './consent'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { ChatUiLaunchTipTargeting } from '../../shared/telemetry-settings-types'
+import type {
+  ChatUiLaunchTipCohort,
+  ChatUiLaunchTipTargeting
+} from '../../shared/telemetry-settings-types'
 
 export type ChatUiLaunchTipEligibility = (settings: GlobalSettings) => boolean
 
-export type ChatUiLaunchTipCohort = 'control' | 'treatment'
+export type { ChatUiLaunchTipCohort }
 
 // Decided once per launch with the cohort, so the tip and its enrollment read the same consent; contributor builds never set it.
 let deferredForConsent = false
@@ -25,7 +28,7 @@ export function ensureChatUiLaunchTipCohort(
     const settings = store.getSettings()
     const telemetry = settings.telemetry
     const saved = telemetry?.chatUiLaunchTipCohort
-    if (saved === 'control' || saved === 'treatment') {
+    if (saved === 'control' || saved === 'treatment' || saved === 'treatment-live-switch') {
       return saved
     }
     if (
@@ -40,9 +43,11 @@ export function ensureChatUiLaunchTipCohort(
       deferredForConsent = consent === 'pending_banner'
       return undefined
     }
-    const cohort: ChatUiLaunchTipCohort = randomInt(5) === 0 ? 'treatment' : 'control'
+    const draw = randomInt(10)
+    const cohort: ChatUiLaunchTipCohort =
+      draw < 8 ? 'control' : draw === 8 ? 'treatment' : 'treatment-live-switch'
     const targeting =
-      cohort === 'treatment' ? assignTargeting(settings, resolveEligibility) : undefined
+      cohort === 'control' ? undefined : assignTargeting(settings, resolveEligibility)
     store.updateSettings({
       telemetry: {
         ...telemetry,

@@ -61,16 +61,17 @@ export function trackChatUiFeatureTipAction(
   }
 }
 
-/** Unenrolled and legacy treatment profiles retain the original announcement behavior. */
+/** Unenrolled profiles retain the original announcement behavior; both treatment arms show unless targeting excludes them. */
 export function isChatUiLaunchTipHeldOut(
   settings: Pick<GlobalSettings, 'telemetry'> | null
 ): boolean {
   const telemetry = settings?.telemetry
+  const cohort = telemetry?.chatUiLaunchTipCohort
   return (
-    telemetry?.chatUiLaunchTipCohort === 'control' ||
-    (telemetry?.chatUiLaunchTipCohort === 'treatment' &&
-      telemetry.chatUiLaunchTipTargeting?.mode === 'eligible-harnesses' &&
-      telemetry.chatUiLaunchTipTargeting.eligible !== true)
+    cohort === 'control' ||
+    ((cohort === 'treatment' || cohort === 'treatment-live-switch') &&
+      telemetry?.chatUiLaunchTipTargeting?.mode === 'eligible-harnesses' &&
+      telemetry?.chatUiLaunchTipTargeting?.eligible !== true)
   )
 }
 

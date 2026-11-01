@@ -11,6 +11,7 @@ import { ChatUiHereCornerCard } from './ChatUiHereCornerCard'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn() }))
+vi.mock('@/hooks/usePrefersReducedMotion', () => ({ usePrefersReducedMotion: () => true }))
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -35,14 +36,35 @@ beforeEach(() => {
   openSettingsPage.mockReset()
   vi.mocked(toast.error).mockReset()
   vi.mocked(track).mockReset()
+  vi.spyOn(Math, 'random').mockReturnValue(0.4)
   container = document.createElement('div')
+  document.body.appendChild(container)
   root = createRoot(container)
-  act(() => root.render(<ChatUiHereCornerCard onClose={onClose} />))
+  renderCard()
 })
 
 afterEach(() => {
   act(() => root.unmount())
+  container.remove()
+  vi.restoreAllMocks()
 })
+
+function renderCard(cohort?: 'treatment' | 'treatment-live-switch'): void {
+  const settings = createGlobalSettingsFixture({ agentDefaultSurface: 'terminal' })
+  useAppStore.setState({
+    settings: {
+      ...settings,
+      telemetry: {
+        optedIn: settings.telemetry?.optedIn ?? true,
+        installId: settings.telemetry?.installId ?? 'install',
+        existedBeforeTelemetryRelease: settings.telemetry?.existedBeforeTelemetryRelease ?? true,
+        ...settings.telemetry,
+        chatUiLaunchTipCohort: cohort
+      }
+    }
+  })
+  act(() => root.render(<ChatUiHereCornerCard onClose={onClose} />))
+}
 
 function button(label: string): HTMLButtonElement {
   const found = Array.from(container.querySelectorAll('button')).find(
@@ -109,4 +131,54 @@ describe('Chat UI corner card', () => {
     expect(openSettingsPage).toHaveBeenCalledOnce()
     expect(onClose).toHaveBeenCalledOnce()
   })
+
+  it('offers the live-switching demo only in the live-switch arm', () => {
+    expect(container.textContent).not.toContain('Live switching available')
+
+    renderCard('treatment-live-switch')
+    const line = button('Live switching available')
+    act(() => line.click())
+
+    expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
+      variant: 'chat_ui_off',
+      action: 'open_live_switching'
+    })
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain('Live switching')
+    expect(dialog?.textContent).toContain('Claude Code')
+    expect(dialog?.textContent).toContain('Continue in Chat UI')
+  })
+
+  it.each(['Got it', 'Close', 'Escape'])(
+    'returns focus to the live-switching opener after closing with %s',
+    async (dismissal) => {
+      renderCard('treatment-live-switch')
+      const opener = button('Live switching available')
+      act(() => {
+        opener.focus()
+        opener.click()
+      })
+      const dialog = document.querySelector('[role="dialog"]')
+      expect(dialog?.contains(document.activeElement)).toBe(true)
+
+      await act(async () => {
+        if (dismissal === 'Escape') {
+          document.activeElement?.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+          )
+        } else {
+          const closeButton = Array.from(dialog?.querySelectorAll('button') ?? []).find(
+            (entry) => entry.textContent === dismissal
+          )
+          expect(closeButton).toBeDefined()
+          closeButton?.click()
+        }
+      })
+
+      await vi.waitFor(() => {
+        expect(document.querySelector('[role="dialog"]')).toBeNull()
+        expect(document.activeElement).toBe(opener)
+      })
+    }
+  )
 })

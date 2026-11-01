@@ -87,7 +87,8 @@ afterEach(() => {
 describe('Chat UI launch tip holdout', () => {
   it.each([
     [undefined, 'unassigned'],
-    ['treatment', 'treatment']
+    ['treatment', 'treatment'],
+    ['treatment-live-switch', 'treatment-live-switch']
   ] as const)(
     'opens the corner card for %s profiles after recording exposure',
     async (cohort, label) => {
@@ -137,6 +138,18 @@ describe('Chat UI launch tip holdout', () => {
       ).toBe(false)
     }
   )
+
+  it('suppresses the live-switch card when no harness qualifies', async () => {
+    await launch('treatment-live-switch', { mode: 'eligible-harnesses', eligible: false })
+    expect(container.querySelector('output')?.textContent).toBe('false')
+    expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
+      variant: 'chat_ui_off',
+      launch_tip_cohort: 'treatment-live-switch',
+      targeting: 'eligible-harnesses',
+      shown: false
+    })
+    expect(useAppStore.getState().modalData).toMatchObject({ tipId: 'cmd-j-palette' })
+  })
 
   it.each([
     { variant: 'chat-ui-off', targeting: { mode: 'all' } },

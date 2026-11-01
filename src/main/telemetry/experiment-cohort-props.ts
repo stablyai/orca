@@ -17,7 +17,10 @@ export function experimentCohortProps(
   const cohort = ensureChatUiLaunchTipCohort(store, resolveChatUiEligibility)
   const telemetry = store.getSettings().telemetry
   const language = telemetry?.onboardingLanguageCohort
-  const targeting = cohort === 'treatment' ? telemetry?.chatUiLaunchTipTargeting?.mode : undefined
+  const targeting =
+    cohort === 'treatment' || cohort === 'treatment-live-switch'
+      ? telemetry?.chatUiLaunchTipTargeting?.mode
+      : undefined
   return {
     onboarding_language_v1:
       language === 'control' || language === 'treatment' ? language : undefined,
