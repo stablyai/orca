@@ -11865,7 +11865,7 @@
       "src/shared/modifier-double-tap-detector.test.ts": 45,
       "src/shared/muse-session-log.test.ts": 43,
       "src/shared/native-chat/transcript/native-chat-activity-tail-line.test.ts": 141,
-      "src/shared/native-chat-agent-profiles.test.ts": 37,
+      "src/shared/native-chat/native-chat-agent-profiles.test.ts": 37,
       "src/shared/native-chat/native-chat-agent-support.test.ts": 38,
       "src/shared/native-chat/native-chat-appearance-settings.test.ts": 34,
       "src/shared/native-chat-approval-envelope.test.ts": 49,
