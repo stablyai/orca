@@ -6,6 +6,7 @@ import { track } from '../telemetry/client'
 import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
 import { getDaemonProvider, listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
 import { initDaemonPtyProvider } from '../daemon/daemon-provider-init'
+import { scheduleLateDaemonAdoption } from '../daemon/daemon-late-adoption'
 import { restartLocalTerminalsAfterElevation } from '../windows/windows-administrator-restart'
 import { resolveTerminalSpawnAdmissionMode } from '../daemon/terminal-spawn-gate'
 import {
@@ -131,16 +132,28 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
     // Desktop/serve must adopt the persistent provider before terminals or renderers exist.
     startDaemonPtyProvider: async (signal) => {
       logStartupMilestone('startup-service-start', { service: 'daemon-pty-provider' })
-      // Only GUI macOS daemons follow login-session death; serve must survive SSH disconnect.
-      await initDaemonPtyProvider(signal, {
+      const policy = {
+        // Only GUI macOS daemons follow login-session death; serve must survive SSH disconnect.
         macosLoginSessionWatch: process.platform === 'darwin' && !state.isServeMode,
         // Desktop and serve share one per-machine restore budget (D1 Q1).
         spawnAdmission: resolveTerminalSpawnAdmissionMode()
-      })
+      }
+      try {
+        await initDaemonPtyProvider(signal, policy)
+      } finally {
+        if (!getDaemonProvider()) {
+          scheduleLateDaemonAdoption(
+            () => initDaemonPtyProvider(undefined, { ...policy, inProcessPtysMayExist: true }),
+            () => state.isQuitting
+          )
+        }
+      }
       await restartLocalTerminalsAfterElevation(signal)
       // Retained shells keep their launch-time Codex home despite routing changes.
       const hasRetainedManagedHostPane = hasRecordedManagedHostCodexPane()
       if (
+        // After the gate opened, daemon-only inventories would drop in-process Codex panes.
+        !signal.aborted &&
         state.codexRuntimeHome &&
         (hasRetainedManagedHostPane || hasAnyRecordedLegacyWslCodexPane())
       ) {

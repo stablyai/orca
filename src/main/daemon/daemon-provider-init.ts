@@ -51,9 +51,14 @@ function logDaemonMilestone(event: string, details: Record<string, unknown> = {}
   }
 }
 
+export type DaemonProviderInitOptions = DaemonLaunchPolicy & {
+  /** Set once in-process terminals may already run, e.g. adopting a host after startup fell back. */
+  inProcessPtysMayExist?: boolean
+}
+
 export async function initDaemonPtyProvider(
   signal?: AbortSignal,
-  options: DaemonLaunchPolicy = {}
+  options: DaemonProviderInitOptions = {}
 ): Promise<void> {
   logDaemonMilestone('daemon-init-start')
   // Exercise startup-gate timeout by making daemon init deterministically outlast it.
@@ -78,19 +83,8 @@ export async function initDaemonPtyProvider(
   const launchMode = newSpawner.getHandle()?.mode
   const quarantine = newSpawner.getHandle()?.quarantine
   logDaemonMilestone('daemon-current-ready')
-  if (signal?.aborted) {
-    // Fallback PTYs may already exist; release the late daemon lease without replacing their provider.
-    const abortedStartupAdapter = new DaemonPtyAdapter({
-      socketPath: info.socketPath,
-      tokenPath: info.tokenPath,
-      pidPath: getDaemonPidPath(runtimeDir),
-      profileScope: runtimeDir,
-      runtimeDir
-    })
-    releaseDaemonAdoptionLease(newSpawner.getHandle())
-    await abortedStartupAdapter.disconnectOnly()
-    return
-  }
+  // Fallback PTYs may already exist; keep them on the local provider and route only fresh terminals.
+  const keepInProcessPtys = options.inProcessPtysMayExist === true || signal?.aborted === true
 
   const newAdapter = new DaemonPtyAdapter({
     socketPath: info.socketPath,
@@ -131,7 +125,7 @@ export async function initDaemonPtyProvider(
     ])
     legacyAdapters = discoveredLegacyAdapters
     routedAdapter =
-      launchMode === 'degraded-new-pty-fallback'
+      launchMode === 'degraded-new-pty-fallback' || keepInProcessPtys
         ? new DegradedDaemonPtyProvider({
             current: newAdapter,
             legacy: legacyAdapters,
@@ -154,8 +148,8 @@ export async function initDaemonPtyProvider(
     } else if (routedAdapter instanceof DaemonPtyRouter) {
       await routedAdapter.discoverLegacySessions()
     }
-    if (signal?.aborted) {
-      // Recheck after discovery; release uninstalled leases without killing live sessions.
+    if (signal?.aborted && !(routedAdapter instanceof DegradedDaemonPtyProvider)) {
+      // Aborted after choosing a provider that would strand fallback PTYs; release its leases instead.
       await routedAdapter.disconnectOnly()
       return
     }
