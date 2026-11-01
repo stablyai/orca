@@ -20,6 +20,7 @@ import {
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { parseTerminalQuickCommandArguments } from '../../../../shared/terminal-quick-command-arguments'
 import { getTerminalQuickCommandAgentOptions } from './terminal-quick-command-agent-options'
 import type { TerminalQuickCommandDialogDraftMemory } from './terminal-quick-command-dialog-draft'
 import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
@@ -55,6 +56,27 @@ function getBodyLengthLabel(bodySize: TerminalQuickCommandBodySize): string {
       value1: bodySize.max.toLocaleString(getIntlLocale())
     }
   )
+}
+
+function getArgumentsHint(commandText: string, isAgentAction: boolean): string {
+  const names = parseTerminalQuickCommandArguments(commandText).map((arg) => arg.name)
+  if (names.length > 0) {
+    return translate(
+      'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.arguments_detected',
+      'Asks for: {{value0}}',
+      { value0: names.join(', ') }
+    )
+  }
+  return isAgentAction
+    ? translate(
+        'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.agent_toolbar_hint',
+        'Supports /goal, skills, paths'
+      )
+    : translate(
+        'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.arguments_hint',
+        '{{value0}} or {{value1}} asks on run',
+        { value0: '{{name}}', value1: '{{env:dev,*prod}}' }
+      )
 }
 
 function getBodyRefusalLabel(belowCurrentPromptCap: boolean): string {
@@ -192,14 +214,9 @@ export function TerminalQuickCommandContentSection({
           <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
             {commandFieldLabel}
           </span>
-          {isAgentAction ? (
-            <span className="shrink-0 text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.agent_toolbar_hint',
-                'Supports /goal, skills, paths'
-              )}
-            </span>
-          ) : null}
+          <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+            {getArgumentsHint(commandText, isAgentAction)}
+          </span>
         </div>
 
         <textarea
