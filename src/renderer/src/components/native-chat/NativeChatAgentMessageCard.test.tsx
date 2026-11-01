@@ -64,7 +64,7 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
     journalPosition: { sequence: 7, index: 0 },
     timestamp: 1
   })
-  expect(agentMessageHeading(message.from, message.agentStart)).toBe('started')
+  expect(agentMessageHeading(message.from, message)).toBe('started')
   expect(nativeChatTurnFoldRow(message, 'turn', false).outlivesTurn).toBe(true)
   expect(isNoiseMessage(message)).toBe(false)
   expect(nativeChatRowSpeaksOrActs(message, true, new Map())).toBe(false)
@@ -140,18 +140,24 @@ it.each(['', '   ', '<system-reminder>Internal noise</system-reminder>'])(
   }
 )
 
-it('heads an agent its chat launched on its own as a handoff, not a worker', () => {
-  const message = projectStructuredAgentStartItem({
-    itemId: 'handoff',
-    revision: 1,
-    sequence: 2,
-    observedAt: 1,
-    body: { kind: 'agent-handoff', launchId: 'launch-1', agent: from.senders[0], task: 'Fix it' }
-  })!
-  render(<MessageRow message={message} expandSignal={false} onScrollMessageToTop={() => {}} />)
-  expect(screen.getByText('Handed off to agent')).toBeInTheDocument()
-  expect(screen.queryByText('Started worker')).not.toBeInTheDocument()
-})
+it.each(['Fix it', ''])(
+  'heads an agent its chat launched on its own as a handoff, not a worker, with task %j',
+  (task) => {
+    const message = projectStructuredAgentStartItem({
+      itemId: 'handoff',
+      revision: 1,
+      sequence: 2,
+      observedAt: 1,
+      body: { kind: 'agent-handoff', launchId: 'launch-1', agent: from.senders[0], task }
+    })!
+    render(<MessageRow message={message} expandSignal={false} onScrollMessageToTop={() => {}} />)
+    expect(screen.getByText('Handed off to agent')).toBeInTheDocument()
+    expect(screen.queryByText('Started worker')).not.toBeInTheDocument()
+    // With no task the card is the agent's name alone: nothing to copy.
+    expect(screen.getByText('Build cards')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Copy message' }) !== null).toBe(task !== '')
+  }
+)
 
 it('renders unreadable worker metadata with the existing unnamed fallback and no navigation', () => {
   const raw: unknown = {

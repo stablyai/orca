@@ -27,12 +27,10 @@ function prepareHandoffRecord(
 ): (result: AgentLaunchResult) => void {
   // Only the orca CLI on this host names its chat; windows, phones and remote CLIs launch for a person.
   const callerSessionId = context.orchestrationCompatibilityEvidence?.agentSessionId
-  const task = params.prompt?.delivery === 'submit' ? params.prompt.text : undefined
   if (
     !isAgentRpcCaller(context.caller) ||
     callerSessionId === undefined ||
-    !isOrcaSessionId(callerSessionId) ||
-    !task
+    !isOrcaSessionId(callerSessionId)
   ) {
     return () => {}
   }
@@ -41,9 +39,11 @@ function prepareHandoffRecord(
     return () => {}
   }
   return ({ outcome, prompt }) => {
-    if (prompt?.outcome === 'not-delivered') {
-      return
-    }
+    // The agent exists either way; the card shows a task only once it was sent to that agent.
+    const task =
+      params.prompt?.delivery === 'submit' && prompt?.outcome !== 'not-delivered'
+        ? params.prompt.text
+        : ''
     const address =
       outcome.kind === 'structured'
         ? `${ORCA_SESSION_ADDRESS_PREFIX}${outcome.sessionId}`
