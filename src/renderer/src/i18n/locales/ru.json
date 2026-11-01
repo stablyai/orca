@@ -900,6 +900,8 @@
       "claudeRemoveFolder": "Orca удалит с этого компьютера папку Claude и данные входа этой учётной записи. История чатов, общая с системной учётной записью по умолчанию, сохранится. Если выбрана эта учётная запись, следующий запуск Claude использует системную учётную запись по умолчанию."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Операция Git идёт в другом месте",
+      "remoteOperationInAnotherWorkspace": "В другом рабочем пространстве выполняется операция Git, например отправка, получение или принудительная отправка. Дождитесь её завершения, прежде чем использовать это действие, чтобы операции не пересекались.",
       "actionModel": {
         "on": "Включено",
         "off": "Выключено",
@@ -23717,6 +23719,7 @@
       "serveSimUnavailable": "serve-sim недоступен.",
       "serveSimNoEndpoints": "serve-sim не вернул конечные точки потоковой передачи.",
       "serveSimEndpointUnreachable": "serve-sim запущен, но его конечная точка потоковой передачи недоступна.",
+      "deviceHubInputBlocked": "Device Hub из Xcode перехватил ввод для этого симулятора, поэтому касания и набор текста до него не доходят. Закройте Device Hub, затем снова подключите симулятор.",
       "androidSdkMissing": "Android SDK не найден. Установите Android Studio и задайте ANDROID_HOME.",
       "adbUnavailable": "adb недоступен.",
       "noAndroidDevices": "Устройства Android и AVD не найдены. Создайте устройство в Android Studio.",

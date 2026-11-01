@@ -1,8 +1,8 @@
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
-import { writeHooksJson, writeManagedScript } from '../agent-hooks/installer-utils'
-import { writeHooksJsonAsync } from '../agent-hooks/hooks-json-write-async'
-import { CLAUDE_AGENT_VIEW_PLUGIN } from '../../shared/claude-agent-view'
+import { writeHooksJson, writeManagedScript } from '../../agent-hooks/installer-utils'
+import { writeHooksJsonAsync } from '../../agent-hooks/hooks-json-write-async'
+import { CLAUDE_AGENT_VIEW_PLUGIN } from '../../../shared/claude-agent-view'
 import { CLAUDE_AGENT_VIEW_MOD_SOURCE } from './agent-view-mod-source'
 
 export const CLAUDE_AGENT_VIEW_PLUGIN_FILES: Record<string, string> = {

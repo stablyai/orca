@@ -11,13 +11,13 @@ import { existsSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { readFile, rm } from 'node:fs/promises'
 import type { SFTPWrapper } from 'ssh2'
+import { writeHooksJson, type HooksConfig } from '../../agent-hooks/installer-utils'
 import {
   readHooksJson,
-  writeHooksJson,
-  writeHooksJsonAsync,
-  type HooksConfig
-} from '../agent-hooks/installer-utils'
-import { parseHooksJsonText, readHooksJsonWithRaw } from '../agent-hooks/hooks-json-read'
+  parseHooksJsonText,
+  readHooksJsonWithRaw
+} from '../../agent-hooks/hooks-json-read'
+import { writeHooksJsonAsync } from '../../agent-hooks/hooks-json-write-async'
 import {
   claudeAgentViewChord,
   parseClaudeAgentViewBindings,
@@ -28,10 +28,8 @@ import {
   readTextFileRemote,
   writeHooksJsonRemote,
   renamePlain
-} from '../agent-hooks/installer-utils-remote'
-import { CLAUDE_AGENT_VIEW_PLUGIN } from '../../shared/claude-agent-view'
-export { withClaudeAgentViewShortcut } from './agent-view-binding-plan'
-export { ensureClaudeAgentViewPlugin } from './agent-view-plugin'
+} from '../../agent-hooks/installer-utils-remote'
+import { CLAUDE_AGENT_VIEW_PLUGIN } from '../../../shared/claude-agent-view'
 
 // Called only after the user opts in; a surviving marker remembers deletions and edited chords.
 export function installClaudeAgentView(configPath: string): boolean {
