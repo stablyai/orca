@@ -278,6 +278,39 @@ describe('Codex and Claude spawn tools', () => {
       }
     ])
   })
+
+  it('settles a synchronous Claude Agent on the tool result agent id', () => {
+    const activities = nativeChatToolSubagentActivities([
+      message('call', [
+        {
+          type: 'tool-call',
+          name: 'Agent',
+          callId: 'toolu_agent',
+          input: { description: 'Fix CodeRabbit', prompt: 'review the diff' }
+        }
+      ]),
+      message(
+        'result',
+        [
+          {
+            type: 'tool-result',
+            callId: 'toolu_agent',
+            output: 'Fixed the review threads.',
+            subagent: { id: 'agent-1', state: 'completed' }
+          }
+        ],
+        { role: 'tool' }
+      )
+    ])
+    expect(activities).toEqual([
+      {
+        id: 'agent-1',
+        label: 'Fix CodeRabbit',
+        state: 'completed',
+        activity: 'Fixed the review threads.'
+      }
+    ])
+  })
 })
 
 describe('readNativeChatSubagentActivities', () => {

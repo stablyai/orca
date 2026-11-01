@@ -12,6 +12,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { imageSourcePathFromText } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { nativeChatSubagentStateFromStatus } from '../../shared/native-chat/input/native-chat-tool-subagents'
 import { claudeTaskNotificationMessage } from './transcript-claude-task-notification'
 import { claudeContentBlocks } from './transcript-record-blocks'
 import { unwrapClaudePastedContentBlock } from '../../shared/claude-pasted-content'
@@ -24,6 +25,26 @@ const MAX_EDIT_PATCH_HUNKS = 40
 const MAX_EDIT_PATCH_HUNK_LINES = 400
 
 /** Render resolved result hunks; call-side snippet pairs cannot supply real file line numbers. */
+function stampClaudeSyncSubagent(
+  blocks: NativeChatBlock[],
+  record: Record<string, unknown>
+): NativeChatBlock[] {
+  const result = asRecord(record.toolUseResult)
+  const id = extractString(result?.agentId)
+  if (!id) {
+    return blocks
+  }
+  const state = nativeChatSubagentStateFromStatus(extractString(result?.status) ?? '') ?? 'working'
+  let attached = false
+  return blocks.map((block) => {
+    if (attached || block.type !== 'tool-result') {
+      return block
+    }
+    attached = true
+    return { ...block, subagent: { id, state } }
+  })
+}
+
 function claudeEditPatch(record: Record<string, unknown>): NativeChatEditPatch | null {
   const result = asRecord(record.toolUseResult)
   const raw = result?.structuredPatch
@@ -126,15 +147,18 @@ export function decodeClaudeTranscriptLine(
   if (blocks.length === 0) {
     return null
   }
+  const settledBlocks = stampClaudeSyncSubagent(blocks, record)
   const messageId = extractString(record.uuid) ?? extractString(message?.id)
   return {
     id: messageId ?? fallbackId,
-    role: claudeMessageRole(role, blocks, message?.content),
+    role: claudeMessageRole(role, settledBlocks, message?.content),
     // Decode ! command echoes so harness filtering cannot hide them and strand the local echo.
     blocks:
       role === 'user'
-        ? blocks.map((block) => unwrapClaudeBashInputBlock(unwrapClaudePastedContentBlock(block)))
-        : blocks,
+        ? settledBlocks.map((block) =>
+            unwrapClaudeBashInputBlock(unwrapClaudePastedContentBlock(block))
+          )
+        : settledBlocks,
     timestamp,
     source: 'transcript',
     ...parent

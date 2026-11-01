@@ -101,32 +101,34 @@ export function useNativeChatSubagentPage(
     }
     pagingRef.current = true
     const beforeOffset = current.beforeOffset
-    setPage({ ...current, loadingEarlier: true })
+    const pending = { ...current, loadingEarlier: true }
+    pageRef.current = pending
+    setPage(pending)
     try {
       const result = await read(agentId, PAGE_LIMIT, beforeOffset)
-      let outcome: NativeChatOlderPageResult = 'failed'
-      setPage((latest) => {
-        if (!latest || latest.agentId !== agentId || latest.beforeOffset !== beforeOffset) {
-          outcome = 'superseded'
-          return latest
-        }
-        if ('error' in result) {
-          outcome = 'failed'
-          return { ...latest, loadingEarlier: false }
-        }
-        const seen = new Set(latest.messages.map((entry) => entry.id))
-        const older = result.messages.filter((entry) => !seen.has(entry.id))
-        outcome = older.length > 0 ? 'applied' : 'unchanged'
-        return {
-          agentId,
-          messages: [...older, ...latest.messages],
-          hasMore: result.hasMore === true,
-          beforeOffset: result.beforeOffset ?? latest.beforeOffset,
-          loading: false,
-          loadingEarlier: false
-        }
-      })
-      return outcome
+      const latest = pageRef.current
+      if (!latest || latest.agentId !== agentId || latest.beforeOffset !== beforeOffset) {
+        return 'superseded'
+      }
+      if ('error' in result) {
+        const failed = { ...latest, loadingEarlier: false }
+        pageRef.current = failed
+        setPage(failed)
+        return 'failed'
+      }
+      const seen = new Set(latest.messages.map((entry) => entry.id))
+      const older = result.messages.filter((entry) => !seen.has(entry.id))
+      const next = {
+        agentId,
+        messages: [...older, ...latest.messages],
+        hasMore: result.hasMore === true,
+        beforeOffset: result.beforeOffset ?? latest.beforeOffset,
+        loading: false,
+        loadingEarlier: false
+      }
+      pageRef.current = next
+      setPage(next)
+      return older.length > 0 ? 'applied' : 'unchanged'
     } finally {
       pagingRef.current = false
     }

@@ -129,6 +129,10 @@ function ackLabel(output: string | undefined): string | null {
     : null
 }
 
+export function nativeChatSubagentStateFromStatus(status: string): NativeChatSubagentState | null {
+  return sectionState(status)
+}
+
 function sectionState(status: string): NativeChatSubagentState | null {
   switch (status.toLowerCase()) {
     case 'completed':
@@ -229,10 +233,25 @@ export function nativeChatToolSubagentActivities(
       const call = pair.call
       if (call && SPAWN_TOOLS.has(canonical(call.name))) {
         const failed = call.state === 'failed' || pair.result?.isError === true
-        const id = ackId(pair.result?.output) ?? call.callId ?? `spawn:${message.id}:${pending}`
+        const settled = pair.result?.subagent
+        const id =
+          settled?.id ??
+          ackId(pair.result?.output) ??
+          call.callId ??
+          `spawn:${message.id}:${pending}`
         pending += 1
         const label = spawnLabel(call.input) ?? ackLabel(pair.result?.output) ?? ''
-        note(id, label, failed ? 'failed' : 'working', spawnActivity(call.input, label))
+        const spawned = spawnActivity(call.input, label)
+        const reported =
+          settled && settled.state !== 'working' && pair.result?.output
+            ? nativeChatRosterActivityLine(pair.result.output)
+            : null
+        note(
+          id,
+          label,
+          failed ? 'failed' : (settled?.state ?? 'working'),
+          reported && reported !== label ? reported : spawned
+        )
       }
       if (pair.result?.output) {
         applyOutput(pair.result.output)
