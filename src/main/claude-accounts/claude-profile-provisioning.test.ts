@@ -511,9 +511,9 @@ describe('Claude profile refresh from the default home', () => {
       claudeSaves(join(f.a, 'settings.json'), (settings) => {
         settings.enabledPlugins = { 'linear@market': true }
       })
-      const actual = await vi.importActual<typeof FsUtils>('../codex-accounts/fs-utils')
+      const realWrite = vi.mocked(writeFileAtomically).getMockImplementation()!
       vi.mocked(writeFileAtomically).mockImplementationOnce((target, contents, options) => {
-        actual.writeFileAtomically(target, contents, options)
+        realWrite(target, contents, options)
         // Orca's hook installer saving the user's settings from an earlier read.
         f.json(join(f.source, 'settings.json'), { model: 'opus' })
       })
