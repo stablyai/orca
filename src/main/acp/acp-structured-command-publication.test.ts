@@ -262,3 +262,62 @@ it('answers modern empty-chat first-open through RPC and desktop subscription be
     await discovery.dispose()
   }
 })
+
+// Shapes from Grok's source (slash_commands.rs builtin `goal`, skill rows): the recorded capture trims command lists.
+const GROK_GOAL = {
+  name: 'goal',
+  description: 'Set, manage, or check an autonomous goal',
+  input: { hint: '<objective> [--budget <tokens>] | status | pause | resume | clear' }
+}
+const GROK_GOAL_SKILL = {
+  name: 'goal',
+  description: 'Project goal tracker',
+  _meta: { scope: 'user', path: '/home/u/.grok/skills/goal/SKILL.md', bareName: 'goal' }
+}
+
+it.each([
+  [GROK_GOAL, true],
+  // A session whose goal gate closed lets a user skill take the bare name initialize listed.
+  [GROK_GOAL_SKILL, false]
+])('marks a Grok row built-in only when initialize proved it, row %#', async (row, builtin) => {
+  const { host, ready } = await openHostRig({
+    spec: acpLaunchSpecFor('grok')!,
+    initialize: { _meta: { grokShell: true, availableCommands: [GROK_GOAL] } },
+    script: (agent) => {
+      agent.on('session/new', (frame) => {
+        agent.notify('session/update', {
+          sessionId: PROVIDER_SESSION,
+          update: { sessionUpdate: 'available_commands_update', availableCommands: [row] }
+        })
+        agent.reply(frame, { sessionId: PROVIDER_SESSION })
+      })
+    }
+  })
+  try {
+    expect(
+      await host.attach(
+        CALLER,
+        hostTestAttachParams(null, {
+          provider: 'grok',
+          agent: 'grok',
+          providerHandle: undefined,
+          accountHome: { variable: 'GROK_HOME', path: '/fake/account' }
+        })
+      )
+    ).toMatchObject({ ok: true })
+    await ready()
+    await waitFor(async () =>
+      expect((await host.readCommands(SESSION)).commands).toEqual([
+        {
+          name: 'goal',
+          kind: 'command',
+          description: row.description,
+          ...('input' in row ? { argumentHint: row.input.hint } : {}),
+          ...(builtin ? { builtin: true } : {})
+        }
+      ])
+    )
+  } finally {
+    await host.close(SESSION, 'user-close')
+  }
+})
