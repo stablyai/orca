@@ -5,12 +5,11 @@ import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, Smartphone } from 
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
-import { useEditorTabLabel } from './use-editor-tab-label'
+import { useEditorTabTarget } from './use-editor-tab-target'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
@@ -79,8 +78,7 @@ export default function EditorFileTab({
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
 }): React.JSX.Element {
-  const worktree = useWorktreeById(file.worktreeId)
-  const repo = useRepoById(worktree?.repoId ?? null)
+  const { worktree, repo, tabLabel } = useEditorTabTarget(file)
   // Keep dragged tabs anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
     // Split copies share a file entity; unified tab IDs keep each copy independently draggable.
@@ -208,7 +206,6 @@ export default function EditorFileTab({
   )
 
   const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
-  const tabLabel = useEditorTabLabel(file, worktree?.path ?? null, repo)
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
