@@ -1,0 +1,11 @@
+**Feedback:**  
+Can you add option to add label for tabs ? For example I wanna add something like check later or similar [https://x.com/Sharpekk/status/2113726195682750859?s=20](https://x.com/Sharpekk/status/2113726195682750859?s=20) 
+
+- wechat group user
+- need to close all / expand all 
+
+
+
+&nbsp;
+
+&nbsp;
