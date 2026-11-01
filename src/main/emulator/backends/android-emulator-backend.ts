@@ -111,7 +111,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     if (!sdk) {
       return { available: false, devices: [], ...emulatorCodedMessage('androidSdkMissing') }
     }
-    const sdkPath = sdk.sdkRoot
+    const sdkPath = sdk.sdkRoot ?? sdk.adb
     let devices: EmulatorDevice[] = []
     try {
       devices = await this.listDevices()
