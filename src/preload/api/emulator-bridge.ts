@@ -1,3 +1,4 @@
+import type { EmulatorStreamConfig } from '../../shared/emulator-stream-config'
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 
@@ -11,11 +12,15 @@ export const emulatorApi = {
   stopFrameStream: (args: { streamId: string }): Promise<void> =>
     ipcRenderer.invoke('emulator:frameStreamStop', args),
   onFrameStreamFrame: (
-    callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
+    callback: (data: {
+      streamId: string
+      bytes: ArrayBuffer
+      config?: EmulatorStreamConfig
+    }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { streamId: string; bytes: ArrayBuffer }
+      data: { streamId: string; bytes: ArrayBuffer; config?: EmulatorStreamConfig }
     ) => callback(data)
     ipcRenderer.on('emulator:frameStreamFrame', listener)
     return () => ipcRenderer.removeListener('emulator:frameStreamFrame', listener)
