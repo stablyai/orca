@@ -40,7 +40,8 @@ export function pinWindowsUpdateInstallDirectory(
     return
   }
   const installDirectory = win32.dirname(exePath)
-  if (!isDedicatedOrcaInstallDirectory(installDirectory)) {
+  // spawn quotes a spaced arg as "/D=...", and NSIS keeps the trailing quote in INSTDIR, breaking the update.
+  if (/\s/.test(installDirectory) || !isDedicatedOrcaInstallDirectory(installDirectory)) {
     return
   }
   // NsisUpdater reads installDirectory, which the cross-platform AppUpdater type omits.

@@ -79,6 +79,19 @@ describe('pinWindowsUpdateInstallDirectory', () => {
     expect(runNsisInstall(updater)).toEqual(['--updated', '/S', '--force-run'])
   })
 
+  it('keeps the default install location when the folder path has a space', () => {
+    const parent = makeFolder([])
+    const folder = join(parent, 'John Smith')
+    mkdirSync(folder)
+    for (const file of INSTALLED_LAYOUT) {
+      writeFileSync(join(folder, file), '')
+    }
+    const updater = {}
+    pinWindowsUpdateInstallDirectory(updater, 'win32', join(folder, 'Orca.exe'))
+
+    expect(runNsisInstall(updater)).toEqual(['--updated', '/S', '--force-run'])
+  })
+
   it('never pins a drive root', () => {
     const updater = {}
     pinWindowsUpdateInstallDirectory(updater, 'win32', 'D:\\Orca.exe')
