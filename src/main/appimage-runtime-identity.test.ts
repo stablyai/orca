@@ -1,7 +1,10 @@
+import type * as fs from 'node:fs'
 import {
   chmodSync,
+  closeSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -9,8 +12,16 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveAppImageRuntimeIdentity } from './appimage-runtime-identity'
+
+const realFs = vi.hoisted(() => ({}) as { closeSync: typeof fs.closeSync })
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof fs>()
+  realFs.closeSync = actual.closeSync
+  return { ...actual, closeSync: vi.fn(actual.closeSync), openSync: vi.fn(actual.openSync) }
+})
 
 const fixtureRoots: string[] = []
 
@@ -58,6 +69,7 @@ function createFixture(appDirName = '.mount_Orca123', machine = 0x3e) {
 }
 
 afterEach(() => {
+  vi.resetAllMocks()
   for (const root of fixtureRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -72,6 +84,21 @@ describe.skipIf(process.platform === 'win32')('resolveAppImageRuntimeIdentity', 
     expect(resolveAppImageRuntimeIdentity(fixture.identity)).toEqual({
       appImagePath: fixture.appImagePath
     })
+  })
+
+  it('keeps a verified identity when closing the AppImage header reports EIO', () => {
+    const fixture = createFixture()
+    vi.mocked(closeSync).mockImplementationOnce((fd) => {
+      realFs.closeSync(fd)
+      throw Object.assign(new Error('close failed'), { code: 'EIO' })
+    })
+
+    expect(resolveAppImageRuntimeIdentity(fixture.identity)).toEqual({
+      appImagePath: fixture.appImagePath
+    })
+    expect(vi.mocked(openSync).mock.calls[0]?.[0]).toBe(fixture.appImagePath)
+    expect(vi.mocked(closeSync).mock.calls[0]).toEqual([vi.mocked(openSync).mock.results[0]?.value])
+    expect(closeSync).toHaveBeenCalledTimes(vi.mocked(openSync).mock.calls.length)
   })
 
   it('accepts an AppImage moved independently of its runtime directory', () => {

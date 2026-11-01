@@ -210,7 +210,11 @@ function readLauncherFile(launcherPath: string): { content: string; executable: 
     return null
   } finally {
     if (fd !== undefined) {
-      closeSync(fd)
+      try {
+        closeSync(fd)
+      } catch {
+        // Advisory cleanup must not override the verified launcher read.
+      }
     }
   }
 }

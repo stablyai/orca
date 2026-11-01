@@ -4,8 +4,11 @@ import { delimiter, join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { withCliRuntimeOnPath } from './node-cli-command-resolution'
 
+const realFs = vi.hoisted(() => ({}) as { closeSync: typeof fs.closeSync })
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof fs>()
+  realFs.closeSync = actual.closeSync
   return { ...actual, closeSync: vi.fn(actual.closeSync), readSync: vi.fn(actual.readSync) }
 })
 
@@ -18,8 +21,7 @@ describe('advisory executable inspection cleanup', () => {
     { kind: 'unreadable', contents: Buffer.from('#!/usr/bin/env node\n'), readError: true }
   ])(
     'preserves $kind runtime pairing when close reports EIO after releasing the handle',
-    async (input) => {
-      const realFs = await vi.importActual<typeof fs>('node:fs')
+    (input) => {
       const root = fs.mkdtempSync(join(tmpdir(), 'orca-cli-close-'))
       onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }))
       const command = join(root, 'codex')
