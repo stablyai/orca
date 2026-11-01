@@ -182,7 +182,11 @@ function documentReadErrorMessage(err: unknown, fallback: string): string {
     return translate('files.filePreviewResponse.fileTooLarge', 'File too large for mobile preview')
   }
   // Why: the host only serves workspace-relative paths; a desktop tab of an external file has none.
-  if (message === 'invalid_relative_path') {
+  if (
+    message === 'invalid_relative_path' ||
+    message.includes('path resolves outside allowed directories') ||
+    message.includes('path is outside allowed directories')
+  ) {
     return translate(
       'session.documentReaders.outsideWorkspace',
       'This file is outside the workspace. Open it on desktop to view it.'
