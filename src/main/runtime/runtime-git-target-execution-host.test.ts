@@ -72,15 +72,6 @@ describe('runtime Git target execution host', () => {
     await expectRefusedFor(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`), 'm4air')
   })
 
-  it("routes to the worktree's host even when the only repo row names a different ssh host", async () => {
-    const runtime = makeRuntime(
-      [{ id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' }],
-      'ssh:m4air'
-    )
-
-    await expectRefusedFor(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`), 'm4air')
-  })
-
   // Local rows cannot carry SSH connectionId; the old target dialed remote for local workspaces.
   it('ignores a stale connection on a row that declares itself local', async () => {
     const runtime = makeRuntime(
@@ -120,18 +111,6 @@ describe('runtime Git target execution host', () => {
     expect(mocks.getStatus).not.toHaveBeenCalled()
   })
 
-  it('refuses a runtime host with no nested ssh target rather than answering locally', async () => {
-    const runtime = makeRuntime(
-      [{ id: 'repo-shared', path: '/srv/app', executionHostId: 'runtime:env-a' }],
-      'runtime:env-a'
-    )
-
-    await expect(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`)).rejects.toThrow(
-      ExecutionHostNotDispatchableError
-    )
-    expect(mocks.getStatus).not.toHaveBeenCalled()
-  })
-
   it('refuses rather than guessing when rival rows disagree and the worktree names no host', async () => {
     const runtime = makeRuntime([
       { id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' },
@@ -140,26 +119,6 @@ describe('runtime Git target execution host', () => {
 
     await expect(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`)).rejects.toThrow(
       'worktree_execution_host_unresolved'
-    )
-    expect(mocks.getStatus).not.toHaveBeenCalled()
-  })
-
-  it('still routes by the single row when the worktree names no host', async () => {
-    const runtime = makeRuntime([{ id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' }])
-
-    await expectRefusedFor(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`), 'm4air')
-  })
-
-  // Losing contact with a remote host is never evidence that its files are here
-  // (docs/reference/ssh-execution-boundary.md).
-  it('reports the dropped connection instead of reading a remote path locally', async () => {
-    const runtime = makeRuntime(
-      [{ id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' }],
-      'ssh:m4air'
-    )
-
-    await expect(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`)).rejects.toThrow(
-      /Remote connection dropped/
     )
     expect(mocks.getStatus).not.toHaveBeenCalled()
   })

@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mocks, hostMocks } from './launch-work-item-direct-test-fixture'
 import * as hostPreferences from '@/components/settings/use-host-agent-launch-preferences'
@@ -74,7 +75,7 @@ describe('direct workspace defaults', () => {
       stageChat()
       hostMocks.callRuntimeRpc.mockResolvedValue({ agents: [{ agent: 'codex', capabilities: {} }] })
       mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-      mocks.store.settings = { defaultTuiAgent: 'codex', experimentalNativeChat: true }
+      mocks.store.settings = { defaultTuiAgent: 'codex', nativeChatProviders: EVERY_AGENT_CHAT }
       useAppStore.setState({
         readLocalAgentInventory: () => ({ state: 'successful', ids: ['claude'] })
       })
@@ -97,7 +98,10 @@ describe('direct workspace defaults', () => {
           path: '/repo/worktree',
           repoId: 'repo-1'
         })
-        mocks.store.settings = { defaultTuiAgent: currentDefault, experimentalNativeChat: true }
+        mocks.store.settings = {
+          defaultTuiAgent: currentDefault,
+          nativeChatProviders: EVERY_AGENT_CHAT
+        }
         useAppStore.setState({
           worktreesByRepo: { 'repo-1': [worktree] }
         })
@@ -213,7 +217,7 @@ describe('direct workspace defaults', () => {
     vi.spyOn(localCapabilities, 'readLocalRuntimeCapabilitiesOrUnknown').mockReturnValue(
       RUNTIME_CAPABILITIES
     )
-    mocks.store.settings = { experimentalNativeChat: true, disabledTuiAgents: ['codex'] }
+    mocks.store.settings = { nativeChatProviders: EVERY_AGENT_CHAT, disabledTuiAgents: ['codex'] }
     vi.mocked(beginDirectWorkItemStructuredLaunch).mockImplementationOnce(({ beforeOpen }) => ({
       completed: beforeOpen() !== false,
       structuredLaunch: true,
@@ -303,7 +307,7 @@ describe('direct workspace defaults', () => {
         runtimeStatusByEnvironmentId: new Map([['alpha', { status, checkedAt: 1 }]]),
         ensureRuntimeDetectedAgents: async () => ['claude', 'codex']
       })
-      mocks.store.settings = { defaultTuiAgent: 'claude', experimentalNativeChat: true }
+      mocks.store.settings = { defaultTuiAgent: 'claude', nativeChatProviders: EVERY_AGENT_CHAT }
       hostMocks.supports.mockResolvedValue(true)
       hostMocks.callRuntimeRpc.mockResolvedValue({
         settings: projectAgentLaunchSettings({ defaultTuiAgent: 'codex' })
@@ -348,7 +352,7 @@ describe('direct workspace defaults', () => {
 
   it('uses the post-availability snapshot for changed default, route and startup settings', async () => {
     stageChat()
-    mocks.store.settings = { defaultTuiAgent: 'codex', experimentalNativeChat: true }
+    mocks.store.settings = { defaultTuiAgent: 'codex', nativeChatProviders: EVERY_AGENT_CHAT }
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
     const opened = Promise.withResolvers<Parameters<typeof hostMocks.subscribe>[3]>()
     const unsubscribe = vi.fn()
@@ -373,7 +377,7 @@ describe('direct workspace defaults', () => {
       settings: {
         ...useAppStore.getState().settings!,
         defaultTuiAgent: 'claude',
-        experimentalNativeChat: false,
+        nativeChatProviders: {},
         agentCmdOverrides: { claude: 'custom-claude' }
       }
     })
@@ -408,7 +412,7 @@ describe('direct workspace defaults', () => {
       mocks.store.settings = {
         defaultTuiAgent,
         disabledTuiAgents: ['codex'],
-        experimentalNativeChat: false
+        nativeChatProviders: {}
       }
       mocks.ensureDetectedAgents.mockResolvedValue(['claude', 'codex'])
       await expect(launch()).resolves.toBe(true)
@@ -419,7 +423,7 @@ describe('direct workspace defaults', () => {
 
   it('matches new-tab unavailable fallback through the moved prospective selector', async () => {
     const { resolveDefaultAgentForNewTab } = await import('./agent-tab-shortcuts')
-    mocks.store.settings = { defaultTuiAgent: 'codex', experimentalNativeChat: false }
+    mocks.store.settings = { defaultTuiAgent: 'codex', nativeChatProviders: {} }
     mocks.ensureDetectedAgents.mockResolvedValue([])
     const store = useAppStore.getState()
     const prospective = await resolveDirectProspectiveAgent(store, store.repos[0], undefined, {})
@@ -437,7 +441,7 @@ describe('direct workspace defaults', () => {
     'bounds real default acquisition without root traversal over %s worktrees',
     async (n) => {
       stageChat()
-      mocks.store.settings = { defaultTuiAgent: 'codex', experimentalNativeChat: true }
+      mocks.store.settings = { defaultTuiAgent: 'codex', nativeChatProviders: EVERY_AGENT_CHAT }
       const rows = Array.from({ length: n }, (_, i) =>
         makeWorktree({ id: `repo-1::/repo/w${i}`, path: `/repo/w${i}`, repoId: 'repo-1' })
       )
@@ -531,7 +535,7 @@ it.each(['native', 'blank', 'terminal'] as const)(
     stageChat()
     mocks.store.settings = {
       defaultTuiAgent: route === 'blank' ? 'blank' : 'codex',
-      experimentalNativeChat: route === 'native'
+      nativeChatProviders: route === 'native' ? EVERY_AGENT_CHAT : {}
     }
     vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue(undefined)
     const answer = Promise.withResolvers<Awaited<ReturnType<typeof ensureAgentLaunchPreferences>>>()

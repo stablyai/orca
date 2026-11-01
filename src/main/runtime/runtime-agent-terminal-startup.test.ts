@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { detectAgentCommandsOnHost } from '../preflight/agent-detection'
 import { resolveAgentTerminalCreateOptions } from './runtime-agent-terminal-startup'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
+import { MIXED_FOLDER, MIXED_GROUP } from '../../shared/folder-workspace-host-routing.test-fixture'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 vi.mock('../preflight/agent-detection', () => ({
   detectAgentCommandsOnHost: vi.fn(async () => new Set(['qoder']))
@@ -25,6 +27,72 @@ afterEach(() => {
 
 // The host planner's inputs. Relied on by C2, whose pane spawns run this plan.
 describe('host agent planner', () => {
+  it('uses the acquired folder project for plain shell refusal and unplanned Qoder detection', async () => {
+    const folder = { ...MIXED_FOLDER, folderPath: 'C:/notes', executionHostId: 'local' as const }
+    const repo = {
+      id: 'r',
+      path: 'C:/repo',
+      projectGroupId: MIXED_GROUP.id,
+      executionHostId: 'local' as const
+    }
+    const session = getDefaultWorkspaceSession()
+    const store = {
+      getSettings: () => ({ terminalWindowsShell: 'powershell.exe' }),
+      getProjects: () => [
+        {
+          id: 'p',
+          sourceRepoIds: ['r'],
+          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        }
+      ],
+      getRepos: () => [{ ...repo, executionHostId: 'ssh:prod' }, repo],
+      getFolderWorkspaces: () => [{ ...folder, executionHostId: 'ssh:prod' }, folder],
+      getProjectGroups: () => [MIXED_GROUP],
+      getWorkspaceSession: () => session
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the actual planner consumes these runtime store ports and the supplied full physical folder.
+    const planHost = { ...host, store: store as never }
+    const scope = {
+      ...workspace,
+      id: `folder:${folder.id}`,
+      path: folder.folderPath,
+      folderWorkspace: folder
+    }
+    await expect(
+      resolveAgentTerminalCreateOptions(scope, { shellOverride: 'powershell.exe' }, planHost)
+    ).rejects.toThrow('project runs its terminals in WSL')
+    vi.mocked(detectAgentCommandsOnHost).mockClear()
+    await resolveAgentTerminalCreateOptions(
+      scope,
+      { launchAgent: 'qoder', command: 'qodercli' },
+      planHost
+    )
+    expect(detectAgentCommandsOnHost).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(detectAgentCommandsOnHost).mock.calls[0]?.[1]).toMatchObject({
+      context: { wslDistro: 'Ubuntu' }
+    })
+    session.tabsByWorktree[scope.id] = [
+      {
+        id: 'saved-host',
+        worktreeId: scope.id,
+        ptyId: null,
+        title: 'Shell',
+        customTitle: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 0,
+        forceHostRuntime: true
+      }
+    ]
+    await expect(
+      resolveAgentTerminalCreateOptions(
+        scope,
+        { tabId: 'saved-host', shellOverride: 'powershell.exe' },
+        planHost
+      )
+    ).resolves.toMatchObject({ shellOverride: 'powershell.exe' })
+  })
+
   it("quotes for the fact's shell and hands that same fact to the spawn", async () => {
     const launch = await resolveAgentTerminalCreateOptions(
       workspace,

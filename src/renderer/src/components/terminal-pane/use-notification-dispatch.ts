@@ -14,8 +14,14 @@ import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdi
 import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-title-owner'
 import {
   isFreshNonDoneAgentStatus,
-  type AgentStatusEntry
+  type AgentStatusEntry,
+  type AgentStatusState
 } from '../../../../shared/agent-status-types'
+import {
+  isCoordinatorOnlyNews,
+  withApprovalTitle
+} from '../../../../shared/dispatched-worker-attention'
+import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
 import { isSupersededAgentCompletionSnapshot } from './agent-completion-snapshot-staleness'
 import { isAutoApprovedAntigravityPermission } from './antigravity-auto-approved-permission'
 import type {
@@ -36,6 +42,15 @@ import {
 } from '@/attention/agent-attention-notification-delivery'
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
+
+/** Only a hook row proves a finish its coordinator hears about; a title waiting for approval outranks one. */
+function completionTurnState(
+  event: TerminalNotificationEvent,
+  agentStatus: Pick<AgentStatusEntry, 'state'> | undefined
+): AgentStatusState | undefined {
+  // A title-only stop, or an agent that died mid-turn, reported to no one, so the person hears it.
+  return withApprovalTitle(agentStatus?.state, event.terminalTitle)
+}
 
 function agentSnapshotMatchesExplicitTitle(
   snapshot: { agentType?: string | null } | undefined,
@@ -127,7 +142,14 @@ export function dispatchTerminalNotification(
       reason: event.source === 'agent-task-complete' ? 'agent-completion' : 'terminal-bell',
       settlesTurn: event.source === 'agent-task-complete',
       // Fresh accepted hooks can arrive before inactive-worktree PTY hydration; title/BEL-only completion still requires live surface evidence.
-      hasFreshActivityEvidence: Boolean(agentStatus)
+      hasFreshActivityEvidence: Boolean(agentStatus),
+      coordinatorOnlyNews:
+        event.source === 'agent-task-complete' &&
+        isCoordinatorOnlyNews(completionTurnState(event, agentStatus), () =>
+          event.paneKey === undefined
+            ? undefined
+            : canonicalOrchestrationForRow(state, event.paneKey)
+        )
     },
     createTerminalAttentionSurface(state)
   )

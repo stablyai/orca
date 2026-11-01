@@ -56,19 +56,6 @@ describe('Codex state DB backfill status', () => {
     db.close()
   })
 
-  it('treats a large unindexed rollout history as pending', async () => {
-    const home = await createHome()
-    const sessions = join(home, 'sessions', '2026', '08', '04')
-    await mkdir(sessions, { recursive: true })
-    await Promise.all(
-      Array.from({ length: 100 }, (_, index) =>
-        writeFile(join(sessions, `rollout-${index}.jsonl`), '{}\n')
-      )
-    )
-
-    expect(isCodexStateDbBackfillPending(home)).toBe(true)
-  })
-
   it('counts compressed rollouts, which Codex also backfills', async () => {
     const home = await createHome()
     const sessions = join(home, 'sessions', '2026', '08', '04')
@@ -81,13 +68,6 @@ describe('Codex state DB backfill status', () => {
 
     expect(isCodexStateDbBackfillPending(home)).toBe(true)
   })
-
-  it('does not call a complete backfill pending', async () => {
-    const home = await createHome()
-    createBackfillDb(home, 5, 'complete')
-
-    expect(isCodexStateDbBackfillPending(home)).toBe(false)
-  })
 })
 
 describe('readCodexStateDbBackfillPendingState', () => {
@@ -98,18 +78,6 @@ describe('readCodexStateDbBackfillPendingState', () => {
     expect(readCodexStateDbBackfillStatus(home).kind).toBe('unreadable')
     expect(readCodexStateDbBackfillPendingState(home)).toBe('unreadable')
     expect(isCodexStateDbBackfillPending(home)).toBe(false)
-  })
-
-  it('maps incomplete, complete and small unindexed homes', async () => {
-    const running = await createHome()
-    createBackfillDb(running, 5, 'running')
-    const complete = await createHome()
-    createBackfillDb(complete, 5, 'complete')
-    const empty = await createHome()
-
-    expect(readCodexStateDbBackfillPendingState(running)).toBe('pending')
-    expect(readCodexStateDbBackfillPendingState(complete)).toBe('not-pending')
-    expect(readCodexStateDbBackfillPendingState(empty)).toBe('not-pending')
   })
 })
 

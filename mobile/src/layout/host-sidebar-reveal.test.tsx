@@ -10,6 +10,7 @@ import { MobileSessionHeader } from '../session/MobileSessionHeader'
 import HostGroupLayout from '../../app/h/_layout'
 
 vi.mock('react-native', () => ({
+  Animated: { View: 'View' },
   View: 'View',
   Text: 'Text',
   ScrollView: 'ScrollView',
@@ -71,8 +72,8 @@ vi.mock('../navigation/host-stack', () => ({
 }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('./use-top-chrome-space', () => ({ useTopChromeSpace: () => ({}) }))
-vi.mock('../session/MobileSessionHeaderMoreActionsSheet', () => ({
-  MobileSessionHeaderMoreActionsSheet: () => null
+vi.mock('../session/MobileSessionHeaderMoreMenu', () => ({
+  MobileSessionHeaderMoreMenu: () => null
 }))
 vi.mock('../platform/haptics', () => ({ triggerMediumImpact: () => {} }))
 vi.mock('../transport/host-client-hooks', () => ({
@@ -100,7 +101,6 @@ function headerController(): MobileSessionController {
     visibleTabs: [],
     showConnectionRetry: false,
     terminalSummary: 'Claude',
-    showHeaderMoreButton: false,
     requestLeaveSession: vi.fn()
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This header fixture supplies every rendered field; no tab or panel actions are exercised.

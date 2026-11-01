@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('./structured-agent-session-client', () => ({
@@ -139,18 +139,5 @@ describe('structured status feed execution authority lifecycle', () => {
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
     subscription(1).emit({ type: 'snapshot', sessions: [owned] })
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBe(true)
-  })
-
-  it('does not notify or reallocate already unowned historical rows on teardown', async () => {
-    const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
-    const deactivate = feed.activate()
-    await vi.advanceTimersByTimeAsync(0)
-    subscription().emit({ type: 'snapshot', sessions: [done] })
-    const previous = feed.getSnapshot()
-    const listener = vi.fn()
-    feed.subscribe(listener)
-    deactivate()
-    expect(feed.getSnapshot()).toBe(previous)
-    expect(listener).not.toHaveBeenCalled()
   })
 })

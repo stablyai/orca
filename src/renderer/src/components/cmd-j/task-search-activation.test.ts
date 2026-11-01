@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { findCmdJTaskWorkspace, openCmdJTask } from './task-search-activation'
 import { jiraTaskIssue, jiraTaskSource, jiraTaskResult } from './task-search.test-fixture'
 import { makeWorktree, makeFolderWorkspace } from '../worktree-jump-palette-test-fixtures'
-import { getFolderWorkspaceWorktree } from '@/store/slices/worktrees/listing/detected-worktree-meta'
+import { getFolderWorkspaceWorktree } from '@/store/workspace-record-selectors'
 
 const initial = useAppStore.getInitialState()
 afterEach(() => useAppStore.setState(initial, true))

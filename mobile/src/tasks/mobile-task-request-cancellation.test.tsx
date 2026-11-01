@@ -102,6 +102,7 @@ async function mount(provider: Provider, repoCount = 30, counted = false) {
     setGithubSourceFallbacks: vi.fn(),
     setLoading: vi.fn(),
     setRefreshing: vi.fn(),
+    setTaskListSettled: vi.fn(),
     setGithubLoadingTargetPage: vi.fn(),
     repoListEnsureLoaded: async () => repos,
     selectedLinearTeamIds: new Set<string>(),

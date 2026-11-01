@@ -12,11 +12,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../../shared/agent-launch-surface'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,
   editPersistedTestAgentSessionStore
-} from '../../agent-session-record-store-test-harness'
+} from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   RuntimeLineageError,
@@ -35,6 +35,7 @@ import {
   methodNamed,
   runtimeStub,
   setAgentLaunchRecordStore,
+  STRUCTURED_PREFERENCE,
   type AgentLaunchRuntimeStub
 } from './agent-launch.test-fixture'
 
@@ -252,7 +253,7 @@ describe('a launch whose terminal fails', () => {
   )
 
   it('starts the CLI for an explicit terminal even when chats are the default', async () => {
-    const runtime = runtimeStub({ settings: { experimentalNativeChat: true } })
+    const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
 
     const response = await replay(runtime, { ...EXISTING_LAUNCH, surface: 'terminal' })
 
@@ -309,7 +310,7 @@ describe('a launch whose terminal fails', () => {
         ...(callerDowngrade ? {} : { nativeChatDefault: false }),
         prompt: { text: 'Reply with OK', delivery: 'submit' }
       }
-      const first = runtimeStub({ settings: { experimentalNativeChat: true } })
+      const first = runtimeStub({ settings: STRUCTURED_PREFERENCE })
       first.createManagedWorktree.mockImplementation(async (args) => {
         expect(args).toMatchObject({
           startupAgent: 'opencode',
@@ -339,7 +340,7 @@ describe('a launch whose terminal fails', () => {
   it.each([undefined, 'chat'] as const)(
     'keeps an OpenCode model create on its chat route %s',
     async (surface) => {
-      const runtime = runtimeStub({ settings: { experimentalNativeChat: true } })
+      const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
       const launch = {
         ...CREATE_LAUNCH,
         agent: 'opencode',

@@ -21,7 +21,6 @@ import { WorkspaceViewers } from './workspace-viewers'
 import { clientRaisesUnreadFlagItself } from '../../../shared/workspace-unread-raise-capability'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { TerminalUseProducer } from './terminal-use-producer'
-import { createKeyedTrailingEdgeCoalescer } from '../keyed-trailing-edge-coalescer'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId, worktreeIdentityKey } from '../../../shared/worktree/id'
 import {
@@ -57,11 +56,6 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     retentionCandidates: () => this.readSidebarRetentionCandidates()
   })
   readonly workspaceViewers = new WorkspaceViewers(Date.now)
-  // Coalesce streaming-title bursts into one re-list notice; store writes already landed.
-  private readonly sortStampNotices = createKeyedTrailingEdgeCoalescer(
-    (worktreeId) => this.notifySortStampsChanged(worktreeId),
-    { flushMs: 50, maxWaitMs: 250 }
-  )
   readonly sortStamps = new SortStampsProducer({
     store: () => this.store,
     isWriteFenced: (worktreeId) =>
@@ -211,16 +205,6 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
           getProjectGroups: () => store.getProjectGroups?.() ?? []
         })
       : null
-  }
-
-  // Metadata only: clients re-list the record, and the cached git scans stay.
-  private notifySortStampsChanged(worktreeId: string): void {
-    if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
-      this.notifyFolderWorkspaceChanged()
-      return
-    }
-    this.invalidateResolvedWorktreeCache()
-    this.notifyWorktreesChanged(getRepoIdFromWorktreeId(worktreeId), { invalidateGitScans: false })
   }
 
   override attachAgentStatusStore(store: AgentStatusStoreView): () => void {

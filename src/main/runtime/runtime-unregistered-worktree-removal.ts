@@ -66,15 +66,22 @@ export async function removeRuntimeUnregisteredWorktree(args: {
     }
 
     await deleteUnregisteredDirectory(args)
-    args.finishRemoval()
     return {}
   }
   if (await isLocalRuntimeWorktreePathMissing(target.path, args.localOptions)) {
     if (!args.force && !removedMeta) {
       throw new Error(UNREGISTERED_MISSING_WORKTREE_MESSAGE)
     }
-    await cleanupPushTarget(args)
-    args.finishRemoval()
+    const gate = await args.acquireWatcherRemoval(target.path)
+    try {
+      try {
+        await cleanupPushTarget(args)
+      } finally {
+        args.finishRemoval()
+      }
+    } finally {
+      await gate.finish(true)
+    }
     return {}
   }
   throw new Error(`Refusing to delete unregistered worktree path: ${target.path}`)
@@ -95,10 +102,14 @@ async function deleteUnregisteredDirectory(
         })
       : removeLocalWorktreePath(args.target.path, args.localOptions))
     completed = true
+    try {
+      await cleanupPushTarget(args)
+    } finally {
+      args.finishRemoval()
+    }
   } finally {
     await gate.finish(completed)
   }
-  await cleanupPushTarget(args)
 }
 
 async function cleanupPushTarget(

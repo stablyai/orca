@@ -8,7 +8,7 @@ import {
   parseAskFromStatus,
   parseAskFromToolInput
 } from '../../../../shared/native-chat/input/native-chat-ask'
-import type { NativeChatBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
 
 const SHARED_HEAD = 'a'.repeat(512)

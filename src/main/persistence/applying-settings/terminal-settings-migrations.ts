@@ -77,6 +77,8 @@ type RetiredGlobalSettings = {
   opencodeGoApiKey?: unknown
   experimentalStructuredNativeChat?: unknown
   openAgentTabsInChatByDefault?: unknown
+  // Chat UI left Experimental; the per-agent Chat | CLI choice decides what opens.
+  experimentalNativeChat?: unknown
   orchestrationHeartbeatsEnabled?: unknown
   orchestrationHeartbeatIntervalMinutes?: unknown
   // Full-access plugins now need only their own approval.
@@ -96,6 +98,7 @@ export function stripRetiredGlobalSettings(
     opencodeGoApiKey: _legacyOpenCodeGoApiKey,
     experimentalStructuredNativeChat: _legacyStructuredNativeChat,
     openAgentTabsInChatByDefault: _legacyChatDefaultView,
+    experimentalNativeChat: _retiredChatUiExperiment,
     orchestrationHeartbeatsEnabled: _retiredHeartbeatsEnabled,
     orchestrationHeartbeatIntervalMinutes: _retiredHeartbeatInterval,
     pluginFullAccessEnabled: _retiredPluginFullAccessSwitch,
@@ -110,13 +113,14 @@ export function stripRetiredGlobalSettings(
   void _legacyOpenCodeGoApiKey
   void _legacyStructuredNativeChat
   void _legacyChatDefaultView
+  void _retiredChatUiExperiment
   void _retiredHeartbeatsEnabled
   void _retiredHeartbeatInterval
   void _retiredPluginFullAccessSwitch
   return rest
 }
 
-/** Preserve terminal-first behavior for pre-retirement profiles whose Chat UI was enabled. */
+/** A profile saved before the default-view switch retired, with Chat UI on and new tabs opening in the terminal. */
 export function savedChatUiWithTerminalDefaultView(settings: unknown): boolean {
   return (
     typeof settings === 'object' &&

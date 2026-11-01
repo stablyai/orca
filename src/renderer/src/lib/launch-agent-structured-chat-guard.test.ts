@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { settleAgentLaunchPaneStart } from './agent-launch-pane-start'
 
 import {
   mockCreateTab,
@@ -19,12 +20,13 @@ import type { AppState } from '@/store/types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import type { launchAgentInNewTab } from './launch-agent-in-new-tab'
-import { makeUnifiedTab } from '@/store/slices/store-test-helpers'
+import { makeTab, makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import {
   resetStructuredAgentLaunchRegistryForTests,
-  getStructuredLaunchStateBySessionId
+  getStructuredLaunchStateBySessionId,
+  retireStructuredAgentSessionLaunchCancellationTombstone
 } from './agent-session/launch/structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
 import * as capabilities from '@/runtime/local-runtime-capabilities'
@@ -44,7 +46,7 @@ function launchScenarioSettings(overrides: Partial<GlobalSettings> = {}): Global
     agentDefaultArgs: {},
     agentDefaultEnv: {},
     activeRuntimeEnvironmentId: null,
-    experimentalNativeChat: true,
+    agentDefaultSurface: 'chat',
     nativeChatSessionOptions: undefined,
     agentPermissionDefault: undefined,
     agentPermissionOverrides: undefined,
@@ -117,8 +119,8 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   afterEach(async () => {
-    const { cancelStructuredAgentLaunch, retireStructuredAgentSessionLaunchCancellationTombstone } =
-      await import('./structured-agent-session-launch')
+    const { cancelStructuredAgentLaunch } =
+      await import('./agent-session/launch/structured-agent-session-launch')
     const pending = ['codex-session-1', 'codex-session-2'].flatMap((id) => {
       const launch = getStructuredLaunchStateBySessionId(id)
       return launch ? [launch.promise] : []
@@ -240,6 +242,14 @@ describe('structured chat adoption guard on the launch path', () => {
   it('opens the terminal, and no chat, when this machine declines the chat', async () => {
     liveStore().setState({ unifiedTabsByWorktree: {} })
     mockCreateSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
+    mockCreateTab.mockImplementation((_worktreeId, _groupId, _unused, options) => {
+      const tab = makeTab({ id: options?.id ?? 'tab-1', worktreeId: 'wt-1' })
+      const leafId = options?.initialLeafId
+      if (options?.pendingStartup?.agentLaunch && leafId) {
+        queueMicrotask(() => settleAgentLaunchPaneStart(tab.id, leafId, `${tab.id}-pty`))
+      }
+      return tab
+    })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -295,9 +305,10 @@ describe('structured chat adoption guard on the launch path', () => {
     }
   )
 
-  // Recheck persisted opt-in against current default view; the hidden toggle can remain enabled under Terminal chat.
-  it('ignores a stale structured opt-in while the default view is Terminal chat', async () => {
-    liveStore().setState({ settings: launchScenarioSettings({ experimentalNativeChat: false }) })
+  it('opens a terminal for an agent inheriting the Terminal default', async () => {
+    liveStore().setState({
+      settings: launchScenarioSettings({ nativeChatProviders: {}, agentDefaultSurface: 'terminal' })
+    })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -484,7 +495,8 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(mockToastError).not.toHaveBeenCalled()
 
     // A new launch would open a new chat; the unconfirmed one is re-checked by its own Retry.
-    const { retryStructuredAgentSessionLaunch } = await import('./structured-agent-session-launch')
+    const { retryStructuredAgentSessionLaunch } =
+      await import('./agent-session/launch/structured-agent-session-launch')
     expect(retryStructuredAgentSessionLaunch('wt-1', firstIntent.sessionId)).toBe(true)
     await vi.waitFor(() => expect(mockRefreshLocalStructuredSessionTabs).toHaveBeenCalledTimes(3))
 

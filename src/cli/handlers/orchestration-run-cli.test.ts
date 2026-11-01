@@ -120,7 +120,7 @@ describe('lightweight Run CLI handlers', () => {
     } as never)
 
     expect(callMock).toHaveBeenCalledWith('orchestration.runList', {
-      limit: 100,
+      limit: 10,
       cursor: undefined
     })
   })

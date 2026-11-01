@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, vi, type Mock } from 'vitest'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { openClaudeStreamJsonConnection } from '../claude/claude-stream-json-connection'
 import {
   hostTestAttachParams,
@@ -13,7 +13,7 @@ import {
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 
 export { SESSION }
 export async function claudePipedFixture() {

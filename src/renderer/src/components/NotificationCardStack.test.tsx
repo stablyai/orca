@@ -8,16 +8,17 @@ import {
   NOTIFICATION_CARD_COMPOSER_CLEARANCE_VAR,
   useNotificationCardComposerClearance
 } from '@/lib/notification-card-composer-clearance'
+import { useNotificationCardLayoutVarReader } from '@/lib/notification-card-layout-vars'
 import { NotificationCardStack } from './NotificationCardStack'
 
 let resize: (() => void) | null = null
 let height = 0
 let root: Root | null = null
 
-const published = (): string =>
-  document.documentElement.style.getPropertyValue(NOTIFICATION_CARD_STACK_HEIGHT_VAR)
-const clearance = (): string =>
-  document.documentElement.style.getPropertyValue(NOTIFICATION_CARD_COMPOSER_CLEARANCE_VAR)
+const toasterVar = (name: string): string =>
+  document.querySelector<HTMLElement>('[data-toaster]')?.style.getPropertyValue(name) ?? ''
+const published = (): string => toasterVar(NOTIFICATION_CARD_STACK_HEIGHT_VAR)
+const clearance = (): string => toasterVar(NOTIFICATION_CARD_COMPOSER_CLEARANCE_VAR)
 
 type Box = { left: number; right: number; top: number; bottom: number }
 // happy-dom's viewport is 1024 x 768; the cards' column is x 648-1008 as at 1024 px in Orca.
@@ -28,6 +29,21 @@ function Composer({ id }: { id: string }): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   useNotificationCardComposerClearance(ref, true)
   return <div ref={ref} data-box={id} />
+}
+
+function ToasterStandIn(): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  useNotificationCardLayoutVarReader(ref)
+  return <div ref={ref} data-toaster="" />
+}
+
+function Corner(): React.JSX.Element {
+  return (
+    <>
+      <ToasterStandIn />
+      <NotificationCardStack>card</NotificationCardStack>
+    </>
+  )
 }
 
 beforeEach(() => {
@@ -67,7 +83,7 @@ afterEach(() => {
 describe('NotificationCardStack', () => {
   it('publishes its height plus the gap so toasts sit above the cards, and clears it when empty', () => {
     height = 120
-    act(() => root?.render(<NotificationCardStack>card</NotificationCardStack>))
+    act(() => root?.render(<Corner />))
     expect(published()).toBe('calc(120px + 0.5rem)')
 
     height = 0
@@ -77,7 +93,7 @@ describe('NotificationCardStack', () => {
 
   it('clears its height on unmount, so the toaster returns to its own offset', () => {
     height = 80
-    act(() => root?.render(<NotificationCardStack>card</NotificationCardStack>))
+    act(() => root?.render(<Corner />))
     act(() => root?.unmount())
     root = null
     expect(published()).toBe('')
@@ -90,13 +106,17 @@ describe('NotificationCardStack', () => {
       root?.render(
         <>
           <Composer id="chat" />
-          <NotificationCardStack>card</NotificationCardStack>
+          <Corner />
         </>
       )
     )
     expect(clearance()).toBe('calc(118px + 0.5rem)')
+    expect(document.documentElement.getAttribute('style')).toBeNull()
+    const setProperty = vi.spyOn(CSSStyleDeclaration.prototype, 'setProperty')
+    act(() => resize?.())
+    expect(setProperty).not.toHaveBeenCalled()
 
-    act(() => root?.render(<NotificationCardStack>card</NotificationCardStack>))
+    act(() => root?.render(<Corner />))
     expect(clearance()).toBe('')
   })
 
@@ -111,7 +131,7 @@ describe('NotificationCardStack', () => {
           <Composer id="beside" />
           <Composer id="above" />
           <Composer id="hidden" />
-          <NotificationCardStack>card</NotificationCardStack>
+          <Corner />
         </>
       )
     )

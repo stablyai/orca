@@ -332,4 +332,37 @@ describe('plugin update review notices IPC', () => {
     )
     await expect(invoke('plugins:takeUpdateReviewNotices')).resolves.toEqual([])
   })
+
+  it('returns public install counts, or none when the service fails or is absent', async () => {
+    const counts = { 'stablyai.orca-nord-theme': 37 }
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      {
+        ...createServices(),
+        installStats: { getInstallCounts: vi.fn().mockResolvedValue(counts) }
+      },
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:getInstallCounts')).resolves.toEqual(counts)
+    handlers = new Map()
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      {
+        ...createServices(),
+        installStats: { getInstallCounts: vi.fn().mockRejectedValue(new Error('disk')) }
+      },
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:getInstallCounts')).resolves.toEqual({})
+    handlers = new Map()
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      createServices(),
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:getInstallCounts')).resolves.toEqual({})
+  })
 })

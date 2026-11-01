@@ -62,6 +62,9 @@ export const diffStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center'
   },
+  diffCloseButtonPressed: {
+    backgroundColor: colors.borderSubtle
+  },
   diffState: {
     minHeight: 160,
     alignItems: 'center',

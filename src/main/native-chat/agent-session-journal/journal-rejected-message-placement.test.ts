@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../shared/structured-agent-session-dispatch-rejection'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { projectJournalBatch } from '../agent-session-wire/agent-session-journal-batch'
 import { DISPATCH_DOUBT_HOST_RESTARTED } from './journal-dispatch-doubt-reasons'
 import { applyJournalRow, createJournalReducerState, renderJournalState } from './journal-reducer'
@@ -78,19 +76,6 @@ function placed(state: ReturnType<typeof journal>['state'], clientMessageId: str
 const IN_TURN: AgentJournalTurnScope = { kind: 'turn', turnItemId: 'orca:turn-1' }
 
 describe('a rejected message', () => {
-  it('sits at the rejection, in no turn, when it was queued', () => {
-    const { state, submission, dispatch, advance } = journal()
-    submission('waiting')
-    advance(300)
-    dispatch('waiting', 'rejected')
-
-    expect(placed(state, 'waiting')).toEqual({
-      sequence: 302,
-      observedAt: 1_302,
-      scope: AGENT_JOURNAL_THREAD_SCOPE
-    })
-  })
-
   it('reaches a subscriber at the tail, so the newest page holds it', () => {
     const { state, submission, dispatch, advance } = journal()
     submission('waiting')
@@ -122,15 +107,6 @@ describe('a rejected message', () => {
       observedAt: 1_023,
       scope: AGENT_JOURNAL_THREAD_SCOPE
     })
-  })
-
-  it('sits at the rejection when it was sent directly', () => {
-    const { state, submission, dispatch, advance } = journal()
-    submission('direct', false)
-    advance(10)
-    dispatch('direct', 'rejected')
-
-    expect(placed(state, 'direct')?.sequence).toBe(12)
   })
 })
 

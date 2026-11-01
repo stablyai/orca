@@ -1,8 +1,9 @@
+import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 import { useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import {
@@ -10,7 +11,6 @@ import {
   runtimeHostContactForEntry
 } from '../../../../shared/runtime-host-contact'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { useAppStore } from '@/store'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import {
@@ -128,7 +128,7 @@ export function useAgentMenuObservation(
     useShallow((state) => [
       state.settings?.defaultTuiAgent,
       state.settings?.disabledTuiAgents,
-      state.settings?.experimentalNativeChat,
+      state.settings?.agentDefaultSurface,
       state.settings?.nativeChatProviders,
       state.settings?.agentDefaultArgs,
       state.settings?.agentPermissionDefault,
@@ -140,8 +140,7 @@ export function useAgentMenuObservation(
       state.settings?.nativeChatPermissionMode
     ])
   )
-  const chatEnabled = isNativeChatEnabled(settings)
-  const plain = !chatEnabled || hostChatAnswer(input) === 'no-chats'
+  const plain = hostChatAnswer(input) === 'no-chats'
   const local = facts.executionHostId === LOCAL_EXECUTION_HOST_ID
   // Use published host-wide availability when supported; older hosts defer final admission to the launch request.
   const published =
@@ -178,7 +177,7 @@ export function useAgentMenuObservation(
       ...(hostCatalog ?? []),
       ...Object.keys(settings?.nativeChatProviders ?? {})
         .filter(isTuiAgent)
-        .filter((agent) => settings?.nativeChatProviders?.[agent] === true)
+        .filter((agent) => nativeChatPreferenceFor(settings, agent))
     ])
   ].filter(isTuiAgent)
   const inventoryFailed =

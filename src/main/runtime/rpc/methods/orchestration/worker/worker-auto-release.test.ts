@@ -81,18 +81,26 @@ describe('orchestration worker automatic release', () => {
     })
   })
 
-  it('keeps a terminal worker-retain claimed before the deadline', async () => {
+  it('keeps a worker-retain terminal through follow-up work until the coordinator releases it', async () => {
     setupWithFakeClock()
     const { dispatchId } = await h.startSettledWorker()
 
     await h.call('orchestration.workerRetain', { dispatch: dispatchId })
     await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
-
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+
+    const followUp = await h.startWorker({ terminal: 'term_worker' })
+    h.settle(followUp.taskId, followUp.dispatchId, 'succeeded')
+    await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
+    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
+    expect(h.db.getWorkerTerminalResourceByOwner(followUp.dispatchId)).toMatchObject({
       release_state: 'retained',
+      retained_reason: 'user_requested',
       auto_release_at: null
     })
+
+    await h.call('orchestration.workerRelease', { dispatch: followUp.dispatchId })
+    await vi.waitFor(() => expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1))
   })
 
   it("closes a worker the user typed into on time; an older client's typing report keeps nothing", async () => {
@@ -112,7 +120,7 @@ describe('orchestration worker automatic release', () => {
   const keepOpen = (keep: boolean): Promise<unknown> =>
     h.call('orchestration.workerKeepOpen', { paneKey: h.workerPaneKey, keep })
 
-  it('keeps a worker kept open while it ran past its finish, a coordinator release and reuse', async () => {
+  it('keeps a worker kept open while it ran past its finish, a coordinator release and follow-up work', async () => {
     setupWithFakeClock()
     const { taskId, dispatchId } = await h.startWorker()
     await expect(
@@ -127,9 +135,13 @@ describe('orchestration worker automatic release', () => {
     await expect(
       h.call('orchestration.workerRelease', { dispatch: dispatchId })
     ).resolves.toMatchObject({ state: 'retained', reason: 'user_kept' })
-    await expect(h.startWorker({ terminal: 'term_worker' })).rejects.toThrow()
+    const followUp = await h.startWorker({ terminal: 'term_worker' })
+    await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.retained_reason).toBe('user_kept')
+    expect(h.db.getWorkerTerminalResourceByOwner(followUp.dispatchId)).toMatchObject({
+      retained_reason: 'user_kept',
+      auto_release_at: null
+    })
   })
 
   it('starts a fresh countdown when the user allows auto-close again', async () => {

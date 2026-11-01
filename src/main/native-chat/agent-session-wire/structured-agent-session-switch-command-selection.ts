@@ -3,7 +3,7 @@ import type { StructuredAgentSessionConversationLifetimeHost } from './structure
 import {
   AgentSessionRefusalError,
   agentSessionRefusalError
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import type {
   AgentSessionSwitchDeadline,

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -45,7 +46,7 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
     pendingFirstAgentMessageRename: false,
     trimmedNote: 'Fix the checkout'
   }
-  const settings = { ...getDefaultSettings('/test'), experimentalNativeChat: true }
+  const settings = { ...getDefaultSettings('/test'), nativeChatProviders: EVERY_AGENT_CHAT }
   const original = useAppStore.getState().settings
   const prepare = vi.fn<() => Promise<PreparedQuickSubmit | null>>()
   const { result } = renderHook(() =>
@@ -96,7 +97,10 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
         )
       })
       useAppStore.setState({
-        settings: { ...settings, experimentalNativeChat: route === 'terminal-tui' }
+        settings: {
+          ...settings,
+          nativeChatProviders: route === 'terminal-tui' ? EVERY_AGENT_CHAT : {}
+        }
       })
       await act(async () => {
         deferred.resolve(prepared)

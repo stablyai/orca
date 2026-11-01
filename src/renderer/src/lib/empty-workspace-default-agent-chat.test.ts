@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -34,7 +35,7 @@ function seedSettings(settings: Partial<GlobalSettings>): void {
     detectedAgentIds: ['claude', 'codex'],
     settings: {
       ...getDefaultSettings('/tmp'),
-      experimentalNativeChat: true,
+      nativeChatProviders: EVERY_AGENT_CHAT,
       defaultTuiAgent: 'codex',
       disabledTuiAgents: [],
       ...settings
@@ -69,6 +70,13 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
     expect(mocks.seedShell).toHaveBeenCalledOnce()
   })
 
+  it('opens no agent when the default agent is left on Auto', () => {
+    seedSettings({ defaultTuiAgent: null })
+
+    expect(openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)).toBeNull()
+    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+  })
+
   it('reads the agents detected on the workspace SSH host', () => {
     seedSettings({})
     mocks.detectionTargetKey.mockReturnValue('ssh:conn-1')
@@ -93,7 +101,11 @@ describe('agent detection for the default chat', () => {
     useAppStore.setState({ remoteDetectedAgentIds: { 'conn-1': [] } })
     expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(false)
 
-    seedSettings({ experimentalNativeChat: false })
+    seedSettings({ nativeChatProviders: {} })
+    useAppStore.setState({ remoteDetectedAgentIds: {} })
+    expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(false)
+
+    seedSettings({ defaultTuiAgent: null })
     useAppStore.setState({ remoteDetectedAgentIds: {} })
     expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(false)
   })

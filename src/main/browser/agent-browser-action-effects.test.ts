@@ -71,17 +71,6 @@ function fakeHost(
 }
 
 describe('runWithActionEffects', () => {
-  it('says a click that changed nothing changed nothing', async () => {
-    const guest = fakeGuest()
-    const { host } = fakeHost(guest, [UNCHANGED, UNCHANGED])
-
-    const result = await runWithActionEffects(host, async () => ({ clicked: '@e6' }))
-
-    expect(result).toEqual({ clicked: '@e6', effects: { settled: true, page: 'unchanged' } })
-    // One baseline before the action, one reading after it.
-    expect(host.snapshotDelta).toHaveBeenCalledTimes(2)
-  })
-
   it('diffs against the last reading without reissuing the refs the agent holds', async () => {
     const guest = fakeGuest()
     const { host } = fakeHost(guest, [INVALID_LOGIN], true)

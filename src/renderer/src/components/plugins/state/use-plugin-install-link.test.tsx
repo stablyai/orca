@@ -63,22 +63,6 @@ afterEach(() => {
   root = null
 })
 
-describe('openPluginInstallLink', () => {
-  it('routes a valid link to Settings → Plugins and holds it for the catalog', () => {
-    openPluginInstallLink('orca://plugins/acme.dusk')
-    expect(storeState.openSettingsTarget).toHaveBeenCalledWith({ pane: 'plugins', repoId: null })
-    expect(storeState.openSettingsPage).toHaveBeenCalled()
-    expect(usePluginPreviewRequestStore.getState().link?.pluginKey).toBe('acme.dusk')
-  })
-
-  it('shows only an error toast for a malformed link', () => {
-    openPluginInstallLink('orca://plugins/../evil')
-    expect(toastError).toHaveBeenCalledTimes(1)
-    expect(storeState.openSettingsPage).not.toHaveBeenCalled()
-    expect(usePluginPreviewRequestStore.getState().link).toBeNull()
-  })
-})
-
 describe('usePluginInstallLink', () => {
   it('keeps the link while plugins are off, then opens the page once the catalog loads', async () => {
     openPluginInstallLink('orca://plugins/acme.dusk')

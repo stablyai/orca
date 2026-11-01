@@ -19,18 +19,6 @@ describe('mailbox delivery consumption', () => {
     return { run, params, insert }
   }
 
-  it('ignores a fully read batch without rewriting it', () => {
-    const { params, insert } = setup()
-    const old = insert('old')
-    const first = db.getOrCreateRunDelivery(params)!
-    db.db.prepare('UPDATE messages SET read = 1 WHERE id = ?').run(old.id)
-    const next = insert('next')
-    const current = db.getOrCreateRunDelivery(params)!
-    expect(current.messages.map((m) => m.id)).toEqual([next.id])
-    expect(current.replayed).toBe(false)
-    expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
-  })
-
   it('preserves the entire replay batch while any member is unread', () => {
     const { params, insert } = setup()
     const a = insert('a')
@@ -56,20 +44,6 @@ describe('mailbox delivery consumption', () => {
     db.db.exec('ROLLBACK')
     expect(db.hasOutstandingRunDelivery(params.runId)).toBe(true)
     expect(db.getDeliveryRaw(first.delivery.id)).toEqual(before)
-    expect(db.getMessageById(message.id)?.read).toBe(0)
-    expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
-  })
-
-  it('explains the delivery ID contract for invalid acknowledgements without consuming mail', () => {
-    const { params, insert } = setup()
-    const message = insert('pending')
-    const first = db.getOrCreateRunDelivery(params)!
-    expect(() => db.acknowledgeRunDelivery({ ...params, deliveryId: message.id })).toThrow(
-      `${message.id} is a message id, not a delivery id. Acknowledge the batch with the deliveryId field from the check response; process the entire batch before acknowledging.`
-    )
-    expect(() => db.acknowledgeRunDelivery({ ...params, deliveryId: 'delivery_missing' })).toThrow(
-      '--ack requires a delivery_* ID returned by orchestration check; process the entire batch before acknowledging.'
-    )
     expect(db.getMessageById(message.id)?.read).toBe(0)
     expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
   })

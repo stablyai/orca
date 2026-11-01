@@ -5,8 +5,8 @@ import {
   seedNativeChatAppliedSessionOptions
 } from './native-chat-session-option-cache'
 import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
-import { mergeDiscoveredAuthoritativeModels } from './agent-session-option-catalog'
-import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
+import { mergeDiscoveredAuthoritativeModels } from './agent-session/options/agent-session-option-catalog'
+import { GROK_SESSION_OPTION_CATALOG } from './agent-session/options/agent-session-option-catalog-grok'
 import {
   resolveNativeChatSessionOptionDefaults,
   updateNativeChatSessionOptionDefaults

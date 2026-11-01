@@ -109,7 +109,10 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-export async function fixture(legacyOpenCodeGoApiKey?: string) {
+export async function fixture(
+  legacyOpenCodeGoApiKey?: string,
+  retainedChatSetting: Record<string, unknown> = {}
+) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-worker-coordination-'))
   const path = join(directory, 'profile-state.db')
   const inner = new ProfileStateSqliteAuthority(path, 'coordination-test')
@@ -120,6 +123,7 @@ export async function fixture(legacyOpenCodeGoApiKey?: string) {
         ...initial,
         settings: {
           ...initial.settings,
+          ...retainedChatSetting,
           ...(legacyOpenCodeGoApiKey ? { opencodeGoApiKey: legacyOpenCodeGoApiKey } : {})
         }
       })

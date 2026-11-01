@@ -12,6 +12,7 @@ import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketp
 import { PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN } from '../plugins/catalog/plugin-marketplace-store'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
+import type { PluginInstallStatsService } from '../plugins/catalog/plugin-install-stats-service'
 import type { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update-review-notices'
 import type {
   PluginAutoUpdateState,
@@ -26,6 +27,7 @@ export type PluginMarketplaceHandlerServices = {
   installer: PluginMarketplaceInstaller
   autoUpdater?: Pick<PluginAutoUpdater, 'getState'>
   reviewNotices?: Pick<PluginUpdateReviewNotices, 'take'>
+  installStats?: Pick<PluginInstallStatsService, 'getInstallCounts'>
 }
 
 /** The consent write path (applyPluginConsent), bound to the store by the caller. */
@@ -140,6 +142,12 @@ export function registerPluginMarketplaceHandlers(
   ipcMain.handle(
     'plugins:takeUpdateReviewNotices',
     (): Promise<PluginUpdateReviewNotice[]> => services.reviewNotices?.take() ?? Promise.resolve([])
+  )
+  // Why never rejects: counts are decoration; a failure just hides them.
+  ipcMain.handle(
+    'plugins:getInstallCounts',
+    (): Promise<Record<string, number>> =>
+      services.installStats?.getInstallCounts().catch(() => ({})) ?? Promise.resolve({})
   )
   ipcMain.handle('plugins:getRollbackVersion', (_event, args: unknown) => {
     const { pluginKey } = installedPluginSchema.parse(args)

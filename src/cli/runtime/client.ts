@@ -203,6 +203,10 @@ export class RuntimeClient {
       const readiness = resolveWorkerStartReadinessTimeoutMs(requested)
       return Math.max(resolveWorkerStartClientTimeoutMs(readiness), this.requestTimeoutMs)
     }
+    // A send to a finished worker starts its follow-up, which waits as worker-start does.
+    if (method === 'orchestration.send') {
+      return Math.max(resolveWorkerStartClientTimeoutMs(), this.requestTimeoutMs)
+    }
     if (
       (method === 'orchestration.check' && isWaitingCheck(params)) ||
       method === 'terminal.wait'

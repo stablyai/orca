@@ -1,14 +1,22 @@
-import { themedStyleSheet, colors, radii, spacing } from './mobile-tasks-dependencies'
+import { themedStyleSheet, colors, radii, spacing, StyleSheet } from './mobile-tasks-dependencies'
 
 export const mobileTasksListStyles = themedStyleSheet(() => ({
   taskRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2
+    paddingVertical: spacing.md
   },
   taskRowPressed: {
     backgroundColor: colors.bgRaised
+  },
+  taskRowCentered: {
+    alignItems: 'center'
+  },
+  taskRowSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderSubtle,
+    marginLeft: spacing.lg
   },
   taskIcon: {
     width: 20,
@@ -57,6 +65,11 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
   subtitle: {
     flex: 1,
     fontSize: 11,
+    color: colors.textSecondary
+  },
+  taskRowMeta: {
+    flex: 1,
+    fontSize: 12,
     color: colors.textSecondary
   },
   branchMetaRow: {
@@ -142,8 +155,9 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
     gap: spacing.xs
   },
   taskRowTrailing: {
-    alignItems: 'flex-end',
-    gap: spacing.xs
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2
   },
   statusText: {
     fontSize: 11,

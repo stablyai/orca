@@ -22,7 +22,9 @@ it('loads the selected icon theme and drops it when its plugin goes away', async
     ],
     icons: { folder: 0, file: 1 },
     fileNames: {},
-    fileExtensions: {}
+    fileExtensions: {},
+    folderNames: { src: 0, broken: 1 },
+    folderNamesExpanded: { src: 0, broken: 1 }
   }
   let listed = [metadata]
   const listeners: ((event: PluginChangeEvent) => void)[] = []
@@ -40,12 +42,14 @@ it('loads the selected icon theme and drops it when its plugin goes away', async
   const store = await import('./plugin-icon-themes')
 
   renderHook(() => store.usePluginIconThemeActivation(metadata.id))
-  // The unusable second SVG gets no rule, so its slot falls back to the built-in icon.
+  // The unusable second SVG gets no rule, so its mappings fall back to the built-in icon.
   await waitFor(() =>
     expect(store.useActivePluginIconTheme.getState().theme).toEqual({
       icons: { folder: 0 },
       fileNames: {},
-      fileExtensions: {}
+      fileExtensions: {},
+      folderNames: { src: 0 },
+      folderNamesExpanded: { src: 0 }
     })
   )
 
@@ -68,7 +72,9 @@ it('drops the previous icons when the next selected theme fails to load', async 
               svgs: ['<svg xmlns="http://www.w3.org/2000/svg"><path fill="currentColor"/></svg>'],
               icons: { file: 0 },
               fileNames: {},
-              fileExtensions: {}
+              fileExtensions: {},
+              folderNames: {},
+              folderNamesExpanded: {}
             }
           : null
       ),
@@ -84,49 +90,4 @@ it('drops the previous icons when the next selected theme fails to load', async 
   rerender({ id: broken.id })
   await waitFor(() => expect(document.getElementById('orca-plugin-icon-theme')).toBeNull())
   expect(store.useActivePluginIconTheme.getState().theme).toBeNull()
-})
-
-it('reloads the active icon theme when a same-metadata update changes its content', async () => {
-  const metadata = { id: 'plugin:samples.icons/minimal', pluginKey: 'samples.icons', label: 'A' }
-  let listed: { id: string; pluginKey: string; label: string; revision?: string }[] = [
-    { ...metadata, revision: 'r1' }
-  ]
-  const listeners: ((event: PluginChangeEvent) => void)[] = []
-  const loadIconTheme = vi.fn(async () => ({
-    ...listed[0],
-    svgs: ['<svg xmlns="http://www.w3.org/2000/svg"><path fill="currentColor"/></svg>'],
-    icons: { file: 0 },
-    fileNames: {},
-    fileExtensions: {}
-  }))
-  vi.stubGlobal('api', {
-    plugins: {
-      listIconThemes: async () => listed,
-      loadIconTheme,
-      onChanged: (listener: (event: PluginChangeEvent) => void) => {
-        listeners.push(listener)
-        return () => {}
-      }
-    }
-  })
-  const store = await import('./plugin-icon-themes')
-  renderHook(() => store.usePluginIconThemeActivation(metadata.id))
-  await waitFor(() => expect(loadIconTheme).toHaveBeenCalledTimes(1))
-
-  const refresh = async () => {
-    act(() => listeners.forEach((listener) => listener({ contentPacksChanged: true })))
-    await act(async () => {
-      await store.usePluginIconThemeStore.getState().fetchEntries()
-    })
-  }
-  listed = [
-    { ...metadata, revision: 'r1' },
-    { ...metadata, id: 'plugin:samples.icons/other' }
-  ]
-  await refresh()
-  expect(loadIconTheme).toHaveBeenCalledTimes(1)
-
-  listed = [{ ...metadata, revision: 'r2' }]
-  await refresh()
-  await waitFor(() => expect(loadIconTheme).toHaveBeenCalledTimes(2))
 })

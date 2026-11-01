@@ -6,9 +6,11 @@ import { MobileNativeChatComposer } from './native-chat/composer/MobileNativeCha
 import { useMobileNativeChatFileSearch } from './native-chat/composer/use-mobile-native-chat-file-search'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
+    ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Text: 'Text',
@@ -23,6 +25,8 @@ vi.mock('react-native', async () => {
 })
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  ListEnd: 'ListEnd',
+  CornerDownRight: 'CornerDownRight',
   Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',

@@ -282,7 +282,7 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     textAlign: 'center'
   },
-  pressed: { backgroundColor: colors.bgRaised },
+  pressed: { backgroundColor: colors.borderSubtle },
   editorDesc: { paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
   descText: { fontSize: 12, color: colors.textMuted }
 }))

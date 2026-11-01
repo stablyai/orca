@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { projectStatus } from './structured-agent-session-status-projection'
 import {
   getStructuredAgentSessionLaunchLifecycle,

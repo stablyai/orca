@@ -1,4 +1,4 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 export type StructuredSubjectRead = {

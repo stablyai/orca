@@ -176,10 +176,26 @@ export function _clearHostedReviewRequestGenerationsForTest(): void {
 
 /** A forced request needs a forced flight; an explicit Refresh (wake) needs one that may start the WSL distro (E9). */
 export function canJoinHostedReviewFlight(
-  inflight: { force: boolean; wakeWslDistro: boolean },
-  options: { force?: boolean; wakeWslDistro?: boolean } | undefined
+  inflight: { force: boolean; wakeWslDistro: boolean; currentHeadOid?: string | null },
+  options:
+    | {
+        force?: boolean
+        wakeWslDistro?: boolean
+        userRefresh?: boolean
+        currentHeadOid?: string | null
+      }
+    | undefined
 ): boolean {
-  return (!options?.force || inflight.force) && (!options?.wakeWslDistro || inflight.wakeWslDistro)
+  return (
+    !options?.userRefresh &&
+    !(
+      options?.currentHeadOid != null &&
+      inflight.currentHeadOid != null &&
+      options.currentHeadOid !== inflight.currentHeadOid
+    ) &&
+    (!options?.force || inflight.force) &&
+    (!options?.wakeWslDistro || inflight.wakeWslDistro)
+  )
 }
 
 /** Records a freshly issued request in the in-flight map and supersedes any queued revalidation for its key. */
@@ -190,7 +206,7 @@ export function registerInflightHostedReviewRequest(
     ...entry
   }: {
     promise: Promise<HostedReviewInfo | null>
-    options: { force?: boolean; wakeWslDistro?: boolean } | undefined
+    options: { force?: boolean; wakeWslDistro?: boolean; userRefresh?: boolean } | undefined
     currentHeadOid: string | null
     generation: number
     startedAt: number

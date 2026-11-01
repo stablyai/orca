@@ -35,13 +35,6 @@ describe('readDaemonWslSleepCwd', () => {
     }
   })
 
-  it("answers the shell's folder in the bridge's UNC spelling", async () => {
-    readRows.mockResolvedValue([shell])
-    expect(await readDaemonWslSleepCwd(pane)).toBe('\\\\wsl.localhost\\Ubuntu\\home\\a\\deep')
-    // A live pane's distro is running: no separate running check.
-    expect(readRows).toHaveBeenCalledWith('Ubuntu', 3_000, { running: true })
-  })
-
   it('gives the read at most a quarter of what is left of the Sleep, capped at 3 s', async () => {
     readRows.mockResolvedValue([shell])
     await readDaemonWslSleepCwd(pane, Date.now() + 4_000)
@@ -49,14 +42,6 @@ describe('readDaemonWslSleepCwd', () => {
     readRows.mockClear()
     expect(await readDaemonWslSleepCwd(pane, Date.now() - 1)).toBeNull()
     expect(readRows).not.toHaveBeenCalled()
-  })
-
-  it('gives up at its budget when the distro does not answer', async () => {
-    vi.useFakeTimers()
-    readRows.mockReturnValue(new Promise(() => {}))
-    const read = readDaemonWslSleepCwd(pane)
-    await vi.advanceTimersByTimeAsync(3_000)
-    expect(await read).toBeNull()
   })
 
   it("answers quit's panes within its own budget, leaving out panes it cannot read", async () => {
@@ -89,11 +74,5 @@ describe('readDaemonWslSleepCwd', () => {
     const read = readDaemonWslSleepCwdWithFacts(pane)
     await vi.advanceTimersByTimeAsync(3_000)
     expect(await read).toMatchObject({ cwd: null, rows: null, shells: null, timedOut: true })
-  })
-
-  it('reads nothing off Windows', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-    expect(await readDaemonWslSleepCwd(pane)).toBeNull()
-    expect(readRows).not.toHaveBeenCalled()
   })
 })

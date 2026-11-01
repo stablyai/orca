@@ -451,6 +451,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     storeSubscribers = []
     mockStoreState = {
       activeWorktreeId: 'wt-1',
+      unifiedTabsByWorktree: {},
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
       },

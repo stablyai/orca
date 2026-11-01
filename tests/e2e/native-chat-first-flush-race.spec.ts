@@ -4,9 +4,15 @@ import os from 'node:os'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
 import {
-  enableNativeChatSetting,
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
+import {
+  observeTranscriptPaneLifetime,
   seedClaudeProviderSession,
   toggleTerminalTabToChatView,
   claudeTranscriptLines
@@ -24,7 +30,11 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
+    const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+    expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
     const [tabId] = descriptor.paneKey.split(':')
     const sessionId = `e2e-first-flush-${randomUUID()}`
 
@@ -39,8 +49,12 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
       contentType: 'text/plain'
     })
 
+    const finishLifetime = await observeTranscriptPaneLifetime(orcaPage, {
+      tabId,
+      worktreeId: descriptor.worktreeId,
+      paneKey: descriptor.paneKey
+    })
     try {
-      await enableNativeChatSetting(orcaPage)
       await seedClaudeProviderSession(orcaPage, {
         paneKey: descriptor.paneKey,
         worktreeId: descriptor.worktreeId,
@@ -87,7 +101,16 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
       await orcaPage.screenshot({
         path: path.join(screenshotDir, '02-hydrated.png')
       })
+      const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+      expect(finalPane.tabId).toBe(boundPane.tabId)
+      expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+      expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+      await expect(transcript).toBeVisible()
     } finally {
+      await testInfo.attach('transcript-pane-lifetime', {
+        body: JSON.stringify(await finishLifetime()),
+        contentType: 'application/json'
+      })
       rmSync(scratchDir, { recursive: true, force: true })
     }
   })

@@ -23,7 +23,6 @@ export type RuntimeClientSettings = Pick<
   | 'defaultLinearTeamSelection'
   | 'githubProjects'
   | 'experimentalNewWorktreeCardStyle'
-  | 'experimentalNativeChat'
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
@@ -40,9 +39,6 @@ export type RuntimeClientSettings = Pick<
   | 'sourceControlCompareAgainstUpstream'
   | 'diffShowWhitespace'
 > & {
-  /** Older clients still read these; neither is persisted or accepted as an update. */
-  openAgentTabsInChatByDefault?: boolean
-  experimentalStructuredNativeChat?: boolean
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
   sourceControlAi: RuntimeClientSourceControlAi
 }

@@ -8,10 +8,10 @@ import { StructuredAgentSessionJournalProjections } from './structured-agent-ses
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionStatusEvent } from '../../../shared/agent-session/agent-session-wire'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const journals = createTrackedJournalOpener()
 let directory: string

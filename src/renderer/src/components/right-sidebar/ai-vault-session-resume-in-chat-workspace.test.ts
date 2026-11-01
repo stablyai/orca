@@ -1,8 +1,9 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { makeWorktree } from '../worktree-jump-palette-test-fixtures'
 
@@ -46,7 +47,7 @@ function resumeInChat(session: AiVaultSession = codexSession) {
     activeWorkspaceId: PAIRED_WORKSPACE,
     targetState: { folderWorkspaces: [], projectGroups: [], repos: [], worktreesByRepo: {} },
     settings: {
-      experimentalNativeChat: true
+      nativeChatProviders: EVERY_AGENT_CHAT
     }
   })
 }
@@ -81,7 +82,7 @@ it.each(['local', 'runtime:server-1'] as const)(
             'repo-1': [makeWorktree(PAIRED_WORKSPACE, 'workspace', { path: target })]
           }
         },
-        settings: { experimentalNativeChat: true }
+        settings: { agentDefaultSurface: 'chat' }
       })
     const old = [STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY]
     const set = (capabilities: readonly string[]) => {

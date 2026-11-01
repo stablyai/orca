@@ -1,10 +1,10 @@
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalRenderItem,
-  type AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+  type AgentJournalRenderItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   journalLifecycleMutationItemId,
   type JournalLifecycleMutationInput

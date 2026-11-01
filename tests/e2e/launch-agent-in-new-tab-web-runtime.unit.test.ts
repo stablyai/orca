@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../src/shared/native-chat/every-agent-chat.test-fixture'
 import { mocks, store } from './launch-agent-web-terminal.test-fixture'
 import { createElement, useState } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { useTabAgentMenuLaunch } from '@/components/tab-bar/QuickLaunchButton'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/structured-agent-session-surface-capabilities'
 import { AGENT_SESSION_AGENTS_METHOD } from '../../src/shared/agent-session/agent-session-registered-agents'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
@@ -433,7 +434,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
       mocks.actualOperation = true
       mocks.capability.mockResolvedValue(true)
       vi.mocked(pasteDraftWhenAgentReady).mockResolvedValue(true)
-      store.settings.experimentalNativeChat = true
+      store.settings.nativeChatProviders = { ...EVERY_AGENT_CHAT }
       store.runtimeStatusByEnvironmentId.get('web-runtime')!.status = {
         hostPlatform: 'linux',
         runtimeId: 'runtime-1',

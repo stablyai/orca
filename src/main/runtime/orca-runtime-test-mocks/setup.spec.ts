@@ -419,7 +419,12 @@ vi.mock('../../source-control/stacked-hosted-review-creation', () => ({
 }))
 
 vi.mock('../../source-control/hosted-review', () => ({
-  getHostedReviewForBranch: getHostedReviewForBranchMock
+  getHostedReviewForBranch: getHostedReviewForBranchMock,
+  // Handlers read through this; keep asserting on the one mock.
+  readHostedReviewForBranch: vi.fn(async (input: unknown) => ({
+    review: await getHostedReviewForBranchMock(input),
+    readOutcome: 'cached'
+  }))
 }))
 
 vi.mock('../../github/client', async (importOriginal) => {

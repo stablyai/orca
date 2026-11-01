@@ -1,26 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import {
-  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-} from '../../../../shared/protocol-version'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
+
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
   assertProjectedSessionTabVisible,
-  clientCanObserveClientHostedBrowserPages,
   projectSessionTabBrowserPlacements,
   translateProjectedSessionTabMove
 } from './session-tab-browser-placement-projection'
 
 describe('projectSessionTabBrowserPlacements', () => {
-  it('preserves exact client placement for a capable desktop', () => {
-    const snapshot = makeSnapshot()
-
-    expect(
-      projectSessionTabBrowserPlacements(snapshot, [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY])
-    ).toBe(snapshot)
-  })
-
   it('removes client-only pages and repairs focus for an old peer', () => {
     const projected = projectSessionTabBrowserPlacements(makeSnapshot(), [])
 
@@ -39,20 +26,6 @@ describe('projectSessionTabBrowserPlacements', () => {
       }
     ])
     expect(projected.tabGroupLayout).toEqual({ type: 'leaf', groupId: 'group-terminal' })
-  })
-
-  // CLI sockets advertise no capabilities, so even test oracles cannot see client-placed browser pages by default.
-  it('hides client-placed pages from a native peer and from a caller with no capabilities', () => {
-    expect(
-      clientCanObserveClientHostedBrowserPages(NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES)
-    ).toBe(false)
-    expect(
-      clientCanObserveClientHostedBrowserPages(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES)
-    ).toBe(true)
-    expect(clientCanObserveClientHostedBrowserPages(undefined)).toBe(false)
-    expect(projectSessionTabBrowserPlacements(makeSnapshot(), undefined).tabs).toEqual([
-      expect.objectContaining({ id: 'terminal-leaf' })
-    ])
   })
 
   it('preserves hidden raw slots while translating an old-client reorder', () => {

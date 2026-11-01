@@ -61,7 +61,7 @@ import { WORKTREE_METHODS } from './worktree'
 import { OrcaRuntimeService } from '../../orca-runtime-test-mocks.spec'
 import '../../orca-runtime-test-lifecycle.spec'
 import { store as runtimeStore, TEST_WORKTREE_ID } from '../../orca-runtime-test-fixtures.spec'
-import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase

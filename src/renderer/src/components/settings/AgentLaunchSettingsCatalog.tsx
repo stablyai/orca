@@ -61,7 +61,6 @@ import { AgentChatRuntimeArea } from './AgentChatChoiceControls'
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { translate } from '@/i18n/i18n'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
@@ -117,10 +116,7 @@ export function AgentLaunchSettingsCatalog({
       : false
   )
   // The chat-or-CLI choice is this computer's, so a paired host's page doesn't offer it.
-  const chatAgents =
-    local && isNativeChatEnabled(local.settings)
-      ? chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
-      : []
+  const chatAgents = local ? chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined) : []
   const managedChatAgents = new Set(
     readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, undefined)
       ?.filter((row) => row.managedRuntime)
@@ -128,7 +124,7 @@ export function AgentLaunchSettingsCatalog({
   )
   // Agents whose chat program is here without their CLI, like a downloaded chat runtime, are installed for chat.
   const chatOnlyKey = useAppStore((state) => {
-    if (detectionTarget.kind === 'ssh' || (local && !isNativeChatEnabled(local.settings))) {
+    if (detectionTarget.kind === 'ssh') {
       return ''
     }
     const context = resolveChatProgramContext(state, workspace)

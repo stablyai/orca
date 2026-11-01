@@ -5,7 +5,10 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { createElement } from 'react'
 import { AgentLaunchSetupPanel } from '../components/agent/AgentLaunchSetupPanel'
 import { TooltipProvider } from '../components/ui/tooltip'
-import { useAgentLaunchPickerInventory } from '../components/agent/use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from '../components/agent/use-agent-launch-picker-inventory'
 import type { NewTabAgentMenuModel } from '../components/tab-bar/new-tab-agent-menu-model'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../shared/agent-launch-picker'
 import {
@@ -150,7 +153,7 @@ describe('picker window launch contract', () => {
       const host: ExecutionHostId =
         target === 'ssh' ? 'ssh:ssh-target-1' : target === 'local' ? 'local' : 'runtime:web-runtime'
       const rows = buildNewTabAgentMenuRows({
-        settings: { experimentalNativeChat: true, nativeChatProviders: { claude: false } },
+        settings: { agentDefaultSurface: 'chat', nativeChatProviders: { claude: false } },
         detectedOnHost: ['claude'],
         chatAgents: ['claude'],
         hostChatAnswer: () => (target === 'ssh' ? 'ssh' : 'yes'),
@@ -160,7 +163,8 @@ describe('picker window launch contract', () => {
         rows,
         ['claude'],
         (selected) => agentPickerChoiceSeeds(selected, store.settings),
-        () => 'Claude'
+        () => 'Claude',
+        undefined
       )[0]
       entry.catalog = {
         origin: 'probe',
@@ -390,7 +394,9 @@ it.each(['claude', 'codex'] as const)(
     let current: AgentPickerEntry
     const launches: AgentPickerDraft[] = []
     function Panel({ open }: { open: boolean }) {
-      const entries = useAgentLaunchPickerInventory('wt-1', menu, open)
+      const entries = useAgentPickerInventoryEntries(
+        useAgentLaunchPickerInventorySource('wt-1', menu, open)
+      )
       current = entries[0]
       return open
         ? createElement(

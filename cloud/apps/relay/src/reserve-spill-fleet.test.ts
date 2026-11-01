@@ -1,6 +1,6 @@
 import type { RelayRegion } from '@orca-cloud/relay-contract'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { CellReserveClient } from './cell-reserve-client.js'
 import type { RelayCellConfig, RelayConfig } from './config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'

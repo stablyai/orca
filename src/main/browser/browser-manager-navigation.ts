@@ -25,10 +25,10 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       request.webContentsId === undefined
         ? undefined
         : this.pendingNavigationByGuestId.get(request.webContentsId)
-    // Keep Firefox auth overrides in clean mode to avoid mixing them with native worker identity.
-    const googleAuthEnabled = processIdentity.mode === 'clean'
+    // Only a UA distinct from the process UA can mark a request as part of sign-in.
+    const authUaIsDistinct = googleAuth.userAgent !== processIdentity.userAgent
     if (
-      googleAuthEnabled &&
+      authUaIsDistinct &&
       request.currentUserAgent === googleAuth.userAgent &&
       (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
     ) {
@@ -39,14 +39,14 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
         ? undefined
         : this.standingCdpUserAgentOverride(request.webContentsId)
     if (
-      googleAuthEnabled &&
+      authUaIsDistinct &&
       !standingOverride &&
       request.effectiveUserAgent === googleAuth.userAgent &&
       (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
     ) {
       return googleAuth
     }
-    if (googleAuthEnabled && standingOverride?.userAgent === googleAuth.userAgent) {
+    if (authUaIsDistinct && standingOverride?.userAgent === googleAuth.userAgent) {
       return googleAuth
     }
     // Shared/service workers lack a guest ID and retain the process identity.

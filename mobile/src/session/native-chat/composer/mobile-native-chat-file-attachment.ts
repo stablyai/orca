@@ -3,7 +3,7 @@ import {
   MobileFileTooLargeError,
   type PickedMobileFile
 } from '../../../platform/media-picker-contract'
-import type { AgentSessionAttachmentUploadCommitResult } from '../../../../../src/shared/agent-session-attachments'
+import type { AgentSessionAttachmentUploadCommitResult } from '../../../../../src/shared/agent-session/agent-session-attachments'
 
 export type PendingNativeChatFile = {
   readonly id: string

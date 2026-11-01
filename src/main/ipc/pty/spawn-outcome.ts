@@ -6,7 +6,7 @@ import {
 import { terminalAttachResult } from '../../../shared/terminal-attach-result'
 import type { AdoptStablePaneResult } from './ipc/spawn-types'
 import type { StartupCwdFallback } from '../../../shared/startup-cwd-fallback'
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StablePaneOwner } from './pane/stable-owner'
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 
@@ -26,16 +26,15 @@ export type PtySpawnOutcome = {
 
 export { provenSpawnResponse } from '../../../shared/terminal-spawn-response'
 
-export function requireAcceptedSpawn(outcome: PtySpawnOutcome): PtySpawnOutcome['result'] {
+export function requireAcceptedSpawn(
+  outcome: PtySpawnOutcome,
+  refusalCode = 'agent_session_exited_during_start'
+): PtySpawnOutcome['result'] {
   if (outcome.kind === 'registration-exited') {
     const failure = outcome.terminalStartFailure
     throw failure
-      ? terminalStartError(
-          'agent_session_exited_during_start',
-          failure.cause,
-          failure.incarnationId
-        )
-      : terminalExitError('agent_session_exited_during_start')
+      ? terminalStartError(refusalCode, failure.cause, failure.incarnationId)
+      : terminalExitError(refusalCode)
   }
   return outcome.result
 }

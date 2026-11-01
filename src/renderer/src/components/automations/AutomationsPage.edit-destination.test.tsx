@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 
 import {
   addRuntimeProject,
@@ -85,15 +86,9 @@ describe('AutomationsPage edit fencing', () => {
     await save()
   }
 
-  function updatePreconditions(): unknown[] {
-    return api.automations.update.mock.calls.map(
-      ([payload]) => (payload as { expectedOwner?: unknown }).expectedOwner
-    )
-  }
-
-  it('fences the save even when the record cannot be re-read', async () => {
+  it('refuses the save when the captured record cannot be re-read', async () => {
     const automation = makeAutomation({ id: 'a-1' })
-    mocks.state.settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: true }
+    mocks.state.settings = { ...getDefaultSettings('/tmp'), nativeChatProviders: EVERY_AGENT_CHAT }
     const { setLocalRuntimeCapabilitiesForTests } =
       await import('@/runtime/local-runtime-capabilities')
     setLocalRuntimeCapabilitiesForTests(null)
@@ -106,13 +101,14 @@ describe('AutomationsPage edit fencing', () => {
     scopedList([])
     await editAndSave(listedRow(automation.id))
 
-    expect(api.automations.update).toHaveBeenCalled()
-    expect(updatePreconditions()).not.toContain(undefined)
-    expect(api.automations.update.mock.calls[0]?.[0]).toMatchObject({
-      updates: { name: 'Renamed' }
-    })
-    expect(api.automations.update.mock.calls[0]?.[0]?.updates).not.toHaveProperty(
-      'launchSetupPatch'
+    expect(api.automations.update).not.toHaveBeenCalled()
+    expect(api.automations.create).not.toHaveBeenCalled()
+    expect(api.automations.delete).not.toHaveBeenCalled()
+    expect(api.automations.runNow).not.toHaveBeenCalled()
+    expect(mocks.editorDialog?.open).toBe(true)
+    expect(mocks.editorDialog?.draft).toMatchObject({ name: 'Renamed' })
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'This automation is no longer available. Refresh and try again.'
     )
   })
 
@@ -175,7 +171,14 @@ describe('AutomationsPage edit fencing', () => {
     await editAndSave(unscopedAutomationListRows([automation])[0]!)
 
     expect(api.automations.update).not.toHaveBeenCalled()
-    expect(mocks.editorDialog?.notice?.message).toBeTruthy()
+    expect(api.automations.create).not.toHaveBeenCalled()
+    expect(api.automations.delete).not.toHaveBeenCalled()
+    expect(api.automations.runNow).not.toHaveBeenCalled()
+    expect(mocks.editorDialog?.open).toBe(true)
+    expect(mocks.editorDialog?.draft).toMatchObject({ name: 'Renamed' })
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'This automation is no longer available. Refresh and try again.'
+    )
   })
 })
 

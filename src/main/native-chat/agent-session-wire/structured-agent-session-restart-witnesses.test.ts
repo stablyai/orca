@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { createStructuredAgentSessionRestartWitnesses } from './structured-agent-session-restart-witnesses'
 import { marker } from './structured-agent-session-restart-resume-test-harness'
 

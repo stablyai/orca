@@ -146,18 +146,34 @@
       ]
     },
     {
-      "name": "orchestration",
-      "sourcePath": "skills/orchestration",
-      "packageDigest": "033316337f9c5d070a5b6d7f071d79deeed0e39985e29b1247c5de80a56a3215",
+      "name": "orca-plugin-authoring",
+      "sourcePath": "skills/orca-plugin-authoring",
+      "packageDigest": "8bc40895e0655c24014699ff0f311752814b0ba6b18a8428768cb42f9b54264e",
       "files": [
         {
           "path": "SKILL.md",
-          "size": 4365,
+          "size": 2320,
           "executable": false,
           "classification": "text",
-          "exactSha256": "24c5392fe1734c3dcf63d1a05ab4ac75eaa70e4d880f590a4a33ec83e4a2cc6a",
-          "textNormalizedSha256": "24c5392fe1734c3dcf63d1a05ab4ac75eaa70e4d880f590a4a33ec83e4a2cc6a",
-          "identitySha256": "24c5392fe1734c3dcf63d1a05ab4ac75eaa70e4d880f590a4a33ec83e4a2cc6a"
+          "exactSha256": "633d9b8dd17a7406a77541633e10391d95dfe10a0c25fcd0e04d6a248ea2f597",
+          "textNormalizedSha256": "633d9b8dd17a7406a77541633e10391d95dfe10a0c25fcd0e04d6a248ea2f597",
+          "identitySha256": "633d9b8dd17a7406a77541633e10391d95dfe10a0c25fcd0e04d6a248ea2f597"
+        }
+      ]
+    },
+    {
+      "name": "orchestration",
+      "sourcePath": "skills/orchestration",
+      "packageDigest": "306d65c6742f5061179646e467b92a8e5d5c659842f079883ee2ef983f890112",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 4348,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "66d4c60a3ead54eb063a57341278cccaf28e016c2847a6f1808a0d4d2d163606",
+          "textNormalizedSha256": "66d4c60a3ead54eb063a57341278cccaf28e016c2847a6f1808a0d4d2d163606",
+          "identitySha256": "66d4c60a3ead54eb063a57341278cccaf28e016c2847a6f1808a0d4d2d163606"
         }
       ]
     }

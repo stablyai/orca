@@ -18,7 +18,7 @@ import {
   testState
 } from '../../src/main/persistence/persistence-test-harness'
 import { AutomationCreate } from '../../src/shared/rpc-contract/automation-params'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

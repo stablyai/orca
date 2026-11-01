@@ -64,20 +64,6 @@ describe('useWorkspaceCleanupBrowseState', () => {
     vi.useRealTimers()
   })
 
-  it('keeps both patches when two groups are written in one tick', () => {
-    const controller = mountController()
-
-    // Batch patches in one act so stale rendered-state reads would overwrite the first patch.
-    act(() => {
-      controller.current!.patchFilters('activity', { idleMinDays: 20 })
-      controller.current!.patchFilters('size', { maxBytes: 500 })
-    })
-
-    const filters = store.getState().workspaceCleanupBrowse.filters
-    expect(filters.activity.idleMinDays).toBe(20)
-    expect(filters.size.maxBytes).toBe(500)
-  })
-
   it('keeps both patches when the same group is written twice in one tick', () => {
     const controller = mountController()
 

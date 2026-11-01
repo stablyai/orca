@@ -3,8 +3,10 @@ import {
   InteractionManager,
   Pressable,
   View,
+  type StyleProp,
   type TextInput,
-  type TextInputProps
+  type TextInputProps,
+  type ViewStyle
 } from 'react-native'
 import { Search, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -30,8 +32,10 @@ type MobileSearchFieldProps = {
   returnKeyType?: TextInputProps['returnKeyType']
   onSubmitEditing?: TextInputProps['onSubmitEditing']
   onBlur?: TextInputProps['onBlur']
+  onFocus?: TextInputProps['onFocus']
   editable?: boolean
   accessibilityLabel?: string
+  style?: StyleProp<ViewStyle>
 }
 
 export function MobileSearchField({
@@ -46,8 +50,10 @@ export function MobileSearchField({
   returnKeyType = 'search',
   onSubmitEditing,
   onBlur,
+  onFocus,
   editable = true,
-  accessibilityLabel
+  accessibilityLabel,
+  style
 }: MobileSearchFieldProps) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -121,6 +127,8 @@ export function MobileSearchField({
       returnKeyType={returnKeyType}
       onSubmitEditing={onSubmitEditing}
       onBlur={onBlur}
+      onFocus={onFocus}
+      style={style}
       clearButtonMode="never"
       accessibilityLabel={accessibilityLabel ?? placeholder}
     />

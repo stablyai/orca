@@ -5,7 +5,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import {
   OrcaRuntimeService,
   addWorktree,

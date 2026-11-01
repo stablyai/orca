@@ -1,4 +1,4 @@
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { PersistPtyBindingArgs } from '../../persistence/loading-store/pty-binding-persistence'
 import { ptyBindingIsRefused } from '../../persistence/loading-store/pty-binding-refusals'
 import { makePaneKey } from '../../../shared/stable-pane-id'

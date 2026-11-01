@@ -10,7 +10,7 @@ import {
   notePRRefreshValidationDenial,
   type PRRefreshValidationDenialReason
 } from '../github/pr-refresh-validation-backoff'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   getLocalProjectGhExecOptions,
   type LocalProjectGhExecOptions
