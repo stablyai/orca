@@ -46,7 +46,6 @@ export function useNativeChatComposerSubmit(args: {
   disabled: boolean
   sendPty: () => void
   sendStructured: NativeChatStructuredComposerSend
-  goalCommandAvailable?: boolean
   /** Runs a command Orca owns, like `/resume`; true means the draft never reaches the agent. */
   consumeOrcaCommand?: (draft: string) => boolean
   matchesOrcaCommand?: (draft: string) => boolean
@@ -61,17 +60,17 @@ export function useNativeChatComposerSubmit(args: {
   const { consumeOrcaCommand, setCaret, setDraft, structuredTransport } = args
   const threadGoal = structuredTransport?.threadGoal
   const [entered, setEntered] = useState(false)
-  const canEnter = threadGoal !== undefined || args.goalCommandAvailable === true
   const active = entered && structuredTransport !== undefined
 
   const interceptPick = useCallback(
     <TItem extends NativeChatPickerItem>(pick: (item: TItem) => void) =>
       (item: TItem) => {
+        // Without host goals only the provider's built-in /goal opens the chip; a namesake keeps its invocation.
         if (
           !structuredTransport ||
-          !canEnter ||
           item.kind !== 'command' ||
-          item.name !== GOAL_COMMAND
+          item.name !== GOAL_COMMAND ||
+          (!threadGoal && item.builtin !== true)
         ) {
           pick(item)
           return
@@ -83,13 +82,15 @@ export function useNativeChatComposerSubmit(args: {
         setCaret(tokenStart)
         setEntered(true)
       },
-    [canEnter, caret, draft, setCaret, setDraft, structuredTransport]
+    [caret, draft, setCaret, setDraft, structuredTransport, threadGoal]
   )
 
-  // Clear only the submitted draft after host acceptance; the goal controller refuses concurrent submissions.
+  // Native goals keep the ordinary sender's paste admission and clearing; host goals clear only an unchanged draft.
   const setGoal = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
-      const objective = structuredAgentSessionGoalObjective(draft)
+      const objective = structuredAgentSessionGoalObjective(
+        threadGoal ? resolveNativeChatPastedText(draftScopeKey, draft) : draft
+      )
       if (!structuredTransport || objective === '') {
         return
       }
@@ -114,21 +115,19 @@ export function useNativeChatComposerSubmit(args: {
       structuredTransport.onSubmitted?.()
       const isCurrent = structuredTransport.capturePresentation()
       const submitted = readNativeChatComposerDraft(draftScopeKey)
-      void threadGoal
-        .setObjective(resolveNativeChatPastedText(draftScopeKey, objective))
-        .then((accepted) => {
-          if (!accepted) {
-            return
-          }
-          if (!clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
-            return
-          }
-          if (isCurrent()) {
-            structuredTransport.onError(null)
-            setCaret(0)
-            setEntered(false)
-          }
-        })
+      void threadGoal.setObjective(objective).then((accepted) => {
+        if (!accepted) {
+          return
+        }
+        if (!clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
+          return
+        }
+        if (isCurrent()) {
+          structuredTransport.onError(null)
+          setCaret(0)
+          setEntered(false)
+        }
+      })
     },
     [
       draft,
@@ -156,7 +155,7 @@ export function useNativeChatComposerSubmit(args: {
       if (nativeChatImagesHoldSend(imageAttachments)) {
         return
       }
-      if (canEnter && structuredTransport && isBareStructuredAgentSessionGoalCommand(draft)) {
+      if (threadGoal && structuredTransport && isBareStructuredAgentSessionGoalCommand(draft)) {
         // Bare /goal always enters goal mode; even there it must not become an objective.
         setDraft('')
         setCaret(0)
@@ -177,7 +176,6 @@ export function useNativeChatComposerSubmit(args: {
     },
     [
       active,
-      canEnter,
       consumeOrcaCommand,
       disabled,
       draft,
@@ -188,7 +186,8 @@ export function useNativeChatComposerSubmit(args: {
       setCaret,
       setDraft,
       setGoal,
-      structuredTransport
+      structuredTransport,
+      threadGoal
     ]
   )
 

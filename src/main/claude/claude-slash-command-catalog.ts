@@ -6,7 +6,7 @@ const MAX_NAME_LENGTH = 200
 const MAX_DESCRIPTION_LENGTH = 200
 const MAX_ARGUMENT_HINT_LENGTH = 100
 
-type CommandDetail = Pick<AgentSessionSlashCommand, 'description' | 'argumentHint'>
+type CommandDetail = Pick<AgentSessionSlashCommand, 'description' | 'argumentHint' | 'builtin'>
 
 function commandName(value: unknown): string | undefined {
   const name = typeof value === 'string' ? value.trim() : ''
@@ -45,6 +45,7 @@ function descriptorCatalog(value: unknown): {
   const names: string[] = []
   const seen = new Set<string>()
   const details = new Map<string, CommandDetail>()
+  const unmarked = new Set<string>()
   if (!Array.isArray(value)) {
     return { names, details }
   }
@@ -63,6 +64,9 @@ function descriptorCatalog(value: unknown): {
       seen.add(name)
       names.push(name)
     }
+    if (entry.builtin !== true) {
+      unmarked.add(name)
+    }
     const previous = details.get(name)
     const description = previous?.description ?? rowText(entry.description, MAX_DESCRIPTION_LENGTH)
     const argumentHint =
@@ -74,6 +78,12 @@ function descriptorCatalog(value: unknown): {
       ...(description === undefined ? {} : { description }),
       ...(argumentHint === undefined ? {} : { argumentHint })
     })
+  }
+  // A user skill named like a built-in arrives unmarked, so any unmarked namesake withholds the flag.
+  for (const name of names) {
+    if (!unmarked.has(name)) {
+      details.set(name, { ...details.get(name), builtin: true })
+    }
   }
   return { names, details }
 }
@@ -147,9 +157,12 @@ export class ClaudeSlashCommandCatalog {
     return reported.map((entry) => ({ ...entry, kind: known.get(entry.name) ?? entry.kind }))
   }
 
-  // Name-only frames do not repeat descriptor text.
+  // Name-only frames do not repeat descriptor text; a name reclassified as a skill is no longer built-in.
   private describe(entries: AgentSessionSlashCommand[]): AgentSessionSlashCommand[] {
-    return entries.map((entry) => ({ ...entry, ...this.details.get(entry.name) }))
+    return entries.map((entry) => {
+      const { builtin, ...detail }: CommandDetail = this.details.get(entry.name) ?? {}
+      return { ...entry, ...detail, ...(builtin && entry.kind === 'command' ? { builtin } : {}) }
+    })
   }
 
   observe(message: Record<string, unknown>): boolean {
@@ -186,7 +199,8 @@ export class ClaudeSlashCommandCatalog {
           entry.kind === this.entries?.[index]?.kind &&
           entry.kindUnspecified === this.entries?.[index]?.kindUnspecified &&
           entry.description === this.entries?.[index]?.description &&
-          entry.argumentHint === this.entries?.[index]?.argumentHint
+          entry.argumentHint === this.entries?.[index]?.argumentHint &&
+          entry.builtin === this.entries?.[index]?.builtin
       )
     ) {
       return false

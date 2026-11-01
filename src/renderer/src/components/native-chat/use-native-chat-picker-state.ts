@@ -41,7 +41,6 @@ import {
 
 export type NativeChatPickerState = {
   autocomplete: ComposerAutocomplete
-  goalCommandAvailable: boolean
   listboxId: string
   retrySkills: () => void
   classifySend: (draft: string) => NativeChatSendClassification
@@ -105,10 +104,6 @@ export function useNativeChatPickerState(args: {
   const pickerCommands = useMemo(
     () => nativeChatPickerCommands(agent, agentCommands, discovery.skills),
     [agent, agentCommands, discovery.skills]
-  )
-  const goalCommandAvailable = useMemo(
-    () => pickerCommands.some((command) => command.name === 'goal' && !command.kindUnspecified),
-    [pickerCommands]
   )
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`
@@ -288,7 +283,6 @@ export function useNativeChatPickerState(args: {
 
   return {
     autocomplete,
-    goalCommandAvailable,
     listboxId,
     retrySkills: discovery.retry,
     classifySend,
