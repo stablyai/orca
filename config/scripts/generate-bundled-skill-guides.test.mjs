@@ -48,7 +48,9 @@ const GUIDE_REFERENCES = {
     'events.md',
     'host-api.md',
     'manifest.md',
-    'testing.md'
+    'recipes.md',
+    'testing.md',
+    'workflow.md'
   ]
 }
 const GUIDE_REFERENCE_PATHS = Object.entries(GUIDE_REFERENCES).flatMap(([guide, references]) =>
