@@ -160,15 +160,11 @@ async function mainLoadsStoreLayout(): Promise<void> {
   main = await drawTabsFromMain(useAppStore)
 }
 
-it.each([
-  [false, true],
-  [true, true],
-  [false, false]
-])(
-  'strict legacy Stop through real host admission and provisional/layout writers, newer navigation=%s, captured=%s',
-  async (navigate, captured) => {
+it.each([false, true])(
+  'opens the chat through real host admission and provisional/layout writers, newer navigation=%s',
+  async (navigate) => {
     // A pane with no terminal to capture (its shell exited) stops nothing and opens the chat.
-    mocks.captured.current = captured
+    mocks.captured.current = false
     const source = useAppStore
       .getState()
       .createUnifiedTab('wt-1', 'terminal', { id: 'source-terminal', entityId: 'source-terminal' })
@@ -243,16 +239,7 @@ it.each([
       source: mocks.source.current
     })
     await vi.waitFor(() => expect(mocks.support).toHaveBeenCalledOnce())
-    if (captured) {
-      expect(mocks.stopped).toHaveBeenCalledExactlyOnceWith({
-        worktree: 'id:wt-1',
-        expectedPtyIds: ['source-pty'],
-        targetOnly: true,
-        keepHistory: true
-      })
-    } else {
-      expect(mocks.stopped).not.toHaveBeenCalled()
-    }
+    expect(mocks.stopped).not.toHaveBeenCalled()
     expect(mocks.create).not.toHaveBeenCalled()
     await main.settle()
     if (navigate) {

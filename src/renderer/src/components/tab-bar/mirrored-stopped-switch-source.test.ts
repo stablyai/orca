@@ -12,7 +12,14 @@ import type { ConnectPanePtySession } from '../terminal-pane/pty-connection/conn
 import type { TerminalSurface } from '@/runtime/web-session-tabs-sync/state'
 import type { StoppedSwitchSourceFact } from '../../../../shared/stopped-switch-source'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
-import * as protocol from '../../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { POST_REPLAY_MODE_RESET } from '../../../../shared/terminal-mode-reset-profiles'
 
 // A paired client (B) viewing a terminal whose agent a switch stopped on the host: main's fact on
@@ -70,10 +77,10 @@ function pairedClient(): void {
             liveTabCount: 1,
             liveLeafCount: 1,
             capabilities: [
-              protocol.STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-              protocol.STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-              protocol.STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-              protocol.STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
+              STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+              STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+              STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+              STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
             ]
           }
         }

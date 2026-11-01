@@ -64,7 +64,7 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
             : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
         command,
         (move) => rekeyMovedPaneOwners(this, move),
-        options ? { ...this.layoutCommandRun(command), ...options } : this.layoutCommandRun(command)
+        { ...this.layoutCommandRun(command), ...options }
       )
     // A window's sleep or wake lands after the hook statuses main accepted before it, as in the window.
     return await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)

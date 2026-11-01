@@ -22,7 +22,7 @@ export type CliChatResumeSource = {
   providerSessionId: string
   executionHostId: ExecutionHostId
   /** The pane's PTY when this was resolved; only that execution may be retired. */
-  ptyId: string | undefined
+  ptyId?: string
   /** The host predates chat resume: show the action disabled and ask for an update. */
   hostUpdateRequired?: true
 }

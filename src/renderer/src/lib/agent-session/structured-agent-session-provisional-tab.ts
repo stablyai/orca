@@ -174,13 +174,12 @@ export function beginStructuredAgentSessionProvisionalLaunch(
       openAdmitted: (seedOptions) => {
         // The host can answer after the user picked another tab; their newer selection wins, by the
         // same rule as a same-slot replace: the tab shown at the action must still hold its group.
+        // A shown tab that closed went with the action (Continue in Chat UI closes its terminal).
         const shownAtAction = visibleAtAction ? findUnifiedTab(worktreeId, visibleAtAction) : null
         if (
           args.deferPublication &&
-          !(
-            shownAtAction &&
-            replacedTabHoldsSelection(useAppStore.getState(), worktreeId, shownAtAction)
-          )
+          shownAtAction &&
+          !replacedTabHoldsSelection(useAppStore.getState(), worktreeId, shownAtAction)
         ) {
           focusIntent?.cancel()
           args = { ...args, activate: false }
