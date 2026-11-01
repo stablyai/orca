@@ -65,7 +65,35 @@ export async function seedSpinnerWorkspaces(
     (count) => Object.values(window.__store!.getState().worktreesByRepo).flat().length === count,
     options.worktrees
   )
-  return configureRendererScaleFixture(page, options, repoPath)
+  const seeded = await configureRendererScaleFixture(page, options, repoPath)
+  const expandedChildAgentLists = options.subagentsPerAgent
+    ? await expandMountedChildAgentLists(page)
+    : 0
+  return { ...seeded, expandedChildAgentLists }
+}
+
+// Child agent lists start collapsed (#36936); open mounted ones so subagent spinners render.
+async function expandMountedChildAgentLists(page: Page) {
+  const collapsed =
+    '[data-worktree-sidebar] [data-agent-child-disclosure-button][aria-expanded="false"]'
+  await page.waitForSelector(collapsed, { state: 'attached' })
+  let expanded = 0
+  // Expanding grows cards and can mount more virtualized cards, so repeat until none remain.
+  for (let pass = 0; pass < 10; pass++) {
+    const clicked = await page.evaluate((selector) => {
+      const buttons = [...document.querySelectorAll<HTMLElement>(selector)]
+      for (const button of buttons) {
+        button.click()
+      }
+      return buttons.length
+    }, collapsed)
+    if (clicked === 0) {
+      return expanded
+    }
+    expanded += clicked
+    await page.waitForTimeout(250)
+  }
+  return expanded
 }
 
 export async function refreshSpinnerAgents(page: Page) {
