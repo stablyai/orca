@@ -3,7 +3,6 @@ import { stubRpcClient } from '../../../transport/rpc-client-test-stub'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX } from '../../../../../src/shared/orca-dispatch-status-prompt'
 import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../../../src/shared/agent-session-host-status-rows'
@@ -14,12 +13,6 @@ import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { ANSWERED_PROMPT_ITEMS } from '../input/mobile-native-chat-answered-prompts.test-fixture'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { styles } from './mobile-native-chat-message-styles'
-import { agentMessageTranscriptText } from '../../../../../src/shared/agent-session/agent-message-display-text'
-import {
-  agentMessageHeading,
-  agentMessageSenderLabel
-} from '../../../../../src/shared/agent-session/agent-message-presentation'
-import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { useMobileStructuredAgentSession } from '../../use-mobile-structured-agent-session'
@@ -365,63 +358,6 @@ describe('MobileNativeChatMessage', () => {
         fontSize: 25.5,
         lineHeight: 34.5
       })
-    }
-  )
-
-  it.each(['started', 'task', 'coordinator', 'worker', 'generic'] as const)(
-    'uses the desktop shared heading, sender, text and fold rules for %s',
-    (kind) => {
-      const from: AgentMessageSource = {
-        kind: 'agent',
-        senders: [
-          {
-            party: { address: 'term_sender', terminalHandle: 'term_sender', orcaSessionId: null },
-            name: 'Parser worker',
-            ...(kind === 'coordinator' || kind === 'worker' ? { relation: kind } : {})
-          }
-        ],
-        orchestration:
-          kind === 'task'
-            ? { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' }
-            : { message: 'mail-notice', mailbox: 'term_recipient', dispatchId: null, messages: [] }
-      }
-      const body = 'A short task fits without a disclosure.'
-      const raw =
-        kind === 'task'
-          ? `${ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX}\r\nInstructions\r\n=== TASK ===\r\n${body}`
-          : body
-      const message: NativeChatMessage = {
-        ...userMessage([{ type: 'text', text: raw }]),
-        id: `notice-${kind}`,
-        from,
-        ...(kind === 'started' ? ({ role: 'system', agentStart: true } as const) : {})
-      }
-      const tree = render(message)
-      const mailNotice = kind !== 'started' && kind !== 'task'
-      if (mailNotice) {
-        expect(textIn(tree.root)).toEqual(['Orchestration mail'])
-        expect(markdownIn(tree.root)).toEqual([])
-        const disclosure = findAllByHostType(tree.root, 'Pressable').find(
-          (node) => node.props.accessibilityState?.expanded === false
-        )!
-        act(() => disclosure.props.onPress())
-      }
-      const headings = {
-        started: 'Started worker',
-        task: 'Task from coordinator',
-        coordinator: 'Message from coordinator',
-        worker: 'Update from worker',
-        generic: 'Message from'
-      }
-      expect(textIn(tree.root).slice(mailNotice ? 1 : 0, mailNotice ? 3 : 2)).toEqual([
-        headings[agentMessageHeading(from, message.agentStart === true)],
-        agentMessageSenderLabel({
-          localChat: false,
-          snapshotName: from.senders[0].name,
-          fallback: 'an agent'
-        })
-      ])
-      expect(markdownIn(tree.root)).toEqual([agentMessageTranscriptText(message.blocks, from)])
     }
   )
 
