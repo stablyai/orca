@@ -71,7 +71,6 @@
       "config/scripts/ci-background-steps.test.mjs": 1589,
       "config/scripts/ci-closed-pr-caches.test.mjs": 41,
       "config/scripts/ci-closed-pr-cancellation.test.mjs": 62,
-      "config/scripts/ci-dependency-download-cache.test.mjs": 1152,
       "config/scripts/ci-draft-pr-admission.test.mjs": 637,
       "config/scripts/ci-e2e-failure-summary.test.mjs": 48,
       "config/scripts/ci-e2e-job-selection.test.mjs": 170,
