@@ -1976,6 +1976,7 @@
       "providerRetrying": "{{agent}} a rencontré un problème temporaire et réessaie.",
       "providerRetryingQuoted": "{{agent}} réessaie : {{detail}}.",
       "providerStartFailed": "{{agent}} s'est arrêté avant d'avoir fini de démarrer.",
+      "savedConversationMissing": "{{agent}} n’a pas trouvé la conversation enregistrée de ce chat.",
       "queueFull": "Trop de messages attendaient l'agent, ce message n'a donc pas été envoyé.",
       "quitTerminalAgent": "Quittez cet agent pour continuer le chat ici.",
       "runCommandAgain": "Relancez /{{command}}.",

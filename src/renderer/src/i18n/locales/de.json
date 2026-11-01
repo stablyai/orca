@@ -19075,6 +19075,7 @@
       "failureWords": {
         "theAgent": "Der Agent",
         "providerStartFailed": "{{agent}} wurde beendet, bevor der Start abgeschlossen war.",
+        "savedConversationMissing": "{{agent}} konnte den gespeicherten Verlauf dieses Chats nicht finden.",
         "runCommandAgain": "/{{command}} erneut ausführen.",
         "sendToTryAgain": "Die Nachricht senden, um es erneut zu versuchen.",
         "sendAgainToTryOnceMore": "Die Nachricht erneut senden, um es noch einmal zu versuchen.",

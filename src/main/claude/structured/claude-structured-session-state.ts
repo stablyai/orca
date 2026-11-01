@@ -48,6 +48,8 @@ export type ClaudeStructuredSessionEvent =
       clientMessageId?: string
       /** On any other frame: the send the CLI started and has not echoed, whose turn output opens. */
       startedSend?: ClaudeStartedSend
+      /** Received before this acquisition's host-awaited open finished; startup reports its failure. */
+      startupPending?: true
       /** Host clock at receipt; stamped on turn boundaries only. */
       observedAt?: number
     }
@@ -233,6 +235,8 @@ export type ClaudeSession = {
     cwd: string
     history: { leafUuid: string | null; covered: boolean; contextActivity: number }
     onLateRefusal: (error: Error) => void
+    /** Set when this acquisition's open, including resume catch-up, succeeds; never unset. */
+    opened?: true
   }
 }
 

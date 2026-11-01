@@ -12,6 +12,7 @@ import {
   type NativeChatTextBlock
 } from '../../../../../src/shared/native-chat/native-chat-types'
 import { readWholeAgentSessionFailureFact } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
   MobileNativeChatNoticeContext,
@@ -25,6 +26,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
 import { nativeChatOrcaStopSay } from './native-chat-orca-stop-copy'
 import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
+import { sayMobileAgentSessionFailure } from '../../agent-session-failure-copy'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../src/shared/native-chat/native-chat-stopped-before-start'
@@ -52,8 +54,19 @@ function noticeLineText(
     )
   }
   const failure = readWholeAgentSessionFailureFact(notice.failure)
-  return failure?.kind === 'usageLimitReached'
-    ? nativeChatUsageLimitText(failure.usageLimit, names.agentName, t)
+  if (failure?.kind === 'usageLimitReached') {
+    return nativeChatUsageLimitText(failure.usageLimit, names.agentName, t)
+  }
+  // Only reword text fully described by its fact; other host text stays as written.
+  const context = { agentName: names.agentName }
+  const surface =
+    failure?.kind === 'savedConversationMissing'
+      ? (['row', 'rejection'] as const).find(
+          (candidate) => notice.text === agentSessionFailureSentence(failure, candidate, context)
+        )
+      : undefined
+  return failure && surface
+    ? agentSessionFailureSentence(failure, surface, context, sayMobileAgentSessionFailure)
     : notice.text
 }
 

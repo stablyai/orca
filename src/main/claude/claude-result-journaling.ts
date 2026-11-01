@@ -11,6 +11,9 @@ import {
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { claudeFrameParentRef, isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
+
+type ClaudeResultFrameEvent = Extract<ClaudeStructuredSessionEvent, { type: 'message' }>
 
 export type ClaudeResultJournalContext = Pick<
   ClaudeMessageJournalContext,
@@ -44,8 +47,11 @@ export function journalClaudeResult(
     threadGoal,
     goalBackgroundWork
   }: ClaudeResultJournalContext,
-  message: Record<string, unknown>,
-  observedAt: number
+  {
+    message,
+    observedAt = Date.now(),
+    startupPending
+  }: Pick<ClaudeResultFrameEvent, 'message' | 'observedAt' | 'startupPending'>
 ): void {
   // Child results can report failures but must never settle the root turn.
   const settlesTurn = isRootClaudeFrame(message)
@@ -96,6 +102,10 @@ export function journalClaudeResult(
     return
   }
   const alreadyShown = assistantFailures.resultAlreadyShown(message)
+  // The host's final startup failure reports a turnless failure before this acquisition opened.
+  if (failure && settlesTurn && endedTurnIdentity === null && startupPending === true) {
+    return
+  }
   if ((failure || !isSettledClaudeResultKind(kind)) && !alreadyShown) {
     providerFallback.append(
       kind,

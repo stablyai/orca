@@ -91,5 +91,6 @@ export async function openClaudeStructuredSession(input: {
     )
     current()
   }
+  session.initialization.opened = true
   return { ...result, link: session.link, newConversation: !resumesTranscript }
 }

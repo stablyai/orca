@@ -148,6 +148,9 @@ describe('the words written beside a failure fact', () => {
   it('names the agent that stopped starting, and a failed start or restart gives a next step', () => {
     const sentence = (kind: AgentSessionFailureKind, agentName?: string) =>
       agentSessionFailureSentence({ kind }, 'rejection', { agentName })
+    expect(sentence('savedConversationMissing', 'Claude')).toBe(
+      "Claude couldn't find this chat's saved conversation. Start a new chat to continue."
+    )
     expect(sentence('providerStartFailed', 'Claude')).toBe(
       'Claude stopped before it finished starting. Send your message to try again.'
     )

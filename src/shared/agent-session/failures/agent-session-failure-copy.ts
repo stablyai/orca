@@ -22,6 +22,7 @@ export const AGENT_STILL_WORKING = 'The agent is still working.'
 export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
   providerStartFailed: '{{agent}} stopped before it finished starting.',
+  savedConversationMissing: "{{agent}} couldn't find this chat's saved conversation.",
   runCommandAgain: 'Run /{{command}} again.',
   sendToTryAgain: 'Send your message to try again.',
   sendAgainToTryOnceMore: 'Send your message again to try once more.',

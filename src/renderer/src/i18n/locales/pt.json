@@ -20466,6 +20466,7 @@
       "failureWords": {
         "theAgent": "O agente",
         "providerStartFailed": "{{agent}} parou antes de terminar de iniciar.",
+        "savedConversationMissing": "{{agent}} não conseguiu encontrar a conversa salva deste chat.",
         "runCommandAgain": "Execute /{{command}} novamente.",
         "sendToTryAgain": "Envie sua mensagem para tentar novamente.",
         "sendAgainToTryOnceMore": "Envie sua mensagem novamente para fazer outra tentativa.",

@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   adapterAtPublishFor,
   fakeClaude,
   claudeFrame,
   identityFor,
-  USER_MESSAGE
+  USER_MESSAGE,
+  recordingJournalSink,
+  PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
 import { claudeOpened } from './claude-structured-startup-settled-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
@@ -48,6 +51,80 @@ describe('Claude host-awaited open', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  // Recorded results; the send orderings after open are constructed, receipt ids omitted where named.
+  it.each([
+    ['missing conversation while starting', 0],
+    ['missing conversation after open, before any send', 1],
+    ['send before its echo', 1],
+    ['send idle left in doubt', 1],
+    ['ambiguous write', 1],
+    ['/goal answered without ids', 1],
+    ['started /goal answered without ids', 1]
+  ] as const)('reports a failure result (%s) in %i rows', async (path, rows) => {
+    const fixture = (name: string): Record<string, unknown>[] =>
+      readFileSync(new URL(`../__fixtures__/${name}.jsonl`, import.meta.url), 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+    const starting = path === 'missing conversation while starting'
+    const claude = fakeClaude(starting ? { holdInit: true } : { replayUuid: null })
+    const { adapter } = adapterFor(claude)
+    const appendItem = vi.fn()
+    await adapter.acquire({ ...ACQUIRE, events: { ...recordingJournalSink(), appendItem } })
+    const connection = claude.connections[0]!
+    let result = fixture('claude-missing-conversation')[0]!
+    if (!starting) {
+      await claudeOpened(adapter, 'session-1')
+    }
+    if (!path.startsWith('missing conversation')) {
+      result = fixture('claude-lifecycle-capture-auth-failed')
+        .map((line) => line.frame as Record<string, unknown> | undefined)
+        .find((frame) => frame?.type === 'result')!
+      if (path === 'ambiguous write') {
+        const send = connection.send
+        connection.send = async (...args) => {
+          await send(...args)
+          throw new Error('input pump stopped')
+        }
+      }
+      const goal = path.includes('/goal')
+      await expect(
+        adapter.dispatch({
+          sessionId: 'session-1',
+          clientMessageId: 'unechoed',
+          body: goal
+            ? { ...USER_MESSAGE, blocks: [{ type: 'text', text: '/goal task' }] }
+            : USER_MESSAGE,
+          fence: 7
+        })
+      ).resolves.toMatchObject({ state: path === 'ambiguous write' ? 'unknown' : 'admitted' })
+      const sentUuid = connection.sent[0]!.uuid
+      if (path === 'send idle left in doubt' || path === 'started /goal answered without ids') {
+        claudeFrame(connection, {
+          type: 'command_lifecycle',
+          command_uuid: sentUuid,
+          state: 'started'
+        })
+      }
+      if (path === 'send idle left in doubt') {
+        claudeFrame(connection, {
+          type: 'system',
+          subtype: 'session_state_changed',
+          state: 'idle',
+          uuid: 'idle-1'
+        })
+      }
+      // No user or assistant echo first; older CLIs omit the receipt ids.
+      result = goal
+        ? { ...result, user_message_uuid: undefined, user_message_uuids: undefined }
+        : { ...result, user_message_uuid: sentUuid, user_message_uuids: [sentUuid] }
+    }
+    claudeFrame(connection, { ...result, session_id: PROVIDER_SESSION_ID })
+    expect(
+      appendItem.mock.calls.filter(([, body]) => body.kind === 'status' && body.tone === 'error')
+    ).toHaveLength(rows)
   })
 
   // SDK-typed shape; ordering constructed

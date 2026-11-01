@@ -119,6 +119,8 @@ export async function acquireClaudeSession({
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     const requestedAt = turnOrigin?.requestedAt
     const startedSend = !startsTurn && liveSession ? claudeStartedUnechoedSend(liveSession) : null
+    // Read at arrival: a frame buffered before publication belongs to this acquisition's startup.
+    const startupPending = liveSession?.initialization.opened !== true
     // Retain send ownership during publication until the host receives its settlement.
     const session = liveSession
     const reported = session?.unreportedSettlements
@@ -150,6 +152,7 @@ export async function acquireClaudeSession({
           ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
           ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
           ...(startedSend ? { startedSend } : {}),
+          ...(startupPending ? { startupPending: true } : {}),
           ...observedAt
         })
         // Final snapshots and the turn settlement must reach the journal before its leaf can move.
