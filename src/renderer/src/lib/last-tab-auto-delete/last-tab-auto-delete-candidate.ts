@@ -37,7 +37,11 @@ export function captureLastTabAutoDeleteCandidate(
   ) {
     return null
   }
-  const wasActive = state.activeWorktreeId === workspaceKey
+  const activeHostId = state.activeWorkspaceExecutionHostId ?? undefined
+  // Why the host check: the same id on another host is a different, background workspace.
+  const wasActive =
+    state.activeWorktreeId === workspaceKey &&
+    (!opts.hostId || !activeHostId || opts.hostId === activeHostId)
   const knownHostId =
     opts.hostId ?? (wasActive ? (state.activeWorkspaceExecutionHostId ?? undefined) : undefined)
   const base = { workspaceKey, trigger: opts.trigger, wasActive }
