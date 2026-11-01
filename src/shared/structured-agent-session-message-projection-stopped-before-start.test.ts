@@ -21,9 +21,9 @@ import { projectStructuredAgentSessionMessages } from './structured-agent-sessio
 import {
   projectNativeChatTranscript,
   projectNativeChatTranscriptMessages
-} from './native-chat-transcript-projection'
+} from './native-chat/transcript/native-chat-transcript-projection'
 import { nativeChatRowsInDrawOrder } from './native-chat/transcript/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from './native-chat-turn-membership'
+import { nativeChatTurnMembership } from './native-chat/transcript/native-chat-turn-membership'
 
 let sequence = 0
 

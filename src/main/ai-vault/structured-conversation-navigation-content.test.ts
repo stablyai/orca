@@ -32,6 +32,7 @@ beforeEach(() => {
   setStructuredAgentSessionHost({
     deps: {
       store: {
+        getRecord: () => record,
         listRecords: () => [record],
         listConversations: () => [agentSessionConversationView(record)]
       },

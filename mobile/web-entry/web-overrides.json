@@ -202,6 +202,10 @@
       "reason": "The iPhone Duo key rail is drawn by the shell in a side inset strip the page cannot reach. The native file has no shell around it and answers no rail; this one reads whether the shell shows one from `init` and takes its presses from the bridge."
     },
     {
+      "file": "src/components/use-working-motion.web.ts",
+      "reason": "React Native Web has no native animation driver, so every working ring and live tool-run pulse ran as its own JS loop writing a style each frame on the page's main thread, which is busiest while a reply streams. The native file keeps the native-driver loops; this one runs the same spin and pulse as Web Animations on the element, which the compositor plays, with one shared phase like desktop's spinner."
+    },
+    {
       "file": "src/platform/shell-storage.web.ts",
       "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
     }

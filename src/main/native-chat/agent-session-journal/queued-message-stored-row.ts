@@ -5,7 +5,7 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session-jour
 import { readAgentJournalMessageBody } from '../../../shared/agent-session-journal-body-admission'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
-import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import { storedMessageBody } from './journal-storage-schema'
 import { storageVerdict, strictStorage } from './journal-storage-strict'
 

@@ -123,10 +123,11 @@ describe('applyWindowLayoutCommand', () => {
 
     await applyWindowLayoutCommand(store, () => ['local', 'runtime:env-1', 'ssh:target-1'], close)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith({ ...close, force: true }, [
-      'local',
-      'ssh:target-1'
-    ])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(
+      { ...close, force: true },
+      ['local', 'ssh:target-1'],
+      undefined
+    )
     expect(mocks.markAgentLaunchesClosedByUser).toHaveBeenCalledWith('wt-1', {
       kind: 'tab',
       tabId: 'tab-1'
@@ -218,7 +219,8 @@ describe('applyWindowLayoutCommand', () => {
 
     expect(applyLayoutCommand).toHaveBeenCalledWith(
       { ...move, windowDetach: { ptyId: 'pty-1', startupCwd: '/wt/app' } },
-      ['ssh:t', 'local']
+      ['ssh:t', 'local'],
+      undefined
     )
     expect(onPaneMoved).toHaveBeenCalledWith({
       worktreeId: 'wt-1',

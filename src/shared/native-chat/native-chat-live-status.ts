@@ -1,14 +1,13 @@
 // Reconcile live working state with provider turn boundaries so a dropped final hook cannot leave Stop stuck.
 
-import type { AgentStatusEntry, AgentStatusState } from '../agent-status-types'
+import type { AgentStatusEntry, AgentStatusState, AgentType } from '../agent-status-types'
 import { isAgentStatusFresh } from '../agent-status-freshness'
 import type {
-  AgentType,
   NativeChatMessage,
   NativeChatSession,
   NativeChatSessionStatus,
   NativeChatTurnLifecycle
-} from '../native-chat-types'
+} from './native-chat-types'
 import { LIFECYCLE_CLOCK_SKEW_SLACK_MS } from '../native-chat-clock-skew'
 
 export type NativeChatLiveMergeInput = {

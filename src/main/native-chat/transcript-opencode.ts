@@ -2,7 +2,7 @@ import {
   OPENCODE_CAPTURE_RECORD_LIMIT,
   OPENCODE_CAPTURE_TEXT_LIMIT
 } from '../ai-vault/opencode-transcript-capture-limits'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import type { ReadTranscriptResult } from './transcript-reader'
 import {

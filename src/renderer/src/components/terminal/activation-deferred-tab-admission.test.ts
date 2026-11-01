@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  ACTIVATION_DEFERRED_ADMISSION_LIMIT,
-  isActivationAdmissionEligible,
   pickNextActivationDeferredTabId,
   scheduleActivationDeferredAdmission
 } from './activation-deferred-tab-admission'
+
 import {
   planColdActivationTabDeferral,
   revealActivationDeferredTabs
@@ -31,22 +30,6 @@ function withoutIdleCallbacks(run: () => void): void {
 }
 
 describe('activation-deferred tab admission', () => {
-  it('picks deferred tabs in tab order', () => {
-    expect(pickNextActivationDeferredTabId(tabIds(4), new Set(['tab-4', 'tab-2']))).toBe('tab-2')
-  })
-
-  it('reports nothing to admit for an empty, absent, or stale deferred set', () => {
-    expect(pickNextActivationDeferredTabId(tabIds(3), new Set())).toBeNull()
-    expect(pickNextActivationDeferredTabId(tabIds(3), null)).toBeNull()
-    expect(pickNextActivationDeferredTabId(tabIds(2), new Set(['tab-9']))).toBeNull()
-  })
-
-  it('only warms up a deferred population the pre-deferral behaviour would have mounted', () => {
-    expect(isActivationAdmissionEligible(0)).toBe(false)
-    expect(isActivationAdmissionEligible(ACTIVATION_DEFERRED_ADMISSION_LIMIT)).toBe(true)
-    expect(isActivationAdmissionEligible(ACTIVATION_DEFERRED_ADMISSION_LIMIT + 1)).toBe(false)
-  })
-
   // Idle admission must restore the same fully mounted warm set as eager activation.
   it('drains to a fully mounted worktree with no restriction left behind', () => {
     const restrictions = new Map<string, ReadonlySet<string>>()

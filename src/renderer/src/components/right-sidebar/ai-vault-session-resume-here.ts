@@ -3,7 +3,8 @@ import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-
 import { useAppStore } from '@/store'
 import {
   activateAiVaultStructuredSession,
-  structuredSessionOpenFeedback
+  structuredSessionOpenFeedback,
+  openDesktopStructuredSession
 } from '@/lib/activate-ai-vault-structured-session'
 import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -206,19 +207,21 @@ function revealInPlaceOf(
   structured: NonNullable<AiVaultSession['structuredSession']>,
   target: RuntimeClientTarget | undefined
 ): Promise<void> {
-  return activateAiVaultStructuredSession(
-    { structuredSession: structured },
-    undefined,
+  return openDesktopStructuredSession(
+    { kind: 'history', structuredSession: structured },
     target
-  ).then(() => {
+  ).then((result) => {
+    if (result.kind !== 'opened' || !here.current()) {
+      return
+    }
     // Reported reopen success may lack a tab; replace this chat only when the reopened tab exists.
     const reopened = findChatTabWhere(
-      here.workspaceId,
-      (tab) => tab.entityId === structured.sessionId
+      result.target.worktreeId,
+      (tab) => tab.id === result.tab.id && tab.entityId === result.target.sessionId
     )
     if (reopened) {
       // Reveal appends to the group; take this chat's slot as a new chat does (a no-op across splits).
-      insertUnifiedTabAfterAnchor(here.workspaceId, reopened.id, here.tabId)
+      insertUnifiedTabAfterAnchor(result.target.worktreeId, reopened.id, here.tabId)
       closeReplacedChat(here)
     }
   })

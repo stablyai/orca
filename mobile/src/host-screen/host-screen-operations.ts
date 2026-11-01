@@ -4,7 +4,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   hostPlatformSchema,
-  hostRepoCatalogSchema,
+  hostRepoCatalogSnapshotSchema,
   hostScreenUnreadReplySchema,
   hostSshTargetSummariesSchema,
   hostViewSettingsSchema
@@ -12,13 +12,14 @@ import {
 
 // Decorative reads skip refusals and retry on refresh; malformed accepted replies throw into the refresh/settings catches. Writes read no body.
 
-export const hostRepoCatalogRead = bindDeferredRpcOperation(
+// The host screen's repo poll: repeats of an unchanged catalog cost a snapshot id, not every icon.
+export const hostRepoCatalogSnapshotRead = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'repo.host-catalog-or-skip',
+    name: 'repo.host-catalog-snapshot-or-skip',
     method: 'repo.list',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('repo-catalog', hostRepoCatalogSchema)
+    read: rpcResultVariant('repo-catalog-snapshot', hostRepoCatalogSnapshotSchema)
   })
 )
 

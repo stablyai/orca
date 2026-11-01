@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { discoveredModel } from './structured-agent-session-discovered-model'
+import { discoveredModel } from './agent-session/options/structured-agent-session-discovered-model'
 
 const unconfirmed = {
   id: 'other',

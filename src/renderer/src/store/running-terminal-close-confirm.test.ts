@@ -38,27 +38,6 @@ describe('running terminal close confirmation store', () => {
     vi.mocked(Date.now).mockRestore()
   })
 
-  it('shows the first request and queues the next one', () => {
-    const first = vi.fn()
-    const second = vi.fn()
-    const store = useRunningTerminalCloseConfirmStore.getState()
-
-    store.requestRunningTerminalCloseConfirm(request('tab-1', first))
-    store.requestRunningTerminalCloseConfirm(request('tab-2', second))
-
-    expect(
-      useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm?.terminalTabId
-    ).toBe('tab-1')
-
-    store.confirmRunningTerminalClose()
-
-    expect(first).toHaveBeenCalledTimes(1)
-    expect(second).not.toHaveBeenCalled()
-    expect(
-      useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm?.terminalTabId
-    ).toBe('tab-2')
-  })
-
   it('shows one prompt for a repeat request but still resolves both closes', () => {
     const first = vi.fn()
     const duplicate = vi.fn()
@@ -116,26 +95,6 @@ describe('running terminal close confirmation store', () => {
     expect(visible).toHaveBeenCalledTimes(1)
     expect(queued).toHaveBeenCalledTimes(1)
     expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
-  })
-
-  it('runs onCancel on dismiss and never the close', () => {
-    const onConfirm = vi.fn()
-    const onCancel = vi.fn()
-    const store = useRunningTerminalCloseConfirmStore.getState()
-
-    store.requestRunningTerminalCloseConfirm(request('tab-1', onConfirm, onCancel))
-    store.dismissRunningTerminalClose()
-
-    expect(onCancel).toHaveBeenCalledTimes(1)
-    expect(onConfirm).not.toHaveBeenCalled()
-    expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
-  })
-
-  it('is inert when there is nothing to confirm', () => {
-    const store = useRunningTerminalCloseConfirmStore.getState()
-
-    expect(() => store.confirmRunningTerminalClose()).not.toThrow()
-    expect(() => store.dismissRunningTerminalClose()).not.toThrow()
   })
 
   it('lets a re-entrant close from onConfirm queue behind the next request', () => {

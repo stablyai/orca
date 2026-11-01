@@ -21,7 +21,6 @@
     "panel": {
       "all": "Toutes",
       "emptyScope": "Aucune session d'agent passée dans ce périmètre.",
-      "loadFailed": "Chargement impossible",
       "missingResumeId": "Cette session n'a pas d'identifiant de reprise.",
       "noSearchResults": "Aucune session ne correspond à votre recherche.",
       "noSessions": "Aucune session d'agent",
@@ -694,7 +693,6 @@
       "loadingDiff": "Chargement du diff…",
       "loadingReview": "Chargement de la revue…",
       "noReviewableChanges": "Aucune modification à examiner",
-      "retryLabel": "Réessayer de charger la revue",
       "reviewUnavailable": "Revue indisponible",
       "selectFile": "Sélectionnez un fichier à examiner.",
       "tooLargeMessage": "Ce diff est trop volumineux pour l'aperçu sur mobile.",
@@ -894,10 +892,8 @@
       "selectRunTarget": "Choisir une cible d'exécution"
     },
     "prSidebar": {
-      "loadFailed": "Une erreur s'est produite.",
       "loading": "Chargement de la pull request…",
-      "notPermitted": "Accès refusé — votre compte GitHub n'est pas connecté.",
-      "retryLoading": "Réessayer de charger la pull request"
+      "notPermitted": "Accès refusé — votre compte GitHub n'est pas connecté."
     },
     "protocolBlockScreen": {
       "backToHosts": "Retour aux hôtes",
@@ -1047,6 +1043,16 @@
       "title": "Une erreur est survenue",
       "tryAgain": "Réessayer",
       "home": "Accueil"
+    },
+    "svgPreview": {
+      "drawFailed": "Impossible d’afficher ce SVG",
+      "label": "Dessin {{title}}",
+      "previewDrawing": "Aperçu du dessin",
+      "viewSource": "Afficher la source SVG"
+    },
+    "mermaidDiagram": {
+      "expand": "Agrandir le diagramme",
+      "label": "Diagramme Mermaid"
     }
   },
   "connection": {
@@ -3164,7 +3170,6 @@
       "waitingForDesktop": "En attente de l'ordinateur…"
     },
     "panel": {
-      "loadFailedTitle": "Chargement impossible",
       "unavailableTitle": "Contrôle de code source indisponible"
     },
     "prChip": {
@@ -4005,8 +4010,7 @@
       "noFilterMatches": "Aucun espace de travail ne correspond aux filtres",
       "noMatches": "Aucun espace de travail correspondant",
       "reopen": "Rouvrir pour mettre à jour",
-      "reopenDetail": "Cet hôte fournit une liste d'espaces de travail dans un format que cette page ne reconnaît pas encore.",
-      "retrying": "Échec de worktree.ps ({{error}}) — nouvelle tentative automatique"
+      "reopenDetail": "Cet hôte fournit une liste d'espaces de travail dans un format que cette page ne reconnaît pas encore."
     },
     "workspaceListSections": {
       "all": "Tous",

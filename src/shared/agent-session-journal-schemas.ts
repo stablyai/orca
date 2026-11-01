@@ -3,7 +3,7 @@
 // Unknown keys and string vocabularies survive; unknown bodies/blocks/goals/subjects remain undrawn and writable.
 // Unreadable context usage alone is dropped (journal-row-unusable-annotations.ts).
 // Older rewind replaces unknown turn/tool/resolution states with placeholders and blocks with raw-JSON text, retaining unknown bodies.
-// History pages lack row v: extensions must also remain safe for older clients (journal-closed-sets.test.ts).
+// History pages lack row v: extensions must also remain safe for older clients.
 
 import { z } from 'zod'
 import { AgentSessionContextUsageSchema } from './agent-session-context-usage-schema'

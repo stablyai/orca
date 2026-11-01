@@ -1,7 +1,7 @@
 // Queue facts share the chat journal/reducer; no second stored copy may drift behind dispatch state.
 
 import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import {
   AGENT_SESSION_JOURNAL_QUEUE_SCHEMA_VERSION,
   type AgentJournalCursor,

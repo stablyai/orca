@@ -9,7 +9,7 @@ import {
   type AgentJournalItemIdentity,
   type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
-import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
+import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
 import {
   applyJournalRow,

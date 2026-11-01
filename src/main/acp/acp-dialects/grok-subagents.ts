@@ -2,7 +2,7 @@
 
 import { z } from 'zod'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
-import type { NativeChatSubagentState } from '../../../shared/native-chat-types'
+import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpSubagentUpdate } from './acp-dialect'
 import { grokTaskResults, isGrokSubagentTask } from './grok-background-tasks'

@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 // Latch handoff outcomes before rewind can retire their rows; requeue only proven-undelivered sends.
 
 import type {
@@ -5,7 +6,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/structured-agent-session-command-turn-identity'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'
@@ -210,8 +211,10 @@ function spendReportedCommandCards(state: JournalReducerState): void {
 
 function setCard(state: JournalReducerState, card: QueuedMessageRow): void {
   if (state.queue.cards.get(card.messageId) !== card) {
+    const prior = state.queue.cards.get(card.messageId)
     state.queue.cards.set(card.messageId, card)
     state.queue.revision += 1
+    journalInputOrder(state).queueChanged(state, prior, card)
   }
 }
 

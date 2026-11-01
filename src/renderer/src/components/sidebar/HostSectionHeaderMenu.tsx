@@ -6,6 +6,7 @@ import {
   Loader2,
   Pencil,
   Plug,
+  Play,
   PlugZap,
   RefreshCw,
   Settings2,
@@ -30,6 +31,8 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { runtimePairingRepairRoute } from '../../../../shared/runtime-environments'
 
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
+import { selectStoppedWslDistro } from '@/lib/wsl-host-stopped-status'
+import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
 import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-rpc-client'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
@@ -92,13 +95,19 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
     return environment ? runtimePairingRepairRoute(environment) : 'access-link'
   })
   const repairableWithAccessLink = repairRoute === 'access-link'
+  const stoppedWslDistro = useAppStore((s) =>
+    s.settings?.experimentalWslHosts === true
+      ? selectStoppedWslDistro(s, runtimeEnvironmentId)
+      : null
+  )
   const model = buildHostHeaderMenuModel({
     kind: row.kind,
     health: row.health,
     sshConnected: sshStatus === 'connected',
     compatibility: row.compatibility,
     blockedReason: row.blockedReason,
-    repairableWithAccessLink
+    repairableWithAccessLink,
+    wslDistroStopped: stoppedWslDistro !== null
   })
   const removalTarget = resolveHostRemoval(row.hostId)
 
@@ -228,6 +237,19 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
             >
               <Link2 className="size-3.5" />
               {translate('auto.components.sidebar.HostSectionHeaderMenu.repair', 'Re-pair…')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {model.actions.includes('wsl-start') && runtimeEnvironmentId && (
+          <>
+            <DropdownMenuItem
+              onSelect={() => void startWslHostAndReloadProjects(runtimeEnvironmentId)}
+            >
+              <Play className="size-3.5" />
+              {translate('components.native-chat.hostOutage.startDistro', 'Start {{distro}}', {
+                distro: stoppedWslDistro
+              })}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
