@@ -1,7 +1,13 @@
-import { FileText, Search } from 'lucide-react'
+import { FileText, Search, Trash2 } from 'lucide-react'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { Button } from '@/components/ui/button'
-import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
+import {
+  Command,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+  CommandSeparator
+} from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
 import type { BrowserAddressBarSuggestion } from './browser-address-bar-suggestions'
 import BrowserHistoryRowRemoveButton from '../history/BrowserHistoryRowRemoveButton'
@@ -19,6 +25,7 @@ type BrowserAddressBarSuggestionListProps = {
   switchFocusedUrl: string | null
   onSwitchToTab: (url: string) => void
   onRemove: (suggestion: BrowserAddressBarSuggestion) => void
+  onClearHistory?: () => void
 }
 
 export default function BrowserAddressBarSuggestionList({
@@ -29,8 +36,11 @@ export default function BrowserAddressBarSuggestionList({
   hasSwitchTarget,
   switchFocusedUrl,
   onSwitchToTab,
-  onRemove
+  onRemove,
+  onClearHistory
 }: BrowserAddressBarSuggestionListProps): React.ReactElement {
+  const hasHistorySuggestions = suggestions.some((entry) => entry.lastVisitedAt > 0)
+
   return (
     // cmdk auto-selects its first row for an empty value; use a sentinel when Enter has no target.
     <Command
@@ -90,6 +100,44 @@ export default function BrowserAddressBarSuggestionList({
             </CommandItem>
           ))}
         </CommandGroup>
+        {hasHistorySuggestions && onClearHistory ? (
+          <>
+            <CommandSeparator />
+            <div className="flex items-center justify-between px-3 py-1.5 text-xs text-muted-foreground">
+              <span>
+                {translate(
+                  'auto.components.browser.pane.browser.address.bar.suggestions.history',
+                  'History'
+                )}
+              </span>
+              <button
+                type="button"
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent-foreground/10 hover:text-foreground"
+                onPointerDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onClearHistory()
+                }}
+              >
+                <Trash2 className="size-3" />
+                <span>
+                  {translate(
+                    'auto.components.browser.pane.browser.address.bar.suggestions.clearHistory',
+                    'Clear history'
+                  )}
+                </span>
+              </button>
+            </div>
+          </>
+        ) : null}
       </CommandList>
     </Command>
   )

@@ -17531,7 +17531,9 @@
             "appearanceMatchOrca": "Match Orca",
             "appearanceLight": "Light",
             "appearanceDark": "Dark",
-            "zoomPercent": "Zoom {{value0}}%"
+            "zoomPercent": "Zoom {{value0}}%",
+            "clearHistory": "Clear History",
+            "clearHistorySuccess": "Browsing history cleared"
           },
           "GrabConfirmationSheet": {
             "314a0aaa5b": "Attach to AI",
@@ -17554,7 +17556,11 @@
             "address": {
               "bar": {
                 "suggestions": {
-                  "87fcdd0da9": "{{value0}} Search"
+                  "87fcdd0da9": "{{value0}} Search",
+                  "removeSuggestion": "Remove from history",
+                  "history": "History",
+                  "clearHistory": "Clear history",
+                  "clearHistorySuccess": "Browsing history cleared"
                 },
                 "placeholder": "Search or enter URL"
               }
