@@ -34,7 +34,10 @@ import {
 import {
   MAX_NATIVE_CHAT_IMAGE_TRANSCRIPT_RECORD_BYTES,
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
-  exceedsPlainTranscriptRecordLimit
+  MAX_NATIVE_CHAT_INLINE_IMAGE_READ_BYTES,
+  exceedsPlainBudgetAfterDecode,
+  exceedsPlainTranscriptRecordLimit,
+  inlineImageBytes
 } from './transcript-record-limits'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
@@ -95,6 +98,7 @@ export async function readNativeChatTranscriptTailFile(
   let lifecycle: NativeChatTurnLifecycle | undefined
   let malformedRecordCount = 0
   let oversizedRecordCount = 0
+  let inlineImageReadBytes = 0
   let ignoreNextMalformedRecord = false
   try {
     signal?.throwIfAborted()
@@ -238,6 +242,15 @@ export async function readNativeChatTranscriptTailFile(
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
     const message = decode(line, fallbackId)
     if (message) {
+      const imageBytes = inlineImageBytes(message)
+      if (
+        exceedsPlainBudgetAfterDecode(bytes.length, message) ||
+        inlineImageReadBytes + imageBytes > MAX_NATIVE_CHAT_INLINE_IMAGE_READ_BYTES
+      ) {
+        oversizedRecordCount++
+        return
+      }
+      inlineImageReadBytes += imageBytes
       messages.push({ message, offset: lineOffset })
     }
   }

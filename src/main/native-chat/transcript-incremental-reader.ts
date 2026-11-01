@@ -7,7 +7,10 @@ import { extendTranscriptBoundary } from './transcript-file-version'
 import { inTranscriptFileOrder } from './transcript-file-order'
 import {
   MAX_NATIVE_CHAT_IMAGE_TRANSCRIPT_RECORD_BYTES,
-  exceedsPlainTranscriptRecordLimit
+  MAX_NATIVE_CHAT_INLINE_IMAGE_READ_BYTES,
+  exceedsPlainBudgetAfterDecode,
+  exceedsPlainTranscriptRecordLimit,
+  inlineImageBytes
 } from './transcript-record-limits'
 import type { NativeChatLineDecoder } from './transcript-tail-reader'
 import { openTranscriptReadStream, transcriptFileStat } from './wsl-transcript-fs-access'
@@ -61,6 +64,7 @@ export async function readIncrementalTranscriptMessages(
     return []
   }
   const messages: NativeChatMessage[] = []
+  let inlineImageReadBytes = 0
   const stream = openTranscriptReadStream(
     filePath,
     { start: state.offset, end: end - 1 },
@@ -138,6 +142,19 @@ export async function readIncrementalTranscriptMessages(
     if (!message) {
       return
     }
+    const imageBytes = inlineImageBytes(message)
+    if (exceedsPlainBudgetAfterDecode(bytes.length, message)) {
+      return
+    }
+    if (inlineImageReadBytes + imageBytes > MAX_NATIVE_CHAT_INLINE_IMAGE_READ_BYTES) {
+      if (!onBatch) {
+        // Single-shot snapshot: nothing can flush, so drop rather than hold unbounded data URIs.
+        return
+      }
+      onBatch(messages.splice(0))
+      inlineImageReadBytes = 0
+    }
+    inlineImageReadBytes += imageBytes
     const ordered = inTranscriptFileOrder(
       message,
       state.latestTimestamp,

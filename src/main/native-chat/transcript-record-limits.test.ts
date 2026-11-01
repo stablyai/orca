@@ -9,6 +9,7 @@ import {
 } from './transcript-incremental-reader'
 import {
   MAX_NATIVE_CHAT_IMAGE_TRANSCRIPT_RECORD_BYTES,
+  MAX_NATIVE_CHAT_INLINE_IMAGE_READ_BYTES,
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
   NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES
 } from './transcript-record-limits'
@@ -56,6 +57,28 @@ function imageRecordOfBytes(bytes: number): string {
   return prefix + 'A'.repeat(bytes - prefix.length - suffix.length) + suffix
 }
 
+// Mimics the real decoder: only records with a valid base64 image source become image-ref blocks.
+function imageDecode(line: string, id: string): NativeChatMessage | null {
+  let parsed: { source?: { type?: string; data?: string } }
+  try {
+    parsed = JSON.parse(line)
+  } catch {
+    return null
+  }
+  const data = parsed.source?.type === 'base64' ? parsed.source.data : undefined
+  return {
+    id,
+    role: 'user',
+    timestamp: null,
+    source: 'transcript',
+    blocks: data ? [{ type: 'image-ref', url: `data:image/png;base64,${data}` }] : []
+  }
+}
+
+function imageLine(index: number, bytes: number): string {
+  return JSON.stringify({ i: index, source: { type: 'base64', data: 'A'.repeat(bytes) } })
+}
+
 describe('native chat transcript record limits', () => {
   it('still drops a plain text record above 2 MiB through both readers', async () => {
     const plain = textRecordOfBytes(MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES + 1)
@@ -85,9 +108,9 @@ describe('native chat transcript record limits', () => {
     // 1,678,285 decoded bytes (the PNG from the review repro) is 2,237,716 base64 bytes.
     const path = await transcript(`${imageRecordOfBytes(2_238_001)}\n`)
 
-    const tail = await readNativeChatTranscriptTailFile(path, 10, decode)
+    const tail = await readNativeChatTranscriptTailFile(path, 10, imageDecode)
     const state = createIncrementalTranscriptState()
-    const incremental = await readIncrementalTranscriptMessages(path, state, decode)
+    const incremental = await readIncrementalTranscriptMessages(path, state, imageDecode)
 
     expect(tail.messages).toHaveLength(1)
     expect(tail.oversizedRecordCount).toBeUndefined()
@@ -105,5 +128,50 @@ describe('native chat transcript record limits', () => {
     expect(tail.messages).toHaveLength(1)
     expect(tail.oversizedRecordCount).toBe(1)
     expect(incremental).toHaveLength(1)
+  })
+
+  it('drops a large plain-text record that only carries a base64 marker', async () => {
+    const fake = `{"note":"base64","p":"${'A'.repeat(MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES)}"}`
+    const path = await transcript(`${fake}\n${recordOfBytes(100)}\n`)
+
+    const tail = await readNativeChatTranscriptTailFile(path, 10, imageDecode)
+    const incremental = await readIncrementalTranscriptMessages(
+      path,
+      createIncrementalTranscriptState(),
+      imageDecode
+    )
+
+    expect(tail.messages).toHaveLength(1)
+    expect(tail.oversizedRecordCount).toBe(1)
+    expect(incremental).toHaveLength(1)
+  })
+
+  it('caps inline image bytes per read and flushes append batches by bytes', async () => {
+    const imageBytes = 10 * 1024 * 1024
+    const count = Math.floor(MAX_NATIVE_CHAT_INLINE_IMAGE_READ_BYTES / imageBytes) + 1
+    const path = await transcript(
+      Array.from({ length: count }, (_unused, i) => `${imageLine(i, imageBytes)}\n`).join('')
+    )
+
+    const tail = await readNativeChatTranscriptTailFile(path, 100, imageDecode)
+    expect(tail.messages).toHaveLength(count - 1)
+    expect(tail.oversizedRecordCount).toBe(1)
+
+    const batches: number[] = []
+    const appended = await readIncrementalTranscriptMessages(
+      path,
+      createIncrementalTranscriptState(),
+      imageDecode,
+      (messages) => batches.push(messages.length)
+    )
+    expect(batches.reduce((a, b) => a + b, 0) + appended.length).toBe(count)
+    expect(batches.length).toBeGreaterThan(0)
+
+    const snapshot = await readIncrementalTranscriptMessages(
+      path,
+      createIncrementalTranscriptState(),
+      imageDecode
+    )
+    expect(snapshot).toHaveLength(count - 1)
   })
 })
