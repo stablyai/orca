@@ -5,12 +5,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { z } from 'zod'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
-  type AgentSessionJournalIdentity,
-  type AgentSessionJournalProviderHandle
-} from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity,
+  AgentSessionJournalProviderHandle
+} from '../../../shared/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import {
   createTrackedJournalOpener,
@@ -22,7 +22,7 @@ import {
   updateTestJournalRowJson
 } from './journal-host-database-test-support'
 import { admitOutcomeFormat1 } from './journal-outcome-format-1'
-import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { storedFailureFact, storedProviderHandle } from './journal-storage-schema'
 import type { UndeclaredStorageKeys } from './journal-storage-strict'
 import { restoreJournal } from './journal-open'

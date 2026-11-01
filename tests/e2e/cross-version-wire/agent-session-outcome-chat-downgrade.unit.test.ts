@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentSessionJournalIdentity,
-  type AgentSessionJournalProviderHandle
-} from '../../../src/shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentSessionJournalIdentity,
+  AgentSessionJournalProviderHandle
+} from '../../../src/shared/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import Database from '../../../src/main/sqlite/sync-database'
 import {

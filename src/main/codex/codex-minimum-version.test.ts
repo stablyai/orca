@@ -3,7 +3,7 @@ import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-chi
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import { readWholeAgentSessionFailureFact } from '../../shared/agent-session-failure'
+import { readWholeAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { resolveAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
 import type { AgentCliVersionReader } from '../agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'

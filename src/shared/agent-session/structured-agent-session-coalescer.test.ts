@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../agent-session-journal-types'
+import type { AgentJournalRenderItem } from './journal/agent-session-journal-types'
 import { projectNativeChatTranscriptMessages } from '../native-chat/transcript/native-chat-transcript-projection'
 import { projectStructuredAgentSessionMessages } from '../structured-agent-session-message-projection'
 import {

@@ -3,16 +3,18 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session-journal-schemas'
+import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { useAppStore } from '@/store'
 import { i18n } from '@/i18n/i18n'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import {
+  type AgentSessionFailureFact,
+  agentSessionFailureFact
+} from '../../../../shared/agent-session/failures/agent-session-failure'
 import {
   NativeChatOrcaStopContext,
   type NativeChatOrcaStopView

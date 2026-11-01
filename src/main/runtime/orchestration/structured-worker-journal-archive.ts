@@ -3,7 +3,7 @@
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { boundWorkerTranscriptTail } from './worker-transcript-payload'
 import { readRetiredLineageJournalPage } from './structured-worker-journal-page'
 

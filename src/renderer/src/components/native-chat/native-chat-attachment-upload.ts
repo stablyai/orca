@@ -21,7 +21,7 @@ import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-rev
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../shared/agent-session-write-notice-copy'
+import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../shared/agent-session/failures/agent-session-write-notice-copy'
 import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget

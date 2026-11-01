@@ -2,7 +2,7 @@ import { resolveChatAutomationRun } from './automation-chat-run-observation'
 export { chatAutomationRunObservation } from './automation-chat-run-observation'
 import type { JournalPublication } from '../native-chat/agent-session-wire/structured-agent-session-conversations'
 import type { AutomationRun } from '../../shared/automations-types'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome

@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
 import { nativeChatTurnMembership } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'

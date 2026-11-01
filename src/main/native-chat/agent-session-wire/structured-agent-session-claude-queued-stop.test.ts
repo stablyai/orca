@@ -7,8 +7,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import {
   projectStructuredAgentSessionStatus,

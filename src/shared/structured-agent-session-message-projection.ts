@@ -1,12 +1,12 @@
+import type { AgentJournalCursor } from './agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from './agent-session-journal-types'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
-import { selectAgentSessionCurrentRequests } from './agent-session-current-requests'
-import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
+} from './agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from './agent-session/journal/agent-session-journal-item-key'
+import { selectAgentSessionCurrentRequests } from './agent-session/requests/agent-session-current-requests'
+import { isQueuedAgentJournalSubmission } from './agent-session/requests/agent-session-queued-submission'
 import { collapseProviderRetryRuns } from './native-chat/native-chat-provider-retry-runs'
 import {
   keepStoppedSendsInSendOrder,
@@ -15,7 +15,7 @@ import {
 } from './native-chat/native-chat-stopped-before-start'
 import { compareNativeChatTranscriptMessages } from './native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatMessage } from './native-chat/native-chat-types'
-import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'
+import { dispatchWasWithdrawn } from './agent-session/requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
 import { isActionableStructuredAgentSessionPrompt } from './structured-agent-session-live-turn'
 import {

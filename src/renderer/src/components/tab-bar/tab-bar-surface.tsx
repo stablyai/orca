@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ProjectedAgentMenuItems } from './QuickLaunchButton'
-import TabBarCreateEntry from './TabBarCreateEntry'
+import { TabBarAgentPickerEntry } from './TabBarAgentPickerEntry'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { TabStripTooltipProvider } from './TabStripTooltipProvider'
 import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
@@ -75,8 +75,7 @@ export function renderTabBarSurface({
   } = runtime
   const {
     agentMenu,
-    agentLaunchOptions,
-    agentPickerEntries,
+    agentPickerInventory,
     selectPickerAgent,
     launchAgentRow,
     newTabMenuOpen,
@@ -234,13 +233,12 @@ export function renderTabBarSurface({
         >
           {!terminalOnly && onOpenEntry ? (
             <>
-              <TabBarCreateEntry
+              <TabBarAgentPickerEntry
+                inventory={agentPickerInventory}
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
                 menuOpen={newTabMenuOpen}
                 menuOptions={createMenuOptions}
-                agentOptions={agentLaunchOptions}
-                agentPickerEntries={agentPickerEntries}
                 onLaunchAgentOption={launchAgentFromNewTabEntry}
                 onOpenDefaultTerminal={() => {
                   queueNewActiveTerminalFocusAfterNewTabMenuClose()
@@ -283,7 +281,7 @@ export function renderTabBarSurface({
               <DropdownMenuSeparator />
               <ProjectedAgentMenuItems
                 model={agentMenu}
-                pickerEntries={agentPickerEntries}
+                pickerInventory={agentPickerInventory}
                 onSelectPickerAgent={selectPickerAgent}
                 hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
                 runLaunch={launchAgentRow}

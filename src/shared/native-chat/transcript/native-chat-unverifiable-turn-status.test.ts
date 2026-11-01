@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalTurnItem
-} from '../../agent-session-journal-types'
+} from '../../agent-session/journal/agent-session-journal-types'
 import { reduceNativeChatTurnTiming, selectNativeChatTurnStatuses } from './native-chat-turn-status'
 import { selectStructuredAgentSettledTurns } from '../../structured-agent-session-turn-timing'
 

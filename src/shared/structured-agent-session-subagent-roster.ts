@@ -1,12 +1,15 @@
 // Retain names/state beyond the loaded window using all roster rows/revisions and page-side entries for older rows.
 // Rebuild on replacement pages across epoch/reconnect; removals and revisions discard names their source row no longer carries.
 
-import type { AgentJournalPosition, AgentJournalRenderItem } from './agent-session-journal-types'
-import { isRootAgentJournalItem } from './agent-session-journal-producer'
+import type {
+  AgentJournalPosition,
+  AgentJournalRenderItem
+} from './agent-session/journal/agent-session-journal-types'
+import { isRootAgentJournalItem } from './agent-session/journal/agent-session-journal-producer'
 import {
   agentJournalItemPosition,
   compareAgentJournalPositions
-} from './agent-session-journal-position'
+} from './agent-session/journal/agent-session-journal-position'
 import type { AgentSessionHistoryPage, AgentSessionSubagentRosterEntry } from './agent-session-wire'
 import { namedSubagents } from './native-chat/transcript/native-chat-subagent-items'
 import type { NativeChatSubagentEntry } from './native-chat/native-chat-types'

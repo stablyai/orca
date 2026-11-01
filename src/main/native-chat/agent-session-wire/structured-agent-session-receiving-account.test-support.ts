@@ -9,11 +9,11 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem,
   type AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentJournalSubmissionKey,
   agentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isOrcaSessionId } from '../../../shared/orca-session-address'
 import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'

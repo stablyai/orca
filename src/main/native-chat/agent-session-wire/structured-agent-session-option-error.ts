@@ -1,5 +1,5 @@
-import { AGENT_SESSION_FAILURE_COPY } from '../../../shared/agent-session-failure-copy'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import { AGENT_SESSION_FAILURE_COPY } from '../../../shared/agent-session/failures/agent-session-failure-copy'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 
 /** Option validation failed before the provider session was mutated. */
 export class AgentSessionOptionRejectedError extends Error {

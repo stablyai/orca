@@ -102,8 +102,7 @@
       "quitDuringMoveConfirm": "Trotzdem beenden"
     },
     "startupWorktreeRefresh": {
-      "loading": "Arbeitsbereiche werden gesucht…",
-      "description": "Während lokale und entfernte Projekte geladen werden, können weitere Arbeitsbereiche erscheinen."
+      "loading": "Arbeitsbereiche werden gesucht…"
     },
     "createProject": {
       "errors": {
@@ -215,7 +214,8 @@
     "wslHostOffer": {
       "title": "{{distro}} als Host ausführen (empfohlen)",
       "why": "Git, Dateien und Terminals laufen dann nativ in Linux statt über die Windows-Dateifreigabe.",
-      "accept": "Als Host ausführen"
+      "accept": "Als Host ausführen",
+      "projectNotFound": "Das hinzugefügte Projekt zum Verschieben wurde nicht gefunden. Verwende „Auf den {{distro}}-Host verschieben…“ beim Projekt in der Seitenleiste."
     }
   },
   "app": {
@@ -6552,15 +6552,17 @@
           "remoteRuntimeEditorHint": "Apps auf diesem Computer können Dateien dieses Servers nur öffnen, wenn Orca ihn über SSH erreicht.",
           "remotePathInvalid": "Pfad ist für den SSH-Host ungültig.",
           "remotePathInvalidDetail": "Arbeitsbereich vor einem erneuten Versuch aktualisieren.",
-          "remoteLaunchFailed": "Der Pfad konnte nicht im Editor geöffnet werden.",
-          "remoteLaunchFailedDetail": "Den auf diesem Computer konfigurierten Editorbefehl prüfen.",
+          "pathLaunchFailed": "Der Pfad konnte nicht im Editor geöffnet werden.",
+          "pathLaunchFailedDetail": "Den auf diesem Computer konfigurierten Editorbefehl prüfen.",
           "1417fd8380": "Apps anpassen…",
           "8009ab69a6": "Öffnen in",
           "bd0e8159f8": "Den Editorbefehl oder die Dateimanager-Konfiguration auf diesem Computer prüfen.",
           "9a5381eb09": "Arbeitsbereichsordner konnte nicht geöffnet werden.",
           "0bed8727db": "Er wurde möglicherweise verschoben oder gelöscht. Arbeitsbereiche aktualisieren oder den Arbeitsbereich aus Orca entfernen.",
           "3921d3d9a5": "Arbeitsbereichsordner wurde nicht gefunden.",
+          "pathNotFound": "Datei oder Ordner nicht gefunden. Das Element wurde möglicherweise verschoben oder gelöscht.",
           "f387af445b": "Arbeitsbereichspfad ist kein gültiger lokaler Pfad.",
+          "pathInvalid": "Pfad ist kein gültiger lokaler Pfad.",
           "wsl": "WSL"
         },
         "WorktreeTitleInlineRename": {
@@ -7577,14 +7579,13 @@
           "932ff1fbff": "Design",
           "leftSidebarAppearance": {
             "title": "Darstellung der linken Seitenleiste",
-            "rowDescription": "Die linke Seitenleiste an das Terminal anpassen, die Standardeinstellung beibehalten oder eine Farbtönung verwenden.",
             "default": "Standard",
-            "matchTerminal": "An Terminal anpassen",
             "tinted": "Getönt",
             "tintColor": "Farbtönung der Seitenleiste",
             "tintColorDescription": "Die Farbe, die der Oberfläche der linken Seitenleiste beigemischt wird.",
             "tintOpacity": "Stärke der Farbtönung",
-            "tintOpacityDescription": "Legt fest, wie stark die Farbe der Seitenleiste beigemischt wird."
+            "tintOpacityDescription": "Legt fest, wie stark die Farbe der Seitenleiste beigemischt wird.",
+            "tintDescription": "Behalte die Standard-Seitenleiste bei oder töne sie ein. Um dem Terminal zu folgen, wähle „An Terminal anpassen“ als helles oder dunkles Design."
           },
           "interfaceDefaultFont": "Standardschriftart",
           "terminalDefaultFont": "Standardschriftart",
@@ -9767,11 +9768,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Darstellung der linken Seitenleiste",
-              "description": "Die linke Seitenleiste an das Terminal anpassen, die Standardeinstellung beibehalten oder eine Farbtönung verwenden.",
               "project": "Projekt",
-              "terminal": "Terminal",
               "background": "Hintergrund",
-              "tint": "Tönung"
+              "tint": "Tönung",
+              "tintDescription": "Behalte die Standard-Seitenleiste bei oder töne sie ein. Um dem Terminal zu folgen, wähle „An Terminal anpassen“ als helles oder dunkles Design."
             },
             "workspaceCardLayout": {
               "title": "Layout der Arbeitsbereichskarten",
@@ -9824,7 +9824,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "An Terminal anpassen"
           }
         },
         "auto": {
@@ -13360,6 +13361,10 @@
         },
         "PluginContributionActionNewFile": {
           "create": "Erstellen"
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "An Terminal anpassen",
+          "dynamic": "dynamisch"
         }
       },
       "right": {

@@ -1,6 +1,6 @@
 import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
 import { OpenCodeCopyServerRouteError } from '../../shared/opencode-launch-command'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome

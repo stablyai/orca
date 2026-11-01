@@ -18,7 +18,7 @@ import {
 import { Fragment, createElement, StrictMode } from 'react'
 import { act, render, waitFor } from '@testing-library/react'
 import { expect, it, describe } from 'vitest'
-import type { AgentJournalRenderItem } from '../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionAttentionSubjectPrefix,
   agentSessionPromptAttentionKey

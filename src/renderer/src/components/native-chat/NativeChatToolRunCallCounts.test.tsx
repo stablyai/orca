@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentJournalToolCallItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalToolCallItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { interruptedAgentJournalToolCall } from '../../../../shared/agent-journal-tool-call-lifecycle'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalItemBody } from '../../../../../src/shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 

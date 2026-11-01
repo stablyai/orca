@@ -23,7 +23,7 @@ vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => (
   subscribeStructuredAgentSession: mocks.subscribe
 }))
 
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
 import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
 
 import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'

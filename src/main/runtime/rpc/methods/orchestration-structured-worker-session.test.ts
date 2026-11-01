@@ -5,11 +5,11 @@ import type { AgentSessionExecutionLocation } from '../../../../shared/agent-ses
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import { getAppEnvironment } from '../../../../shared/app-environment'
-import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/structured-agent-session-dispatch-rejection'
-import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { codexDispatchRejection } from '../../../codex/codex-structured-turn-end-settlement'
 
 type WorkerHost = Pick<

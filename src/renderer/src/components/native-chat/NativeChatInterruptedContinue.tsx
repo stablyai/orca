@@ -20,7 +20,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { latestNativeChatOrcaStopCut } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
 import {
   latestNativeChatUsageLimitCut,

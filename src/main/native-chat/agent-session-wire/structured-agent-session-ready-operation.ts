@@ -1,4 +1,4 @@
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { isAgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint

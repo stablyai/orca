@@ -1,14 +1,14 @@
-import { agentJournalSubmissionKey } from '../agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../agent-session/journal/agent-session-journal-item-key'
 import {
   agentJournalItemPosition,
   compareAgentJournalItems,
   compareAgentJournalPositions
-} from '../agent-session-journal-position'
+} from '../agent-session/journal/agent-session-journal-position'
 import type {
   AgentJournalPosition,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../agent-session-journal-types'
+} from '../agent-session/journal/agent-session-journal-types'
 import { inSendOrder } from './native-chat-send-order'
 import {
   stoppedTurnOpeners,

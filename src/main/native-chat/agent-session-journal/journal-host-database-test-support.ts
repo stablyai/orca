@@ -1,9 +1,9 @@
-import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session-journal-identity'
 // Share one connection per test profile to match production host ownership.
 
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
+import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { JournalHostDatabase } from './journal-host-database'
 import { fields } from './journal-state-schema'

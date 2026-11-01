@@ -6,8 +6,8 @@ import {
   finalizingStructuredAgentSessionInput,
   structuredAgentSessionHandingOver
 } from './structured-agent-session-handing-over'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   holdUnsentSends,
   type UnsentSendHold

@@ -10,7 +10,7 @@ import {
   createQueuedMessageTestRig,
   eventually
 } from '../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { openTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionJournalProjections } from '../../../../native-chat/agent-session-wire/structured-agent-session-status-journal-projection'
 import { installSqlVisitCounters } from '../../../dispatch-predicate-visits.test-fixture'

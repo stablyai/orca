@@ -27,7 +27,10 @@ import {
   ensureAgentLaunchPreferences,
   readAgentLaunchPreferencesForWorktree
 } from '../settings/use-host-agent-launch-preferences'
-import { useAgentLaunchPickerInventory } from '../agent/use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from '../agent/use-agent-launch-picker-inventory'
 import { useAgentMenuObservation, useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 
 it('projects one capable source through cold, deadline, late, failed-refresh and empty answers', async () => {
@@ -270,7 +273,9 @@ it.each([20, 200])(
             environmentId: 'alpha'
           })
           renders++
-          return useAgentLaunchPickerInventory('wt', menu, false)
+          return useAgentPickerInventoryEntries(
+            useAgentLaunchPickerInventorySource('wt', menu, false)
+          )
         })
       )
       await act(async () => vi.advanceTimersByTimeAsync(3_000))

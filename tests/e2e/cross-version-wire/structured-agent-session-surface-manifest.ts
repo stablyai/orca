@@ -6,7 +6,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent
 import {
   structuredAgentSessionMessageSendMutation,
   structuredAgentSessionSendBody
-} from '../../../src/shared/structured-agent-session-send-mutation'
+} from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 
 import {
   SESSION,

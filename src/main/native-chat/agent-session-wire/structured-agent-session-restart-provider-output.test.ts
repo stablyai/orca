@@ -3,8 +3,8 @@ import { createCodexJournalTranslator } from '../../codex/codex-structured-journ
 import { codexStreamingJournalItem } from '../../codex/codex-structured-item-translation'
 import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import {
   completedStructuredAgentTurnSeconds,

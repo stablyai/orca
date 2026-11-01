@@ -7,7 +7,7 @@ import {
   endedRunningAgentJournalToolCall,
   interruptedAgentJournalToolCall
 } from '../../../src/shared/agent-journal-tool-call-lifecycle'
-import type { AgentJournalItemIdentity } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../src/shared/agent-session-journal-identity'
 import { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import type { JournalReadRow } from '../../../src/main/native-chat/agent-session-journal/journal-read-row'

@@ -1,7 +1,7 @@
 import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 // Adapter-reachable contract must remain free of host and Node-only process dependencies.
 
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import type {
   AgentSessionRecord,
   AgentSessionExecutionLocation,

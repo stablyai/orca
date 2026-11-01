@@ -5,7 +5,7 @@ import type { NativeChatMessage } from '../../../../../src/shared/native-chat/na
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../../../src/shared/agent-session-journal-types'
+} from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import * as toolFold from '../../../../../src/shared/native-chat/tools/native-chat-tool-pairs'
 import { projectStructuredItemsToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
 import { foldMobileNativeChatMessages } from '../../mobile-native-chat-render-data'

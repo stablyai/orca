@@ -1,7 +1,7 @@
 import type {
   AgentJournalApprovalItem,
   AgentJournalQuestionItem
-} from '../agent-session-journal-types'
+} from '../agent-session/journal/agent-session-journal-types'
 import {
   agentSessionPromptQuestions,
   legacyAgentSessionQuestionAnswers

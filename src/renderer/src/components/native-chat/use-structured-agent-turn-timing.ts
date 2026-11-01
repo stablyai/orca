@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
 import type { StructuredAgentHostClock } from '../../../../shared/structured-agent-session-reducer'

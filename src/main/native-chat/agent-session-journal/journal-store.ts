@@ -2,22 +2,24 @@ import { journalInputOrder } from './journal-input-order'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
 import { JournalWriteProjection } from './journal-write-projection'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import { retireCoveredJournalFloor } from './journal-commit'
 import { createJournalPublicReader } from './journal-public-read'
 import type {
   AgentJournalAcceptanceReceipt,
-  AgentJournalCursor,
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission,
-  AgentJournalTurnLifecycle,
+  AgentJournalTurnLifecycle
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/structured-agent-session-context-usage'
 import {
@@ -56,8 +58,6 @@ import { JournalWriteQueue } from './journal-write-queue'
 import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
 import { journalThreadGoalSource, type JournalThreadGoalSource } from './journal-thread-goal-source'
-
-export { AgentSessionJournalError } from './journal-write-guards'
 
 type JournalCollaborators = ReturnType<typeof createJournalStoreCollaborators>
 

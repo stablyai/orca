@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readAgentSessionUnavailable, agentSessionSignInCopyId } from './agent-session-availability'
-import { agentSessionFailureSentence } from './agent-session-failure-words'
-import { AGENT_SESSION_FAILURE_COPY } from './agent-session-failure-copy'
+import { agentSessionFailureSentence } from './agent-session/failures/agent-session-failure-words'
+import { AGENT_SESSION_FAILURE_COPY } from './agent-session/failures/agent-session-failure-copy'
 
 describe("the host's sign-in and CLI verdict", () => {
   it.each([undefined, null, {}, { reason: 'future' }, { state: 'notSignedIn' }, 'notSignedIn'])(

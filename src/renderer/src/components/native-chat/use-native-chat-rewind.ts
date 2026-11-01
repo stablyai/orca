@@ -10,7 +10,7 @@ import {
   type AgentSessionRewindSupport
 } from '../../../../shared/agent-session-rewind'
 import { readAgentJournalTurn } from '../../../../shared/agent-session-turn-record'
-import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-write-failure'
+import type { AgentSessionWriteFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import {
   nativeChatRewindPendingCopy,
@@ -30,7 +30,7 @@ import {
   agentSessionContextFloorSequence,
   latestAgentSessionContextClearSequence
 } from '../../../../shared/agent-session-context-clear'
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
 
 /** How long a confirmed rewind waits for its new conversation before letting go. */
 export const NATIVE_CHAT_REWIND_RESET_TIMEOUT_MS = 120_000

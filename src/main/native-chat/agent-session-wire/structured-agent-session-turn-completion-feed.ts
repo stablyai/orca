@@ -10,7 +10,7 @@ import type {
   AgentSessionAttentionEdge,
   StructuredAttentionState
 } from '../../../shared/agent-session-attention'
-import type { StructuredAgentSessionLatestRequest } from '../../../shared/structured-agent-session-latest-request'
+import type { StructuredAgentSessionLatestRequest } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionStatusState } from './structured-agent-session-status-feed'
 

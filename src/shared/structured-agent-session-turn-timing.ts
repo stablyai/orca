@@ -1,11 +1,11 @@
 // Durable host-clock lifecycle endpoints/provider durations keep settled timing identical on desktop/mobile without client clocks.
 
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from './agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalTurnLifecycleState
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
 import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
 import { structuredAgentTurnAnchors } from './native-chat/transcript/native-chat-turn-membership'

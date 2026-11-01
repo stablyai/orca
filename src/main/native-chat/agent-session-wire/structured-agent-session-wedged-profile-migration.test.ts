@@ -1,5 +1,5 @@
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 // Real wedged record shapes must become acquirable while retaining conversation and provider history.
 // Migration releases the lease; only operations needing the agent may spawn it.
 

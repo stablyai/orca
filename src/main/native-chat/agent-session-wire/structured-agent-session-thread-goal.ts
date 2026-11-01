@@ -1,13 +1,13 @@
 import {
   refuse,
-  type AgentSessionRefusalReason,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import type {
   AgentJournalCursor,
-  AgentJournalItemIdentity,
-  AgentJournalThreadGoal
-} from '../../../shared/agent-session-journal-types'
+  AgentJournalItemIdentity
+} from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalThreadGoal } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
 import type {

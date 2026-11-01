@@ -7,9 +7,9 @@ import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session/ag
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { journalPendingSubmissionResolutions } from '../agent-session-journal/journal-pending-submission-recovery'
 import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'

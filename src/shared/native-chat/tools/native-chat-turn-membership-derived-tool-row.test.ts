@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../agent-session-journal-types'
+} from '../../agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
 import { foldToolMessages } from './native-chat-tool-fold'
 import { nativeChatRowsInDrawOrder } from '../transcript/native-chat-turn-grouping'

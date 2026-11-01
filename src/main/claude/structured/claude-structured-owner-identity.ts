@@ -1,4 +1,4 @@
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionProcessIdentity } from '../../../shared/agent-session-record'

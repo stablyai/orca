@@ -1,4 +1,4 @@
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalInputOrder } from './journal-input-order'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

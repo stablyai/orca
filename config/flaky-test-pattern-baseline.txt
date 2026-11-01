@@ -346,7 +346,6 @@
 6 test-no-real-time-wait:src/main/ipc/worktree-git-common-polling.test.ts
 6 test-no-real-time-wait:src/main/ipc/worktree-git-common-watch.test.ts
 2 test-no-real-time-wait:src/main/ipc/worktree-git-status-attribution-real-git.test.ts
-1 test-no-real-time-wait:src/main/ipc/worktree-head-identity-reader-concurrency.test.ts
 2 test-no-real-time-wait:src/main/ipc/worktrees-background-removal.test.ts
 1 test-no-real-time-wait:src/main/ipc/worktrees-detected-scan-cache.test.ts
 1 test-no-real-time-wait:src/main/local-worktree-removal-recovery-live.test.ts

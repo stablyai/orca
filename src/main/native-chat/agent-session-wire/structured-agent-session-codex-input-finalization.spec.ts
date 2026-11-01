@@ -1,6 +1,6 @@
 import type { codexInputFinalizationFixture } from './structured-agent-session-codex-input-host.test'
 import { expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   continuingStructuredAgentSessionInput,
   finalizingStructuredAgentSessionInput,
@@ -14,7 +14,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import * as lifetime from './structured-agent-session-host-lifetime'
 import { claimStructuredAgentSessionAgent } from './structured-agent-session-agent-start'
 import { openStructuredAgentSessionConversationJournal } from './structured-agent-session-conversation-open'

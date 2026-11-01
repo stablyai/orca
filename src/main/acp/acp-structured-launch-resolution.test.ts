@@ -23,7 +23,7 @@ import { publishJournalOutcomeEpoch } from '../native-chat/agent-session-journal
 import { JOURNAL_OUTCOME_FORMAT } from '../native-chat/agent-session-journal/journal-outcome-format'
 import type { JournalRow } from '../native-chat/agent-session-journal/journal-row-schema'
 import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   createLegacyProviderTimelineIdentityScheme,
   spellProviderTimelineKey

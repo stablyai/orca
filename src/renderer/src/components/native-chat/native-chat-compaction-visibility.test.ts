@@ -9,9 +9,9 @@ import { z } from 'zod'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session-journal-schemas'
-import { isAdmissibleAgentJournalSubmission } from '../../../../shared/agent-session-journal-submission-schema'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
+import { isAdmissibleAgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-submission-schema'
 
 type CapturedJournal = { items: AgentJournalRenderItem[]; submissions: AgentJournalSubmission[] }
 

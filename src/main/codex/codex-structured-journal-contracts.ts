@@ -1,4 +1,4 @@
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type {
   CodexDispatchEchoes,

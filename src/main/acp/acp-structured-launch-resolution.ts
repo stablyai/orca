@@ -10,7 +10,7 @@ import {
 
 import { delimiter } from 'node:path'
 import { homedir } from 'node:os'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandleKey,

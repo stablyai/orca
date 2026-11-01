@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
+import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { journalLifecycleMutationItemId } from '../native-chat/agent-session-journal/journal-row-builders'
 import { PROVIDER_EXIT_ROW_PREFIX } from '../../shared/agent-session-stop-row-identity'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'

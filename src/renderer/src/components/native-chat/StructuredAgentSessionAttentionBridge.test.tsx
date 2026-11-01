@@ -4,7 +4,7 @@
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { AgentJournalTurnOutcome } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalTurnOutcome } from '../../../../shared/agent-turn-outcome'
 import { modelRefusalReadStates } from './structured-model-refusal.test-fixture'
 import { structuredAttentionReadObservation } from './structured-attention-read-observation'
 import type {

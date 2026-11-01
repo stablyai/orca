@@ -4,7 +4,7 @@ import type {
   AgentJournalDiffItem,
   AgentJournalItemBody,
   AgentJournalToolCallItem
-} from '../agent-session-journal-types'
+} from './journal/agent-session-journal-types'
 import type { NativeChatToolCallBlock } from '../native-chat/native-chat-types'
 
 export type StructuredAgentSessionToolAction = AgentJournalToolCallItem | AgentJournalDiffItem

@@ -1,7 +1,7 @@
 import '../../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
 import { codexItemBody } from '../../codex/codex-structured-item-translation'

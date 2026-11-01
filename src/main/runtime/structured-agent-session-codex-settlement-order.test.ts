@@ -15,7 +15,7 @@ import type {
   AgentJournalDispatchState,
   AgentJournalTurnItem,
   AgentJournalItemBody
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
