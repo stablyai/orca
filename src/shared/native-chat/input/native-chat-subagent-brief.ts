@@ -77,6 +77,10 @@ function launchAck(output: string): boolean {
   if (/async agent launched/i.test(output)) {
     return true
   }
+  // Grok's background spawn returns the child id and tells the parent to wait.
+  if (/subagent started in background/i.test(output) && /subagent_id:\s*\S+/.test(output)) {
+    return true
+  }
   const fields = record(output)
   if (fields && Object.keys(fields).every((key) => key === 'task_name')) {
     return true

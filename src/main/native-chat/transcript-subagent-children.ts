@@ -1,5 +1,10 @@
 import type { Dirent } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
+import {
+  findGrokChatHistoryBySessionId,
+  GROK_CHAT_HISTORY_FILE,
+  isSafeGrokSessionId
+} from '../../shared/grok-session-paths'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   SUBAGENT_TRANSCRIPT_PREFIX,
@@ -9,6 +14,7 @@ import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-sc
 import { BOUNDED_FRAME_CONTENT_BUDGET_BYTES } from './agent-session-wire/agent-session-history-page-bounds'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
+import { decodeGrokTranscriptLine } from './transcript-line-decoders-grok'
 import { splitTranscriptStreamLines } from './transcript-stream-lines'
 import { openTranscriptReadStream, wslGatedReaddir } from './wsl-transcript-fs-access'
 
@@ -62,12 +68,7 @@ export async function readNativeChatSubagentPage(args: {
   signal?: AbortSignal
   readTail: NativeChatChildTailRead
 }): Promise<NativeChatChildPage | null> {
-  const childPath =
-    args.decode === decodeClaudeTranscriptLine
-      ? claudeChildPath(args.parentPath, args.agentId)
-      : args.decode === decodeCodexTranscriptLine
-        ? await codexChildPath(args.parentPath, args.agentId, args.signal)
-        : null
+  const childPath = await childTranscriptPath(args)
   if (!childPath || args.limit <= 0) {
     return childPath ? { messages: [], hasMore: false, beforeOffset: 0 } : null
   }
@@ -81,6 +82,24 @@ export async function readNativeChatSubagentPage(args: {
   )
 }
 
+async function childTranscriptPath(args: {
+  parentPath: string
+  decode: NativeChatLineDecoder
+  agentId: string
+  signal?: AbortSignal
+}): Promise<string | null> {
+  if (args.decode === decodeClaudeTranscriptLine) {
+    return claudeChildPath(args.parentPath, args.agentId)
+  }
+  if (args.decode === decodeCodexTranscriptLine) {
+    return codexChildPath(args.parentPath, args.agentId, args.signal)
+  }
+  if (args.decode === decodeGrokTranscriptLine) {
+    return grokChildPath(args.parentPath, args.agentId)
+  }
+  return null
+}
+
 function claudeChildPath(parentPath: string, agentId: string): string | null {
   if (!CLAUDE_CHILD_ID.test(agentId)) {
     return null
@@ -89,6 +108,15 @@ function claudeChildPath(parentPath: string, agentId: string): string | null {
     subagentTranscriptsDirFor(parentPath),
     `${SUBAGENT_TRANSCRIPT_PREFIX}${agentId}.jsonl`
   )
+}
+
+/** A Grok child id is its session id. The history can sit under another cwd group. */
+async function grokChildPath(parentPath: string, agentId: string): Promise<string | null> {
+  if (basename(parentPath) !== GROK_CHAT_HISTORY_FILE || !isSafeGrokSessionId(agentId)) {
+    return null
+  }
+  const sessionsDir = dirname(dirname(dirname(parentPath)))
+  return findGrokChatHistoryBySessionId(sessionsDir, agentId)
 }
 
 async function readFittedPage(
