@@ -1,5 +1,6 @@
 import { isShellProcess } from '../../../../shared/agent-detection'
 import type {
+  RuntimeTerminalAgentStatus,
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
 } from '../../../../shared/runtime-terminal-contracts'
@@ -47,6 +48,9 @@ type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
   /** The pane's rendered viewport, or null when the runtime holds no screen model for it. */
   readVisibleScreen(ptyId: string): Promise<string | null> | null
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
+  getFreshExplicitAgentStatus?: (
+    handle: string
+  ) => { status: NonNullable<RuntimeTerminalAgentStatus['status']>; updatedAt: number } | null
 }
 
 type IdlePollEntry = {
@@ -144,16 +148,35 @@ export class RuntimeTerminalIdlePolls {
     try {
       const sample = this.sample(entry)
       const { verdict, ptyId } = sample
-      if (verdict.kind === 'blocked') {
-        this.settle(entry, sample.blocked(verdict.reason))
-        return
-      }
-      if (entry.waiter.condition === 'waiting' && entry.pty.lastAgentStatus === 'permission') {
+      const explicitStatus = this.deps.getFreshExplicitAgentStatus?.(entry.waiter.handle)
+      const isPermission =
+        entry.pty.lastAgentStatus === 'permission' || explicitStatus?.status === 'permission'
+      const isWorkingOrIdle =
+        explicitStatus?.status === 'working' ||
+        explicitStatus?.status === 'idle' ||
+        (entry.pty.lastAgentStatus === 'working' && explicitStatus?.status !== 'permission')
+      if (entry.waiter.condition === 'waiting' && isPermission) {
         this.settle(entry, sample.blocked('agent-interactive-prompt'))
         return
       }
+      if (verdict.kind === 'blocked') {
+        if (entry.waiter.condition === 'waiting') {
+          if (!isWorkingOrIdle) {
+            this.settle(entry, sample.blocked(verdict.reason))
+            return
+          }
+        } else {
+          this.settle(entry, sample.blocked(verdict.reason))
+          return
+        }
+      }
       if (entry.waiter.condition === 'waiting') {
-        if (verdict.kind === 'working' || entry.screenReadInFlight) {
+        if (
+          verdict.kind === 'working' ||
+          verdict.kind === 'ready-strong' ||
+          isWorkingOrIdle ||
+          entry.screenReadInFlight
+        ) {
           this.armRecheck(entry, verdict)
           return
         }
@@ -162,7 +185,15 @@ export class RuntimeTerminalIdlePolls {
         if (!this.entries.has(entry)) {
           return
         }
-        if (screenBlockedReason) {
+        const recheckVerdict = this.sample(entry).verdict
+        const recheckExplicit = this.deps.getFreshExplicitAgentStatus?.(entry.waiter.handle)
+        const recheckWorkingOrIdle =
+          recheckVerdict.kind === 'working' ||
+          recheckVerdict.kind === 'ready-strong' ||
+          recheckExplicit?.status === 'working' ||
+          recheckExplicit?.status === 'idle' ||
+          (entry.pty.lastAgentStatus === 'working' && recheckExplicit?.status !== 'permission')
+        if (screenBlockedReason && !recheckWorkingOrIdle) {
           this.settle(entry, sample.blocked(screenBlockedReason))
           return
         }
@@ -170,7 +201,7 @@ export class RuntimeTerminalIdlePolls {
         return
       }
       // Strong readiness outranks unscoped dialog wording elsewhere on the screen.
-      if (verdict.kind === 'ready-strong') {
+      if (verdict.kind === 'ready-strong' && !isPermission) {
         this.settle(entry, sample.ready())
         return
       }

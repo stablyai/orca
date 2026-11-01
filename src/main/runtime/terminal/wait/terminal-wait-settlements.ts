@@ -1,3 +1,4 @@
+import type { RuntimeTerminalWaitCondition } from '../../../../shared/runtime-terminal-contracts'
 import { OrcaRuntimeWithBindPtyIncarnationHandle } from '../identity/terminal-handle-bindings'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import {
@@ -44,22 +45,33 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     }
   }
 
-  protected resolvePtyTuiIdleWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
+  protected resolvePtyTuiIdleWaiters(
+    pty: RuntimePtyWorktreeRecord,
+    ptyId: string,
+    onlyCondition?: RuntimeTerminalWaitCondition
+  ): void {
     const waiters = this.terminalWaiters
       .forPty(ptyId)
-      .filter((waiter) => waiter.condition === 'tui-idle' || waiter.condition === 'waiting')
+      .filter(
+        (waiter) =>
+          (waiter.condition === 'tui-idle' || waiter.condition === 'waiting') &&
+          (!onlyCondition || waiter.condition === onlyCondition)
+      )
     if (waiters.length === 0) {
       return
     }
     // Re-rank titles: weak readiness cannot see tail-truncated dialogs and must wait for a rendered-screen poll.
     const verdict = this.evaluateTuiIdleForPty(pty)
     for (const waiter of waiters) {
-      if (verdict.kind === 'blocked') {
-        this.resolveWaiter(
-          waiter,
-          buildPtyTerminalWaitBlockedResult(waiter.handle, waiter.condition, pty, verdict.reason)
-        )
-      } else if (waiter.condition === 'waiting' && pty.lastAgentStatus === 'permission') {
+      const explicitStatus = this.getFreshExplicitAgentStatusForHandle(waiter.handle)
+      const isPermission =
+        pty.lastAgentStatus === 'permission' || explicitStatus?.status === 'permission'
+      const isWorkingOrIdle =
+        explicitStatus?.status === 'working' ||
+        explicitStatus?.status === 'idle' ||
+        (pty.lastAgentStatus === 'working' && explicitStatus?.status !== 'permission')
+
+      if (waiter.condition === 'waiting' && isPermission) {
         this.resolveWaiter(
           waiter,
           buildPtyTerminalWaitBlockedResult(
@@ -69,7 +81,30 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
             'agent-interactive-prompt'
           )
         )
-      } else if (verdict.kind === 'ready-strong' && waiter.condition === 'tui-idle') {
+      } else if (verdict.kind === 'blocked') {
+        if (waiter.condition === 'waiting') {
+          if (!isWorkingOrIdle) {
+            this.resolveWaiter(
+              waiter,
+              buildPtyTerminalWaitBlockedResult(
+                waiter.handle,
+                waiter.condition,
+                pty,
+                verdict.reason
+              )
+            )
+          }
+        } else {
+          this.resolveWaiter(
+            waiter,
+            buildPtyTerminalWaitBlockedResult(waiter.handle, waiter.condition, pty, verdict.reason)
+          )
+        }
+      } else if (
+        verdict.kind === 'ready-strong' &&
+        waiter.condition === 'tui-idle' &&
+        !isPermission
+      ) {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
       }
     }

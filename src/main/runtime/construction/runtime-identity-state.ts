@@ -361,7 +361,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
             (screen) => screen?.lines.join('\n') ?? null
           )
         : null,
-    resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
+    resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result),
+    getFreshExplicitAgentStatus: (handle) => this.getFreshExplicitAgentStatusForHandle(handle)
   })
 
   protected readonly terminalWait = new RuntimeTerminalWaitController(
@@ -376,7 +377,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
         pty.lastExitCode === null &&
         mainBindsUnendedTerminal(this, pty.ptyId, this.ptyLivenessVerdictByPtyId.get(pty.ptyId)),
       startVisibleReadProbe: (waiter, waiterTimeoutMs, agent) =>
-        this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs, agent)
+        this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs, agent),
+      getFreshExplicitAgentStatus: (handle) => this.getFreshExplicitAgentStatusForHandle(handle)
     },
     this.terminalWaiters,
     this.terminalIdlePolls

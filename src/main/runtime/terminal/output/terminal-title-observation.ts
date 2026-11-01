@@ -1,4 +1,5 @@
 import type { AgentStatus } from '../../../../shared/agent-detection'
+import type { RuntimeTerminalWaitCondition } from '../../../../shared/runtime-terminal-contracts'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import { OrcaRuntimeWithGetUnpersistedTrackedTitleForPty } from './terminal-title-tracker'
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
@@ -19,7 +20,11 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     title: string | null | undefined,
     observedAt: number
   ): void
-  protected abstract resolvePtyTuiIdleWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void
+  protected abstract resolvePtyTuiIdleWaiters(
+    pty: RuntimePtyWorktreeRecord,
+    ptyId: string,
+    onlyCondition?: RuntimeTerminalWaitCondition
+  ): void
   protected abstract shouldDelayPtyBackedMobileSnapshotForForegroundAgent(
     pty: RuntimePtyWorktreeRecord,
     title: string
@@ -154,13 +159,11 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
         this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
       }
       ptyRecordChanged = prevTitle !== recordedTitle || prevStatus !== agentStatus
-      // Re-offer idle-to-idle upgrades from name-only to explicit evidence; resolve permission/waiting waiters on permission transition.
-      if (
-        ((agentStatus === 'idle' && prevStatus !== 'permission') ||
-          (agentStatus === 'permission' && prevStatus !== 'permission')) &&
-        ptyRecordChanged
-      ) {
+      // Re-offer idle-to-idle upgrades from name-only to explicit evidence; resolve waiting waiters on permission transition.
+      if (agentStatus === 'idle' && prevStatus !== 'permission' && ptyRecordChanged) {
         this.resolvePtyTuiIdleWaiters(pty, ptyId)
+      } else if (agentStatus === 'permission' && prevStatus !== 'permission' && ptyRecordChanged) {
+        this.resolvePtyTuiIdleWaiters(pty, ptyId, 'waiting')
       }
       const shouldDelayMobileSnapshot =
         ptyRecordChanged &&
