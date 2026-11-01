@@ -69,7 +69,6 @@ export function createPaneManagerOptionsTestContext(
     getLinkActionContext: () => null,
     canOpenOwnedBrowserForPane: () => false,
     requestOpenLinksInAppPreference: vi.fn(),
-    onShowSessionRestoredBanner: vi.fn(),
     queueResizeAll: vi.fn(),
     syncPaneCount: vi.fn(),
     syncPaneLayoutRevision: vi.fn(),

@@ -77,7 +77,6 @@ export type TerminalState = {
         agent: TuiAgent
         prompt: string
       }
-      showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
     }
   >

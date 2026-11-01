@@ -179,13 +179,13 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       spawn.resolve('fresh-pty')
       await flushAsyncTicks(10)
 
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
+      // Only the agent's own output confirms the resume.
+      expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
     })
 
     it('says the fresh-spawn resume started fresh when main declined it', async () => {
-      // Sidebar resume creates a fresh tab without a restored PTY; it still needs a resume banner (#10757).
+      // Sidebar resume creates a fresh tab without a restored PTY; a declined resume still says it started fresh.
       const { connectPanePty } = await import('./pty-connection')
       const spawn = createDeferred<{ id: string; agentResumeUnavailable: true }>()
       const transport = createMockTransport()
@@ -271,8 +271,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'resume-unavailable')
     })
 
-    it('lets a declined resume replace an already-shown restored banner', async () => {
-      // A later declined resume must clear an earlier restored-banner latch.
+    it('says started fresh when a later wake of a resumed pane is declined', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
       let connectCount = 0
@@ -345,13 +344,12 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       await flushAsyncTicks(10)
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // Main starts and resumes the pane; the window attaches and shows main's outcome once.
+        // Main starts and resumes the pane; a restored outcome shows no banner.
         await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
-        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
-        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
+        expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
         return
       }
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
+      expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
       isVisibleRef.current = false
 
       // Hibernate the pane, then reveal it so the wake respawns the recorded session.
@@ -367,7 +365,10 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       await flushAsyncTicks(10)
 
       expect(connectCount).toBeGreaterThan(1)
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenLastCalledWith(2, 'resume-unavailable')
+      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledExactlyOnceWith(
+        2,
+        'resume-unavailable'
+      )
     })
 
     it('keeps sleeping resume record when fresh cold-restore spawn fails', async () => {
@@ -436,8 +437,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         createDeps({
           startup: {
             command: "codex 'resume' 'codex-session-1'",
-            resumeProviderSession: providerSession,
-            showSessionRestoredBanner: true
+            resumeProviderSession: providerSession
           }
         }) as never
       )

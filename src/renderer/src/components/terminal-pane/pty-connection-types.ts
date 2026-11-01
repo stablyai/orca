@@ -47,7 +47,6 @@ export type PtyPaneStartup = {
   /** Initial prompt-start status for agents that lack native prompt hooks. */
   initialAgentStatus?: { agent: TuiAgent; prompt: string }
   /** Show the restored-session banner when this startup command mounts. */
-  showSessionRestoredBanner?: boolean
 } | null
 
 export type PaneProcessExit = {
@@ -106,7 +105,7 @@ export type PtyConnectionDeps = {
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
   markTerminalBell: WorkspaceAttentionSlice['markTerminalBell']
-  onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
+  onShowSessionRestoredBanner: (paneId: number, reason: SessionRestoredBannerReason) => void
   // Renderer notifications originate from BEL or completion; main also supports the settings test source.
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'

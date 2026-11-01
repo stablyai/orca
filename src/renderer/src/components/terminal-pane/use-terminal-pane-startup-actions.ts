@@ -94,7 +94,7 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
     [setSessionRestoredBannerPaneIds]
   )
   const showRestoredSessionBanner = useCallback(
-    (paneId: number, reason: SessionRestoredBannerReason = 'restored'): void => {
+    (paneId: number, reason: SessionRestoredBannerReason): void => {
       setSessionRestoredBannerPaneIds((previous) => {
         const next = addSessionRestoredBannerPaneId(previous, paneId, reason)
         return next === previous ? previous : next

@@ -646,8 +646,7 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
         expect.stringContaining('--- session restored ---'),
         expect.any(Function)
       )
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
+      expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
     })
   })

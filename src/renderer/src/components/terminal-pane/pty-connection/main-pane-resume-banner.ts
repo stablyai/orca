@@ -1,4 +1,5 @@
-// Main owns agent resume; show its published restored/unavailable outcome once per terminal start.
+// Main owns agent resume; show its published unavailable outcome once per terminal start.
+// A restored outcome shows nothing: only the agent's own output confirms the resume.
 
 import { useAppStore } from '@/store'
 import type { TerminalPaneResumeOutcome } from '@/store/terminals/terminal-state'
@@ -76,7 +77,11 @@ export function showMainPaneResumeOutcome(session: ConnectPanePtySession, ptyId:
   }
   const outcomes = useAppStore.getState().terminalPaneResumeOutcomesByPaneKey
   const found = outcomes[session.cacheKey]
-  if (found?.ptyId === ptyId && noteShown(startOf(found), outcomes)) {
+  if (
+    found?.ptyId === ptyId &&
+    found.outcome === 'resume-unavailable' &&
+    noteShown(startOf(found), outcomes)
+  ) {
     session.showSessionRestoredBanner(found.outcome)
   }
 }

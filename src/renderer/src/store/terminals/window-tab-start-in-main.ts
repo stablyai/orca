@@ -31,7 +31,6 @@ export function startupNeedsWindowSpawn(startup: TabStartup | undefined): boolea
     startup.sessionOptions !== undefined ||
     // View effects of the start the window shows once it attaches.
     startup.initialAgentStatus !== undefined ||
-    startup.showSessionRestoredBanner !== undefined ||
     startup.telemetry !== undefined
   )
 }
