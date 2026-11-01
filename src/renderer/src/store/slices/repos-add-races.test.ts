@@ -20,7 +20,7 @@ installReposRuntimeRoutingHarness()
 
 describe('repo add/catalog races', () => {
   it('appends the same bare ID when add returns a different host identity', async () => {
-    reposAdd.mockResolvedValue({ repo: localRepo })
+    reposAdd.mockResolvedValue({ repo: localRepo, selectedPath: '/canonical/linked' })
     const runtimeSibling: Repo = {
       ...localRepo,
       path: '/runtime/local-repo',
@@ -29,7 +29,9 @@ describe('repo add/catalog races', () => {
     const store = createTestStore()
     store.setState({ repos: [runtimeSibling] })
 
-    await store.getState().addRepoPath(localRepo.path)
+    const onResolvedSelectedPath = vi.fn()
+    await store.getState().addRepoPath(localRepo.path, 'git', { onResolvedSelectedPath })
+    expect(onResolvedSelectedPath).toHaveBeenCalledExactlyOnceWith('/canonical/linked')
 
     expect(store.getState().repos).toEqual([
       runtimeSibling,

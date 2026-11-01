@@ -86,6 +86,10 @@ describe('useAddRepoLocalFolderFlow', () => {
 
   it('adds every selected local folder and completes one default-checkout handoff', async () => {
     pickFolders.mockResolvedValue(['/projects/alpha', '/projects/beta'])
+    addRepoPath.mockImplementation(async (path: string, _kind, options) => {
+      options?.onResolvedSelectedPath?.(path.replace('/projects/', '/canonical/'))
+      return makeRepo(path)
+    })
     const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
 
     const { handleBrowse } = useAddRepoLocalFolderFlow({
@@ -110,9 +114,11 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(pickFolders).toHaveBeenCalledTimes(1)
     expect(addRepoPath).toHaveBeenCalledTimes(2)
     expect(addRepoPath).toHaveBeenNthCalledWith(1, '/projects/alpha', undefined, {
+      onResolvedSelectedPath: expect.any(Function),
       runtimeEnvironmentId: null
     })
     expect(addRepoPath).toHaveBeenNthCalledWith(2, '/projects/beta', undefined, {
+      onResolvedSelectedPath: expect.any(Function),
       runtimeEnvironmentId: null
     })
     expect(scanNestedRepos).toHaveBeenCalledWith(
@@ -129,7 +135,9 @@ describe('useAddRepoLocalFolderFlow', () => {
       executionHostId: 'local'
     })
     expect(onGitRepoReady).toHaveBeenCalledTimes(1)
-    expect(onGitRepoReady).toHaveBeenCalledWith('alpha', 'local_folder_picker', 'local')
+    expect(onGitRepoReady).toHaveBeenCalledWith('alpha', 'local_folder_picker', 'local', {
+      selectedPath: '/canonical/alpha'
+    })
   })
 
   it('holds a single browsed folder the WSL host offer takes, and adds nothing', async () => {
@@ -198,10 +206,13 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(showNestedRepoReview).not.toHaveBeenCalled()
     expect(addRepoPath).toHaveBeenCalledTimes(1)
     expect(addRepoPath).toHaveBeenCalledWith('/projects/later', undefined, {
+      onResolvedSelectedPath: expect.any(Function),
       runtimeEnvironmentId: null
     })
     expect(scanNestedRepos).toHaveBeenCalledTimes(2)
-    expect(onGitRepoReady).toHaveBeenCalledWith('later', 'local_folder_picker', 'local')
+    expect(onGitRepoReady).toHaveBeenCalledWith('later', 'local_folder_picker', 'local', {
+      selectedPath: '/projects/later'
+    })
   })
 
   it('still completes handoff when a later selected folder is skipped', async () => {
@@ -236,9 +247,12 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(showNestedRepoReview).not.toHaveBeenCalled()
     expect(addRepoPath).toHaveBeenCalledTimes(1)
     expect(addRepoPath).toHaveBeenCalledWith('/projects/git', undefined, {
+      onResolvedSelectedPath: expect.any(Function),
       runtimeEnvironmentId: null
     })
-    expect(onGitRepoReady).toHaveBeenCalledWith('git', 'local_folder_picker', 'local')
+    expect(onGitRepoReady).toHaveBeenCalledWith('git', 'local_folder_picker', 'local', {
+      selectedPath: '/projects/git'
+    })
   })
 
   it('ignores stale scans and offers Open as Folder only for the current plain directory', async () => {

@@ -1,3 +1,4 @@
+import { realpath } from 'node:fs/promises'
 import { defineMethod } from '../core'
 import { resolveReplySnapshot } from '../content-snapshot-id'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
@@ -139,7 +140,8 @@ export const REPO_METHODS = [
       repo: projectRepoVisibilityForClient(
         await context.runtime.addRepo(params.path, params.kind, undefined, params.displayName),
         context
-      )
+      ),
+      selectedPath: await realpath(params.path).catch(() => undefined)
     })
   }),
   // Use a new ssh.target-management.v1 method: old repo.add would strip the target and register the path locally.

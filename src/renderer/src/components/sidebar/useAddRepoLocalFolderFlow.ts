@@ -15,12 +15,12 @@ import type { ShowNestedRepoReviewArgs } from './useAddRepoNestedReviewState'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
 import { showSkippedBatchFoldersToast } from './add-repo-skipped-folders-toast'
+import type { CompleteGitRepoAdd } from './use-complete-git-repo-add'
 
 type LocalPathAddResult =
-  | { status: 'completed'; repo: Repo }
+  | { status: 'completed'; repo: Repo; selectedPath: string }
   | { status: 'cancelled' | 'paused' | 'skipped' }
 
 type LocalPathAddMode = 'single' | 'batch'
@@ -53,11 +53,7 @@ export function useAddRepoLocalFolderFlow({
   setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
   showNestedRepoReview: (args: ShowNestedRepoReviewArgs) => void
-  onGitRepoReady: (
-    repoId: string,
-    source: AddRepoExistingWorkspaceSource,
-    executionHostId?: ExecutionHostId
-  ) => Promise<void>
+  onGitRepoReady: CompleteGitRepoAdd
   setIsAdding: (isAdding: boolean) => void
   setAddProjectBusyLabel: (label: string | null) => void
   /** True when it held this single local path to offer running its WSL distro as a host. */
@@ -163,7 +159,11 @@ export function useAddRepoLocalFolderFlow({
           return { status: 'paused' }
         }
         setAddProjectBusyLabel(addRepoBusyLabels.openingProject())
+        let selectedPath = path
         const repo = await addRepoPath(path, undefined, {
+          onResolvedSelectedPath: (resolved) => {
+            selectedPath = resolved
+          },
           runtimeEnvironmentId: activeRuntimeEnvironmentId ?? null
         })
         if (gen !== localAddGenRef.current) {
@@ -180,14 +180,16 @@ export function useAddRepoLocalFolderFlow({
             return { status: 'cancelled' }
           }
           if (mode === 'batch') {
-            return { status: 'completed', repo }
+            return { status: 'completed', repo, selectedPath }
           }
-          await onGitRepoReady(repo.id, source, ownerOptions.executionHostId)
+          await onGitRepoReady(repo.id, source, ownerOptions.executionHostId, {
+            selectedPath
+          })
         } else {
           // Folder projects activate their synthetic root through the add flow instead of Git checkout completion.
           closeModal()
         }
-        return { status: 'completed', repo }
+        return { status: 'completed', repo, selectedPath }
       } finally {
         if (gen === localAddGenRef.current) {
           clearNestedScanState()
@@ -233,7 +235,7 @@ export function useAddRepoLocalFolderFlow({
 
   const handleAddLocalPaths = useCallback(
     async (paths: string[], source: AddRepoExistingWorkspaceSource, gen: number): Promise<void> => {
-      const gitRepoIds: string[] = []
+      let firstGitRepo: { id: string; selectedPath: string } | undefined
       const shouldDeferGitRepoReady = paths.length > 1
       let skippedCount = 0
       for (const path of paths) {
@@ -250,8 +252,8 @@ export function useAddRepoLocalFolderFlow({
         if (result.status !== 'completed') {
           return
         }
-        if (isGitRepoKind(result.repo)) {
-          gitRepoIds.push(result.repo.id)
+        if (!firstGitRepo && isGitRepoKind(result.repo)) {
+          firstGitRepo = { id: result.repo.id, selectedPath: result.selectedPath }
         }
       }
       if (gen !== localAddGenRef.current) {
@@ -260,11 +262,12 @@ export function useAddRepoLocalFolderFlow({
       if (skippedCount > 0) {
         showSkippedBatchFoldersToast()
       }
-      if (shouldDeferGitRepoReady && gitRepoIds.length > 0) {
+      if (shouldDeferGitRepoReady && firstGitRepo) {
         await onGitRepoReady(
-          gitRepoIds[0],
+          firstGitRepo.id,
           source,
-          worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null).executionHostId
+          worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null).executionHostId,
+          { selectedPath: firstGitRepo.selectedPath }
         )
       }
     },

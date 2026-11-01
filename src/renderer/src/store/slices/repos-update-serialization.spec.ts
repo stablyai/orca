@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
+import { mergeExternalWorktreeInboxPaths } from '../../../../shared/external-worktree-inbox'
 
 export function registerReposUpdateSerializationTests(): void {
   const localRepo: Repo = {
@@ -43,6 +44,46 @@ export function registerReposUpdateSerializationTests(): void {
   })
 
   describe('repo update serialization', () => {
+    it('merges overlapping imports from the latest row on the captured host', async () => {
+      const firstWrite = deferred<void>()
+      reposUpdate.mockImplementationOnce(() => firstWrite.promise)
+      reposUpdate.mockResolvedValueOnce(undefined)
+      const sshRepo: Repo = {
+        ...localRepo,
+        executionHostId: 'ssh:box',
+        importedExternalWorktreePaths: ['/existing']
+      }
+      const store = createTestStore()
+      store.setState({ repos: [localRepo, sshRepo] })
+      const importPath = (path: string) =>
+        store.getState().updateRepo(
+          localRepo.id,
+          (latestRepo) => ({
+            importedExternalWorktreePaths: mergeExternalWorktreeInboxPaths(
+              latestRepo.importedExternalWorktreePaths,
+              [path]
+            )
+          }),
+          { hostId: 'ssh:box' }
+        )
+
+      const first = importPath('/feature-a')
+      const second = importPath('/feature-b')
+      expect(reposUpdate).toHaveBeenCalledTimes(1)
+      firstWrite.resolve()
+      await Promise.all([first, second])
+
+      expect(reposUpdate).toHaveBeenNthCalledWith(2, {
+        repoId: localRepo.id,
+        hostId: 'ssh:box',
+        updates: { importedExternalWorktreePaths: ['/existing', '/feature-a', '/feature-b'] }
+      })
+      expect(store.getState().repos).toEqual([
+        localRepo,
+        { ...sshRepo, importedExternalWorktreePaths: ['/existing', '/feature-a', '/feature-b'] }
+      ])
+    })
+
     it('serializes local repo updates for the same repo before applying state', async () => {
       const firstUpdate = deferred<void>()
       const secondUpdate = deferred<void>()
