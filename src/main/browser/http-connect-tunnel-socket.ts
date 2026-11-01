@@ -73,6 +73,11 @@ function encodeConnectRequest(proxy: URL, target: BrowserNetworkTunnelOpen): str
   const lines = [`CONNECT ${authority} HTTP/1.1`, `Host: ${authority}`]
   const { credentials } = separateElectronProxyCredentials(proxy.toString())
   if (credentials) {
+    if (proxy.protocol !== 'https:') {
+      // Basic auth is only Base64-encoded, not encrypted; sending it over a plaintext
+      // CONNECT to the proxy would expose reusable credentials on the wire.
+      throw new Error('http_proxy_insecure_credentials')
+    }
     const basic = Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')
     lines.push(`Proxy-Authorization: Basic ${basic}`)
   }
