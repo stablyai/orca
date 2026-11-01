@@ -31,6 +31,7 @@ import { mapDispatcherError } from './dispatcher-error-response'
 import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
 import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import type { RpcCallerScope } from './rpc-caller-scope'
+import type { RpcMethodPermission } from './rpc-method-permission'
 import { runWithActiveRpcCaller } from './rpc-active-caller'
 import { admitRpcRequest } from './rpc-request-admission-prologue'
 import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './orcad-feature-readiness'
@@ -62,6 +63,11 @@ export class RpcDispatcher {
     this.registry = buildRegistry(withoutMethodsThisHostDoesNotServe(methods))
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
+  }
+
+  /** For transports that act on a call before dispatch, such as relaying it to another server. */
+  methodPermission(methodName: string): RpcMethodPermission | undefined {
+    return this.registry.get(methodName)?.permission
   }
 
   async dispatch(request: RpcRequest, options?: RpcDispatchStreamingOptions): Promise<RpcResponse> {
