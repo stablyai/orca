@@ -8,6 +8,7 @@ import {
 import { getTerminalPaneSearchEntries } from '@/components/settings/terminal-search'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
+import { usePlaneProviderConnected } from '@/hooks/usePlaneProviderConnected'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -49,6 +50,7 @@ export function buildSettingsNavigationMetadata({
   mobileEmulatorCreationEnabled = !isWebClient,
   isDev = import.meta.env.DEV,
   isLinearConnected = false,
+  isPlaneConnected = false,
   repos,
   projectGrouping
 }: {
@@ -63,6 +65,7 @@ export function buildSettingsNavigationMetadata({
   mobileEmulatorCreationEnabled?: boolean
   isDev?: boolean
   isLinearConnected?: boolean
+  isPlaneConnected?: boolean
   repos: readonly Repo[]
   projectGrouping?: ProjectGroupingModel
 }): SettingsNavSection[] {
@@ -92,6 +95,7 @@ export function buildSettingsNavigationMetadata({
     mobileEmulatorCreationEnabled,
     isDev,
     isLinearConnected,
+    isPlaneConnected,
     repos,
     projectGrouping
   }
@@ -127,6 +131,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
   const isLinearConnected = useLinearProviderConnected()
+  const isPlaneConnected = usePlaneProviderConnected()
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
@@ -169,6 +174,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         mobileEmulatorCreationEnabled,
         isDev: import.meta.env.DEV,
         isLinearConnected,
+        isPlaneConnected,
         repos,
         projectGrouping: {
           projects: projectHostSetupProjection.projects,
@@ -187,6 +193,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       isLinearConnected,
+      isPlaneConnected,
       repos,
       projectHostSetupProjection,
       languageRevision

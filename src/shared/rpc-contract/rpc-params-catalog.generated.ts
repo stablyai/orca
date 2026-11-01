@@ -496,6 +496,18 @@ import {
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
 import {
+  AddCommentSchema,
+  ConnectSchema,
+  CreateIssueSchema,
+  GetIssueSchema,
+  ListIssuesSchema,
+  ListStatesSchema,
+  SelectWorkspaceSchema,
+  SetPrioritySchema,
+  SetStateSchema,
+  WorkspaceSelection as WorkspaceSelectionOfPlaneParams
+} from './plane-params'
+import {
   PluginDevLoadParams,
   PluginDevUnloadParams,
   PluginGetLogsParams,
@@ -1306,6 +1318,19 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
+  'plane.connect': ConnectSchema,
+  'plane.createIssue': CreateIssueSchema,
+  'plane.disconnect': null,
+  'plane.getIssue': GetIssueSchema,
+  'plane.issueAddComment': AddCommentSchema,
+  'plane.issueSetPriority': SetPrioritySchema,
+  'plane.issueSetState': SetStateSchema,
+  'plane.listIssues': ListIssuesSchema,
+  'plane.listProjects': WorkspaceSelectionOfPlaneParams,
+  'plane.listStates': ListStatesSchema,
+  'plane.selectWorkspace': SelectWorkspaceSchema,
+  'plane.status': null,
+  'plane.testConnection': null,
   'plugins.consent': PluginRpcConsentParams,
   'plugins.devLoad': PluginDevLoadParams,
   'plugins.devUnload': PluginDevUnloadParams,

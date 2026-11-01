@@ -11,7 +11,8 @@ import { isWebClientLocation } from '@/hooks/useSettingsNavigationMetadata'
 import {
   COMPUTER_USE_SKILL_NAME,
   LINEAR_AGENT_SKILL_NAMES,
-  ORCHESTRATION_SKILL_NAME
+  ORCHESTRATION_SKILL_NAME,
+  PLANE_AGENT_SKILL_NAMES
 } from '@/lib/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -20,6 +21,7 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
+import { usePlaneProviderConnected } from '@/hooks/usePlaneProviderConnected'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { getFallbackTerminalFonts, mergeFontSuggestions } from './SettingsConstants'
 import { useGhosttyImport } from './useGhosttyImport'
@@ -113,6 +115,7 @@ export function useSettingsStoreModel() {
   const showDesktopOnlySettings = !isWebClient
   // Match navigation’s gate so the Linear entry and pane appear together.
   const linearConnected = useLinearProviderConnected()
+  const planeConnected = usePlaneProviderConnected()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
@@ -120,6 +123,11 @@ export function useSettingsStoreModel() {
   })
   const linearSkill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     enabled: linearConnected,
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
+  const planeSkill = useInstalledAgentSkillNames(PLANE_AGENT_SKILL_NAMES, {
+    enabled: planeConnected,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
@@ -226,8 +234,10 @@ export function useSettingsStoreModel() {
     isWebClient,
     showDesktopOnlySettings,
     linearConnected,
+    planeConnected,
     orchestrationSkill,
     linearSkill,
+    planeSkill,
     computerUseSkill,
     skillFreshnessApplies,
     skillPlan,

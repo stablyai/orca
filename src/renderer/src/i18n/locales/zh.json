@@ -852,7 +852,9 @@
         "jira": {
           "856083302c": "Jira 连接已被新的请求取代。"
         },
-        "linear": {},
+        "linear": {
+          "37d36984d0": "Linear 连接已被新的请求取代。"
+        },
         "orca": {
           "profiles": {
             "612f7f6861": "创建配置文件失败",
@@ -1408,6 +1410,27 @@
         "title": "在此计算机上添加 Windows 驱动器上的文件夹",
         "descriptionWithPath": "{{value0}} 位于 Windows 驱动器上。在该位置，WSL 中的 Git 会误报行尾更改、无法察觉从 Windows 中进行的编辑，而且搜索速度很慢。",
         "description": "此文件夹位于 Windows 驱动器上。在该位置，WSL 中的 Git 会误报行尾更改、无法察觉从 Windows 中进行的编辑，而且搜索速度很慢。"
+      },
+      "plane": {
+        "usage": {
+          "examples": {
+            "readTicket": "读取关联议题",
+            "readTicketSummary": "开始工作前提取关联 Plane 议题的完整上下文。",
+            "readTicketPrompt": "使用 {{value0}} 读取此工作区关联的 Plane 议题，并在开始前总结目标和验收标准。",
+            "postUpdate": "发布进度更新",
+            "postUpdateSummary": "将进度或完成总结评论回 Plane 议题。",
+            "postUpdatePrompt": "使用 {{value0}} 在关联的 Plane 议题上发布完成更新，说明变更内容及验证方式。",
+            "moveState": "推进议题状态",
+            "moveStateSummary": "随着工作推进，更新 Plane 工作流状态。",
+            "moveStatePrompt": "现在变更已在进行中，使用 {{value0}} 将关联的 Plane 议题移动到 In Progress 或 In Review。",
+            "triagePriority": "分类并设置优先级",
+            "triagePrioritySummary": "在明确范围后，更新 Plane 议题的优先级或状态。",
+            "triagePriorityPrompt": "使用 {{value0}} 分类关联的 Plane 议题 — 将其优先级更新为 urgent/high/medium/low 并调整状态。",
+            "createFollowup": "创建跟进议题",
+            "createFollowupSummary": "为开发过程中发现的延后工作或相关缺陷提交新的 Plane 议题。",
+            "createFollowupPrompt": "使用 {{value0}} 为延后的跟进工作创建新的 Plane 议题。"
+          }
+        }
       }
     },
     "hooks": {
@@ -1538,7 +1561,9 @@
         "automationsDescription": "安排智能体工作并选择自动化是否显示在侧栏中。",
         "shareSkillsTitle": "分享技能",
         "shareSkillsDescription": "通过未列出的链接分享您的技能。任何拥有它的人都可以安装它们。",
-        "floatingWorkspaceWebDescription": "全局终端和 Markdown 选项卡。"
+        "floatingWorkspaceWebDescription": "全局终端和 Markdown 选项卡。",
+        "planeTitle": "Plane",
+        "planeDescription": "Plane 在 Orca 中的工作方式、设置清单、智能体技能和示例提示词。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -5570,7 +5595,8 @@
           "fee535205b": "任务",
           "d599269755": "从侧边栏隐藏",
           "artifacts": "工件",
-          "skills": "技能"
+          "skills": "技能",
+          "openPlaneTasks": "打开 Plane 任务"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "清除",
@@ -6526,7 +6552,8 @@
           "refresh": "刷新",
           "wsl1Reason": "WSL 1 无法运行 Orca 主机；请使用 {{command}} 转换",
           "noWsl2Title": "未找到 WSL 2 发行版",
-          "noWsl2Install": "在 Windows 终端中使用 {{command}} 安装一个，然后选择“刷新”。"
+          "noWsl2Install": "在 Windows 终端中使用 {{command}} 安装一个，然后选择“刷新”。",
+          "none": "未找到 WSL 发行版。使用以下命令安装：wsl --install"
         },
         "wslHostRowStatus": {
           "connecting": "正在启动",
@@ -7277,7 +7304,11 @@
             "shellEnvToggleLabel": "切换使用 shell 环境",
             "resumeTitle": "重启后自动恢复工作聊天",
             "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 后，正在工作的聊天会自动恢复。",
-            "resumeToggleLabel": "重启后切换自动恢复"
+            "resumeToggleLabel": "重启后切换自动恢复",
+            "title": "Chat UI",
+            "toggleLabel": "切换 Chat UI",
+            "description": "在聊天 UI 中打开支持的新智能体。",
+            "copy": "支持的新智能体会在结构化聊天中打开。其他智能体在终端中打开；现有聊天仍可使用。"
           },
           "agentDashboard": {
             "title": "智能体仪表盘",
@@ -7730,7 +7761,20 @@
           "workerAutoReleaseTitle": "自动关闭已完成的工作者",
           "workerAutoReleaseDescription": "除非选择“保持打开”，否则工作者完成后 2 分钟会关闭其终端或聊天。如果它再次开始工作，完成后将重新计时 2 分钟。",
           "workerAutoReleaseKeywordClose": "关闭",
-          "workerAutoReleaseKeywordRelease": "释放"
+          "workerAutoReleaseKeywordRelease": "释放",
+          "chatErrorEscalationTitle": "将聊天错误告知协调者",
+          "chatErrorEscalationDescription": "当被分派的智能体遇到结束其回合的错误时，将原始错误发送给分派它的协调者。任务仍分配给该智能体。仅适用于在聊天界面中运行的智能体。",
+          "chatErrorEscalationNeedsChat": "请在实验性设置中开启聊天界面后使用。",
+          "chatErrorEscalationKeywordError": "错误",
+          "chatErrorEscalationKeywordChat": "聊天",
+          "heartbeatTitle": "工作者心跳",
+          "heartbeatDescription": "已分派的工作者每隔几分钟报告一次，让协调者能区分正在工作的智能体和卡住的智能体。关闭后发给协调者的消息会减少，但协调者也不再收到这一报告信号。仅对更改后分派的工作者生效。",
+          "heartbeatKeywordHeartbeat": "心跳",
+          "heartbeatKeywordStalled": "卡住",
+          "heartbeatKeywordInterval": "间隔",
+          "heartbeatIntervalTitle": "心跳间隔",
+          "heartbeatIntervalDescription": "间隔越短，协调者收到报告越频繁，但消息也越多。间隔越长，消息越少，但两次报告之间的空档也越长。仅对更改后分派的工作者生效。",
+          "heartbeatIntervalSuffix": "分钟"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "使智能体能够通过 Orca 传递上下文并协调工作。",
@@ -8221,7 +8265,9 @@
           "linearDescription": "Linear 在 Orca 中的工作方式、设置清单、智能体技能和提示词示例。",
           "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。",
           "remoteServersDescription": "在另一台机器上运行 Orca，并在这里使用它。",
-          "noSettingsFoundForQuery": "找不到“{{value0}}”的设置"
+          "noSettingsFoundForQuery": "找不到“{{value0}}”的设置",
+          "planeTitle": "Plane",
+          "planeDescription": "Plane 在 Orca 中的工作方式、设置清单、智能体技能和示例提示词。"
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -8464,7 +8510,9 @@
           "integrationsHint": "所有提供商的凭据也可在此管理：",
           "integrationsLink": "集成",
           "skillHint": "。连接 Linear 后，可在设置 → Linear 中查看使用示例。",
-          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。"
+          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。",
+          "plane": "Plane",
+          "planeDescription": "连接 Plane Cloud 或自托管 Plane 并在任务中显示。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "窗格分隔线的粗细。",
@@ -8707,7 +8755,8 @@
           "color_overrides_dark_description": "覆盖深色终端主题的各个颜色。",
           "color_overrides_light_description": "覆盖浅色终端主题的各个颜色。",
           "reset_dark_color_overrides": "重置深色主题颜色覆盖",
-          "reset_light_color_overrides": "重置浅色主题颜色覆盖"
+          "reset_light_color_overrides": "重置浅色主题颜色覆盖",
+          "03c855d15f": "重置所有颜色覆盖"
         },
         "UIZoomControl": {
           "c2c64b24d0": "重置"
@@ -9452,6 +9501,19 @@
               "extension": "扩展程序",
               "chrome": "chrome",
               "password": "密码管理器"
+            },
+            "nativeChat": {
+              "title": "Chat UI",
+              "grok": "grok",
+              "native": "原生",
+              "chat": "聊天",
+              "claude": "claude",
+              "codex": "codex",
+              "openclaude": "开放克劳德",
+              "omp": "奥普",
+              "terminal": "终端",
+              "agent": "智能体",
+              "description": "在聊天 UI 中打开支持的新智能体。"
             }
           }
         },
@@ -9759,7 +9821,10 @@
             "7166b9090c": "通过 gh CLI 进行 GitHub 身份验证。",
             "f16e41cc72": "GitHub 集成",
             "760e2446e0": "使用保存的 API 令牌或环境变量进行 Bitbucket Cloud 身份验证。",
-            "af5ae87847": "访问令牌"
+            "af5ae87847": "访问令牌",
+            "plane_title": "Plane 集成",
+            "plane_description": "连接 Plane Cloud 或自托管实例以浏览和关联议题。",
+            "plane_keyword": "Plane"
           }
         },
         "jira": {
@@ -10251,7 +10316,8 @@
             "setup": "设置",
             "apiKey": "API 密钥",
             "skill": "技能",
-            "connect": "连接"
+            "connect": "连接",
+            "plane": "Plane"
           }
         },
         "terminal": {
@@ -10749,7 +10815,9 @@
                 "connectedSiteSingular": "已连接 {{count}} 个站点",
                 "connectedSitePlural": "已连接 {{count}} 个站点",
                 "connectedWorkspaceSingular": "已连接 {{count}} 个工作区",
-                "connectedWorkspacePlural": "已连接 {{count}} 个工作区"
+                "connectedWorkspacePlural": "已连接 {{count}} 个工作区",
+                "checkingPlane": "在显示设置操作前检查 Plane 访问权限。",
+                "addPlaneAccess": "使用 API Token 连接 Plane Cloud 或自托管实例。"
               }
             }
           }
@@ -11324,7 +11392,8 @@
           "resolvedTag": "将安装 {{value0}}（提交 {{value1}}）。",
           "resolvedBranch": "将安装分支 {{value0}} 的当前状态（提交 {{value1}}）。",
           "resolvedCommit": "将安装提交 {{value0}}。",
-          "resolvedDefaultBranch": "未找到版本标签，因此将安装最新提交 {{value0}}。"
+          "resolvedDefaultBranch": "未找到版本标签，因此将安装最新提交 {{value0}}。",
+          "gitRefRequired": "添加 #tag 或 #commit，例如 #v0.1.0。"
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "仅在工作区中"
@@ -11439,7 +11508,8 @@
           "useForDark": "用于深色：",
           "assignedLight": "已将 {{value0}} 设为浅色主题",
           "assignedDark": "已将 {{value0}} 设为深色主题",
-          "saveFailed": "无法保存主题。请重试。"
+          "saveFailed": "无法保存主题。请重试。",
+          "useName": "立即使用：{{value0}}"
         },
         "PluginContributionActionCommand": {
           "run": "运行",
@@ -12604,7 +12674,8 @@
           "hashCopied": "已复制内容哈希",
           "hashCopyFailed": "无法复制哈希。",
           "readme": "在 {{value0}} 上阅读 README",
-          "installs": "安装次数"
+          "installs": "安装次数",
+          "homepage": "主页"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "没有与这些筛选条件匹配的插件",
@@ -12740,6 +12811,72 @@
         },
         "PluginContributionActionNewFile": {
           "create": "创建"
+        },
+        "PlaneAgentSkillPane": {
+          "title": "Plane",
+          "description": "在 Orca 中浏览 Plane 议题、启动关联工作区，并让智能体通过 /orca-plane 更新议题。",
+          "skillTitle": "Plane 技能",
+          "howToUse": "提示词示例",
+          "howToUseDescription": "点击卡片即可复制提示词。安装技能后，请在关联 Plane 的工作区中使用。",
+          "manageConnectionHint": "可在此查看已连接的 Plane 工作区和 API 密钥：",
+          "manageConnectionLink": "集成"
+        },
+        "PlaneAgentSkillGuide": {
+          "setupConnectTitle": "1. 连接 Plane",
+          "setupConnectBody": "用于让 Orca 列出议题并打开关联工作区的个人 API 密钥。",
+          "manageKeys": "管理密钥",
+          "addAccess": "添加访问权限",
+          "setupSkillTitle": "2. 安装智能体技能",
+          "setupSkillBody": "让智能体使用 /orca-plane 读取、更新、分类议题并附加拉取或合并请求。",
+          "setupVisibleTitle": "3. 在任务中显示 Plane",
+          "setupVisibleBody": "在任务来源选择器和侧边栏快捷方式中保留 Plane。",
+          "openTaskSources": "任务来源",
+          "setupTitle": "设置清单",
+          "setupBody": "完整的任务与智能体流程需要完成全部三个步骤。首次设置也可在任务来源中进行。",
+          "setupReady": "全部就绪",
+          "setupProgress": "已完成 {{done}}/{{total}}",
+          "notesTitle": "使用须知",
+          "notesIntro": "连接 Plane 并安装技能后的一些快速提示。",
+          "noteLinkedTitle": "从 Plane 议题开始",
+          "noteLinkedBody": "从任务创建的工作区会将议题保留为关联上下文，因此议题操作最顺畅。",
+          "noteSlashTitle": "提及 /orca-plane",
+          "noteSlashBody": "在聊天中使用 /orca-plane（或用自然语言提出请求），智能体会在该轮加载此技能。",
+          "noteInstanceTitle": "Cloud 与自托管",
+          "noteInstanceBody": "同时支持 Plane Cloud (app.plane.so) 和自定义自托管 Plane 实例。",
+          "noteVisibilityTitle": "隐藏不等于断开连接",
+          "noteVisibilityBody": "在任务来源中隐藏 Plane 只会将其从选择器中移除，不会删除密钥或技能。",
+          "setupChecking": "检查…"
+        },
+        "TaskSourcePlaneSetup": {
+          "connectTitle": "连接 Plane",
+          "connectDescription": "添加个人 API 密钥，让 Orca 能够浏览议题并使用议题上下文打开工作区。",
+          "manageAccess": "管理密钥",
+          "addAccess": "添加 Plane 访问权限",
+          "connectedHint": "工作区和密钥存储在当前运行环境中。你可以随时添加更多访问权限。",
+          "recheck": "重新检查连接",
+          "skillTitle": "安装 Plane 智能体技能",
+          "skillDescription": "让智能体使用 /orca-plane 读取议题、发布更新、更改状态并附加拉取或合并请求。",
+          "skillBlocked": "请先连接 Plane，然后为智能体安装技能。",
+          "skillPanelTitle": "Plane 技能",
+          "showDescription": "在任务来源选择器和侧边栏快捷方式中显示 Plane。"
+        },
+        "plane": {
+          "agent": {
+            "skill": {
+              "search": {
+                "title": "Plane",
+                "description": "Plane 技能状态、使用示例和任务来源设置链接。",
+                "plane": "Plane",
+                "tickets": "门票",
+                "issues": "议题",
+                "skill": "技能",
+                "orcaPlane": "orca-plane"
+              }
+            }
+          },
+          "cloud": "Plane Cloud",
+          "connectionFailed": "连接失败",
+          "cardFooter": "直接从 Plane Cloud 或你的自托管实例浏览议题并使用议题上下文打开工作区。"
         }
       },
       "right": {
@@ -14644,7 +14781,24 @@
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "台式机",
             "af761a0c0d": "设置",
-            "5d94e8ddcc": "Orca"
+            "5d94e8ddcc": "Orca",
+            "a7d9e2c44d": "7天",
+            "a3d5476811": "5小时",
+            "8a350a4784": "账户使用情况",
+            "e27fdaee51": "新工作区",
+            "4405f3c440": "配对桌面",
+            "0b00c98506": "快捷操作",
+            "0bad5b07c8": "GitHub 和 Linear",
+            "d047197480": "GitHub · Linear",
+            "d33d7a9c29": "Orca / mobile页面",
+            "25d6e8a491": "mobile页面",
+            "c791677f2f": "恢复",
+            "091355da3d": "M1迷你·家",
+            "0bc1881bc4": "已连接 · 40 个工作树 · 5 个活动树",
+            "156db8a68a": "已创建 PR",
+            "4a40af029b": "智能体时间",
+            "00a6903322": "已启动智能体",
+            "c0e2e9dcd9": "欢迎回来"
           },
           "TerminalSlide": {
             "0bb39f8fe6": "发送",
@@ -15500,7 +15654,9 @@
           "d9d2944855": "无法加载文件预览",
           "fitToView": "适应视图",
           "actualSize": "实际大小",
-          "expand": "放大图片"
+          "expand": "放大图片",
+          "6c89c73d9f": "重置变焦",
+          "77bfc9b35a": "在弹出窗口中打开图像"
         },
         "IpynbViewer": {
           "859bf9fc21": "运行单元格",
@@ -16176,6 +16332,11 @@
           "tooLarge": "{{value0}} 过大，无法在 {{value1}} 中打开（{{value2}}；上限为 {{value3}}）。",
           "unsupported": "{{value0}} 无法从此文件的存储位置读取它。请更新托管该文件的 Orca 服务器，或切换到源代码。",
           "readFailed": "无法为 {{value1}} 读取 {{value0}}。{{value2}}"
+        },
+        "ImageViewerPopup": {
+          "0ef78475e7": "按 Esc 关闭",
+          "535f4e2b56": "关闭",
+          "9e27b2ecaf": "全尺寸图像预览"
         }
       },
       "diff": {
@@ -17580,6 +17741,20 @@
                 }
               }
             }
+          },
+          "plane": {
+            "connectTitle": "连接你的 Plane 工作区",
+            "connectDescription": "在隔离的工作区中直接浏览、跟踪 Plane 议题并开始工作。",
+            "connectButton": "连接 Plane",
+            "selectWorkspace": "选择工作区",
+            "allProjects": "所有项目",
+            "refreshIssues": "刷新议题",
+            "openInPlane": "在 Plane 中打开",
+            "noIssuesFound": "未找到议题",
+            "createIssueHint": "在 Plane 中创建议题后将显示在此处。",
+            "backlog": "待办列表",
+            "openInWorktree": "在工作区中打开",
+            "viewInPlane": "在 Plane 中查看"
           }
         }
       },
@@ -18241,6 +18416,23 @@
           "add": "添加目录",
           "body": "有链接请求显示此目录中的 {{value0}}。请只添加你信任的人的目录。"
         }
+      },
+      "plane": {
+        "connect": {
+          "dialog": {
+            "title": "连接 Plane",
+            "description": "连接你的 Plane 工作区，以浏览议题并使用议题上下文打开工作区。",
+            "deploymentType": "部署类型",
+            "planeCloud": "Plane Cloud",
+            "selfHosted": "自托管",
+            "instanceUrl": "实例 URL",
+            "instanceUrlPlaceholder": "https://plane.yourcompany.com",
+            "personalApiToken": "个人 API Token",
+            "createApiToken": "创建 API Token",
+            "apiTokenPlaceholder": "plane_api_...",
+            "connecting": "正在连接..."
+          }
+        }
       }
     },
     "i18n": {
@@ -18783,7 +18975,9 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "请更新此主机上的 Orca 以在聊天界面中继续。",
-        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。"
+        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。",
+        "exitUnconfirmed": "{{agent}} 正在另一个终端中运行此对话。请在那里退出或关闭该终端，然后重试。",
+        "exitUnconfirmedFromTerminal": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后从会话历史记录中打开此对话。"
       },
       "state": {
         "loading": {
@@ -19065,7 +19259,8 @@
         "collapse": "收起",
         "expand": "展开",
         "queued": "已排队",
-        "clearAll": "全部清除"
+        "clearAll": "全部清除",
+        "turnOffQueueing": "关闭排队"
       },
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",
@@ -19700,7 +19895,10 @@
         "queueSearchSteer": "立即发送",
         "shellEnvSearchVariables": "环境变量",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "代理"
+        "shellEnvSearchProxy": "代理",
+        "queueFollowUpsTitle": "将后续消息加入队列",
+        "queueFollowUpsCopy": "智能体工作时发送的消息会以卡片形式等待，你可以立即发送、编辑或删除。带图片的消息会立即发送。",
+        "queueFollowUpsToggleLabel": "切换后续消息队列"
       }
     },
     "agentChildRow": {
@@ -20217,7 +20415,8 @@
       "quitDuringMoveConfirm": "仍要退出"
     },
     "startupWorktreeRefresh": {
-      "loading": "正在发现工作区…"
+      "loading": "正在发现工作区…",
+      "description": "本地和远程项目加载期间，可能会显示更多工作区。"
     },
     "createProject": {
       "errors": {
@@ -20426,6 +20625,18 @@
       "demoApp": "应用",
       "demoPassword": "密码",
       "demoCookie": "Cookie"
+    },
+    "nativeChatUpgrade": {
+      "eyebrow": "新功能",
+      "title": "本机聊天已升级",
+      "intro": "受支持智能体的新聊天现在会在升级后的聊天视图中打开。要在聊天和 CLI 之间切换，请打开右侧边栏中的{{panel}}：",
+      "resumeInNativeChat": "{{action}}：在本机聊天中打开受支持的 CLI 对话。",
+      "resumeInCli": "{{action}}：将 Claude 或 Codex 聊天复制到新的 CLI 会话中。原始聊天保持不变。",
+      "gotIt": "知道了",
+      "leaveOff": "保持关闭",
+      "enableNow": "立即启用",
+      "enableError": "无法启用聊天模式。",
+      "manageInSettings": "在<link>设置 → 实验性</link>中管理 Chat UI。"
     }
   },
   "quickOpen": {
@@ -20860,7 +21071,9 @@
   },
   "common": {
     "retry": "重试",
-    "cancel": "取消"
+    "cancel": "取消",
+    "connect": "连接",
+    "disconnect": "断开连接"
   },
   "fileExplorer": {
     "root": {
@@ -21704,7 +21917,11 @@
       "endHint": "结束此终端及其子进程。",
       "claimed": "智能体现在拥有此终端。请刷新后重试。",
       "attached": "客户端现在已连接到此终端。请刷新后重试。",
-      "unverifiableEnd": "无法验证：主机无法确认结果。终端可能仍在运行。"
+      "unverifiableEnd": "无法验证：主机无法确认结果。终端可能仍在运行。",
+      "endTitle": "结束 {{terminal}}？",
+      "endDescription": "这会结束终端及其子进程。未保存的工作可能会丢失。",
+      "cancel": "取消",
+      "end": "结束终端"
     },
     "resources": "资源",
     "ptys": "PTY",
@@ -22173,7 +22390,12 @@
         "viewIssues_other": "仅显示视图中的前 {{count}} 个议题。请搜索或打开 Linear 查看完整列表。",
         "views_one": "仅显示前 {{count}} 个视图。请搜索或打开 Linear 查看完整列表。",
         "views_other": "仅显示前 {{count}} 个视图。请搜索或打开 Linear 查看完整列表。"
-      }
+      },
+      "projectsLoadFailed": "无法加载项目。",
+      "projectLoadFailed": "无法加载项目。",
+      "projectIssuesLoadFailed": "无法加载项目 issue。",
+      "viewsLoadFailed": "无法加载视图。",
+      "viewContentsLoadFailed": "无法加载视图内容。"
     },
     "jira": {
       "connectionFailed": "连接失败",

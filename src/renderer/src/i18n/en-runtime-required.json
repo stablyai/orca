@@ -259,6 +259,15 @@
           "rowCount_one": "{{formatted}} row",
           "rowCount_other": "{{formatted}} rows"
         },
+        "ImageViewer": {
+          "6c89c73d9f": "Reset zoom",
+          "77bfc9b35a": "Open image in popup"
+        },
+        "ImageViewerPopup": {
+          "0ef78475e7": "Press Esc to close",
+          "535f4e2b56": "Close",
+          "9e27b2ecaf": "Full-size image preview"
+        },
         "IpynbViewer": {
           "cellCount_one": "{{count}} cell",
           "cellCount_other": "{{count}} cells"
@@ -340,6 +349,29 @@
           "selector": {
             "teamCount_one": "{{count}} team",
             "teamCount_other": "{{count}} teams"
+          }
+        }
+      },
+      "mobile": {
+        "slides": {
+          "HomeSlide": {
+            "00a6903322": "Agents spawned",
+            "091355da3d": "M1 Mini · home",
+            "0b00c98506": "Quick Actions",
+            "0bad5b07c8": "GitHub and Linear",
+            "0bc1881bc4": "Connected · 40 worktrees · 5 active",
+            "156db8a68a": "PRs created",
+            "25d6e8a491": "feat/mobile-page",
+            "4405f3c440": "Pair Desktop",
+            "4a40af029b": "Agent time",
+            "8a350a4784": "Account usage",
+            "a3d5476811": "5h",
+            "a7d9e2c44d": "7d",
+            "c0e2e9dcd9": "Welcome back",
+            "c791677f2f": "Resume",
+            "d047197480": "GitHub · Linear",
+            "d33d7a9c29": "orca  ·  feat/mobile-page",
+            "e27fdaee51": "New Workspace"
           }
         }
       },
@@ -631,11 +663,32 @@
           "4d03dec2d0": "Read app interface trees and perform requested actions.",
           "6b5a2cd3a5": "Accessibility"
         },
+        "ExperimentalPane": {
+          "nativeChat": {
+            "copy": "Supported new agents open in structured chat. Other agents open in the terminal; existing chats stay available.",
+            "description": "Open supported new agents in Chat UI.",
+            "title": "Chat UI",
+            "toggleLabel": "Toggle Chat UI"
+          }
+        },
         "McpConfigSection": {
           "detectedServers_one": "{{detected}} detected · {{count}} server",
           "detectedServers_other": "{{detected}} detected · {{count}} servers"
         },
         "OrchestrationPane": {
+          "chatErrorEscalationDescription": "When a dispatched agent hits an error that ends its turn, send the exact error to the coordinator that dispatched it. The task stays assigned to the agent. Only works for agents running in Chat UI.",
+          "chatErrorEscalationKeywordChat": "chat",
+          "chatErrorEscalationKeywordError": "error",
+          "chatErrorEscalationNeedsChat": "Turn on Chat UI in Experimental settings to use it.",
+          "chatErrorEscalationTitle": "Tell the coordinator about chat errors",
+          "heartbeatDescription": "Dispatched workers check in every few minutes so the coordinator can tell a working agent from a hung one. Turning this off means fewer messages to the coordinator, but it loses that check-in signal. Applies to workers dispatched after the change.",
+          "heartbeatIntervalDescription": "Shorter intervals give the coordinator more frequent check-ins but send it more messages. Longer intervals send fewer messages but leave longer gaps between check-ins. Applies to workers dispatched after the change.",
+          "heartbeatIntervalSuffix": "minutes",
+          "heartbeatIntervalTitle": "Heartbeat interval",
+          "heartbeatKeywordHeartbeat": "heartbeat",
+          "heartbeatKeywordInterval": "interval",
+          "heartbeatKeywordStalled": "stalled",
+          "heartbeatTitle": "Worker heartbeats",
           "workerAutoReleaseKeywordClose": "close",
           "workerAutoReleaseKeywordRelease": "release"
         },
@@ -643,8 +696,18 @@
           "fullCoverage_one": "All 1 detected agent has the skill.",
           "fullCoverage_other": "All {{value0}} detected agents have the skill."
         },
+        "PlaneAgentSkillPane": {
+          "terminalAriaLabel": "Plane skill install terminal",
+          "terminalTitle": "Plane skill setup"
+        },
+        "PluginDetailInfo": {
+          "homepage": "Homepage"
+        },
         "PluginDevelopmentSection": {
           "title": "Development"
+        },
+        "PluginInstallDialog": {
+          "gitRefRequired": "Add a #tag or #commit, like #v0.1.0."
         },
         "PluginMarketplaceBrowser": {
           "addSource": "Add catalog",
@@ -660,6 +723,9 @@
           "refresh": "Refresh",
           "refreshing": "Refreshing…",
           "tryAgain": "Try again"
+        },
+        "PluginThemeUseNow": {
+          "useName": "Use now: {{value0}}"
         },
         "PluginsSettingsSection": {
           "empty": "Browse the All tab to install plugins from a catalog.",
@@ -695,6 +761,13 @@
         "SshPane": {
           "syncedServerPlural": "Synced {{count}} servers",
           "syncedServerSingular": "Synced {{count}} server"
+        },
+        "TaskSourcePlaneSetup": {
+          "terminalAriaLabel": "Plane skill install terminal",
+          "terminalTitle": "Plane skill setup"
+        },
+        "TerminalWindowSection": {
+          "03c855d15f": "Reset all color overrides"
         },
         "WarpThemeImportModal": {
           "found_theme_one": "Found {{value0}} theme",
@@ -779,6 +852,23 @@
           "permissionsRequired_one": "{{value0}} permission required before agents can operate app windows.",
           "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows."
         },
+        "experimental": {
+          "search": {
+            "nativeChat": {
+              "agent": "agent",
+              "chat": "chat",
+              "claude": "claude",
+              "codex": "codex",
+              "description": "Open supported new agents in Chat UI.",
+              "grok": "grok",
+              "native": "native",
+              "omp": "omp",
+              "openclaude": "openclaude",
+              "terminal": "terminal",
+              "title": "Chat UI"
+            }
+          }
+        },
         "sshHostServer": {
           "automationsLeftDisabled_one": "This host’s Orca server took over {{count}} automation but couldn’t turn it back on. Turn it on in Automations.",
           "automationsLeftDisabled_other": "This host’s Orca server took over {{count}} automations but couldn’t turn them back on. Turn them on in Automations.",
@@ -830,6 +920,10 @@
         "AddRepoNestedImportStep": {
           "foundRepositories_one": "Found {{count}} repository in {{path}}.",
           "foundRepositories_other": "Found {{count}} repositories in {{path}}."
+        },
+        "AddWslHostFormPanel": {
+          "none": "No WSL distros found. Install one with: wsl --install",
+          "wsl1Hint": "WSL 1 distros can’t be hosts. Convert one in a Windows terminal with: wsl --set-version {{value0}} 2"
         },
         "DeleteWorktreeDialog": {
           "removeBatchFolder_one": "Remove <target>{{count}} workspace</target> from Orca. Project folders on disk will not be deleted.",
@@ -1257,6 +1351,13 @@
       "githubCheckDetailsTimeout": {
         "timedOut": "Timed out loading check details."
       }
+    },
+    "store": {
+      "slices": {
+        "linear": {
+          "37d36984d0": "Linear connection was superseded by a newer request."
+        }
+      }
     }
   },
   "automations": {
@@ -1669,7 +1770,8 @@
         "editGone": "This message was already sent or removed. Your edit is in the chat box.",
         "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent.",
         "imageCount_one": "{{count}} image",
-        "imageCount_other": "{{count}} images"
+        "imageCount_other": "{{count}} images",
+        "turnOffQueueing": "Turn off queueing"
       },
       "receipt": {
         "cancelled": "Cancelled",
@@ -1881,26 +1983,6 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment."
-      },
-      "usageLimitActions": {
-        "continueNow": "Continue Now",
-        "leadIn": "Continue this chat without waiting:",
-        "switchAccount": "Switch Account",
-        "addAccount": "Add Account…",
-        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
-      },
-      "resumeInNewChat": {
-        "historyUnavailable": "Orca couldn't read the conversation",
-        "chatHeld": "another chat or terminal is using it",
-        "startFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open: {{reason}}. Your conversation is saved. Open it from Session History.",
-        "notSavedAfterClose": "{{agent}}'s terminal was closed, but {{agent}} hadn't saved this conversation yet, so it can't continue in chat. Start a new chat instead.",
-        "otherTerminalAfterClose": "{{agent}}'s terminal was closed, but {{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History.",
-        "chatFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open. Your conversation is saved. Open it from Session History.",
-        "terminalChanged": "The terminal running {{agent}} changed before it closed, so Orca left it open. Try again.",
-        "terminalExitUnproven": "Orca closed {{agent}}'s terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History.",
-        "resumeFailed": "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again.",
-        "exitUnconfirmedFromTerminal": "{{agent}} is still running this conversation in this terminal. Quit {{agent}} here, then open this conversation from Session History.",
-        "exitUnconfirmed": "{{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then try again."
       }
     },
     "onboarding": {
@@ -1911,6 +1993,13 @@
           "reviewStatus": "See issue state, review status, and CI checks on every worktree",
           "startWorkspaceFromIssue": "Start a workspace from any GitHub issue or pull request, prefilled with its title and context"
         }
+      }
+    },
+    "settings": {
+      "nativeChat": {
+        "queueFollowUpsCopy": "Messages you send while the agent is working wait as cards you can steer, edit, or delete. Messages with images send right away.",
+        "queueFollowUpsTitle": "Queue follow-ups",
+        "queueFollowUpsToggleLabel": "Toggle queue follow-ups"
       }
     },
     "tab": {
@@ -2030,6 +2119,20 @@
       "startRefUnresolved": "Could not resolve provisioned-root start ref: {{ref}}"
     }
   },
+  "featureTips": {
+    "nativeChatUpgrade": {
+      "enableError": "Could not enable chat mode.",
+      "enableNow": "Enable Now",
+      "eyebrow": "New",
+      "gotIt": "Got It",
+      "intro": "New chats with supported agents now open in the upgraded chat view. To move between chat and CLI, open {{panel}} in the right sidebar:",
+      "leaveOff": "Leave Off",
+      "manageInSettings": "Manage Chat UI in <link>Settings → Experimental</link>.",
+      "resumeInCli": "{{action}} copies a Claude or Codex chat into a new CLI session. The original chat stays as it is.",
+      "resumeInNativeChat": "{{action}} opens a supported CLI conversation in native chat.",
+      "title": "Native chat got an upgrade"
+    }
+  },
   "jira": {
     "workspace": {
       "linkedCount_one": "{{count}} workspace linked to {{key}}",
@@ -2085,6 +2188,10 @@
   },
   "resourceManager": {
     "pty": {
+      "cancel": "Cancel",
+      "end": "End terminal",
+      "endDescription": "This ends the terminal and its child processes. Unsaved work may be lost.",
+      "endTitle": "End {{terminal}}?",
       "localOwnedCount_one": "{{count}} Orca PTY on this computer",
       "localOwnedCount_other": "{{count}} Orca PTYs on this computer"
     }
@@ -2267,6 +2374,9 @@
         "targetNotFolder": "\"{{name}}\" already exists at this location and is not a folder."
       }
     },
+    "startupWorktreeRefresh": {
+      "description": "More workspaces may appear while local and remote projects load."
+    },
     "wslHosts": {
       "addErrors": {
         "alreadyAdded": "{{distro}} is already a host.",
@@ -2423,6 +2533,9 @@
   },
   "taskProviders": {
     "linear": {
+      "projectIssuesLoadFailed": "Failed to load project issues.",
+      "projectLoadFailed": "Failed to load project.",
+      "projectsLoadFailed": "Failed to load projects.",
       "truncated": {
         "issues_one": "Showing the first {{count}} issue. Search or open Linear for the full set.",
         "issues_other": "Showing the first {{count}} issues. Search or open Linear for the full set.",
@@ -2434,7 +2547,9 @@
         "viewIssues_other": "Showing the first {{count}} view issues. Search or open Linear for the full set.",
         "views_one": "Showing the first {{count}} view. Search or open Linear for the full set.",
         "views_other": "Showing the first {{count}} views. Search or open Linear for the full set."
-      }
+      },
+      "viewContentsLoadFailed": "Failed to load view contents.",
+      "viewsLoadFailed": "Failed to load views."
     }
   },
   "terminal": {
