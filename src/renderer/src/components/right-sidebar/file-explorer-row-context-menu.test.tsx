@@ -12,7 +12,10 @@ const storeState = vi.hoisted(
     activeWorktreeId: string
     activeWorkspaceExecutionHostId: 'local' | `runtime:${string}` | null
     openMarkdownPreview: () => void
-    settings: { activeRuntimeEnvironmentId: string | null }
+    settings: {
+      activeRuntimeEnvironmentId: string | null
+      openInApplications?: { id: string; label: string; command: string }[]
+    }
     worktreesByRepo: Record<string, { id: string; repoId: string; hostId: 'local' }[]>
     folderWorkspaces: { id: string; projectGroupId: string }[]
     projectGroups: { id: string }[]
@@ -27,6 +30,7 @@ const storeState = vi.hoisted(
   })
 )
 const revealInFileManager = vi.hoisted(() => vi.fn())
+const openWorktreePath = vi.hoisted(() => vi.fn())
 
 vi.mock('@/components/ui/context-menu', async () => {
   const React_ = await import('react')
@@ -39,7 +43,10 @@ vi.mock('@/components/ui/context-menu', async () => {
       return React_.createElement(React_.Fragment, null, props.children)
     },
     ContextMenuSeparator: () => null,
-    ContextMenuShortcut: () => null
+    ContextMenuShortcut: () => null,
+    ContextMenuSub: passthrough,
+    ContextMenuSubContent: passthrough,
+    ContextMenuSubTrigger: passthrough
   }
 })
 
@@ -60,6 +67,13 @@ vi.mock(import('@/lib/reveal-in-file-manager'), async (importOriginal) => ({
   getRevealInFileManagerLabel: () => 'Reveal in Finder',
   revealInFileManager
 }))
+
+vi.mock(import('@/components/sidebar/WorktreeOpenInMenu'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  openWorktreePath
+}))
+
+vi.mock('@/lib/open-in-app-catalog', () => ({ OpenInApplicationIcon: () => null }))
 
 vi.mock('./file-explorer-row-file-transfer', () => ({
   copyFileToOsClipboard: vi.fn(),
@@ -118,7 +132,9 @@ describe('FileExplorerRowContextMenu host capabilities', () => {
     storeState.activeWorktreeId = 'wt-1'
     storeState.activeWorkspaceExecutionHostId = null
     storeState.settings.activeRuntimeEnvironmentId = null
+    storeState.settings.openInApplications = undefined
     revealInFileManager.mockReset()
+    openWorktreePath.mockReset()
   })
 
   it.each(['runtime:remote', 'ssh:nested'] as const)(
@@ -144,6 +160,27 @@ describe('FileExplorerRowContextMenu host capabilities', () => {
     expect(showsLocalOnlyHint(reveal)).toBe(false)
     reveal?.onSelect?.()
     expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/index.ts', 'local')
+  })
+
+  it('opens a local row in a configured Open In app', () => {
+    storeState.settings.openInApplications = [{ id: 'zed', label: 'Zed', command: 'zed' }]
+    renderRevealItem()
+    const zed = items.list.find((item) =>
+      renderToStaticMarkup(<>{item.children}</>).includes('Zed')
+    )
+
+    expect(zed?.disabled).toBe(false)
+    zed?.onSelect?.()
+    expect(openWorktreePath).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: 'external-editor',
+        worktreePath: '/repo/src/index.ts',
+        command: 'zed',
+        connectionId: null,
+        runtimeEnvironmentId: null,
+        ownerUnresolved: false
+      })
+    )
   })
 
   it('reveals a local row while a remote server is focused', () => {
