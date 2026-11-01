@@ -91,7 +91,7 @@ describe('T597 cross-worktree tab drag-and-drop & Move to Workspace', () => {
             groupId: 'group-src',
             contentType: 'terminal',
             label: sessionTitle,
-            customTitle: sessionTitle,
+            customLabel: sessionTitle,
             color: '#3b82f6',
             sortOrder: 0,
             createdAt: 1000
@@ -123,11 +123,12 @@ describe('T597 cross-worktree tab drag-and-drop & Move to Workspace', () => {
       ptyIdsByTabId: {
         [tabId]: [ptyId]
       },
-      tabLayoutsByTabId: {
+      terminalLayoutsByTabId: {
         [tabId]: {
-          root: { type: 'leaf', id: 'pane-1', ptyId },
+          root: { type: 'leaf', leafId: 'pane-1' },
           activeLeafId: 'pane-1',
-          expandedLeafId: null
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'pane-1': ptyId }
         }
       }
     })
@@ -146,7 +147,7 @@ describe('T597 cross-worktree tab drag-and-drop & Move to Workspace', () => {
     expect(targetUnified[0]).toMatchObject({
       id: tabId,
       worktreeId: targetWorktreeId,
-      customTitle: sessionTitle,
+      customLabel: sessionTitle,
       label: sessionTitle
     })
 
@@ -161,10 +162,12 @@ describe('T597 cross-worktree tab drag-and-drop & Move to Workspace', () => {
 
     // Live PTY binding and pane layout must remain intact (zero session respawn)
     expect(next.ptyIdsByTabId[tabId]).toEqual([ptyId])
-    expect(next.tabLayoutsByTabId[tabId]?.root).toMatchObject({
+    expect(next.terminalLayoutsByTabId[tabId]?.root).toMatchObject({
       type: 'leaf',
-      id: 'pane-1',
-      ptyId
+      leafId: 'pane-1'
+    })
+    expect(next.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId).toEqual({
+      'pane-1': ptyId
     })
   })
 
@@ -205,10 +208,10 @@ describe('T597 cross-worktree tab drag-and-drop & Move to Workspace', () => {
             id: editorUnifiedId,
             entityId: editorFileId,
             worktreeId: sourceWorktreeId,
-            groupId: sourceGroupId,
+            groupId: 'group-src',
             contentType: 'editor',
             label: 'README.md',
-            customTitle: null,
+            customLabel: null,
             color: null,
             sortOrder: 1,
             createdAt: 2000
@@ -219,7 +222,7 @@ describe('T597 cross-worktree tab drag-and-drop & Move to Workspace', () => {
         ...prev.groupsByWorktree,
         [sourceWorktreeId]: [
           {
-            id: sourceGroupId,
+            id: 'group-src',
             worktreeId: sourceWorktreeId,
             activeTabId: tabId,
             tabOrder: [tabId, editorUnifiedId],
