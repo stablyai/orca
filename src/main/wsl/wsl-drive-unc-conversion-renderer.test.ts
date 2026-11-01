@@ -42,7 +42,6 @@ const record = (storeId: string) =>
   recordWslDriveUncRendererStoreRewritten(root, { migrationId: 'conv-1', storeId }, MAIN)
 
 describe('the window half of a Windows-drive conversion', () => {
-
   it('drops the journal once every store is recorded', () => {
     journal()
     expect(record('quick-open-history')).toEqual({ recorded: true })

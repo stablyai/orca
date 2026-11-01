@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { RendererTerminalSerializerReadiness } from './renderer-terminal-serializer-readiness'
 
 describe('RendererTerminalSerializerReadiness', () => {
-
   it('releases waiters when the PTY is cleared', async () => {
     const readiness = new RendererTerminalSerializerReadiness()
     readiness.markReady('pty-1')

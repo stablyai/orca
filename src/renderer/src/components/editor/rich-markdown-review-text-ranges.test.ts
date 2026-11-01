@@ -33,7 +33,6 @@ function editorWithTextNodes(nodes: FakeTextNode[], contentSize?: number): Edito
 }
 
 describe('findRichMarkdownSelectedTextRanges', () => {
-
   it('matches after overlapping prefix fallback', () => {
     const editor = editorWithTextNodes([{ isText: true, text: 'xxabababaca' }])
 

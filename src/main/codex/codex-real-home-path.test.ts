@@ -23,7 +23,6 @@ afterEach(() => {
 })
 
 describe('hasCustomCodexHomeOverride', () => {
-
   it.skipIf(process.platform === 'win32')(
     'detects a pane-local shell startup override from its launch HOME',
     () => {

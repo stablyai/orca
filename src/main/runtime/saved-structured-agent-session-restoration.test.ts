@@ -33,7 +33,6 @@ function session(tabs: Tab[], activeTabId: string | null): WorkspaceSessionState
 }
 
 describe('saved structured session restoration targets', () => {
-
   it('keeps restoration on the local execution host and deduplicates repeated sessions', () => {
     const saved = session(
       [

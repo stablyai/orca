@@ -29,7 +29,6 @@ function notices(
 }
 
 describe('PluginUpdateReviewNotices', () => {
-
   it('stays quiet for a told version after a restart, and tells a newer one', async () => {
     const held: Record<string, PluginUpdateHold> = { [KEY]: { version: '2.0.0', reason: 'access' } }
     await notices(held).take()

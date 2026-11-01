@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { resolveRuntimeBrowserNetworkExecutionHost } from './runtime-browser-network-execution-host'
 
 describe('runtime browser network execution host', () => {
-
   it('rejects disconnected or incomplete SSH authority instead of routing natively', () => {
     expect(() =>
       resolveRuntimeBrowserNetworkExecutionHost({

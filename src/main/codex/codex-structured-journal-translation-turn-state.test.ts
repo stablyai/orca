@@ -7,7 +7,6 @@ import {
 } from './codex-structured-journal-translation-turn-state'
 
 describe('CodexJournalActiveTurns', () => {
-
   it('uses dispatch order even when the host clock moves backwards', () => {
     const active = new CodexJournalActiveTurns()
     active.remember('thread', 'turn-1', 1_000, 1)

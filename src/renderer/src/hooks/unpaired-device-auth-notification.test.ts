@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { subscribeToUnpairedDeviceAuthNotification } from './unpaired-device-auth-notification'
 
 describe('subscribeToUnpairedDeviceAuthNotification', () => {
-
   it('keeps live delivery with an older preload that has no consume API', () => {
     const onNotification = vi.fn()
     const listenerState: { liveListener?: () => void } = {}

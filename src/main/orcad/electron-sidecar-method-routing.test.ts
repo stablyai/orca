@@ -41,7 +41,6 @@ async function runtimeCommandFor(
 }
 
 describe('electronSidecarRuntimeMethodName', () => {
-
   it('round-trips every registered browser RPC method', async () => {
     const mismatches: string[] = []
     const unmapped: string[] = []

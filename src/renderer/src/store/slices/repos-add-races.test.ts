@@ -19,7 +19,6 @@ vi.mock('sonner', () => ({
 installReposRuntimeRoutingHarness()
 
 describe('repo add/catalog races', () => {
-
   it('appends the same bare ID when add returns a different host identity', async () => {
     reposAdd.mockResolvedValue({ repo: localRepo })
     const runtimeSibling: Repo = {

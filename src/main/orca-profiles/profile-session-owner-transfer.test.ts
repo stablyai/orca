@@ -14,7 +14,6 @@ function file(filePath: string, worktreeId = SOURCE): PersistedOpenFile {
 }
 
 describe('session owner transfer', () => {
-
   it('refuses to guess an override two transferred files both claim', () => {
     const owners = { [`h1|${SOURCE}`]: 'repo-9::/tmp/h1', [`h2|${SOURCE}`]: 'repo-9::/tmp/h2' }
     const projection = {

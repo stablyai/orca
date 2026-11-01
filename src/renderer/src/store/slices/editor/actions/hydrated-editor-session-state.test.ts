@@ -38,7 +38,6 @@ const session: WorkspaceSessionState = {
 }
 
 describe('buildHydratedEditorSessionState', () => {
-
   it('keeps the moved tab’s owned id apart from a sibling showing the same path, in any frame', () => {
     const OTHER = 'repo-a::/repo-a'
     const both: WorkspaceSessionState = {

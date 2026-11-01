@@ -36,7 +36,6 @@ const deferred: WslMoveOrchestratorRecord = {
 }
 
 describe('wsl-move-orchestrator store', () => {
-
   it('drops a bad record alone and keeps the rest', () => {
     const dir = userData()
     writeFileSync(

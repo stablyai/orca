@@ -29,7 +29,6 @@ afterEach(() => {
 })
 
 describe('readJsonlLinesFromOffset', () => {
-
   it('strips the carriage return but counts it in the offset', async () => {
     const filePath = writeFixture('crlf.jsonl', 'ab\r\ncde\r\n')
 

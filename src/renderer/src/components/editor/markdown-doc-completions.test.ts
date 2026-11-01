@@ -23,7 +23,6 @@ const documents: MarkdownDocument[] = [
 ]
 
 describe('getMarkdownDocCompletionContext', () => {
-
   it('rejects closed or malformed contexts', () => {
     expect(getMarkdownDocCompletionContext('[[done]]')).toBeNull()
     expect(getMarkdownDocCompletionContext('[[done|Alias')).toBeNull()
@@ -40,7 +39,6 @@ describe('getMarkdownDocCompletionContext', () => {
 })
 
 describe('getMarkdownDocCompletionDocuments', () => {
-
   it('returns no documents for oversized pasted partials before reading documents', () => {
     const unreadableDocument = { ...documents[0] }
     Object.defineProperty(unreadableDocument, 'name', {
