@@ -12,10 +12,6 @@ import type { PtyDataMeta } from '../pty-dispatcher'
 import type { PtyPaneStartup } from '../pty-connection-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { useAppStore } from '@/store'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
-import { resolveTerminalColorSchemeMode } from '../../../../../shared/terminal-color-scheme-protocol'
-import { maybePushMode2031Flip } from '../terminal-mode-2031-replies'
 
 /** Per-generation transport output callbacks and the hidden-output restore state they reset. */
 export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySession): void {
@@ -78,17 +74,7 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
             session.reportRemoteRendererSerializerReady()
             // Re-derive the pause bit after a rebind; visibility can change while no PTY is bound.
             session.syncHiddenRendererPtyDelivery()
-            // A flip while the stream was down was skipped; deliver it once on reconnect (#10913).
-            maybePushMode2031Flip(
-              session.pane.id,
-              resolveTerminalColorSchemeMode(
-                useAppStore.getState().settings,
-                getSystemPrefersDark()
-              ),
-              session.transport,
-              session.deps.paneMode2031Ref.current,
-              session.deps.paneLastThemeModeRef.current
-            )
+            session.catchUpMode2031()
           }
         },
         onStreamRecovered: (): void => {

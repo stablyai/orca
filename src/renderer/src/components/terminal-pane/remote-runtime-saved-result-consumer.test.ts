@@ -114,9 +114,7 @@ it.each([
         tabId: record.tabId,
         isVisibleRef: { current: true },
         onShowSessionRestoredBanner: note,
-        paneTransportsRef: { current: new Map([[1, transport]]) },
-        paneMode2031Ref: { current: new Map() },
-        paneLastThemeModeRef: { current: new Map() }
+        paneTransportsRef: { current: new Map([[1, transport]]) }
       },
       cacheKey: record.paneKey,
       paneStartup: kind === 'observer-only' ? null : startup,
@@ -131,6 +129,7 @@ it.each([
       showSessionRestoredBanner: note,
       reportRemoteRendererSerializerReady: callbacksReady,
       syncHiddenRendererPtyDelivery: vi.fn(),
+      catchUpMode2031: vi.fn(),
       handleRemoteOutputPauseChanged: vi.fn(),
       markHiddenOutputRestoreNeeded: vi.fn(),
       beginReattachLiveDataDeferralIfUnowned: vi.fn(),

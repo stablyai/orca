@@ -107,7 +107,7 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         dispose()
       })
 
-      it('catches a subscribed pane up to the current mode once per (re)connect', async () => {
+      it('catches a subscribed pane up once per mode change across repeated reconnects', async () => {
         const { transport, emit, reconnect, dispose } = await connectVisiblePane()
         emit('\x1b[?2031h')
         mockStoreState = {
@@ -116,6 +116,29 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         }
         reconnect()
         reconnect()
+        mockStoreState = {
+          ...mockStoreState,
+          settings: { ...mockStoreState.settings, theme: 'light' }
+        }
+        reconnect()
+        reconnect()
+        expect(replies(transport)).toEqual(['\x1b[?997;1n', '\x1b[?997;2n'])
+        dispose()
+      })
+
+      it('defers to the viewer holding the grid, then catches up once on release', async () => {
+        const { transport, emit, reconnect, dispose } = await connectVisiblePane()
+        const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
+        emit('\x1b[?2031h')
+        setFitOverride('pty-id', 'mobile-fit', 40, 20)
+        mockStoreState = {
+          ...mockStoreState,
+          settings: { ...mockStoreState.settings, theme: 'dark' }
+        }
+        reconnect()
+        expect(replies(transport)).toEqual([])
+        setFitOverride('pty-id', 'desktop-fit', 0, 0)
+        setFitOverride('pty-id', 'desktop-fit', 0, 0)
         expect(replies(transport)).toEqual(['\x1b[?997;1n'])
         dispose()
       })
