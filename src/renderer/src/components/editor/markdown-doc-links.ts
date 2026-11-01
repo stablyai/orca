@@ -1,5 +1,6 @@
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { slugMarkdownHeading } from './markdown-heading-slug'
+import { extractDocLinkPrefixes, resolveDocLinkSlugOrAlias } from './markdown-doc-link-slug'
 
 export const MARKDOWN_DOC_LINK_PREFIX = '#orca-doc-link='
 
@@ -35,6 +36,9 @@ export type MarkdownDocumentIndex = {
   byName: Map<string, MarkdownDocument[]>
   byRelativePath: Map<string, MarkdownDocument[]>
   byRelativePathWithoutExtension: Map<string, MarkdownDocument[]>
+  byPrefix: Map<string, MarkdownDocument[]>
+  byAlias: Map<string, MarkdownDocument[]>
+  documents: MarkdownDocument[]
 }
 
 export type MarkdownDocLinkResolution =
@@ -104,6 +108,8 @@ export function createMarkdownDocumentIndex(documents: MarkdownDocument[]): Mark
   const byName = new Map<string, MarkdownDocument[]>()
   const byRelativePath = new Map<string, MarkdownDocument[]>()
   const byRelativePathWithoutExtension = new Map<string, MarkdownDocument[]>()
+  const byPrefix = new Map<string, MarkdownDocument[]>()
+  const byAlias = new Map<string, MarkdownDocument[]>()
 
   for (const document of documents) {
     addIndexedDocument(byName, normalizeDocLinkKey(document.name), document)
@@ -113,9 +119,17 @@ export function createMarkdownDocumentIndex(documents: MarkdownDocument[]): Mark
       normalizeDocLinkKey(stripMarkdownExtension(document.relativePath)),
       document
     )
+    for (const prefix of extractDocLinkPrefixes(document.name)) {
+      addIndexedDocument(byPrefix, prefix, document)
+    }
+    if (document.aliases) {
+      for (const alias of document.aliases) {
+        addIndexedDocument(byAlias, normalizeDocLinkKey(alias), document)
+      }
+    }
   }
 
-  return { byName, byRelativePath, byRelativePathWithoutExtension }
+  return { byName, byRelativePath, byRelativePathWithoutExtension, byPrefix, byAlias, documents }
 }
 
 export function resolveMarkdownDocLink(
@@ -142,6 +156,11 @@ export function resolveMarkdownDocLink(
     const byName = resolveMatches(index.byName.get(extensionlessTarget))
     if (byName) {
       return byName
+    }
+
+    const slugOrAlias = resolveDocLinkSlugOrAlias(extensionlessTarget, index)
+    if (slugOrAlias) {
+      return slugOrAlias
     }
   }
 
