@@ -18,7 +18,12 @@ export type MockAdapter = {
     historyPath?: string
     packagedAppVersion?: string | null
     respawn?: (
-      reason: 'daemon_died' | 'unhealthy_resolver' | 'stale_bundle' | 'severed_tcc_attribution'
+      reason:
+        | 'daemon_died'
+        | 'unhealthy_resolver'
+        | 'stale_bundle'
+        | 'severed_tcc_attribution'
+        | 'failed_health_check'
     ) => Promise<void>
     protocolVersion?: number
   }

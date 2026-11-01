@@ -20,8 +20,15 @@ type DaemonLiveness = {
   processCeiling: PtyProcessCeilingState | null
 }
 
-/** `daemon` is absent from hosts that predate the liveness report. */
-type SeveredStatusResult = { severed: SeveredDaemonStatus | null; daemon?: DaemonLiveness }
+/** `daemon` and `freshSpawnsInProcess` are absent from hosts that predate them. */
+type SeveredStatusResult = {
+  severed: SeveredDaemonStatus | null
+  daemon?: DaemonLiveness
+  freshSpawnsInProcess?: boolean
+}
+
+const IN_PROCESS_NOTICE =
+  'New terminals run inside Orca, not in the terminal daemon: the daemon cannot start terminals and is kept for its earlier ones. New terminals are not kept when Orca quits; Orca switches back by itself once those earlier terminals are closed.'
 
 type RestartResult =
   | { status: 'restarted'; killedCount: number }
@@ -56,7 +63,10 @@ function formatDaemonLiveness(daemon: DaemonLiveness | undefined): string[] {
 
 export function formatSeveredDaemonStatus(result: SeveredStatusResult): string {
   const severed = result.severed
-  const liveness = formatDaemonLiveness(result.daemon)
+  const liveness = [
+    ...formatDaemonLiveness(result.daemon),
+    ...(result.freshSpawnsInProcess === true ? [IN_PROCESS_NOTICE] : [])
+  ]
   // An exited daemon hosts nothing; do not print stale severed-state details.
   if (!severed || result.daemon?.verdict === 'exited') {
     return liveness.join('\n')
