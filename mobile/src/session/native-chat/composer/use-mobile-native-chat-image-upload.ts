@@ -10,6 +10,7 @@ import type { RpcClient } from '../../../transport/rpc-client'
 import type { ConnectionState } from '../../../transport/types'
 import { useMediaPicker } from '../../../platform/media-picker'
 import {
+  CameraPermissionError,
   ImageLibraryPermissionError,
   type MobileImageSource
 } from '../../../platform/media-picker-contract'
@@ -116,6 +117,13 @@ export function useMobileNativeChatImageUpload(args: {
         if (connStateRef.current !== 'connected') {
           showToast(
             translate('chat.useImageUpload.disconnected', 'Attach failed (disconnected)'),
+            1500
+          )
+          return
+        }
+        if (uploadError instanceof CameraPermissionError) {
+          showToast(
+            translate('chat.useImageUpload.cameraPermissionDenied', 'Camera permission denied'),
             1500
           )
           return

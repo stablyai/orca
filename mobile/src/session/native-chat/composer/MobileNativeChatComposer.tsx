@@ -12,7 +12,7 @@ import {
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, type TextInput, Text, View } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { Camera, Plus } from 'lucide-react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -81,6 +81,7 @@ type Props = MobileNativeChatMicProps & {
   agent?: string | null
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
   onAttachImage?: () => void
+  onTakePhoto?: () => void
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
@@ -100,42 +101,32 @@ type Props = MobileNativeChatMicProps & {
 /** What a chat's composer sends through, which the chat view hands down from its route. */
 export type MobileNativeChatSendProps = Pick<Props, 'onSend' | 'sendFollowUp'>
 
-export function MobileNativeChatComposer({
-  inputRef,
-  draftScopeKey,
-  insertDictation,
-  editSession,
-  onPickSkill,
-  value,
-  onChangeText,
-  onSend,
-  sendSurfaceId,
-  getSendCompletionGeneration,
-  getComposerEditGeneration,
-  agent = null,
-  structured = null,
-  sessionOptions,
-  onAttachImage,
-  attachments = NO_ATTACHMENTS,
-  onRemoveAttachment,
-  isAttaching = false,
-  onMicPress,
-  micActive = false,
-  micStarting,
-  micProcessing,
-  dictationMode,
-  onMicPressIn,
-  onMicPressOut,
-  disabled = false,
-  sendDisabled = false,
-  placeholder,
-  filePaths = NO_FILE_PATHS,
-  onNeedFiles,
-  skillDiscovery,
-  onNeedSkills,
-  stop = null,
-  sendFollowUp = null
-}: Props): React.JSX.Element {
+export function MobileNativeChatComposer(props: Props): React.JSX.Element {
+  const {
+    inputRef,
+    draftScopeKey,
+    editSession,
+    value,
+    onChangeText,
+    onSend,
+    sendSurfaceId,
+    agent = null,
+    structured = null,
+    sessionOptions,
+    onAttachImage,
+    onTakePhoto,
+    attachments = NO_ATTACHMENTS,
+    onRemoveAttachment,
+    isAttaching = false,
+    onMicPress,
+    micActive = false,
+    disabled = false,
+    sendDisabled = false,
+    placeholder,
+    filePaths = NO_FILE_PATHS,
+    stop = null,
+    sendFollowUp = null
+  } = props
   useMobileColorScheme()
   const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInput>(null)
@@ -163,8 +154,8 @@ export function MobileNativeChatComposer({
       onChangeText(text)
     },
     onPickSkill: (skill) => {
-      if (onPickSkill && skill.path) {
-        onPickSkill({ name: skill.token.slice(1), path: skill.path })
+      if (props.onPickSkill && skill.path) {
+        props.onPickSkill({ name: skill.token.slice(1), path: skill.path })
       }
       if (!editSession) {
         recordMobileNativeChatSkillPick(sendSurfaceId, skill)
@@ -175,9 +166,9 @@ export function MobileNativeChatComposer({
     agent,
     structuredCatalog: structured?.catalog,
     filePaths,
-    onNeedFiles,
-    skillDiscovery,
-    onNeedSkills,
+    onNeedFiles: props.onNeedFiles,
+    skillDiscovery: props.skillDiscovery,
+    onNeedSkills: props.onNeedSkills,
     onSlashMenuOpen: structured?.onSlashMenuOpen,
     onSlashMenuDemand: structured?.onSlashMenuDemand,
     focusField: () => fieldRef.current?.focus()
@@ -185,7 +176,7 @@ export function MobileNativeChatComposer({
   const dictation = useMobileNativeChatComposerDictation({
     draftScopeKey,
     value,
-    insertDictation,
+    insertDictation: props.insertDictation,
     placeCaret: menu.placeCaret
   })
   const sendingRef = useRef(false)
@@ -235,8 +226,8 @@ export function MobileNativeChatComposer({
     sendingRef.current = true
     setSending(true)
     const sendSurfaceGeneration = sendSurfaceGenerationRef.current
-    const sendCompletionGeneration = getSendCompletionGeneration()
-    const composerEditGeneration = getComposerEditGeneration()
+    const sendCompletionGeneration = props.getSendCompletionGeneration()
+    const composerEditGeneration = props.getComposerEditGeneration()
     try {
       // Raw, not trimmed: the send seam owns the wire trim, and a rejection has
       // to hand the user back exactly what they typed (#14819).
@@ -245,8 +236,8 @@ export function MobileNativeChatComposer({
         accepted &&
         mountedRef.current &&
         sendSurfaceGeneration === sendSurfaceGenerationRef.current &&
-        sendCompletionGeneration === getSendCompletionGeneration() &&
-        composerEditGeneration === getComposerEditGeneration()
+        sendCompletionGeneration === props.getSendCompletionGeneration() &&
+        composerEditGeneration === props.getComposerEditGeneration()
       ) {
         menu.resetCursor()
         // Why: the turn is now the agent's — the keyboard would cover the reply.
@@ -332,6 +323,16 @@ export function MobileNativeChatComposer({
                 )}
               </Pressable>
             ) : null}
+            {!structured && onTakePhoto ? (
+              <Pressable
+                accessibilityLabel={t('chat.composer.takePhoto', 'Take photo')}
+                style={({ pressed }) => [inputStyles.controlButton, pressed && inputStyles.pressed]}
+                onPress={onTakePhoto}
+                disabled={isAttaching || disabled}
+              >
+                <Camera size={19} color={colors.textPrimary} strokeWidth={2} />
+              </Pressable>
+            ) : null}
             {sessionOptions ? (
               <MobileNativeChatSessionOptionPickers
                 {...sessionOptions}
@@ -349,16 +350,7 @@ export function MobileNativeChatComposer({
             ) : null}
             <View style={inputStyles.actionSpacer} />
             {onMicPress ? (
-              <MobileNativeChatComposerMic
-                onMicPress={onMicPress}
-                micActive={micActive}
-                micStarting={micStarting}
-                micProcessing={micProcessing}
-                dictationMode={dictationMode}
-                onMicPressIn={onMicPressIn}
-                onMicPressOut={onMicPressOut}
-                disabled={disabled}
-              />
+              <MobileNativeChatComposerMic {...props} micActive={micActive} disabled={disabled} />
             ) : null}
             {editSession ? (
               <Pressable
@@ -410,6 +402,7 @@ export function MobileNativeChatComposer({
           onClose={() => setAttachOpen(false)}
           actions={mobileNativeChatAttachActions({
             onPhotos: onAttachImage,
+            onTakePhoto,
             onFiles: structured.onAttachFiles,
             onWorkspaceFile: menu.openFileMenu,
             onSkills: () => menu.openSlashMenu('skill'),
