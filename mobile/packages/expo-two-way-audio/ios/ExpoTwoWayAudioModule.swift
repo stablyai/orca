@@ -24,6 +24,11 @@ public class ExpoTwoWayAudioModule: Module {
         }
 
         AsyncFunction("initialize") { () -> Bool in
+#if targetEnvironment(simulator)
+            // RemoteIO simulator timeouts abort the process instead of throwing.
+            print("AudioEngine is unavailable in the iOS Simulator")
+            return false
+#else
             do {
                 if self.audioEngine != nil {
                     return true
@@ -38,6 +43,7 @@ public class ExpoTwoWayAudioModule: Module {
                 print("Failed to initialize AudioEngine: \(error)")
                 return false
             }
+#endif
         }
 
         Function("isRecording") { () -> Bool in
