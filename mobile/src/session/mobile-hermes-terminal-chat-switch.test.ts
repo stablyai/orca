@@ -14,7 +14,8 @@ import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../.
 import { switchMobileHermesTerminalToChat } from './mobile-hermes-terminal-chat-switch'
 import type { PendingSessionSelection } from './pending-session-selection'
 
-const SESSION_ID = '20261031_144415_71256d'
+const SESSION_ID = '11111111-1111-4111-8111-111111111111'
+const TERMINAL_SESSION_ID = '20261031_144415_71256d'
 const terminalTab = { id: 'tab-h' }
 
 function harness() {
@@ -44,12 +45,9 @@ describe('switchMobileHermesTerminalToChat', () => {
       terminalTab,
       ...scope
     })
-    expect(createMobileStructuredAgentSession).toHaveBeenCalledWith(
-      {},
-      'workspace-1',
-      'hermes',
-      { resumeFrom: { providerSessionId: SESSION_ID } }
-    )
+    expect(createMobileStructuredAgentSession).toHaveBeenCalledWith({}, 'workspace-1', 'hermes', {
+      resumeFrom: { providerSessionId: SESSION_ID }
+    })
     expect(scope.closeTerminalTab).toHaveBeenCalledWith(terminalTab)
     expect(scope.pendingSelectionRef.current).toMatchObject({
       kind: 'launched',
@@ -101,6 +99,29 @@ describe('switchMobileHermesTerminalToChat', () => {
     expect(createMobileStructuredAgentSession).toHaveBeenCalledTimes(1)
     expect(scope.closeTerminalTab).not.toHaveBeenCalled()
     expect(scope.showToast).toHaveBeenCalled()
+  })
+
+  it('starts a new chat and keeps the terminal when the hook id is a TUI timestamp', async () => {
+    createMobileStructuredAgentSession.mockResolvedValueOnce({
+      kind: 'created',
+      sessionId: 'hermes_chat_4'
+    })
+    const scope = harness()
+    await switchMobileHermesTerminalToChat({
+      client: {} as never,
+      worktreeId: 'workspace-1',
+      hostCapabilities: [STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY],
+      providerSessionId: TERMINAL_SESSION_ID,
+      terminalTab,
+      ...scope
+    })
+    expect(createMobileStructuredAgentSession).toHaveBeenCalledWith(
+      {},
+      'workspace-1',
+      'hermes',
+      undefined
+    )
+    expect(scope.closeTerminalTab).not.toHaveBeenCalled()
   })
 
   it('starts a new chat without resume when the session id is missing', async () => {

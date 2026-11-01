@@ -6,7 +6,7 @@ import {
   type AgentSessionAttachParams
 } from './structured-agent-session-attach'
 
-const SESSION_ID = '20261031_144415_71256d'
+const SESSION_ID = '11111111-1111-4111-8111-111111111111'
 
 function params(acpLoadSessionId?: string): AgentSessionAttachParams {
   return {

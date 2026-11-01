@@ -9,7 +9,7 @@ import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-nati
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { translate } from '../i18n/mobile-i18n'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
-import { hermesResumeSessionId } from '../../../src/shared/hermes-session-id'
+import { hermesAcpLoadSessionId } from '../../../src/shared/hermes-session-id'
 import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat/native-chat-agent-support'
 import {
   resolveMobileNativeChat,
@@ -30,7 +30,7 @@ export function getMobileNativeChatToggleActions(args: {
   structuredAgents?: readonly string[]
   /** terminal.list identity. Used only when the tab itself does not name an agent, and only for Hermes. */
   hostAgentIdentity?: string | null
-  /** Host advertises resume-history, so a hook id can be session/load'd. */
+  /** Host advertises resume-history, so an ACP uuid can be session/load'd. */
   hermesResumeSupported?: boolean
   onClose: () => void
   onHermesTerminalChat?: (request: { tabId: string; providerSessionId: string | null }) => void
@@ -98,9 +98,11 @@ function hermesTerminalChatAction(
   if (!hermesNamedTerminal(tab, args.hostAgentIdentity)) {
     return null
   }
-  const providerSessionId = args.hermesResumeSupported
-    ? hermesResumeSessionId(tab.agentStatus?.providerSession?.id)
-    : null
+  const hookId = tab.agentStatus?.providerSession?.id
+  const providerSessionId =
+    args.hermesResumeSupported && hookId
+      ? hermesAcpLoadSessionId('hermes', { providerSessionId: hookId })
+      : null
   return {
     id: providerSessionId ? 'switchHermesTerminalToChat' : 'startHermesChat',
     label: providerSessionId

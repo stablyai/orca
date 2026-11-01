@@ -1,4 +1,4 @@
-import { hermesResumeSessionId } from '../../../src/shared/hermes-session-id'
+import { hermesAcpLoadSessionId } from '../../../src/shared/hermes-session-id'
 import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { translate } from '../i18n/mobile-i18n'
@@ -55,7 +55,9 @@ async function openHermesChat(args: {
   return created
 }
 
-function failureText(result: Exclude<MobileStructuredAgentLaunchResult, { kind: 'created' }>): string {
+function failureText(
+  result: Exclude<MobileStructuredAgentLaunchResult, { kind: 'created' }>
+): string {
   return result.kind === 'unsupported' ? '' : result.message
 }
 
@@ -71,7 +73,7 @@ function toastFailure(
   )
 }
 
-/** Load the terminal's Hermes session into chat, then close it. No id, or a refused load, opens a new chat and leaves the terminal. */
+/** Load an ACP uuid into chat, then close the terminal. A TUI id, or a refused load, opens a new chat and leaves the terminal. */
 export async function switchMobileHermesTerminalToChat<Tab extends { id: string }>(args: {
   client: RpcClient
   worktreeId: string
@@ -85,7 +87,7 @@ export async function switchMobileHermesTerminalToChat<Tab extends { id: string 
 }): Promise<void> {
   const resumeId =
     canResumeOnHost(args.hostCapabilities) && args.providerSessionId
-      ? hermesResumeSessionId(args.providerSessionId)
+      ? hermesAcpLoadSessionId('hermes', { providerSessionId: args.providerSessionId })
       : null
   if (resumeId) {
     const resumed = await openHermesChat({

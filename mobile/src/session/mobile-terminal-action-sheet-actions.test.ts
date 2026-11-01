@@ -81,7 +81,7 @@ describe('getMobileTerminalActionSheetActions', () => {
     expect(onCloseSessionTab).toHaveBeenCalledWith(second)
   })
 
-  it('switches a Hermes terminal to the same chat when the hook saved a session id', () => {
+  it('starts a new Hermes chat when the hook id is a TUI timestamp', () => {
     const onHermesTerminalChat = vi.fn()
     const actions = buildActions({
       tabs: [
@@ -99,13 +99,45 @@ describe('getMobileTerminalActionSheetActions', () => {
       hermesResumeSupported: true,
       onHermesTerminalChat
     })
-    const action = actions.find((candidate) => candidate.id === 'switchHermesTerminalToChat')
-    expect(action?.label).toBe('Switch to Chat')
-    expect(action?.disabled).toBeUndefined()
+    const action = actions.find((candidate) => candidate.id === 'startHermesChat')
+    expect(action?.label).toBe('Start new chat')
+    expect(
+      actions.find((candidate) => candidate.id === 'switchHermesTerminalToChat')
+    ).toBeUndefined()
     action?.onPress()
     expect(onHermesTerminalChat).toHaveBeenCalledWith({
       tabId: 'tab-h',
-      providerSessionId: '20261031_144415_71256d'
+      providerSessionId: null
+    })
+  })
+
+  it('switches a Hermes terminal when the hook id is an ACP session uuid', () => {
+    const onHermesTerminalChat = vi.fn()
+    const actions = buildActions({
+      tabs: [
+        {
+          type: 'terminal',
+          id: 'tab-h',
+          terminal: 'terminal-1',
+          launchAgent: 'hermes',
+          agentStatus: {
+            providerSession: {
+              key: 'session_id',
+              id: '11111111-1111-4111-8111-111111111111'
+            }
+          } as never
+        }
+      ],
+      structuredAgents: ['hermes'],
+      hermesResumeSupported: true,
+      onHermesTerminalChat
+    })
+    const action = actions.find((candidate) => candidate.id === 'switchHermesTerminalToChat')
+    expect(action?.label).toBe('Switch to Chat')
+    action?.onPress()
+    expect(onHermesTerminalChat).toHaveBeenCalledWith({
+      tabId: 'tab-h',
+      providerSessionId: '11111111-1111-4111-8111-111111111111'
     })
   })
 

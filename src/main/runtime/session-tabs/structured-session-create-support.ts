@@ -156,7 +156,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   ): Promise<AgentSessionAttachParams> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
     // Adopting a conversation reads the agent's own transcript, so only an agent registered with an
-    // importer adopts. Hermes keeps its session in SQLite and reloads that id over ACP.
+    // importer adopts. Hermes reloads an ACP uuid; a TUI timestamp is not that id.
     const transcriptImport = structuredAgentRuntimeMetadata(input.agent)?.transcriptImport
     const hermesLoadId = hermesAcpLoadSessionId(input.agent, input.resumeFrom)
     if (!support.supported || (input.resumeFrom && !transcriptImport && !hermesLoadId)) {
