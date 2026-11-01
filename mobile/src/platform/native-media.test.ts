@@ -12,7 +12,8 @@ import {
   BRIDGE_MEDIA_READ_MAX_BYTES,
   mediaNameResultSchema,
   mediaPickResultSchema,
-  mediaReadResultSchema
+  mediaReadResultSchema,
+  shareTakeResultSchema
 } from '../mobile-web-shell/bridge/bridge-media-verbs'
 import { readShellRefusalCode } from '../mobile-web-shell/bridge-host-errors'
 import { MediaHandleRegistry } from '../mobile-web-shell/media-handle-registry'
@@ -117,6 +118,7 @@ function harness(
     openFile: (uri) => fakeFile(files.get(uri) ?? new Uint8Array()),
     discard,
     ownsStagedUri: (uri: string) => uri.startsWith('file:'),
+    takeShare: () => null,
     ...overrides
   })
   return { serve, registry, discarded, files, written, copied }
@@ -461,6 +463,81 @@ describe('picking', () => {
       probe.serve('native.media.pick', { source: 'library', multiple: false })
     ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_too_large')
     expect(probe.discarded).toEqual([`${CACHE}/lib.png`])
+  })
+})
+
+describe('taking a share', () => {
+  type Share = { text: string; files: { uri: string; mimeType: string; name: string }[] }
+
+  // The shell's pending share empties on the first take.
+  function once(share: Share): () => Share | null {
+    let pending: Share | null = share
+    return () => {
+      const taken = pending
+      pending = null
+      return taken
+    }
+  }
+
+  it('stages shared files like a pick, under their shared names, and empties the share', async () => {
+    const probe = harness({
+      takeShare: once({
+        text: 'cite?',
+        files: [
+          { uri: `${CACHE}/PXL_0042.jpg`, mimeType: 'image/jpeg', name: 'PXL_0042.jpg' },
+          { uri: `${CACHE}/paper.pdf`, mimeType: 'application/pdf', name: 'paper.pdf' }
+        ]
+      })
+    })
+    probe.files.set(`${CACHE}/PXL_0042.jpg`, bytesOf(12))
+    probe.files.set(`${CACHE}/paper.pdf`, bytesOf(30))
+
+    const { share } = shareTakeResultSchema.parse(await probe.serve('native.share.take', {}))
+    expect(share?.text).toBe('cite?')
+    expect(share?.items.map((item) => [item.mime, item.byteLength])).toEqual([
+      ['image/jpeg', 12],
+      ['application/pdf', 30]
+    ])
+    await expect(
+      probe.serve('native.media.name', { handle: share?.items[1]?.handle ?? '' })
+    ).resolves.toEqual({ name: 'paper.pdf' })
+    await expect(probe.serve('native.share.take', {})).resolves.toEqual({ share: null })
+  })
+
+  it('keeps the text and the other files when one shared file is too big to stage', async () => {
+    const notes = bytesOf(5)
+    const probe = harness({
+      takeShare: once({
+        text: 'https://example.com',
+        files: [
+          { uri: `${CACHE}/huge.pdf`, mimeType: 'application/pdf', name: 'huge.pdf' },
+          { uri: `${CACHE}/notes.md`, mimeType: 'text/markdown', name: 'notes.md' }
+        ]
+      }),
+      openFile: (uri) =>
+        uri.endsWith('huge.pdf')
+          ? { size: 64 * 1024 * 1024, open: () => fakeFile(new Uint8Array()).open() }
+          : fakeFile(notes)
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const { share } = shareTakeResultSchema.parse(await probe.serve('native.share.take', {}))
+    expect(share?.text).toBe('https://example.com')
+    expect(share?.items.map((item) => [item.mime, item.byteLength])).toEqual([['text/markdown', 5]])
+    expect(probe.discarded).toEqual([`${CACHE}/huge.pdf`])
+  })
+  it('skips a shared file whose copy is missing, keeping the text', async () => {
+    const probe = harness({
+      takeShare: once({
+        text: 'cite?',
+        files: [{ uri: `${CACHE}/never-copied.png`, mimeType: 'image/png', name: 'x.png' }]
+      })
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(probe.serve('native.share.take', {})).resolves.toEqual({
+      share: { text: 'cite?', items: [] }
+    })
   })
 })
 

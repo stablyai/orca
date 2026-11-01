@@ -1,10 +1,12 @@
 import {
   BRIDGE_MEDIA_NAME_MAX_CHARS,
   BRIDGE_MEDIA_READ_MAX_BYTES,
+  BRIDGE_SHARE_TEXT_MAX_CHARS,
   mediaNameParamsSchema,
   mediaPickParamsSchema,
   mediaReadParamsSchema,
   mediaReleaseParamsSchema,
+  shareTakeParamsSchema,
   type BridgeMediaSource
 } from '../mobile-web-shell/bridge/bridge-media-verbs'
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-verbs'
@@ -55,6 +57,8 @@ export type NativeMediaDeps = {
   readonly copyIntoCache: (uri: string) => string
   // Sweep refused picks before minting; no registry handle exists to own their cleanup.
   readonly discard: (uri: string) => void
+  // Empties the share waiting for a destination, if any.
+  readonly takeShare: () => { readonly text: string; readonly files: readonly PickedAsset[] } | null
 }
 
 const CLIPBOARD_STAGED_MIME = 'image/png'
@@ -218,7 +222,36 @@ export function createNativeMediaVerbServer(
     }
   }
 
+  // Stage each file alone: one the page cannot hold drops that file, not the share's text or other files.
+  function stageShared(files: readonly PickedAsset[]): StagedMedia[] {
+    return files.slice(0, deps.registry.remainingCapacity()).flatMap((file) => {
+      try {
+        // A copy the sending app never let the shell read is missing (Expo reports no size); skip it.
+        if (!(deps.openFile(file.uri).size > 0)) {
+          throw new Error('a shared file is missing or empty')
+        }
+        return stage([file])
+      } catch (error) {
+        console.warn('[web-shell-bridge] a shared file could not be staged', error)
+        return []
+      }
+    })
+  }
+
   return async (verb, params) => {
+    if (verb === 'native.share.take') {
+      shareTakeParamsSchema.parse(params)
+      const share = deps.takeShare()
+      if (share === null) {
+        return { share: null }
+      }
+      return {
+        share: {
+          text: share.text.slice(0, BRIDGE_SHARE_TEXT_MAX_CHARS),
+          items: deps.registry.mint(stageShared(share.files))
+        }
+      }
+    }
     if (verb === 'native.media.pick') {
       const { source, multiple } = mediaPickParamsSchema.parse(params)
       const generation = deps.registry.generation

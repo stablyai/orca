@@ -1,4 +1,5 @@
 import ExpoModulesCore
+import PDFKit
 import QuickLook
 
 public class OrcaMobileWebShellModule: Module {
@@ -17,6 +18,20 @@ public class OrcaMobileWebShellModule: Module {
       self.pdfPreview = preview
       presenter.present(controller, animated: true)
     }.runOnQueue(.main)
+
+    // Draws a local PDF's first page as a JPEG, for document tiles in chat.
+    AsyncFunction("renderPdfThumbnail") { (url: URL, width: Int) -> String in
+      guard let page = PDFDocument(url: url)?.page(at: 0) else {
+        throw PdfThumbnailUnavailableException()
+      }
+      let bounds = page.bounds(for: .mediaBox)
+      let height = min(CGFloat(width) * 2, CGFloat(width) * bounds.height / max(bounds.width, 1))
+      let image = page.thumbnail(of: CGSize(width: CGFloat(width), height: height), for: .mediaBox)
+      guard let jpeg = image.jpegData(compressionQuality: 0.8) else {
+        throw PdfThumbnailUnavailableException()
+      }
+      return jpeg.base64EncodedString()
+    }
 
     View(OrcaMobileWebShellView.self) {
       Events("onLoadState", "onBridgeMessage", "onExternalNavigation")

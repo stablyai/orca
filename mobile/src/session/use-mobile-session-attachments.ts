@@ -12,7 +12,12 @@ import {
 } from './native-chat/mobile-native-chat-eligibility'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
+import { useMobileIncomingShareClaim } from '../share/use-mobile-incoming-share-claim'
+import { saveMobileWorkspaceFile } from '../files/mobile-workspace-file-save'
 import type { MobileSessionAccessorySelectionModel } from './use-mobile-session-accessory-selection'
+
+// Shared documents land here in the workspace, so the agent reads them by a project path.
+const SHARED_DOCUMENTS_DIRECTORY = 'docs'
 
 export function useMobileSessionAttachments(scope: MobileSessionAccessorySelectionModel) {
   const {
@@ -109,6 +114,30 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       onSuccess: triggerSelection,
       onError: triggerError
     })
+  useMobileIncomingShareClaim({
+    composerVisible:
+      nativeChatController.showNativeChat && nativeChatController.chatDraftKey !== null,
+    // Structured image support is known only once the host's capabilities load.
+    canAttach:
+      client !== null &&
+      connState === 'connected' &&
+      (structuredNativeChat ? agentSessionHostSupport != null : activeHandle !== null),
+    acceptsImages: nativeChatController.nativeChatAcceptsImages,
+    appendText: nativeChatController.appendChatComposerText,
+    attachImages: (picked) => nativeChatImages.attachImage('files', picked),
+    saveDocument: (file) => {
+      if (!client) {
+        return Promise.reject(new Error('disconnected'))
+      }
+      return saveMobileWorkspaceFile(client, {
+        worktreeId,
+        directory: SHARED_DOCUMENTS_DIRECTORY,
+        name: file.name,
+        base64: file.base64
+      })
+    },
+    showToast
+  })
   const nativeChatStructuredComposer = useMobileNativeChatStructuredComposer({
     structured: structuredNativeChat,
     sessionCommands: nativeChatController.nativeChatSessionCommands,

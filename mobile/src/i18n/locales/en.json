@@ -545,6 +545,10 @@
       "heading": "Jump back in",
       "lastOpened": "Last opened",
       "connectToOpen": "Connect {{desktop}} to open"
+    },
+    "shareCard": {
+      "title": "Open a workspace chat to add this",
+      "cancel": "Cancel share"
     }
   },
   "hooks": {
@@ -4366,6 +4370,12 @@
           }
         }
       }
+    }
+  },
+  "share": {
+    "claim": {
+      "unsupportedFiles": "This session can't take some of the shared files",
+      "saveFailed": "Couldn't save {{name}} to the workspace"
     }
   }
 }

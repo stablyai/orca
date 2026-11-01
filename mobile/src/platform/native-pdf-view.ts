@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { Platform } from 'react-native'
 import { Directory, File as FsFile, Paths } from 'expo-file-system'
 import { useFocusEffect, useNavigation } from 'expo-router'
-import { presentPdf } from '../../modules/orca-mobile-web-shell/src'
+import { presentPdf, renderPdfThumbnail } from '../../modules/orca-mobile-web-shell/src'
 import { getRuntimePathBasename } from '../../../src/shared/cross-platform-path'
 import { PDF_MIME_TYPE } from '../files/mobile-file-media'
 import {
@@ -11,6 +11,7 @@ import {
   type MobileMediaSink
 } from '../files/mobile-file-media-download'
 import {
+  pdfThumbnailParamsSchema,
   pdfViewParamsSchema,
   type BridgePdfOpenParams
 } from '../mobile-web-shell/bridge/bridge-native-verbs'
@@ -111,4 +112,42 @@ export function useNativePdfViewer(
   )
   useFocusEffect(useCallback(() => () => viewer.dispose(), [viewer]))
   return viewer.serve
+}
+
+const PDF_THUMBNAIL_WIDTH_PX = 400
+
+// Draws a workspace PDF's first page for a chat tile; the download is deleted once drawn.
+// ponytail: downloads the whole PDF for one page; pages cache the result, add a host-side page read if big PDFs make tiles slow.
+async function renderWorkspacePdfThumbnail(
+  client: RpcClient,
+  params: unknown
+): Promise<{ jpegBase64: string }> {
+  const { worktreeId, relativePath, executionHost } = pdfThumbnailParamsSchema.parse(params)
+  const file = new FsFile(
+    Paths.cache,
+    `orca-pdf-thumbnail-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`
+  )
+  try {
+    await downloadMobileFileMedia(
+      executionHost ? scopeRpcClientToExecutionHost(client, executionHost) : client,
+      { worktreeId, relativePath, mimeType: PDF_MIME_TYPE },
+      pdfFileSink(file),
+      new AbortController().signal,
+      () => {}
+    )
+    return { jpegBase64: await renderPdfThumbnail(file.uri, PDF_THUMBNAIL_WIDTH_PX) }
+  } finally {
+    discardUnreturnedMediaFile(file)
+  }
+}
+
+export function useNativePdfThumbnails(hostId: string): (params: unknown) => Promise<unknown> {
+  const { client } = useHostClient(hostId)
+  return useCallback(
+    (params: unknown) =>
+      client
+        ? renderWorkspacePdfThumbnail(client, params)
+        : Promise.reject(new Error('no desktop connection to download the PDF from')),
+    [client]
+  )
 }
