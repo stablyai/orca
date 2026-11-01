@@ -16,12 +16,22 @@ import {
 import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import { FolderWorkspaceCreateRefusedError } from '../../../project-groups/folder-workspace-create-refusal'
 import { WorktreeCreateSetupChoiceRefusedError } from '../../worktree-create-setup-choice-refusal'
+import { AGENT_LAUNCH_DISABLED_CODE } from '../../../../shared/agent-launch-disabled'
 import { AgentLaunchSurfaceUnavailableError } from '../../../agent-launch/agent-launch-surface-refusal'
 
 /** Long enough for every code this path raises, with room for one a later guard adds. */
 const LAUNCH_FAILURE_CODE_MAX_LENGTH = 128
 /** Refusal text that may name a path as long as Linux's PATH_MAX, after its code. */
 const REFUSAL_TEXT_MAX_LENGTH = 4096 + LAUNCH_FAILURE_CODE_MAX_LENGTH
+
+/** The code a refusal error carries, when the throw site attached one. */
+function errorCodeOf(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) {
+    return undefined
+  }
+  const value = (error as { code?: unknown }).code
+  return typeof value === 'string' ? value : undefined
+}
 
 /** Bound error text on ingestion because the ledger is serialized whole per operation.
  * Do not impose the bound in row validation: rejecting a row this build wrote loses the entire store. */
@@ -33,12 +43,14 @@ export function agentLaunchFailureCode(error: unknown): string {
 
 /** A coded refusal's own words, kept beside its code so a replay says the same; bounded likewise. */
 export function agentLaunchFailureMessage(error: unknown): string | undefined {
-  return (
-    formatTerminalStartFailure(error) ??
-    (error instanceof OrchestrationError
-      ? error.message.slice(0, REFUSAL_TEXT_MAX_LENGTH)
-      : undefined)
-  )
+  const formatted = formatTerminalStartFailure(error)
+  if (formatted !== undefined) {
+    return formatted
+  }
+  // Coded refusals keep their own words: a replay must say what the first answer said.
+  return error instanceof OrchestrationError || errorCodeOf(error) === AGENT_LAUNCH_DISABLED_CODE
+    ? (error as Error).message.slice(0, REFUSAL_TEXT_MAX_LENGTH)
+    : undefined
 }
 
 /** Keep a refused folder's full path or only its code; truncating the path would name a different folder. */
@@ -59,6 +71,12 @@ export function launchFailureWithoutEffectsCode(
 ): string | null {
   if (error instanceof WorktreeCreateCollisionError) {
     return WORKTREE_CREATE_COLLISION_CODE
+  }
+  // A disabled agent on an existing workspace is refused before any effect. Creation targets
+  // may already have created their workspace by the time the terminal guard fires, so they stay
+  // unknown rather than claiming a definite no-effect refusal (#37045).
+  if (errorCodeOf(error) === AGENT_LAUNCH_DISABLED_CODE && targetKind === 'existing') {
+    return AGENT_LAUNCH_DISABLED_CODE
   }
   if (error instanceof FolderWorkspaceCreateRefusedError) {
     return folderCreateRefusalCode(error)

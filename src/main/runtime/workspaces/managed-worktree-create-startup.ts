@@ -1,6 +1,7 @@
 import { applyRemoteViewerLaunchEnv } from '../remote-viewer-launch-env'
 import type { RuntimeManagedWorktreeCreateArgs } from '../runtime-managed-worktree-create-types'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import { AGENT_LAUNCH_DISABLED_CODE } from '../../../shared/agent-launch-disabled'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   type buildWorktreeStartupForDraft,
@@ -26,14 +27,20 @@ export async function resolveManagedWorktreeCreateStartup(
   const requestedAgentEnabled =
     requestedAgent !== undefined ? isTuiAgentEnabled(requestedAgent, disabledTuiAgents) : false
   if ((args.startup || args.startupAgent) && requestedAgent && !requestedAgentEnabled) {
-    throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+    throw Object.assign(
+      new Error('Selected agent is disabled. Choose an enabled agent before creating.'),
+      { code: AGENT_LAUNCH_DISABLED_CODE }
+    )
   }
   if (
     args.startup &&
     args.startupDraftPaste &&
     !isTuiAgentEnabled(args.startupDraftPaste.agent, disabledTuiAgents)
   ) {
-    throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+    throw Object.assign(
+      new Error('Selected agent is disabled. Choose an enabled agent before creating.'),
+      { code: AGENT_LAUNCH_DISABLED_CODE }
+    )
   }
   const agentStartup = resolveWorktreeCreateAgentStartup(args, build.agent)
   const draftStartup =

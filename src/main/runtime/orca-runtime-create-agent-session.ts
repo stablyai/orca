@@ -11,6 +11,7 @@ import {
 } from '../../shared/agent-session/agent-session-host-authority'
 import { createHash } from 'node:crypto'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { AGENT_LAUNCH_DISABLED_CODE } from '../../shared/agent-launch-disabled'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type {
   AgentSessionCreateOperation,
@@ -150,7 +151,11 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
         .digest('base64url')
       const settings = this.store!.getSettings()
       if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
-        throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+        // Name the agent and carry a dedicated code: callers surface "this agent is disabled"
+        // instead of the unknown-outcome wrapper a plain refusal would be folded into (#37045).
+        throw Object.assign(new Error(`Agent ${request.agent} is disabled. Choose an enabled agent before creating.`), {
+          code: AGENT_LAUNCH_DISABLED_CODE
+        })
       }
       let terminal: RuntimeTerminalCreate
       const executionOperationId = createHash('sha256')
