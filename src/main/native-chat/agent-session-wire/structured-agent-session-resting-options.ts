@@ -1,7 +1,8 @@
+import type { AgentModelCatalogReadParams } from '../agent-model-catalog/agent-model-catalog-service-contract'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
-import { decodeStructuredAgentSessionOptionValue } from '../../../shared/structured-agent-session-option-codec'
-import { finishedListingIds } from '../../../shared/structured-agent-session-options'
-import { savedEffectiveServiceTier } from '../../../shared/structured-agent-session-effective-tier'
+import { decodeStructuredAgentSessionOptionValue } from '../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { finishedListingIds } from '../../../shared/agent-session/options/structured-agent-session-options'
+import { savedEffectiveServiceTier } from '../../../shared/agent-session/options/structured-agent-session-effective-tier'
 import { independentAgentModelCatalog } from '../agent-model-catalog/agent-model-catalog-discovery'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../agent-model-catalog/agent-model-catalog-listing-waiters'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -21,7 +22,8 @@ export const IN_PROCESS_OPTIONS_READER: StructuredAgentSessionOptionsReader = {
 export async function readStructuredAgentSessionOptionsAtRest(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'agents' | 'modelCatalog'>,
   sessionId: string,
-  reader: StructuredAgentSessionOptionsReader
+  reader: StructuredAgentSessionOptionsReader,
+  scope: Pick<AgentModelCatalogReadParams, 'records' | 'operation'>
 ): Promise<RestingOptions> {
   const record = deps.store.getConversation(sessionId)
   if (!record) {
@@ -36,6 +38,7 @@ export async function readStructuredAgentSessionOptionsAtRest(
   ): Promise<AgentSessionModelCatalogResult> =>
     (await deps.modelCatalog
       ?.read({
+        ...scope,
         agent: record.provider,
         sessionId,
         savedOnly: true,
@@ -49,6 +52,7 @@ export async function readStructuredAgentSessionOptionsAtRest(
       .catch(() => null)) ?? { origin: 'unknown' }
   if (!reader.readsWithoutModel) {
     await deps.modelCatalog?.read({
+      ...scope,
       agent: record.provider,
       sessionId,
       deadline,
@@ -57,6 +61,7 @@ export async function readStructuredAgentSessionOptionsAtRest(
       legacyOptionsDisplay: true
     })
     await deps.modelCatalog?.prepareSaved?.({
+      ...scope,
       agent: record.provider,
       sessionId,
       deadline,
@@ -76,6 +81,7 @@ export async function readStructuredAgentSessionOptionsAtRest(
     scoped.origin !== 'unknown' &&
     !reader.readsWithoutModel
       ? (await deps.modelCatalog?.prepareSaved?.({
+          ...scope,
           agent: record.provider,
           sessionId,
           deadline,
@@ -86,10 +92,14 @@ export async function readStructuredAgentSessionOptionsAtRest(
       : scoped
   // With no catalog for the account, the list a running child of this agent falls back to.
   const listed = catalog.origin === 'unknown' ? (rules?.fallbackModels() ?? null) : catalog.models
-  const models = listed ?? []
+  const models =
+    catalog.origin === 'unknown' && saved.model === undefined
+      ? (listed ?? []).map((row) => ({ ...row, isDefault: false }))
+      : (listed ?? [])
   const proof = independentAgentModelCatalog(record.provider)
     ? await deps.modelCatalog
         ?.read({
+          ...scope,
           agent: record.provider,
           sessionId,
           savedOnly: true,
@@ -130,8 +140,8 @@ export async function readStructuredAgentSessionOptionsAtRest(
   const serviceTier = savedEffectiveServiceTier(saved, models)
   return {
     inventory: catalog,
-    fallback: catalog.origin === 'unknown' ? (listed ?? []) : [],
-    models: listed ? structuredAgentSessionOptionModels(listed, model, (row) => row) : [],
+    fallback: catalog.origin === 'unknown' ? models : [],
+    models: listed ? structuredAgentSessionOptionModels(models, model, (row) => row) : [],
     ...(catalog.origin !== 'unknown' && catalog.fastModeSupport
       ? { fastModeSupport: catalog.fastModeSupport }
       : {}),

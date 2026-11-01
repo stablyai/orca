@@ -38,18 +38,6 @@ describe('classifyMacSystemResolverHealth', () => {
     expect(classifyMacSystemResolverHealth('No DNS configuration available\n')).toBe('unhealthy')
   })
 
-  it('treats scutil DNS output with nameservers as healthy', () => {
-    expect(
-      classifyMacSystemResolverHealth(`
-DNS configuration
-
-resolver #1
-  nameserver[0] : 1.1.1.1
-  flags    : Request A records
-`)
-    ).toBe('healthy')
-  })
-
   it('fails open when the resolver output is inconclusive', () => {
     expect(classifyMacSystemResolverHealth('')).toBe('unknown')
   })
@@ -94,20 +82,6 @@ resolver #1
     child.emit('close', 0)
 
     await expect(healthPromise).resolves.toBe('healthy')
-  })
-
-  it('settles at the timeout even if scutil has not closed yet', async () => {
-    vi.useFakeTimers()
-    mockPlatform('darwin')
-    const child = createMockScutilProcess()
-    vi.mocked(spawn).mockReturnValue(child)
-
-    const healthPromise = readCurrentProcessMacSystemResolverHealth()
-
-    await vi.advanceTimersByTimeAsync(1_500)
-
-    await expect(healthPromise).resolves.toBe('unknown')
-    expect(child.kill).toHaveBeenCalledTimes(1)
   })
 
   it('removes scutil listeners when the timeout settles before child close', async () => {

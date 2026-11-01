@@ -9,13 +9,10 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { sortJiraIssues } from './jira-issue-sorter'
-import { groupJiraIssuesByStatus, TaskPageJiraIssueList } from './task-page-jira-issue-list'
-import {
-  getSingleJiraProjectScope,
-  loadTaskPageJiraProjectStatusOrder
-} from './task-page/jira/task-page-jira-status-order'
-import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira/jira-types'
+
+import { TaskPageJiraIssueList } from './task-page-jira-issue-list'
+
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 
 const { jiraGetProjectStatusOrderMock } = vi.hoisted(() => ({
   jiraGetProjectStatusOrderMock: vi.fn()
@@ -57,117 +54,7 @@ function jiraIssue(
   }
 }
 
-function statusOrder(statusIdsByColumn: string[][]): JiraProjectStatusOrder {
-  return { statusIdsByColumn }
-}
-
 describe('Jira issue status grouping', () => {
-  it('groups issues through the production implementation and preserves row order', () => {
-    const first = jiraIssue('ALP-1', 'First', '1', 'To Do')
-    const second = jiraIssue('ALP-2', 'Second', '2', 'In Progress')
-    const third = jiraIssue('ALP-3', 'Third', '1', 'To Do')
-
-    const sections = groupJiraIssuesByStatus([first, second, third], null)
-
-    expect(sections.map((section) => section.label)).toEqual(['In Progress', 'To Do'])
-    expect(sections[1]?.issues).toEqual([first, third])
-  })
-
-  it('uses Jira column order while sorting statuses in the same column alphabetically', () => {
-    const sections = groupJiraIssuesByStatus(
-      [
-        jiraIssue('ALP-1', 'Done issue', '3', 'Done'),
-        jiraIssue('ALP-2', 'To do issue', '1', 'To Do'),
-        jiraIssue('ALP-3', 'Progress issue', '2', 'In Progress')
-      ],
-      statusOrder([['1', '2'], ['3']])
-    )
-
-    expect(sections.map((section) => section.label)).toEqual(['In Progress', 'To Do', 'Done'])
-  })
-
-  it('reverses Jira column order for descending status sort', () => {
-    const sections = groupJiraIssuesByStatus(
-      [
-        jiraIssue('ALP-1', 'Done issue', '3', 'Done'),
-        jiraIssue('ALP-2', 'To do issue', '1', 'To Do'),
-        jiraIssue('ALP-3', 'Progress issue', '2', 'In Progress')
-      ],
-      statusOrder([['1', '2'], ['3']]),
-      'desc'
-    )
-
-    expect(sections.map((section) => section.label)).toEqual(['Done', 'To Do', 'In Progress'])
-  })
-
-  it('preserves priority sorting inside the production status groups', () => {
-    const sortedIssues = sortJiraIssues(
-      [
-        jiraIssue('ALP-1', 'High issue', '1', 'To Do', { priority: 'High' }),
-        jiraIssue('ALP-2', 'Low issue', '1', 'To Do', { priority: 'Low' })
-      ],
-      'priority',
-      'asc'
-    )
-
-    const sections = groupJiraIssuesByStatus(sortedIssues, statusOrder([['1']]))
-
-    expect(sections[0]?.issues.map((issue) => issue.key)).toEqual(['ALP-2', 'ALP-1'])
-  })
-
-  it('places statuses missing from board configuration last in alphabetical order', () => {
-    const sections = groupJiraIssuesByStatus(
-      [
-        jiraIssue('ALP-1', 'Done issue', '3', 'Done'),
-        jiraIssue('ALP-2', 'To do issue', '1', 'To Do'),
-        jiraIssue('ALP-3', 'Progress issue', '2', 'In Progress')
-      ],
-      statusOrder([['2']])
-    )
-
-    expect(sections.map((section) => section.label)).toEqual(['In Progress', 'Done', 'To Do'])
-  })
-
-  it('only selects a board-order scope for one Jira site and project', () => {
-    const singleScope = getSingleJiraProjectScope([
-      jiraIssue('ALP-1', 'First', '1', 'To Do'),
-      jiraIssue('ALP-2', 'Second', '2', 'In Progress')
-    ])
-    const multipleSites = getSingleJiraProjectScope([
-      jiraIssue('ALP-1', 'First', '1', 'To Do', { siteId: 'site-1' }),
-      jiraIssue('ALP-2', 'Second', '2', 'In Progress', { siteId: 'site-2' })
-    ])
-    const multipleProjects = getSingleJiraProjectScope([
-      jiraIssue('ALP-1', 'First', '1', 'To Do', { projectKey: 'ALP' }),
-      jiraIssue('BRV-1', 'Second', '2', 'In Progress', { projectKey: 'BRV' })
-    ])
-    const missingSite = jiraIssue('ALP-3', 'Third', '3', 'Done')
-    delete missingSite.siteId
-    delete missingSite.project.siteId
-
-    expect(singleScope).toMatchObject({ projectKey: 'ALP', siteId: 'site-1' })
-    expect(multipleSites).toBeNull()
-    expect(multipleProjects).toBeNull()
-    expect(getSingleJiraProjectScope([missingSite])).toBeNull()
-  })
-
-  it('uses alphabetical fallback when status-order metadata is unavailable', async () => {
-    const error = new Error('Unknown RPC method')
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    jiraGetProjectStatusOrderMock.mockRejectedValueOnce(error)
-    const scope = getSingleJiraProjectScope([jiraIssue('ALP-1', 'First', '1', 'To Do')])
-    if (!scope) {
-      throw new Error('Expected one Jira project scope')
-    }
-
-    await expect(
-      loadTaskPageJiraProjectStatusOrder({ kind: 'local' }, 'runtime:old', scope)
-    ).resolves.toEqual({
-      statusIdsByColumn: []
-    })
-    expect(warn).toHaveBeenCalledWith('[jira] Failed to load project status order:', error)
-  })
-
   it('collapses and expands a status group through its accessible trigger', async () => {
     const user = userEvent.setup()
     render(

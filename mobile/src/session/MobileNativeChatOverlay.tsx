@@ -16,7 +16,7 @@ import {
   useMobileNativeChatReplyReveals
 } from './native-chat/transcript/mobile-native-chat-reply-reveals'
 import { MobileNativeChatRowOverlaysHost } from './native-chat/transcript/MobileNativeChatRowOverlaysHost'
-import { nativeChatAskRequiresTerminal } from '../../../src/shared/native-chat-agent-support'
+import { nativeChatAskRequiresTerminal } from '../../../src/shared/native-chat/native-chat-agent-support'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { MobileNativeChatNoticeContext } from './mobile-native-chat-notice-context'
 import type { MobileNativeChatImageSource } from './native-chat/visual/mobile-native-chat-image-preview'
@@ -96,7 +96,8 @@ export function MobileNativeChatOverlay({
       onResume: queued.resume,
       sessionKey: queued.sessionKey,
       // Hold steering while Stop ends the turn; use the session’s single display-status decision.
-      steerHeld: controller.nativeChatTurnIndicator?.stopping === true
+      steerHeld: controller.nativeChatTurnIndicator?.stopping === true,
+      agentWorking: controller.nativeChatTurnActive
     },
     backgroundTasks: controller.nativeChatBackgroundTasks
   })
@@ -192,6 +193,7 @@ export function MobileNativeChatOverlay({
                     agentWorking={controller.nativeChatTurnActive}
                     awaitingInput={controller.nativeChatAwaitingInput}
                     canStop={controller.nativeChatCanStop}
+                    sendFollowUp={controller.nativeChatSendFollowUp}
                     structuredActivityUi={controller.nativeChatStructured}
                     turnIndicator={controller.nativeChatTurnIndicator}
                     workingStartedAt={controller.nativeChatWorkingStartedAt}

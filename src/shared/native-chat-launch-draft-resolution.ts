@@ -1,4 +1,4 @@
-import type { NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 import { LIFECYCLE_CLOCK_SKEW_SLACK_MS } from './native-chat-clock-skew'
 
 /** A new tail turn proves resolution without timestamps; older-history prepends cannot advance it. */

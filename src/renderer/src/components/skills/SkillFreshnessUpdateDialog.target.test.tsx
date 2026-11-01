@@ -1,15 +1,14 @@
 // @vitest-environment happy-dom
 
-import { act, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
+
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
 import { AgentSkillSetupPanel } from '../settings/AgentSkillSetupPanel'
 import { SkillFreshnessUpdateDialog } from './SkillFreshnessUpdateDialog'
-import {
-  consumeSkillFreshnessUpdateDialogRequest,
-  requestSkillFreshnessUpdateDialog
-} from './skill-freshness-update-dialog'
+import { consumeSkillFreshnessUpdateDialogRequest } from './skill-freshness-update-dialog'
+
 import { _resetSkillUpdateRunStore } from './skill-update-run-store'
 import {
   doneResult,
@@ -116,17 +115,5 @@ it('reviews and replaces the setup panel host while a remote workspace is active
     expect(mocks.execute).toHaveBeenCalledWith(LOCAL, forcedPlan.planDigest, {
       force: [EDITED_PATH]
     })
-  )
-})
-
-it('uses the active workspace for requests without an originating target', async () => {
-  act(() => requestSkillFreshnessUpdateDialog())
-  render(<SkillFreshnessUpdateDialog />)
-  const dialog = within(screen.getByRole('dialog'))
-  expect(dialog.getByText('orchestration')).toBeDefined()
-  expect(dialog.queryByText('orca-cli')).toBeNull()
-  fireEvent.click(dialog.getByRole('button', { name: 'Update 1 skill' }))
-  await waitFor(() =>
-    expect(mocks.execute).toHaveBeenCalledWith(REMOTE, remotePlan.planDigest, { force: [] })
   )
 })

@@ -1,4 +1,4 @@
-import type { AgentSessionRecord } from './agent-session-record'
+import type { AgentSessionRecord } from './agent-session/lifecycle/agent-session-record'
 
 export type AgentSessionProviderContextBoundary = {
   operationId: string

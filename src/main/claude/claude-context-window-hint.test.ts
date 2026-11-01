@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { selectStructuredAgentContextUsage } from '../../shared/structured-agent-session-context-usage'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { bindClaudeContextUsageCapture, claudeContextWindowHint } from './claude-context-usage'
 import {
   assistantFrame,

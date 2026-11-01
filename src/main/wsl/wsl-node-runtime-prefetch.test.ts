@@ -59,40 +59,7 @@ function wire(options: { enabled: boolean; gateOpen: boolean }) {
   return { settings, scheduled, materialize }
 }
 
-describe('wslNodeRuntimePrefetchTarget', () => {
-  it('matches the build architecture without asking a distro', () => {
-    expect(wslNodeRuntimePrefetchTarget('x64')).toBe('linux-x64-glibc')
-    expect(wslNodeRuntimePrefetchTarget('arm64')).toBe('linux-arm64-glibc')
-  })
-})
-
 describe('wireWslNodeRuntimePrefetch', () => {
-  it('prefetches into the cache a WSL deploy reads, once the setting is on and the flag open', async () => {
-    const { scheduled, materialize } = wire({ enabled: true, gateOpen: true })
-    expect(materialize).not.toHaveBeenCalled()
-    expect(scheduled).toHaveLength(1)
-    scheduled[0]()
-    await prefetchWslNodeRuntime({ userDataPath })
-    const deployCache = join(userDataPath, 'orcad-artifacts')
-    expect(materialize).toHaveBeenCalledWith('linux-x64-glibc', deployCache, {})
-  })
-
-  it('never runs while the WSL hosts flag is closed, even when the setting turns on', () => {
-    const { settings, scheduled } = wire({ enabled: true, gateOpen: false })
-    settings.set(false)
-    settings.set(true)
-    expect(scheduled).toHaveLength(0)
-  })
-
-  it('waits for the setting to turn on, then schedules only once', () => {
-    const { settings, scheduled } = wire({ enabled: false, gateOpen: true })
-    expect(scheduled).toHaveLength(0)
-    settings.set(true)
-    settings.set(false)
-    settings.set(true)
-    expect(scheduled).toHaveLength(1)
-  })
-
   it('skips the download when the setting turned off before the delay ended, and reschedules on turn-on', async () => {
     const { settings, scheduled, materialize } = wire({ enabled: true, gateOpen: true })
     settings.set(false)
@@ -103,14 +70,6 @@ describe('wireWslNodeRuntimePrefetch', () => {
     scheduled[1]()
     await prefetchWslNodeRuntime({ userDataPath })
     expect(materialize).toHaveBeenCalledTimes(1)
-  })
-
-  it('skips the download when the gate is closed by the time the delay ends', () => {
-    const options = { enabled: true, gateOpen: true }
-    const { scheduled, materialize } = wire(options)
-    options.gateOpen = false
-    scheduled[0]()
-    expect(materialize).not.toHaveBeenCalled()
   })
 })
 

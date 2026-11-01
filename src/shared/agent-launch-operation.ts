@@ -1,6 +1,6 @@
 /** Lost replies are retried, including mobile workspace creation: claim an operation ID durably before side effects, then replay its recorded answer. Unknown outcomes stay refused; this ledger neither adopts nor recovers orphaned surfaces. */
 
-import { canonicalAgentSessionDigest } from './agent-session-mutation-envelope'
+import { canonicalAgentSessionDigest } from './agent-session/lifecycle/agent-session-mutation-envelope'
 import { parseAgentSessionOperationTimestamp } from './agent-session-host-authority'
 
 /** Digest launch behavior, excluding its operation ID and mutable host settings; changed defaults must not conflict with an honest retry. */

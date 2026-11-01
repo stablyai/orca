@@ -1,5 +1,18 @@
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+
+export function isContinuationAgentAllowed(
+  agent: TuiAgent,
+  sourceAgent: TuiAgent | null | undefined,
+  avoidSourceAgent = false
+): boolean {
+  // Launch modes of the same CLI still share its usage limit.
+  return (
+    !avoidSourceAgent ||
+    !sourceAgent ||
+    TUI_AGENT_CONFIG[agent].expectedProcess !== TUI_AGENT_CONFIG[sourceAgent].expectedProcess
+  )
+}
 
 export function chooseInitialContinuationAgent(args: {
   availableAgents: TuiAgent[]

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalTurnLifecycle
-} from './agent-session-journal-types'
-import { agentJournalTurnBody } from './agent-session-turn-record'
+} from './agent-session/journal/agent-session-journal-types'
+import { agentJournalTurnBody } from './agent-session/lifecycle/agent-session-turn-record'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch

@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
@@ -44,7 +44,9 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
     _meta: { runtimeId: 'r1' }
   }))
   const subscribe = vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
-    listener = onData
+    if (_method === 'agentSession.subscribe') {
+      listener = onData
+    }
     return vi.fn()
   })
   const client: RpcClient = {

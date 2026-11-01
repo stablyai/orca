@@ -21,7 +21,7 @@ import { createAnnouncedNotificationRegistry } from '../notifications/announced-
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
 import { isStructuredAttentionRead } from '../../shared/agent-session-attention'
-import { isAgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import { isAgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   getLastObservedDeliveryOutcome,
   hasTriggeredPermissionDialogThisSession,

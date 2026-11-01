@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
-import {
-  agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleKey
-} from '../../shared/agent-session-provider-handle'
+import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
@@ -225,17 +223,25 @@ describe('a created Grok session Grok reports missing on the first reopen', () =
 describe('a replacement after its earlier attach failed to open the journal', () => {
   async function failAttachBeforeReplacement() {
     const opened = await openRestoreRig(-32603, 'session file is corrupt')
-    const { host, store, fence, warnings, ready } = opened
+    const { host, store, fence, warnings, ready, rig } = opened
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
     await ready()
     await host.close(SESSION, 'user-close')
+    const spawnedBefore = [...rig.spawned]
+    const chainBefore = structuredClone(store.getRecord(SESSION)?.providerHandleChain)
     // Fail before the spawned child's background handshake can prove a replacement link.
     vi.spyOn(AgentSessionJournal.prototype, 'open').mockRejectedValueOnce(
       new Error('journal path unavailable')
     )
-    await expect(host.attach(CALLER, attachParams(fence()))).rejects.toThrow(
-      'journal path unavailable'
-    )
+    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_journal_unreadable',
+        details: { reason: 'journalUnavailable' }
+      }
+    })
+    expect(rig.spawned).toEqual(spawnedBefore)
+    expect(store.getRecord(SESSION)?.providerHandleChain).toEqual(chainBefore)
     expect(
       agentSessionProviderHandleChainHead(store.getRecord(SESSION)?.providerHandleChain ?? [])
     ).toMatchObject({

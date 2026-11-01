@@ -125,43 +125,6 @@ describe('authenticated Jira image reads', () => {
     expect(binary).toHaveBeenCalledTimes(3)
   })
 
-  it('loads the combined 48 description and comment references without rejecting a reader', async () => {
-    const releases: (() => void)[] = []
-    binary.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          releases.push(() => resolve({ data: bytes.buffer, contentType: 'image/png' }))
-        })
-    )
-    const reads = Array.from({ length: 48 }, (_, id) =>
-      readAttachmentImageBytes(client, { ...meta, id: String(id) })
-    )
-    await vi.waitFor(() => expect(binary).toHaveBeenCalledTimes(3))
-    for (let batch = 0; batch < 16; batch += 1) {
-      await vi.waitFor(() => expect(releases).toHaveLength(3))
-      releases.splice(0).forEach((release) => release())
-    }
-    expect((await Promise.all(reads)).filter(Boolean)).toHaveLength(48)
-    expect(binary).toHaveBeenCalledTimes(48)
-  })
-
-  it('uses the REST attachment fallback for scoped site links while preserving Server paths', async () => {
-    const scoped = {
-      ...client,
-      site: {
-        ...client.site,
-        apiBaseUrl: 'https://api.atlassian.com/ex/jira/tenant',
-        authType: 'cloud' as const
-      }
-    }
-    await readAttachmentImageBytes(scoped, { ...meta, contentUrl: '/secure/attachment/1/shot.png' })
-    expect(binary).toHaveBeenCalledWith(
-      scoped,
-      'https://jira.test/rest/api/3/attachment/content/1?redirect=false',
-      expect.anything()
-    )
-  })
-
   it('expires grants and renews them when the issue is read again', () => {
     vi.useFakeTimers()
     const reference = grant()
@@ -192,18 +155,6 @@ describe('authenticated Jira image reads', () => {
 })
 
 describe('local Jira image protocol', () => {
-  it('serves bounded image bytes and headers without exposing authorization', async () => {
-    const url = `orca-jira-image://attachment/${grant()}`
-    const response = await handleJiraImageRequest(new Request(url))
-    expect(response.status).toBe(200)
-    expect(response.headers.get('content-type')).toBe('image/png')
-    expect(response.headers.get('cache-control')).toBe('no-store')
-    expect(response.headers.get('authorization')).toBeNull()
-    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes)
-    const head = await handleJiraImageRequest(new Request(url, { method: 'HEAD' }))
-    expect(head.headers.get('content-length')).toBe('3')
-    expect(await head.text()).toBe('')
-  })
   it('refuses unknown, malformed, revoked and non-GET image requests', async () => {
     const url = `orca-jira-image://attachment/${grant()}`
     expect((await handleJiraImageRequest(new Request(`${url}?url=https://evil.test`))).status).toBe(

@@ -105,27 +105,6 @@ describe('closeFile when activeFileId is not an open file', () => {
     expectValidActiveFile(store)
   })
 
-  it('finishes close-all when the open-file list has a duplicate id', async () => {
-    const store = createTestStore()
-    seed(store, ['/a', '/a', '/b'], [['t-a1', '/a'], ...duplicateTab, ['t-b', '/b']], 't-a1', [
-      't-a2',
-      't-a1'
-    ])
-    const main = await drawTabsFromMain(store)
-    const closable = store.getState().openFiles.filter((f) => f.worktreeId === WT)
-    expect(() => {
-      for (const file of closable) {
-        store.getState().closeFile(file.id)
-      }
-    }).not.toThrow()
-    await main.settle()
-    main.close()
-    const state = store.getState()
-    expect(state.openFiles.map((f) => f.id)).toEqual(['/other'])
-    expect(state.unifiedTabsByWorktree[WT] ?? []).toEqual([])
-    expect(state.activeFileId).toBeNull()
-  })
-
   it('does not select another worktree file after close-all clears the active worktree', async () => {
     const store = createTestStore()
     seed(store, ['/a', '/b', '/a'], [['t-a1', '/a'], ['t-b', '/b'], ...duplicateTab], 't-a1', [

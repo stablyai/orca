@@ -2,7 +2,7 @@ import './MobileNativeChatView.harness.test-fixture'
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
 const scrollToEnd = vi.hoisted(() => vi.fn())
@@ -11,6 +11,7 @@ const scrollToOffset = vi.hoisted(() => vi.fn())
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
+    ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     FlatList: React.forwardRef<
       unknown,

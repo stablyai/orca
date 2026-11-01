@@ -3,9 +3,9 @@ import type {
   AgentJournalItemBody,
   AgentJournalProducerLinkage,
   AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
-import { projectNativeChatTranscript } from '../../../../shared/native-chat-transcript-projection'
+import { projectNativeChatTranscript } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,

@@ -1,6 +1,6 @@
 import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {

@@ -2,7 +2,7 @@ import {
   endedRunningAgentJournalToolCall,
   type AgentJournalRunningCallEnd
 } from '../../shared/agent-journal-tool-call-lifecycle'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { cancelledJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import {
   endedJournalReasoning,

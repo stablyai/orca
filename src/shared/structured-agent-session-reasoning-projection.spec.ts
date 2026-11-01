@@ -3,7 +3,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalMessageState,
   AgentJournalRenderItem
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import { projectStructuredItemToNativeChat } from './structured-agent-session-projection'
 
 function item(

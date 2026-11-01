@@ -8,7 +8,7 @@ import {
   type StructuredAttentionState,
   type AgentSessionAttentionEdge
 } from '../../shared/agent-session-attention'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   NotificationDispatchRequest,
   NotificationSettings

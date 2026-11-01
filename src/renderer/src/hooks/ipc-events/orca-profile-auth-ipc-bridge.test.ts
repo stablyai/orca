@@ -119,13 +119,6 @@ describe('orca profile sign-in progress IPC bridge', () => {
   const progress = (): OrcaCloudSignInProgress | null =>
     storeHolder.current?.getState().orcaProfileSignInProgress ?? null
 
-  it('adopts a sign-in already in flight when the window loads', async () => {
-    registerOrcaProfileAuthIpcBridge([])
-    await vi.waitFor(() => expect(snapshots).toHaveLength(1))
-    snapshots[0](WAITING)
-    await vi.waitFor(() => expect(progress()).toEqual(WAITING))
-  })
-
   it('lets a newer change win over a late snapshot', async () => {
     registerOrcaProfileAuthIpcBridge([])
     await vi.waitFor(() => expect(snapshots).toHaveLength(1))

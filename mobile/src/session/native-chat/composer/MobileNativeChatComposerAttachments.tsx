@@ -11,7 +11,7 @@ import {
   View
 } from 'react-native'
 import { FileText, Image as ImageIcon, X } from 'lucide-react-native'
-import { colors, concentricRadius, radii, spacing } from '../../../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { formatPreviewByteLength } from '../../../files/mobile-file-preview-response'
@@ -129,7 +129,12 @@ export function MobileNativeChatComposerAttachments({
 function RemoveBadge({ label, onPress }: { label: string; onPress: () => void }) {
   useMobileColorScheme()
   return (
-    <Pressable accessibilityLabel={label} style={styles.remove} onPress={onPress} hitSlop={8}>
+    <Pressable
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.remove, pressed && pressedStyle]}
+      onPress={onPress}
+      hitSlop={8}
+    >
       <X size={11} color={colors.textPrimary} strokeWidth={3} />
     </Pressable>
   )

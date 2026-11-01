@@ -3,7 +3,7 @@ import {
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent
-} from './agent-session-resume'
+} from './agent-session/lifecycle/agent-session-resume'
 import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runtime-types'
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'

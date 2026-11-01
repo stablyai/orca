@@ -83,6 +83,7 @@ it('leaves the preamble only what the setup gate did not use of the caller’s t
     recordWorkerStage: () => {},
     prepareStartingWorkerAuthority: () => {},
     getWorkerDispatch: () => ({ state: 'starting' }),
+    getLatestUnreadMessageSequence: () => undefined,
     markWorkerDispatchReady: () => ({ state: 'ready', stage: 'ready' })
   }
 

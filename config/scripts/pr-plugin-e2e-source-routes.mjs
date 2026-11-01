@@ -68,7 +68,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       `${UI}state\\/(?:plugin-try-action|plugin-action-toast|use-plugin-install-action)`,
       `${STORE}preview-request`
     ].join('|'),
-    'plugin-git-fixture|plugin-gleam-catalog-fixture|plugin-smoke'
+    'plugin-git-fixture|plugin-gleam-catalog-fixture|plugin-smoke|plugin-frame-guest'
   ),
   pluginRoute(
     'plugins.themes',
@@ -101,7 +101,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/main\\/plugins\\/plugin-new-file-template',
       'src\\/shared\\/plugins\\/(?:contributions\\/plugin-(?:custom-editor-contribution|new-file-contribution)|frames\\/plugin-custom-editor-bridge)'
     ].join('|'),
-    'plugin-smoke'
+    'plugin-smoke|plugin-frame-guest'
   ),
   pluginRoute(
     'plugins.panels-and-workers',
@@ -110,9 +110,52 @@ const SPECIFIC_PLUGIN_ROUTES = [
       `${UI}(?:page\\/PluginContributionAction(?:Panel|Command|Events)|state\\/use-plugin-logs)`,
       `${STORE}panels`,
       'src\\/main\\/plugins\\/(?:panels\\/|workers\\/|plugin-(?:command-|event-delivery|agent-status-event|storage-store|secrets-store|log-buffer))',
-      'src\\/shared\\/plugins\\/(?:frames\\/|workers\\/|events\\/|capabilities\\/|contributions\\/plugin-(?:command-|event-|panel-|execution-profile))'
+      'src\\/shared\\/plugins\\/(?:frames\\/|workers\\/|events\\/|capabilities\\/|contributions\\/plugin-(?:command-|event-|panel-|execution-profile))',
+      'examples\\/plugins\\/(?:hello-orca|test-fixtures\\/hostile-panel)\\/'
     ].join('|'),
-    'plugin-panel-navigation-observer'
+    'plugin-panel-navigation-observer|plugin-frame-guest'
+  ),
+  // Desktop frames are isolated <webview> guests; a regression here breaks every frame on desktop.
+  pluginRoute(
+    'plugins.isolated-frames',
+    ['plugin-isolated-frame', 'plugin-panel-containment'],
+    [
+      'src\\/main\\/plugins\\/panels\\/plugin-frame-',
+      'src\\/shared\\/plugins\\/frames\\/plugin-(?:frame-guest|panel-shell)',
+      'src\\/preload\\/plugin-frame-guest',
+      'src\\/main\\/window\\/(?:main-window-webview-security|attach-main-window-services|host-frame-permission-policy)',
+      'src\\/main\\/ipc\\/(?:plugins|plugin-frame-entry-ipc)\\.ts$',
+      'src\\/main\\/startup\\/main-process-plugins',
+      'config\\/build-plugins\\/main-build-entry-points',
+      'src\\/main\\/browser\\/browser-guest-shortcut-(?:forwarding|dispatch)',
+      'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-frame-|use-plugin-frame-|PluginPanel\\.tsx$|plugin-panel-design-token-css|use-plugin-panel-theme-revision)',
+      'src\\/renderer\\/src\\/components\\/editor\\/(?:PluginCustomEditorFrame\\.tsx$|plugin-custom-editor-host)'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke'
+  ),
+  pluginRoute(
+    'plugins.declarative-panels',
+    ['plugin-declarative-panel'],
+    [
+      `${UI}declarative\\/`,
+      'src\\/shared\\/plugins\\/(?:declarative\\/|frames\\/plugin-declarative-)',
+      'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:PluginDeclarativePanel|use-plugin-declarative-|plugin-declarative-)',
+      'resources\\/plugins\\/declarative\\/'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke'
+  ),
+  // Build-less TS/TSX: the frame protocol transpiles source modules and resolves their imports.
+  pluginRoute(
+    'plugins.buildless-tsx',
+    ['plugin-buildless-tsx'],
+    [
+      'src\\/main\\/plugins\\/panels\\/plugin-frame-(?:module-|source-serving|protocol\\.ts$)',
+      'src\\/main\\/plugins\\/plugin-content-hash',
+      'src\\/shared\\/plugins\\/frames\\/plugin-frame-source-modules',
+      'src\\/cli\\/plugin-authoring\\/plugin-(?:type-files|components-template)',
+      'examples\\/plugins\\/hello-tsx\\/'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke'
   ),
   pluginRoute(
     'plugins.vm-recipes',

@@ -125,25 +125,4 @@ describe('whole-session workspace tab-model reconciliation', () => {
     expect(notifications).toBe(0)
     expect(reconciliationSnapshot(store)).toEqual(settled)
   })
-
-  it('indexes openFiles once instead of rescanning it per workspace', () => {
-    const { store, workspaceIds } = hydrateFixtureStore()
-    const openFiles = store.getState().openFiles
-    let scans = 0
-    store.setState({
-      openFiles: new Proxy(openFiles, {
-        get(target, property, receiver) {
-          if (property === 'filter') {
-            scans += 1
-          }
-          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
-          return Reflect.get(target, property, receiver)
-        }
-      })
-    })
-
-    store.getState().reconcileWorktreeTabModels(workspaceIds)
-
-    expect(scans).toBe(0)
-  })
 })

@@ -70,8 +70,8 @@ vi.mock('./use-structured-agent-session-sends', () => ({
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-queued-message-wire'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-chat-draft-cache'
@@ -160,7 +160,7 @@ describe('useStructuredAgentSession rewind RPC', () => {
     await waitFor(() => expect(view.result.current.rewind.disabledReason).toBeNull())
     await act(() => view.result.current.rewind.request('user-1', async () => true))
     const { structuredAgentSessionPayloadFingerprint } =
-      await import('../../../../shared/structured-agent-session-mutation')
+      await import('../../../../shared/agent-session/lifecycle/structured-agent-session-mutation')
     expect(mocks.call).toHaveBeenCalledWith(target, 'agentSession.rewind', {
       envelope: {
         sessionId: 'session-1',

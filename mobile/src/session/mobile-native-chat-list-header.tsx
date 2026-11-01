@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
-import { ActivityIndicator, Animated, Platform, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Animated, Easing, Platform, Pressable, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 import type { OlderPagePhase } from './use-mobile-older-page-loader'
@@ -19,6 +19,7 @@ function FadeIn({ delay, children }: { delay: number; children: ReactNode }): Re
       toValue: 1,
       duration: FADE_MS,
       delay,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: Platform.OS !== 'web'
     })
     fade.start()

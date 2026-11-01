@@ -1,6 +1,6 @@
 import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import type { SpawnRequestFacts } from '../../../shared/host-spawn-admission'
 import {
+  type SpawnRequestFacts,
   createSpawnAdmissionState,
   DEFAULT_SPAWN_ADMISSION_LIMITS,
   decideSpawnAdmission,
@@ -9,7 +9,7 @@ import {
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
-import type { SleepingAgentSessionRecord } from '../orca-runtime-test-mocks.spec'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,

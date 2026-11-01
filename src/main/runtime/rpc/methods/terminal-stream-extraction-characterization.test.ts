@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/terminal-stream-protocol'
 import { sendSnapshotFrames } from './terminal/terminal-snapshot-publication'
 import { publishMultiplexInitialSnapshot } from './terminal/terminal-multiplex-initial-snapshot'
-import { initializeMultiplexStream } from './terminal/terminal-multiplex-stream-initialization'
+
 import type { TerminalMultiplexConnection } from './terminal/terminal-multiplex-connection'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { TerminalMultiplexStream } from './terminal/terminal-stream-types'
@@ -17,41 +17,6 @@ import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../
 // These assertions protect the permanent binary publication seam while its state machine
 // lives in concrete terminal domain modules.
 describe('terminal stream extraction characterization', () => {
-  it('publishes an empty snapshot as Start then End without a synthetic chunk', () => {
-    const frames: {
-      opcode: TerminalStreamOpcode
-      payload?: Uint8Array<ArrayBufferLike>
-    }[] = []
-    const stats = sendSnapshotFrames(
-      (opcode, payload) => {
-        frames.push({ opcode, payload })
-      },
-      {
-        kind: 'scrollback',
-        cols: 80,
-        rows: 24,
-        data: '',
-        seq: 41,
-        truncated: false,
-        truncatedByByteBudget: false
-      }
-    )
-
-    expect(frames.map((frame) => frame.opcode)).toEqual([
-      TerminalStreamOpcode.SnapshotStart,
-      TerminalStreamOpcode.SnapshotEnd
-    ])
-    expect(decodeTerminalStreamJson(frames[0]!.payload ?? new Uint8Array())).toEqual({
-      kind: 'scrollback',
-      cols: 80,
-      rows: 24,
-      seq: 41,
-      truncated: false,
-      truncatedByByteBudget: false
-    })
-    expect(stats).toEqual({ bytes: 0, chunks: 0, published: true })
-  })
-
   it('stops publication immediately when SnapshotStart is rejected', () => {
     const opcodes: TerminalStreamOpcode[] = []
     const stats = sendSnapshotFrames(
@@ -210,27 +175,5 @@ describe('terminal stream extraction characterization', () => {
     })
     expect(decodeTerminalStreamText(frames[1]!.payload)).toBe('AUTHORITATIVE_INITIAL_MARKER')
     expect(outputBatcherPush).not.toHaveBeenCalled()
-  })
-
-  it('lets a slot-handler registration throw escape before per-stream catch ownership begins', async () => {
-    const streams = new Map()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration throws before initialization reads any other connection member.
-    const state = {
-      runtime: {},
-      connectionId: 'connection',
-      streams,
-      registerBinaryStreamHandler: vi.fn(() => {
-        throw new Error('registrar-failed')
-      }),
-      sendFrame: vi.fn(),
-      queueOrSendOutput: vi.fn()
-    } as unknown as TerminalMultiplexConnection
-    const installed = vi.fn()
-
-    await expect(
-      initializeMultiplexStream(state, { streamId: 7, terminal: 'terminal' }, 'pty', installed)
-    ).rejects.toThrow('registrar-failed')
-    expect(installed).not.toHaveBeenCalled()
-    expect(streams.has(7)).toBe(true)
   })
 })

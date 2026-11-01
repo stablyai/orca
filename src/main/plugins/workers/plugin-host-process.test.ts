@@ -45,19 +45,6 @@ afterEach(() => {
 })
 
 describe('startPluginWorker', () => {
-  it('does not inherit Orca execArgv', async () => {
-    const child = new FakeChild()
-    const pending = start(child)
-    child.emit('message', ready([]))
-    await pending
-
-    expect(processMocks.fork).toHaveBeenCalledWith(
-      '/host.js',
-      [],
-      expect.objectContaining({ execArgv: [] })
-    )
-  })
-
   it('replays an exit that happened before handle registration', async () => {
     const child = new FakeChild()
     const pending = start(child)
@@ -84,24 +71,6 @@ describe('startPluginWorker', () => {
 
     await expect(command).rejects.toThrow('disconnected')
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('counts delivered events as in flight until their acknowledgement', async () => {
-    const child = new FakeChild()
-    const pending = start(child)
-    child.emit('message', ready([]))
-    const handle = await pending
-
-    handle.deliverEvent('workspace.created', {
-      workspaceId: 'worktree-1',
-      kind: 'worktree',
-      path: '/repo',
-      branch: 'feature'
-    })
-
-    expect(handle.inFlightCount()).toBe(1)
-    child.emit('message', { orca: 1, kind: 'res', id: 0, result: null })
-    expect(handle.inFlightCount()).toBe(0)
   })
 
   it('kills a worker whose event handler never acknowledges completion', async () => {

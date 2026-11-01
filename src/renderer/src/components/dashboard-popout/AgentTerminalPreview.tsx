@@ -14,7 +14,7 @@ import {
 import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
-import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { createPreviewGridClaim } from './preview-grid-claim'
@@ -65,10 +65,7 @@ export function AgentTerminalPreview({
       return { terminalTheme: null, terminalMode: 'dark' as const }
     }
     const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-    const theme = composeActiveTerminalTheme(
-      appearance.theme ?? getBuiltinTheme(appearance.themeName),
-      settings
-    )
+    const theme = composeActiveTerminalTheme(appearance.theme, settings)
     return { terminalTheme: theme, terminalMode: appearance.mode }
   }, [settings, systemPrefersDark])
   // Settings arrive as cloned snapshots; compare theme values before reconnecting.

@@ -1,6 +1,6 @@
 /** Share settings defaults and per-launch feasibility between renderer tab launches and orchestration workers to prevent drift. */
 
-import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
+import { isAgentSessionHandleProvider } from './agent-session/lifecycle/agent-session-provider-handle'
 import { parseExecutionHostId } from './execution-host'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 import {

@@ -1,4 +1,4 @@
-import { agentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { agentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS, type AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
@@ -11,6 +11,7 @@ import { supportsCodexStructuredLocation } from '../codex/codex-structured-locat
 import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
 import { supportsAcpStructuredLocation } from '../acp/acp-structured-location-support'
 import { PI_RPC_RUNTIME_METADATA } from '../pi/rpc-runtime-metadata'
+import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import {
   resolveStructuredClaudeAccountHomePath,
   resolveStructuredCodexAccountHomePath
@@ -133,12 +134,15 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
       modelCatalog: claudeModelCatalogDiscovery,
       ...CLAUDE_CLI_CONVERSATIONS,
       supportsLocation: supportsClaudeStructuredLocation,
-      resolveAccountHome: async ({ launchEnv, location }, services) =>
+      // Without a router a launch keeps the record's home (resolveClaudeStructuredLaunchHome).
+      launchFollowsSelection: () => getClaudeProfileRouter() !== undefined,
+      resolveAccountHome: async ({ launchEnv, location, purpose }, services) =>
         agentSessionAccountHome(
           CLAUDE_STRUCTURED_AGENT,
           resolveStructuredClaudeAccountHomePath({
             launchEnv,
             wslDistro: location?.wslDistro ?? null,
+            ...(purpose === 'identity' ? { purpose } : {}),
             getClaudeConfigDirectory: services.getClaudeConfigDirectory
           })
         )

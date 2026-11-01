@@ -19,7 +19,7 @@ import {
 } from '../runtime/structured-agent-runtime-registrations'
 import { resolveStructuredAgentSessionAdoptionForCreate } from '../runtime/structured-agent-session-create-adoption'
 import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
-import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { writeOpenCodeSqliteDatabase } from '../ai-vault/session-scanner-opencode-sqlite-fixture'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { activeProviderContext } from '../../../shared/agent-session-provider-context'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'

@@ -7,7 +7,10 @@ import {
 } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat/tools/native-chat-tool-fold'
-import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatMessage
+} from '../../../src/shared/native-chat/native-chat-types'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import {
   useMobileNativeChatRowKeys,

@@ -230,6 +230,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
         tabId: 'reserved-tab',
         leafId: 'reserved-leaf',
         launchToken: 'reserved-token',
+        // A paired window's create can't be told from its pane remounts, so it never stamps Recent.
+        reopensPane: true,
         preAllocatedHandle: 'reserved-handle'
       })
       expect(mockSpawn).not.toHaveBeenCalled()

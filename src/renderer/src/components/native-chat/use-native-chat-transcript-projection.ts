@@ -2,9 +2,9 @@ import { useMemo } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import type { NativeChatSubagentRow } from '../../../../shared/native-chat-transcript-projection'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'

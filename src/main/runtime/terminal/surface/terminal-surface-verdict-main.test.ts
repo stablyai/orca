@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { HEADLESS_LEAF_ID, TEST_WORKTREE_ID } from '../../orca-runtime-test-fixtures.spec'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PaneStartStatuses } from '../../pane-start-statuses'
 import { SURFACE_TAB_ID, surfaceRuntime } from './terminal-surface-replies.test-fixture'
 

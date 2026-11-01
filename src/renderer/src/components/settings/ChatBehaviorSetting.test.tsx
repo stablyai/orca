@@ -6,7 +6,10 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
+import { i18n } from '@/i18n/i18n'
+import de from '../../i18n/locales/de.json'
 import { TooltipProvider } from '../ui/tooltip'
 
 afterEach(() => {
@@ -146,20 +149,61 @@ describe('ChatBehaviorSetting shell environment', () => {
   })
 })
 
-describe('ChatBehaviorSetting queue follow-ups', () => {
-  const QUEUE_TOGGLE = '[aria-label="Toggle queue follow-ups"]'
+describe('ChatBehaviorSetting follow-up behavior', () => {
+  const FOLLOW_UP_SWITCH = '[role="switch"][aria-label="Queue follow-ups"]'
 
-  it('hides the switch until the host answers, then shows it', async () => {
+  it('hides the choice until the host answers, then shows it', async () => {
     setLocalRuntimeCapabilitiesForTests(null)
     let answer: (status: { capabilities: string[] }) => void = () => {}
     vi.stubGlobal('api', {
       runtime: { getStatus: () => new Promise((resolve) => (answer = resolve)) }
     })
     const { container } = renderSetting({})
-    expect(container.querySelector(QUEUE_TOGGLE)).toBeNull()
+    expect(container.querySelector(FOLLOW_UP_SWITCH)).toBeNull()
     await act(async () =>
       answer({ capabilities: [AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY] })
     )
-    expect(container.querySelector(QUEUE_TOGGLE)).not.toBeNull()
+    expect(container.querySelector(FOLLOW_UP_SWITCH)).not.toBeNull()
   })
+
+  it.each([true, false, undefined])(
+    'reads Queue by default and toggles the existing boolean (%s)',
+    (saved) => {
+      setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
+      const updateSettings = vi.fn()
+      const { container } = renderSetting({ nativeChatQueueFollowUps: saved }, updateSettings)
+      const toggle = container.querySelector<HTMLButtonElement>(FOLLOW_UP_SWITCH)!
+      expect(toggle.getAttribute('aria-checked')).toBe(String(saved !== false))
+      // The alternate is described relative to the switch, so the copy holds on and off.
+      expect(container.textContent).toContain('Cmd/Ctrl+Enter does the opposite for one message.')
+      fireEvent.click(toggle)
+      expect(updateSettings).toHaveBeenCalledWith({ nativeChatQueueFollowUps: saved === false })
+    }
+  )
+})
+
+it('renders the Queue switch and description using the German catalog', async () => {
+  setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
+  i18n.addResourceBundle('de', 'translation', de, true, true)
+  await act(async () => {
+    await i18n.changeLanguage('de')
+  })
+  try {
+    const { container } = renderSetting({})
+    const copy = de.components.settings.nativeChat
+    expect(
+      container
+        .querySelector(`[role="switch"][aria-label="${copy.followUpBehaviorTitle}"]`)
+        ?.getAttribute('aria-checked')
+    ).toBe('true')
+    expect(container.textContent).toContain(copy.followUpBehaviorTitle)
+    expect(container.textContent).toContain(copy.followUpBehaviorCopy)
+    expect(copy.followUpBehaviorCopy).toContain(
+      'Cmd/Strg+Enter macht für eine Nachricht das Gegenteil.'
+    )
+  } finally {
+    await act(async () => {
+      await i18n.changeLanguage('en')
+    })
+  }
 })

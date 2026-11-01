@@ -58,7 +58,7 @@ import {
 } from './cell-admission-migration-registration.js'
 import {
   ASSIGNMENT_CONNECTION_HEADROOM_QUERY
-} from './assignment-connection-headroom-query.js'
+} from './assignment/assignment-connection-headroom-query.js'
 import {
   CONNECTION_CAP_COLUMNS_SQL,
   EFFECTIVE_HARD_CAP_SQL,

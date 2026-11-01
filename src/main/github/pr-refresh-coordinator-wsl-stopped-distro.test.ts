@@ -67,6 +67,30 @@ describe('PR refresh for a stopped WSL distro (E9)', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
   })
 
+  it("drains outside a user act that scheduled it, so a stopped distro's queue is not admitted", async () => {
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+    const { isWslUserActFor, runAsWslUserAct } = await import('../wsl/wsl-user-act-scope')
+    const drainedInsideAct: boolean[] = []
+    gate.blockedWslDistroForPath.mockImplementation(async () => {
+      drainedInsideAct.push(isWslUserActFor('Ubuntu'))
+      return { distro: 'Ubuntu', state: 'stopped' }
+    })
+    const candidate = makeCandidate({
+      repoPath: WSL_REPO,
+      cacheKey: `${WSL_REPO}::feature/act`,
+      isSelected: true
+    })
+
+    // The drain timer is armed and fires while the act still holds.
+    await runAsWslUserAct('Ubuntu', async () => {
+      reportVisiblePRRefreshCandidates([candidate], 1, 1)
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(drainedInsideAct).toEqual([false])
+    expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
+  })
+
   it.each(['visible', 'active', 'post-push'] as const)(
     'skips an automatic %s refreshPRNow without running gh, keeping the cached PR',
     async (reason) => {

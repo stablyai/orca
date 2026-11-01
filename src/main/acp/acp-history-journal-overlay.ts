@@ -1,5 +1,5 @@
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   journalLifecycleItemMutation,
   journalLifecycleMutationItemId,

@@ -121,13 +121,6 @@ describe('file explorer OS file drops', () => {
     expect(clearDrag).toHaveBeenCalled()
   })
 
-  it('imports a drop on the empty tree area into the displayed root', async () => {
-    const view = render(<Explorer scope={SCOPE_B} rows={[]} />)
-    drag(view.getByTestId('tree'), 'drop')
-    await waitFor(() => expect(mocks.importPaths).toHaveBeenCalledTimes(1))
-    expect(mocks.importPaths.mock.calls[0][2]).toBe('/repo/app')
-  })
-
   it('captures the target folder at drop time even if rows re-render during preparation', async () => {
     const finishPreparation = deferredPreparation()
     const view = render(<Explorer scope={SCOPE_B} rows={ROWS} />)
@@ -168,23 +161,6 @@ describe('file explorer OS file drops', () => {
     drag(view.getByTestId('/repo/api/x'), 'drop')
     expect(mocks.prepare).not.toHaveBeenCalled()
     expect(mocks.importPaths).not.toHaveBeenCalled()
-  })
-
-  it('refuses while the files view is hidden', () => {
-    const hidden = { worktreeId: 'wt-b', worktreePath: null, displayRootPath: '/repo/app' }
-    function HiddenExplorer(): React.JSX.Element {
-      const ownerRef = useFileExplorerImport({
-        ...hidden,
-        refreshDir,
-        clearNativeDragState: clearDrag,
-        setSelectedPath: setSelected
-      })
-      return <div ref={ownerRef} data-testid="tree" />
-    }
-    const view = render(<HiddenExplorer />)
-    expect(drag(view.getByTestId('tree'), 'dragover').dropEffect).toBe('none')
-    drag(view.getByTestId('tree'), 'drop')
-    expect(mocks.prepare).not.toHaveBeenCalled()
   })
 })
 

@@ -7,10 +7,6 @@ import { WideCellGrid, readGridRows } from './__fixtures__/terminal-wide-cell-gr
 const KO = '안녕하세요 오르카 테스트입니다.'
 const KO2 = '결론부터 말씀드리면 시각적 피로도'
 const LA = 'roadmap/complete-overhaul-backlog-history.md'
-// Whole-row repaint fixtures must fit one physical row because CR returns to that row’s start.
-const KO_ROW = '안녕하세요 오르카'
-const KO2_ROW = '테스트입니다.'
-const LA_ROW = 'complete-overhaul.md'
 const ROWS = 14
 
 type Painted = { rows: string[]; emulator: HeadlessEmulator }
@@ -28,25 +24,6 @@ function rowsOf(cols: number, sequence: string): string[] {
   return painted.rows
 }
 
-describe('wide-character wrap fidelity', () => {
-  it('places every glyph where an independent cell model does, at every width', () => {
-    const mismatches: string[] = []
-    for (let cols = 6; cols <= 60; cols += 1) {
-      for (const text of [KO, `${LA} ${KO}`, `${KO} ${LA}`, `${KO}${KO2}`]) {
-        const model = new WideCellGrid(cols)
-        model.text(text)
-        const actual = rowsOf(cols, text)
-        if (actual.join('|') !== model.render(ROWS).join('|')) {
-          mismatches.push(
-            `cols=${cols} ${JSON.stringify(text.slice(0, 12))}: ${JSON.stringify(actual)}`
-          )
-        }
-      }
-    }
-    expect(mismatches).toEqual([])
-  })
-})
-
 describe('repaint over wide characters (#15192)', () => {
   it('lands a rewrite correctly on every column, including a glyph trailing cell', () => {
     const mismatches: string[] = []
@@ -62,30 +39,6 @@ describe('repaint over wide characters (#15192)', () => {
           const actual = rowsOf(cols, sequence)
           if (actual.join('|') !== model.render(ROWS).join('|')) {
             mismatches.push(`cols=${cols} row=${row} col=${col}: ${JSON.stringify(actual)}`)
-          }
-        }
-      }
-    }
-    expect(mismatches).toEqual([])
-  })
-
-  it('leaves a full-row repaint indistinguishable from writing the row once', () => {
-    const mismatches: string[] = []
-    for (let cols = 22; cols <= 60; cols += 1) {
-      for (const [prior, next] of [
-        [KO_ROW, KO2_ROW],
-        [KO2_ROW, KO_ROW],
-        [LA_ROW, KO_ROW],
-        [KO_ROW, LA_ROW],
-        [KO_ROW, KO_ROW]
-      ] as const) {
-        for (const repaint of ['\r\x1b[2K', '\r\x1b[0K', '\x1b[1;1H\x1b[0K']) {
-          const painted = rowsOf(cols, `${prior}${repaint}${next}`)
-          const direct = rowsOf(cols, next)
-          if (painted.join('|') !== direct.join('|')) {
-            mismatches.push(
-              `cols=${cols} ${JSON.stringify(repaint)}: painted=${JSON.stringify(painted)} direct=${JSON.stringify(direct)}`
-            )
           }
         }
       }

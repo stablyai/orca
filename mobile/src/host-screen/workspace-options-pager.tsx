@@ -1,22 +1,36 @@
 import { useCallback, useState, type ReactNode } from 'react'
-import { View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import Animated, {
+  Easing,
+  ReduceMotion,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
   type SharedValue
 } from 'react-native-reanimated'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import {
+  PUSH_CURVE,
+  PUSH_SLIDE_MS,
+  PUSH_UNDER_DIM,
+  PUSH_UNDER_SHIFT
+} from '../navigation/push-motion'
+import { useDrawerReducedMotion } from '../components/bottom-drawer-constants'
+import { REDUCED_MOTION_FADE_MS } from '../components/sheet-motion-values'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-const PAGE_SLIDE_MS = 200
+// Built per call: a module-level easing would run before a test's Reanimated mock can serve it.
+function pageTiming(reducedMotion: boolean) {
+  // Under Reduce Motion the page cross-fades instead of sliding, and that fade must still run.
+  return reducedMotion
+    ? { duration: REDUCED_MOTION_FADE_MS, reduceMotion: ReduceMotion.Never }
+    : { duration: PUSH_SLIDE_MS, easing: Easing.bezier(...PUSH_CURVE) }
+}
 
 export function useOptionPager<Key extends string>() {
-  const reduceMotion = useReducedMotionEnabled()
-  const duration = reduceMotion ? 0 : PAGE_SLIDE_MS
+  const reducedMotion = useDrawerReducedMotion()
   const [page, setPage] = useState<Key | null>(null)
   // 0 shows the page; 1 parks it one width to the right.
   const slide = useSharedValue(1)
@@ -25,43 +39,54 @@ export function useOptionPager<Key extends string>() {
     (key: Key) => {
       slide.value = 1
       setPage(key)
-      slide.value = withTiming(0, { duration })
+      slide.value = withTiming(0, pageTiming(reducedMotion))
     },
-    [duration, slide]
+    [reducedMotion, slide]
   )
   const close = useCallback(() => {
-    if (duration === 0) {
-      setPage(null)
-      return
-    }
-    slide.value = withTiming(1, { duration }, (finished) => {
+    slide.value = withTiming(1, pageTiming(reducedMotion), (finished) => {
       if (finished) {
         runOnJS(setPage)(null)
       }
     })
-  }, [duration, slide])
+  }, [reducedMotion, slide])
 
   const forget = useCallback(() => setPage(null), [])
 
-  return { page, open, close, forget, slide }
+  return { page, open, close, forget, slide, reducedMotion }
 }
 
 export type OptionPagerControls<Key extends string> = ReturnType<typeof useOptionPager<Key>>
 
 // Keep the main sheet laid out under its page so opening or closing it cannot change drawer height.
 export function OptionPager(props: {
-  pager: { slide: SharedValue<number> }
+  pager: { slide: SharedValue<number>; reducedMotion: boolean }
   main: ReactNode
   page: ReactNode | null
 }) {
   useMobileColorScheme()
   const [width, setWidth] = useState(0)
   const [mainHeight, setMainHeight] = useState<number | null>(null)
-  const { slide } = props.pager
+  const { slide, reducedMotion } = props.pager
   // Web has no worklet plugin; mapper hooks need this explicit dependency list.
   const pageStyle = useAnimatedStyle(
-    () => ({ transform: [{ translateX: slide.value * width }] }),
-    [slide, width]
+    () =>
+      reducedMotion
+        ? { opacity: 1 - slide.value, transform: [{ translateX: 0 }] }
+        : { opacity: 1, transform: [{ translateX: slide.value * width }] },
+    [slide, width, reducedMotion]
+  )
+  // The main list drifts left and dims under the page, like the screen under an iOS push.
+  const under = reducedMotion ? 0 : 1
+  const mainStyle = useAnimatedStyle(
+    () => ({
+      transform: [{ translateX: -(1 - slide.value) * PUSH_UNDER_SHIFT * width * under }]
+    }),
+    [slide, width, under]
+  )
+  const dimStyle = useAnimatedStyle(
+    () => ({ opacity: (1 - slide.value) * PUSH_UNDER_DIM * under }),
+    [slide, under]
   )
   const pageOpen = props.page !== null
   return (
@@ -69,15 +94,16 @@ export function OptionPager(props: {
       style={[styles.pager, pageOpen && mainHeight !== null && { minHeight: mainHeight }]}
       onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
     >
-      <View
-        style={pageOpen && styles.underlay}
+      <Animated.View
+        style={[pageOpen && styles.underlay, mainStyle]}
         // Measured while under a page too, so a change behind the page does not jump on the way out.
         onLayout={(event) => setMainHeight(event.nativeEvent.layout.height)}
         pointerEvents={pageOpen ? 'none' : 'auto'}
         aria-hidden={pageOpen}
       >
         {props.main}
-      </View>
+        {pageOpen && <Animated.View pointerEvents="none" style={[styles.dim, dimStyle]} />}
+      </Animated.View>
       {pageOpen && <Animated.View style={[styles.page, pageStyle]}>{props.page}</Animated.View>}
     </View>
   )
@@ -86,5 +112,6 @@ export function OptionPager(props: {
 const styles = themedStyleSheet(() => ({
   pager: { overflow: 'hidden' },
   underlay: { position: 'absolute', top: 0, left: 0, right: 0 },
-  page: { flexGrow: 1, backgroundColor: colors.sheetSurface }
+  page: { flexGrow: 1, backgroundColor: colors.sheetSurface },
+  dim: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' }
 }))
