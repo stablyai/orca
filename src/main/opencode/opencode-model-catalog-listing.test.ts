@@ -22,7 +22,7 @@ function listing(models: Record<string, unknown>): string {
 }
 
 describe('OpenCode verbose model listing', () => {
-  it('does not claim that a recorded listing runs its first variant by default', () => {
+  it('declares the variant a recorded 1.x listing runs, shown but never sent', () => {
     // OpenCode 1.18.31 models --verbose capture, 2026-10-30; one complete model row.
     const stdout = readFileSync(
       new URL('../acp/fixtures/opencode-v1-model-listing.txt', import.meta.url),
