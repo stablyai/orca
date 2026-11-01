@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
+import { formatNonGitRepoRejection } from '../../../shared/non-git-repo-rejection'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
@@ -31,7 +32,7 @@ export async function addLocalRepoFromPath(
     return {
       error:
         (await describeWslUncAccessDenied(path, store.getSettings())) ??
-        `Not a valid git repository: ${path}`
+        formatNonGitRepoRejection(path)
     }
   }
 

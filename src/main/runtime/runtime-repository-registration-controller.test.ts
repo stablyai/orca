@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { isNonGitRepoRejection } from '../../shared/non-git-repo-rejection'
 import type { Repo } from '../../shared/repo-types'
+import { describeWslUncAccessDenied } from '../wsl/wsl-unc-access-denied'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
 import type { RuntimeStore } from './runtime-store-contract'
 
@@ -13,6 +15,9 @@ vi.mock('../repo-icon-autodetect', () => ({
 }))
 vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
+}))
+vi.mock('../wsl/wsl-unc-access-denied', () => ({
+  describeWslUncAccessDenied: vi.fn().mockResolvedValue(null)
 }))
 
 const dirLinkType = process.platform === 'win32' ? 'junction' : 'dir'
@@ -29,10 +34,11 @@ function createController(): {
       repos.push(repo)
       return repo
     },
-    updateRepo: () => null
+    updateRepo: () => null,
+    getSettings: () => ({})
   }
   const controller = new RuntimeRepositoryRegistrationController({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: add() only uses getRepos/getRepo/addRepo/updateRepo.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: add() only uses getRepos/getRepo/addRepo/updateRepo/getSettings.
     getStore: () => store as unknown as RuntimeStore,
     invalidateResolvedWorktrees: () => {},
     invalidateWorktreeScan: () => {},
@@ -203,5 +209,36 @@ describe('RuntimeRepositoryRegistrationController.add stores the checkout git li
     const added = await controller.add(join(root, 'notes-link'), 'folder')
 
     expect(added.path).toBe(join(root, 'notes-link'))
+  })
+})
+
+describe('RuntimeRepositoryRegistrationController.add rejecting a non-checkout', () => {
+  let root: string
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-runtime-add-non-git-'))
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('rejects a plain directory with the rejection clients match to offer a folder project', async () => {
+    const { controller } = createController()
+
+    const error = await controller.add(root, 'git').catch((caught: unknown) => caught)
+
+    expect(error instanceof Error && isNonGitRepoRejection(error.message)).toBe(true)
+  })
+
+  it('reports a denied WSL path without the non-checkout rejection', async () => {
+    const denied = `Windows denied access to this WSL path: ${root}`
+    vi.mocked(describeWslUncAccessDenied).mockResolvedValueOnce(denied)
+    const { controller } = createController()
+
+    const error = await controller.add(root, 'git').catch((caught: unknown) => caught)
+
+    expect(error instanceof Error ? error.message : error).toBe(denied)
+    expect(isNonGitRepoRejection(denied)).toBe(false)
   })
 })

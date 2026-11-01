@@ -1,7 +1,8 @@
 # Placement and remote execution
 
 Folder workspaces are valid. `new-child` and `new-top-level` make Git worktrees
-and do not apply to folders; never `git init` a user's folder.
+and do not apply to folders; never `git init` a user's folder. Register one as a
+project with `ORCA repo add --path <abs_path> --kind folder --json`.
 
 ```text
 # Child of the current worktree.
