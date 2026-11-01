@@ -2629,6 +2629,10 @@
       "diffFailed": "Couldn't load diff preview",
       "fileFailed": "Couldn't load file preview",
       "outsideWorkspace": "This file is outside the workspace. Open it on desktop to view it."
+    },
+    "terminalPasswordMask": {
+      "showInput": "Show input",
+      "hideInput": "Hide input"
     }
   },
   "chat": {

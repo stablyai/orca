@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { View, TextInput } from 'react-native'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { hostOs } from '../platform/host-os'
@@ -8,7 +9,12 @@ import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
 } from '../terminal/terminal-keyboard-type'
+import {
+  reconcileTerminalManualMaskOverride,
+  resolveTerminalInputMaskedState
+} from '../terminal/terminal-password-prompt'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
+import { MobileTerminalPasswordMaskOverlay } from './MobileTerminalPasswordMaskOverlay'
 import { MobileTerminalCommandDictationPreview } from './MobileTerminalCommandDictationPreview'
 import { readMobileDictationAnchor } from '../dictation/mobile-dictation-text-insertion'
 import {
@@ -76,6 +82,41 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     attachImage,
     keyboardLift
   } = controller
+  const [manualMaskByHandle, setManualMaskByHandle] = useState<ReadonlyMap<string, boolean>>(
+    () => new Map()
+  )
+  const maskScopeKey = activeHandle ?? '__default__'
+  const autoDetectedPrompt = Boolean(
+    activeHandle && controller.terminalPasswordPromptHandles?.has(activeHandle)
+  )
+  const rawManualOverride = manualMaskByHandle.get(maskScopeKey)
+  const manualOverride = reconcileTerminalManualMaskOverride({
+    autoDetectedPrompt,
+    manualOverride: rawManualOverride
+  })
+  if (manualOverride !== rawManualOverride) {
+    setManualMaskByHandle((prev) => {
+      const next = new Map(prev)
+      next.delete(maskScopeKey)
+      return next
+    })
+  }
+  const inputMasked = resolveTerminalInputMaskedState({
+    autoDetectedPrompt,
+    manualOverride
+  })
+  const toggleInputMask = () => {
+    setManualMaskByHandle((prev) => {
+      const next = new Map(prev)
+      const nextMasked = !inputMasked
+      if (!autoDetectedPrompt && !nextMasked) {
+        next.delete(maskScopeKey)
+      } else {
+        next.set(maskScopeKey, nextMasked)
+      }
+      return next
+    })
+  }
   if (!sessionCommandDockShown(controller)) {
     return null
   }
@@ -125,6 +166,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               style={[
                 inputStyles.fieldText,
                 inputStyles.mono,
+                inputMasked && liveInputCapture.length > 0 && inputStyles.hiddenText,
                 !canSend && styles.liveInputCaptureDisabled
               ]}
               value={liveInputCapture}
@@ -150,6 +192,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                 'Typed text is sent directly to the active terminal'
               )}
               showSoftInputOnFocus
+              secureTextEntry={inputMasked}
               autoCapitalize="none"
               autoCorrect={false}
               spellCheck={false}
@@ -162,6 +205,11 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               editable={canSend}
               importantForAutofill="no"
               tabIndex={liveInputEnabled ? 0 : -1}
+            />
+            <MobileTerminalPasswordMaskOverlay
+              value={liveInputCapture}
+              masked={inputMasked}
+              onToggleMask={toggleInputMask}
             />
             {liveInputEnabled ? (
               <MobileTerminalLiveInputStatus
@@ -207,7 +255,14 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               }
             }}
             inputOverlay={
-              !liveInputEnabled && commandDictationPreview ? (
+              !liveInputEnabled && inputMasked && draft.length > 0 ? (
+                <MobileTerminalPasswordMaskOverlay
+                  value={draft}
+                  masked={inputMasked}
+                  onToggleMask={toggleInputMask}
+                  showToggle={false}
+                />
+              ) : !liveInputEnabled && !inputMasked && commandDictationPreview ? (
                 <MobileTerminalCommandDictationPreview
                   draft={draft}
                   preview={commandDictationPreview}
@@ -215,6 +270,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                 />
               ) : undefined
             }
+            secureTextEntry={inputMasked}
             // The preview stands in for an empty draft, so its placeholder must not show through.
             placeholder={
               commandDictationPreview
@@ -265,6 +321,14 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               </>
             }
           />
+          {!liveInputEnabled &&
+          (autoDetectedPrompt || manualOverride !== undefined || draft.length > 0) ? (
+            <MobileTerminalPasswordMaskOverlay
+              value=""
+              masked={inputMasked}
+              onToggleMask={toggleInputMask}
+            />
+          ) : null}
         </View>
       </View>
       {rail.keysInRail ? (
