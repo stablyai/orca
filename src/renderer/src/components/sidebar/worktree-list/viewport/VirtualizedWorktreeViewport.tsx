@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
+import { SidebarHostOptionsContext } from '../../sidebar-host-options-context'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { WorktreeListScrollToTopButton } from '../../WorktreeListScrollToTopButton'
@@ -409,10 +410,12 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
             headerDrag,
             worktreeDragState: runtime.worktreeDragState
           })}
-          {virtualItems.map((vItem) => {
-            const row = renderRows[vItem.index]
-            return row ? renderWorktreeVirtualRow(rowContext, row, vItem) : null
-          })}
+          <SidebarHostOptionsContext.Provider value={props.hostOptions ?? null}>
+            {virtualItems.map((vItem) => {
+              const row = renderRows[vItem.index]
+              return row ? renderWorktreeVirtualRow(rowContext, row, vItem) : null
+            })}
+          </SidebarHostOptionsContext.Provider>
         </div>
       </div>
       {showScrollToTop ? <WorktreeListScrollToTopButton onClick={scrollToTop} /> : null}
