@@ -102,6 +102,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       optionPickerRequest,
       sessionCommands: controller.sessionCommands,
       refreshCommands: controller.refreshCommands,
+      promptSuggestion: controller.promptSuggestion,
       setCommandsMenuOpen: controller.setCommandsMenuOpen,
       acceptsImages,
       contextUsage: controller.contextUsage,

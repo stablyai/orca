@@ -44,6 +44,8 @@ export type NativeChatComposerFieldProps = {
   hasPty: boolean
   canSend: boolean
   unavailableHint?: string | undefined
+  /** Replaces the placeholder while the draft is empty. */
+  promptSuggestion?: string | null
   autocomplete: ComposerAutocomplete
   mentionFiles: NativeChatMentionFiles
   activeSuggestion: number
@@ -137,6 +139,7 @@ export function NativeChatComposerField({
   hasPty,
   canSend,
   unavailableHint,
+  promptSuggestion,
   autocomplete,
   mentionFiles,
   activeSuggestion,
@@ -374,7 +377,8 @@ export function NativeChatComposerField({
                           'Describe your goal, define measurable outcomes for best results'
                         )
                       : (unavailableHint ??
-                        nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
+                        (promptSuggestion ||
+                          nativeChatComposerPlaceholder(hasPty, canSend, afterStop)))
               }
               // Let layout handle wrapping and touch targets; scroll after eight lines (a launch prompt: one line growing to six) without JavaScript measurement.
               // An empty launch prompt also grows to fit a placeholder that wraps: its zero-width float keeps its height.
