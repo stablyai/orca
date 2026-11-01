@@ -3,7 +3,11 @@
 import { findStream, isMinidump, MinidumpView, type MinidumpSource } from './minidump-stream-reader'
 import { readCrashpadAnnotations } from './minidump-crashpad-annotations'
 import { findEmbeddedCheckMessage } from './minidump-embedded-check'
-import { readMinidumpFaultContext, type MinidumpFaultContext } from './minidump-fault-context'
+import {
+  readAmd64InstructionPointer,
+  readMinidumpFaultContext,
+  type MinidumpFaultContext
+} from './minidump-fault-context'
 
 const STREAM_TYPE_MODULE_LIST = 4
 const STREAM_TYPE_EXCEPTION = 6
@@ -38,6 +42,8 @@ export type MinidumpCrashSignature = {
   /** Module whose image range contains `exceptionAddress`. */
   readonly faultingModule?: string
   readonly faultingModuleOffset?: string
+  /** Set when the module came from the thread's RIP because no module contains the exception address. */
+  readonly faultingModuleFromInstructionPointer?: true
   readonly fault?: MinidumpFaultContext
   /** Allowlisted Crashpad annotations, verbatim. */
   readonly annotations: Readonly<Record<string, string>>
@@ -174,7 +180,17 @@ export async function parseMinidumpCrashSignature(
     }
     if (address !== null) {
       signature.exceptionAddress = toHex(address)
-      const faulting = findFaultingModule(await readModules(view), address)
+      const modules = await readModules(view)
+      let faulting = findFaultingModule(modules, address)
+      // Linux records si_addr here: 0 for a CHECK's int3, the data address for SIGSEGV.
+      if (!faulting) {
+        const instructionPointer = await readAmd64InstructionPointer(view, exception.rva)
+        faulting =
+          instructionPointer === null ? undefined : findFaultingModule(modules, instructionPointer)
+        if (faulting) {
+          signature.faultingModuleFromInstructionPointer = true
+        }
+      }
       if (faulting) {
         signature.faultingModule = faulting.name
         signature.faultingModuleOffset = faulting.offset
@@ -216,6 +232,9 @@ export function minidumpSignatureDetails(
   }
   if (signature.faultingModuleOffset) {
     details.minidumpFaultingModuleOffset = signature.faultingModuleOffset
+  }
+  if (signature.faultingModuleFromInstructionPointer) {
+    details.minidumpFaultingModuleSource = 'instruction-pointer'
   }
   const fault = signature.fault
   if (fault?.access) {
