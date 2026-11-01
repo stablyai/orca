@@ -68,7 +68,7 @@ export const storedFailureFact = AgentSessionFailureFactSchema.extend({
   retry: z
     .object({ error: text, status: count, cause: text, attempt: count, maxRetries: count })
     .optional(),
-  usageLimit: z.object({ window: text, resetsAt: count }).optional(),
+  usageLimit: z.object({ providerCode: text, window: text, resetsAt: count }).optional(),
   neverReachedAgent: z.literal(true).optional(),
   backgroundStop: text,
   requestTimeout: z.object({ method: z.string(), timeoutMs: z.number() }).optional()

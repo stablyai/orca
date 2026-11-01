@@ -188,7 +188,11 @@ export class StructuredAgentSessionDeliveryLoop {
     // Commands block while their child lives; ended command commits wake delivery again.
     const work = this.deps.currentWork(sessionId)
     const oldest = selectableStructuredSubmission(session.journal, work)
-    if (!oldest || (session.child && work && structuredAgentSessionCommandRunning(work))) {
+    if (
+      !oldest ||
+      (session.child && work && structuredAgentSessionCommandRunning(work)) ||
+      this.deps.quotaFallbackDeliveryAllowed?.(sessionId, oldest.clientMessageId) === false
+    ) {
       return this.stop(sessionId)
     }
     if (this.deps.startFlights?.get(sessionId)) {
@@ -218,6 +222,9 @@ export class StructuredAgentSessionDeliveryLoop {
     clientMessageId: string,
     waited: boolean
   ): Promise<'continue' | 'stop' | StructuredAgentSessionPendingHandover> {
+    if (this.deps.quotaFallbackDeliveryAllowed?.(sessionId, clientMessageId) === false) {
+      return this.stop(sessionId)
+    }
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.disposed) {
       return this.stop(sessionId)

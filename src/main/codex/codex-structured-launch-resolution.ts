@@ -26,8 +26,16 @@ import {
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
 } from '../native-chat/native-chat-visuals-delivery'
+import {
+  quotaApiEnvironment,
+  quotaCodexProviderArgs,
+  QUOTA_CODEX_PROVIDER,
+  type NativeQuotaApiCredential
+} from '../native-chat/quota-fallback-native-auth'
 
 export type CodexStructuredLaunchPartDeps = {
+  restoreQuotaOpenaiSubscription?: (sessionId: string) => boolean
+  resolveQuotaApiCredential?: (sessionId: string) => Promise<NativeQuotaApiCredential | null>
   resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveCommand?: (options?: {
     pathEnv?: string | null
@@ -119,11 +127,32 @@ export function codexStructuredLaunchPart(
     const model = record.options?.model
     const visuals = await basis.visuals()
     await basis.launchDirectory()
+    const quotaApi = await deps.resolveQuotaApiCredential?.(record.sessionId)
+    if (quotaApi && quotaApi.route !== 'openai-api') {
+      throw new Error('Quota API route does not match Codex')
+    }
+    const restoreOpenai =
+      !quotaApi && deps.restoreQuotaOpenaiSubscription?.(record.sessionId) === true
+    const quotaEnv = quotaApi ? quotaApiEnvironment(environment, quotaApi) : null
     return {
       launch: {
         command,
         prefixArgs,
-        args: [...prefixArgs, ...args, 'app-server'],
+        args: [
+          ...prefixArgs,
+          ...args,
+          ...(quotaApi
+            ? quotaCodexProviderArgs()
+            : restoreOpenai
+              ? ['-c', 'model_provider="openai"']
+              : []),
+          'app-server'
+        ],
+        ...(quotaApi
+          ? { modelProvider: QUOTA_CODEX_PROVIDER }
+          : restoreOpenai
+            ? { modelProvider: 'openai' }
+            : {}),
         codexHome: accountHome.path,
         resumeThreadId,
         // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.
@@ -136,11 +165,15 @@ export function codexStructuredLaunchPart(
         ...(visuals ? { visuals } : {})
       },
       env: withNativeChatVisualsEnv(
-        { ...environment, ...(accountHome.path ? { CODEX_HOME: accountHome.path } : {}) },
+        {
+          ...(quotaEnv?.env ?? environment),
+          ...(accountHome.path ? { CODEX_HOME: accountHome.path } : {})
+        },
         visuals
       ),
       // Clear inherited scratch paths that may belong to another chat.
       inheritedEnvToDelete: [
+        ...(quotaEnv?.removed ?? []),
         ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
       ],

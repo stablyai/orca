@@ -1,3 +1,4 @@
+import type { NativeQuotaApiCredential } from '../native-chat/quota-fallback-native-auth'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
@@ -22,6 +23,8 @@ import type {
 
 /** What an agent's adapter is built from: the open store and the runtime around it. */
 export type StructuredAgentAdapterContext = {
+  restoreQuotaOpenaiSubscription?: (sessionId: string) => boolean
+  resolveQuotaApiCredential?: (sessionId: string) => Promise<NativeQuotaApiCredential | null>
   deps: StructuredAgentSessionRuntimeDeps
   store: AgentSessionRecordStore
   journalDatabase: JournalHostDatabase

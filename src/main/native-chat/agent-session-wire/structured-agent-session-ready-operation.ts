@@ -1,3 +1,4 @@
+import { quotaContinuationRefusal } from '../quota-fallback-native-guard'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentSessionFingerprintConflict,
@@ -9,7 +10,6 @@ import type {
 } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
-import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from './structured-agent-session-send-settlement'
 import { openForWrite, rewindInDoubt } from './structured-agent-session-send-preparation'
 import { agentSessionOperationOutcomeUnknown } from './structured-agent-session-replay-outcome'
@@ -17,14 +17,14 @@ import {
   replayRecordedOperation,
   type AgentSessionMutationSessionPreparation
 } from './structured-agent-session-mutation-admission'
-import type { ReadyOperationPlan } from './structured-agent-session-ready-operation-plan'
+import type {
+  ReadyOperationPlan,
+  QueuedReadyOperation
+} from './structured-agent-session-ready-operation-plan'
 import { mutationReplayContext } from './structured-agent-session-mutation-turn-context'
 import { commandReceiptScope } from '../agent-session-journal/command-receipt-schema'
 import { parseAgentSessionOperationTimestamp } from '../../../shared/agent-session/agent-session-host-authority'
 import { waitForStructuredAgentSessionStart } from './structured-agent-session-start-readiness'
-import type { StructuredAgentSessionDeliveryPlace } from './structured-agent-session-delivery-order'
-import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'
-import type { StructuredAgentSessionStartReadiness } from './structured-agent-session-startup-attempt'
 
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 
@@ -39,16 +39,6 @@ export {
   type ReadyOperationChild,
   type ReadyOperationSelection
 } from './structured-agent-session-operation-child'
-
-type QueuedReadyOperation<T> =
-  | { result: AgentSessionMutationResult<T> }
-  | {
-      /** null starts a child outside serialization. */
-      child: StructuredAgentSessionProviderChildIdentity | null
-      readiness: StructuredAgentSessionStartReadiness | null
-      start: StructuredAgentSessionStartClaim | null
-      place: StructuredAgentSessionDeliveryPlace
-    }
 
 export async function runAfterRewindStart<T>(
   context: StructuredAgentSessionMutationContext,
@@ -89,6 +79,10 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
   const preparedOperation = context.serialize<QueuedReadyOperation<T>>(
     envelope.sessionId,
     async () => {
+      const quotaRefusal = quotaContinuationRefusal(context.deps, callerKey, envelope)
+      if (quotaRefusal) {
+        return { result: { ok: false, refusal: quotaRefusal } }
+      }
       authority = options.goal
         ? context.acquireAborts.begin(envelope.sessionId, false, true)
         : undefined
@@ -297,10 +291,13 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
       return operationDidNotRun(true)
     }
     const ran = child
-    return await context.serialize(envelope.sessionId, () =>
-      // Re-read after readiness so competing settlement wins admission.
-      run({ ok: true, child: ran, deadline, signal: authority?.signal })
-    )
+    return await context.serialize(envelope.sessionId, async () => {
+      const quotaRefusal = quotaContinuationRefusal(context.deps, callerKey, envelope)
+      if (quotaRefusal) {
+        return { ok: false, refusal: quotaRefusal }
+      }
+      return run({ ok: true, child: ran, deadline, signal: authority?.signal })
+    })
   } finally {
     authority?.end()
     selected.place.release()

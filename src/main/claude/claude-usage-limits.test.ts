@@ -115,6 +115,7 @@ describe('a Claude usage limit', () => {
           ...limitRow,
           failure: {
             ...limitRow.failure,
+            usageLimit: { ...limitRow.failure.usageLimit, providerCode: 'usage_limit_reached' },
             detail: { text: `${LIMIT_TEXT}\nRequest failed`, audience: 'person' }
           }
         },
@@ -233,7 +234,7 @@ describe('a Claude usage limit', () => {
       t.handle(failedResult('expired', 2200, 'Request rejected'))
       const limits = statusRows(t).filter((row) => row.failure?.kind === 'usageLimitReached')
       expect(limits).toHaveLength(1)
-      expect(limits[0]?.failure?.usageLimit).toBeUndefined()
+      expect(limits[0]?.failure?.usageLimit).toEqual({ providerCode: 'usage_limit_reached' })
       t.translator.dispose()
     } finally {
       clock.mockRestore()

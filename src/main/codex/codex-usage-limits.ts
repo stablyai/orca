@@ -60,7 +60,16 @@ export class CodexUsageLimits {
       .join('\n')
     const limit = this.limit()
     return agentSessionFailureFact('usageLimitReached', {
-      ...(limit ? { usageLimit: limit } : {}),
+      ...(limit || error === 'usageLimitExceeded'
+        ? {
+            usageLimit: {
+              ...limit,
+              ...(error === 'usageLimitExceeded'
+                ? { providerCode: 'usageLimitExceeded' as const }
+                : {})
+            }
+          }
+        : {}),
       detail: providerDiagnostic(text, 'person')
     })
   }

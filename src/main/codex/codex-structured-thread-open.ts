@@ -51,6 +51,7 @@ export async function openCodexThread(
   launch: {
     cwd: string
     resumeThreadId: string | null
+    modelProvider?: string
     supersedeIfUnsaved?: boolean
     permissionPolicy?: CodexStructuredPermissionPolicy
     /** Avoid a duplicate base prompt caused by switching models on the first turn. */
@@ -66,6 +67,7 @@ export async function openCodexThread(
   const config = { ...launch.threadConfig, ...shellEnvironmentSetConfig(launch.commandEnv) }
   const threadSettings = {
     cwd: launch.cwd,
+    ...(launch.modelProvider ? { modelProvider: launch.modelProvider } : {}),
     ...launch.permissionPolicy,
     ...(Object.keys(config).length > 0 ? { config } : {})
   }
@@ -126,6 +128,9 @@ export async function openCodexThread(
     throw new Error(`codex app-server resumed ${threadId} instead of ${resumeThreadId}`)
   }
   const result = opened as Record<string, unknown>
+  if (launch.modelProvider && result.modelProvider !== launch.modelProvider) {
+    throw new Error('Codex did not confirm the requested API billing provider')
+  }
   const thread =
     typeof result.thread === 'object' && result.thread !== null
       ? (result.thread as Record<string, unknown>)

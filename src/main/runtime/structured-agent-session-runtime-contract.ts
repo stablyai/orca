@@ -1,3 +1,4 @@
+import type { NativeQuotaFallbackConfig } from '../native-chat/quota-fallback-native-config'
 import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
@@ -62,6 +63,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
    *  workspace rename that CLI agents get from their hooks. */
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
   conversationNaming?: StructuredAgentSessionHostDeps['conversationNaming']
+  /** Absent until the host supplies verified credit and continuation ownership. */
+  quotaFallback?: NativeQuotaFallbackConfig
   /** See `StructuredAgentSessionHostDeps.hasOpenDispatch`. */
   hasOpenDispatch?: StructuredAgentSessionHostDeps['hasOpenDispatch']
   resolveCodexAccountKind?: (home: string) => AgentSessionAccountKind | undefined
