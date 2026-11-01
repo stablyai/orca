@@ -13,6 +13,7 @@ import {
   UI_LANGUAGE_SPANISH,
   UI_LANGUAGE_SYSTEM,
   UI_LANGUAGE_TURKISH,
+  UI_LANGUAGE_GALICIAN,
   normalizeUiLanguage
 } from './ui-language'
 
@@ -30,6 +31,7 @@ describe('normalizeUiLanguage', () => {
     expect(normalizeUiLanguage(UI_LANGUAGE_RUSSIAN)).toBe('ru')
     expect(normalizeUiLanguage(UI_LANGUAGE_TURKISH)).toBe('tr')
     expect(normalizeUiLanguage(UI_LANGUAGE_GERMAN)).toBe('de')
+    expect(normalizeUiLanguage(UI_LANGUAGE_GALICIAN)).toBe('gl')
   })
 
   it('falls back unknown values to system', () => {
