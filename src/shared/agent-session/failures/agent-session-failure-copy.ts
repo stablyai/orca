@@ -104,9 +104,13 @@ export const AGENT_SESSION_FAILURE_COPY = {
   providerRejected: "{{agent}} didn't accept this message.",
   providerRejectedQuoted: "{{agent}} didn't accept this message: {{detail}}.",
   attachmentEmpty: 'An image on this message is empty, so the message was not sent.',
+  attachmentItemEmpty: 'Image {{item}} is empty, so the message was not sent.',
   attachmentTooLarge: 'An image on this message is too large, so the message was not sent.',
+  attachmentItemTooLarge: 'Image {{item}} is too large, so the message was not sent.',
   attachmentLargerThan:
     'An image on this message is larger than {{size}} MB, so the message was not sent.',
+  attachmentItemLargerThan:
+    'Image {{item}} is larger than {{size}} MB, so the message was not sent.',
   attachmentTooMany: 'This message has too many images, so it was not sent.',
   attachmentAtMost:
     '{{agent}} accepts at most {{limit}} images in one message, so this message was not sent.',
@@ -116,7 +120,10 @@ export const AGENT_SESSION_FAILURE_COPY = {
     'The images on this message add up to more than {{size}} MB, so the message was not sent.',
   attachmentUnsupportedType:
     '{{agent}} accepts only PNG, JPEG, GIF, and WebP images, so this message was not sent.',
+  attachmentItemUnsupportedType:
+    '{{agent}} accepts only PNG, JPEG, GIF, and WebP images, so Image {{item}} was not sent.',
   attachmentNotAFile: "An image on this message isn't a file, so the message was not sent.",
+  attachmentItemNotAFile: "Image {{item}} isn't a file, so the message was not sent.",
   attachmentNoSource: 'An image on this message has no file to send, so the message was not sent.',
   attachmentInvalid: "An attachment on this message can't be sent to the agent.",
   attachmentUnreadable:
@@ -193,6 +200,7 @@ export type AgentSessionFailureCopyValues = {
   option?: string
   limit?: string
   size?: string
+  item?: string
   attempt?: string
   maxRetries?: string
   /** A provider protocol method that got no answer, e.g. `thread/start`. */

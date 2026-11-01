@@ -1,4 +1,4 @@
-import { extname } from 'node:path'
+import { basename, extname } from 'node:path'
 import { resolveJsonlRpcPeerOptions } from '../jsonl-rpc/peer-limits'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatImageRefBlock } from '../../shared/native-chat/native-chat-types'
@@ -82,7 +82,8 @@ function imageMime(bytes: Uint8Array): string | null {
 
 async function readImage(
   block: NativeChatImageRefBlock,
-  reads: ImageReads
+  reads: ImageReads,
+  index?: number
 ): Promise<{ bytes: Buffer; mimeType: string }> {
   if (block.url) {
     throw attachmentError('Pi does not accept image URLs', { reason: 'unsupportedType' })
@@ -112,7 +113,10 @@ async function readImage(
   if (bytes.byteLength > MAX_IMAGE_BYTES) {
     throw attachmentError('Pi image exceeds the size limit', {
       reason: 'tooLarge',
-      limit: MAX_IMAGE_BYTES
+      limit: MAX_IMAGE_BYTES,
+      ...(index !== undefined ? { index } : {}),
+      ...(block.path ? { name: basename(block.path) } : {}),
+      size: bytes.byteLength
     })
   }
   if (imageMime(bytes) !== mimeType) {
@@ -134,17 +138,19 @@ export async function preparePiRpcPrompt(
   const texts: string[] = []
   const images: PiRpcPrompt['images'] = []
   let totalImageBytes = 0
+  let imageIndex = 0
   for (const block of body.blocks) {
     if (block.type === 'text' && block.text.length > 0) {
       texts.push(block.text)
     } else if (block.type === 'image-ref') {
+      imageIndex += 1
       if (images.length >= MAX_IMAGE_COUNT) {
         throw attachmentError('Pi prompt has too many images', {
           reason: 'tooMany',
           limit: MAX_IMAGE_COUNT
         })
       }
-      const { bytes, mimeType } = await readImage(block, reads)
+      const { bytes, mimeType } = await readImage(block, reads, imageIndex)
       totalImageBytes += bytes.byteLength
       if (totalImageBytes > MAX_TOTAL_IMAGE_BYTES) {
         throw attachmentError('Pi images exceed the total size limit', {

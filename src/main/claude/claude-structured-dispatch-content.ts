@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { open } from 'node:fs/promises'
-import { extname } from 'node:path'
+import { basename, extname } from 'node:path'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 import {
@@ -62,20 +62,29 @@ type ImageBudget = {
   localBytes: number
 }
 
-export async function readClaudeImage(path: string, openImpl: typeof open = open): Promise<Buffer> {
+export async function readClaudeImage(
+  path: string,
+  openImpl: typeof open = open,
+  imageIndex?: number,
+  fileName?: string
+): Promise<Buffer> {
   const file = await openImpl(path, 'r')
   try {
-    const tooLarge = (): Error =>
+    const name = fileName ?? basename(path)
+    const tooLarge = (size?: number): Error =>
       attachmentError(`Claude image must be no larger than ${MAX_IMAGE_BYTES} bytes`, {
         reason: 'tooLarge',
-        limit: MAX_IMAGE_BYTES
+        limit: MAX_IMAGE_BYTES,
+        ...(imageIndex !== undefined ? { index: imageIndex } : {}),
+        name,
+        ...(size !== undefined ? { size } : {})
       })
     const info = await file.stat()
     if (!info.isFile()) {
       throw attachmentError('Claude image must be a file', { reason: 'notAFile' })
     }
     if (info.size > MAX_IMAGE_BYTES) {
-      throw tooLarge()
+      throw tooLarge(info.size)
     }
     const buffer = Buffer.allocUnsafe(info.size + 1)
     let bytesRead = 0
@@ -89,7 +98,7 @@ export async function readClaudeImage(path: string, openImpl: typeof open = open
     // A file can grow after EOF; verify the open descriptor still matches the bytes read.
     const finalInfo = await file.stat()
     if (bytesRead > MAX_IMAGE_BYTES) {
-      throw tooLarge()
+      throw tooLarge(bytesRead)
     }
     if (finalInfo.size !== bytesRead) {
       throw new Error('Claude image changed while it was read')
@@ -113,7 +122,8 @@ const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
 
 async function imageContent(
   block: Extract<NativeChatBlock, { type: 'image-ref' }>,
-  budget: ImageBudget
+  budget: ImageBudget,
+  imageIndex: number
 ): Promise<unknown> {
   budget.count += 1
   if (budget.count > MAX_IMAGE_COUNT) {
@@ -128,7 +138,8 @@ async function imageContent(
   if (!block.path) {
     throw attachmentError('image reference has neither a path nor a URL', { reason: 'noSource' })
   }
-  const data = await readClaudeImage(block.path)
+  const fileName = basename(block.path)
+  const data = await readClaudeImage(block.path, open, imageIndex, fileName)
   budget.localBytes += data.byteLength
   if (budget.localBytes > MAX_TOTAL_IMAGE_BYTES) {
     throw attachmentError(`Claude images must total no more than ${MAX_TOTAL_IMAGE_BYTES} bytes`, {
@@ -165,11 +176,13 @@ export async function claudeDispatchMessageContent(
   const images: unknown[] = []
   const texts: string[] = []
   const imageBudget: ImageBudget = { count: 0, localBytes: 0 }
+  let imageIndex = 0
   for (const block of body.blocks as NativeChatBlock[]) {
     if (block.type === 'text' && block.text.length > 0) {
       texts.push(block.text)
     } else if (block.type === 'image-ref') {
-      images.push(await imageContent(block, imageBudget))
+      imageIndex += 1
+      images.push(await imageContent(block, imageBudget, imageIndex))
     }
   }
   // Claude reads only the last text block, so join text to avoid losing earlier blocks.

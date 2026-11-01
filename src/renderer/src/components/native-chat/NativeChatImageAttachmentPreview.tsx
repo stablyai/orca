@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileText, Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
+import { cn } from '@/lib/utils'
 import { useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
@@ -13,6 +14,10 @@ import { chatImageAccess } from '@/lib/local-file-access'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { nativeChatImageNumberLabel } from './NativeChatImageReferencePill'
+import { agentSessionFailureSentence } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 type Props = {
   attachment: NativeChatComposerImageAttachment
@@ -49,14 +54,23 @@ export function NativeChatImageAttachmentPreview({
   )
 }
 
-function ImageNumberBadge({ number }: { number?: number }): React.JSX.Element | null {
+function ImageNumberBadge({
+  number,
+  failed
+}: {
+  number?: number
+  failed?: boolean
+}): React.JSX.Element | null {
   if (number === undefined) {
     return null
   }
   return (
     <span
       aria-hidden
-      className="pointer-events-none absolute bottom-0.5 left-0.5 rounded-full bg-background/85 px-1 text-3xs font-medium text-foreground tabular-nums"
+      className={cn(
+        'pointer-events-none absolute bottom-0.5 left-0.5 rounded-full px-1 text-3xs font-medium tabular-nums',
+        failed ? 'bg-destructive text-destructive-foreground' : 'bg-background/85 text-foreground'
+      )}
     >
       #{number}
     </span>
@@ -208,6 +222,42 @@ function NativeChatImageThumbnail({
   // The thumbnail may be the downscaled clipboard preview; copy only the file.
   const copySrc = copyableNativeChatImageSrc(localSrc)
 
+  const [oversizedError, setOversizedError] = useState<string | null>(null)
+  const isFailed =
+    attachment.failed === true || Boolean(attachment.error) || Boolean(oversizedError)
+  const errorMessage = attachment.error ?? oversizedError
+
+  useEffect(() => {
+    if (isPending || !attachment.path || attachment.failed || attachment.error) {
+      return
+    }
+    if (typeof window !== 'undefined' && window.api?.fs?.stat) {
+      window.api.fs
+        .stat({ filePath: attachment.path })
+        .then((stats) => {
+          if (stats && stats.size > MAX_IMAGE_BYTES) {
+            const error = agentSessionFailureSentence(
+              {
+                kind: 'attachmentInvalid',
+                attachment: {
+                  reason: 'tooLarge',
+                  limit: MAX_IMAGE_BYTES,
+                  index: number,
+                  name: filename,
+                  size: stats.size
+                }
+              },
+              'rejection',
+              {},
+              sayAgentSessionFailureTranslated
+            )
+            setOversizedError(error)
+          }
+        })
+        .catch(() => {})
+    }
+  }, [attachment.path, attachment.failed, attachment.error, filename, isPending, number])
+
   return (
     <>
       <div ref={thumbnailRef} className="relative size-14 shrink-0">
@@ -215,15 +265,22 @@ function NativeChatImageThumbnail({
           type="button"
           aria-label={numberedLabel(
             number,
-            isPending
-              ? pendingLabel
-              : `${translate('components.native-chat.composer.viewAttachment', 'View image')}: ${label}`
+            errorMessage
+              ? `${label}: ${errorMessage}`
+              : isPending
+                ? pendingLabel
+                : `${translate('components.native-chat.composer.viewAttachment', 'View image')}: ${label}`
           )}
           aria-busy={isPending}
-          title={label}
+          title={errorMessage ?? label}
           data-native-chat-copy-image-src={copySrc}
           onClick={() => setIsOpen(true)}
-          className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn(
+            'flex size-full items-center justify-center overflow-hidden rounded-md border bg-chat-canvas transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            isFailed
+              ? 'border-destructive ring-2 ring-destructive/40 hover:border-destructive'
+              : 'border-border hover:border-ring'
+          )}
         >
           {thumbnailSrc ? (
             <img
@@ -249,7 +306,7 @@ function NativeChatImageThumbnail({
             <LoadingSpinner className="size-3 text-muted-foreground" />
           </span>
         ) : null}
-        <ImageNumberBadge number={number} />
+        <ImageNumberBadge number={number} failed={isFailed} />
         <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} />
       </div>
       <PanZoomImageDialog

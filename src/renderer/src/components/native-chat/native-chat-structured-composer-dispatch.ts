@@ -8,6 +8,11 @@ import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/ag
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
+import { basename } from '@/lib/path'
+import { agentSessionFailureSentence } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 export async function dispatchNativeChatStructuredComposerText(
   transport: NativeChatStructuredComposerTransport,
@@ -16,6 +21,46 @@ export async function dispatchNativeChatStructuredComposerText(
   skills: readonly AgentJournalSkillRef[] = [],
   intent: Pick<StructuredAgentSessionSendRequest, 'alternate'> = {}
 ): Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'> & { revealsTranscript: boolean }> {
+  if (typeof window !== 'undefined' && window.api?.fs?.stat && attachments.length > 0) {
+    for (let index = 0; index < attachments.length; index += 1) {
+      const attachment = attachments[index]
+      if (!attachment.path) {
+        continue
+      }
+      try {
+        const stats = await window.api.fs.stat({ filePath: attachment.path })
+        if (stats && stats.size > MAX_IMAGE_BYTES) {
+          const name = attachment.pendingName || basename(attachment.path)
+          const error = agentSessionFailureSentence(
+            {
+              kind: 'attachmentInvalid',
+              attachment: {
+                reason: 'tooLarge',
+                limit: MAX_IMAGE_BYTES,
+                index: index + 1,
+                name,
+                size: stats.size
+              }
+            },
+            'rejection',
+            {},
+            sayAgentSessionFailureTranslated
+          )
+          const mutableAttachment = attachment as { failed?: boolean; error?: string }
+          mutableAttachment.failed = true
+          mutableAttachment.error = error
+          return {
+            accepted: false,
+            error,
+            revealsTranscript: false
+          }
+        }
+      } catch {
+        // If stat fails, continue to structured send
+      }
+    }
+  }
+
   // Number image chips by their attachment order in this message.
   const prompt = imageReferencesToPromptMarkers(
     draftText,

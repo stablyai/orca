@@ -64,7 +64,15 @@ const refusalDetails = z.object({
 export const storedFailureFact = AgentSessionFailureFactSchema.extend({
   account: text,
   refusal: z.object({ code: z.string().min(1), details: refusalDetails.optional() }).optional(),
-  attachment: z.object({ reason: z.string(), limit: count }).optional(),
+  attachment: z
+    .object({
+      reason: z.string(),
+      limit: count,
+      index: count,
+      name: text,
+      size: count
+    })
+    .optional(),
   retry: z
     .object({ error: text, status: count, cause: text, attempt: count, maxRetries: count })
     .optional(),

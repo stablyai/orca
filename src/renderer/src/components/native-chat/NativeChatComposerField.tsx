@@ -107,6 +107,8 @@ export type NativeChatComposerImageAttachment = {
   pendingName?: string
   /** Set on an image the draft names but can't send: the file to attach again. */
   unavailableName?: string
+  failed?: boolean
+  error?: string
 }
 
 /** After a clear suppressed by IME, preserve only the composed segment; compare both ends because the caret need not be at the end. */

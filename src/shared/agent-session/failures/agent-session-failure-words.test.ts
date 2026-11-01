@@ -345,6 +345,37 @@ describe('the words written beside a failure fact', () => {
     expect(sentence({ reason: 'tooLarge', limit: 5 * 1024 * 1024 })).toBe(
       'An image on this message is larger than 5 MB, so the message was not sent.'
     )
+    expect(
+      sentence({
+        reason: 'tooLarge',
+        limit: 5 * 1024 * 1024,
+        index: 1,
+        name: 'screenshot.png',
+        size: 5.2 * 1024 * 1024
+      })
+    ).toBe('Image #1 (screenshot.png, 5.2 MB) is larger than 5 MB, so the message was not sent.')
+    expect(
+      sentence({
+        reason: 'tooLarge',
+        limit: 5 * 1024 * 1024,
+        index: 2,
+        size: 6 * 1024 * 1024
+      })
+    ).toBe('Image #2 (6 MB) is larger than 5 MB, so the message was not sent.')
+    expect(
+      sentence({
+        reason: 'tooLarge',
+        limit: 5 * 1024 * 1024,
+        name: 'huge.png'
+      })
+    ).toBe('Image huge.png is larger than 5 MB, so the message was not sent.')
+    expect(
+      sentence({
+        reason: 'tooLarge',
+        index: 1,
+        name: 'huge.png'
+      })
+    ).toBe('Image #1 (huge.png) is too large, so the message was not sent.')
     expect(sentence({ reason: 'totalTooLarge', limit: 20 * 1024 * 1024 })).toBe(
       'The images on this message add up to more than 20 MB, so the message was not sent.'
     )
@@ -363,6 +394,27 @@ describe('an attachment problem as a reader meets it', () => {
         attachment: { reason: 'tooMany', limit: 20 }
       })
     ).toEqual({ kind: 'attachmentInvalid', attachment: { reason: 'tooMany', limit: 20 } })
+    expect(
+      readAgentSessionFailureFact({
+        kind: 'attachmentInvalid',
+        attachment: {
+          reason: 'tooLarge',
+          limit: 5 * 1024 * 1024,
+          index: 1,
+          name: 'screenshot.png',
+          size: 5500000
+        }
+      })
+    ).toEqual({
+      kind: 'attachmentInvalid',
+      attachment: {
+        reason: 'tooLarge',
+        limit: 5 * 1024 * 1024,
+        index: 1,
+        name: 'screenshot.png',
+        size: 5500000
+      }
+    })
     expect(
       readAgentSessionFailureFact({
         kind: 'attachmentInvalid',

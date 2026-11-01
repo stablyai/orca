@@ -8,12 +8,30 @@ import {
 export const ATTACHMENT_FAILURE_PIECES = {
   attachmentEmpty: () =>
     translate('components.native-chat.failureWords.attachmentEmpty', COPY.attachmentEmpty),
+  attachmentItemEmpty: (values) =>
+    translate(
+      'components.native-chat.failureWords.attachmentItemEmpty',
+      COPY.attachmentItemEmpty,
+      values
+    ),
   attachmentTooLarge: () =>
     translate('components.native-chat.failureWords.attachmentTooLarge', COPY.attachmentTooLarge),
+  attachmentItemTooLarge: (values) =>
+    translate(
+      'components.native-chat.failureWords.attachmentItemTooLarge',
+      COPY.attachmentItemTooLarge,
+      values
+    ),
   attachmentLargerThan: (values) =>
     translate(
       'components.native-chat.failureWords.attachmentLargerThan',
       COPY.attachmentLargerThan,
+      values
+    ),
+  attachmentItemLargerThan: (values) =>
+    translate(
+      'components.native-chat.failureWords.attachmentItemLargerThan',
+      COPY.attachmentItemLargerThan,
       values
     ),
   attachmentTooMany: () =>
@@ -41,8 +59,20 @@ export const ATTACHMENT_FAILURE_PIECES = {
       COPY.attachmentUnsupportedType,
       values
     ),
+  attachmentItemUnsupportedType: (values) =>
+    translate(
+      'components.native-chat.failureWords.attachmentItemUnsupportedType',
+      COPY.attachmentItemUnsupportedType,
+      values
+    ),
   attachmentNotAFile: () =>
     translate('components.native-chat.failureWords.attachmentNotAFile', COPY.attachmentNotAFile),
+  attachmentItemNotAFile: (values) =>
+    translate(
+      'components.native-chat.failureWords.attachmentItemNotAFile',
+      COPY.attachmentItemNotAFile,
+      values
+    ),
   attachmentNoSource: () =>
     translate('components.native-chat.failureWords.attachmentNoSource', COPY.attachmentNoSource),
   attachmentInvalid: () =>

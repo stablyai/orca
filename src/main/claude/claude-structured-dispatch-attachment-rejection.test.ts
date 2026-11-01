@@ -67,10 +67,17 @@ describe('Claude structured dispatch attachment rejections', () => {
         dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
       ).resolves.toEqual({
         state: 'rejected',
-        reason: 'An image on this message is larger than 5 MB, so the message was not sent.',
+        reason:
+          'Image #1 (oversized.png, 5.1 MB) is larger than 5 MB, so the message was not sent.',
         rejection: {
           kind: 'attachmentInvalid',
-          attachment: { reason: 'tooLarge', limit: 5 * 1024 * 1024 }
+          attachment: {
+            reason: 'tooLarge',
+            limit: 5 * 1024 * 1024,
+            index: 1,
+            name: 'oversized.png',
+            size: 5 * 1024 * 1024 + 1
+          }
         }
       })
       expect(session.connection.send).not.toHaveBeenCalled()

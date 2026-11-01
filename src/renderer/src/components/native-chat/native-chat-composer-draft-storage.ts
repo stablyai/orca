@@ -11,6 +11,8 @@ export type NativeChatComposerDraftImage = {
   connectionId?: string
   /** Set on an image Orca could not keep: the file name the user must attach again. */
   unavailableName?: string
+  failed?: boolean
+  error?: string
 }
 
 export type NativeChatComposerDraft = {
@@ -117,17 +119,21 @@ function parseImage(value: unknown): NativeChatComposerDraftImage | null {
   if (!isRecord(value)) {
     return null
   }
-  const { id, path, connectionId, unavailableName } = value
+  const { id, path, connectionId, unavailableName, failed, error } = value
   if (typeof id !== 'string') {
     return null
   }
+  const failedProps = {
+    ...(failed === true ? { failed: true } : {}),
+    ...(typeof error === 'string' ? { error } : {})
+  }
   if (typeof unavailableName === 'string') {
-    return { id, path: '', unavailableName }
+    return { id, path: '', unavailableName, ...failedProps }
   }
   if (typeof path !== 'string' || path === '') {
     return null
   }
-  return { id, path, ...(typeof connectionId === 'string' ? { connectionId } : {}) }
+  return { id, path, ...(typeof connectionId === 'string' ? { connectionId } : {}), ...failedProps }
 }
 
 function parseOwner(value: unknown): NativeChatComposerDraftOwner | undefined {

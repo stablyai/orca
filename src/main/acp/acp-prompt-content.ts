@@ -1,4 +1,4 @@
-import { extname, isAbsolute } from 'node:path'
+import { basename, extname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   agentSessionFailureFact,
@@ -59,12 +59,17 @@ function hostImagePath(block: NativeChatImageRefBlock): string | null {
 async function imageBlock(
   block: NativeChatImageRefBlock,
   remainingBytes: number,
-  signal: AbortSignal
+  signal: AbortSignal,
+  imageIndex?: number
 ): Promise<{ block: ContentBlock; bytes: number }> {
-  const tooLarge = (): AcpPromptContentError =>
+  const path = hostImagePath(block)
+  const tooLarge = (size?: number): AcpPromptContentError =>
     attachmentProblem({
       reason: remainingBytes < ACP_PROMPT_IMAGE_MAX_BYTES ? 'totalTooLarge' : 'tooLarge',
-      limit: ACP_PROMPT_IMAGE_MAX_BYTES
+      limit: ACP_PROMPT_IMAGE_MAX_BYTES,
+      ...(imageIndex !== undefined ? { index: imageIndex } : {}),
+      ...(path ? { name: basename(path) } : {}),
+      ...(size !== undefined ? { size } : {})
     })
   if (block.url?.startsWith('data:')) {
     const match = /^data:(image\/[a-z]+);base64,([A-Za-z0-9+/]*={0,2})$/.exec(block.url)
@@ -76,11 +81,10 @@ async function imageBlock(
       throw attachmentProblem({ reason: 'empty' })
     }
     if (bytes > remainingBytes) {
-      throw tooLarge()
+      throw tooLarge(bytes)
     }
     return { block: { type: 'image', mimeType: match[1], data: match[2] }, bytes }
   }
-  const path = hostImagePath(block)
   if (!path) {
     throw attachmentProblem({ reason: 'noSource' })
   }
@@ -166,7 +170,7 @@ export async function acpPromptBlocks(
       : imageCount >= MAX_IMAGE_COUNT
         ? 0
         : Math.min(ACP_PROMPT_IMAGE_MAX_BYTES - imageBytes, encodedCapacity)
-    const image = await imageBlock(block, remainingBytes, signal)
+    const image = await imageBlock(block, remainingBytes, signal, imageCount + 1)
     if (image.block.type === 'image') {
       imageCount += 1
     }

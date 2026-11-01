@@ -130,4 +130,41 @@ describe('NativeChatImageAttachmentPreview', () => {
     menu.remove()
     elsewhere.remove()
   })
+
+  it('highlights a failed attachment with error styling and red badge', () => {
+    mocks.useLocalImageSrc.mockReturnValue('blob:on-disk')
+    renderPreview({
+      id: 'a1',
+      path: '/tmp/oversized.png',
+      failed: true,
+      error: 'Image #1 (oversized.png, 5.5 MB) is larger than 5 MB, so the message was not sent.'
+    })
+
+    const button = screen.getByRole('button', { name: /oversized\.png/ })
+    expect(button.className).toContain('border-destructive')
+    expect(button.getAttribute('title')).toBe(
+      'Image #1 (oversized.png, 5.5 MB) is larger than 5 MB, so the message was not sent.'
+    )
+    const badge = screen.getByText('#1')
+    expect(badge.className).toContain('bg-destructive')
+  })
+
+  it('detects oversized image via window.api.fs.stat and applies failed styling', async () => {
+    mocks.useLocalImageSrc.mockReturnValue('blob:on-disk')
+    const stat = vi.fn().mockResolvedValue({ size: 6 * 1024 * 1024 })
+    vi.stubGlobal('api', { fs: { stat } })
+
+    await act(async () => {
+      renderPreview({
+        id: 'a1',
+        path: '/tmp/huge.png'
+      })
+    })
+
+    const button = screen.getByRole('button', { name: /huge\.png/ })
+    expect(button.className).toContain('border-destructive')
+    expect(button.getAttribute('title')).toContain('larger than 5 MB')
+    const badge = screen.getByText('#1')
+    expect(badge.className).toContain('bg-destructive')
+  })
 })
