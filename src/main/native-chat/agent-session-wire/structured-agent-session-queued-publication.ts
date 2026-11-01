@@ -131,9 +131,9 @@ export function readQueuePublication(
       (pause.reason === 'restarted' && (!visible || !pause.since || visible < pause.since.sequence))
   )
   const resumable = silent ? null : resumableQueuePause(pauses, journal.queuedMessages.list())
-  // The input order indexes unsettled sends, so a held queue never rescans history.
+  // The input order indexes pending sends, so a held queue never rescans history.
   const pause =
-    resumable && !queuePauseLiftOnItsWay(resumable, journal.inputOrder.unsettledSubmissions())
+    resumable && !queuePauseLiftOnItsWay(resumable, journal.inputOrder.sendingSubmissions())
       ? resumable
       : null
   const input = gate(journal)

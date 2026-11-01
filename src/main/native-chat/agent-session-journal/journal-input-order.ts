@@ -7,6 +7,7 @@ import {
 } from './journal-input-order-state'
 
 import { JournalSubmissionLinks } from './journal-submission-links'
+import { JournalSubmissionIndex } from './journal-submission-index'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { JournalNewestTurn } from './journal-newest-turn'
@@ -41,11 +42,12 @@ export class JournalInputOrder {
   private legacyPlaces = 0
   private readonly recoveryOwed = new Set<string>()
   private readonly originals = new Map<string, AgentJournalCursor | undefined>()
-  private readonly unsettled = new Map<string, AgentJournalSubmission>()
+  private readonly unsettled = new JournalSubmissionIndex()
+  // Recovered unknown sends stay unsettled forever; only pending ones can still be accepted.
+  private readonly sending = new JournalSubmissionIndex()
   private readonly queued = new Map<string, AgentJournalSubmission>()
   private readonly entered = new Map<string, AgentJournalSubmission>()
   private readonly overrides = new Map<string, AgentJournalSubmission>()
-  private pending: readonly AgentJournalSubmission[] | undefined
   readonly lineage: JournalInputLineageOwner
   private readonly cards: JournalInputCardIndex
   private receiptCount = 0
@@ -175,7 +177,10 @@ export class JournalInputOrder {
     return this.entered.values()
   }
   unsettledSubmissions(): readonly AgentJournalSubmission[] {
-    return (this.pending ??= [...this.unsettled.values()])
+    return this.unsettled.list()
+  }
+  sendingSubmissions(): readonly AgentJournalSubmission[] {
+    return this.sending.list()
   }
   version(): number {
     return this.revision
@@ -250,17 +255,12 @@ export class JournalInputOrder {
   private refresh(state: JournalReducerState, id: string): void {
     const entry = state.submissions.get(id)
     this.links.refresh(id, entry)
-    if (entry?.dispatchState === 'pending' || entry?.dispatchState === 'unknown') {
-      if (this.unsettled.get(id) !== entry) {
-        this.unsettled.set(id, entry)
-        this.pending = undefined
-        this.revision++
-      }
-    } else if (this.unsettled.delete(id)) {
-      this.pending = undefined
+    const dispatch = entry?.dispatchState
+    if (this.unsettled.keep(id, entry, dispatch === 'pending' || dispatch === 'unknown')) {
       this.revision++
     }
-    if (entry?.dispatchState !== 'pending') {
+    this.sending.keep(id, entry, dispatch === 'pending')
+    if (dispatch !== 'pending') {
       this.releasePlace(state, id)
     }
     if (entry && isQueuedAgentJournalSubmission(entry)) {

@@ -60,6 +60,17 @@ function fold(rows: JournalRow[]): JournalReducerState {
         .map((entry) => entry.clientMessageId)
         .sort()
     )
+    expect(
+      journalInputOrder(state)
+        .sendingSubmissions()
+        .map((entry) => entry.clientMessageId)
+        .sort()
+    ).toEqual(
+      [...state.submissions.values()]
+        .filter((entry) => entry.dispatchState === 'pending')
+        .map((entry) => entry.clientMessageId)
+        .sort()
+    )
     for (const entry of state.submissions.values()) {
       if (entry.dispatchState !== 'pending') {
         expect(journalInputOrder(state).forced(entry.clientMessageId)).toBe(false)
