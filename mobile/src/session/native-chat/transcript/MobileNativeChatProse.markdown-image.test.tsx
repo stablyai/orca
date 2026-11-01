@@ -98,6 +98,7 @@ describe('mobile chat markdown images', () => {
 
   it.each([
     ['![Shot](/tmp/my%20shot.png)', '/tmp/my shot.png'],
+    ['![Shot](C:\\shots\\shot.png)', 'C:\\shots\\shot.png'],
     ['![Shot](file:///C:/shots/my%20shot.png)', 'C:/shots/my shot.png'],
     ['![Shot](file://server/share/shot.png)', '//server/share/shot.png']
   ])('reads local image paths from %s', async (markdown, path) => {

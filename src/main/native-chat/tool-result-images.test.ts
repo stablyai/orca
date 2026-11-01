@@ -187,4 +187,15 @@ describe('Claude Read image tool results', () => {
     expect(projected?.role).toBe('assistant')
     expect(projected?.blocks).toContainEqual({ type: 'image-ref', path: shot, alt: 'shot.png' })
   })
+
+  it('spools result bytes when the input file contains a different image', () => {
+    directory = mkdtempSync(join(tmpdir(), 'orca-chat-image-'))
+    const shot = join(directory, 'input.png')
+    writeFileSync(shot, 'different image')
+    const spool = vi.fn(() => '/attachments/result.png')
+    expect(
+      resolveToolResultImageRefs({ sources: [{ base64: PNG }], filePath: shot, spool })
+    ).toEqual([{ type: 'image-ref', path: '/attachments/result.png', alt: 'result.png' }])
+    expect(spool).toHaveBeenCalledOnce()
+  })
 })

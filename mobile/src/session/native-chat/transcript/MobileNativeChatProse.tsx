@@ -120,11 +120,12 @@ function chatMarkdownImageBlock(href: string, alt: string): NativeChatImageRefBl
 }
 
 function absoluteMarkdownImagePath(href: string): string | null {
+  const decoded = decodeLocalImagePath(href)
   if (href.startsWith('/') && !href.startsWith('//')) {
-    return decodeLocalImagePath(href)
+    return decoded
   }
-  if (/^[A-Za-z]:[\\/]/.test(href)) {
-    return decodeLocalImagePath(href)
+  if (/^[A-Za-z]:[\\/]/.test(decoded)) {
+    return decoded
   }
   if (!href.startsWith('file://')) {
     return null
