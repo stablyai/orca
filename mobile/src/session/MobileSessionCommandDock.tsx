@@ -26,6 +26,7 @@ import {
   resolveMobileTerminalTabOwnedAgentId
 } from './mobile-terminal-tab-agent'
 import { terminalDockStyles as dockStyles } from './terminal-dock-styles'
+import { ComposerUsageSlot } from '../composer-usage/ComposerUsageMeter'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -44,7 +45,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   const t = useMobileTranslation()
   const rail = useSessionTerminalKeyRail(controller)
   const {
-    insets,
     bufferedTerminalDraftState,
     autocompleteEnabled,
     liveInputCapture,
@@ -74,7 +74,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     handleSend,
     isAttaching,
     attachImage,
-    keyboardLift
+    keyboardLift,
+    dockBottomInset
   } = controller
   if (!sessionCommandDockShown(controller)) {
     return null
@@ -108,7 +109,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     <View
       style={[
         dockStyles.dock,
-        { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
+        { paddingBottom: dockBottomInset, transform: [{ translateY: -keyboardLift }] }
       ]}
     >
       <View>
@@ -242,6 +243,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                 disabledButtonStyle={inputStyles.disabled}
               />
             }
+            middle={<ComposerUsageSlot agent={agentId} />}
             trailing={
               <>
                 <MobileTerminalDictationButton

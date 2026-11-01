@@ -82,6 +82,7 @@ vi.mock('./composer/MobileNativeChatComposerMenu', () => ({
   MobileNativeChatComposerMenu: 'Suggestions'
 }))
 vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
+vi.mock('../../composer-usage/ComposerUsageMeter', () => ({ ComposerUsageSlot: () => null }))
 vi.mock('../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
 let tree: ReactTestRenderer | null = null
 setMobileNativeChatDraftText('terminal-1', 'no, do X instead')

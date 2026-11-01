@@ -1,3 +1,4 @@
+import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session/agent-session-wire'
 import {
@@ -109,4 +110,14 @@ export function draftAfterSkillEdit(previous: string, next: string, skillToken: 
   }
   const rest = previous.slice(lead.length)
   return next.length < previous.length && next.endsWith(rest) ? rest : next
+}
+
+export type MobileNativeChatStructuredComposer = {
+  catalog: MobileComposerStructuredCatalog
+  onSlashMenuOpen: () => void
+  onSlashMenuDemand?: (open: boolean) => void
+  onAttachFiles?: () => void
+  // An uploading attachment must hold Send.
+  files: readonly PendingNativeChatFile[]
+  onRemoveFile: (id: string) => void
 }

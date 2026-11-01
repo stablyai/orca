@@ -1,4 +1,6 @@
 import { useRouter } from 'expo-router'
+import { ComposerUsageDisplayPicker } from '../composer-usage/ComposerUsageDisplayPicker'
+import { ComposerUsageWindowPicker } from '../composer-usage/ComposerUsageWindowPicker'
 import { ListRow } from '../components/list/ListGroup'
 import { MobileSwitch } from '../components/MobileSwitch'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -44,6 +46,16 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
             />
           }
         />
+      </SettingsSection>
+      <SettingsSection
+        title={t('settings.nativeChatSettingsScreen.composerUsageHeading', 'COMPOSER USAGE')}
+        footer={t(
+          'settings.nativeChatSettingsScreen.composerUsageDescription',
+          'Chat and agent terminal composers show your agent plan as used or left. Tap the meter for every window, reset times and pace.'
+        )}
+      >
+        <ComposerUsageWindowPicker inSettings />
+        <ComposerUsageDisplayPicker inSettings />
       </SettingsSection>
     </SettingsScreen>
   )

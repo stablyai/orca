@@ -20,6 +20,7 @@ import {
   publishPageStorage,
   refreshPageTerminalShortcuts
 } from '../src/mobile-web-shell/bridge/page-async-storage'
+import { applyStoredDuoChatExpanded, DUO_CHAT_EXPANDED_KEY } from '../src/session/duo-chat-width'
 import {
   RouteScreenPaintProvider,
   createRouteScreenPaintReporter
@@ -163,6 +164,7 @@ bootstrapShellPage({
       const current = client.getShellSession()
       if (current !== null) {
         refreshPageTerminalShortcuts(current.storage, current.storageOversize)
+        applyStoredDuoChatExpanded(current.storage[DUO_CHAT_EXPANDED_KEY] ?? null)
       }
     })
     // Activation settles to English on failure, so the page always mounts.

@@ -10,6 +10,10 @@ import { colors } from '../src/theme/mobile-theme'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { isOverlayPageRoute } from '../src/new-workspace/overlay-page-route'
+import { usePageGeometry } from '../src/layout/reserved-regions.web'
+
+// The session lays its chat across the Duo's status column itself; every other page stays clear of it.
+const SESSION_ROUTE = /^\/h\/[^/]+\/session\//
 
 // Provide shell insets below ExpoRoot (WebView CSS env insets are zero); pad only sides to avoid DefaultNavigator’s duplicate all-edge SafeAreaView.
 export default function PageRootLayout() {
@@ -20,14 +24,22 @@ export default function PageRootLayout() {
     () => client.getShellSession()?.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS
   )
   const { width, height } = useWindowDimensions()
-  const transparent = isOverlayPageRoute(usePathname())
+  const pathname = usePathname()
+  const transparent = isOverlayPageRoute(pathname)
+  const { sideRail } = usePageGeometry()
+  const releaseSide =
+    sideRail && SESSION_ROUTE.test(pathname)
+      ? insets.right >= insets.left
+        ? 'right'
+        : 'left'
+      : null
   const frame = useMemo(() => ({ x: 0, y: 0, width, height }), [width, height])
   return (
     <SafeAreaFrameContext.Provider value={frame}>
       <SafeAreaInsetsContext.Provider value={insets}>
         <View style={[styles.root, transparent && styles.transparent]}>
           <DetailCardHostProvider>
-            <SideSafeArea>
+            <SideSafeArea releaseSide={releaseSide}>
               <Slot />
             </SideSafeArea>
           </DetailCardHostProvider>
