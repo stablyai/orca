@@ -9,6 +9,7 @@ import {
 } from '../../shared/rich-markdown-context-menu'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { StoppedSwitchSource } from '../../shared/stopped-switch-source'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type { PreloadApi } from '../api-types'
@@ -45,6 +46,12 @@ export const uiClipboardAndWindowControlsApi = {
       callback(target)
     ipcRenderer.on('ui:closeTerminal', listener)
     return () => ipcRenderer.removeListener('ui:closeTerminal', listener)
+  },
+  onStoppedSwitchSource: (callback: (source: StoppedSwitchSource) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, source: StoppedSwitchSource) =>
+      callback(source)
+    ipcRenderer.on('ui:stoppedSwitchSource', listener)
+    return () => ipcRenderer.removeListener('ui:stoppedSwitchSource', listener)
   },
   onTerminalTabCloseRequest: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>

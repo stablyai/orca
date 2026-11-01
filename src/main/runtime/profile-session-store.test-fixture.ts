@@ -1,4 +1,5 @@
 // Model profile sessions by host, including routed layout commands and write notifications.
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
@@ -10,14 +11,14 @@ import type { RuntimeStore } from './runtime-store-contract'
 export type SessionStore = {
   getWorkspaceSession?: (hostId?: string) => WorkspaceSessionState | null | undefined
   setWorkspaceSession?: (session: WorkspaceSessionState, hostId?: string) => void
-  getWorkspaceSessionHostIds?: () => readonly string[]
+  getWorkspaceSessionHostIds?: () => readonly ExecutionHostId[]
   applyLayoutCommand?: (command: LayoutCommand, hostIds?: readonly string[]) => Promise<unknown>
 } & Pick<RuntimeStore, 'onWorkspaceSessionWritten'>
 
 type WriteListener = Parameters<NonNullable<RuntimeStore['onWorkspaceSessionWritten']>>[0]
 
 // The partitions a store without its own host list has had panes bound in.
-const boundHostIdsByStore = new WeakMap<SessionStore, Set<string>>()
+const boundHostIdsByStore = new WeakMap<SessionStore, Set<ExecutionHostId>>()
 
 const installedSessionStores = new WeakSet<SessionStore>()
 const installedLayoutApplies = new WeakSet<SessionStore>()
@@ -78,7 +79,7 @@ export function storeOf(runtime: OrcaRuntimeService): SessionStore | null {
 /** Supply missing profile session APIs, track host partitions, and retain state for fixture cleanup. */
 export function asProfileSessionStore(
   store: SessionStore,
-  hostId: string
+  hostId: ExecutionHostId
 ): {
   get: (host: string) => WorkspaceSessionState
   set: (session: WorkspaceSessionState, host: string) => void
@@ -94,7 +95,7 @@ export function asProfileSessionStore(
     }
   }
   if (!store.getWorkspaceSessionHostIds) {
-    const hostIds = new Set<string>()
+    const hostIds = new Set<ExecutionHostId>()
     boundHostIdsByStore.set(store, hostIds)
     store.getWorkspaceSessionHostIds = () => [...hostIds]
   }
@@ -105,19 +106,19 @@ export function asProfileSessionStore(
       const host = resolveHostId(hostIds[0])
       const change = applyCommandToSession(
         host,
-        getWorkspaceSession(host) ?? getDefaultWorkspaceSession(),
+        getWorkspaceSession.call(store, host) ?? getDefaultWorkspaceSession(),
         command
       )
       if (change.session) {
-        setWorkspaceSession(change.session, host)
+        setWorkspaceSession.call(store, change.session, host)
       }
       return change.value
     }
   }
   boundHostIdsByStore.get(store)?.add(hostId)
   return {
-    get: (host) => getWorkspaceSession(host) ?? getDefaultWorkspaceSession(),
-    set: (session, host) => setWorkspaceSession(session, host)
+    get: (host) => getWorkspaceSession.call(store, host) ?? getDefaultWorkspaceSession(),
+    set: (session, host) => setWorkspaceSession.call(store, session, host)
   }
 }
 

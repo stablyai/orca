@@ -35,6 +35,13 @@ import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owne
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { useAppStore } from '../../store'
+import {
+  noteFrameStoppedSwitchSource,
+  type FrameStoppedSwitchSourceRow
+} from '@/components/terminal-pane/stopped-switch-sources'
+import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import { replacementSelection, selectReplacementInGroup } from '@/lib/replaced-tab-selection'
+import { takeReplacedTabSlot } from '@/lib/unified-tab-anchor-insertion'
 import { framesDrawWorkspace } from '../workspace-layout-frame-drawn-workspaces'
 import { drawnChatLabelChanges, type DrawnChatLabel } from './frame-drawn-chat-tabs'
 
@@ -60,7 +67,13 @@ export type StructuredSessionSnapshotApplyOptions = {
   framesDraw?: (worktreeId: string) => boolean
   /** Collects host titles for drawn chat tabs, applied as content after the store patch. */
   onDrawnChatLabel?: (change: DrawnChatLabel) => void
+  /** Collects chats the host put in another tab's slot; that tab closes after the store patch. */
+  onReplacedTab?: (replacement: ReplacedSessionTab) => void
+  /** Collects main's stopped-source facts from the applied rows; noted after the store patch. */
+  onStoppedSwitchSource?: (worktreeId: string, row: FrameStoppedSwitchSourceRow) => void
 }
+
+type ReplacedSessionTab = { worktreeId: string; tabId: string; sessionId: string }
 
 export function applyStructuredSessionTabSnapshots(
   snapshots: readonly RuntimeMobileSessionTabsResult[],
@@ -69,6 +82,8 @@ export function applyStructuredSessionTabSnapshots(
 ): void {
   const acceptedAgentSessions: { worktreeId: string; sessionId: string }[] = []
   const drawnChatLabels: DrawnChatLabel[] = []
+  const replacements: ReplacedSessionTab[] = []
+  const stoppedSources: [string, FrameStoppedSwitchSourceRow][] = []
   const settleStructuredSessionMirror = applyWebSessionTabsStorePatch(
     (state, changedAgentPaneKeys) =>
       applyLocalStructuredSessionTabSnapshots(
@@ -84,7 +99,9 @@ export function applyStructuredSessionTabSnapshots(
           },
           // Switch point: main places the listed chats' tabs; its frames draw them.
           framesDraw: ORCA_LAYOUT_OWNER_IS_MAIN ? framesDrawWorkspace(state) : undefined,
-          onDrawnChatLabel: (change) => drawnChatLabels.push(change)
+          onDrawnChatLabel: (change) => drawnChatLabels.push(change),
+          onReplacedTab: (replacement) => replacements.push(replacement),
+          onStoppedSwitchSource: (worktreeId, row) => stoppedSources.push([worktreeId, row])
         },
         changedAgentPaneKeys
       ),
@@ -94,10 +111,14 @@ export function applyStructuredSessionTabSnapshots(
     snapshots.map(({ worktree }) => worktree)
   )
   settleStructuredSessionMirror()
+  for (const [worktreeId, row] of stoppedSources) {
+    noteFrameStoppedSwitchSource(worktreeId, row)
+  }
   const { setTabLabel } = useAppStore.getState()
   for (const { tabId, label } of drawnChatLabels) {
     setTabLabel(tabId, label)
   }
+  closeReplacedTerminalTabs(replacements)
   markStructuredAgentSessionLaunchesPublished(LOCAL_EXECUTION_HOST_ID, acceptedAgentSessions)
   if (options.authoritative) {
     startStructuredAgentLaunchCancellationCleanup(LOCAL_EXECUTION_HOST_ID, (sessionId) =>
@@ -165,9 +186,16 @@ export function applyLocalStructuredSessionTabSnapshots<
       continue
     }
     const effectiveSnapshot = suppressCancelledStructuredSessionTabs(snapshot, { kind: 'local' })
+    // One pass over the rows: a frame without main's stopped fact costs that feature nothing more.
     for (const tab of effectiveSnapshot.tabs) {
       if (tab.type === 'agent-session') {
         options.onAcceptedAgentSession?.(snapshot.worktree, tab.sessionId)
+      } else if (tab.type === 'terminal' && tab.stoppedSwitchSource) {
+        options.onStoppedSwitchSource?.(snapshot.worktree, {
+          parentTabId: tab.parentTabId,
+          leafId: tab.leafId,
+          stoppedSwitchSource: tab.stoppedSwitchSource
+        })
       }
     }
     // Runs for a drawn workspace too: its tab-id, focus and close-intent ledgers still follow the host.
@@ -193,6 +221,26 @@ export function applyLocalStructuredSessionTabSnapshots<
       }
     } else {
       next = patch === next ? next : ({ ...next, ...patch } as State)
+      // Main stamps the slot on every frame for the chat's life; only a replaced tab still shown
+      // has anything to close, found through one index rather than a scan per chat.
+      let shownTerminals: Set<string> | undefined
+      for (const tab of effectiveSnapshot.tabs) {
+        if (tab.type !== 'agent-session' || !tab.replaces) {
+          continue
+        }
+        shownTerminals ??= new Set(
+          (next.unifiedTabsByWorktree[snapshot.worktree] ?? []).flatMap((shown) =>
+            shown.contentType === 'terminal' ? [shown.id, shown.entityId] : []
+          )
+        )
+        if (shownTerminals.has(tab.replaces.tabId)) {
+          options.onReplacedTab?.({
+            worktreeId: snapshot.worktree,
+            tabId: tab.replaces.tabId,
+            sessionId: tab.sessionId
+          })
+        }
+      }
     }
     if (isWorktreeRetraction(effectiveSnapshot)) {
       // Retraction removes rows but is not a publication: recording it would retire this consumer/publisher renderer’s lifetime epoch. Retain version cursor against pre-close replies; rebuilt entries mint fresh epochs. Preserve retired tombstones but clear current so the next lineage cannot retire our lifetime epoch one cycle later. Clearing all history would admit dead-epoch stragglers across lineages.
@@ -224,4 +272,43 @@ export function applyLocalStructuredSessionTabSnapshots<
   }
   forgetRetiredEpochRepairsOutside(knownWorktreeIds)
   return next
+}
+
+/**
+ * The other half of the host's one replace write: the chat already sits in the terminal's slot, so
+ * the terminal tab, whose process the switch stopped, leaves now. A pinned slot stays pinned, and
+ * nothing is asked of the host: it retired the pane itself.
+ */
+function closeReplacedTerminalTabs(replacements: readonly ReplacedSessionTab[]): void {
+  for (const { worktreeId, tabId, sessionId } of replacements) {
+    const tabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
+    const replaced = tabs.find(
+      (tab) => tab.contentType === 'terminal' && (tab.id === tabId || tab.entityId === tabId)
+    )
+    const chat = tabs.find(
+      (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
+    )
+    if (!replaced || !chat) {
+      continue
+    }
+    takeReplacedTabSlot(worktreeId, chat, replaced)
+    const selection = replacementSelection(useAppStore.getState(), worktreeId, replaced)
+    // Not a user close: a replace never feeds Reopen Closed Tab or drops the tab's drafts.
+    closeTerminalTab(replaced.entityId, {
+      reason: 'cleanup',
+      force: true,
+      skipRunningProcessConfirm: true,
+      localPtyTeardownOwnedExternally: true
+    })
+    // The chat takes its group's selection only from a terminal that still held it when the
+    // replace landed, and focus only where the user is looking.
+    if (selection === 'focus') {
+      const store = useAppStore.getState()
+      store.activateTab(chat.id, { worktreeId })
+      store.focusGroup(worktreeId, chat.groupId)
+      store.setActiveTabType('agent-session', worktreeId)
+    } else if (selection === 'group') {
+      selectReplacementInGroup(worktreeId, chat.id)
+    }
+  }
 }

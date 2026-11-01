@@ -1,7 +1,14 @@
 import { SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS } from '../ipc/pty/delivery/visibility-state'
+import { publishPtyPresentationRelease } from './terminal/pty-presentation-release-signal'
 
-/** Preserve pane bindings across intentional exits: reversible keeps a wake hint; replaced awaits immediate or reconnect-time replacement. */
-export type TerminalIntentionalStopKind = 'reversible' | 'replaced'
+/**
+ * Why main stopped a PTY on purpose. These kinds keep the pane's binding through the exit:
+ * - `reversible`: sleep or hibernation; the binding is the wake hint.
+ * - `closing`: physical teardown is externally owned; explicit presentation removal follows.
+ * - `replaced`: a restart stops the old process, or a reattach finds it gone; a new one takes over,
+ *   at once or (after a daemon restart) when the pane next connects.
+ */
+export type TerminalIntentionalStopKind = 'reversible' | 'replaced' | 'closing'
 
 type IntentionalStopOwners = { inFlight: number; stopped: boolean }
 
@@ -51,10 +58,14 @@ export class TerminalIntentionalStops {
       settled = true
       owners.stopped ||= stopped
       owners.inFlight -= 1
-      if (owners.inFlight === 0 && !owners.stopped) {
+      const released = owners.inFlight === 0 && !owners.stopped
+      if (released) {
         owned.ownersByKind.delete(kind)
       }
       this.settleIfIdle(ptyId, owned)
+      if (released && kind === 'closing') {
+        publishPtyPresentationRelease(ptyId)
+      }
     }
   }
 
@@ -72,6 +83,20 @@ export class TerminalIntentionalStops {
     }
     stop.incarnationId ??= exitIncarnationId ?? null
     return [...stop.ownersByKind.keys()]
+  }
+
+  /**
+   * Whether a whole-tab close owns this exact process, so its teardown output is held from the pane
+   * the close removes. Reads only: never pins the stop to a process the way an exit claim does.
+   * Released when an unproven stop settles; a later process on the same id is never held.
+   */
+  holdsPresentation(ptyId: string, incarnationId: string | null | undefined): boolean {
+    const stop = this.stopsByPtyId.get(ptyId)
+    return (
+      stop?.ownersByKind.has('closing') === true &&
+      incarnationId != null &&
+      stop.incarnationId === incarnationId
+    )
   }
 
   /** Whether a stop of this PTY that may still be undone is in flight. */

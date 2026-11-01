@@ -89,7 +89,7 @@ export function buildMainModelSnapshotReplayWrites(
     scrollbackAnsi?: string
     carriesNormalBuffer?: boolean
   },
-  options: { skipAltFrame?: boolean; paneOnAlternateScreen: boolean }
+  options: { skipAltFrame?: boolean; paneOnAlternateScreen: boolean; carriesHistory?: boolean }
 ): string[] {
   const { paneOnAlternateScreen } = options
   // The split branch paints alt only after rebuilding normal, so judge its switch from normal.
@@ -101,7 +101,8 @@ export function buildMainModelSnapshotReplayWrites(
   // Missed exit can leave renderer on alt while model is normal; switch before replay so history is not trapped there. Folded normal-buffer images own their later alt entry.
   const normalPreamble = buildSnapshotReplayPreamble({
     targetAlternateScreen: false,
-    paneOnAlternateScreen
+    paneOnAlternateScreen,
+    carriesHistory: options.carriesHistory
   })
   if (!snapshot.alternateScreen || snapshot.carriesNormalBuffer) {
     return [normalPreamble, snapshot.data]

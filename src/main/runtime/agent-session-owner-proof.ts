@@ -14,16 +14,21 @@ export function createAgentSessionOwnerProof(
   ) => Promise<AgentSessionRecord>,
   leaseTtlMs: number
 ) {
-  return (args: {
-    sessionId: string
-    fence: number
-    link?: AgentSessionProviderHandleLink
-    now: number
-    leaseTtlMs?: number
-    accountAcquisition?: { generation: string; recipe: ClaudeAccountRecipe }
-  }): Promise<AgentSessionRecord> =>
-    mutate(args.sessionId, (record) =>
-      withAcquiredAgentSessionAccount(
+  return (
+    args: {
+      sessionId: string
+      fence: number
+      link?: AgentSessionProviderHandleLink
+      now: number
+      leaseTtlMs?: number
+      accountAcquisition?: { generation: string; recipe: ClaudeAccountRecipe }
+    },
+    /** Runs inside the write, so a caller's last check refuses before the owner is recorded. */
+    check?: () => void
+  ): Promise<AgentSessionRecord> =>
+    mutate(args.sessionId, (record) => {
+      check?.()
+      return withAcquiredAgentSessionAccount(
         proveAgentSessionOwner({
           record,
           fence: args.fence,
@@ -33,5 +38,5 @@ export function createAgentSessionOwnerProof(
         }),
         args.accountAcquisition
       )
-    )
+    })
 }

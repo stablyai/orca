@@ -1,12 +1,11 @@
-import { applyAgentStatusBatchUpdate } from './agent-status-batch-update'
 import { projectAgentPaneConversation } from '../agent-pane-conversation'
-import { structuralValuesEqualIgnoringUndefined } from '../../../../../shared/structural-value-equality'
+import { createAgentStatusChangePublication } from './agent-status-change-publication'
+import { applyAgentStatusBatchUpdate } from './agent-status-batch-update'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type {
   AgentStatusBatchTransaction,
   AgentStatusBatchUpdate,
-  AgentStatusChange,
   AgentStatusChangeListener
 } from './agent-status-contract'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
@@ -41,73 +40,11 @@ export function createAgentStatusRuntime(
     'setAgentStatus' | 'recordAgentProviderSession' | 'setAgentProgramStatus'
   >
 ): AgentStatusRuntime {
-  const listeners = new Set<AgentStatusChangeListener>()
-  const pendingChanges: AgentStatusChange[][] = []
-  let committing = 0
-  let notifying = false
+  const { commit, subscribeAgentStatusChanges } = createAgentStatusChangePublication(
+    storeSet,
+    storeGet
+  )
   let batchedPaneKeys: Set<string> | null = null
-  const subscribeAgentStatusChanges = (listener: AgentStatusChangeListener): (() => void) => {
-    listeners.add(listener)
-    return () => listeners.delete(listener)
-  }
-  const flushChanges = (): void => {
-    if (committing || notifying) {
-      return
-    }
-    notifying = true
-    try {
-      for (const accepted of pendingChanges) {
-        if (!accepted?.length) {
-          continue
-        }
-        const currentListeners = [...listeners]
-        for (const listener of currentListeners) {
-          if (!listeners.has(listener)) {
-            continue
-          }
-          try {
-            listener(accepted)
-          } catch (error) {
-            console.error('Agent status observer failed', error)
-          }
-        }
-      }
-    } finally {
-      pendingChanges.length = 0
-      notifying = false
-    }
-  }
-  const commit = (
-    patch: AppState | Partial<AppState>,
-    before: AppState,
-    paneKeys: ReadonlySet<string>
-  ): void => {
-    if (!listeners.size) {
-      storeSet(patch, false)
-      return
-    }
-    const changes: AgentStatusChange[] = []
-    const rows = patch.agentStatusByPaneKey ?? before.agentStatusByPaneKey
-    for (const paneKey of paneKeys) {
-      const previous = before.agentStatusByPaneKey[paneKey]
-      const current = rows[paneKey]
-      if (!structuralValuesEqualIgnoringUndefined(previous, current)) {
-        changes.push({ paneKey, previous, current })
-      }
-    }
-    committing++
-    pendingChanges.push(changes)
-    try {
-      storeSet(patch, false)
-    } finally {
-      // A middleware rejection before commit must never advertise accepted rows.
-      if (storeGet() === before) {
-        changes.length = 0
-      }
-      committing--
-      flushChanges()
-    }
-  }
   let batchedAgentStatusState: AppState | null = null
   let batchedAgentStatusTouchedKeys: Set<keyof AppState> | null = null
   // Staged in-place mutations cannot signal changes by identity; count every accepted write.
@@ -116,7 +53,6 @@ export function createAgentStatusRuntime(
   let batchedGeneratedTabTitleUpdates: GeneratedTabTitleUpdate[] | null = null
   let batchedAgentStatusFreshnessRequested = false
   const get = (): AppState => batchedAgentStatusState ?? storeGet()
-
   let conversationDraft: AppState['agentConversationsByPaneKey'] | null = null
   const projectConversation: typeof projectAgentPaneConversation = (state, entry) =>
     projectAgentPaneConversation(state, entry, (entries) => {

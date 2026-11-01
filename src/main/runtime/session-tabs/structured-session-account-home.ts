@@ -1,4 +1,6 @@
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithStructuredSessionCliWriterHost } from './structured-session-cli-writer-host'
@@ -39,6 +41,22 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
           stateDirectory: getProfileUserDataPath()
         }
       )
+  }
+
+  protected requireRegisteredStructuredAgent(agent: StructuredAgentId) {
+    const definition = structuredAgentRuntimeMetadata(agent)?.definition
+    if (!definition) {
+      throw agentSessionRefusalError('structured_agent_session_unsupported', {
+        reason: 'hostUnsupported'
+      })
+    }
+    return definition
+  }
+
+  structuredAgentSessionLaunchSeedOptions(
+    agent: StructuredAgentId
+  ): Record<string, string> | undefined {
+    return structuredLaunchSeedOptions(this.requireStore().getSettings(), agent)
   }
 
   /** The account home a start of this chat would launch under now, read without side effects; null

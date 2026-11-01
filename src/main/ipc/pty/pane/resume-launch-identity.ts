@@ -21,6 +21,8 @@ export function seedResumeLaunchIdentityFromSpawn(args: {
   if (
     !args.paneKey ||
     args.resumeArgvDropped ||
+    args.result.agentResumeRefused ||
+    args.result.agentResumeUnavailable ||
     args.result.isReattach === true ||
     args.connectionId ||
     !args.launchedAt

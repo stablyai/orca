@@ -10,7 +10,9 @@ import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 const store = vi.hoisted((): { current: AppState | null } => ({ current: null }))
-vi.mock('../../store', () => ({ useAppStore: { getState: () => store.current } }))
+vi.mock('../../store', () => ({
+  useAppStore: { getState: () => store.current, subscribe: () => () => {} }
+}))
 vi.mock('react', () => ({
   useCallback: (fn: unknown) => fn,
   useEffect: () => {},

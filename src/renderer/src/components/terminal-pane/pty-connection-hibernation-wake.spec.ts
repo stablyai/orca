@@ -65,6 +65,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     it('disarms input modes and resumes a hibernated agent session on visibility reveal', async () => {
       // Regression: hibernation suppresses its kill's PTY exit while hidden; before the wake fix onExit permanently latched handledExitPtyId, leaving a frozen inert ghost pane on reveal.
       const { connectPanePty } = await import('./pty-connection')
+      const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -105,7 +106,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       // The deferred connect attached this transport to the persisted tab PTY, so the kill's exit must carry that id for the wake guard's same-pty check.
       expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
       const connectCallsBeforeExit = transport.connect.mock.calls.length
+      deps.isPtyShutdownPending.mockReturnValueOnce(true)
       onPtyExit?.('tab-pty')
+      settleDeferredPtyShutdownExits(['tab-pty'], 'committed')
       await flushAsyncTicks()
 
       // The frozen frame's input-eating modes are disarmed at hibernation-exit (mouse tracking / bracketed paste would otherwise swallow clicks).
@@ -143,65 +146,125 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     })
 
     // A suppressed exit over a finished turn’s live anchor still arms reveal resume despite its worktree-sleep note (#16308).
-    it('arms an in-place resume from a finished turn idle anchor on a suppressed exit', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-pane-2')
-      transportFactoryQueue.push(transport)
-      const deps = createDeps({
-        consumeSuppressedPtyExit: vi.fn(() => true),
-        isVisibleRef: { current: false }
-      })
-      const pane = createPane(2)
-      const paneKey = `tab-1:${leafIdForPane(2)}`
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        await mainStartsPaneAs({
-          ptyId: 'pty-main',
-          bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
+    it.each([10, 100])(
+      'arms an in-place resume from a finished turn idle anchor without scanning %i unrelated hosts',
+      async (hostCount) => {
+        const { connectPanePty } = await import('./pty-connection')
+        const {
+          settleDeferredPtyShutdownExits,
+          applyHostWorktreeTerminalSleepState,
+          consumeCommittedPtyShutdownExit
+        } = await import('./pty-shutdown-exit-deferral')
+        const { toRemoteRuntimePtyId } =
+          await import('../../../../shared/remote-runtime/remote-runtime-pty-id')
+        const transport = createMockTransport('pty-pane-2')
+        transportFactoryQueue.push(transport)
+        const deps = createDeps({
+          consumeSuppressedPtyExit: vi.fn(() => true),
+          isVisibleRef: { current: false }
         })
-      }
-      mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
-        paneKey,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        agent: 'claude',
-        providerSession: { key: 'session_id', id: 'sess-idle-anchor' },
-        prompt: '',
-        state: 'done',
-        capturedAt: 1,
-        updatedAt: 1,
-        origin: 'live'
-      }
-      mockStoreState.suppressedPtyExitIds['tab-pty'] = true
-      const args = mockPanePtyArgs(pane, createManager(1), deps)
-      const binding = connectPanePty(...args)
-      await flushAsyncTicks()
-      const onPtyExit = createdTransportOptions[0]?.onPtyExit
-      expect(onPtyExit).toBeTypeOf('function')
-      const connectCallsBeforeExit = transport.connect.mock.calls.length
-      if (typeof onPtyExit === 'function') {
-        onPtyExit('tab-pty')
-      }
-      await flushAsyncTicks()
-
-      binding.noteVisibilityResume()
-      await flushAsyncTicks()
-
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        await expectWindowStartAskedMain(transport, paneKey)
-        expect(transport.connect).toHaveBeenLastCalledWith(
-          expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+        const pane = createPane(2)
+        const paneKey = `tab-1:${leafIdForPane(2)}`
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          await mainStartsPaneAs({
+            ptyId: 'pty-main',
+            bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
+          })
+        }
+        mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'sess-idle-anchor' },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin: 'live'
+        }
+        mockStoreState.suppressedPtyExitIds['tab-pty'] = true
+        const args = mockPanePtyArgs(pane, createManager(1), deps)
+        const binding = connectPanePty(...args)
+        await flushAsyncTicks()
+        const onPtyExit = createdTransportOptions[0]?.onPtyExit
+        expect(onPtyExit).toBeTypeOf('function')
+        const connectCallsBeforeExit = transport.connect.mock.calls.length
+        const unrelatedHosts = Array.from(
+          { length: hostCount },
+          (_, i) => `env-unrelated-replay-${i}`
         )
-        return
+        for (const environmentId of unrelatedHosts) {
+          applyHostWorktreeTerminalSleepState(environmentId, {
+            type: 'worktreeTerminalSleepState',
+            worktreeId: 'unrelated-workspace',
+            generation: 1,
+            phase: 'committed',
+            ptyIds: [],
+            terminalHandles: ['unrelated-terminal']
+          })
+        }
+        let unrelatedHostVisits = 0
+        const iterate = Map.prototype[Symbol.iterator]
+        Object.defineProperty(Map.prototype, Symbol.iterator, {
+          configurable: true,
+          writable: true,
+          value: function* (this: Map<unknown, unknown>) {
+            for (const entry of iterate.call(this)) {
+              if (typeof entry[0] === 'string' && entry[0].startsWith('env-unrelated-replay-')) {
+                unrelatedHostVisits += 1
+              }
+              yield entry
+            }
+            return undefined
+          }
+        })
+        try {
+          deps.isPtyShutdownPending.mockReturnValueOnce(true)
+          if (typeof onPtyExit === 'function') {
+            onPtyExit('tab-pty')
+          }
+          settleDeferredPtyShutdownExits(['tab-pty'], 'committed')
+        } finally {
+          Object.defineProperty(Map.prototype, Symbol.iterator, {
+            configurable: true,
+            writable: true,
+            value: iterate
+          })
+          for (const environmentId of unrelatedHosts) {
+            expect(
+              consumeCommittedPtyShutdownExit(
+                toRemoteRuntimePtyId('unrelated-terminal', environmentId),
+                environmentId
+              )
+            ).toBe(true)
+          }
+        }
+        expect(unrelatedHostVisits).toBe(0)
+        console.info('R110_HOST_REPLAY', { hostCount, unrelatedHostVisits })
+        await flushAsyncTicks()
+
+        binding.noteVisibilityResume()
+        await flushAsyncTicks()
+
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          await expectWindowStartAskedMain(transport, paneKey)
+          expect(transport.connect).toHaveBeenLastCalledWith(
+            expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+          )
+          return
+        }
+        const resumeConnectOptions: { command?: string } | undefined =
+          transport.connect.mock.calls.at(-1)?.[0]
+        expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
+        expect(resumeConnectOptions?.command).toContain('sess-idle-anchor')
       }
-      const resumeConnectOptions: { command?: string } | undefined =
-        transport.connect.mock.calls.at(-1)?.[0]
-      expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
-      expect(resumeConnectOptions?.command).toContain('sess-idle-anchor')
-    })
+    )
 
     it('resumes a hibernated agent from a navigation-free wake without a visibility reveal', async () => {
       // Mobile wakes hidden panes without visibility changes; duplicate wake events must resume exactly once (INV-1).
       const { connectPanePty } = await import('./pty-connection')
+      const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -239,7 +302,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         | undefined
       expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
       const connectCallsBeforeExit = transport.connect.mock.calls.length
+      deps.isPtyShutdownPending.mockReturnValueOnce(true)
       onPtyExit?.('tab-pty')
+      settleDeferredPtyShutdownExits(['tab-pty'], 'committed')
       await flushAsyncTicks()
       // Still hidden: no reveal happened, so nothing respawned on exit.
       expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
@@ -278,6 +343,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
     it('names the replaced PTY on the restart spawn only, never on a later wake of the same pane', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
       const transport = createMockTransport('pty-restarted')
       transportFactoryQueue.push(transport)
       const deps = createDeps({
@@ -323,7 +389,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
+      deps.isPtyShutdownPending.mockReturnValueOnce(true)
       onPtyExit?.('pty-restarted')
+      settleDeferredPtyShutdownExits(['pty-restarted'], 'committed')
       await flushAsyncTicks()
       expect(binding.wakeHibernatedAgentIfArmed(new Set())).not.toBeNull()
       await flushAsyncTicks()
@@ -411,6 +479,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     it('latches a navigation-free wake that lands before the hibernation kill arms the pane', async () => {
       // Latch wake events between recording sleep and arming the kill’s PTY ID, or the frozen pane remains stranded (#7906).
       const { connectPanePty } = await import('./pty-connection')
+      const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -455,7 +524,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
+      deps.isPtyShutdownPending.mockReturnValueOnce(true)
       onPtyExit?.('tab-pty')
+      settleDeferredPtyShutdownExits(['tab-pty'], 'committed')
       await flushAsyncTicks()
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -476,6 +547,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
     it('keeps an in-place provider claim until the replacement PTY spawn settles', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const deps = createDeps({
@@ -501,7 +573,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
+      deps.isPtyShutdownPending.mockReturnValueOnce(true)
       onPtyExit?.('tab-pty')
+      settleDeferredPtyShutdownExits(['tab-pty'], 'committed')
       await flushAsyncTicks()
       const deferredSpawn = createDeferred<unknown>()
       transport.connect.mockImplementationOnce(() => deferredSpawn.promise)
@@ -535,6 +609,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
     it('re-arms the exact hibernation target after a replacement spawn fails', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const paneKey = `tab-1:${leafIdForPane(2)}`
@@ -550,22 +625,19 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         updatedAt: 1,
         origin: 'worktree-sleep'
       }
-      const binding = connectPanePty(
-        ...mockPanePtyArgs(
-          createPane(2),
-          createManager(1),
-          createDeps({
-            consumeSuppressedPtyExit: vi.fn(() => true),
-            isVisibleRef: { current: false }
-          })
-        )
-      )
+      const deps = createDeps({
+        consumeSuppressedPtyExit: vi.fn(() => true),
+        isVisibleRef: { current: false }
+      })
+      const binding = connectPanePty(...mockPanePtyArgs(createPane(2), createManager(1), deps))
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
+      deps.isPtyShutdownPending.mockReturnValueOnce(true)
       onPtyExit?.('tab-pty')
+      settleDeferredPtyShutdownExits(['tab-pty'], 'committed')
       await flushAsyncTicks()
       transport.connect.mockRejectedValueOnce(new Error('transient spawn failure'))
 
@@ -624,6 +696,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     it('auto-resumes a hibernated pane when its kill lands after the pane is already revealed', async () => {
       // If reveal precedes wake arming, the arm-time visibility check must resume the pane immediately.
       const { connectPanePty } = await import('./pty-connection')
+      const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -662,7 +735,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       // The deferred connect attached this transport to the persisted tab PTY, so the kill's exit must carry that id for the wake guard's same-pty check.
       expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
       const connectCallsBeforeExit = transport.connect.mock.calls.length
+      deps.isPtyShutdownPending.mockReturnValueOnce(true)
       onPtyExit?.('tab-pty')
+      settleDeferredPtyShutdownExits(['tab-pty'], 'committed')
       await flushAsyncTicks()
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -691,6 +766,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     it('invalidates the hibernation wake when another flow rebinds the pane before reveal', async () => {
       // A hidden restart’s rebind permanently invalidates the old armed wake, including after a later PTY death.
       const { connectPanePty } = await import('./pty-connection')
+      const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -722,7 +798,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       expect(onPtyExit).toBeTypeOf('function')
       expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
       const connectCallsBeforeExit = transport.connect.mock.calls.length
+      deps.isPtyShutdownPending.mockReturnValueOnce(true)
       onPtyExit?.('tab-pty')
+      settleDeferredPtyShutdownExits(['tab-pty'], 'committed')
       await flushAsyncTicks()
 
       // Another flow rebinds the pane to a fresh PTY while it is still hidden.

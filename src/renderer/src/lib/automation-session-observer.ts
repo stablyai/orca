@@ -1,5 +1,6 @@
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { subscribeToPtyExit } from '@/components/terminal-pane/pty-dispatcher'
+import type { PtyExitOptions } from '@/components/terminal-pane/pty-exit-delivery'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { getRemoteRuntimeTerminalMultiplexer } from '@/runtime/remote-runtime-terminal-multiplexer'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -18,7 +19,7 @@ export async function observeExistingAutomationSession(args: {
   runId: string
   onData: (chunk: string) => void
   onAgentStatus: (payload: ParsedAgentStatusPayload) => void
-  onExit: (code: number) => void
+  onExit: (code: number, options?: PtyExitOptions) => void
 }): Promise<() => void> {
   const { ptyId, paneKey, runId, onData, onExit } = args
   // Main owns local/SSH OSC 9999 writes unless the kill switch restores legacy behavior; runtime bytes still need renderer writes. Completion callbacks always fire here.
@@ -97,7 +98,13 @@ export async function observeExistingAutomationSession(args: {
   }
 
   const unsubscribeData = subscribeToPtyData(ptyId, handleData)
-  const unsubscribeExit = subscribeToPtyExit(ptyId, onExit)
+  const unsubscribeExit = subscribeToPtyExit(ptyId, (code, context) => {
+    if (context.exitOptions?.preserveRendererBinding) {
+      onExit(code, context.exitOptions)
+    } else {
+      onExit(code)
+    }
+  })
   return () => {
     unsubscribeData()
     unsubscribeExit()

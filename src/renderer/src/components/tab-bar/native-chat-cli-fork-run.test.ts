@@ -1,3 +1,4 @@
+import { conversationSwitchFailureText } from '@/lib/conversation-switch-feedback'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { runNativeChatCliFork } from './native-chat-cli-fork-run'
 import type * as LaunchFeedback from '../right-sidebar/ai-vault-session-launch-feedback'
@@ -124,13 +125,13 @@ it('lets the destination finish after dispatch and passes no source resume ident
     closeSource()
     return { tabId: null, runtimeLaunch: Promise.resolve({ status: 'created' }) }
   })
-  await runNativeChatCliFork(args)
+  await runNativeChatCliFork({ ...args, queuedMessage: 'Claude copy opens in a new terminal.' })
   expect(mocks.launch).toHaveBeenCalledWith({
     agent: 'claude',
     worktreeId: 'workspace-1',
     command: 'claude --resume source --fork-session'
   })
-  expect(mocks.notify).toHaveBeenCalledWith('claude')
+  expect(mocks.notify).toHaveBeenCalledWith('claude', 'Claude copy opens in a new terminal.')
   expect(mocks.error).not.toHaveBeenCalled()
 })
 
@@ -200,5 +201,32 @@ it.each([
     expect(mocks.launch).not.toHaveBeenCalled()
     expect(onComplete).toHaveBeenCalledTimes(2)
     expect(mocks.listeners.size).toBe(0)
+  }
+)
+
+it.each(['prepare', 'launch'])(
+  'unified old Continue sanitizes its %s failure once',
+  async (stage) => {
+    mocks.prepare.mockResolvedValue(prepared)
+    if (stage === 'prepare') {
+      mocks.prepare.mockRejectedValue(new Error('raw provider secret'))
+    } else {
+      mocks.launch.mockReturnValue({
+        tabId: null,
+        runtimeLaunch: Promise.resolve({ status: 'failed', message: 'raw provider secret' })
+      })
+    }
+    await runNativeChatCliFork({
+      ...args,
+      describeFailure: (message) =>
+        conversationSwitchFailureText(new Error(message), {
+          agent: args.agent,
+          direction: 'terminal'
+        })
+    })
+    expect(mocks.error).toHaveBeenCalledExactlyOnceWith(
+      'Claude could not switch to a terminal. Try again.'
+    )
+    expect(mocks.notify).not.toHaveBeenCalled()
   }
 )

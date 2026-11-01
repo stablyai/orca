@@ -1,4 +1,7 @@
-import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
+import type {
+  RuntimeRpcDispatchObservation,
+  RuntimeRpcResponse
+} from '../shared/runtime-rpc-envelope'
 
 type RuntimeEnvironmentSubscribeArgs = {
   subscriptionId?: string
@@ -7,10 +10,13 @@ type RuntimeEnvironmentSubscribeArgs = {
   params?: unknown
   timeoutMs?: number
   expectedEnvironmentPairingRevision?: number
+  observeDispatch?: boolean
+  dispatchObservation?: RuntimeRpcDispatchObservation
   expectedEnvironmentRuntimeId?: string
 }
 
 type RuntimeEnvironmentSubscriptionCallbacks = {
+  onSent?: (sentAt?: number) => void
   onResponse: (response: RuntimeRpcResponse<unknown>) => void
   onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError?: (error: { code: string; message: string }) => void
@@ -23,10 +29,16 @@ export type RuntimeEnvironmentSubscriptionHandle = {
 }
 
 type RuntimeEnvironmentSubscriptionEvent =
-  | { subscriptionId: string; type: 'response'; response: RuntimeRpcResponse<unknown> }
+  | {
+      subscriptionId: string
+      type: 'response'
+      response: RuntimeRpcResponse<unknown>
+      sentAt?: number
+    }
   | { subscriptionId: string; type: 'binary'; bytes: Uint8Array<ArrayBufferLike> }
   | { subscriptionId: string; type: 'error'; code: string; message: string }
   | { subscriptionId: string; type: 'close' }
+  | { subscriptionId: string; type: 'sent'; sentAt?: number }
 
 type RuntimeEnvironmentSubscriptionIpc = {
   invoke: (channel: string, args: unknown) => Promise<unknown>
@@ -90,7 +102,12 @@ function getOrCreateDispatcher(
     if (!subscriptionCallbacks) {
       return
     }
-    if (event.type === 'response') {
+    if (event.type === 'sent') {
+      subscriptionCallbacks.onSent?.(event.sentAt)
+    } else if (event.type === 'response') {
+      if (event.sentAt !== undefined) {
+        subscriptionCallbacks.onSent?.(event.sentAt)
+      }
       subscriptionCallbacks.onResponse(event.response)
     } else if (event.type === 'binary') {
       subscriptionCallbacks.onBinary?.(event.bytes)

@@ -69,6 +69,7 @@ import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { agentSessionRefusalFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import {
   readNativeChatComposerDraft,
   structuredAgentSessionDraftScopeKey,
@@ -85,14 +86,16 @@ const NOT_SIGNED_IN_TEXT = "Codex isn't signed in. Run `codex login`."
 
 function sessionView(agent: 'codex' | 'grok' = 'codex'): React.JSX.Element {
   return (
-    <NativeChatStructuredSession
-      isVisible
-      isFocusedGroup
-      tabId="structured-tab-1"
-      sessionId="session-1"
-      target={{ kind: 'local' }}
-      agent={agent}
-    />
+    <ConfirmationDialogProvider>
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-1"
+        sessionId="session-1"
+        target={{ kind: 'local' }}
+        agent={agent}
+      />
+    </ConfirmationDialogProvider>
   )
 }
 

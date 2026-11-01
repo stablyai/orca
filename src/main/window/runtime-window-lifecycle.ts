@@ -9,6 +9,10 @@ import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identi
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { requestAgentLaunchTabPublishFromRenderer } from './agent-launch-tab-publish-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import {
+  TerminalNotPlacedError,
+  TerminalRevealUnconfirmedError
+} from '../runtime/session-tabs/terminal-not-placed-error'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
@@ -81,12 +85,12 @@ export function registerRuntimeWindowLifecycle(
             : null
           : undefined
         if (expectedIdentity === null) {
-          reject(new Error('terminal_reveal_identity_required'))
+          reject(new TerminalNotPlacedError('terminal_reveal_identity_required'))
           return
         }
         const timer = setTimeout(() => {
           ipcMain.removeListener('terminal:tabCreateReply', handler)
-          reject(new Error('Terminal reveal timed out'))
+          reject(new TerminalRevealUnconfirmedError('Terminal reveal timed out'))
         }, 10_000)
         const handler = (event: Electron.IpcMainEvent, reply: TerminalTabCreateReply): void => {
           // Renderer-supplied request IDs confer no authority; only this window can satisfy reveal.
@@ -96,7 +100,12 @@ export function registerRuntimeWindowLifecycle(
           clearTimeout(timer)
           ipcMain.removeListener('terminal:tabCreateReply', handler)
           if (reply.error) {
-            reject(new Error(reply.error))
+            // A tab already held the terminal when the window failed: it may be on screen.
+            reject(
+              reply.tabId
+                ? new TerminalRevealUnconfirmedError(reply.error)
+                : new TerminalNotPlacedError(reply.error)
+            )
             return
           }
           if (
@@ -113,7 +122,8 @@ export function registerRuntimeWindowLifecycle(
           resolve({
             tabId: reply.tabId!,
             title: reply.title,
-            ...(reply.identity ? { identity: reply.identity } : {})
+            ...(reply.identity ? { identity: reply.identity } : {}),
+            ...(reply.closed ? { closed: reply.closed } : {})
           })
         }
         ipcMain.on('terminal:tabCreateReply', handler)
@@ -142,7 +152,8 @@ export function registerRuntimeWindowLifecycle(
           ...(opts.splitTelemetrySource !== undefined
             ? { splitTelemetrySource: opts.splitTelemetrySource }
             : {}),
-          ...(opts.focus !== undefined ? { focus: opts.focus } : {})
+          ...(opts.focus !== undefined ? { focus: opts.focus } : {}),
+          ...(opts.replaces ? { replaces: opts.replaces } : {})
         })
         if (!sent) {
           clearTimeout(timer)
@@ -178,7 +189,8 @@ export function registerRuntimeWindowLifecycle(
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
     revealTerminalPane: (target) => revealTerminalPaneInWindow(mainWindow, target),
-    focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
+    focusEditorTab: (tabId, worktreeId, sourceTabId) =>
+      send('ui:focusEditorTab', { tabId, worktreeId, ...(sourceTabId ? { sourceTabId } : {}) }),
     closeSessionTab: (tabId, worktreeId) =>
       requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
@@ -213,6 +225,7 @@ export function registerRuntimeWindowLifecycle(
       }),
     closeTerminal: (tabId) => send('ui:closeTerminal', { kind: 'tab', tabId }),
     closeTerminalPane: (tabId, leafId) => send('ui:closeTerminal', { kind: 'pane', tabId, leafId }),
+    settleStoppedSwitchSource: (source) => send('ui:stoppedSwitchSource', source),
     closeTerminalTab: (tabId, options) =>
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     workspaceSleepChanged: (notice) => send('ui:workspaceSleep', notice),

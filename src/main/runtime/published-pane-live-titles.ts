@@ -27,3 +27,13 @@ export function withLiveTitles(
     )
   }
 }
+
+/** Collect titles in the same tab/pane order used by the ordinary live overlay. */
+export function paneLiveTitlesOf(
+  layout: PublishedWorkspaceLayout,
+  source: { liveTitle: (ptyId: string) => string | null }
+): (string | null)[] {
+  return layout.tabs.flatMap((tab) =>
+    (tab.terminal?.panes ?? []).map((pane) => (pane.ptyId ? source.liveTitle(pane.ptyId) : null))
+  )
+}

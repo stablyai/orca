@@ -1,3 +1,4 @@
+import type { TerminalSurfaceCloseCapture } from '../../../shared/terminal-tab-close'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
@@ -10,7 +11,11 @@ export type PairedHostTerminal = { environmentId: string; handle: string }
 export type PairedHostTerminalCall = (
   environmentId: string,
   method: 'terminal.close' | 'terminal.closeTab',
-  params: { terminal: string },
+  params: {
+    terminal: string
+    expectedIncarnationId?: string
+    originalPresentation?: TerminalSurfaceCloseCapture
+  },
   timeoutMs: number
 ) => Promise<unknown>
 
@@ -54,18 +59,22 @@ function errorCode(error: unknown): string | null {
 export async function closeTerminalOnPairedHost(
   call: PairedHostTerminalCall,
   terminal: PairedHostTerminal,
-  method: 'terminal.close' | 'terminal.closeTab'
+  method: 'terminal.close' | 'terminal.closeTab',
+  original?: { expectedIncarnationId?: string; originalPresentation?: TerminalSurfaceCloseCapture }
 ): Promise<Omit<RuntimeTerminalClose, 'handle' | 'tabId'>> {
   let result: unknown
   try {
     result = await call(
       terminal.environmentId,
       method,
-      { terminal: terminal.handle },
+      { terminal: terminal.handle, ...original },
       PAIRED_HOST_TERMINAL_CLOSE_TIMEOUT_MS
     )
   } catch (error) {
     const code = errorCode(error)
+    if (original?.originalPresentation) {
+      throw error
+    }
     if (code === 'terminal_not_found') {
       // The owner has no such terminal, so nothing runs there to stop.
       return { ptyKilled: false }
@@ -82,12 +91,18 @@ export async function closeTerminalOnPairedHost(
   }
   const close = readHostClose(result)
   if (!close) {
+    if (original?.originalPresentation) {
+      throw new Error('terminal_close_unverifiable')
+    }
     // Why unverifiable: the owner answered, but not with a receipt this build can read.
     return {
       ptyKilled: false,
       ptyStopVerdict: 'unverifiable',
       ptyStopReason: 'its owning host returned no close receipt'
     }
+  }
+  if (original?.originalPresentation && !close.ptyKilled) {
+    throw new Error('terminal_close_unverifiable')
   }
   return close
 }

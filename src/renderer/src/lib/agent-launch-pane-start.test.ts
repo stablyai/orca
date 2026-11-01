@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { awaitAgentLaunchPaneStart, settleAgentLaunchPaneStart } from './agent-launch-pane-start'
+import {
+  awaitAgentLaunchPaneStart,
+  pendingAgentLaunchPaneStartCountForTests,
+  settleAgentLaunchPaneStart
+} from './agent-launch-pane-start'
 import { noteAgentLaunchPaneClosedByUser } from './agent-launch-pane-closes'
 
 const TAB = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
@@ -18,5 +22,14 @@ describe("an AI button's pane says whether its agent started", () => {
     const started = awaitAgentLaunchPaneStart(TAB, LEAF)
     noteAgentLaunchPaneClosedByUser(TAB, LEAF)
     await expect(started).resolves.toBeNull()
+  })
+
+  it.each([50, 500])('keeps no entry after %i launches settle', async (launches) => {
+    for (let index = 0; index < launches; index++) {
+      const started = awaitAgentLaunchPaneStart(TAB, `leaf-${index}`)
+      settleAgentLaunchPaneStart(TAB, `leaf-${index}`, `pty-${index}`)
+      await started
+    }
+    expect(pendingAgentLaunchPaneStartCountForTests()).toBe(0)
   })
 })

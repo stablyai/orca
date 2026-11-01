@@ -3,10 +3,12 @@ import {
   shouldDropHiddenRendererPtyData
 } from './pty-hidden-delivery-gate'
 import {
+  presentationHeldPtys,
   rendererVisibilityKnownPtys,
   visibleRendererPtys,
   activeRendererPtys
 } from './visibility-state'
+import { ptyIncarnationById } from '../provider/ownership-state'
 import { PTY_BATCH_INTERVAL_MS } from './constants'
 import {
   appendPendingPtyData,
@@ -24,6 +26,24 @@ import {
   takePtyGapEscapeState
 } from './pty-gap-escape-state'
 import type { PtyIpcSession } from '../session'
+import { subscribeToPtyPresentationRelease } from '../../../runtime/terminal/pty-presentation-release-signal'
+
+// The stop wasn't proven and the process lives on: the pane restores what was held back instead of
+// continuing across a silent gap.
+function releaseHeldPtyPresentation(
+  session: PtyIpcSession,
+  id: string,
+  markerSeq: number | undefined
+): void {
+  const unsubscribe = presentationHeldPtys.get(id)
+  if (!unsubscribe) {
+    return
+  }
+  presentationHeldPtys.delete(id)
+  unsubscribe()
+  markPtyRendererStreamGap(id)
+  sendModelRestoreNeededMarker(session, id, 'pending-cap', markerSeq)
+}
 
 export function rendererPtyIsKnownHidden(id: string): boolean {
   return rendererVisibilityKnownPtys.has(id) && !visibleRendererPtys.has(id)
@@ -60,6 +80,26 @@ export function acceptPtyDataForRenderer(
     return
   }
   const escapeStateBefore = advancePtyEscapeBoundary(payload.id, payload.data)
+  if (
+    session.runtime?.intentionalPtyStops?.holdsPresentation(
+      payload.id,
+      ptyIncarnationById.get(payload.id)
+    )
+  ) {
+    // A whole-tab close owns this process: its teardown output never reaches the pane it removes,
+    // and is never queued or charged to delivery.
+    if (!presentationHeldPtys.has(payload.id)) {
+      const id = payload.id
+      presentationHeldPtys.set(
+        id,
+        subscribeToPtyPresentationRelease(id, () =>
+          releaseHeldPtyPresentation(session, id, session.runtime?.getPtyOutputSequence(id))
+        )
+      )
+    }
+    return
+  }
+  releaseHeldPtyPresentation(session, payload.id, startSeq)
   if (shouldDropHiddenRendererPtyData(payload.id, session.getSettings?.())) {
     const droppedChars = payload.data.length
     const drop = recordHiddenRendererPtyDataDrop(payload.id, droppedChars)

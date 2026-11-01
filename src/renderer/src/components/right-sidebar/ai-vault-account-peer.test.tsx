@@ -17,8 +17,12 @@ import {
   flushAccountWork,
   installAccountFixture
 } from './ai-vault-account-test-fixture'
+import type * as I18n from '@/i18n/i18n'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18n>()),
+  translate: (_key: string, fallback: string) => fallback
+}))
 installAccountFixture()
 
 it.each([

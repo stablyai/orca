@@ -14,6 +14,7 @@ import type {
   AgentJournalTurnLifecycle
 } from '../../agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../agent-session/lifecycle/agent-session-turn-record'
+import { turnScopedUserRows } from '../../native-chat-turn-scoped-rows'
 import {
   nativeChatJournalOrderTurnKeys,
   nativeChatRowTurnKeys,
@@ -61,13 +62,7 @@ export function structuredAgentTurnAnchors(
         : []
     )
   )
-  const steeredInto = new Map(
-    items.flatMap((item) =>
-      item.turnScope?.kind === 'turn' && userItemIds.has(item.itemId)
-        ? [[item.itemId, item.turnScope.turnItemId] as const]
-        : []
-    )
-  )
+  const { steeredInto, scopedOpeners } = turnScopedUserRows(items, userItemIds)
   const aliases = new Map<string, string>()
   // Codex steers reuse the running turn’s provider key; the earliest submission naming it is the opener.
   for (const submission of submissions) {
@@ -132,7 +127,7 @@ export function structuredAgentTurnAnchors(
       userItemIds,
       aliases,
       steeredInto,
-      precedingUserItemId,
+      scopedOpeners.get(item.itemId) ?? precedingUserItemId,
       inFlightSinceLastTurn
     )
     const key = turn.userItemId

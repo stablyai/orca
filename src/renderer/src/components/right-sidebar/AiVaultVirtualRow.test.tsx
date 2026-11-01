@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { getDefaultSettings } from '../../../../shared/constants'
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -7,11 +8,12 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import type { AgentDotState } from '@/components/AgentStateDot'
-import { useAppStore } from '@/store'
 import { createEditorStore } from '@/store/slices/editor-slice-test-harness'
 import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'
 import { aiVaultSearchHitToSession } from './ai-vault-search-session'
 import { AiVaultVirtualRow } from './AiVaultVirtualRow'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { useAppStore } from '@/store'
 
 const cliSession: AiVaultSession = {
   id: 'local:codex:session-1:/tmp/session-1.jsonl',
@@ -38,9 +40,83 @@ const cliSession: AiVaultSession = {
 
 afterEach(() => {
   cleanup()
+  setLocalRuntimeCapabilitiesForTests(null)
   vi.restoreAllMocks()
   Reflect.deleteProperty(window, 'api')
 })
+
+function sessionRowFixture(
+  session: AiVaultSession,
+  blocked = false,
+  searchHit?: AiVaultSearchHit,
+  searchHitHostLabels?: ReadonlyMap<string, string>,
+  index = 0,
+  resumeInChat = false,
+  liveState: AgentDotState | null = null,
+  logDetails?: { onOpenLog: (session: AiVaultSession) => Promise<void> }
+) {
+  const buildResumeStartup = vi.fn(() => ({ command: session.resumeCommand }))
+  const onCopyResume = vi.fn()
+  const onResume = vi.fn()
+  const onResumeInNewCli = vi.fn()
+  const getOriginalPaneTarget = vi.fn(() => null)
+  const element = (
+    <AiVaultVirtualRow
+      row={{ type: 'session', groupKey: 'today', session }}
+      index={index}
+      start={index * 52}
+      activeStickyHeaderIndex={null}
+      measureElement={vi.fn()}
+      collapsedGroups={new Set()}
+      expandedSessionIds={new Set(logDetails ? [session.id] : [])}
+      vaultScope="all"
+      searchHits={searchHit ? new Map([[session.id, searchHit]]) : undefined}
+      searchHitHostLabels={searchHitHostLabels}
+      buildResumeStartup={buildResumeStartup}
+      getOriginalPaneTarget={getOriginalPaneTarget}
+      isStructuredSessionOpen={() => false}
+      getSessionLiveState={() => liveState}
+      getWorktreeInfo={() => null}
+      getSessionResumeState={() => ({
+        blocked,
+        worktreeId: blocked ? null : 'worktree-1',
+        usesSessionWorktree: false
+      })}
+      getSessionResumeActions={() => ({
+        worktree: { worktreeId: null, disabled: true },
+        newTab: { worktreeId: 'worktree-1', disabled: blocked }
+      })}
+      getSessionResumeInChat={() =>
+        resumeInChat
+          ? { available: true, workspaceId: 'worktree-1' }
+          : { available: false, reason: 'already-structured' }
+      }
+      onToggleGroup={vi.fn()}
+      onToggleSessionDetails={vi.fn()}
+      onJumpToOriginalPane={vi.fn()}
+      onJumpToWorktree={vi.fn()}
+      onResume={onResume}
+      onContinueInNewSession={vi.fn()}
+      onResumeInNewChat={vi.fn()}
+      onResumeInNewCli={onResumeInNewCli}
+      onCopyResume={onCopyResume}
+      onCopyId={vi.fn()}
+      onCopyPath={vi.fn()}
+      onOpenLog={logDetails?.onOpenLog ?? vi.fn()}
+      onRevealLog={vi.fn()}
+      onOpenCwd={vi.fn()}
+      onRequestDelete={vi.fn()}
+    />
+  )
+  return {
+    element,
+    getOriginalPaneTarget,
+    buildResumeStartup,
+    onCopyResume,
+    onResume,
+    onResumeInNewCli
+  }
+}
 
 function renderSession(
   session: AiVaultSession,
@@ -53,57 +129,18 @@ function renderSession(
   if (logDetails) {
     Object.defineProperty(window, 'api', { configurable: true, value: { aiVault: {} } })
   }
-  const buildResumeStartup = vi.fn(() => ({ command: session.resumeCommand }))
-  const onCopyResume = vi.fn()
-  const onResume = vi.fn()
-  const onResumeInNewCli = vi.fn()
-  render(
-    <TooltipProvider>
-      <AiVaultVirtualRow
-        row={{ type: 'session', groupKey: 'today', session }}
-        index={0}
-        start={0}
-        activeStickyHeaderIndex={null}
-        measureElement={vi.fn()}
-        collapsedGroups={new Set()}
-        expandedSessionIds={new Set(logDetails ? [session.id] : [])}
-        vaultScope="all"
-        searchHits={searchHit ? new Map([[session.id, searchHit]]) : undefined}
-        searchHitHostLabels={searchHitHostLabels}
-        buildResumeStartup={buildResumeStartup}
-        getOriginalPaneTarget={() => null}
-        isStructuredSessionOpen={() => false}
-        getSessionLiveState={() => liveState}
-        getWorktreeInfo={() => null}
-        getSessionResumeState={() => ({
-          blocked,
-          worktreeId: blocked ? null : 'worktree-1',
-          usesSessionWorktree: false
-        })}
-        getSessionResumeActions={() => ({
-          worktree: { worktreeId: null, disabled: true },
-          newTab: { worktreeId: 'worktree-1', disabled: blocked }
-        })}
-        getSessionResumeInChat={() => ({ available: false, reason: 'already-structured' })}
-        onToggleGroup={vi.fn()}
-        onToggleSessionDetails={vi.fn()}
-        onJumpToOriginalPane={vi.fn()}
-        onJumpToWorktree={vi.fn()}
-        onResume={onResume}
-        onContinueInNewSession={vi.fn()}
-        onResumeInNewChat={vi.fn()}
-        onResumeInNewCli={onResumeInNewCli}
-        onCopyResume={onCopyResume}
-        onCopyId={vi.fn()}
-        onCopyPath={vi.fn()}
-        onOpenLog={logDetails?.onOpenLog ?? vi.fn()}
-        onRevealLog={vi.fn()}
-        onOpenCwd={vi.fn()}
-        onRequestDelete={vi.fn()}
-      />
-    </TooltipProvider>
+  const fixture = sessionRowFixture(
+    session,
+    blocked,
+    searchHit,
+    searchHitHostLabels,
+    0,
+    false,
+    liveState,
+    logDetails
   )
-  return { buildResumeStartup, onCopyResume, onResume, onResumeInNewCli }
+  render(<TooltipProvider>{fixture.element}</TooltipProvider>)
+  return fixture
 }
 
 describe('AiVaultVirtualRow conversation logs', () => {
@@ -281,12 +318,20 @@ describe('AiVaultVirtualRow resume command actions', () => {
   })
 })
 
-describe('AiVaultVirtualRow Resume in New Terminal', () => {
+describe('AiVaultVirtualRow CLI surface actions', () => {
   const owner = { sessionId: 'chat-1', workspaceId: 'worktree-1' }
 
   it.each(['claude', 'codex'] as const)(
-    'offers the fork on a chat-owned %s row from both menus',
+    // A host that can't switch in place offers the copy instead of a switch it would refuse.
+    'offers the terminal copy on an older host for a chat-owned %s row from both menus',
     async (agent) => {
+      useAppStore.setState((state) => ({
+        settings: {
+          ...getDefaultSettings('/home/test'),
+          ...state.settings
+        }
+      }))
+      setLocalRuntimeCapabilitiesForTests([])
       const session: AiVaultSession = { ...cliSession, agent, structuredSession: owner }
       const { onResumeInNewCli, onResume } = renderSession(session)
       const user = userEvent.setup()
@@ -299,6 +344,7 @@ describe('AiVaultVirtualRow Resume in New Terminal', () => {
       await user.click(await screen.findByRole('menuitem', { name: 'Resume in New Terminal' }))
       expect(onResumeInNewCli).toHaveBeenCalledTimes(2)
       expect(onResume).not.toHaveBeenCalled()
+      expect(screen.queryByRole('menuitem', { name: 'Switch to CLI' })).toBeNull()
     }
   )
 

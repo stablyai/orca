@@ -15,7 +15,12 @@ type CliSource = NonNullable<StructuredAgentSessionResumeSource['cliSource']>
 export type StructuredAgentCliSourceRoute = 'native-local' | 'unsupported' | 'unknown'
 export type StructuredAgentCliSourceLocator =
   | { kind: 'none' }
-  | { kind: 'matched'; transcriptPath?: string }
+  | {
+      kind: 'matched'
+      transcriptPath?: string
+      /** The CLI took a prompt, so it saved this conversation: a transcript gone now is unreadable. */
+      conversed?: true
+    }
   | { kind: 'absent' }
 
 export type StructuredAgentCliSourceEvidence = (
@@ -149,5 +154,9 @@ function resolveSource(input: {
       reason: 'hostUnsupported'
     })
   }
-  return { kind: 'matched', ...(path ? { transcriptPath: path } : {}) }
+  return {
+    kind: 'matched',
+    ...(path ? { transcriptPath: path } : {}),
+    ...(row.prompt.trim() ? { conversed: true as const } : {})
+  }
 }

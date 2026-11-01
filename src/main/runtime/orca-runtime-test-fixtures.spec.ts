@@ -11,9 +11,12 @@ import {
   getTerminalPasteIngestMs
 } from '../../shared/agent-prompt-injection'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
+import { applyPtyBinding } from '../persistence/loading-store/pty-binding-session-update'
+import { ptyBindingIsRefused } from '../persistence/loading-store/pty-binding-refusals'
 import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
 import { toComparableRelaySshPtyId } from '../../shared/ssh-pty-id'
 import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
@@ -569,7 +572,7 @@ function makeHeadlessTerminalLayout(
 function makeRuntimeStoreWithWorkspaceSession(
   initialSession: WorkspaceSessionState,
   // Session fixtures must answer only their host partition so hardcoded host ids fail.
-  ownerHostId = 'local'
+  ownerHostId: ExecutionHostId = 'local'
 ): {
   runtimeStore: typeof store & {
     admitTerminalPane: ReturnType<typeof withRuntimePaneAdmission>['admitTerminalPane']
@@ -626,30 +629,16 @@ function makeRuntimeStoreWithWorkspaceSession(
         if (!args) {
           return false
         }
-        const tabs = session.tabsByWorktree[args.worktreeId] ?? []
-        session = {
-          ...session,
-          tabsByWorktree: {
-            ...session.tabsByWorktree,
-            [args.worktreeId]: tabs.map((tab) =>
-              tab.id === args.tabId ? { ...tab, ptyId: args.ptyId } : tab
-            )
-          },
-          terminalLayoutsByTabId: {
-            ...session.terminalLayoutsByTabId,
-            [args.tabId]: {
-              ...(session.terminalLayoutsByTabId[args.tabId] ?? {
-                root: { type: 'leaf', leafId: args.leafId },
-                activeLeafId: args.leafId,
-                expandedLeafId: null
-              }),
-              ptyIdsByLeafId: {
-                ...session.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId,
-                [args.leafId]: args.ptyId
-              }
-            }
-          }
+        const worktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
+        const paneKey = makePaneKey(args.tabId, args.leafId)
+        if (
+          ptyBindingIsRefused(args, session, worktreeId, paneKey, [
+            { hostId: ownerHostId, session }
+          ])
+        ) {
+          return false
         }
+        applyPtyBinding(args, session, worktreeId, paneKey)
         return true
       })
     })

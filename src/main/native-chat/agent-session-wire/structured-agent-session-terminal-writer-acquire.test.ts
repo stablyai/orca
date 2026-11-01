@@ -1,3 +1,4 @@
+import { setStructuredAgentSessionHost } from './structured-agent-session-registry'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -46,6 +47,10 @@ const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>(async ({ fence, 
     observedAt: NOW
   }
 }))
+const open = vi.fn<StructuredAgentSessionAdapter['open']>(async () => ({
+  reportedOptions: { model: '' }
+}))
+const closeSession = vi.fn<NonNullable<StructuredAgentSessionAdapter['closeSession']>>()
 const assertNoTerminalWriter = vi.fn(async (_record: AgentSessionRecord) => {
   if (terminalWriting) {
     throw agentSessionRefusalError('agent_session_conflict', {
@@ -59,6 +64,8 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   terminalWriting = false
   acquire.mockClear()
+  open.mockClear()
+  closeSession.mockReset().mockResolvedValue(true)
   assertNoTerminalWriter.mockReset().mockImplementation(async () => {
     if (terminalWriting) {
       throw agentSessionRefusalError('agent_session_conflict', {
@@ -84,12 +91,12 @@ beforeEach(async () => {
         state: 'accepted' as const,
         providerIdentity: { provider: 'codex' as const, threadId: THREAD, turnId: 't', ordinal: 1 }
       })),
-      closeSession: vi.fn(async () => true),
+      closeSession,
       releaseAcquisition: vi.fn(async () => true),
       cancelTurn: vi.fn(async () => ({ cancelled: false })),
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined),
-      open: async () => ({ reportedOptions: { model: '' } })
+      open
     },
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
@@ -101,6 +108,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  setStructuredAgentSessionHost(null)
   await host.flushAllStreamedEvents()
   await closeTestJournalHostDatabase(root)
   await rm(root, { recursive: true, force: true })

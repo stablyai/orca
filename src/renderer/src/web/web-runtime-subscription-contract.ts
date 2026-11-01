@@ -2,6 +2,8 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
 export type WebRuntimeSubscriptionCallbacks = {
   onResponse: (response: RuntimeRpcResponse<unknown>) => void
+  /** The request left this client: the caller's response deadline starts here, not at enqueue. */
+  onSent?: (sentAt?: number) => void
   onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError?: (error: { code: string; message: string }) => void
   onClose?: () => void

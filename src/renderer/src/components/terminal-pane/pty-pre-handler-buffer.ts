@@ -1,6 +1,7 @@
 import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
 import { clampUtf8Tail } from './pty-eager-buffer-clamp'
 import type { PtyDataMeta } from './pty-dispatcher'
+import type { PtyExitOptions } from './pty-exit-delivery'
 
 type BufferedPreHandlerPtyData = {
   data: string
@@ -17,6 +18,7 @@ type BufferedPreHandlerPtyState = {
 }
 
 type BufferedPreHandlerPtyExit = {
+  options?: PtyExitOptions
   code: number
   sequence: number
   /** Which lifetime of `ptyId` died. Absent when the emitting host predates the field. */
@@ -181,13 +183,15 @@ export function replayPreHandlerPtyData(ptyId: string, observer: (data: string) 
 export function bufferPreHandlerPtyExit(
   ptyId: string,
   code: number,
-  incarnationId?: unknown
+  incarnationId?: unknown,
+  options?: PtyExitOptions
 ): void {
   if (consumedPreHandlerPtyExits.has(ptyId) || discardedPreHandlerPtyStates.has(ptyId)) {
     return
   }
   evictOldestPtyIfAtCap(preHandlerPtyExit, ptyId, PRE_HANDLER_PTY_EXIT_MAX_PTYS)
   const exit: BufferedPreHandlerPtyExit = {
+    ...(options ? { options } : {}),
     code,
     sequence: nextPreHandlerPtySequence(),
     // Record only a well-formed incarnation; a malformed one must not become evidence.
@@ -201,6 +205,13 @@ export function bufferPreHandlerPtyExit(
   // Replace duplicates within their lifetime; unnamed exits keep the single legacy slot.
   const sameLifetime = exits.findIndex((entry) => entry.incarnationId === exit.incarnationId)
   if (sameLifetime !== -1) {
+    const previous = exits[sameLifetime].options?.preserveRendererBinding
+    if (previous) {
+      exit.options ??= {}
+      if (previous === true || !exit.options.preserveRendererBinding) {
+        exit.options.preserveRendererBinding = previous
+      }
+    }
     exits[sameLifetime] = exit
     return
   }
@@ -286,7 +297,7 @@ export function hasPreHandlerPtyExit(ptyId: string, incarnationId?: unknown): bo
 
 export function drainPreHandlerPtyExit(
   ptyId: string,
-  handler: (code: number) => void,
+  handler: (code: number, options?: PtyExitOptions) => void,
   incarnationId?: unknown
 ): void {
   // Select the newest admissible lifetime record to preserve last-write-wins behavior.
@@ -301,7 +312,11 @@ export function drainPreHandlerPtyExit(
   }
   preHandlerPtyExit.delete(ptyId)
   try {
-    handler(exit.code)
+    if (exit.options?.preserveRendererBinding) {
+      handler(exit.code, exit.options)
+    } else {
+      handler(exit.code)
+    }
   } finally {
     // Draining transfers exit ownership despite handler throws; duplicates cannot become new pre-handler events.
     consumePreHandlerPtyState(ptyId)

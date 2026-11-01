@@ -125,6 +125,9 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const navigation = opts.navigation ?? 'all'
     const select = opts.select ?? opts.activate !== false
+    if (select && navigationTargetsHost(navigation)) {
+      this.clientSessionTabSelections.noteHostNavigation()
+    }
     const runOpts = {
       ...opts,
       activate: select && navigationTargetsHost(navigation)
@@ -176,7 +179,12 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
     created: RuntimeMobileSessionCreateTerminalResult,
     opts: { resumeProviderSession?: AgentProviderSessionMetadata; launchAgent?: TuiAgent }
   ): void {
-    if (!opts.resumeProviderSession || !created.tab.terminal) {
+    if (
+      created.agentResumeRefused ||
+      created.agentResumeUnavailable ||
+      !opts.resumeProviderSession ||
+      !created.tab.terminal
+    ) {
       return
     }
     const pty = this.getLivePtyForHandle(created.tab.terminal)?.pty

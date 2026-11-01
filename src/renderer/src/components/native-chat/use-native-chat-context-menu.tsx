@@ -306,8 +306,8 @@ export function useNativeChatContextMenu({
                 <DropdownMenuItem onSelect={onSwitchToTerminal}>
                   <SquareTerminal />
                   {translate(
-                    'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                    'Continue with Terminal Agent'
+                    'components.tab.bar.SortableTabContextMenu.showAsTerminal',
+                    'Show as terminal'
                   )}
                   {shortcutLabel ? (
                     <DropdownMenuShortcut>{shortcutLabel}</DropdownMenuShortcut>

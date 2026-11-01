@@ -170,6 +170,7 @@ function openSplitPane(
 }
 
 type CloseManagedPaneArgs = {
+  failures?: unknown[]
   paneId: number
   activePaneId: number | null
   panes: Map<number, ManagedPaneInternal>
@@ -183,7 +184,7 @@ type CloseManagedPaneArgs = {
 
 function teardownManagedPane(
   args: CloseManagedPaneArgs,
-  reason: 'close' | 'detach' | 'retire'
+  reason: 'close' | 'detach' | 'retire' | 'remove'
 ): void {
   const pane = args.panes.get(args.paneId)
   if (!pane) {
@@ -194,8 +195,10 @@ function teardownManagedPane(
     args.activePaneId === args.paneId ? findClosedPaneSuccessor(pane.container, args.panes) : null
   args.releasePaneIdentity(args.paneId)
   removePaneContainer(args, pane)
-  if (reason === 'close') {
-    // Closed UUID leaves never recur; detach/retire transfers ownership and must preserve scroll intent.
+  if (reason === 'close' || reason === 'remove') {
+    // Leaf ids are minted UUIDs and never reused, so a closed leaf's scroll
+    // intent is unreachable. Detach/retire hand the leaf to a new host, which
+    // must still be able to restore it.
     releaseTerminalScrollIntentKey(closedLeafId)
   }
   const nextActivePaneId = activateReplacementPane(args, successor)
@@ -209,7 +212,9 @@ function teardownManagedPane(
     leafId: closedLeafId,
     reason
   })
-  args.managerOptions.onLayoutChanged?.()
+  if (reason !== 'remove') {
+    args.managerOptions.onLayoutChanged?.()
+  }
 }
 
 export function closeManagedPane(args: CloseManagedPaneArgs): void {
@@ -225,18 +230,21 @@ export function detachManagedPaneForExternalMove(args: CloseManagedPaneArgs): bo
   return true
 }
 
-export function retireManagedPanePreservingPty(args: CloseManagedPaneArgs): boolean {
-  if (!args.panes.has(args.paneId) || args.panes.size <= 1) {
+export function retireManagedPanePreservingPty(
+  args: CloseManagedPaneArgs,
+  permanent = false
+): boolean {
+  if (!args.panes.has(args.paneId) || (!permanent && args.panes.size <= 1)) {
     return false
   }
-  teardownManagedPane(args, 'retire')
+  teardownManagedPane(args, permanent ? 'remove' : 'retire')
   return true
 }
 
 function removePaneContainer(args: CloseManagedPaneArgs, pane: ManagedPaneInternal): void {
   const paneContainer = pane.container
   const parent = paneContainer.parentElement
-  disposePane(pane, args.panes)
+  disposePane(pane, args.panes, args.failures)
   if (!parent) {
     return
   }

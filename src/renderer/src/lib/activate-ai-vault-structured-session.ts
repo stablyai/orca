@@ -57,17 +57,39 @@ export const structuredSessionOpenFeedback: Pick<
 export async function activateAiVaultStructuredSession(
   session: Pick<AiVaultSession, 'structuredSession'> & { agent?: string },
   deps?: StructuredSessionActivationDeps,
-  target?: RuntimeClientTarget
+  target?: RuntimeClientTarget,
+  onFailure?: () => void
 ): Promise<boolean> {
-  if (!session.structuredSession) {
-    return false
-  }
-  await openDesktopStructuredSession(
-    { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
-    target,
-    deps
+  return (
+    (await activateAiVaultStructuredSessionVerified(session, deps, target, onFailure)) !== 'none'
   )
-  return true
+}
+
+/** `activated` only when the chat's tab is really active; `reported` means the click's toast said why
+ *  not, which a caller retiring something on success must not read as success. */
+export async function activateAiVaultStructuredSessionVerified(
+  session: Pick<AiVaultSession, 'structuredSession'> & { agent?: string },
+  deps?: StructuredSessionActivationDeps,
+  target?: RuntimeClientTarget,
+  onFailure?: () => void
+): Promise<'activated' | 'reported' | 'none'> {
+  if (!session.structuredSession) {
+    return 'none'
+  }
+  const source: StructuredSessionOpenSource = {
+    kind: 'history',
+    structuredSession: session.structuredSession,
+    agent: session.agent
+  }
+  const feedback = onFailure
+    ? { unavailable: onFailure, gone: onFailure, hostCannotOpen: onFailure }
+    : (deps ?? structuredSessionOpenFeedback)
+  const result = await openDesktopStructuredSessionInteraction(source, {
+    target,
+    deps,
+    present: (value) => presentDesktopStructuredSession(value, source, feedback)
+  })
+  return result.kind === 'opened' ? 'activated' : 'reported'
 }
 
 export function openDesktopStructuredSession(

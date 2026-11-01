@@ -37,7 +37,7 @@ export function MobileNativeChatTurnStatus({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const settled = workedSeconds != null
-  const elapsedSeconds = useElapsedSeconds(startedAt, !settled)
+  const elapsedSeconds = useElapsedSeconds(startedAt, !settled && verdict !== 'cancellation')
   const label = formatMobileNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict }, t)
 
   if (settled && onToggleExpanded) {

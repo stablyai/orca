@@ -68,6 +68,7 @@ const chat = agentSessionRecordFixture(
 )
 
 const store = {
+  getRecord: (sessionId: string) => (sessionId === chat.sessionId ? chat : null),
   listConversations: () => [agentSessionConversationView(chat)],
   getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [chat.sessionId] })
 }
@@ -75,7 +76,7 @@ const store = {
 /** A host whose one chat continues C at rest, with its tab open. */
 function chatHost() {
   return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the admission reads only the two members `store` has.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the admission reads only the three members `store` has.
     openAgentSessionRecordStore: async () => store as unknown as AgentSessionRecordStore,
     getTerminalLaunchResult: vi.fn(),
     forgetRefusedSavedResume: vi.fn(async () => {}),
@@ -175,6 +176,10 @@ describe('actual runtime saved-resume outcomes', () => {
           handle: { ...link.handle, nativeId: `unrelated-${index}` }
         }))
       }))
+      const recordsBySessionId = new Map(records.map((record) => [record.sessionId, record]))
+      const getRecord = vi
+        .spyOn(store, 'getRecord')
+        .mockImplementation((sessionId) => recordsBySessionId.get(sessionId) ?? null)
       const list = vi
         .spyOn(store, 'listConversations')
         .mockImplementation(() => records.map(agentSessionConversationView))
@@ -243,6 +248,7 @@ describe('actual runtime saved-resume outcomes', () => {
         spawn.mockRestore()
         read.mockRestore()
         list.mockRestore()
+        getRecord.mockRestore()
         visible.mockRestore()
       }
     }
@@ -411,6 +417,7 @@ it('preserves case-distinct conversation heads and saved homes across the shared
     }))
   }
   const opencodeStore: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
+  opencodeStore.getRecord = (sessionId) => (sessionId === record.sessionId ? record : null)
   opencodeStore.listConversations = () => [agentSessionConversationView(record)]
   opencodeStore.getVisibleSessionTabIndex = () => ({
     present: true,

@@ -1,4 +1,6 @@
-// In main-owned layouts, phone row closes use main's pane/tab close with or without a window.
+import type { MobileSessionLifecycleCloseHost } from '../../mobile-session-lifecycle-close-adjudication'
+// Layout-owner builds: a phone's close of a terminal row in a workspace main owns is main's own
+// layout close, window or not, as the CLI's close by handle is.
 import { OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose } from './refuse-unattributed-mobile-session-tab-close'
 import type {
   RuntimeMobileSessionTerminalTab,
@@ -11,8 +13,27 @@ import {
 } from '../../session-tabs/main-layout-close-command'
 import type { ExplicitCloseStop } from '../../session-tabs/explicit-terminal-close-pty-stops'
 import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
 
 export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose {
+  abstract retireStructuredAgentSessionTabFromSnapshot(
+    sessionId: string,
+    expectedTabId?: string,
+    expectedWorktreeId?: string
+  ): boolean
+
+  abstract currentLocalStructuredSessionPresentation(
+    ...args: Parameters<ChatPresentation['currentLocalStructuredSessionPresentation']>
+  ): ReturnType<ChatPresentation['currentLocalStructuredSessionPresentation']>
+
+  abstract captureStructuredAgentSessionPresentation(
+    ...args: Parameters<ChatPresentation['captureStructuredAgentSessionPresentation']>
+  ): ReturnType<ChatPresentation['captureStructuredAgentSessionPresentation']>
+
+  abstract removeCapturedStructuredSessionSavedTabs(
+    ...args: Parameters<ChatPresentation['removeCapturedStructuredSessionSavedTabs']>
+  ): ReturnType<ChatPresentation['removeCapturedStructuredSessionSavedTabs']>
+
   protected abstract stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
     addressedPtyId: string
@@ -84,6 +105,16 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
     if (snapshot && rows.length > 0) {
       this.storeMobileSessionSnapshot(worktreeId, snapshot)
       this.notifyMobileSessionTabsChanged(worktreeId)
+    }
+  }
+  protected getMobileSessionLifecycleCloseHost(): MobileSessionLifecycleCloseHost {
+    return {
+      tabs: this.tabs,
+      leaves: this.leaves,
+      ptysById: this.ptysById,
+      findPtyForMobileTerminalTab: (worktreeId, tab) =>
+        this.findPtyForMobileTerminalTab(worktreeId, tab),
+      republishSnapshot: (worktreeId) => this.republishMobileSessionTabsSnapshot(worktreeId)
     }
   }
 }

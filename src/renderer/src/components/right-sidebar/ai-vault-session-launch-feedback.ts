@@ -8,13 +8,14 @@ import { translate } from '@/i18n/i18n'
 import { agentLabel } from './ai-vault-session-filters'
 import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
 
-export function notifyAiVaultSessionQueued(agent: AiVaultAgent): void {
+export function notifyAiVaultSessionQueued(agent: AiVaultAgent, message?: string): void {
   toast.success(
-    translate(
-      'auto.components.right.sidebar.AiVaultPanel.agentSessionQueued',
-      '{{value0}} session queued',
-      { value0: agentLabel(agent) }
-    )
+    message ??
+      translate(
+        'auto.components.right.sidebar.AiVaultPanel.agentSessionQueued',
+        '{{value0}} session queued',
+        { value0: agentLabel(agent) }
+      )
   )
 }
 

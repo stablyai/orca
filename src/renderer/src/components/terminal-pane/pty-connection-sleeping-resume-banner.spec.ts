@@ -360,7 +360,10 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
+      const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
+      deps.isPtyShutdownPending.mockReturnValueOnce(true)
       onPtyExit?.('fresh-pty')
+      settleDeferredPtyShutdownExits(['fresh-pty'], 'committed')
       await flushAsyncTicks(10)
       isVisibleRef.current = true
       binding.noteVisibilityResume()

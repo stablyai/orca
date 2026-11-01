@@ -3,10 +3,14 @@ import { randomUUID } from 'node:crypto'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
 import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type {
+  RuntimeRpcDispatchObservation,
+  RuntimeRpcResponse
+} from '../../../shared/runtime-rpc-envelope'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-connectivity-handlers'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { registerRuntimeEnvironmentSubscriptionControls } from './runtime-environment-subscription-controls'
 
 export type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
   setupController: AbortController
@@ -53,6 +57,8 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
         timeoutMs?: number
         subscriptionId?: string
         expectedEnvironmentPairingRevision?: number
+        observeDispatch?: boolean
+        dispatchObservation?: RuntimeRpcDispatchObservation
         expectedEnvironmentRuntimeId?: string
       }
     ): Promise<{ subscriptionId: string; requestId: string }> => {
@@ -89,6 +95,10 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
       const sender = event.sender
       const ownerWebContentsId = sender.id
       const setupController = new AbortController()
+      const dispatchBy =
+        args.dispatchObservation?.expiresAt ?? Date.now() + (args.timeoutMs ?? 30_000)
+      let dispatchTimer: ReturnType<typeof setTimeout> | undefined
+      let sentAt: number | undefined
       const associationObserver =
         args.method === 'agentSession.subscribeStatus'
           ? createAssociationObserver?.(
@@ -103,6 +113,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
       let subscription: RemoteRuntimeSubscription | null = null
       const rendererLifetime = abortWhenRendererGone(sender)
       const disposeRendererLifetime = (): void => {
+        clearTimeout(dispatchTimer)
         associationObserver?.dispose()
         rendererLifetime.dispose()
         rendererLifetime.signal.removeEventListener('abort', closeSubscription)
@@ -144,6 +155,15 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
       pendingSubscriptions.set(subscriptionId, pending)
       // A reload replaces the owning document without destroying its WebContents.
       rendererLifetime.signal.addEventListener('abort', closeSubscription, { once: true })
+      if (args.dispatchObservation) {
+        dispatchTimer = setTimeout(
+          () => {
+            notifyClosed()
+            closeSubscription()
+          },
+          Math.max(0, dispatchBy - Date.now())
+        )
+      }
       try {
         subscription = await subscribeRuntimeEnvironment(
           getUserDataPath(),
@@ -152,6 +172,40 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
           args.params,
           args.timeoutMs,
           {
+            beforeSend:
+              args.observeDispatch || args.dispatchObservation
+                ? () => {
+                    if (
+                      !transportIsCurrent() ||
+                      setupController.signal.aborted ||
+                      Date.now() >= dispatchBy
+                    ) {
+                      throw new Error('request expired')
+                    }
+                    sentAt ??= Date.now()
+                    if (args.dispatchObservation) {
+                      clearTimeout(dispatchTimer)
+                      dispatchTimer = setTimeout(
+                        () => {
+                          notifyClosed()
+                          closeSubscription()
+                        },
+                        Math.max(
+                          0,
+                          (args.dispatchObservation.responseExpiresAt ??
+                            sentAt + args.dispatchObservation.responseTimeoutMs) - Date.now()
+                        )
+                      )
+                    }
+                    if (!sender.isDestroyed()) {
+                      sender.send('runtimeEnvironments:subscriptionEvent', {
+                        subscriptionId,
+                        type: 'sent',
+                        sentAt
+                      })
+                    }
+                  }
+                : undefined,
             onEvent: (payload) => {
               if (
                 rendererGone ||
@@ -169,7 +223,8 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
               if (transportIsCurrent() && !sender.isDestroyed()) {
                 sender.send('runtimeEnvironments:subscriptionEvent', {
                   subscriptionId,
-                  ...payload
+                  ...payload,
+                  ...(args.observeDispatch && sentAt !== undefined ? { sentAt } : {})
                 })
                 if (payload.type === 'response' && payload.response.ok) {
                   try {
@@ -243,50 +298,5 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
       return { subscriptionId, requestId: subscription.requestId }
     }
   )
-  ipcMain.handle(
-    'runtimeEnvironments:unsubscribe',
-    (event, args: { subscriptionId: string }): { unsubscribed: boolean } => {
-      const pending = pendingSubscriptions.get(args.subscriptionId)
-      if (pending?.ownerWebContentsId === event.sender.id) {
-        pending.close()
-        return { unsubscribed: true }
-      }
-      const subscription = remoteRuntimeSubscriptions.get(args.subscriptionId)
-      if (!subscription || subscription.ownerWebContentsId !== event.sender.id) {
-        return { unsubscribed: false }
-      }
-      remoteRuntimeSubscriptions.delete(args.subscriptionId)
-      subscription.close()
-      return { unsubscribed: true }
-    }
-  )
-  ipcMain.on(
-    'runtimeEnvironments:subscriptionBinary',
-    (event, args: { subscriptionId?: unknown; bytes?: unknown }) => {
-      if (typeof args.subscriptionId !== 'string') {
-        return
-      }
-      const bytes = toBinaryPayload(args.bytes)
-      if (!bytes) {
-        return
-      }
-      const subscription = remoteRuntimeSubscriptions.get(args.subscriptionId)
-      if (subscription?.ownerWebContentsId === event.sender.id) {
-        subscription.sendBinary(bytes)
-      }
-    }
-  )
-}
-
-function toBinaryPayload(value: unknown): Uint8Array<ArrayBufferLike> | null {
-  if (value instanceof Uint8Array) {
-    return value
-  }
-  if (value instanceof ArrayBuffer) {
-    return new Uint8Array(value)
-  }
-  if (ArrayBuffer.isView(value)) {
-    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
-  }
-  return null
+  registerRuntimeEnvironmentSubscriptionControls(remoteRuntimeSubscriptions, pendingSubscriptions)
 }

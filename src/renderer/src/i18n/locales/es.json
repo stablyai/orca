@@ -19846,8 +19846,18 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Continuar con el agente de terminal",
-          "switchToChatView": "Continuar en la interfaz de chat",
+          "continueInChatView": "Continuar en la interfaz de chat",
+          "switchToChatView": "Mostrar como chat",
+          "showAsTerminal": "Mostrar como terminal",
           "allowAutoClose": "Permitir cierre automático"
+        },
+        "switch": {
+          "toCli": "Cambiar a la CLI",
+          "toNativeChat": "Cambiar a la interfaz de chat",
+          "toCliTooltip": "Cambiar a la CLI: detiene {{agent}} en la interfaz de chat y continúa la misma conversación en una terminal.",
+          "openedInWorkspace": "Chat abierto en {{workspace}}.",
+          "toNativeChatTooltip": "Cambiar a la interfaz de chat: continúa la misma conversación en un chat, en esta pestaña.",
+          "noConversation": "Todavía no hay una conversación guardada disponible en este terminal."
         },
         "BrowserTab": {
           "closeOthers": "Cerrar otras",

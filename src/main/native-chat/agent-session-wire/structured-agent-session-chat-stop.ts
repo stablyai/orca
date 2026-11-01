@@ -1,6 +1,4 @@
-// Atomically accept Stop/withdrawals/receipt before acting on the captured target.
-// Queue session-ending wind-down in the mutation’s tick; saved failures answer from the receipt.
-
+import { acceptCapturedChatStop } from './structured-agent-session-stop-acceptance'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -20,7 +18,6 @@ import {
   openForWrite,
   structuredAgentSessionFailureWordsContext
 } from './structured-agent-session-send-preparation'
-import { acceptChatStop, acceptStopTarget } from './structured-agent-session-stop-acceptance'
 import {
   noteStructuredAgentSessionStopUnconfirmed,
   writeStructuredAgentSessionStopNote
@@ -32,6 +29,7 @@ import {
 } from './structured-agent-session-stop-wind-down'
 import { performCancel, type AcceptedChatStop } from './structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import { structuredAgentSessionChildStopFeedbackId } from './structured-agent-session-switch-proven-chat-stop'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import type { AgentSessionCloseObserver } from './structured-agent-session-adapter-stop'
 import {
@@ -39,6 +37,8 @@ import {
   structuredAgentSessionStopNoteIdentity,
   structuredAgentSessionCommandWasStopped
 } from './structured-agent-session-command-turn'
+// Atomically accept Stop/withdrawals/receipt before acting on the captured target.
+// Queue session-ending wind-down in the mutation’s tick; saved failures answer from the receipt.
 
 type ChatStopOutcome = TurnOutcome<AgentSessionCancelResult>
 
@@ -52,6 +52,8 @@ export function mutateWithChatStop<TValue>(
     turnId?: string
     stoppedPrePrompt?: boolean
     stoppedSend?: boolean
+    onAccepted?: (child: ChatStopTarget['child']) => void
+    waitForShutdown?: boolean
   },
   plan: MutationPlan<TValue>,
   run: (
@@ -79,46 +81,6 @@ export function mutateWithChatStop<TValue>(
       error
     })
   // Failed durable acceptance must leave the agent running.
-  const accept = async (
-    ctx: AgentSessionTurnContext,
-    target: ChatStopTarget
-  ): Promise<TurnOutcome<{ settled: boolean; turnId: string | null }>> => {
-    if (!target.marks) {
-      const accepted = await acceptStopTarget(ctx)
-      return accepted.ok ? { ok: true, value: { settled: false, turnId: null } } : accepted
-    }
-    const sinceStop = ctx.journal.queuedMessages.userStopInForce()?.sequence
-    const handed = ctx.journal
-      .submissions()
-      .some(
-        (entry) =>
-          entry.fence === ctx.fence &&
-          (entry.handoverRecorded !== true || entry.handedOverAt !== undefined) &&
-          (entry.dispatchState === 'pending' ||
-            (entry.dispatchState === 'unknown' && !entry.recovered)) &&
-          (sinceStop === undefined || (entry.submittedSequence ?? -1) > sinceStop)
-      )
-    const accepted = await acceptChatStop(ctx, {
-      event: {
-        reason: 'user-stop',
-        caller: caller.callerKey,
-        ...(target.eventTurnId !== null ? { turnId: target.eventTurnId } : {})
-      },
-      fence: ctx.fence
-    })
-    return accepted.ok
-      ? {
-          ok: true,
-          value: {
-            settled:
-              (accepted.value.withdrawn?.length ?? (target.queued ? 1 : 0)) > 0 ||
-              handed ||
-              params.stoppedSend === true,
-            turnId: accepted.value.turnId
-          }
-        }
-      : accepted
-  }
   const act = async (
     ctx: AgentSessionTurnContext,
     target: ChatStopTarget,
@@ -131,7 +93,7 @@ export function mutateWithChatStop<TValue>(
       return { ok: true, value: { ...named, cancelled: settled } }
     }
     const { child } = target
-    const feedbackId = `child:${child.fence}:${child.generation ?? 'unknown'}`
+    const feedbackId = structuredAgentSessionChildStopFeedbackId(child)
     let stopOutcome = child.close?.stopOutcome
     const observeClose: AgentSessionCloseObserver = (evidence) => {
       if (stopOutcome && evidence) {
@@ -232,10 +194,11 @@ export function mutateWithChatStop<TValue>(
       target.turnId !== null &&
       isStructuredAgentSessionCommandTurnId(target.turnId) &&
       structuredAgentSessionCommandWasStopped(ctx.journal, target.turnId)
-    const accepted = await accept(ctx, target)
+    const accepted = await acceptCapturedChatStop(caller.callerKey, params.stoppedSend, ctx, target)
     if (!accepted.ok) {
       return accepted
     }
+    params.onAccepted?.(target.child)
     for (const abort of operations) {
       abort()
       reached = true
@@ -312,5 +275,10 @@ export function mutateWithChatStop<TValue>(
     }
   })
   void shutdown.catch(logChildEnd)
-  return result
+  return params.waitForShutdown
+    ? result.then(async (answer) => {
+        await shutdown
+        return answer
+      })
+    : result
 }

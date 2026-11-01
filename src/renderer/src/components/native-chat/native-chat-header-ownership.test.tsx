@@ -1,6 +1,7 @@
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 // @vitest-environment happy-dom
 import { Profiler } from 'react'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
@@ -108,7 +109,7 @@ function seedChats(size: number) {
     countedTab({
       ...makeUnifiedTab(`chat-${index}`, workspace, `session-${index}`, `Chat ${index}`),
       contentType: 'agent-session',
-      agentSessionAgent: 'codex',
+      agentSessionAgent: 'omp',
       executionHostId: 'local',
       groupId: index === size - 1 ? 'second' : 'first'
     })
@@ -129,9 +130,11 @@ function seedChats(size: number) {
 }
 function overlay(active: boolean) {
   return (
-    <TooltipProvider>
-      <StructuredAgentSessionPaneOverlayLayer worktreeId={workspace} isWorktreeActive={active} />
-    </TooltipProvider>
+    <ConfirmationDialogProvider>
+      <TooltipProvider>
+        <StructuredAgentSessionPaneOverlayLayer worktreeId={workspace} isWorktreeActive={active} />
+      </TooltipProvider>
+    </ConfirmationDialogProvider>
   )
 }
 function chat(container: HTMLElement, id: string) {
@@ -198,25 +201,28 @@ function eligibility(
   folder: string,
   git: string,
   sessionId = 'session',
-  agent: subjects.NativeChatTabSession['agent'] = 'codex',
+  // The copy button belongs to an agent the top-right control can't switch in place.
+  agent: subjects.NativeChatTabSession['agent'] = 'omp',
   tabId = 'tab'
 ) {
   return (
-    <TooltipProvider>
-      <Profiler id="eligibility" onRender={() => work.commits++}>
-        {[
-          { key: 'folder', id: folder },
-          { key: 'git', id: git }
-        ].map(({ key, id }) => (
-          <NativeChatResumeInCliButton
-            key={key}
-            tabId={tabId}
-            worktreeId={id}
-            nativeChat={{ sessionId, agent }}
-          />
-        ))}
-      </Profiler>
-    </TooltipProvider>
+    <ConfirmationDialogProvider>
+      <TooltipProvider>
+        <Profiler id="eligibility" onRender={() => work.commits++}>
+          {[
+            { key: 'folder', id: folder },
+            { key: 'git', id: git }
+          ].map(({ key, id }) => (
+            <NativeChatResumeInCliButton
+              key={key}
+              tabId={tabId}
+              worktreeId={id}
+              nativeChat={{ sessionId, agent }}
+            />
+          ))}
+        </Profiler>
+      </TooltipProvider>
+    </ConfirmationDialogProvider>
   )
 }
 
@@ -318,7 +324,7 @@ it.each([10, 100])(
       const expected = [folder, git].filter((worktreeId) =>
         subjects.resolveNativeChatCliForkIdentity(useAppStore.getState(), {
           tab: { id: 'tab', worktreeId },
-          nativeChat: { sessionId: 'session', agent: 'codex' }
+          nativeChat: { sessionId: 'session', agent: 'omp' }
         })
       )
       expect(screen.queryAllByRole('button')).toHaveLength(expected.length)
@@ -331,19 +337,19 @@ it.each([10, 100])(
     view.rerender(eligibility(folder, git, 'new-session'))
     expect(identity).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ nativeChat: { sessionId: 'new-session', agent: 'codex' } })
+      expect.objectContaining({ nativeChat: { sessionId: 'new-session', agent: 'omp' } })
     )
     identity.mockClear()
-    view.rerender(eligibility(folder, git, 'new-session', 'codex', 'new-tab'))
+    view.rerender(eligibility(folder, git, 'new-session', 'omp', 'new-tab'))
     expect(identity).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ tab: { id: 'new-tab', worktreeId: folder } })
     )
     view.rerender(eligibility(folder, git, 'new-session', 'gemini', 'new-tab'))
     expect(screen.queryAllByRole('button')).toHaveLength(0)
-    view.rerender(eligibility(folder, git, 'new-session', 'codex', 'new-tab'))
+    view.rerender(eligibility(folder, git, 'new-session', 'omp', 'new-tab'))
     expect(screen.getAllByRole('button')).toHaveLength(2)
-    view.rerender(eligibility('folder:missing', git, 'new-session', 'codex', 'new-tab'))
+    view.rerender(eligibility('folder:missing', git, 'new-session', 'omp', 'new-tab'))
     expect(screen.getAllByRole('button')).toHaveLength(1)
     expect(fullRequest).not.toHaveBeenCalled()
   }
@@ -368,7 +374,7 @@ it('keeps the real Continue pending operation disabled across header hide/reveal
   expect(button().hasAttribute('disabled')).toBe(true)
   expect(button().getAttribute('aria-busy')).toBe('true')
   fireEvent.click(button())
-  expect(mocks.prepare).toHaveBeenCalledTimes(1)
+  await waitFor(() => expect(mocks.prepare).toHaveBeenCalledTimes(1))
   await act(async () =>
     preparation.resolve({
       copied: false,

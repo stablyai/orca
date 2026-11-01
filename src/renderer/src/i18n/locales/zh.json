@@ -19278,8 +19278,18 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "使用终端智能体继续",
-          "switchToChatView": "在聊天界面中继续",
+          "continueInChatView": "在聊天界面中继续",
+          "switchToChatView": "以聊天显示",
+          "showAsTerminal": "以终端显示",
           "allowAutoClose": "允许自动关闭"
+        },
+        "switch": {
+          "toCli": "切换到 CLI",
+          "toNativeChat": "切换到聊天界面",
+          "toCliTooltip": "切换到 CLI：停止聊天界面中的 {{agent}}，并在终端中继续同一对话。",
+          "openedInWorkspace": "已在 {{workspace}} 中打开聊天。",
+          "toNativeChatTooltip": "切换到聊天界面：在此标签页的聊天中继续同一对话。",
+          "noConversation": "此终端中尚无可用的已保存对话。"
         },
         "BrowserTab": {
           "closeOthers": "关闭其他",

@@ -9,7 +9,7 @@ export const WEB_SESSION_CLOSE_INTENT_TTL_MS =
   WEB_SESSION_TAB_RPC_TIMEOUT_MS + CLOSE_INTENT_ANSWER_GRACE_MS
 export const MAX_WEB_SESSION_CLOSE_INTENT_PARTITIONS = 512
 
-type CloseIntent = { recordedAt: number; durable: boolean }
+type CloseIntent = { expiresAt: number; durable: boolean }
 
 const pendingCloseByOwnerAndWorktree = new Map<string, Map<string, CloseIntent>>()
 
@@ -21,8 +21,9 @@ export function recordWebSessionCloseIntent(
   owner: WebSessionIntentOwner,
   worktreeId: string,
   hostTabId: string,
-  now: number
-): void {
+  now: number,
+  ttlMs = WEB_SESSION_CLOSE_INTENT_TTL_MS
+): (() => void) | undefined {
   const trimmed = hostTabId.trim()
   if (!worktreeId || !trimmed) {
     return
@@ -40,7 +41,20 @@ export function recordWebSessionCloseIntent(
     }
     pendingCloseByOwnerAndWorktree.set(partitionKey, byTab)
   }
-  byTab.set(trimmed, { recordedAt: now, durable: byTab.get(trimmed)?.durable === true })
+  const durable = ttlMs === WEB_SESSION_CLOSE_INTENT_TTL_MS && byTab.get(trimmed)?.durable === true
+  const intent = { expiresAt: now + ttlMs, durable }
+  byTab.set(trimmed, intent)
+  return () => {
+    if (
+      byTab?.get(trimmed) === intent &&
+      pendingCloseByOwnerAndWorktree.get(partitionKey) === byTab
+    ) {
+      byTab.delete(trimmed)
+      if (byTab.size === 0) {
+        pendingCloseByOwnerAndWorktree.delete(partitionKey)
+      }
+    }
+  }
 }
 
 // Definitive tab_not_found can coexist with stale republished surfaces (#9194); no TTL or unclosable panes return. Clear when a snapshot omits the surface so recovered tabs are not suppressed forever.
@@ -69,7 +83,7 @@ export function isWebSessionCloseIntentPending(
   if (!intent) {
     return false
   }
-  if (!intent.durable && now - intent.recordedAt > WEB_SESSION_CLOSE_INTENT_TTL_MS) {
+  if (!intent.durable && now > intent.expiresAt) {
     byTab!.delete(hostTabId)
     if (byTab!.size === 0) {
       pendingCloseByOwnerAndWorktree.delete(partitionKey)

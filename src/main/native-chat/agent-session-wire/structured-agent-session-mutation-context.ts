@@ -44,7 +44,11 @@ export type StructuredAgentSessionMutationContext = {
   /** Open within the caller’s existing serialization. */
   openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
   /** Claim inside serialization; await the result outside. */
-  claimAgent: (sessionId: string) => StructuredAgentSessionStartClaim
+  claimAgent: (
+    sessionId: string,
+    check?: () => void,
+    switchStart?: boolean
+  ) => StructuredAgentSessionStartClaim
   startFlights: Pick<StructuredAgentSessionStartFlights, 'get'>
   startupAttempts: Pick<StructuredAgentSessionStartupAttempts, 'readiness'>
   deliveryOrder: StructuredAgentSessionDeliveryOrder

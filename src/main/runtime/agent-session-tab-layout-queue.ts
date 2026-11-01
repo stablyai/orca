@@ -1,3 +1,4 @@
+import type { LayoutCommandRunOptions } from './runtime-layout-apply'
 import { savedSessionId } from './saved-structured-agent-session-restoration'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
@@ -20,10 +21,7 @@ export function createChatTabLayoutQueue(deps: {
   sessionOf: (worktreeId: string) => WorkspaceSessionState | null
   /** Called only with a saved session; unplaceable worktrees throw. */
   hostIdOf: (worktreeId: string) => ExecutionHostId
-  apply: (
-    command: ChatTabLayoutCommand,
-    run?: { admit: (partitions?: readonly WorkspaceSessionState[]) => boolean }
-  ) => Promise<LayoutApplyReply>
+  apply: (command: ChatTabLayoutCommand, run?: LayoutCommandRunOptions) => Promise<LayoutApplyReply>
 }) {
   let queue: Promise<void> = Promise.resolve()
   const pending = new Set<QueuedChatTabChange>()
@@ -41,9 +39,12 @@ export function createChatTabLayoutQueue(deps: {
       change
     )
   }
+  /** `admit` is the caller's own fence, re-read inside each write; the result is false when any
+   *  change was refused, failed, or (under a fence) had no tab left to close. */
   const enqueue = (
-    input: readonly QueuedChatTabChange[] | (() => readonly QueuedChatTabChange[])
-  ) => {
+    input: readonly QueuedChatTabChange[] | (() => readonly QueuedChatTabChange[]),
+    admit?: () => boolean
+  ): Promise<boolean> => {
     if (typeof input !== 'function') {
       for (const change of input) {
         if ('open' in change.change) {
@@ -51,13 +52,14 @@ export function createChatTabLayoutQueue(deps: {
         }
       }
     }
-    queue = queue.then(async () => {
+    const result = queue.then(async () => {
+      let applied = true
       let changes: readonly QueuedChatTabChange[]
       try {
         changes = typeof input === 'function' ? input() : input
       } catch (error) {
         console.warn('[agent-session-tabs] reading chat tab changes failed:', error)
-        return
+        return false
       }
       for (const queued of changes) {
         try {
@@ -66,9 +68,13 @@ export function createChatTabLayoutQueue(deps: {
               break
             }
             const command = commandNow(queued)
+            if (!command && admit && 'close' in queued.change) {
+              applied = false
+            }
             const reply = command
               ? await deps.apply(command, {
                   admit: (partitions) =>
+                    (!admit || admit()) &&
                     (!queued.eligible || queued.eligible()) &&
                     JSON.stringify(commandNow(queued)) === JSON.stringify(command) &&
                     (command.type !== 'closeTabs' ||
@@ -86,6 +92,7 @@ export function createChatTabLayoutQueue(deps: {
                 })
               : null
             if (command && reply && !reply.ok) {
+              applied = false
               console.warn(`[agent-session-tabs] ${command.type} refused:`, reply.code)
             }
             if (!reply?.ok || !('open' in queued.change) || command?.type !== 'closeTabs') {
@@ -93,13 +100,16 @@ export function createChatTabLayoutQueue(deps: {
             }
           }
         } catch (error) {
+          applied = false
           console.warn('[agent-session-tabs] a chat tab change failed:', error)
         } finally {
           pending.delete(queued)
         }
       }
+      return applied
     })
-    return queue
+    queue = result.then(() => {})
+    return result
   }
   return Object.assign(enqueue, { pendingOpens: () => [...pending] })
 }

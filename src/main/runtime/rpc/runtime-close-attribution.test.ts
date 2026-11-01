@@ -88,7 +88,9 @@ describe('runtime close attribution', () => {
       )
 
       expect(JSON.parse(replies[0]!)).toMatchObject({ ok: true })
-      expect(close).toHaveBeenCalledWith('term-1')
+      expect(close).toHaveBeenCalledWith(
+        ...(method === 'terminal.close' ? ['term-1', undefined] : ['term-1'])
+      )
       expect(sink.records).toEqual([
         expect.objectContaining({
           type: 'effect-span',

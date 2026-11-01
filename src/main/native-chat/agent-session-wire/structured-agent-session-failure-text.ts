@@ -51,7 +51,7 @@ const TYPED_START_REFUSALS = [
 ] as const satisfies readonly (AgentSessionFailureKind &
   AgentSessionRefusalReason<'agent_session_operation_invalid'>)[]
 
-function typedStartRefusal(
+export function typedStartRefusal(
   reason: string | undefined
 ): (typeof TYPED_START_REFUSALS)[number] | undefined {
   return TYPED_START_REFUSALS.find((typed) => typed === reason)

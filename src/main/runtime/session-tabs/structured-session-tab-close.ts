@@ -2,7 +2,6 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from './mobile-session-publication-preservation'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
-import { OrcaRuntimeWithStructuredSessionTabProjection } from './restored-chat-tab-changes'
 import type {
   BrowserTabInfo,
   RuntimeMobileSessionAgentTab,
@@ -22,10 +21,7 @@ import {
   withChatTabChanges,
   type ChatTabChange
 } from '../agent-session/agent-session-tab-layout'
-import { createChatTabLayoutQueue } from '../agent-session-tab-layout-queue'
-import type { WindowLayoutCommand, LayoutCommandRunOptions } from '../runtime-layout-apply'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import {
   captureStructuredSessionPresentation,
   capturedStructuredSessionSavedTabChanges,
@@ -36,8 +32,10 @@ import {
   closeCapturedStructuredSession,
   type StructuredSessionSurface
 } from '../agent-session/structured-agent-session-close'
+import { OrcaRuntimeWithChatTabLayoutQueue } from './chat-tab-layout-queue-owner'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
-export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithStructuredSessionTabProjection {
+export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithChatTabLayoutQueue {
   protected abstract isHeadlessOwnedMobileBrowserTab(
     ...args: Parameters<BrowserOwnership['isHeadlessOwnedMobileBrowserTab']>
   ): ReturnType<BrowserOwnership['isHeadlessOwnedMobileBrowserTab']>
@@ -55,11 +53,6 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['getMobileTerminalPaneKey']>
   ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['getMobileTerminalPaneKey']>
 
-  abstract applyLayoutCommand(
-    command: WindowLayoutCommand,
-    run?: Pick<LayoutCommandRunOptions, 'admit'>
-  ): Promise<LayoutApplyReply>
-
   protected abstract persistHeadlessTabGroups(
     ...args: Parameters<HeadlessTabGroupsMethods['persistHeadlessTabGroups']>
   ): ReturnType<HeadlessTabGroupsMethods['persistHeadlessTabGroups']>
@@ -74,6 +67,20 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
       return false
     }
     return closeCapturedStructuredSession(host, tab.sessionId, cause, surface, this)
+  }
+
+  /** A host with no window saves its own layout; a window saves its layout whole. */
+  protected commitWindowlessChatSession(
+    worktreeId: string,
+    update: (session: WorkspaceSessionState) => WorkspaceSessionState | null
+  ): void {
+    const session = this.getAvailableAuthoritativeWindow()
+      ? null
+      : this.getWorkspaceSessionForWorktree(worktreeId)
+    const next = session && update(session)
+    if (next) {
+      this.setWorkspaceSessionForWorktree(worktreeId, next)
+    }
   }
 
   // Refused echo closes need a newer snapshot so clients restore the still-live mirror they already pruned.
@@ -302,28 +309,16 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
           change,
           ...(eligible ? { eligible: () => eligible(change) } : {})
         }))
-      )
+      ).then(() => {})
     }
-    const session = this.getAvailableAuthoritativeWindow()
-      ? null
-      : this.getWorkspaceSessionForWorktree(worktreeId)
-    const next =
-      session &&
+    this.commitWindowlessChatSession(worktreeId, (session) =>
       withChatTabChanges(
         this.getWorkspaceSessionHostIdForWorktree(worktreeId),
         session,
         worktreeId,
         eligible ? changes.filter(eligible) : changes
       )
-    if (next) {
-      this.setWorkspaceSessionForWorktree(worktreeId, next)
-    }
+    )
     return Promise.resolve()
   }
-
-  private readonly queueChatTabChanges = createChatTabLayoutQueue({
-    sessionOf: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
-    hostIdOf: (worktreeId) => this.getWorkspaceSessionHostIdForWorktree(worktreeId),
-    apply: (command, run) => this.applyLayoutCommand(command, run)
-  })
 }

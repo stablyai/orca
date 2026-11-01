@@ -13,6 +13,7 @@ export const NATIVE_CHAT_TURN_STATUS_COPY = {
   workingFor: 'Working for {{value0}}',
   workedFor: 'Worked for {{value0}}',
   interruptedAfter: 'Interrupted after {{value0}}',
+  interrupted: 'Interrupted',
   failedAfter: 'Failed after {{value0}}',
   toggleDetails: 'Toggle turn details',
   responding: 'Agent is responding'
@@ -48,12 +49,14 @@ export function describeNativeChatTurnStatus({
   /** User Stop/replacement means interrupted; failures mean failed. Crash/quit/eviction cuts use finished wording because a separate notice explains the stop. */
   verdict?: AgentTurnOutcome
 }): {
-  key: 'workingFor' | 'workedFor' | 'interruptedAfter' | 'failedAfter'
+  key: 'workingFor' | 'workedFor' | 'interruptedAfter' | 'interrupted' | 'failedAfter'
   duration: string
 } {
   return workedSeconds != null
     ? { key: settledTurnStatusKey(verdict), duration: formatNativeChatDuration(workedSeconds) }
-    : { key: 'workingFor', duration: formatNativeChatDuration(elapsedSeconds) }
+    : verdict === 'cancellation'
+      ? { key: 'interrupted', duration: '' }
+      : { key: 'workingFor', duration: formatNativeChatDuration(elapsedSeconds) }
 }
 
 function settledTurnStatusKey(
@@ -221,8 +224,8 @@ export function reduceNativeChatTurnTiming(
 /** A turn duration the execution host recorded, which outranks anything this
  *  platform observed locally. */
 export type NativeChatSettledTurn = {
-  startedAt: number
-  workedSeconds: number
+  startedAt: number | null
+  workedSeconds: number | null
   verdict?: AgentTurnOutcome
 }
 

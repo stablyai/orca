@@ -57,7 +57,20 @@ export function readCodexHistoryJournalView(
       identity.sessionId === threadId &&
       (body.kind === 'message' || body.kind === 'tool-call')
     ) {
-      hasLegacy = true
+      const scope = attribution.turnScope
+      const owner = scope?.kind === 'turn' ? journal.item(scope.turnItemId) : null
+      const ownerIdentity = owner && parseAgentJournalItemKey(owner.itemId)
+      const ownerTurn = owner && readAgentJournalTurn(owner.body)
+      // Positive per-turn imports need no blanket legacy timestamp for the whole journal.
+      const covered =
+        ownerIdentity?.provider === 'legacy' &&
+        ownerIdentity.agent === 'codex' &&
+        ownerIdentity.sessionId === threadId &&
+        ownerIdentity.recordId === `${TURN_LIFECYCLE_RECORD_PREFIX}${ownerTurn?.turnId}` &&
+        (ownerTurn?.state === 'completed' || ownerTurn?.state === 'interrupted')
+      if (!covered) {
+        hasLegacy = true
+      }
     }
     if (identity?.provider === 'orca' && body.kind === 'message' && body.role === 'user') {
       nativePromptKeys.add(itemId)

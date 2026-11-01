@@ -92,7 +92,7 @@ export const ptyStreamAndSerializationApi = {
     callback: (data: {
       id: string
       code: number
-      preserveRendererBinding?: boolean
+      preserveRendererBinding?: boolean | 'closing'
       incarnationId?: string
       hostId?: string
       ptySourceDisowned?: true
@@ -104,7 +104,7 @@ export const ptyStreamAndSerializationApi = {
       data: {
         id: string
         code: number
-        preserveRendererBinding?: boolean
+        preserveRendererBinding?: boolean | 'closing'
         incarnationId?: string
         hostId?: string
         ptySourceDisowned?: true

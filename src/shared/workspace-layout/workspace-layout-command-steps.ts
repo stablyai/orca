@@ -111,6 +111,18 @@ export function locatePane(
 
 export type TabPlacement = { groupId?: string; afterTabId?: string; index?: number }
 
+/** The replaced tab's own slot, so placing before the close keeps its group alive and its index. */
+export function replacedTabSlot(
+  workspace: WorkspaceLayout,
+  placement: TabPlacement & { replaces?: { tabId: string } }
+): TabPlacement {
+  const replaced = placement.replaces?.tabId
+  const group = replaced && workspace.groups.find((entry) => entry.tabOrder.includes(replaced))
+  return group
+    ? { groupId: group.id, index: group.tabOrder.indexOf(replaced!) }
+    : { groupId: placement.groupId, afterTabId: placement.afterTabId, index: placement.index }
+}
+
 /** In owner builds, reuse the sender’s empty group or the window/Loader root ID; otherwise mint an ID. */
 function firstGroupId(key: string, placement: TabPlacement, context: LayoutContext): string {
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {

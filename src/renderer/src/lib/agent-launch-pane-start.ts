@@ -28,3 +28,7 @@ export function settleAgentLaunchPaneStart(
     settle?.(startedPtyId)
   }
 }
+
+export function pendingAgentLaunchPaneStartCountForTests(): number {
+  return pendingStarts.size
+}

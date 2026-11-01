@@ -42,4 +42,25 @@ describe('TerminalProcessExitOverlay', () => {
 
     expect(screen.getByRole('alert').textContent).toContain('exit code 7')
   })
+
+  it('names the agent a switch stopped and claims no kept output', () => {
+    render(
+      <TerminalProcessExitOverlay
+        processExit={{
+          paneId: 1,
+          exitCode: 0,
+          reason: 'switch-stopped',
+          startup: null,
+          replacesPtyId: 'pty-stopped',
+          agent: 'codex'
+        }}
+        onRestart={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+
+    const text = screen.getByRole('alert').textContent
+    expect(text).toContain('Codex stopped')
+    expect(text).not.toContain('preserved')
+  })
 })

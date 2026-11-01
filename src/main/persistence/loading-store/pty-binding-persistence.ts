@@ -243,10 +243,11 @@ export class PtyBindingPersistenceOperations {
 
   admitTerminalPane(
     admission: TerminalPaneAdmission,
-    hostId?: string | null
+    hostId?: string | null,
+    check?: () => void
   ): Promise<TerminalPaneAdmissionOutcome> {
     return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
-      admitPane(resolveHostId(hostId), admission, this.topology())
+      admitPane(resolveHostId(hostId), admission, this.topology(), check)
     )
   }
 

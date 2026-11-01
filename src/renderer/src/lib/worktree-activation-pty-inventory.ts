@@ -12,6 +12,14 @@ import {
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
 
+export function canInspectAgentActivationInventory(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.api?.runtime?.call === 'function' &&
+    typeof window.api?.pty?.listSessions === 'function'
+  )
+}
+
 /** Only a reachable execution-owner route can authorize activation from its inventory. */
 export function resolveActivationPtyListScope(
   state: WorktreeOperationRouteState,

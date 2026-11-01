@@ -1,11 +1,18 @@
+import {
+  useConversationSwitchBusy,
+  useConversationSwitchReadiness,
+  runCliChatResume
+} from '@/lib/conversation-surface-switch'
 import { useShallow } from 'zustand/react/shallow'
-import { MessagesSquare } from 'lucide-react'
+import { Loader2, MessagesSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { resolveCliChatResumeSource } from '../tab-bar/cli-chat-resume-source'
-import { runCliChatResume, useCliChatResumePending } from '../tab-bar/cli-chat-resume-run'
+import {
+  resolveCliChatResumeSource,
+  useCliChatResumeCapability
+} from '../tab-bar/cli-chat-resume-source'
 
 export function TerminalPaneResumeInChatButton({
   tabId,
@@ -15,27 +22,44 @@ export function TerminalPaneResumeInChatButton({
   tabId: string
   worktreeId: string
   paneKey: string
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const source = useAppStore(
     useShallow((state) =>
-      resolveCliChatResumeSource(state, {
-        tab: { id: tabId, worktreeId },
-        paneKey
-      })
+      resolveCliChatResumeSource(state, { tab: { id: tabId, worktreeId }, paneKey })
     )
   )
-  const pending = useCliChatResumePending(source)
-  const updateRequired = source?.hostUpdateRequired === true
-  const label = translate(
-    'components.tab.bar.SortableTabContextMenu.switchToChatView',
-    'Continue in Chat UI'
+  const capability = useCliChatResumeCapability(worktreeId, source?.agent)
+  const readiness = useConversationSwitchReadiness(
+    source ? { direction: 'chat', ...source, source } : null
   )
+  const busy = useConversationSwitchBusy(readiness.pending)
+
+  // An older host or an agent that can't switch opens the chat beside the pane, as main's Continue did.
+  const label =
+    capability === false
+      ? translate(
+          'components.tab.bar.SortableTabContextMenu.continueInChatView',
+          'Continue in Chat UI'
+        )
+      : translate('components.tab.bar.switch.toNativeChat', 'Switch to Chat UI')
+  const updateRequired = source?.hostUpdateRequired === true
   const tooltip = updateRequired
     ? translate(
         'components.native-chat.resumeInNewChat.hostUpdateRequired',
         'Update Orca on this host to continue in Chat UI.'
       )
-    : label
+    : !source
+      ? translate(
+          'components.tab.bar.switch.noConversation',
+          'No saved conversation is available in this terminal yet.'
+        )
+      : (readiness.explanation ??
+        (capability === false
+          ? label
+          : translate(
+              'components.tab.bar.switch.toNativeChatTooltip',
+              'Switch to Chat UI: continues the same conversation in a chat, in this tab.'
+            )))
 
   return (
     <Tooltip>
@@ -46,18 +70,22 @@ export function TerminalPaneResumeInChatButton({
             type="button"
             variant="pane-title"
             size="icon-xs"
-            // A disabled button's tooltip is unreachable by screen readers, so the label carries the reason.
             aria-label={updateRequired ? `${label}. ${tooltip}` : label}
-            disabled={!source || pending || updateRequired}
-            aria-busy={pending || undefined}
+            disabled={!readiness.ready}
+            aria-disabled={!readiness.ready || undefined}
+            aria-busy={readiness.pending || undefined}
             onClick={(event) => {
               event.stopPropagation()
-              if (source) {
-                void runCliChatResume(source, true)
+              if (source && readiness.ready) {
+                void runCliChatResume(source)
               }
             }}
           >
-            <MessagesSquare className="size-3" />
+            {busy ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <MessagesSquare className="size-3" />
+            )}
           </Button>
         </span>
       </TooltipTrigger>

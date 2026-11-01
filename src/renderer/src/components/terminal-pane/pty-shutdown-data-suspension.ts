@@ -1,3 +1,4 @@
+import type { PtyExitOptions } from './pty-exit-delivery'
 import { clearPreHandlerPtyState, drainPreHandlerPtyData } from './pty-pre-handler-buffer'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { PtyShutdownOutputQueue, type PtyShutdownOutputEvent } from './pty-shutdown-output-queue'
@@ -5,7 +6,7 @@ import { PtyShutdownOutputQueue, type PtyShutdownOutputEvent } from './pty-shutd
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
 export const ptyDataSidecars = new Map<string, Set<(data: string) => void>>()
 export const ptyReplayHandlers = new Map<string, (data: string) => void>()
-export const ptyExitHandlers = new Map<string, (code: number) => void>()
+export const ptyExitHandlers = new Map<string, (code: number, options?: PtyExitOptions) => void>()
 export const ptyTeardownHandlers = new Map<string, () => void>()
 export const ptyShutdownLifecycleHandlers = new Map<
   string,

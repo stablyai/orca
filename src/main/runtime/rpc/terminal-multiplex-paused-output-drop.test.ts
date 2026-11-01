@@ -14,6 +14,7 @@ import {
 } from '../../../shared/terminal-multiplex-flow-control'
 import { startDesktopMultiplexSubscribe } from './terminal-multiplex-test-harness'
 import { RuntimeTerminalViewSubscribers } from '../runtime-terminal-view-subscribers'
+import { publishPtyPresentationRelease } from '../terminal/pty-presentation-release-signal'
 
 async function subscribePausable(
   capabilities: Record<string, 1>,
@@ -70,9 +71,13 @@ async function subscribePausable(
         })
       )!
     )
-  const emitOutput = (text: string): void => {
+  const emitOutput = (text: string, held = false): void => {
     seq += text.length
-    listeners[0]?.(text, { seq, rawLength: text.length })
+    listeners[0]?.(text, {
+      seq,
+      rawLength: text.length,
+      ...(held ? { presentationHeld: true } : {})
+    })
   }
   const dropNotices = (): number =>
     harness.binaryFrames.filter(
@@ -201,6 +206,40 @@ describe('terminal multiplex paused-output drop notice', () => {
     host.setPaused(true)
     await host.close()
     expect(host.remoteViewHoldsAuthority()).toBe(false)
+  })
+
+  // A whole-tab close holds its process's teardown output from the view it removes.
+  it('holds teardown output, and has the client restore if output resumes', async () => {
+    const host = await subscribePausable({ ackOutput: 1, outputPause: 1, outputPauseDropNotice: 1 })
+    host.emitOutput('before the stop ')
+    host.emitOutput('zsh: terminated  codex resume', true)
+    expect(host.dropNotices()).toBe(0)
+    // The stop wasn't proven and the process lives on: one notice, then output as usual.
+    host.emitOutput('still running')
+    host.emitOutput(' and more')
+    expect(host.dropNotices()).toBe(1)
+    await vi.waitFor(() => expect(host.outputText()).toBe('before the stop still running and more'))
+    await host.close()
+  })
+
+  it('has the client restore when an unproven stop settles, though the process stays quiet', async () => {
+    const host = await subscribePausable({ ackOutput: 1, outputPause: 1, outputPauseDropNotice: 1 })
+    host.emitOutput('zsh: terminated  codex resume', true)
+    publishPtyPresentationRelease('pty-1')
+    expect(host.dropNotices()).toBe(1)
+    host.emitOutput('still running')
+    expect(host.dropNotices()).toBe(1)
+    await host.close()
+    publishPtyPresentationRelease('pty-1')
+    expect(host.dropNotices()).toBe(1)
+  })
+
+  it('keeps showing teardown output to a client that could not restore after a gap', async () => {
+    const host = await subscribePausable({ ackOutput: 1, outputPause: 1 })
+    host.emitOutput('zsh: terminated', true)
+    await vi.waitFor(() => expect(host.outputText()).toBe('zsh: terminated'))
+    expect(host.dropNotices()).toBe(0)
+    await host.close()
   })
 
   it('never sends the frame to a client that did not negotiate it', async () => {

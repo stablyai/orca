@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
   makeTab,
@@ -619,4 +619,14 @@ describe('useIpcEvents agent status snapshot integration', () => {
       vi.useRealTimers()
     }
   })
+})
+
+const cleanup: (() => void)[] = []
+afterEach(() => {
+  for (const close of cleanup.splice(0).toReversed()) {
+    close()
+  }
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
 })

@@ -1,3 +1,6 @@
+import type { TabGroup } from '../../../../shared/tab-types'
+import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
+import { pushRecentTabId, sanitizeRecentTabIds } from './tab-group-state'
 import type { AppState } from '../types'
 
 type TerminalTabReconnectState = Pick<
@@ -191,4 +194,34 @@ export function buildOrphanTerminalCleanupPatch(
     activeTabId:
       state.activeTabId && orphanTerminalIds.has(state.activeTabId) ? null : state.activeTabId
   }
+}
+
+/** Repair every group before adding a tab, including inactive/background creation. */
+export function removeOrphanTerminalsFromGroups(
+  groups: TabGroup[],
+  orphanTerminalIds: ReadonlySet<string>
+): TabGroup[] {
+  return orphanTerminalIds.size === 0
+    ? groups
+    : groups.map((entry) => {
+        // Why: repair every group before adding the new tab, or inactive/background creation can revive stale focus.
+        const tabOrder = dedupeTabOrder(entry.tabOrder).filter(
+          (tabId) => !orphanTerminalIds.has(tabId)
+        )
+        const recentTabIds = sanitizeRecentTabIds(entry.recentTabIds, tabOrder)
+        const replacedActiveTabId = Boolean(
+          entry.activeTabId && orphanTerminalIds.has(entry.activeTabId)
+        )
+        const fallbackActiveTabId = recentTabIds.at(-1) ?? tabOrder[0] ?? null
+        const activeTabId = replacedActiveTabId ? fallbackActiveTabId : entry.activeTabId
+        return {
+          ...entry,
+          activeTabId,
+          tabOrder,
+          recentTabIds:
+            replacedActiveTabId && activeTabId
+              ? pushRecentTabId(recentTabIds, activeTabId)
+              : recentTabIds
+        }
+      })
 }

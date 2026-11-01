@@ -74,3 +74,17 @@ export function mobileSnapshotIdentityUnchanged(
       mobileSnapshotValueEqual(next.retiredTerminalSurfaces, existing.retiredTerminalSurfaces))
   )
 }
+
+/** Main-order reconciliation can reuse an unchanged occupant without publishing a new version. */
+export function unchangedMainSessionSnapshotRebuild(
+  existing: RuntimeMobileSessionTabsSnapshot | undefined,
+  snapshot: RuntimeMobileSessionTabsSnapshot,
+  merged: RuntimeMobileSessionTabsSnapshot
+): existing is RuntimeMobileSessionTabsSnapshot {
+  return Boolean(
+    existing &&
+    mobileSnapshotIdentityUnchanged(existing, snapshot) &&
+    headlessMobileSnapshotContentUnchanged(existing, merged) &&
+    !headlessMobileSnapshotContentUnchanged(snapshot, merged)
+  )
+}

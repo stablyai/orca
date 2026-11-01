@@ -1,3 +1,5 @@
+import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
+import { useAiVaultInPlaceAgent, useInPlaceSwitchCapability } from '@/lib/in-place-switch-support'
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { useCallback } from 'react'
@@ -32,6 +34,7 @@ import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-ti
 
 export function VaultSessionRow({
   session,
+  originalPaneTarget,
   liveState,
   resumeStartup,
   realHomeResumeStartup,
@@ -65,6 +68,7 @@ export function VaultSessionRow({
   onPick
 }: {
   session: AiVaultSession
+  originalPaneTarget?: AiVaultOriginalPaneTarget | null
   liveState: AgentDotState | null
   resumeStartup: AiVaultResumeStartup
   realHomeResumeStartup: AiVaultResumeStartup
@@ -105,6 +109,9 @@ export function VaultSessionRow({
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const title = useAiVaultSessionDisplayTitle(session)
   const detailsId = getSessionDetailsId(session.id)
+  const inPlaceAgent = useAiVaultInPlaceAgent(session)
+  const switchLoading =
+    useInPlaceSwitchCapability(session.executionHostId, session.agent) === undefined
   const latestTurn = latestSessionConversationTurn(session)
   const deleteHost = useAiVaultSessionDeleteHost(session)
   const deleteBlockedReason = onRequestDelete
@@ -192,6 +199,7 @@ export function VaultSessionRow({
           {title}
         </div>
         <SessionRowTrailingActions
+          originalPaneTarget={originalPaneTarget}
           session={session}
           detailsExpanded={detailsExpanded}
           detailsId={detailsId}
@@ -247,6 +255,7 @@ export function VaultSessionRow({
       />
       {detailsExpanded ? (
         <SessionInlineDetails
+          originalPaneTarget={originalPaneTarget}
           id={detailsId}
           session={session}
           worktreeInfo={worktreeInfo}
@@ -275,6 +284,8 @@ export function VaultSessionRow({
       </ContextMenuTrigger>
       <ContextMenuContent>
         <SessionActionMenuItems
+          originalPaneTarget={originalPaneTarget}
+          session={session}
           menuKind="context"
           resumeDisabled={resumeDisabled}
           resumeHidden={resumeHidden}
@@ -287,6 +298,8 @@ export function VaultSessionRow({
           onContinueInNewSession={onContinueInNewSession}
           onResumeInNewChat={onResumeInNewChat}
           onResumeInNewCli={onResumeInNewCli}
+          inPlaceAgent={inPlaceAgent}
+          switchLoading={switchLoading}
           onCopyResume={onCopyResume}
           onCopyId={onCopyId}
           onCopyPath={onCopyPath}

@@ -8,12 +8,13 @@ import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import type { TerminalPaneBindingController } from './use-terminal-pane-layout-bindings'
+import { isStoppedSwitchSource } from './stopped-switch-sources'
 
 export function capturePendingTerminalPaneClose(
   controller: Pick<TerminalPaneBindingController, 'managerRef' | 'paneTransportsRef' | 'tabId'>,
   paneId: number,
   getState: () => AppState
-): { ptyId: string; isCurrent: () => boolean } | undefined {
+): { ptyId: string; stopped: boolean; isCurrent: () => boolean } | undefined {
   const { managerRef, paneTransportsRef, tabId } = controller
   const manager = managerRef.current
   const transport = paneTransportsRef.current.get(paneId)
@@ -47,6 +48,8 @@ export function capturePendingTerminalPaneClose(
   const pairingRevision = environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
   return {
     ptyId,
+    // A switch stopped it with proof, as the stopped overlay's own Close knows.
+    stopped: isStoppedSwitchSource(tabId, leafId, ptyId),
     isCurrent: () => {
       const current = getState()
       const currentTab = locateTerminalTab(current.tabsByWorktree, tabId)

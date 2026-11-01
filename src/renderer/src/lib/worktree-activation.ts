@@ -1,3 +1,4 @@
+import { canInspectAgentActivationInventory } from './worktree-activation-pty-inventory'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { translate } from '@/i18n/i18n'
@@ -54,11 +55,6 @@ export type ActivateAndRevealResult = {
   primaryTabId: string | null
 }
 
-const canInspectAgentActivationInventory = (): boolean =>
-  typeof window !== 'undefined' &&
-  typeof window.api?.runtime?.call === 'function' &&
-  typeof window.api?.pty?.listSessions === 'function'
-
 export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
   opts?: WorktreeActivationSurfaceSelection & {
@@ -70,6 +66,7 @@ export function activateAndRevealFolderWorkspace(
     executionHostId?: ExecutionHostId
   }
 ): ActivateAndRevealResult | false {
+  noteUserWorkspaceOpen(folderWorkspaceKey(folderWorkspaceId), opts?.navigationIntent)
   const state = useAppStore.getState()
   const folderWorkspaceOwner = findFolderWorkspaceOwner(
     state,
@@ -173,6 +170,7 @@ export function activateAndRevealWorktree(
   worktreeId: string,
   opts?: WorktreeActivationOptions
 ): ActivateAndRevealResult | false {
+  noteUserWorkspaceOpen(worktreeId, opts?.navigationIntent)
   const state = useAppStore.getState()
   // The floating workspace owns a separate panel, never the main window's selection.
   if (isFloatingWorkspaceId(worktreeId)) {
@@ -207,7 +205,6 @@ export function activateAndRevealWorktree(
   if (state.activeView !== 'terminal') {
     state.setActiveView('terminal')
   }
-  noteUserWorkspaceOpen(worktreeId, opts?.navigationIntent)
 
   state.setActiveWorktree(
     worktreeId,

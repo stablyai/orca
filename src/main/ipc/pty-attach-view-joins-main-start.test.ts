@@ -226,6 +226,7 @@ describe('a window view of a pane main is starting', () => {
       })
     )
     const records: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
+    records.getRecord = (sessionId) => (sessionId === chat.sessionId ? chat : null)
     const list = vi.fn(() => [agentSessionConversationView(chat)])
     records.listConversations = list
     records.getVisibleSessionTabIndex = () => ({ present: true, sessionIds: [chat.sessionId] })

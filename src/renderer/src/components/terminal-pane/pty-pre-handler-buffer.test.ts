@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { deliverPtyExitToHandlers } from './pty-exit-delivery'
+import {
+  markCommittedPtyShutdowns,
+  consumeCommittedPtyShutdownExit
+} from './pty-shutdown-exit-deferral'
 import {
   bufferPreHandlerPtyData,
   bufferPreHandlerPtyExit,
@@ -298,15 +303,33 @@ describe('pre-handler PTY buffer', () => {
   })
 
   it('replaces a duplicate exit for the same lifetime instead of crowding out another lifetime', () => {
-    bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 1, FRESH_INCARNATION_ID)
+    markCommittedPtyShutdowns([RECYCLED_PTY_ID])
+    deliverPtyExitToHandlers({
+      ptyId: RECYCLED_PTY_ID,
+      code: 1,
+      incarnationId: FRESH_INCARNATION_ID,
+      preserveRendererBinding: 'closing',
+      sidecars: [
+        (_code, context) => {
+          const disposition = consumeCommittedPtyShutdownExit(RECYCLED_PTY_ID)
+          expect(context.hadPrimary).toBe(false)
+          if (disposition && context.exitOptions) {
+            context.exitOptions.preserveRendererBinding = disposition
+          }
+        }
+      ]
+    })
+    expect(consumeCommittedPtyShutdownExit(RECYCLED_PTY_ID)).toBe(false)
     bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 9, FRESH_INCARNATION_ID)
-    bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 0, PRIOR_INCARNATION_ID)
+    bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 0, PRIOR_INCARNATION_ID, {
+      preserveRendererBinding: 'closing'
+    })
 
     discardPreHandlerPtyExitFromForeignIncarnation(RECYCLED_PTY_ID, FRESH_INCARNATION_ID)
 
     const exit = vi.fn()
     drainPreHandlerPtyExit(RECYCLED_PTY_ID, exit)
-    expect(exit).toHaveBeenCalledWith(9)
+    expect(exit).toHaveBeenCalledWith(9, { preserveRendererBinding: true })
   })
 
   // Reads enforce lifetime filtering even for eager background launches that never invoke explicit discard.

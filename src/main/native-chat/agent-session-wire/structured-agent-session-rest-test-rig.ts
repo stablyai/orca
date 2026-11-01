@@ -148,24 +148,34 @@ export async function createRestTestRig(
     readChildWork: vi.fn((): AgentChildWorkView[] => [])
   }
   let store = await openTestAgentSessionRecordStore(root)
+  const physical = new Map<string, ReturnType<typeof Promise.withResolvers<void>>>()
   const adapter: RestTestAdapter = {
     open: async () => ({
       reportedOptions: { model: '' }
     }),
-    acquire: vi.fn(async ({ fence, spawnToken }) => ({
-      acquisitionGeneration: `generation-${++generations}`,
-      process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
-      link: {
-        linkId: `link-${fence}`,
-        handle: codexProviderHandle(THREAD),
-        origin: store.getRecord(SESSION)?.providerHandleChain.length
-          ? ('resumed' as const)
-          : ('created' as const),
-        mintedAtFence: fence,
-        observedAt: clock.now
+    acquire: vi.fn(async ({ identity, fence, spawnToken, onPhysicalExit }) => {
+      const exited = Promise.withResolvers<void>()
+      physical.set(identity.sessionId, exited)
+      onPhysicalExit?.(exited.promise)
+      return {
+        acquisitionGeneration: `generation-${++generations}`,
+        process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
+        link: {
+          linkId: `link-${fence}`,
+          handle: codexProviderHandle(THREAD),
+          origin: store.getRecord(SESSION)?.providerHandleChain.length
+            ? ('resumed' as const)
+            : ('created' as const),
+          mintedAtFence: fence,
+          observedAt: clock.now
+        }
       }
-    })),
-    closeSession: vi.fn(async () => true),
+    }),
+    closeSession: vi.fn(async (sessionId) => {
+      physical.get(sessionId)?.resolve()
+      physical.delete(sessionId)
+      return true
+    }),
     dispatch: vi.fn(async () => acceptedDispatch()),
     acknowledgeSessionRelease: vi.fn(),
     holdsDispatch: vi.fn(() => false),

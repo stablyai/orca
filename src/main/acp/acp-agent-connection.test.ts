@@ -333,7 +333,16 @@ describe('ACP process-owning connection', () => {
 
   it('settles a failed spawn but requires processless close evidence before reporting exit', async () => {
     const onExit = vi.fn()
-    const { connection, child, agent } = fixture({ onExit }, { pid: null, exitOnEnd: false })
+    const physical = vi.fn<(exited: Promise<void>) => void>()
+    const { connection, child, agent } = fixture(
+      { onExit, onPhysicalExit: physical },
+      { pid: null, exitOnEnd: false }
+    )
+    let exited = false
+    expect(physical).toHaveBeenCalledOnce()
+    void physical.mock.calls[0]![0].then(() => {
+      exited = true
+    })
     agent.on('initialize', () => {})
     const rejected = expect(connection.initialize()).rejects.toThrow('ENOENT')
     child.emit('error', new Error('ENOENT'))
@@ -341,7 +350,10 @@ describe('ACP process-owning connection', () => {
     await rejected
     expect(connection.rootVerdict).toBe('unverifiable')
     expect(onExit).not.toHaveBeenCalled()
+    expect(exited).toBe(false)
     child.emit('close', null, null)
+    await physical.mock.calls[0]![0]
+    expect(exited).toBe(true)
     expect(connection.rootVerdict).toBe('exited')
     expect(onExit.mock.calls[0][1].exit.processless).toBe(true)
     expect(await connection.close()).toBe(true)
@@ -420,7 +432,13 @@ it.each([true, false])(
   'runs setup through the retained launch gate with initial kill delivery=%s',
   async (initialDelivery) => {
     vi.useFakeTimers()
-    const { connection, child } = fixture({}, { exitOnEnd: false })
+    const physical = vi.fn<(exited: Promise<void>) => void>()
+    const { connection, child } = fixture({ onPhysicalExit: physical }, { exitOnEnd: false })
+    let exited = false
+    expect(physical).toHaveBeenCalledOnce()
+    void physical.mock.calls[0]![0].then(() => {
+      exited = true
+    })
     let permitted = initialDelivery
     let writerGone = false
     const deliver = () => {
@@ -488,5 +506,9 @@ it.each([true, false])(
       root: 'live',
       killDelivered: true
     })
+    expect(exited).toBe(false)
+    child.emit('exit', 0, null)
+    await physical.mock.calls[0]![0]
+    expect(exited).toBe(true)
   }
 )

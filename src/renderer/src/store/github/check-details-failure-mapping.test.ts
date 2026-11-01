@@ -152,7 +152,9 @@ for (const surface of surfaces) {
               },
               timeoutMs: 30_000,
               expectedEnvironmentPairingRevision: undefined,
-              expectedEnvironmentRuntimeId: undefined
+              expectedEnvironmentRuntimeId: undefined,
+              dispatchObservation: undefined,
+              observeDispatch: false
             },
             expect.any(Object)
           )

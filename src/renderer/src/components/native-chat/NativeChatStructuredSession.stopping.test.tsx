@@ -33,18 +33,21 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 
 function renderPane(): void {
   render(
     <TooltipProvider>
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="structured-tab-1"
-        sessionId="session-1"
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
+      <ConfirmationDialogProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="structured-tab-1"
+          sessionId="session-1"
+          target={{ kind: 'local' }}
+          agent="codex"
+        />
+      </ConfirmationDialogProvider>
     </TooltipProvider>
   )
 }

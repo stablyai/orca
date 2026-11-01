@@ -38,7 +38,7 @@ import type { AppState } from '../types'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 // Main's frames are applied by hand below; the window's own stream has no main to reach here.
-vi.mock('@/runtime/workspace-layout-frame-sync', () => ({ showStartupLayoutFrames: vi.fn() }))
+vi.mock('@/runtime/workspace-layout-frame-startup', () => ({ showStartupLayoutFrames: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()

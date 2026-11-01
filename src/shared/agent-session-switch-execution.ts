@@ -4,8 +4,13 @@ import {
 } from './agent-session/failures/agent-session-wire-refusals'
 import { waitForPromiseWithSignal } from './abort-signal-reason'
 
-export const AGENT_SESSION_SWITCH_HOST_MS = 720_000
-export const AGENT_SESSION_SWITCH_CLIENT_MS = 735_000
+/**
+ * The whole switch: stop (≤15 s), the at-rest prepare (transcript import, or the terminal spawn,
+ * which the daemon request bounds at 30 s), and one layout replace. The client allows one IPC
+ * round trip more.
+ */
+export const AGENT_SESSION_SWITCH_HOST_MS = 90_000
+export const AGENT_SESSION_SWITCH_CLIENT_MS = 105_000
 
 export type AgentSessionSwitchResult =
   | {
@@ -13,18 +18,6 @@ export type AgentSessionSwitchResult =
       sessionId: string
       terminal?: string
       sourceRetained?: boolean
-      startupPending?: boolean
-    }
-  | {
-      status: 'present'
-      surface?: 'terminal'
-      leafId?: string
-      sessionId: string
-      generation: string
-      workspaceId: string
-      tabId: string
-      agent: 'codex'
-      placement?: { groupId?: string; afterTabId?: string }
     }
   | {
       status: 'refused' | 'uncertain'
@@ -32,13 +25,6 @@ export type AgentSessionSwitchResult =
       sessionId: string
       failureItemId?: string
     }
-
-export type AgentSessionSwitchReceipt = {
-  generation: string
-  shown: boolean
-  retained?: boolean
-  converged?: boolean
-}
 
 /** Expiry revokes new effects; already dispatched owners still reconcile their real outcome. */
 export function agentSessionSwitchDeadline(
@@ -108,21 +94,3 @@ export function agentSessionSwitchDeadline(
   }
 }
 export type AgentSessionSwitchDeadline = ReturnType<typeof agentSessionSwitchDeadline>
-
-/** In-process authority; never serialize the callbacks as a transport permit. */
-export type AgentSessionSwitchAuthority = {
-  invocationId: string
-  check: () => void
-  remaining: () => number
-  signal: AbortSignal
-  /** Existing physical acquisition only, excluding placement and presentation. */
-  trackPhysical?: <T>(work: Promise<T>) => Promise<T>
-}
-
-export type SessionSwitchProjection = {
-  invocationId: string
-  generation: string
-  sessionId: string
-  tabId: string
-  phase: 'prepare' | 'retire' | 'retain'
-}

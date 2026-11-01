@@ -136,12 +136,20 @@ export async function applyWindowLayoutCommand(
       : store.applyLayoutCommand(command, target)
   }
   const { workspace, tabId, leafId } = command
-  // Cancel pending launches in user-closed panes, as legacy close did.
-  markAgentLaunchesClosedByUser(workspace, { kind: 'pane', tabId, leafId })
-  return store.applyLayoutCommand(
-    { type: 'closePane', workspace, tabId, leafId, userPaneClose: true },
-    holders
-  )
+  // A launch still starting in the pane the user closed stops, and says so (as the legacy close).
+  if (!run?.originalPresentation && !run?.admit) {
+    markAgentLaunchesClosedByUser(workspace, { kind: 'pane', tabId, leafId })
+  }
+  const close: CommandOf<'closePane'> = {
+    type: 'closePane',
+    workspace,
+    tabId,
+    leafId,
+    userPaneClose: true
+  }
+  return run
+    ? store.applyLayoutCommand(close, holders, run)
+    : store.applyLayoutCommand(close, holders)
 }
 
 /** Rename in each tab's routed partition in one durable write; untitled reports the same refusal codes as renameTab. */

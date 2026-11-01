@@ -205,6 +205,7 @@ export function subscribeRemoteRuntimeSharedControlRequest<TResult>(
   params: unknown,
   timeoutMs: number,
   callbacks: {
+    beforeSend?: () => void
     onResponse: (response: RuntimeRpcResponse<TResult>) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
     onError: (error: { code: string; message: string }) => void

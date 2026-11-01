@@ -55,6 +55,7 @@ export function nativeChatTurnStatusCopy(t: Translate, value0?: string) {
     interruptedAfter: t('chat.turnStatus.interruptedAfter', 'Interrupted after {{value0}}', {
       value0
     }),
+    interrupted: t('worktree.agentRowDisplay.interrupted', 'Interrupted'),
     failedAfter: t('chat.turnStatus.failedAfter', 'Failed after {{value0}}', { value0 }),
     toggleDetails: t('chat.turnStatus.toggleDetails', 'Toggle turn details'),
     responding: t('chat.turnStatus.responding', 'Agent is responding')

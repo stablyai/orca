@@ -27,6 +27,7 @@ export abstract class OrcaRuntimeWithHeadlessPaneMoveToNewTab extends OrcaRuntim
     commit: (move: TerminalLeafMoveRequest) => Promise<TerminalLeafMoveResult>,
     placement?: MovedPanePlacement
   ): Promise<TerminalLeafMoveResult> {
+    this.clientSessionTabSelections.noteHostNavigation()
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id

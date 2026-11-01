@@ -25,6 +25,7 @@ import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   callBuild,
   expectDeclaredSurfaceExecutes,
+  expectItemDetailAndSwitchNegotiation,
   runtimeStub
 } from './structured-agent-session-surface-execution'
 import {
@@ -248,6 +249,10 @@ describe('cross-version structured agent sessions', () => {
   })
 
   describe('a new client against an old host', () => {
+    it('advertises item detail and the in-place switch exactly when it registers their methods', () => {
+      expectItemDetailAndSwitchNegotiation([current, baseline])
+    })
+
     // The client sends a Stop naming no turn only to a host advertising this, because older cancel
     // params are strict and require the turn. The invariant survives a release cut: each build
     // advertises the capability exactly when its dispatcher accepts that cancel.

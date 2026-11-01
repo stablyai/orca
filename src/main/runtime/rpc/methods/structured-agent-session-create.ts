@@ -1,15 +1,13 @@
 import type { StructuredSessionSurface } from '../../agent-session/structured-agent-session-close'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { seededPermissionMode } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
-// Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
-
-import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
 import {
   refuse,
   AgentSessionRefusalError
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationEnvelope,
@@ -33,10 +31,14 @@ import {
   type StructuredAgentCliSourceEvidence
 } from '../../../native-chat/structured-agent-cli-source'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentSessionAdoption } from '../../../native-chat/structured-agent-session-history-adoption'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
 import type { ChatTabPlacement } from '../../agent-session/agent-session-tab-layout'
+import { structuredAgentSessionCreateIntentFingerprint } from './structured-agent-session-create-options'
+
+// Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -47,32 +49,6 @@ export type PreparedStructuredAgentSessionCreate = {
   tab: { workspaceId: string; agent: StructuredAgentId } | null
   /** Absent for older clients and provider-dependent in-process callers. */
   atRest?: { firstMessage?: StructuredAgentSessionFirstMessage }
-}
-
-/** New creates keep the immutable client intent in the ledger; legacy creates keep attach identity. */
-export function structuredAgentSessionCreateIntentFingerprint(params: {
-  envelope: AgentSessionMutationEnvelope
-  worktree: string
-  agent: string
-  resumeFrom?: StructuredAgentSessionResumeSource
-  tabId?: string
-  firstMessage?: StructuredAgentSessionFirstMessage
-  optionsMode?: 'replace-model-selection'
-  options?: Readonly<Record<string, string>>
-}): string {
-  return computeAgentSessionPayloadFingerprint({
-    method: 'agentSession.create',
-    sessionId: params.envelope.sessionId,
-    fields: {
-      worktree: params.worktree,
-      agent: params.agent,
-      resumeFrom: params.resumeFrom,
-      tabId: params.tabId,
-      firstMessage: params.firstMessage,
-      optionsMode: params.optionsMode,
-      options: params.options
-    }
-  })
 }
 
 /** Run throwing pre-commit work inside resolveUncommittedStructuredCreate so clients receive a no-effects refusal. */
@@ -86,6 +62,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   caller: StructuredAgentSessionCaller
   resumeFrom?: StructuredAgentSessionResumeSource
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
+  pinnedAdoption?: StructuredAgentSessionAdoption
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
@@ -111,7 +88,8 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     agent: args.agent,
     callerKey: args.caller.callerKey,
     structuredAgentCliSourceEvidence,
-    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
+    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+    ...(args.pinnedAdoption ? { pinnedAdoption: args.pinnedAdoption } : {})
   })
   const attachFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
@@ -178,11 +156,13 @@ export async function commitStructuredAgentSessionCreate(args: {
   caller: StructuredAgentSessionCaller
   prepared: PreparedStructuredAgentSessionCreate
   activate: boolean
+  check?: () => void
   capture?: (surface: StructuredSessionSurface) => void
   /** This machine's window made the create and opens the chat's tab where it reserved it. */
   placedByWindow?: boolean
   /** Where the creating client opens the chat, in this host's ids. */
   tabPlacement?: ChatTabPlacement
+  switchStop?: StructuredAgentSessionCreateOptions['switchStop']
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
   const tab = prepared.tab
@@ -194,6 +174,8 @@ export async function commitStructuredAgentSessionCreate(args: {
   if (prepared.atRest) {
     return prepared.host.create(args.caller, prepared.attachParams, {
       ...prepared.atRest,
+      check: args.check,
+      ...(args.switchStop ? { switchStop: args.switchStop } : {}),
       ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {}),
       ...(prepared.hostLaunchDirectory
         ? { hostLaunchDirectory: prepared.hostLaunchDirectory }
@@ -217,6 +199,7 @@ export async function commitStructuredAgentSessionCreate(args: {
                 sessionId,
                 agent: tab.agent,
                 activate: args.activate,
+                ...(args.check ? { check: args.check } : {}),
                 ...tabPlace,
                 ...(prepared.attachParams.surfaceTabId
                   ? { tabId: prepared.attachParams.surfaceTabId }
@@ -312,3 +295,5 @@ export async function createStructuredAgentSessionForWorktree(args: {
     activate: args.activate
   })
 }
+
+export { structuredAgentSessionCreateIntentFingerprint } from './structured-agent-session-create-options'

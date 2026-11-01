@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type {
+  TerminalSurfaceCloseIdentity,
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
 } from '../../shared/terminal-tab-close'
@@ -13,7 +14,11 @@ const TERMINAL_TAB_CLOSE_TIMEOUT_MS = 20_000
 export async function requestTerminalTabCloseFromRenderer(
   mainWindow: BrowserWindow,
   tabId: string,
-  options: { localPtyTeardownOwnedExternally?: boolean; force?: boolean } = {}
+  options: {
+    localPtyTeardownOwnedExternally?: boolean
+    force?: boolean
+    originalSurface?: TerminalSurfaceCloseIdentity
+  } = {}
 ): Promise<void> {
   if (mainWindow.isDestroyed()) {
     throw new Error('renderer_unavailable')

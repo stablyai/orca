@@ -55,6 +55,7 @@ async function setupMultiplexStream(): Promise<{
     getPtyExecutionHostMetadata: () => ({ incarnationId: 'test-incarnation' }),
     getTerminalLaunchResult: () => undefined,
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+    isStoppedSwitchSourceHandle: () => false,
     readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
     serializeTerminalBuffer: serializeSnapshot,
     serializeAuthoritativeTerminalBuffer: serializeSnapshot,

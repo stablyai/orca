@@ -87,6 +87,9 @@ export async function installOnJournal(
       : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
+    ...(deps.captureSessionSwitchStop
+      ? { captureSessionSwitchStop: deps.captureSessionSwitchStop }
+      : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
     ...(deps.launchAccountHome ? { launchAccountHome: deps.launchAccountHome } : {}),
     ...(deps.parentAccountWork ? { parentAccountWork: deps.parentAccountWork } : {}),

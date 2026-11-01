@@ -38,6 +38,11 @@ export const CreateTerminalTabCommand = z.object({
   creation: TerminalCreation.optional(),
   /** Only into a workspace with no tab in main's copy; otherwise nothing is created. */
   initial: z.literal('activation').optional(),
+  /** Takes this tab's slot and closes it in the same write; optional, so older peers omit it. */
+  replaces: z
+    .object({ tabId: z.string().min(1) })
+    .strict()
+    .optional(),
   split: NewGroupSplit
 })
 

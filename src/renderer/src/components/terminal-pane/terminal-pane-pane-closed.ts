@@ -47,7 +47,8 @@ export function createTerminalPaneClosedHandler(
     } = deps
     onPtyRecoveryStateRef?.current?.(paneId, null)
     const isDetachedToTab = closedPane?.reason === 'detach'
-    const isRetiredSurface = closedPane?.reason === 'retire'
+    const permanent = closedPane?.reason === 'remove'
+    const isRetiredSurface = closedPane?.reason === 'retire' || permanent
     disposeMapEntry(refs.linkProviderDisposablesRef.current, paneId)
     disposeMapEntry(refs.terminalHandleLinkDisposablesRef.current, paneId)
     disposeMapEntry(refs.linkifierClickPrimingDisposablesRef.current, paneId)
@@ -106,6 +107,7 @@ export function createTerminalPaneClosedHandler(
         syncPanePtyLayoutBindingForLeaf,
         clearExitedPanePtyLayoutBindingForLeaf,
         clearTabPtyId,
+        permanent,
         ...(transport ? { transport } : {})
       })
     } else if (leafId && !isDetachedToTab) {
@@ -131,6 +133,8 @@ export function createTerminalPaneClosedHandler(
         }
         transport.destroy?.()
       }
+    }
+    if (!isRetiredSurface || permanent) {
       paneTransportsRef.current.delete(paneId)
     }
     clearRuntimePaneTitle(tabId, paneId)

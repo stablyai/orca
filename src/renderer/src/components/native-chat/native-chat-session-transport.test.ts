@@ -91,7 +91,12 @@ describe('getNativeChatSessionTransport — selection', () => {
 
   it('validates lifecycle metadata on runtime read responses', async () => {
     markRuntimeEnvironmentCompatible(ENV)
-    const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
+    const lifecycle = {
+      state: 'completed',
+      outcome: 'failure',
+      turnId: 'turn-1',
+      timestamp: 42
+    } as const
     runtimeEnvironmentsCall
       .mockResolvedValueOnce(okEnvelope({ messages: [message('valid')], lifecycle }))
       .mockResolvedValueOnce(
@@ -226,7 +231,12 @@ describe('runtime subscribe', () => {
     const { deliver } = stubSubscribe()
     const onFrame = vi.fn()
     const transport = getNativeChatSessionTransport(ENV)
-    const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
+    const lifecycle = {
+      state: 'completed',
+      outcome: 'failure',
+      turnId: 'turn-1',
+      timestamp: 42
+    } as const
 
     transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
     await Promise.resolve()

@@ -3,12 +3,15 @@ import type {
   RuntimeMobileSessionTerminalClientTab
 } from '../../../shared/runtime-types'
 import { hostSnapshotAffirmsWorktreeContents } from './host-session-snapshot-authority'
+import type { StoppedSwitchSourceFact } from '../../../shared/stopped-switch-source'
 
 export type WebSessionTerminalHandleUpdate = {
   surfacePresent: boolean
   terminalHandle: string | null
   /** The published handle's process lifetime, when the host stamps one. */
   incarnationId?: string | null
+  /** Main's fact that a switch stopped the published handle's process; old hosts omit it. */
+  stoppedSwitchSource?: StoppedSwitchSourceFact
 }
 
 type TerminalHandleSubscriber = {
@@ -52,7 +55,10 @@ function resolveSubscriberUpdate(
   return {
     surfacePresent: true,
     terminalHandle: readySurface?.terminal ?? null,
-    ...(readySurface?.incarnationId ? { incarnationId: readySurface.incarnationId } : {})
+    ...(readySurface?.incarnationId ? { incarnationId: readySurface.incarnationId } : {}),
+    ...(readySurface?.stoppedSwitchSource
+      ? { stoppedSwitchSource: readySurface.stoppedSwitchSource }
+      : {})
   }
 }
 

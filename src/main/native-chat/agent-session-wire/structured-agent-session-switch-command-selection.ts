@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import type { StructuredAgentSessionConversationLifetimeHost } from './structured-agent-session-conversation-lifetime-host'
 import {
   AgentSessionRefusalError,
@@ -7,159 +6,121 @@ import {
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import type {
   AgentSessionSwitchDeadline,
-  AgentSessionSwitchResult,
-  AgentSessionSwitchReceipt
+  AgentSessionSwitchResult
 } from '../../../shared/agent-session-switch-execution'
 
-// Commands outlive the read handle they may close themselves.
 export type SwitchCommand = {
   invocationId: string
   generation: string
+  direction: 'chat' | 'terminal'
+  workCurrent?: () => boolean
   settled: boolean
-  present: (view: Extract<AgentSessionSwitchResult, { status: 'present' }>) => void
-  presentation: Promise<AgentSessionSwitchResult>
-  shown: Promise<boolean>
-  acknowledge: (shown: boolean) => void
-  opened: Promise<AgentSessionSwitchResult>
-  openedResult: (result: AgentSessionSwitchResult) => void
+  result?: AgentSessionSwitchResult
   deadline: AgentSessionSwitchDeadline
-  revokeOnSend: boolean
-  retain?: () => Promise<void>
-  retentionAllowed: boolean
   completion: Promise<AgentSessionSwitchResult>
   physical?: Promise<void>
   cleanupTimer?: ReturnType<typeof setTimeout>
 }
 
+/** The command owns dispatched work even after its viewer gives up. */
 export function selectStructuredSessionSwitchCommand(args: {
   host: StructuredAgentSessionConversationLifetimeHost
   commands: Map<string, SwitchCommand>
   isDisposed: () => boolean
   id: string
   invocationId: string
+  direction: SwitchCommand['direction']
   deadline: AgentSessionSwitchDeadline
   run: () => Promise<AgentSessionSwitchResult>
-  revokeOnSend: boolean
-  phase?: { observe?: boolean; receipt?: AgentSessionSwitchReceipt }
-  onRetained?: (check: () => void) => Promise<void>
-  allowUncreated: boolean
+  allowUncreated?: boolean
+  conversationKey?: string
+  destinationCurrent?: (result: AgentSessionSwitchResult) => boolean | undefined
+  onAccepted?: () => void
 }): SwitchCommand {
-  const {
-    host,
-    commands,
-    isDisposed,
-    id,
-    invocationId,
-    deadline,
-    run,
-    revokeOnSend,
-    phase,
-    onRetained,
-    allowUncreated
-  } = args
+  const { host, commands, isDisposed, id, invocationId, direction, deadline, run } = args
   const { sessions, serialize } = host
-  const deps = () => host.context().deps
   deadline.check()
-  const prior = commands.get(id)
+  const prior =
+    (args.conversationKey ? commands.get(args.conversationKey) : undefined) ?? commands.get(id)
   if (prior) {
-    if (prior.invocationId !== invocationId && !prior.settled) {
+    const replay = prior.invocationId === invocationId
+    const join = prior.direction === direction && !prior.settled
+    const completed =
+      !replay &&
+      !join &&
+      prior.direction === direction &&
+      prior.settled &&
+      prior.result?.status === 'completed'
+    const destinationCurrent = completed ? args.destinationCurrent?.(prior.result!) : undefined
+    if (completed && destinationCurrent === undefined) {
+      throw agentSessionRefusalError('agent_session_ownership_unknown', {
+        reason: 'ownerUnproven'
+      })
+    }
+    const reusable =
+      completed &&
+      destinationCurrent === true &&
+      prior.deadline.remaining() > 0 &&
+      !prior.deadline.signal.aborted &&
+      (!prior.workCurrent || prior.workCurrent())
+    if (replay || join || reusable) {
+      commands.set(id, prior)
+      if (args.conversationKey) {
+        commands.set(args.conversationKey, prior)
+      }
+      return prior
+    }
+    if (!prior.settled) {
       throw agentSessionRefusalError('agent_session_operation_invalid', {
         reason: 'handoffInFlight'
       })
     }
-    if (prior.invocationId === invocationId) {
-      return prior
-    }
-    prior.retentionAllowed = false
     clearTimeout(prior.cleanupTimer)
     prior.deadline.revoke()
-    commands.delete(id)
+    for (const [alias, current] of commands) {
+      if (current === prior) {
+        commands.delete(alias)
+      }
+    }
   }
-  if (phase?.observe || phase?.receipt) {
-    throw agentSessionRefusalError('agent_session_operation_unknown', {
-      reason: 'outcomeUnknown'
-    })
-  }
-  const session = sessions.get(id)
-  if (!deps().store.getRecord(id) && !allowUncreated) {
+  if (!host.context().deps.store.getRecord(id) && !args.allowUncreated) {
     throw new AgentSessionRefusalError(AGENT_SESSION_NOT_ATTACHED)
   }
-  let present!: (view: Extract<AgentSessionSwitchResult, { status: 'present' }>) => void
-  let acknowledge!: (shown: boolean) => void
-  let openedResult!: (result: AgentSessionSwitchResult) => void
-  const presentation = new Promise<Extract<AgentSessionSwitchResult, { status: 'present' }>>(
-    (resolve) => {
-      present = resolve
-    }
-  )
-  const shown = new Promise<boolean>((resolve) => {
-    acknowledge = resolve
-  })
-  const opened = new Promise<AgentSessionSwitchResult>((resolve) => {
-    openedResult = resolve
-  })
+  args.onAccepted?.()
   const command: SwitchCommand = {
     invocationId,
-    generation: randomUUID(),
+    generation: invocationId,
+    direction,
     settled: false,
     deadline,
-    revokeOnSend,
-    retentionAllowed: true,
-    retain: async () => {
-      const check = () => {
-        if (!command.retentionAllowed || commands.get(id) !== command) {
-          throw agentSessionRefusalError('agent_session_operation_expired', {
-            reason: 'operationExpired'
-          })
-        }
-      }
-      check()
-      await onRetained?.(check)
-    },
-    present,
-    acknowledge,
-    presentation,
-    shown,
-    opened,
-    openedResult,
     completion: Promise.resolve().then(async () => {
-      if (deps().store.getRecord(id)) {
+      if (host.context().deps.store.getRecord(id)) {
         await serialize(id, async () => {
           deadline.check()
-          const opened = await host.open(id)
+          const session = await host.open(id)
           deadline.check()
-          if (opened) {
-            opened.switchCommand = command
+          if (session) {
+            session.switchCommand = command
           }
         })
       }
-      try {
-        const result = await run()
-        if (revokeOnSend && (result.status === 'refused' || result.status === 'uncertain')) {
-          await command.retain?.()
-        }
-        return result
-      } catch (error) {
-        if (revokeOnSend) {
-          await command.retain?.().catch(() => {})
-        }
-        throw error
-      }
+      const result = await run()
+      command.result = result
+      return result
     })
   }
   commands.set(id, command)
-  const retainOnExpiry = () => {
-    if (revokeOnSend) {
-      void command.retain?.().catch(() => {})
-    }
+  if (args.conversationKey) {
+    commands.set(args.conversationKey, command)
   }
-  deadline.signal.addEventListener('abort', retainOnExpiry, { once: true })
+  const session = sessions.get(id)
   if (session) {
     session.switchCommand = command
   }
   host.context().publishStatus?.(id)
   void command.completion
-    .finally(() => {
+    .finally(async () => {
+      await command.physical
       command.settled = true
       deadline.dispose()
       for (const [key, current] of commands) {
@@ -173,15 +134,11 @@ export function selectStructuredSessionSwitchCommand(args: {
       }
       command.cleanupTimer = setTimeout(
         () => {
-          void Promise.resolve(command.physical).then(() => {
-            command.retentionAllowed = false
-            deadline.signal.removeEventListener('abort', retainOnExpiry)
-            for (const [key, current] of commands) {
-              if (current === command) {
-                commands.delete(key)
-              }
+          for (const [key, current] of commands) {
+            if (current === command) {
+              commands.delete(key)
             }
-          })
+          }
         },
         Math.max(1, deadline.remaining())
       )

@@ -55,7 +55,9 @@ export async function resumeAiVaultSessionInNewChat(
   rowAgent: CliConversationRowAgent,
   worktreeId: string,
   requestId: AgentLaunchRequestId,
-  replacing?: AiVaultChatReplacement
+  replacing?: AiVaultChatReplacement,
+  reportFailure: (error: unknown) => void = (error) =>
+    notifyAiVaultSessionResumeInChatFailure(error, rowAgent)
 ): Promise<void> {
   try {
     const recordingHost = parseRoutableExecutionHostId(session.executionHostId)
@@ -124,11 +126,11 @@ export async function resumeAiVaultSessionInNewChat(
       }
       const handled = replacing?.onSettled(settlement) === true
       if (settlement.kind === 'failed' && !settlement.notified && !handled) {
-        notifyAiVaultSessionResumeInChatFailure(settlement.error, rowAgent)
+        reportFailure(settlement.error)
       }
     })
   } catch (error) {
-    notifyAiVaultSessionResumeInChatFailure(error, rowAgent)
+    reportFailure(error)
     replacing?.onSettled(null)
   }
 }

@@ -230,10 +230,10 @@ it.each([100, 1000])(
         r.allow(2) // A's generic diagnostic/end commit; the unrelated prefix still blocks its answer.
         await vi.advanceTimersByTimeAsync(250)
         await r.rig.settle()
-        expect(r.failure).toHaveBeenCalledTimes(1)
-        expect(r.mail()).toHaveLength(0)
         // The escalation's first check follows real async work; await it instead of a fixed number of turns.
         await firstCheck.promise
+        expect(r.failure).toHaveBeenCalledTimes(1)
+        expect(r.mail()).toHaveLength(0)
         expect(samples).toHaveLength(1)
         otherReads = 0
         for (clock = 50; clock <= 2000; clock += 50) {

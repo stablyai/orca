@@ -20972,9 +20972,15 @@
     "tab": {
       "bar": {
         "SortableTabContextMenu": {
-          "switchToTerminalView": "Alternar para visualização de terminal",
+          "switchToTerminalView": "Continuar com o agente de terminal",
+          "continueInChatView": "Alternar para visualização de chat",
           "switchToChatView": "Alternar para visualização de chat",
+          "showAsTerminal": "Mostrar como terminal",
           "allowAutoClose": "Permitir fechamento automático"
+        },
+        "switch": {
+          "stopUnknown": "O Orca não pôde confirmar que {{agent}} parou. Verifique os chats e terminais abertos e tente alternar novamente.",
+          "sourceStopUnknown": "O Orca não pôde confirmar que {{agent}} parou. Verifique {{agent}} no terminal original e tente alternar novamente."
         },
         "BrowserTab": {
           "closeOthers": "Fechar Outras",

@@ -236,12 +236,12 @@ function TerminalContextMenuItems({
           {isNativeChatView ? <SquareTerminal /> : <MessageSquare />}
           {isNativeChatView
             ? translate(
-                'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                'Continue with Terminal Agent'
+                'components.tab.bar.SortableTabContextMenu.showAsTerminal',
+                'Show as terminal'
               )
             : translate(
                 'components.tab.bar.SortableTabContextMenu.switchToChatView',
-                'Continue in Chat UI'
+                'Show as chat'
               )}
           {shortcuts.nativeChat ? (
             <DropdownMenuShortcut>{shortcuts.nativeChat}</DropdownMenuShortcut>

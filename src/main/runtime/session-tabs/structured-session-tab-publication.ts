@@ -11,6 +11,11 @@ import { chatTabId } from '../agent-session/agent-session-tab-layout'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { mobileChatTabId, newReopenedChatTabId } from '../agent-session/agent-session-tab-identity'
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import {
+  insertTabIdIntoOrder,
+  partitionPinnedTabOrder
+} from '../../../shared/workspace-layout/tab-order'
+import { replaceSessionTabInSnapshot } from './session-tab-replace'
 
 export type StructuredSessionTabPublicationInput = {
   workspaceId: string
@@ -31,14 +36,21 @@ export type StructuredSessionTabPublicationInput = {
   /** This machine's window made the create; its own open places the tab. */
   placedByWindow?: boolean
   /** Where the creating paired client opens the chat. */
-  placement?: { groupId?: string; afterTabId?: string }
+  placement?: { groupId?: string; afterTabId?: string; index?: number }
+  /** A switch's open: refused once newer work supersedes it, and its tab write is awaited. */
+  check?: () => void
+  focusWindow?: boolean
+  /** A same-slot switch: the chat takes this tab's slot and the tab's rows leave, in one write. */
+  replaces?: string
+  /** A split pane's switch: the tab the chat opens beside, whose selection it may take. */
+  sourceTabId?: string
 }
 
 /** Caller opens require a committed lifetime; legacy opens retain their best-effort Retry surface. */
 export async function admitStructuredSessionTabPublication(
   input: Pick<
     StructuredSessionTabPublicationInput,
-    'sessionId' | 'tabId' | 'navigation' | 'workspaceAuthority'
+    'sessionId' | 'tabId' | 'navigation' | 'workspaceAuthority' | 'check'
   >,
   restore: () => Promise<void>
 ): Promise<{ tabId: string; current: string | null; eligible: () => boolean }> {
@@ -65,11 +77,13 @@ export async function admitStructuredSessionTabPublication(
       throw new Error('Chat tab publication was superseded')
     }
   } else if (typeof host?.setSessionTabVisibility === 'function') {
-    // Restore-index failures (newer records/disk errors) are reported without preventing tab open.
     const openingHost = host
-    await openingHost
+    const opening = openingHost
       .setSessionTabVisibility(input.sessionId, true, input.tabId, {
-        check: () => input.workspaceAuthority?.check(),
+        check: () => {
+          input.workspaceAuthority?.check()
+          input.check?.()
+        },
         capture: (winner) => {
           if (winner) {
             tabId = winner
@@ -80,14 +94,18 @@ export async function admitStructuredSessionTabPublication(
         committed = true
         input.workspaceAuthority?.committed()
       })
-      .catch((error: unknown) => {
-        input.workspaceAuthority?.check()
-        openingHost.deps.logger.warn('recording an opened chat tab failed', {
-          scope: 'tab-visibility-open',
-          sessionId: input.sessionId,
-          error
-        })
-      })
+    // A switch's open fails with its tab record; other restore-index failures (newer records/disk
+    // errors) are reported without preventing tab open.
+    await (input.check
+      ? opening
+      : opening.catch((error: unknown) => {
+          input.workspaceAuthority?.check()
+          openingHost.deps.logger.warn('recording an opened chat tab failed', {
+            scope: 'tab-visibility-open',
+            sessionId: input.sessionId,
+            error
+          })
+        }))
   }
   const current = host?.getSessionTabId(input.sessionId)
   if (isReopenedChatTabId(tabId) ? current !== tabId : current && isReopenedChatTabId(current)) {
@@ -113,9 +131,15 @@ export async function admitStructuredSessionTabPublication(
 
 export type StructuredSessionRawPublicationInput = Pick<
   StructuredSessionTabPublicationInput,
-  'workspaceId' | 'sessionId' | 'agent' | 'activate' | 'notify' | 'tabId'
-> & { eligible?: () => boolean }
+  'workspaceId' | 'sessionId' | 'agent' | 'activate' | 'notify' | 'tabId' | 'placement' | 'replaces'
+> & {
+  eligible?: () => boolean
+  /** The layout owner's own write already decided `activate` from its source's selection. */
+  selectionDecided?: boolean
+}
 
+/** Publish membership; a listed chat keeps its place, a new one goes last, at its placement, or
+ *  into the replaced slot. */
 export function projectStructuredSessionTab(
   runtime: Pick<OrcaRuntimeService, 'mobileSessionTabsByWorktree' | 'storeMobileSessionSnapshot'>,
   input: StructuredSessionRawPublicationInput,
@@ -166,6 +190,23 @@ export function projectStructuredSessionTab(
     agent: input.agent,
     isActive: input.activate
   }
+  if (input.replaces) {
+    const replaced = replaceSessionTabInSnapshot(existing, {
+      workspaceId: input.workspaceId,
+      replacedTabId: input.replaces,
+      row: tab,
+      activate: input.activate,
+      selectionDecided: input.selectionDecided
+    })
+    if (input.eligible?.() === false) {
+      throw new Error('Chat tab publication was superseded')
+    }
+    const stored = runtime.storeMobileSessionSnapshot(input.workspaceId, replaced)
+    if (input.notify !== false) {
+      emit(stored)
+    }
+    return
+  }
   const tabs = [...(existing?.tabs ?? [])].map((candidate) => ({
     ...candidate,
     isActive: input.activate ? false : candidate.isActive
@@ -180,8 +221,11 @@ export function projectStructuredSessionTab(
   ]
   // Why: the window can list the chat before main restores its row; keep the place it gave it.
   const listingGroupId = priorGroups.find((group) => group.tabOrder.includes(id))?.id
+  const { placement } = input
   const groupId =
     listingGroupId ??
+    priorGroups.find((group) => group.id === placement?.groupId)?.id ??
+    priorGroups.find((group) => group.tabOrder.includes(placement?.afterTabId ?? ''))?.id ??
     (priorGroups.some((group) => group.id === existing?.activeGroupId)
       ? existing!.activeGroupId!
       : priorGroups[0]!.id)
@@ -190,7 +234,9 @@ export function projectStructuredSessionTab(
       ? {
           ...group,
           activeTabId: input.activate ? id : group.activeTabId,
-          tabOrder: listingGroupId ? group.tabOrder : [...group.tabOrder, id]
+          tabOrder: listingGroupId
+            ? group.tabOrder
+            : placedTabOrder(group.tabOrder, tabs, id, placement)
         }
       : group
   )
@@ -212,4 +258,23 @@ export function projectStructuredSessionTab(
   if (input.notify !== false) {
     emit(stored)
   }
+}
+
+function placedTabOrder(
+  tabOrder: readonly string[],
+  tabs: RuntimeMobileSessionTabsSnapshot['tabs'],
+  id: string,
+  placement: StructuredSessionTabPublicationInput['placement']
+): string[] {
+  const after = placement?.afterTabId
+  if (after && tabOrder.includes(after)) {
+    return insertTabIdIntoOrder(tabOrder, tabs, id, false, after)
+  }
+  if (placement?.index !== undefined) {
+    const preceding = tabOrder[Math.max(0, Math.min(placement.index, tabOrder.length)) - 1]
+    return preceding
+      ? insertTabIdIntoOrder(tabOrder, tabs, id, false, preceding)
+      : partitionPinnedTabOrder([...tabOrder, id], tabs, id)
+  }
+  return [...tabOrder, id]
 }

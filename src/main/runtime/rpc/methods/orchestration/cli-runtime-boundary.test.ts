@@ -23,7 +23,7 @@ describe('orchestration CLI/runtime boundary', () => {
   let db: OrchestrationDb
   let ctx: RpcContext
 
-  afterEach(() => {
+  afterEach(async () => {
     h.cleanup()
     restoreTerminalHandle()
     vi.doUnmock('../../../../../cli/format')

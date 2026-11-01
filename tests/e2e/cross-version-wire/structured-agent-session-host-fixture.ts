@@ -1,6 +1,8 @@
-import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../src/shared/agent-session-conversation-view'
 import { vi, type Mock } from 'vitest'
+import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../../src/shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionRefusalError } from '../../../src/shared/agent-session/failures/agent-session-wire-refusals'
+import { agentSessionConversationView } from '../../../src/shared/agent-session-conversation-view'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
@@ -13,15 +15,15 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 
-// Use per-method spies so every skew can prove which call reached the host.
-export function structuredHostStub(
-  sessionId: string,
-  workspaceId: string
-): Record<string, ReturnType<typeof vi.fn>> & {
+type StructuredHostCalls = Record<string, ReturnType<typeof vi.fn>> & {
+  getRecord: Mock<(sessionId: string) => AgentSessionRecord | null>
   getSessionTabId: Mock<StructuredAgentSessionHost['getSessionTabId']>
   setSessionTabVisibility: Mock<StructuredAgentSessionHost['setSessionTabVisibility']>
   notifySessionTabHidden: Mock<StructuredAgentSessionHost['notifySessionTabHidden']>
-} {
+}
+
+// Use per-method spies so every skew can prove which call reached the host.
+export function structuredHostStub(sessionId: string, workspaceId: string): StructuredHostCalls {
   let tabId: string | null = `tab-${sessionId}`
   const tabs = {
     getSessionTabId: vi.fn<StructuredAgentSessionHost['getSessionTabId']>((id) =>
@@ -43,6 +45,9 @@ export function structuredHostStub(
   >
   return {
     ...tabs,
+    getRecord: vi.fn<(sessionId: string) => AgentSessionRecord | null>(() => null),
+    switchToTerminal: vi.fn<StructuredAgentSessionHost['switchToTerminal']>(async () => undefined),
+    switchToChat: vi.fn<StructuredAgentSessionHost['switchToChat']>(async () => ({ ok: true })),
     getConversation: vi.fn(() => {
       const record = agentSessionRecordFixture()
       return agentSessionConversationView({
@@ -155,9 +160,7 @@ export function structuredHostStub(
 }
 
 // Install the nested host shape, but assert against the flat spy map.
-export function installableHost(
-  hostCalls: ReturnType<typeof structuredHostStub>
-): StructuredAgentSessionHost {
+export function installableHost(hostCalls: StructuredHostCalls): StructuredAgentSessionHost {
   const logger: StructuredAgentSessionHost['deps']['logger'] = { warn: vi.fn(), error: vi.fn() }
   const host = {
     ...hostCalls,
@@ -167,7 +170,20 @@ export function installableHost(
       logger,
       modelCatalog: { read: hostCalls.modelCatalog, demand: vi.fn(async () => {}) },
       store: {
-        getRecord: () => null,
+        getRecord: hostCalls.getRecord,
+        selectWritableRecord: (sessionId: string) => {
+          const record: AgentSessionRecord | null = hostCalls.getRecord(sessionId)
+          return record ? { kind: 'writable' as const, record } : { kind: 'missing' as const }
+        },
+        requireWritableRecord: (sessionId: string) => {
+          const record: AgentSessionRecord | null = hostCalls.getRecord(sessionId)
+          if (!record) {
+            throw agentSessionRefusalError('agent_session_identity_required', {
+              reason: 'recordMissing'
+            })
+          }
+          return record
+        },
         getConversation: hostCalls.getConversation,
         getOperationRow: () => null
       }

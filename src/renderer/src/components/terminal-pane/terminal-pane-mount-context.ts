@@ -54,5 +54,5 @@ export type PaneCreatedHandlerContext = TerminalPaneManagerOptionsContext
 
 export type PaneClosedHandlerContext = TerminalPaneMountContext & {
   paneId: number
-  closedPane?: { leafId: string; reason?: 'close' | 'detach' | 'retire' }
+  closedPane?: { leafId: string; reason?: 'close' | 'detach' | 'retire' | 'remove' }
 }

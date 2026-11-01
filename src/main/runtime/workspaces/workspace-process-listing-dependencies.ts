@@ -70,9 +70,20 @@ export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeW
   protected abstract assertStructuredChatAcquireAdmissible(
     record: AgentSessionRecord
   ): Promise<void>
+  abstract captureSessionSwitchStop(
+    ...args: Parameters<OrcaRuntimeWithGetPtyRecordForPaneKey['captureSessionSwitchStop']>
+  ): ReturnType<OrcaRuntimeWithGetPtyRecordForPaneKey['captureSessionSwitchStop']>
   abstract onStructuredSessionTabHidden(
     ...args: Parameters<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionTabHidden']>
   ): ReturnType<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionTabHidden']>
+
+  /** The structured host's hooks for a hidden chat tab and a switch's stop. */
+  protected structuredSessionTabHooks() {
+    return {
+      captureSessionSwitchStop: (sessionId: string) => this.captureSessionSwitchStop(sessionId),
+      onSessionTabHidden: (sessionId: string) => this.onStructuredSessionTabHidden(sessionId)
+    }
+  }
 
   listRepos(): Repo[] {
     return this.store?.getRepos() ?? []

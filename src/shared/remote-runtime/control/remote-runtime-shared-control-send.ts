@@ -31,6 +31,17 @@ export function sendSharedControlSubscription(args: {
   if (args.subscription.closed || args.subscription.sent) {
     return
   }
+  try {
+    args.subscription.callbacks.beforeSend?.()
+  } catch {
+    finishSharedControlSubscription(
+      args.subscriptions,
+      args.subscription,
+      true,
+      remoteRuntimeUnavailableError()
+    )
+    return
+  }
   if (
     args.send({
       id: args.subscription.requestId,

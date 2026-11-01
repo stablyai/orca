@@ -1,3 +1,4 @@
+import type { PtyExitOptions } from './pty-exit-delivery'
 import {
   drainRolledBackPtyShutdownData,
   isPtyDataHandlerShutdownPending,
@@ -52,7 +53,7 @@ export function createIpcPtySessionHandlers({
       writeUnavailable: () => void
     }
   >()
-  const ownedExitHandlers = new Map<string, (code: number) => void>()
+  const ownedExitHandlers = new Map<string, (code: number, options?: PtyExitOptions) => void>()
 
   function clearAccumulatedState(): void {
     outputProcessor.clearAccumulatedState()
@@ -135,7 +136,7 @@ export function createIpcPtySessionHandlers({
 
   function registerExit(id: string, incarnationId?: string): boolean {
     const hadBufferedExit = hasPreHandlerPtyExit(id, incarnationId)
-    const exit = (code: number): void => {
+    const exit = (code: number, options?: PtyExitOptions): void => {
       const currentId = getPtyId()
       if (currentId !== null && currentId !== id) {
         unregisterAll(id)
@@ -145,9 +146,17 @@ export function createIpcPtySessionHandlers({
       markExited()
       unregisterAll(id)
       const callbacks = getCallbacks()
-      callbacks.onExit?.(code)
+      if (options) {
+        callbacks.onExit?.(code, options)
+      } else {
+        callbacks.onExit?.(code)
+      }
       callbacks.onDisconnect?.()
-      onPtyExit?.(id, code)
+      if (options) {
+        onPtyExit?.(id, code, options)
+      } else {
+        onPtyExit?.(id, code)
+      }
     }
     ptyExitHandlers.set(id, exit)
     ownedExitHandlers.set(id, exit)

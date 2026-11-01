@@ -3,6 +3,7 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
+import type { PtyExitOptions } from '@/components/terminal-pane/pty-exit-delivery'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 
@@ -18,7 +19,7 @@ export type LaunchAgentBackgroundSessionArgs = {
   launchSource?: LaunchSource
   title?: string
   onData?: (chunk: string) => void
-  onExit?: (ptyId: string, code: number) => void
+  onExit?: (ptyId: string, code: number, options?: PtyExitOptions) => void
   onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
 }
 

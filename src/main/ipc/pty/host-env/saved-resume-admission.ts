@@ -1,3 +1,4 @@
+import type { ResumeSpawnAdmission, ResumeSpawnRefusal } from './types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   normalizeAgentProviderSession,
@@ -23,6 +24,8 @@ import {
   terminalConversationKey
 } from '../../../native-chat/structured-conversation-key'
 
+export type { ResumeSpawnAdmission, ResumeSpawnRefusal } from './types'
+
 export type ResumeSpawnArgs = {
   connectionId?: string | null
   command?: string
@@ -30,7 +33,7 @@ export type ResumeSpawnArgs = {
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: unknown
   resumeProviderSession?: AgentProviderSessionMetadata
-  /** `saved`: the resume was built from a pane's saved facts, not asked for by the user. */
+  /** Saved pane restore or explicit same-id switch from a native chat. */
   resumeOrigin?: unknown
   env?: Record<string, string>
 }
@@ -44,18 +47,6 @@ type AdmissionRuntime = {
   openAgentSessionRecordStore(): Promise<AgentSessionRecordStore>
 }
 
-/** `chat-home`: an automatic restore of a conversation an open chat continues; `chat-writing`:
- *  any start of one a chat may be writing; `unverifiable`: an automatic restore with no records. */
-export type ResumeSpawnRefusal = {
-  sourceRecord?: SleepingAgentSessionRecord
-  verdict: 'chat-home' | 'chat-writing' | 'unverifiable'
-  refused: RefusedPaneResume
-}
-
-export type ResumeSpawnAdmission =
-  | { verdict: 'admitted'; refused: RefusedPaneResume; sourceRecord?: SleepingAgentSessionRecord }
-  | ResumeSpawnRefusal
-
 /** Saved-home policy only; ordinary terminal starts remain hook-observed. */
 export async function admitResumeSpawn(
   runtime: AdmissionRuntime | undefined,
@@ -66,7 +57,7 @@ export async function admitResumeSpawn(
   const agent = args.launchAgent
   // Native chats run only natively, so a remote or WSL conversation is never a chat's.
   if (
-    args.resumeOrigin !== 'saved' ||
+    (args.resumeOrigin !== 'saved' && args.resumeOrigin !== 'switch') ||
     !providerSession ||
     !agent ||
     args.connectionId ||
@@ -77,7 +68,7 @@ export async function admitResumeSpawn(
   if (!runtime) {
     return { verdict: 'unverifiable', refused: { agent, providerSession } }
   }
-  return judgeResumes(runtime, [{ agent, providerSession }])
+  return judgeResumes(runtime, [{ agent, providerSession }], args.resumeOrigin === 'switch')
 }
 
 /** A reattach that found its session gone returns a fresh shell its window then resumes from the
@@ -117,16 +108,13 @@ export async function admitColdRestoreReattach(
 
 async function judgeResumes(
   runtime: AdmissionRuntime,
-  resumes: readonly [RefusedPaneResume, ...RefusedPaneResume[]]
+  resumes: readonly [RefusedPaneResume, ...RefusedPaneResume[]],
+  switchStart = false
 ): Promise<ResumeSpawnAdmission> {
   const keysOf = ({ agent, providerSession }: RefusedPaneResume) =>
     [providerSession.id, providerSession.transcriptPath].flatMap((id) =>
       id?.trim() ? [terminalConversationKey(agent, id)] : []
     )
-  const admitted = (): ResumeSpawnAdmission => ({
-    verdict: 'admitted',
-    refused: resumes[0]
-  })
   let store: AgentSessionRecordStore
   try {
     store = await runtime.openAgentSessionRecordStore()
@@ -145,8 +133,17 @@ async function judgeResumes(
     const holders = heads.filter((holding) =>
       keysOf(refused).some((key) => keysMayMatch(holding.key, key))
     )
-    if (holders.some((holding) => agentSessionLeasePossiblyWriting(holding.ownerObservation))) {
+    if (
+      holders.some((holding) =>
+        agentSessionLeasePossiblyWriting(
+          store.getRecord(holding.sessionId)?.lease ?? holding.ownerObservation
+        )
+      )
+    ) {
       return { verdict: 'chat-writing', refused }
+    }
+    if (switchStart) {
+      continue
     }
     if (holders.length > 0 && (!tabs || !tabs.present)) {
       return { verdict: 'unverifiable', refused }
@@ -155,7 +152,7 @@ async function judgeResumes(
       return { verdict: 'chat-home', refused }
     }
   }
-  return admitted()
+  return { verdict: 'admitted', refused: resumes[0] }
 }
 
 /** A refused resume becomes the pane's plain shell: nothing of the agent launch is left to run,

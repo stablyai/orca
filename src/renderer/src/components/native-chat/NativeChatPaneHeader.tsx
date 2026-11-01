@@ -26,6 +26,7 @@ export function NativeChatPaneHeader({
   nativeChat,
   focused,
   colorScheme,
+  topRightAction,
   handOff
 }: {
   tabId: string
@@ -34,6 +35,7 @@ export function NativeChatPaneHeader({
   nativeChat: NativeChatTabSession
   focused: boolean
   colorScheme: React.CSSProperties['colorScheme']
+  topRightAction?: React.ReactNode
   handOff?: NativeChatHeaderHandOff
 }): React.JSX.Element {
   const actions = useStructuredChatPaneActions(tabId, worktreeId, groupId)
@@ -54,7 +56,8 @@ export function NativeChatPaneHeader({
       style={HEADER_STYLE}
     >
       <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
-        {handOff && focused ? (
+        {topRightAction}
+        {handOff ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -62,6 +65,7 @@ export function NativeChatPaneHeader({
                 variant="pane-title"
                 size="icon-xs"
                 aria-label={handOffLabel}
+                style={{ visibility: focused ? 'visible' : 'hidden' }}
                 disabled={handOff.disabled}
                 onClick={(event) => {
                   event.stopPropagation()
@@ -158,7 +162,8 @@ export function nativeChatPaneHeader(
   >,
   worktreeId: string | null,
   colorScheme: React.CSSProperties['colorScheme'],
-  handOff?: NativeChatHandOff
+  handOff?: NativeChatHandOff,
+  topRightAction?: React.ReactNode
 ): React.JSX.Element | null {
   return view.isVisible && worktreeId && view.groupId && !view.contextMenuActions ? (
     <NativeChatPaneHeader
@@ -168,6 +173,7 @@ export function nativeChatPaneHeader(
       nativeChat={{ sessionId: view.sessionId, agent: view.agent }}
       focused={view.isFocusedGroup}
       colorScheme={colorScheme}
+      topRightAction={topRightAction}
       handOff={
         handOff?.available
           ? { open: handOff.open, disabled: handOff.preparing || handOff.dialog !== null }
@@ -175,4 +181,17 @@ export function nativeChatPaneHeader(
       }
     />
   ) : null
+}
+
+export function nativeChatPaneCaptureHandlers(
+  ...handlers: React.DOMAttributes<HTMLDivElement>[]
+): React.DOMAttributes<HTMLDivElement> {
+  return {
+    onPointerDownCapture: (event) => {
+      handlers.forEach((handler) => handler.onPointerDownCapture?.(event))
+    },
+    onKeyDownCapture: (event) => {
+      handlers.forEach((handler) => handler.onKeyDownCapture?.(event))
+    }
+  }
 }

@@ -64,7 +64,9 @@ function setStore(sleepingRecord: Record<string, unknown> | null, tabId = TAB_ID
     tabsByWorktree: { [WORKTREE_ID]: [{ id: tabId, ptyId: REMOTE_PTY_ID }] },
     ptyIdsByTabId: { [tabId]: [REMOTE_PTY_ID] },
     sleepingAgentSessionsByPaneKey: sleepingRecord ? { [paneKey]: sleepingRecord } : {},
-    runtimeStatusByEnvironmentId: new Map()
+    runtimeStatusByEnvironmentId: new Map(),
+    terminalLayoutsByTabId: {},
+    agentConversationsByPaneKey: {}
   }
 }
 

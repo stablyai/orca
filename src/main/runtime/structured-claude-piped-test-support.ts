@@ -191,6 +191,7 @@ export async function claudePipedFixture() {
     host,
     children,
     connections,
+    prompts,
     delivered,
     heldIdentity,
     heldSpawn,

@@ -84,7 +84,8 @@ export function moveLeaf(
 export function admitPane(
   hostId: ExecutionHostId,
   admission: TerminalPaneAdmission,
-  context: TerminalTopologyCommitContext
+  context: TerminalTopologyCommitContext,
+  check?: () => void
 ): () => DurableProfileStateMutation<TerminalPaneAdmissionOutcome> {
   return traced(
     'admit_pane',
@@ -92,6 +93,7 @@ export function admitPane(
     fencedIfLayoutOwner(
       () => partitionsFence([hostId], context.getSession, false),
       () => {
+        check?.()
         // A legacy reattach can land outside the partition that recorded the tab's close.
         if (
           admission.type === 'createTerminalTab' &&

@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
-  RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
+import type {
+  RuntimeMobileSessionSnapshotTab,
+  RuntimeMobileSessionAgentTab
+} from '../../../shared/runtime-mobile-session-tab-contracts'
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -359,10 +361,14 @@ describe('session runtime reentry', () => {
     await runtime.publishStructuredAgentSessionTab(input)
 
     expect(list).toHaveBeenCalledExactlyOnceWith('client')
+    // The projection gets what this write decided (no switch source here, so nothing gated it),
+    // not the request as sent.
     expect(project).toHaveBeenCalledExactlyOnceWith({
       ...input,
       tabId: 'structured-agent-session-session',
-      eligible: expect.any(Function)
+      eligible: expect.any(Function),
+      activate: false,
+      selectionDecided: false
     })
     expect(project.mock.calls[0]?.[0].eligible?.()).toBe(true)
   })

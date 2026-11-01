@@ -1,6 +1,6 @@
 import { adoptMaterializedRuntimePtySpawn } from './spawn-early'
 import { createRuntimePtySpawnState } from './spawn-state'
-import { localProvider } from '../provider/registry'
+import { getProviderForPty, localProvider } from '../provider/registry'
 import {
   getLocalAutomaticWorkStatus,
   localTerminalLimit,
@@ -9,6 +9,7 @@ import {
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+import { prepareAgentSessionOwner } from '../pane/agent-session-owner-preparation'
 import { spawnPtyFromRuntimeController } from './spawn'
 import {
   killPtyFromRuntimeController,
@@ -71,6 +72,10 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     probePtyLiveness: (ptyId) => probePtyLivenessFromRuntimeController(deps, ptyId),
     // Attach-only ingestion serves unmounted daemon sessions without creating/resizing; SSH uses leases and local PTYs already stream.
     attach: (ptyId) => attachPtyFromRuntimeController(deps, ptyId),
+    killFenced: (request) =>
+      getProviderForPty(request.id).killFenced?.(request) ??
+      Promise.resolve({ outcome: 'refused', reason: 'unsupported' }),
+    prepareAgentSessionOwner,
     kill: (ptyId) => killPtyFromRuntimeController(deps, ptyId),
     retireRejectedPty: (ptyId, stopConfirmed, incarnationId) =>
       retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed, incarnationId),

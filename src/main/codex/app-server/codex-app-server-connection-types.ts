@@ -5,6 +5,7 @@ export type CodexAppServerServerRequest = {
 }
 
 export type CodexAppServerConnectionHandlers = {
+  onPhysicalExit?: (exited: Promise<void>) => void
   onNotification?: (method: string, params: unknown) => void
   onServerRequest?: (request: CodexAppServerServerRequest) => void
   onUnhandledFrame?: (kind: string, payload: unknown) => void

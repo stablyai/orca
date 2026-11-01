@@ -12,6 +12,10 @@ vi.mock('../ipc/worktree-change-invalidators', () => ({ runWorktreeChangeInvalid
 vi.mock('./renderer-document-navigation', () => ({ registerRendererDocumentNavigation: vi.fn() }))
 
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
+import {
+  TerminalNotPlacedError,
+  TerminalRevealUnconfirmedError
+} from '../runtime/session-tabs/terminal-not-placed-error'
 
 function attachWindow(id: number): {
   destroy: () => void
@@ -92,4 +96,22 @@ describe('runtime window terminal reveal', () => {
       vi.useRealTimers()
     }
   })
+
+  it.each([
+    ['before any tab held the terminal', undefined, TerminalNotPlacedError],
+    ['after a tab held it', 'tab-1', TerminalRevealUnconfirmedError]
+  ])(
+    'answers a window that failed %s as placed nowhere, or maybe placed',
+    async (_name, tabId, kind) => {
+      const window = attachWindow(3)
+      const reveal = window.notifier.revealTerminalSession?.('wt-1', { ptyId: 'pty-3' })
+      const [, payload] = window.send.mock.calls[0]
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: window.webContents },
+        { requestId: payload.requestId, error: 'boom', ...(tabId ? { tabId } : {}) }
+      )
+      await expect(reveal).rejects.toBeInstanceOf(kind)
+    }
+  )
 })

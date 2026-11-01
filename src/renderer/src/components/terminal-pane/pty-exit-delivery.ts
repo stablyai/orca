@@ -1,9 +1,17 @@
+import type { StoppedSwitchSourceFact } from '../../../../shared/stopped-switch-source'
 import {
   bufferPreHandlerPtyExit,
   clearPreHandlerPtyState,
   consumePreHandlerPtyState,
   discardPreHandlerPtyState
 } from './pty-pre-handler-buffer'
+
+export type PtyExitOptions = {
+  preserveRendererBinding?: boolean | 'closing'
+  /** Main's fact that a switch stopped this paired pane's process; its frame keeps the binding. */
+  stoppedSwitchSource?: StoppedSwitchSourceFact
+}
+export type PtyExitDeliveryContext = { hadPrimary: boolean; exitOptions?: PtyExitOptions }
 
 type PtyExitDelivery = {
   ptyId: string
@@ -12,8 +20,9 @@ type PtyExitDelivery = {
   incarnationId?: string
   /** Main stopped this PTY so a new process could take its pane. */
   replacedByRestart?: boolean
-  primary?: (code: number) => void
-  sidecars: readonly ((code: number, context: { hadPrimary: boolean }) => void)[]
+  preserveRendererBinding?: PtyExitOptions['preserveRendererBinding']
+  primary?: (code: number, options?: PtyExitOptions) => void
+  sidecars: readonly ((code: number, context: PtyExitDeliveryContext) => void)[]
 }
 
 // Scope labels to synchronous delivery so no stale record can misclassify a later same-ID exit.
@@ -39,13 +48,21 @@ export function deliverPtyExitToHandlers(delivery: PtyExitDelivery): void {
 }
 
 function deliverClassifiedPtyExit(delivery: PtyExitDelivery): void {
+  // The parked observer resolves genuine authority onto the same buffered event before handoff.
+  const exitOptions: PtyExitOptions = delivery.preserveRendererBinding
+    ? { preserveRendererBinding: delivery.preserveRendererBinding }
+    : {}
   let firstError: unknown
   let hasError = false
   try {
     if (delivery.primary) {
       clearPreHandlerPtyState(delivery.ptyId)
       try {
-        delivery.primary(delivery.code)
+        if (exitOptions.preserveRendererBinding) {
+          delivery.primary(delivery.code, exitOptions)
+        } else {
+          delivery.primary(delivery.code)
+        }
       } finally {
         // Exit ownership is final despite cleanup throws; duplicates cannot become pre-handler state for a later mount.
         consumePreHandlerPtyState(delivery.ptyId)
@@ -54,7 +71,7 @@ function deliverClassifiedPtyExit(delivery: PtyExitDelivery): void {
       // Discard restart exits and old bindings so mid-restart mounts attach by pane to the replacement, not the dead PTY.
       discardPreHandlerPtyState(delivery.ptyId)
     } else {
-      bufferPreHandlerPtyExit(delivery.ptyId, delivery.code, delivery.incarnationId)
+      bufferPreHandlerPtyExit(delivery.ptyId, delivery.code, delivery.incarnationId, exitOptions)
     }
   } catch (error) {
     firstError = error
@@ -63,7 +80,7 @@ function deliverClassifiedPtyExit(delivery: PtyExitDelivery): void {
 
   for (const sidecar of delivery.sidecars) {
     try {
-      sidecar(delivery.code, { hadPrimary: delivery.primary !== undefined })
+      sidecar(delivery.code, { hadPrimary: delivery.primary !== undefined, exitOptions })
     } catch (error) {
       if (!hasError) {
         firstError = error

@@ -1,4 +1,54 @@
 export const CROSS_LOCALE_KEY_OVERRIDES = {
+  'components.native-chat.resumeInNewChat.exitUnconfirmedFromTerminal': {
+    de: 'Orca konnte nicht bestätigen, dass {{agent}} in diesem Terminal beendet wurde. Beende {{agent}} hier und versuche diese Aktion erneut.',
+    es: 'Orca no pudo confirmar que {{agent}} se detuvo en esta terminal. Sal de {{agent}} aquí y vuelve a intentar esta acción.',
+    fr: 'Orca n’a pas pu confirmer l’arrêt de {{agent}} dans ce terminal. Quittez {{agent}} ici, puis réessayez cette action.',
+    ja: 'Orca は、このターミナルで {{agent}} が停止したことを確認できませんでした。ここで {{agent}} を終了してから、この操作をもう一度試してください。',
+    ko: 'Orca가 이 터미널에서 {{agent}}이(가) 중지되었는지 확인할 수 없습니다. 여기서 {{agent}}을(를) 종료한 다음 이 작업을 다시 시도하세요.',
+    pt: 'O Orca não pôde confirmar que {{agent}} parou neste terminal. Encerre {{agent}} aqui e tente esta ação novamente.',
+    ru: 'Orca не удалось подтвердить, что {{agent}} остановлен в этом терминале. Завершите {{agent}} здесь и повторите это действие.',
+    tr: 'Orca, {{agent}} uygulamasının bu terminalde durduğunu doğrulayamadı. Burada {{agent}} uygulamasından çıkın ve bu işlemi yeniden deneyin.',
+    zh: 'Orca 无法确认 {{agent}} 已在此终端中停止。请在此处退出 {{agent}}，然后重试此操作。',
+    'zh-Hant':
+      'Orca 無法確認 {{agent}} 已在此終端機中停止。請在此處結束 {{agent}}，然後重試此操作。'
+  },
+  'components.native-chat.resumeInNewChat.exitUnconfirmed': {
+    de: 'Orca konnte nicht bestätigen, dass {{agent}} beendet wurde. Beende {{agent}} in seinem Terminal und versuche diese Aktion erneut.',
+    es: 'Orca no pudo confirmar que {{agent}} se detuvo. Sal de {{agent}} en su terminal y vuelve a intentar esta acción.',
+    fr: 'Orca n’a pas pu confirmer l’arrêt de {{agent}}. Quittez {{agent}} dans son terminal, puis réessayez cette action.',
+    ja: 'Orca は {{agent}} が停止したことを確認できませんでした。{{agent}} を実行中のターミナルで終了してから、この操作をもう一度試してください。',
+    ko: 'Orca가 {{agent}}이(가) 중지되었는지 확인할 수 없습니다. 해당 터미널에서 {{agent}}을(를) 종료한 다음 이 작업을 다시 시도하세요.',
+    pt: 'O Orca não pôde confirmar que {{agent}} parou. Encerre {{agent}} no terminal em que está sendo executado e tente esta ação novamente.',
+    ru: 'Orca не удалось подтвердить, что {{agent}} остановлен. Завершите {{agent}} в его терминале и повторите это действие.',
+    tr: 'Orca, {{agent}} uygulamasının durduğunu doğrulayamadı. {{agent}} uygulamasından çalıştığı terminalde çıkın ve bu işlemi yeniden deneyin.',
+    zh: 'Orca 无法确认 {{agent}} 已停止。请在其所在的终端中退出 {{agent}}，然后重试此操作。',
+    'zh-Hant':
+      'Orca 無法確認 {{agent}} 已停止。請在其所在的終端機中結束 {{agent}}，然後重試此操作。'
+  },
+  'components.tab.bar.SortableTabContextMenu.showAsTerminal': {
+    de: 'Als Terminal anzeigen',
+    es: 'Mostrar como terminal',
+    fr: 'Afficher en terminal',
+    ja: 'ターミナルとして表示',
+    ko: '터미널로 표시',
+    pt: 'Mostrar como terminal',
+    ru: 'Показать как терминал',
+    tr: 'Terminal olarak göster',
+    zh: '以终端显示',
+    'zh-Hant': '以終端機顯示'
+  },
+  'components.tab.bar.SortableTabContextMenu.switchToTerminalView': {
+    de: 'Mit Terminal-Agenten fortfahren',
+    es: 'Continuar con el agente de terminal',
+    fr: 'Continuer avec l’agent de terminal',
+    ja: 'ターミナル Agent で続ける',
+    ko: '터미널 에이전트로 계속하기',
+    pt: 'Continuar com o agente de terminal',
+    ru: 'Продолжить с агентом в терминале',
+    tr: 'Terminal ajanıyla devam et',
+    zh: '使用终端智能体继续',
+    'zh-Hant': '使用終端機代理程式繼續'
+  },
   // The live status describes ongoing reasoning; the composer option names the feature.
   'components.native-chat.status.thinking': {
     zh: '思考中',

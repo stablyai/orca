@@ -15,7 +15,7 @@ vi.mock('../../../shared/layout-owner-switch', () => ({
 vi.mock('../runtime/server-layout-frames', () => ({
   showServerLayoutFrames: hoisted.showServerLayoutFrames
 }))
-vi.mock('../runtime/workspace-layout-frame-sync', () => ({
+vi.mock('../runtime/workspace-layout-frame-startup', () => ({
   showStartupLayoutFrames: hoisted.showStartupLayoutFrames
 }))
 vi.mock('../runtime/sleeping-records-to-layout-owner', () => ({

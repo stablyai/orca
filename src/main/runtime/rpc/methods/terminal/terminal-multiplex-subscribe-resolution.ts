@@ -46,6 +46,12 @@ export function resolveMultiplexSubscribePty(
   state.detachStream(request.streamId, null)
   state.cancelPendingPtyWaits(request.streamId)
 
+  // A pane a switch stopped is gone for good: the definitive exit ends every client's recovery.
+  if (runtime.isStoppedSwitchSourceHandle(request.terminal)) {
+    state.sendStreamError(request.streamId, 'terminal_exited')
+    emit({ type: 'end', streamId: request.streamId })
+    return null
+  }
   let leaf: { ptyId: string | null } | null
   try {
     // Never bind stale handles to a pane's replacement PTY (#7718).

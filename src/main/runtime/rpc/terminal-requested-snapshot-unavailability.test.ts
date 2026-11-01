@@ -57,6 +57,7 @@ async function requestSnapshotReply(options: {
     getTerminalLaunchResult: () => undefined,
     registerRemoteTerminalViewSubscriber: () => () => {},
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+    isStoppedSwitchSourceHandle: () => false,
     requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),
     updateRemoteDesktopViewer: vi.fn().mockResolvedValue(true),
     unregisterRemoteDesktopViewer: vi.fn().mockResolvedValue(true),

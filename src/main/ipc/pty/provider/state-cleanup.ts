@@ -20,6 +20,7 @@ import {
   invalidatePendingPtyDrainPolicy,
   invalidatePendingPtyDrainPriority,
   lastInputAtByPty,
+  presentationHeldPtys,
   providerSnapshotRequiredPtys,
   ptySizes,
   rendererVisibilityKnownPtys,
@@ -57,6 +58,8 @@ export function clearProviderPtyState(
   }
   clearBackgroundedDeliverySyncForPty(id)
   providerSnapshotRequiredPtys.delete(id)
+  presentationHeldPtys.get(id)?.()
+  presentationHeldPtys.delete(id)
   // Reused IDs must not inherit ConPTY startup-query state.
   clearNativeWindowsConptyPty(id)
   const paneKey = ptyPaneKey.get(id)

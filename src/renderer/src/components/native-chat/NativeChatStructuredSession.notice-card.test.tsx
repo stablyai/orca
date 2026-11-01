@@ -2,6 +2,7 @@
 
 import type * as LaunchRegistry from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -64,14 +65,16 @@ afterEach(() => {
 
 function renderPane(): void {
   render(
-    <NativeChatStructuredSession
-      isVisible
-      isFocusedGroup
-      tabId="structured-notice-card-tab"
-      sessionId={SESSION_ID}
-      target={{ kind: 'local' }}
-      agent="codex"
-    />
+    <ConfirmationDialogProvider>
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-notice-card-tab"
+        sessionId={SESSION_ID}
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    </ConfirmationDialogProvider>
   )
 }
 

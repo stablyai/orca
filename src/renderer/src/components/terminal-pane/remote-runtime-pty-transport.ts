@@ -110,6 +110,7 @@ import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session
 import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/host-session-snapshot-authority'
 import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
 import { useAppStore } from '@/store'
+import type { StoppedSwitchSourceFact } from '../../../../shared/stopped-switch-source'
 import { recordWebAgentSessionHandoff } from '@/runtime/web-agent-session-handoff'
 import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-runtime-session-snapshot'
 import {
@@ -419,6 +420,12 @@ export function createRemoteRuntimePtyTransport(
       // Why: only the wall-clock deadline is evidence the window was spent; a UI latch from a fatal
       // resubscribe must not license reattaching a fenced same handle (#12683).
       autoRecoveryWindowSpent ||= recovery.autoRecoveryDeadlineExpired
+      // Why: the stopped-fact watch ends with the window (a switch settles well inside it); only a
+      // wait that owns its epoch stays to renew a spent window, so a parked pane costs no frame work.
+      if (publishedHandleWaitEpoch === null) {
+        stopWaitingForPublishedHandle?.()
+        stopWaitingForPublishedHandle = null
+      }
       // Why: cached pixels may remain, but no stream from the exhausted epoch may keep delivering or accepting terminal traffic.
       subscriptionGeneration += 1
       closeMultiplexedStream()
@@ -779,6 +786,16 @@ export function createRemoteRuntimePtyTransport(
     )
   }
 
+  function findStoppedSwitchSource(
+    snapshot: RuntimeMobileSessionTabsResult,
+    hostTabId: string,
+    targetHandle: string
+  ): StoppedSwitchSourceFact | undefined {
+    return getHostSessionTerminalSurfaces(snapshot, hostTabId, { matchRequestedLeaf: true }).find(
+      (tab) => tab.terminal === targetHandle
+    )?.stoppedSwitchSource
+  }
+
   function hasHostSessionTerminalSurface(
     snapshot: RuntimeMobileSessionTabsResult,
     hostTabId: string
@@ -980,7 +997,7 @@ export function createRemoteRuntimePtyTransport(
     previousHandle: string,
     replacementPolicy: HostHandleReplacementPolicy,
     recoveryEpoch: number
-  ): Promise<string | null | undefined> {
+  ): Promise<string | null | undefined | { stopped: StoppedSwitchSourceFact }> {
     if (!worktreeId) {
       return null
     }
@@ -1042,6 +1059,14 @@ export function createRemoteRuntimePtyTransport(
               await activateHostSessionSurface(hostTabId, worktree, 'automatic', requestRemainingMs)
         lastRequestError = null
         const nextHandle = findReadyHostSessionHandle(listed, hostTabId)
+        // A switch stopped this exact process and kept its pane: nothing to reattach or replace.
+        const stopped =
+          nextHandle === previousHandle
+            ? findStoppedSwitchSource(listed, hostTabId, previousHandle)
+            : undefined
+        if (stopped) {
+          return { stopped }
+        }
         if (nextHandle) {
           lastReadyHandle = nextHandle
         }
@@ -2296,6 +2321,12 @@ export function createRemoteRuntimePtyTransport(
     stopWatchingHostRebind = null
   }
 
+  // Why: an attempt of its own owns the retry now, but the frame wait stays armed through the whole
+  // recovery so main's stopped fact for this handle ends it the frame it arrives.
+  function releasePublishedHandleWaitEpoch(): void {
+    publishedHandleWaitEpoch = null
+  }
+
   function isCurrentRemoteTerminal(targetHandle: string, targetPtyId: string | null): boolean {
     return (
       !destroyed &&
@@ -2306,7 +2337,10 @@ export function createRemoteRuntimePtyTransport(
     )
   }
 
-  function retireRemoteTerminalId(exitCode?: number): void {
+  function retireRemoteTerminalId(
+    exitCode?: number,
+    stoppedSwitchSource?: StoppedSwitchSourceFact
+  ): void {
     discardPendingInput()
     recovery.cancel()
     resetRecoveryReplacementPolicy()
@@ -2324,7 +2358,9 @@ export function createRemoteRuntimePtyTransport(
     setAttachmentUnavailable()
     emitRecoveryState()
     if (stalePtyId) {
-      if (exitCode === undefined) {
+      if (stoppedSwitchSource) {
+        onPtyExit?.(stalePtyId, exitCode, { stoppedSwitchSource })
+      } else if (exitCode === undefined) {
         onPtyExit?.(stalePtyId)
       } else {
         onPtyExit?.(stalePtyId, exitCode)
@@ -2507,8 +2543,15 @@ export function createRemoteRuntimePtyTransport(
         if (!update.terminalHandle) {
           return
         }
+        // A switch stopped this exact process and kept its pane: nothing to reattach or replace.
+        if (update.terminalHandle === previousHandle && update.stoppedSwitchSource) {
+          retireRemoteTerminalId(undefined, update.stoppedSwitchSource)
+          return
+        }
         if (update.terminalHandle === previousHandle) {
           if (getCurrentMultiplexedStream(previousHandle)) {
+            // The host still publishes the handle a live stream holds: recovery needs no more frames.
+            clearPublishedHandleWait()
             return
           }
           if (!autoRecoveryWindowSpent) {
@@ -2522,9 +2565,13 @@ export function createRemoteRuntimePtyTransport(
             return
           }
           // After deadline, renewed surface publication permits one fenced-handle reattach per spent window, not one per snapshot.
+          if (publishedHandleWaitEpoch === null) {
+            // Only a listing wait that owns its epoch is licensed to renew; the fact watch is not.
+            return
+          }
           autoRecoveryWindowSpent = false
           const reattachEpoch = recovery.begin()
-          clearPublishedHandleWait()
+          releasePublishedHandleWaitEpoch()
           const reusedPtyId = remotePtyId
           void subscribeToHandle(reattachEpoch, true).catch((error) => {
             if (!recoverAfterSubscribeFailure(error, previousHandle, reusedPtyId)) {
@@ -2577,7 +2624,7 @@ export function createRemoteRuntimePtyTransport(
     }
     if (isRemoteTerminalGoneMessage(message)) {
       // Why: an explicit terminal-gone response is lifecycle evidence, unlike a replaceable stale handle seen during reconnect.
-      retireRemoteTerminalId()
+      retireGoneRemoteTerminal()
       return
     }
     if (message.includes('no_connected_pty')) {
@@ -2612,6 +2659,39 @@ export function createRemoteRuntimePtyTransport(
     discardPendingInput()
     emitRecoveryState()
     surfaceErrorMessage(message)
+  }
+
+  // Why: main answers a switch-stopped pane exited, possibly before this client applies the frame
+  // carrying the fact; main's listing names it for the exact handle, so the pane ends stopped.
+  function retireGoneRemoteTerminal(): void {
+    const goneHandle = handle
+    if (!goneHandle || !worktreeId || !tabId || !isWebTerminalSurfaceTabId(tabId)) {
+      retireRemoteTerminalId()
+      return
+    }
+    const hostTabId = toHostSessionTabId(tabId)
+    const worktree = toRuntimeWorktreeSelector(worktreeId)
+    const goneLifecycle = lifecycleEpoch
+    // Why: the refused stream's trailing end must not start a recovery of its own meanwhile.
+    subscriptionGeneration += 1
+    closeMultiplexedStream()
+    void listRemoteRuntimeSessionTabsAfterCurrentInFlight({
+      environmentId: currentRuntimeEnvironmentId,
+      worktreeId,
+      load: async () => ({
+        snapshot: await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+          worktree
+        })
+      })
+    })
+      .then(({ snapshot }) => findStoppedSwitchSource(snapshot, hostTabId, goneHandle))
+      // An unreadable listing proves no stop; the exit stands as main answered it.
+      .catch(() => undefined)
+      .then((stopped) => {
+        if (!destroyed && goneLifecycle === lifecycleEpoch && handle === goneHandle) {
+          retireRemoteTerminalId(undefined, stopped)
+        }
+      })
   }
 
   function recoverAfterSubscribeFailure(
@@ -2663,7 +2743,7 @@ export function createRemoteRuntimePtyTransport(
       }
       const retryResubscribe = (nextEpoch: number): void => {
         // Why: a retry is a fresh attempt, not a repeated stale send, so it takes over this epoch's snapshot wait.
-        clearPublishedHandleWait()
+        releasePublishedHandleWaitEpoch()
         scheduleResubscribeAfterTransportClose(
           handle ? getRecoveryReplacementPolicy(handle) : 'reuse',
           nextEpoch
@@ -2690,6 +2770,10 @@ export function createRemoteRuntimePtyTransport(
         recovery.schedule(recoveryEpoch, retryResubscribe)
         return
       }
+      if (typeof nextHandle === 'object' && nextHandle) {
+        retireRemoteTerminalId(undefined, nextHandle.stopped)
+        return
+      }
       if (!nextHandle) {
         // Retire attachment quietly on unpublished surface, preserving process-unknown tab state until authoritative snapshots settle it.
         retireRemoteTerminalId(-1)
@@ -2706,7 +2790,7 @@ export function createRemoteRuntimePtyTransport(
       if (nextHandle !== previousHandle) {
         rebindRemoteTerminalHandle(nextHandle)
       }
-      clearPublishedHandleWait()
+      releasePublishedHandleWaitEpoch()
       await subscribeToHandle(
         recoveryEpoch,
         nextHandle === previousHandle && effectivePolicy === 'prefer-replacement'
@@ -2844,7 +2928,7 @@ export function createRemoteRuntimePtyTransport(
         if (
           !retryScheduled &&
           recovery.isCurrent(recoveryEpoch) &&
-          !stopWaitingForPublishedHandle &&
+          publishedHandleWaitEpoch === null &&
           pendingHandle &&
           pendingHandle === handle &&
           !getCurrentMultiplexedStream(pendingHandle)
@@ -2867,6 +2951,10 @@ export function createRemoteRuntimePtyTransport(
       holdUnsentPendingInput()
       viewportBatcher.clear()
       clearPendingViewportClaim()
+    }
+    if (!stopWaitingForPublishedHandle && tabId && isWebTerminalSurfaceTabId(tabId)) {
+      // Why: a frame naming this handle stopped must end the sleep, not wait out the backoff.
+      waitForPublishedHostSessionHandle(toHostSessionTabId(tabId), handle)
     }
     recovery.schedule(
       recoveryEpoch,

@@ -1,11 +1,18 @@
+import type { TerminalSurfaceCloseCapture } from '../../shared/terminal-tab-close'
 import type {
   RuntimeMobileSessionTabCloseResult,
+  RuntimeMobileSessionRetiredTerminalSurface,
   RuntimeSessionTabCloseReason
 } from '../../shared/runtime-types'
 import type { RuntimePtyTabCloseAuthority } from './runtime-terminal-state-records'
 import type { ClientSessionTabSelectionStore } from './client-session-tab-selection'
 
 export type MobileSessionTabCloseOptions = {
+  originalPresentation?: TerminalSurfaceCloseCapture
+  rendererOwnsPresentation?: boolean
+  retirementProofs?: RuntimeMobileSessionRetiredTerminalSurface[]
+  /** The pane's presentation is already gone (a replace's write or its own exit); retire only its bookkeeping. */
+  presentationRetired?: boolean
   reason?: RuntimeSessionTabCloseReason
   expectedPublicationEpoch?: string
   expectedTerminalHandle?: string
@@ -57,3 +64,9 @@ export function refusedMobileSessionTabClose(
     ...(options.snapshotRepublished ? { snapshotRepublished: true as const } : {})
   } as MobileSessionTabCloseOutcome
 }
+
+/** What retiring one terminal pane may carry: its captured presentation and proofs. */
+export type TerminalPaneRetirementOptions = Pick<
+  MobileSessionTabCloseOptions,
+  'originalPresentation' | 'rendererOwnsPresentation' | 'retirementProofs' | 'presentationRetired'
+>

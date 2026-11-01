@@ -193,6 +193,11 @@ const OpenAgentSessionTabCommand = z.object({
   afterTabId: z.string().min(1).optional(),
   index: z.number().int().nonnegative().optional(),
   createdAt: z.number().int().nonnegative().optional(),
+  /** Takes this tab's slot and closes it in the same write; optional, so older peers omit it. */
+  replaces: z
+    .object({ tabId: z.string().min(1) })
+    .strict()
+    .optional(),
   split: NewGroupSplit
 })
 

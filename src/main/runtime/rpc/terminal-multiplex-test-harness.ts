@@ -34,6 +34,7 @@ export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRu
     answerYieldedTerminalQueries: vi.fn(),
     // Default guarded handle lookup to live PTY for legacy harness stubs; null/stale cases override it (#7718).
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+    isStoppedSwitchSourceHandle: () => false,
     requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),
     updateRemoteDesktopViewer: vi.fn().mockResolvedValue(true),
     unregisterRemoteDesktopViewer: vi.fn().mockResolvedValue(true),

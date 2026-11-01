@@ -10,6 +10,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { connectPanePty } from './pty-connection'
 import { bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { releasePaneTransportForRestart } from './pane-restart-transport-handoff'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { clearPaneTerminalError } from './terminal-error-accumulation'
 import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
@@ -71,7 +72,11 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   )
 
   const handleRestartPane = useCallback(
-    (paneId: number, startup: PtyConnectionDeps['startup'], options: { focus: boolean }) => {
+    (
+      paneId: number,
+      startup: PtyConnectionDeps['startup'],
+      options: { focus: boolean; replacesPtyId?: string }
+    ) => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
       if (!manager || !pane) {
@@ -88,7 +93,11 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       panePtyBinding?.dispose()
       panePtyBindingsRef.current.delete(paneId)
       syncPanePtyLayoutBinding(paneId, null)
-      const replacesPtyId = releasePaneTransportForRestart(transport)
+      const replacesPtyId =
+        releasePaneTransportForRestart(transport) ??
+        (options.replacesPtyId && !isRemoteRuntimePtyId(options.replacesPtyId)
+          ? options.replacesPtyId
+          : null)
       paneTransportsRef.current.delete(paneId)
       setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
       setTerminalError(null)
@@ -188,7 +197,8 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       clearPaneProcessExit(processExit.paneId)
       // Why no agent fallback: a null startup means a plain shell; account switches restart via their own path.
       handleRestartPane(processExit.paneId, resolveTerminalProcessExitRestartStartup(processExit), {
-        focus: true
+        focus: true,
+        ...(processExit.replacesPtyId ? { replacesPtyId: processExit.replacesPtyId } : {})
       })
     },
     [clearPaneProcessExit, handleRestartPane]

@@ -45,7 +45,12 @@ export function NativeChatTranscriptItems({
             return (
               <Fragment key={item.key}>
                 <div aria-hidden style={{ height: Math.max(0, item.start - previousEnd) }} />
-                <div data-index={item.index} ref={window.measureRow} className="flow-root w-full">
+                <div
+                  data-switch-item-id={slot.kind === 'message' ? slot.message.id : undefined}
+                  data-index={item.index}
+                  ref={window.measureRow}
+                  className="flow-root w-full"
+                >
                   <NativeChatTranscriptRow
                     slot={slot}
                     context={context}

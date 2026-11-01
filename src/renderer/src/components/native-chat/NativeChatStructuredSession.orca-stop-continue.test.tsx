@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import type * as LaunchRegistry from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { useImperativeHandle } from 'react'
@@ -136,15 +137,17 @@ it('offers one Continue, in the card that says Orca stopped, and the card does n
   mocks.journalItems = cutChat
   render(
     <TooltipProvider>
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="orca-stop-tab"
-        sessionId="orca-stop-session"
-        // A paired server with no name to show.
-        target={{ kind: 'environment', environmentId: 'env-unnamed' }}
-        agent="codex"
-      />
+      <ConfirmationDialogProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="orca-stop-tab"
+          sessionId="orca-stop-session"
+          // A paired server with no name to show.
+          target={{ kind: 'environment', environmentId: 'env-unnamed' }}
+          agent="codex"
+        />
+      </ConfirmationDialogProvider>
     </TooltipProvider>
   )
 

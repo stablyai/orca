@@ -85,6 +85,7 @@ export function createTabsCloseActions(
             worktreeId,
             sessionId: tab.entityId,
             provisional,
+            replaced: opts?.replaced === true,
             layoutOwner: state,
             // Switch point: main's frames draw this machine's chats, so main opens it again.
             ...(ORCA_LAYOUT_OWNER_IS_MAIN &&
@@ -120,12 +121,9 @@ export function createTabsCloseActions(
       const closeHere = (): void =>
         settleAttentionRemovedBy(set, get, () =>
           set((current) => {
-            const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter((item) => {
-              if (item.id === tabId) {
-                retireRemovedNativeChatDraftPositions([item], [])
-              }
-              return item.id !== tabId
-            })
+            const tabs = current.unifiedTabsByWorktree[worktreeId] ?? []
+            const nextTabs = tabs.filter((item) => item.id !== tabId)
+            retireRemovedNativeChatDraftPositions(tabs, nextTabs)
             // Bulk closes bypass terminals.closeTab, so clear entity-keyed unread markers here too.
             const nextUnreadTerminalTabs = terminalEntityId
               ? omitRecordKeys(current.unreadTerminalTabs, [terminalEntityId])

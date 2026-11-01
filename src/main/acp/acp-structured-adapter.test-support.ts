@@ -62,6 +62,7 @@ export type AcpAdapterRig = {
   acquire(options?: {
     fence?: number
     onSpawned?: () => Promise<void>
+    onPhysicalExit?: (exited: Promise<void>) => void
     signal?: AbortSignal
     waitForStart?: boolean
     options?: Readonly<Record<string, string>>
@@ -201,6 +202,7 @@ export async function openAcpAdapterRig(
         fence: acquireOptions.fence ?? 1,
         spawnToken: 'spawn-1',
         events: rig.eventSink,
+        onPhysicalExit: acquireOptions.onPhysicalExit,
         ...(acquireOptions.options ? { options: acquireOptions.options } : {}),
         ...(acquireOptions.signal ? { signal: acquireOptions.signal } : {}),
         ...(acquireOptions.permissionMode ? { permissionMode: acquireOptions.permissionMode } : {}),

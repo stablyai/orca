@@ -2,8 +2,7 @@ import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
 import {
   adjudicateAbsentMobileSessionTabClose,
-  resolveMobileSessionLifecycleCloseContext,
-  type MobileSessionLifecycleCloseHost
+  resolveMobileSessionLifecycleCloseContext
 } from '../../mobile-session-lifecycle-close-adjudication'
 import {
   committedMobileSessionTabClose,
@@ -19,27 +18,8 @@ import { retireHeadlessMobileSessionEditorTab } from '../../mobile-session-edito
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { closeMobileStructuredSessionPresentation } from '../../session-tabs/structured-session-tab-presentation'
-import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
 
 export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithCloseMobileRowInMainLayout {
-  abstract retireStructuredAgentSessionTabFromSnapshot(
-    sessionId: string,
-    expectedTabId?: string,
-    expectedWorktreeId?: string
-  ): boolean
-
-  abstract currentLocalStructuredSessionPresentation(
-    ...args: Parameters<ChatPresentation['currentLocalStructuredSessionPresentation']>
-  ): ReturnType<ChatPresentation['currentLocalStructuredSessionPresentation']>
-
-  abstract captureStructuredAgentSessionPresentation(
-    ...args: Parameters<ChatPresentation['captureStructuredAgentSessionPresentation']>
-  ): ReturnType<ChatPresentation['captureStructuredAgentSessionPresentation']>
-
-  abstract removeCapturedStructuredSessionSavedTabs(
-    ...args: Parameters<ChatPresentation['removeCapturedStructuredSessionSavedTabs']>
-  ): ReturnType<ChatPresentation['removeCapturedStructuredSessionSavedTabs']>
-
   declare browserTabClose: RuntimeEdgeCommandSurface['browserTabClose']
 
   async closeMobileSessionTab(
@@ -51,6 +31,26 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
+    if (options.originalPresentation) {
+      const source = options.originalPresentation.identity
+      if (
+        source.worktreeId !== worktreeId ||
+        source.tabId !== tabId ||
+        !options.localPtyTeardownOwnedExternally
+      ) {
+        throw new Error('terminal_pane_owner_changed')
+      }
+      const closedTab = await this.closeTerminalPane(
+        worktreeId,
+        { kind: 'pane', tabId, leafId: source.leafId },
+        options
+      )
+      return committedMobileSessionTabClose(
+        this.clientSessionTabSelections,
+        worktreeId,
+        closedTab ? [tabId] : []
+      )
+    }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const observedPtyIds = await this.refreshMobileSessionPtyRecords()
     if (graphEpoch !== null) {
@@ -306,15 +306,5 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       await this.notifier.closeSessionTab(tab.id, worktreeId)
     }
     return finishCommittedClose()
-  }
-
-  protected getMobileSessionLifecycleCloseHost(): MobileSessionLifecycleCloseHost {
-    return {
-      tabs: this.tabs,
-      leaves: this.leaves,
-      ptysById: this.ptysById,
-      findPtyForMobileTerminalTab: this.findPtyForMobileTerminalTab.bind(this),
-      republishSnapshot: (worktreeId) => this.republishMobileSessionTabsSnapshot(worktreeId)
-    }
   }
 }

@@ -1,3 +1,4 @@
+import { useInPlaceSwitchCapability } from '@/lib/in-place-switch-support'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -92,7 +93,11 @@ export function AiVaultVirtualRow({
   onJumpToWorktree: (worktreeId: string) => void
   onResume: (session: AiVaultSession, worktreeId: string) => void
   onContinueInNewSession: (session: AiVaultSession, worktreeId: string) => void
-  onResumeInNewChat: (session: AiVaultSession, worktreeId: string) => void
+  onResumeInNewChat: (
+    session: AiVaultSession,
+    worktreeId: string,
+    pane?: AiVaultOriginalPaneTarget | null
+  ) => void
   onResumeInNewCli: (session: AiVaultSession, worktreeId: string) => void
   onCopyResume: (session: AiVaultSession, worktreeId?: string | null) => void
   onCopyId: (session: AiVaultSession) => void
@@ -109,6 +114,10 @@ export function AiVaultVirtualRow({
   /** Set in `/resume`'s picker; see VaultSessionRow's `onPick`. */
   onPickSession?: (session: AiVaultSession) => void
 }): React.JSX.Element | null {
+  useInPlaceSwitchCapability(
+    row?.type === 'session' ? row.session.executionHostId : undefined,
+    row?.type === 'session' ? row.session.agent : undefined
+  )
   if (!row) {
     return null
   }
@@ -204,6 +213,7 @@ export function AiVaultVirtualRow({
         />
       ) : (
         <VaultSessionRow
+          originalPaneTarget={originalPaneTarget}
           session={row.session}
           searchHit={searchHit}
           sourceHostLabel={searchHitHostLabels?.get(row.session.executionHostId)}
@@ -251,7 +261,7 @@ export function AiVaultVirtualRow({
           }
           onResumeInNewChat={
             resumeInNewChatWorkspaceId
-              ? () => onResumeInNewChat(row.session, resumeInNewChatWorkspaceId)
+              ? () => onResumeInNewChat(row.session, resumeInNewChatWorkspaceId, originalPaneTarget)
               : undefined
           }
           onResumeInNewCli={

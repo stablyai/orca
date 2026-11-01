@@ -19312,8 +19312,18 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "ターミナル Agent で続ける",
-          "switchToChatView": "チャット UI で続ける",
+          "continueInChatView": "チャット UI で続ける",
+          "switchToChatView": "チャットとして表示",
+          "showAsTerminal": "ターミナルとして表示",
           "allowAutoClose": "自動終了を許可"
+        },
+        "switch": {
+          "toCli": "CLI に切り替える",
+          "toNativeChat": "チャット UI に切り替える",
+          "toCliTooltip": "CLI に切り替え: チャット UI で {{agent}} を停止し、ターミナルで同じ会話を続けます。",
+          "openedInWorkspace": "{{workspace}} でチャットを開きました。",
+          "toNativeChatTooltip": "チャット UI に切り替え: このタブのチャットで同じ会話を続けます。",
+          "noConversation": "このターミナルには、保存された会話がまだありません。"
         },
         "BrowserTab": {
           "closeOthers": "その他を閉じる",

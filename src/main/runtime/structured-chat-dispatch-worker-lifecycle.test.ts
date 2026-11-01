@@ -327,3 +327,5 @@ describe("a chat assignee's liveness, stop and close", () => {
     }
   })
 })
+
+// Stop ends the provider turn; the same chat/caller still owns its direct assignment.

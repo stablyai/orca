@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from '../../store/slices/tabs-slice-test-harness'
@@ -40,6 +41,8 @@ type CreateRequest = {
   requestId: string
   worktreeId: string
   targetGroupId?: string
+  afterTabId?: string
+  source?: 'runtime-session'
   presentation?: 'focused' | 'background'
 }
 
@@ -53,6 +56,7 @@ beforeEach(() => {
   replyTerminalCreate.mockClear()
   vi.stubGlobal('window', {
     ...globalThis.window,
+    dispatchEvent: vi.fn(() => true),
     api: {
       ...globalThis.window?.api,
       ui: {

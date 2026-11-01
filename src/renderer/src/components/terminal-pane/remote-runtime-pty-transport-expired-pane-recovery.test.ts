@@ -69,7 +69,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       }
     })
 
-    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-exited')
+    // The exit stands once main's listing names no switch stop for that handle.
+    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-exited'))
     expect(transport.getPtyId()).toBeNull()
     expect(transport.isConnected()).toBe(false)
     expect(transport.getRecoveryState?.().phase).toBe('ended')
