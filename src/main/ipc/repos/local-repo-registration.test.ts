@@ -2,8 +2,10 @@ import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { isNonGitRepoRejection } from '../../../shared/non-git-repo-rejection'
 import type { Repo } from '../../../shared/repo-types'
 import type { Store } from '../../persistence'
+import { describeWslUncAccessDenied } from '../../wsl/wsl-unc-access-denied'
 import { addLocalRepoFromPath } from './local-repo-registration'
 
 vi.mock('../../repo-icon-autodetect', () => ({
@@ -11,6 +13,9 @@ vi.mock('../../repo-icon-autodetect', () => ({
 }))
 vi.mock('../../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
+}))
+vi.mock('../../wsl/wsl-unc-access-denied', () => ({
+  describeWslUncAccessDenied: vi.fn().mockResolvedValue(null)
 }))
 
 const dirLinkType = process.platform === 'win32' ? 'junction' : 'dir'
@@ -20,9 +25,10 @@ function createStore(repos: Repo[]): Store {
     getRepos: () => repos,
     addRepo: (repo: Repo) => {
       repos.push(repo)
-    }
+    },
+    getSettings: () => ({})
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: addLocalRepoFromPath only calls getRepos/addRepo.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: addLocalRepoFromPath only calls getRepos/addRepo/getSettings.
   return store as unknown as Store
 }
 
@@ -62,5 +68,33 @@ describe('addLocalRepoFromPath through a symlink alias', () => {
     await addLocalRepoFromPath(store, join(root, 'b'), 'folder')
 
     expect(repos).toHaveLength(2)
+  })
+})
+
+describe('addLocalRepoFromPath rejecting a non-checkout', () => {
+  let root: string
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-local-add-non-git-'))
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('rejects a plain directory with the rejection clients match to offer a folder project', async () => {
+    const result = await addLocalRepoFromPath(createStore([]), root, 'git')
+
+    expect('error' in result && isNonGitRepoRejection(result.error)).toBe(true)
+  })
+
+  it('reports a denied WSL path without the non-checkout rejection', async () => {
+    const denied = `Windows denied access to this WSL path: ${root}`
+    vi.mocked(describeWslUncAccessDenied).mockResolvedValueOnce(denied)
+
+    const result = await addLocalRepoFromPath(createStore([]), root, 'git')
+
+    expect(result).toEqual({ error: denied })
+    expect(isNonGitRepoRejection(denied)).toBe(false)
   })
 })
