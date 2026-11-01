@@ -113,10 +113,10 @@ it('cancelled probes retain inFlight occupancy, release listeners immediately an
   expect(f.reply).toHaveBeenCalledOnce()
   expect(f.client.stateListeners()).toBe(0)
 })
-it('does not reset an explicitly spanning deadline during preparation', async () => {
+it('gives the check and the action one deadline without the page asking for it', async () => {
   vi.useFakeTimers()
   const f = hostRequests()
-  f.requests.open({ ...frame(), options: { timeoutMs: 100, budgetSpansConnect: true } })
+  f.requests.open({ ...frame(), options: { timeoutMs: 100 } })
   await vi.advanceTimersByTimeAsync(101)
   f.client.requests[0].resolve(rpcSuccess('probe', status))
   await flush()

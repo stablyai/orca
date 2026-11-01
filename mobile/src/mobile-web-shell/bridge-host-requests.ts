@@ -97,7 +97,8 @@ export class BridgeHostRequests {
     )
     record.retire = invocation.retire
     const options = { timeoutMs: 30_000, ...message.options }
-    const budget = openRpcRequestBudget(options)
+    // The check and the action share the page's one deadline, as on native; only the budget spans both legs.
+    const budget = openRpcRequestBudget({ ...options, budgetSpansConnect: true })
     const remaining = () => {
       if (budget.deadline === null) {
         return options.timeoutMs
