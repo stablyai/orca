@@ -5,7 +5,7 @@ import type { AutomationListRow } from './automation-list-row-identity'
 
 export type AutomationRunsDashboardRun = Pick<
   AutomationRun,
-  'id' | 'title' | 'scheduledFor' | 'status' | 'trigger'
+  'id' | 'title' | 'scheduledFor' | 'status' | 'trigger' | 'warnings'
 >
 
 export function projectAutomationRunsDashboardRun(run: AutomationRun): AutomationRunsDashboardRun {
@@ -14,7 +14,8 @@ export function projectAutomationRunsDashboardRun(run: AutomationRun): Automatio
     title: run.title,
     scheduledFor: run.scheduledFor,
     status: run.status,
-    trigger: run.trigger
+    trigger: run.trigger,
+    ...(run.warnings ? { warnings: run.warnings } : {})
   }
 }
 

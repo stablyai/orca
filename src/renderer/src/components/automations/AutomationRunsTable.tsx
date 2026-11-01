@@ -1,13 +1,11 @@
 import React, { useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronRight, Loader2 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { translate } from '@/i18n/i18n'
 import type { AutomationRunsDashboardEntry } from './automation-runs-dashboard-model'
 import {
   formatAutomationDateTimeWithRelative,
-  getAutomationRunStatusLabel,
-  getAutomationRunStatusVariant
+  AutomationRunStatusBadge
 } from './automation-page-parts'
 
 const RUN_ROW_HEIGHT_PX = 59
@@ -57,7 +55,7 @@ export function AutomationRunsTable({
           }
         }}
       >
-        <div className="sticky top-0 z-10 grid shrink-0 grid-cols-[minmax(11rem,1.4fr)_minmax(10rem,1fr)_minmax(5rem,.55fr)_minmax(8rem,.8fr)_minmax(7rem,auto)] gap-3 border-b border-border/60 bg-card px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <div className="sticky top-0 z-10 grid shrink-0 grid-cols-[minmax(11rem,1.4fr)_minmax(10rem,1fr)_minmax(5rem,.55fr)_minmax(8rem,.8fr)_10rem] gap-3 border-b border-border/60 bg-card px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           <div>
             {translate(
               'auto.components.automations.AutomationRunsDashboard.automation',
@@ -119,7 +117,7 @@ export function AutomationRunsTable({
                   <button
                     type="button"
                     data-testid="automation-runs-row"
-                    className="grid w-full grid-cols-[minmax(11rem,1.4fr)_minmax(10rem,1fr)_minmax(5rem,.55fr)_minmax(8rem,.8fr)_minmax(7rem,auto)] items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    className="grid w-full grid-cols-[minmax(11rem,1.4fr)_minmax(10rem,1fr)_minmax(5rem,.55fr)_minmax(8rem,.8fr)_10rem] items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     onClick={() => onOpenRun(entry)}
                   >
                     <div className="min-w-0">
@@ -142,9 +140,7 @@ export function AutomationRunsTable({
                         )}
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <Badge variant={getAutomationRunStatusVariant(entry.run.status)}>
-                        {getAutomationRunStatusLabel(entry.run.status)}
-                      </Badge>
+                      <AutomationRunStatusBadge run={entry.run} />
                       <ChevronRight className="size-3.5 text-muted-foreground" />
                     </div>
                   </button>
