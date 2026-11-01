@@ -5,7 +5,8 @@ import { claudeRecord, claudeText } from './structured/journal/claude-structured
 
 /** Frame-only publications: the open turn's activity, and the prompt Claude predicts after it. */
 export class ClaudeTransientPublications {
-  private suggesting = false
+  // A relaunch may inherit a suggestion the host still retains, so its first turn clears too.
+  private suggesting = true
 
   constructor(
     private readonly sink: Pick<

@@ -228,12 +228,6 @@ function NativePromptEditor({
     editor?.setEditable(!disabled, false)
   }, [disabled, editor])
 
-  // The placeholder is read through a ref; an empty transaction repaints it.
-  useLayoutEffect(() => {
-    const view = editor && mountedEditorView(editor)
-    view?.dispatch(view.state.tr.setMeta('preventUpdate', true))
-  }, [editor, placeholder])
-
   const input = useMemo<NativeChatComposerInput | null>(
     () =>
       editor
