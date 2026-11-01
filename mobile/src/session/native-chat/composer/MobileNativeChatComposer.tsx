@@ -11,7 +11,7 @@ import {
 } from './mobile-native-chat-draft-inputs'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Keyboard, Pressable, type TextInput, View } from 'react-native'
+import { Keyboard, type TextInput, View } from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -34,10 +34,7 @@ import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer
 import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
 import { MobileNativeChatControlSwap } from '../input/mobile-native-chat-control-swap'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
-import {
-  COMPOSER_CONTROL_HIT_SLOP,
-  composerInputStyles as inputStyles
-} from '../../../components/composer-input/composer-input-styles'
+import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatSendButton } from './MobileNativeChatSendButton'
 import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
