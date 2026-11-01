@@ -9241,6 +9241,10 @@
           "connectJiraDescription": "Add a Jira Cloud site or self-hosted instance with an API token or PAT.",
           "manageJira": "Manage keys",
           "addJira": "Add Jira access",
+          "jiraSkillTitle": "Install Jira agent skill",
+          "jiraSkillDescription": "Gives agents /orca-jira to read issues, post comments, move statuses, and create follow-up issues.",
+          "jiraSkillBlocked": "Connect Jira first, then install the skill for agents.",
+          "jiraSkillPanelTitle": "Jira skill",
           "githubDescription": "Browse GitHub issues and start workspaces from them.",
           "gitlabDescription": "Browse GitLab issues and start workspaces from them.",
           "linearDescription": "Connect Linear, install the agent skill, and show it in Tasks.",
@@ -10560,7 +10564,8 @@
             "card": {
               "statusConnected": "Connected",
               "statusNotConnected": "Not connected",
-              "jiraTokenName": "Your Jira API token"
+              "jiraTokenName": "Your Jira API token",
+              "skillDescription": "Let agents read and update Jira issues. Full guided setup (connect + skill + visibility) is under Settings → Task Sources."
             }
           }
         },
