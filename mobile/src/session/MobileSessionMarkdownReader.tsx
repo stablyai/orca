@@ -31,7 +31,7 @@ export function MarkdownReader({
   onCopy: () => void
   onCopyPath: () => void
   onDiscard: () => void
-  loadImageSource: (path: string) => Promise<string>
+  loadImageSource?: (path: string) => Promise<string>
   keyboardLift: number
 }) {
   useMobileColorScheme()

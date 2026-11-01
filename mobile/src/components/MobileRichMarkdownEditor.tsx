@@ -136,7 +136,8 @@ function MobileRichMarkdownEditorWebInner(
     receiveRef.current = handleMessage
   }, [handleMessage])
 
-  useEffect(() => {
+  // Layout effect: the loader must be current before the controller's passive effects render markdown.
+  useLayoutEffect(() => {
     loadImageSourceRef.current = loadImageSource
   }, [loadImageSource])
 
