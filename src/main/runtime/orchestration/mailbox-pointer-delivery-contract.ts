@@ -23,6 +23,8 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   /** Whether the terminal may take the pointer plus Enter now: at rest, or mid-turn (input queues). */
   isAgentSettledForDelivery: (ptyId: string) => boolean
   isPtyAwaitingUserInput: (ptyId: string) => boolean
+  /** The agent's unsent composer text; undefined when empty or unreadable. */
+  readComposerDraft: (ptyId: string) => Promise<string | undefined>
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
   resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null

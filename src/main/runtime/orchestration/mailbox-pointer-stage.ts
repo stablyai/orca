@@ -108,7 +108,8 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   }
 }
 
-function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWaiter>(
+/** After the pointer text is accepted: schedule its Enter, or hold it for the idle edge. */
+export function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWaiter>(
   args: StagePointerArgs<TWaiter>,
   ptyId: string,
   flight: OrchestrationMailboxDeliveryFlight,

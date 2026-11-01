@@ -360,13 +360,17 @@ describe('orchestration mailbox pointer submit', () => {
       lastAgentStatusObservedLive: true
     }
     const resumed = resumePendingOrchestrationMailboxPointer({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a cross-PTY batch reaches only these two deps.
       deps: {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resume calls only releaseMailboxPointerEnter here.
-        getDb: () => ({ releaseMailboxPointerEnter }) as never,
+        getDb: () => ({ releaseMailboxPointerEnter }),
         resolveSubmitTarget: () => ({ terminal: current, processIncarnation: 'inc-current' })
-      },
+      } as never,
+      state: new OrchestrationMailboxPointerState(),
       terminal: current,
-      messages
+      mailboxHandle: 'run:run-1',
+      messages,
+      settle: vi.fn(),
+      redrive: vi.fn()
     })
 
     expect(resumed).toBe(false)
@@ -487,10 +491,8 @@ describe('orchestration mailbox pointer submit', () => {
     expect(redrive).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['pointer acceptance', MAILBOX_POINTER_WRITE_ATTEMPTED],
-    ['Enter acceptance', MAILBOX_POINTER_ENTER_ATTEMPTED]
-  ])('fails closed after restart following %s before durable settlement', (_boundary, phase) => {
+  it('fails closed after restart following Enter acceptance before durable settlement', () => {
+    const phase = MAILBOX_POINTER_ENTER_ATTEMPTED
     const ptyId = 'pty-surviving'
     const terminal = {
       ptyId,
@@ -506,11 +508,16 @@ describe('orchestration mailbox pointer submit', () => {
     const settleMailboxPointerEnter = vi.fn()
     const releaseMailboxPointerEnter = vi.fn()
     const resumed = resumePendingOrchestrationMailboxPointer({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an attempted Enter reaches only these two deps.
       deps: {
-        getDb: () => ({ settleMailboxPointerEnter, releaseMailboxPointerEnter }) as never,
+        getDb: () => ({ settleMailboxPointerEnter, releaseMailboxPointerEnter }),
         resolveSubmitTarget: () => target
-      },
+      } as never,
+      state: new OrchestrationMailboxPointerState(),
       terminal,
+      mailboxHandle: 'run:run-surviving',
+      settle: vi.fn(),
+      redrive: vi.fn(),
       messages: [
         {
           id: 'msg-surviving',

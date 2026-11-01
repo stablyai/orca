@@ -93,7 +93,15 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     const pending = db.getPendingMailboxPointerMessages(mailboxHandle)
     if (
       pending.length > 0 &&
-      resumePendingOrchestrationMailboxPointer({ deps: this.deps, terminal, messages: pending })
+      resumePendingOrchestrationMailboxPointer({
+        deps: this.deps,
+        state: this.state,
+        terminal,
+        mailboxHandle,
+        messages: pending,
+        settle: (settledPtyId, flight) => this.settle(settledPtyId, flight),
+        redrive: (redriveMailbox, force) => this.redrive(redriveMailbox, force)
+      })
     ) {
       return
     }
