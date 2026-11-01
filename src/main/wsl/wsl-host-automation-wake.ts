@@ -4,9 +4,8 @@
  * schedules and keeps them across restarts; when the soonest run comes due with the host off, this
  * boots the distro once and orcad's startup catch-up fires the run. A due run is the user's own
  * standing request, so it is the one non-interactive wake. Nothing here boots a distro to check.
+ * A run due while this desktop last saw the host ready already ran there, so it never wakes it.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import type { Automation } from '../../shared/automations-types'
 import { nextAutomationOccurrenceAfter } from '../../shared/automation-schedule-occurrences'
 
@@ -22,6 +21,8 @@ export type WslHostAutomationDue = {
   wakeUntil: number
   /** Every enabled schedule, so the next due time survives a run handled while off. */
   schedules: WslHostAutomationSchedule[]
+  /** When this desktop last saw the host ready: a run due by then ran on the host, so it never wakes it. */
+  lastSeenReadyAt: number
 }
 
 export type WslHostAutomationWakeDeps = {
@@ -46,7 +47,8 @@ const GRACE_SLACK_MS = 2 * 60 * 1000
 
 /** The soonest enabled run and the schedules behind it, or null when nothing is scheduled. */
 export function earliestWslHostAutomationDue(
-  automations: readonly Automation[]
+  automations: readonly Automation[],
+  lastSeenReadyAt: number
 ): WslHostAutomationDue | null {
   const enabled = automations.filter(
     (automation) => automation.enabled && Number.isFinite(automation.nextRunAt)
@@ -63,7 +65,8 @@ export function earliestWslHostAutomationDue(
           rrule,
           dtstart,
           missedRunGraceMinutes
-        }))
+        })),
+        lastSeenReadyAt
       }
     : null
 }
@@ -71,7 +74,8 @@ export function earliestWslHostAutomationDue(
 /** The next due run strictly after `after`, from the learned schedules. */
 export function nextWslHostAutomationDue(
   schedules: readonly WslHostAutomationSchedule[],
-  after: number
+  after: number,
+  lastSeenReadyAt: number
 ): WslHostAutomationDue | null {
   let due: WslHostAutomationDue | null = null
   for (const schedule of schedules) {
@@ -85,7 +89,8 @@ export function nextWslHostAutomationDue(
       due = {
         nextRunAt,
         wakeUntil: graceEnd(nextRunAt, schedule.missedRunGraceMinutes),
-        schedules: [...schedules]
+        schedules: [...schedules],
+        lastSeenReadyAt
       }
     }
   }
@@ -121,9 +126,16 @@ export class WslHostAutomationWake {
 
   /** Called while the host is connected; a failed read keeps what was known. */
   async learn(environmentId: string): Promise<void> {
+    // Only a ready host is read, so it is seen ready now even when the read fails.
+    const readyAt = this.now()
+    const known = this.due[environmentId]
+    if (known) {
+      this.set(environmentId, { ...known, lastSeenReadyAt: readyAt })
+      this.persist()
+    }
     let next: WslHostAutomationDue | null
     try {
-      next = earliestWslHostAutomationDue(await this.deps.listAutomations(environmentId))
+      next = earliestWslHostAutomationDue(await this.deps.listAutomations(environmentId), readyAt)
     } catch {
       return
     }
@@ -173,14 +185,15 @@ export class WslHostAutomationWake {
       if (entry.nextRunAt > now) {
         continue
       }
+      const missed = missedRunAfterLastReady(entry, now)
       // Keep the following run whatever happens to this one; a connect re-learns the truth.
-      this.set(environmentId, nextWslHostAutomationDue(entry.schedules, now))
+      this.set(environmentId, nextWslHostAutomationDue(entry.schedules, now, entry.lastSeenReadyAt))
       if (await this.deps.isConnected(environmentId)) {
         // Its own scheduler ran it; read the real next run instead of the local estimate.
         await this.learn(environmentId)
         continue
       }
-      if (now > entry.wakeUntil) {
+      if (!missed || now > missed.wakeUntil) {
         continue
       }
       await this.deps.wake(environmentId).catch((error: unknown) => {
@@ -192,65 +205,18 @@ export class WslHostAutomationWake {
   }
 }
 
-const FILE_NAME = 'wsl-host-automation-wakes.json'
-
-export function readWslHostAutomationWakes(
-  userDataPath: string
-): Record<string, WslHostAutomationDue> {
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(join(userDataPath, FILE_NAME), 'utf8'))
-    const due: Record<string, WslHostAutomationDue> = {}
-    if (parsed && typeof parsed === 'object') {
-      for (const [environmentId, value] of Object.entries(parsed)) {
-        const entry = parseDue(value)
-        if (entry) {
-          due[environmentId] = entry
-        }
-      }
-    }
-    return due
-  } catch {
-    return {}
+/** The run that came due after the host was last seen ready, if one has by `now`: only it was missed. */
+function missedRunAfterLastReady(
+  entry: WslHostAutomationDue,
+  now: number
+): WslHostAutomationDue | null {
+  if (entry.nextRunAt > entry.lastSeenReadyAt) {
+    return entry
   }
-}
-
-function parseDue(value: unknown): WslHostAutomationDue | null {
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    !('nextRunAt' in value) ||
-    !('wakeUntil' in value) ||
-    !('schedules' in value) ||
-    typeof value.nextRunAt !== 'number' ||
-    typeof value.wakeUntil !== 'number' ||
-    !Array.isArray(value.schedules)
-  ) {
-    return null
-  }
-  const schedules = value.schedules.flatMap((schedule: unknown): WslHostAutomationSchedule[] =>
-    schedule &&
-    typeof schedule === 'object' &&
-    'rrule' in schedule &&
-    'dtstart' in schedule &&
-    'missedRunGraceMinutes' in schedule &&
-    typeof schedule.rrule === 'string' &&
-    typeof schedule.dtstart === 'number' &&
-    typeof schedule.missedRunGraceMinutes === 'number'
-      ? [
-          {
-            rrule: schedule.rrule,
-            dtstart: schedule.dtstart,
-            missedRunGraceMinutes: schedule.missedRunGraceMinutes
-          }
-        ]
-      : []
+  const later = nextWslHostAutomationDue(
+    entry.schedules,
+    entry.lastSeenReadyAt,
+    entry.lastSeenReadyAt
   )
-  return { nextRunAt: value.nextRunAt, wakeUntil: value.wakeUntil, schedules }
-}
-
-export function writeWslHostAutomationWakes(
-  userDataPath: string,
-  due: Record<string, WslHostAutomationDue>
-): void {
-  writeFileSync(join(userDataPath, FILE_NAME), JSON.stringify(due))
+  return later && later.nextRunAt <= now ? later : null
 }

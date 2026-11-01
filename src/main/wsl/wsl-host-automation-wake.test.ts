@@ -4,12 +4,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../shared/automations-types'
 import { nextAutomationOccurrenceAfter } from '../../shared/automation-schedule-occurrences'
+import { WslHostAutomationWake, type WslHostAutomationDue } from './wsl-host-automation-wake'
 import {
   readWslHostAutomationWakes,
-  WslHostAutomationWake,
-  writeWslHostAutomationWakes,
-  type WslHostAutomationDue
-} from './wsl-host-automation-wake'
+  writeWslHostAutomationWakes
+} from './wsl-host-automation-wake-store'
 
 const HOUR = 60 * 60 * 1000
 const HOURLY = '0 * * * *'
@@ -80,11 +79,19 @@ function harness(options: { due?: Record<string, WslHostAutomationDue>; connecte
   }
 }
 
-function due(nextRunAt: number, graceHours = 12): WslHostAutomationDue {
+const MINUTE = 60 * 1000
+
+/** By default the host was last seen ready an hour before the run, so the run was missed. */
+function due(
+  nextRunAt: number,
+  graceHours = 12,
+  lastSeenReadyAt = nextRunAt - HOUR
+): WslHostAutomationDue {
   return {
     nextRunAt,
     wakeUntil: nextRunAt + graceHours * HOUR,
-    schedules: [{ rrule: HOURLY, dtstart: 0, missedRunGraceMinutes: graceHours * 60 }]
+    schedules: [{ rrule: HOURLY, dtstart: 0, missedRunGraceMinutes: graceHours * 60 }],
+    lastSeenReadyAt
   }
 }
 
@@ -133,6 +140,27 @@ describe('WslHostAutomationWake', () => {
     expect(h.wake).toHaveBeenCalledExactlyOnceWith('wsl:ubuntu')
   })
 
+  it('does not boot the host at launch for a run that came due while it was last ready', async () => {
+    // The host was ready at 9:50, after the 9 h run: orcad ran it then.
+    const h = harness({ due: { 'wsl:ubuntu': due(9 * HOUR, 12, 9 * HOUR + 50 * MINUTE) } })
+    h.subject.start()
+    await h.runTimer(9 * HOUR + 55 * MINUTE)
+    expect(h.wake).not.toHaveBeenCalled()
+    expect(h.saved.at(-1)?.['wsl:ubuntu']).toMatchObject({
+      nextRunAt: 10 * HOUR,
+      lastSeenReadyAt: 9 * HOUR + 50 * MINUTE
+    })
+  })
+
+  it('still wakes the host once for a later run that came due after it was last ready', async () => {
+    // The 8 h run ran while ready (8:30); the 9 h run came due with the host down.
+    const h = harness({ due: { 'wsl:ubuntu': due(8 * HOUR, 12, 8 * HOUR + 30 * MINUTE) } })
+    h.subject.start()
+    await h.runTimer(9 * HOUR + 30 * MINUTE)
+    expect(h.wake).toHaveBeenCalledExactlyOnceWith('wsl:ubuntu')
+    expect(h.timerAt()).toBe(10 * HOUR)
+  })
+
   it('a deleted or disabled automation no longer wakes the host once this desktop re-learns', async () => {
     const h = harness({ due: { 'wsl:ubuntu': due(5 * HOUR) } })
     h.automations.mockResolvedValueOnce([automation({ enabled: false })])
@@ -145,7 +173,8 @@ describe('WslHostAutomationWake', () => {
     const h = harness({ due: { 'wsl:ubuntu': due(5 * HOUR) } })
     h.automations.mockRejectedValueOnce(new Error('offline'))
     await h.subject.learn('wsl:ubuntu')
-    expect(h.saved).toEqual([])
+    // Read only while ready: the host still counts as seen ready now.
+    expect(h.saved).toEqual([{ 'wsl:ubuntu': due(5 * HOUR, 12, 0) }])
     h.subject.forget('wsl:ubuntu')
     expect(h.saved.at(-1)).toEqual({})
     expect(h.timerAt()).toBeNull()
@@ -170,5 +199,28 @@ describe('persisted wake times', () => {
     )
     expect(readWslHostAutomationWakes(dir)).toEqual({})
     expect(readWslHostAutomationWakes(join(dir, 'missing'))).toEqual({})
+  })
+
+  it('reads a file from before lastSeenReadyAt as last ready at its stored run: no boot for it, a wake for later ones', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'orca-wsl-wake-'))
+    const { lastSeenReadyAt: _dropped, ...oldFormat } = due(8 * HOUR)
+    writeFileSync(
+      join(dir, 'wsl-host-automation-wakes.json'),
+      JSON.stringify({ 'wsl:ubuntu': oldFormat })
+    )
+    const loaded = readWslHostAutomationWakes(dir)
+    expect(loaded['wsl:ubuntu']?.lastSeenReadyAt).toBe(8 * HOUR)
+
+    // Only the stored run is past: it may have run on the host, so nothing boots.
+    const stale = harness({ due: loaded })
+    stale.subject.start()
+    await stale.runTimer(8 * HOUR + 10 * MINUTE)
+    expect(stale.wake).not.toHaveBeenCalled()
+
+    // A run after the stored one is genuinely missed: it wakes the host once.
+    const missed = harness({ due: loaded })
+    missed.subject.start()
+    await missed.runTimer(9 * HOUR + 30 * MINUTE)
+    expect(missed.wake).toHaveBeenCalledExactlyOnceWith('wsl:ubuntu')
   })
 })
