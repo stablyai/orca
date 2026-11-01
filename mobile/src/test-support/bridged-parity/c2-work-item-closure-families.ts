@@ -30,11 +30,13 @@ export const C2_WORK_ITEM_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-item-comment-gitlab-mr': { verdict: 'bridge-contract' }
   },
   'tasks.item-detail-github': {
+    'matrix-tasks.item-detail-github-status.get-1': { verdict: 'bridge-contract' },
     'matrix-tasks.item-detail-github-github.workitemdetails-1': { verdict: 'bridge-contract' },
     'tk-item-detail-github': { verdict: 'bridge-contract' },
     'tk-item-detail-github-reactions': { verdict: 'bridge-contract' }
   },
   'tasks.item-detail-gitlab': {
+    'matrix-tasks.item-detail-gitlab-gitlab.workitemdetails-2': { verdict: 'bridge-contract' },
     'matrix-tasks.item-detail-gitlab-gitlab.workitemdetails-1': { verdict: 'bridge-contract' },
     'tk-item-detail-gitlab': { verdict: 'bridge-contract' },
     'tk-item-detail-gitlab-reactions': { verdict: 'bridge-contract' }
@@ -78,6 +80,7 @@ export const C2_WORK_ITEM_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-item-review-github': { verdict: 'bridge-contract' }
   },
   'tasks.item-status-gitlab': {
+    'matrix-tasks.item-status-gitlab-status.get-1': { verdict: 'bridge-contract' },
     'matrix-tasks.item-status-gitlab-github.updateissue-1': { verdict: 'bridge-contract' },
     'matrix-tasks.item-status-gitlab-gitlab.updateissue-1': { verdict: 'bridge-contract' },
     'tk-item-status-gitlab': { verdict: 'bridge-contract' }
@@ -120,6 +123,7 @@ export const C2_WORK_ITEM_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-project-row-fields': 'identical'
   },
   'tasks.project-row-files-merge': {
+    'matrix-tasks.project-row-files-merge-status.get-1': { verdict: 'bridge-contract' },
     'matrix-tasks.project-row-files-merge-github.addprreviewcomment-1': {
       verdict: 'bridge-contract'
     },

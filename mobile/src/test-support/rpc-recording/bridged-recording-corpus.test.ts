@@ -45,13 +45,12 @@ import {
 import {
   CHANGED_PRODUCERS,
   expectedUnchangedTally,
-  NATIVE_ONLY_CHANGED,
   refusedReplyExpectation,
-  rows,
-  STRICT_OWN_UNDEFINED
+  rows
 } from './changed-bridge-outcomes'
 import { familyGoldens, pilotGoldens, type DerivedGolden } from './derived-goldens'
 import { compareGolden, readGolden } from './golden-recording'
+import { recordingDifferences } from './golden-difference'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import type { Recording, RecordingScenario } from './recording-scenario'
 import { RecordingParamsMismatch, RecordingStreamGuard } from './recording-mismatch'
@@ -95,7 +94,6 @@ let identical = 0
 const members = new Map<BridgedParityClass, string[]>()
 const samples = new Map<BridgedParityClass, string>()
 const changed = new Set(CHANGED_PRODUCERS)
-const strictOwnUndefined = new Set(STRICT_OWN_UNDEFINED)
 
 type PageMode = 'page-original' | 'page-reply-meta'
 
@@ -339,8 +337,14 @@ async function unchangedVerdict(
     refusalReleasedStream:
       scriptsAbsent && asIf.pairs.some((pair) => refusalReleasedStream(pair.diagnostics)),
     legacyBaseline: {
+      // Read the first difference from the replay without injected metadata: a product copy of the
+      // counterfactual's _meta stays data, so it must not decide the legacy label.
       firstField:
-        asIfView === null ? undefined : divergingFields(expected.recording, asIfView, false)[0],
+        view !== null
+          ? divergingFields(expected.recording, view, false)[0]
+          : asIfView === null
+            ? undefined
+            : divergingFields(expected.recording, asIfView, false)[0],
       scriptsAbsentResultReply: scriptsAbsent
     }
   }
@@ -353,45 +357,12 @@ async function unchangedVerdict(
   tally(id, family, name, fields, run)
 }
 
-// A changed member's strict own-undefined stop: the typed guard, keys that differ only by an own undefined value,
-// and the identical bytes the page posted.
-function expectStrictOwnUndefinedStop(id: string, mode: PageMode, run: BridgedReplay) {
-  const context = `${id}/${mode}`
-  expect(run.thrown, context).toBeInstanceOf(RecordingParamsMismatch)
-  const mismatch = run.thrown
-  if (!(mismatch instanceof RecordingParamsMismatch)) {
-    throw new Error(`Missing actual strict params guard: ${context}`)
-  }
-  const evidence = paramsMismatchEvidence(mismatch)!
-  expect(evidence.differingKeys.length, context).toBeGreaterThan(0)
-  expect(
-    evidence.differingKeys.filter((key) => !evidence.undefinedValuedKeys.includes(key)),
-    context
-  ).toEqual([])
-  const bytes = JSON.stringify(mismatch.actual)
-  expect(JSON.stringify(mismatch.expected), context).toBe(bytes)
-  const posted = run.pairs
-    .flatMap((pair) => pair.toShell)
-    .map((json): unknown => JSON.parse(json))
-    .filter(
-      (frame) =>
-        isKeyedObject(frame) && frame.type === 'request' && frame.method === mismatch.method
-    )
-  expect(posted.length, context).toBeGreaterThan(0)
-  const last = posted.at(-1)
-  expect(isKeyedObject(last) ? JSON.stringify(last.params) : undefined, context).toBe(bytes)
-}
-
 // Changed members earn their own outcome in both page modes: the reviewed native golden, with the page's
 // refusal of the injected absent result applied where the product copies it, and nothing else may differ.
 async function directVerdict(id: string, family: string, scenarios: readonly RecordingScenario[]) {
   const expected = readGolden(directory, id)
   for (const mode of ['page-original', 'page-reply-meta'] as const) {
     const run = await replay(id, scenarios, mode)
-    if (strictOwnUndefined.has(id)) {
-      expectStrictOwnUndefinedStop(id, mode, run)
-      continue
-    }
     if (run.didThrow || !run.recording) {
       throw run.thrown
     }
@@ -405,7 +376,15 @@ async function directVerdict(id: string, family: string, scenarios: readonly Rec
     const want = refusedReplyExpectation(view.expected, scenarios)
     const fields = divergingFields(want, view.actual)
     if (fields.length) {
-      throw new Error(`Changed bridged outcome differs: ${id}/${mode}\n${explain(fields, run)}`)
+      const values = recordingDifferences(want, view.actual)
+        .slice(0, 4)
+        .map(
+          ({ checkpoint, field, path, expected: wanted, actual }) =>
+            `  ${checkpoint} ${field}${path}\n    expected ${String(JSON.stringify(wanted)).slice(0, 300)}\n    actual   ${String(JSON.stringify(actual)).slice(0, 300)}`
+        )
+      throw new Error(
+        `Changed bridged outcome differs: ${id}/${mode}\n${explain(fields, run)}\n${values.join('\n')}`
+      )
     }
   }
   record(id, family, { verdict: 'bridge-contract' }, 'direct')
@@ -668,17 +647,13 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       const duplicated = discovered.filter((id, index) => discovered.indexOf(id) !== index)
       const missing = discovered.filter((id) => !accounted.has(id))
       const twice = [...accounted].filter(([, routes]) => routes.length !== 1).map(([id]) => id)
-      // Changed producers either replay here or are declared native-only sites with no page producer.
-      const unrouted = CHANGED_PRODUCERS.filter(
-        (id) => !discovered.includes(id) && !NATIVE_ONLY_CHANGED.includes(id)
-      )
-      const nativeOnlyReplayed = NATIVE_ONLY_CHANGED.filter((id) => discovered.includes(id))
-      expect({ duplicated, missing, twice, unrouted, nativeOnlyReplayed }).toEqual({
+      // Every re-recorded producer replays here and is judged directly.
+      const unrouted = CHANGED_PRODUCERS.filter((id) => !discovered.includes(id))
+      expect({ duplicated, missing, twice, unrouted }).toEqual({
         duplicated: [],
         missing: [],
         twice: [],
-        unrouted: [],
-        nativeOnlyReplayed: []
+        unrouted: []
       })
     })
     afterCorpus('keeps the unchanged corpus within its legacy labels and bounded tally', () => {

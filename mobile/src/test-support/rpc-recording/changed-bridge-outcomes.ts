@@ -1,3 +1,5 @@
+import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../src/shared/github/work-item-target'
+import { GITHUB_CONNECTION_CHANGED } from '../../transport/github-target-invocation'
 import type { BridgedParityClass } from '../bridged-parity/divergence-classes'
 import { isKeyedObject, scriptsAbsentResultReply } from '../bridged-parity/divergence-evidence'
 import type { Observation, Recording, RecordingScenario } from './recording-scenario'
@@ -72,15 +74,6 @@ export const CHANGED_PRODUCERS: readonly string[] = [
   'tk-linear-team-context',
   'tk-project-row-detail',
   'tk-project-row-files-merge',
-  'matrix-github.pr-read-status.get-1',
-  'matrix-tasks.item-detail-github-status.get-1',
-  'matrix-tasks.item-detail-gitlab-gitlab.workitemdetails-2',
-  'matrix-tasks.item-status-gitlab-status.get-1',
-  'matrix-tasks.project-row-files-merge-status.get-1'
-]
-
-// Native sites with no page producer: their bridge path is the bridge-only probe domain.
-export const NATIVE_ONLY_CHANGED: readonly string[] = [
   'matrix-github.pr-read-status.get-1',
   'matrix-tasks.item-detail-github-status.get-1',
   'matrix-tasks.item-detail-gitlab-gitlab.workitemdetails-2',
@@ -167,24 +160,6 @@ export const REMOVED_FROM_BASELINE: Readonly<Record<string, BaselineClass>> = {
   'matrix-tasks.item-detail-metadata-github.listlabels-1': 'result-absent-settlement'
 }
 
-// Changed members whose scripted completion keeps an own undefined key the wire drops: the strict matcher stops them.
-export const STRICT_OWN_UNDEFINED: readonly string[] = [
-  'matrix-tasks.item-checks-files-github.addprreviewcomment-1',
-  'matrix-tasks.item-checks-files-github.prfilecontents-1',
-  'matrix-tasks.item-checks-files-github.rerunprchecks-1',
-  'matrix-tasks.item-checks-files-github.resolvereviewthread-1',
-  'matrix-tasks.item-checks-files-github.setprfileviewed-1',
-  'matrix-tasks.item-metadata-gitlab-mr-gitlab.updatemr-1',
-  'matrix-tasks.project-row-files-merge-github.addprreviewcomment-1',
-  'matrix-tasks.project-row-files-merge-github.mergepr-1',
-  'matrix-tasks.project-row-files-merge-github.prfilecontents-1',
-  'matrix-tasks.project-row-files-merge-github.updateissue-1',
-  'matrix-tasks.project-row-files-merge-github.updateprstate-1',
-  'tk-item-checks-files',
-  'tk-item-metadata-gitlab-mr',
-  'tk-project-row-files-merge'
-]
-
 export function expectedUnchangedTally(baseline: Readonly<Record<BaselineClass, number>>): {
   expected: Record<BaselineClass, number>
   pending: string[]
@@ -208,6 +183,11 @@ export const BRIDGE_REPLY_REFUSED = 'the reply could not be read (unrecognised-m
 
 const unreadable = (method: string) => `The host sent a reply this app could not read (${method})`
 
+// The GitHub exact-target check maps its own failures: natively an unreadable answer says to update the server,
+// while the page's refusal of that frame is a failed transport check, which says the connection changed.
+const GITHUB_CHECK_COPIES = [unreadable('status.get'), GITHUB_EXACT_OPERATION_UNSUPPORTED]
+const GITHUB_CHECK_PAGE_COPY = GITHUB_CONNECTION_CHANGED
+
 function refusedError(): RecordedValue {
   return {
     category: 'BridgeReplyRefusedError',
@@ -216,9 +196,9 @@ function refusedError(): RecordedValue {
   }
 }
 
-function substitute(value: RecordedValue, copied: ReadonlySet<string>): RecordedValue {
+function substitute(value: RecordedValue, copied: ReadonlyMap<string, string>): RecordedValue {
   if (typeof value === 'string') {
-    return copied.has(value) ? BRIDGE_REPLY_REFUSED : value
+    return copied.get(value) ?? value
   }
   if (Array.isArray(value)) {
     return value.map((entry) => substitute(entry, copied))
@@ -229,7 +209,7 @@ function substitute(value: RecordedValue, copied: ReadonlySet<string>): Recorded
   if (
     value.category === 'RpcIncompatibleReplyError' &&
     typeof value.message === 'string' &&
-    copied.has(value.message) &&
+    copied.get(value.message) === BRIDGE_REPLY_REFUSED &&
     value.code === 'incompatible_reply' &&
     value.isRpcDeliveryUnknown === false &&
     Object.keys(value).length === 4
@@ -257,7 +237,7 @@ export function rows(value: RecordedValue): Record<string, RecordedValue>[] {
 // rejects with the bridge refusal, and the product shows that error where it showed the native one. Everything
 // else is the reviewed native golden, so a shorter page prefix or any other difference still fails.
 function refusedObservation(observation: Observation): Observation {
-  const copied = new Set<string>()
+  const copied = new Map<string, string>()
   const sender = rows(observation.sender).map((attempt): RecordedValue => {
     const settlement = attempt.settlement
     if (
@@ -269,7 +249,14 @@ function refusedObservation(observation: Observation): Observation {
     ) {
       return attempt
     }
-    copied.add(unreadable(String(attempt.name).replace(/#.*$/, '')))
+    const method = String(attempt.name).replace(/#.*$/, '')
+    if (method === 'status.get') {
+      for (const copy of GITHUB_CHECK_COPIES) {
+        copied.set(copy, GITHUB_CHECK_PAGE_COPY)
+      }
+    } else {
+      copied.set(unreadable(method), BRIDGE_REPLY_REFUSED)
+    }
     const { value: _value, ...timing } = settlement
     return { ...attempt, settlement: { ...timing, status: 'rejected', error: refusedError() } }
   })

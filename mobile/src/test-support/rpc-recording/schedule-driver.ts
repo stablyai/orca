@@ -21,10 +21,11 @@ export const REQUIRED_SCHEDULES = [
   'reject-peer-pending'
 ] as const
 
-// preflight.check runs on the default 30-second deadline, so the sibling timeout ends it before its reply.
+// These run on the default 30-second deadline, so the sibling timeout ends them before their replies (the goldens
+// record each as timed out).
 const SIBLING_TIMEOUT_LATE_REPLIES: Readonly<Record<string, readonly string[]>> = {
-  'settings-workspace-context-fulfilled': ['preflight.check#1'],
-  'settings-task-hydration-fulfilled': ['preflight.check#1']
+  'settings-workspace-context-fulfilled': ['preflight.check#1', 'linear.status#1', 'jira.status#1'],
+  'settings-task-hydration-fulfilled': ['preflight.check#1', 'linear.status#1', 'jira.status#1']
 }
 
 export function siblingSchedules(
@@ -155,12 +156,11 @@ export function interruptionSchedules(base: RecordingScenario): RecordingScenari
             ? { advance: 30_000 }
             : { action: interruption, id: interruption },
           { checkpoint: 'interrupted' },
-          // The interruption ended the in-flight request, so its scripted reply now arrives late.
+          // Each interruption ends the in-flight request (timed out, lost, or interrupted by the migration), so
+          // its scripted reply now arrives late.
           ...base.steps
             .slice(completion)
-            .map((step, index): ScenarioStep =>
-              index === 0 && interruption !== 'cutover' ? { ...step, late: true } : step
-            )
+            .map((step, index): ScenarioStep => (index === 0 ? { ...step, late: true } : step))
         ]
       }
     }))

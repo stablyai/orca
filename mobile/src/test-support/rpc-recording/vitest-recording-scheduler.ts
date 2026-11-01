@@ -244,7 +244,8 @@ export function vitestRecordingScheduler(identity?: {
             }
           }
         } else if (stopCount !== 0) {
-          errors.push(new Error(`Recording cleanup retained ${stopCount} actual timers`))
+          const named = identity ? `${identity.producer}/${identity.scenario}: ` : ''
+          errors.push(new Error(`${named}Recording cleanup retained ${stopCount} actual timers`))
         }
       } catch (error) {
         errors.push(error)
