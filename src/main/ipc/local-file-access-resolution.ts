@@ -9,7 +9,10 @@ import {
 } from './filesystem/filesystem-auth'
 import { isDescendantOrEqual } from './filesystem/filesystem-path-containment'
 import { filePreviewForPath } from '../../shared/file-preview-kind'
-import { getDefaultFloatingWorkspacePath } from './floating-workspace-directory'
+import {
+  getDefaultFloatingWorkspacePath,
+  resolveFloatingTerminalCwd
+} from './floating-workspace-directory'
 import {
   isDeviceNamespacePath,
   isNetworkSharePath,
@@ -30,9 +33,14 @@ export async function resolveDesktopAuthorizedPath(
   store: RuntimeStore,
   options: ResolveAuthorizedPathOptions = {}
 ): Promise<string> {
+  const floatingCwd = await resolveFloatingTerminalCwd(store, {
+    path: store.getSettings().floatingTerminalCwd,
+    requireTrusted: true
+  }).catch(() => null)
+  const extraRoots = [getDefaultFloatingWorkspacePath(), ...(floatingCwd ? [floatingCwd] : [])]
   return resolveAuthorizedPath(targetPath, store, {
     ...options,
-    extraRoots: [getDefaultFloatingWorkspacePath()]
+    extraRoots: [...(options.extraRoots ?? []), ...extraRoots]
   })
 }
 
