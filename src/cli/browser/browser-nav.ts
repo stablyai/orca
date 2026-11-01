@@ -9,15 +9,16 @@ import type {
   BrowserScrollResult,
   BrowserSnapshotResult,
   BrowserWaitResult
-} from '../../shared/runtime-types'
+} from '../../shared/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
-import { formatScreenshot, formatSnapshot, printResult, saveBrowserScreenshot } from '../format'
+import { formatScreenshot, formatSnapshot, saveBrowserScreenshot } from './browser-format'
+import { printResult } from '../format'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
-import { RuntimeClientError } from '../runtime-client'
+import { RuntimeClientError } from '../runtime/types'
 import { getBrowserCommandTarget } from '../selectors'
 import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
 

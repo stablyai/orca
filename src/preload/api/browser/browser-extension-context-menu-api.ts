@@ -1,7 +1,7 @@
 import type {
   BrowserExtensionContextMenuClick,
   BrowserExtensionContextMenuPayload
-} from '../../shared/browser-extension-context-menu-types'
+} from '../../../shared/browser-extension-context-menu-types'
 
 /** window.api.browser members behind extension items in the page and toolbar-button menus. */
 export type BrowserExtensionContextMenuApi = {

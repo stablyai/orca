@@ -1,13 +1,13 @@
 import { ipcRenderer } from 'electron'
-import type { PreloadApi } from '../api-types'
-import type { BrowserExtensionActionResult } from '../../shared/browser-extension-types'
+import type { PreloadApi } from '../../api-types'
+import type { BrowserExtensionActionResult } from '../../../shared/browser-extension-types'
 import {
   BROWSER_EXTENSION_POPUP_REQUEST_CHANNEL,
   BROWSER_EXTENSION_TOOLBAR_CHANGED_CHANNEL,
   type BrowserExtensionAnchorRect,
   type BrowserExtensionPopupRequest,
   type BrowserExtensionToolbarState
-} from '../../shared/browser-extension-toolbar-types'
+} from '../../../shared/browser-extension-toolbar-types'
 
 /** The browser toolbar's extension buttons and the extension-driven tab activation round trip. */
 export const browserExtensionToolbarApi = {

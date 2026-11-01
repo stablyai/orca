@@ -1,9 +1,9 @@
-import type { BrowserExtensionActionResult } from '../../shared/browser-extension-types'
+import type { BrowserExtensionActionResult } from '../../../shared/browser-extension-types'
 import type {
   BrowserExtensionAnchorRect,
   BrowserExtensionPopupRequest,
   BrowserExtensionToolbarState
-} from '../../shared/browser-extension-toolbar-types'
+} from '../../../shared/browser-extension-toolbar-types'
 
 /** window.api.browser members behind the browser toolbar's extension buttons. */
 export type BrowserExtensionToolbarApi = {

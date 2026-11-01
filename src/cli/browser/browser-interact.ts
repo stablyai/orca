@@ -11,7 +11,7 @@ import type {
   BrowserSelectResult,
   BrowserTypeResult,
   BrowserUploadResult
-} from '../../shared/runtime-types'
+} from '../../shared/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { printResult } from '../format'

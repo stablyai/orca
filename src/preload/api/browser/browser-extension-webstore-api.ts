@@ -2,7 +2,7 @@ import type {
   BrowserExtensionInstallPromptRequest,
   BrowserExtensionInstallPromptResponse,
   BrowserExtensionWebStoreInstallResult
-} from '../../shared/browser-extension-webstore'
+} from '../../../shared/browser-extension-webstore'
 
 /** window.api.browser members behind "Add from Chrome Web Store" and Orca's install prompt. */
 export type BrowserExtensionWebStoreApi = {

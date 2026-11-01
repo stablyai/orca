@@ -1,6 +1,6 @@
-import { readBrowserActionEffects } from '../shared/browser-action-effects'
-import { writeCliScreenshotTempFile } from './cli-screenshot-temp-file'
-import type { RuntimeRpcSuccess } from './runtime-client'
+import { readBrowserActionEffects } from '../../shared/browser-action-effects'
+import { writeCliScreenshotTempFile } from '../cli-screenshot-temp-file'
+import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 import type {
   BrowserProfileListResult,
   BrowserScreenshotResult,
@@ -10,7 +10,7 @@ import type {
   BrowserTabProfileCloneResult,
   BrowserTabProfileShowResult,
   BrowserTabShowResult
-} from '../shared/runtime-types'
+} from '../../shared/runtime-browser-contracts'
 
 export function formatSnapshot(result: BrowserSnapshotResult): string {
   // Older runtimes leave url and title unset.

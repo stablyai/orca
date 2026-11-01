@@ -6,7 +6,7 @@ import type {
   BrowserInterceptEnableResult,
   BrowserInterceptedRequest,
   BrowserNetworkLogResult
-} from '../../shared/runtime-types'
+} from '../../shared/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import { getOptionalPositiveIntegerFlag, getOptionalStringFlag } from '../flags'
