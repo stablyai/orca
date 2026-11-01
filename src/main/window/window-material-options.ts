@@ -8,6 +8,8 @@ type WindowMaterialOptions = Pick<
 
 const CLEAR = '#00000000'
 
+export const MAC_BLUR_VIBRANCY = 'under-window'
+
 /** Creation-time window options; any opaque fill would paint over the material (#8797). */
 export function windowMaterialOptions(
   material: WindowMaterial,
@@ -21,7 +23,7 @@ export function windowMaterialOptions(
     // Why no `transparent` with vibrancy: it suppresses the effect view and forces full-window alpha compositing (#8482).
     // Why active: the default follows focus and turns into a flat gray fill whenever Orca is unfocused.
     return material === 'blur'
-      ? { backgroundColor: CLEAR, vibrancy: 'under-window', visualEffectState: 'active' }
+      ? { backgroundColor: CLEAR, vibrancy: MAC_BLUR_VIBRANCY, visualEffectState: 'active' }
       : { backgroundColor: CLEAR, transparent: true }
   }
   if (platform === 'win32') {
