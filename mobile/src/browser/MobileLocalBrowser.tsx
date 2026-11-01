@@ -4,7 +4,10 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 import { PHONE_NETWORK_BROWSER_STORE_ID } from './mobile-browser-local-proxy'
 import { MobileLocalBrowserPane } from './MobileLocalBrowserPane'
-import { useMobileBrowserLocalTunnel } from './use-mobile-browser-local-tunnel'
+import {
+  useMobileBrowserLocalTunnel,
+  type MobileBrowserLocalTunnel
+} from './use-mobile-browser-local-tunnel'
 
 type Props = {
   client: RpcClient | null
@@ -14,6 +17,8 @@ type Props = {
   // Read from the browser settings when absent; a tab set to stream that asks to be drawn goes through the host.
   initialNetwork?: MobileLocalBrowserNetwork
   initialViewMode: MobileBrowserViewMode
+  // The host holds one tunnel per connection, so views drawn side by side (inline and full screen) share one.
+  tunnel?: MobileBrowserLocalTunnel
   onViewModeChange?: (mode: MobileBrowserViewMode) => void
   onNetworkChange?: (network: MobileLocalBrowserNetwork) => void
   fullScreen: ComponentProps<typeof MobileLocalBrowserPane>['fullScreen']
@@ -34,6 +39,7 @@ export function MobileLocalBrowser({
   initialUrl,
   initialNetwork,
   initialViewMode,
+  tunnel,
   onViewModeChange,
   onNetworkChange,
   fullScreen,
@@ -48,7 +54,8 @@ export function MobileLocalBrowser({
   // Switching network or layout remounts the web view, which then reopens the page it was on.
   const currentUrl = useRef(initialUrl)
   const [resumeUrl, setResumeUrl] = useState(initialUrl)
-  const local = useMobileBrowserLocalTunnel(client, hostId, worktreeId, network === 'host')
+  const own = useMobileBrowserLocalTunnel(client, hostId, worktreeId, network === 'host' && !tunnel)
+  const local = tunnel ?? own
 
   useEffect(() => {
     if (initialNetwork) {

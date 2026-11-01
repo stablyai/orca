@@ -5,6 +5,7 @@ import type {
   BridgeBrowserViewFrame
 } from '../mobile-web-shell/bridge/bridge-native-verbs'
 import type { ShellLocalBrowser } from '../platform/shell-local-browser-types'
+import type { MobileLocalBrowserNetwork } from '../storage/preferences'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 import { mobileBrowserPaneStyles } from './mobile-browser-pane-styles'
 
@@ -13,6 +14,9 @@ type Props = {
   worktreeId: string
   url: string
   viewMode: MobileBrowserViewMode
+  // Absent: the browser settings pick the network.
+  network?: MobileLocalBrowserNetwork
+  fullScreen: boolean
   onEnded: (ending: BridgeBrowserViewEnding) => void
   onRefused: (error: unknown) => void
 }
@@ -56,14 +60,22 @@ export function MobileBrowserPlacedLocal({
   worktreeId,
   url,
   viewMode,
+  network,
+  fullScreen,
   onEnded,
   onRefused
 }: Props): React.JSX.Element {
   const ref = useRef<View>(null)
   const callbacks = useRef({ onEnded, onRefused })
   callbacks.current = { onEnded, onRefused }
-  // The tab's first page and layout only: the native view follows its own navigation from there.
-  const opening = useRef({ url, viewMode })
+  // The tab's first page and layout only: the native view follows its own navigation from there. Older shells
+  // refuse fields they do not know, so the optional ones go only when set.
+  const opening = useRef({
+    url,
+    viewMode,
+    ...(network ? { network } : {}),
+    ...(fullScreen ? { fullScreen } : {})
+  })
 
   useEffect(() => {
     const element = domElement(ref.current)

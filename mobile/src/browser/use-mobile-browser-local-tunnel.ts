@@ -53,6 +53,12 @@ export function canRenderBrowserLocally(client: RpcClient | null): boolean {
 // one connection. Cookies stay per host through the store id.
 let lastProxyInstance = 0
 
+// The host holds one tunnel per connection and frees it a moment after the phone lets go, so a pane that takes over
+// from another (full screen, a network switch) asks again briefly instead of failing.
+const TUNNEL_BUSY = 'binary_handler_mode_conflict'
+const TUNNEL_BUSY_RETRY_MS = 250
+const TUNNEL_BUSY_RETRIES = 8
+
 /** Runs a proxy and tunnel to this host while a local browser pane is mounted. */
 export function useMobileBrowserLocalTunnel(
   client: RpcClient | null,
@@ -61,6 +67,7 @@ export function useMobileBrowserLocalTunnel(
   enabled: boolean
 ): MobileBrowserLocalTunnel {
   const [state, setState] = useState<MobileBrowserLocalTunnel>({ status: 'starting' })
+  const [busyRetries, setBusyRetries] = useState(0)
   const supported = enabled && canRenderBrowserLocally(client)
 
   useEffect(() => {
@@ -73,13 +80,20 @@ export function useMobileBrowserLocalTunnel(
     setState({ status: 'starting' })
     const proxyKey = `${hostId}#${++lastProxyInstance}`
     let disposed = false
+    let retry: ReturnType<typeof setTimeout> | undefined
     let stopBridge = (): void => {}
     const tunnel = new MobileBrowserTunnelClient({
       channel,
       subscribe: (onEvent) =>
         client.subscribe(MOBILE_BROWSER_TUNNEL_METHOD, { workspaceId }, (result) => {
           const event = tunnelEvent(result)
-          if (event?.type === 'error') {
+          if (
+            event?.type === 'error' &&
+            event.message === TUNNEL_BUSY &&
+            busyRetries < TUNNEL_BUSY_RETRIES
+          ) {
+            retry ??= setTimeout(() => setBusyRetries((count) => count + 1), TUNNEL_BUSY_RETRY_MS)
+          } else if (event?.type === 'error') {
             setState({ status: 'failed', message: event.message })
           } else if (event) {
             onEvent(event)
@@ -111,11 +125,12 @@ export function useMobileBrowserLocalTunnel(
       })
     return () => {
       disposed = true
+      clearTimeout(retry)
       stopBridge()
       tunnel.close()
       void native.stopProxy(proxyKey)
     }
-  }, [client, hostId, workspaceId, supported])
+  }, [client, hostId, workspaceId, supported, busyRetries])
 
   return state
 }

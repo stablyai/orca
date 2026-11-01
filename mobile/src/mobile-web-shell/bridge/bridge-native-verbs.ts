@@ -126,7 +126,11 @@ export const browserViewParamsSchema = z.discriminatedUnion('action', [
     worktreeId: z.string().min(1),
     url: z.string().max(8192),
     viewMode: browserViewModeSchema,
-    frame: browserViewFrameSchema
+    frame: browserViewFrameSchema,
+    // The network the user picked on the page; the browser settings decide when absent.
+    network: z.enum(['host', 'phone']).optional(),
+    // Opens the view full screen, as when the user picks drawing on the phone from a full-screen streamed tab.
+    fullScreen: z.boolean().optional()
   }),
   z.strictObject({
     action: z.literal('move'),
@@ -135,10 +139,11 @@ export const browserViewParamsSchema = z.discriminatedUnion('action', [
   }),
   z.strictObject({ action: z.literal('hide'), id: browserViewIdSchema })
 ])
-// streamed: the user chose streaming; setting: the browser settings stream tabs; replaced: another pane took the
-// view; failed: the tunnel through the host failed.
+// streamed: the user chose streaming (streamedFullScreen: from full screen, which stays); setting: the browser
+// settings stream tabs; replaced: another pane took the view; failed: the tunnel through the host failed.
 export const BRIDGE_BROWSER_VIEW_ENDINGS = [
   'streamed',
+  'streamedFullScreen',
   'setting',
   'replaced',
   'hidden',

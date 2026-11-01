@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileLocalBrowser } from '../browser/MobileLocalBrowser'
+import { MobileLocalBrowserFullScreen } from '../browser/MobileLocalBrowserFullScreen'
 import { loadBrowserDrawing } from '../storage/preferences'
 import { useNativeLocalBrowser } from './native-local-browser'
 
@@ -10,8 +11,10 @@ vi.mock('../theme/themed-styles', () => ({ themedStyleSheet: (make: () => unknow
 vi.mock('../theme/mobile-theme', () => ({ colors: { bgBase: '#000' } }))
 vi.mock('../theme/use-mobile-color-scheme', () => ({ useMobileColorScheme: () => 'dark' }))
 vi.mock('../transport/host-client-hooks', () => ({ useHostClient: () => ({ client: {} }) }))
+const TUNNEL = { status: 'ready', proxyKey: 'proxy-1', storeId: 'store-1' }
 vi.mock('../browser/use-mobile-browser-local-tunnel', () => ({
-  canRenderBrowserLocally: () => true
+  canRenderBrowserLocally: () => true,
+  useMobileBrowserLocalTunnel: () => TUNNEL
 }))
 vi.mock('../storage/preferences', () => ({ loadBrowserDrawing: vi.fn() }))
 vi.mock('../browser/MobileLocalBrowser', () => ({ MobileLocalBrowser: () => null }))
@@ -30,19 +33,24 @@ function Harness(): React.JSX.Element | null {
 
 const FRAME = { x: 0, y: 40, width: 390, height: 600 }
 
-function show(id: string): Promise<unknown> {
+function show(id: string, extra: Record<string, unknown> = {}): Promise<unknown> {
   return shell.serveView({
     action: 'show',
     id,
     worktreeId: 'wt-1',
     url: 'https://example.com/',
     viewMode: 'mobile',
-    frame: FRAME
+    frame: FRAME,
+    ...extra
   })
 }
 
 function drawn() {
   return renderer.root.findAllByType(MobileLocalBrowser)
+}
+
+function fullScreen() {
+  return renderer.root.findAllByType(MobileLocalBrowserFullScreen)
 }
 
 beforeEach(() => {
@@ -120,5 +128,27 @@ describe('native.browser.view', () => {
       await shell.serveView({ action: 'hide', id: 'a' })
     })
     expect(drawn()).toHaveLength(1)
+  })
+
+  it('draws a tab the user picked on the page even when the browser settings stream tabs', async () => {
+    vi.mocked(loadBrowserDrawing).mockResolvedValue('stream')
+    await act(async () => {
+      void show('a', { network: 'phone' })
+    })
+    expect(drawn()[0]!.props.initialNetwork).toBe('phone')
+  })
+
+  it('opens full screen over the placed view, both on one tunnel, and keeps it when the user streams', async () => {
+    vi.mocked(loadBrowserDrawing).mockResolvedValue('host')
+    let shown: Promise<unknown> = Promise.resolve()
+    await act(async () => {
+      shown = show('a', { fullScreen: true })
+    })
+    expect(fullScreen()).toHaveLength(1)
+    expect(fullScreen()[0]!.props.tunnel).toBe(TUNNEL)
+    expect(drawn()[0]!.props.tunnel).toBe(TUNNEL)
+    act(() => fullScreen()[0]!.props.onStreamFromHost())
+    await expect(shown).resolves.toEqual({ ended: 'streamedFullScreen' })
+    expect(fullScreen()).toHaveLength(0)
   })
 })

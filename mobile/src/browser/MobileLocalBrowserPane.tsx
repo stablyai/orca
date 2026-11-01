@@ -1,15 +1,6 @@
 import { useRef, useState } from 'react'
 import { View } from 'react-native'
-import {
-  ChevronLeft,
-  ChevronRight,
-  Maximize2,
-  Minimize2,
-  MonitorUp,
-  RefreshCw,
-  Server,
-  Smartphone
-} from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import {
   OrcaProxiedBrowser,
   orcaProxiedBrowserView,
@@ -19,12 +10,15 @@ import {
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileLocalBrowserNetwork } from '../storage/preferences'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
-import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
 import { buttonColor } from './mobile-browser-frame-state'
 import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
+import {
+  MobileBrowserDrawingButtons,
+  type MobileBrowserFullScreenToggle
+} from './MobileBrowserDrawingButtons'
 import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
 import { MobileBrowserViewModeSwitch } from './MobileBrowserViewModeSwitch'
 
@@ -38,7 +32,7 @@ type Props = {
   viewMode: MobileBrowserViewMode
   onViewModeChange: (mode: MobileBrowserViewMode) => void
   // Full screen is a separate view; this button opens or leaves it.
-  fullScreen: { active: boolean; onToggle: () => void } | null
+  fullScreen: MobileBrowserFullScreenToggle | null
   // Switch this tab back to frames streamed from the host's browser.
   onStreamFromHost: () => void
   onNetworkChange: (network: MobileLocalBrowserNetwork) => void
@@ -56,10 +50,6 @@ const IDLE_STATE: ProxiedBrowserNavigationState = {
   canGoBack: false,
   canGoForward: false,
   progress: 0
-}
-
-function networkButtonColor(active: boolean): string {
-  return active ? colors.accentBlue : buttonColor(true)
 }
 
 /** Draws the page in a web view on this phone, connecting through the host or on the phone's own network. */
@@ -132,40 +122,13 @@ export function MobileLocalBrowserPane({
           value={viewMode}
           onChange={onViewModeChange}
         />
-        <MobileBrowserToolbarIconButton
-          label={t('browser.localPane.streamFromHost', 'Stream from the host instead')}
-          onPress={onStreamFromHost}
-        >
-          <MonitorUp size={15} color={buttonColor(true)} />
-        </MobileBrowserToolbarIconButton>
-        <MobileBrowserToolbarIconButton
-          label={t('browser.localPane.throughHost', 'Connect through the host')}
-          onPress={() => onNetworkChange('host')}
-        >
-          <Server size={15} color={networkButtonColor(network === 'host')} />
-        </MobileBrowserToolbarIconButton>
-        <MobileBrowserToolbarIconButton
-          label={t('browser.localPane.phoneNetwork', "Connect on the phone's network")}
-          onPress={() => onNetworkChange('phone')}
-        >
-          <Smartphone size={15} color={networkButtonColor(network === 'phone')} />
-        </MobileBrowserToolbarIconButton>
-        {fullScreen && (
-          <MobileBrowserToolbarIconButton
-            label={
-              fullScreen.active
-                ? t('browser.localPane.leaveFullScreen', 'Leave full screen')
-                : t('browser.localPane.fullScreen', 'Full screen')
-            }
-            onPress={fullScreen.onToggle}
-          >
-            {fullScreen.active ? (
-              <Minimize2 size={15} color={buttonColor(true)} />
-            ) : (
-              <Maximize2 size={15} color={buttonColor(true)} />
-            )}
-          </MobileBrowserToolbarIconButton>
-        )}
+        <MobileBrowserDrawingButtons
+          drawing={network}
+          onDrawingChange={(next) =>
+            next === 'stream' ? onStreamFromHost() : onNetworkChange(next)
+          }
+          fullScreen={fullScreen}
+        />
       </View>
       <View style={styles.viewport}>
         {ProxiedBrowserView && (

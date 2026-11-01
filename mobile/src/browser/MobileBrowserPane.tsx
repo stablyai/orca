@@ -28,6 +28,7 @@ import {
   browserReload
 } from './mobile-browser-command-operations'
 import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
+import type { MobileBrowserStreamedDrawing } from './MobileBrowserDrawingButtons'
 import { MobileBrowserPaneView } from './MobileBrowserPaneView'
 import { useMobileBrowserInteractions } from './use-mobile-browser-interactions'
 import { useMobileBrowserStream } from './use-mobile-browser-stream'
@@ -56,7 +57,7 @@ type MobileBrowserPaneProps = {
   bottomInset: number
   onToast: (message: string, durationMs?: number) => void
   // Offered when this phone can draw the page itself instead of streaming it.
-  onRenderLocally?: () => void
+  drawing?: MobileBrowserStreamedDrawing
 }
 
 type PanGesture = {
@@ -76,7 +77,7 @@ export function MobileBrowserPane({
   keyboardLift,
   bottomInset,
   onToast,
-  onRenderLocally
+  drawing
 }: MobileBrowserPaneProps) {
   useMobileTranslation()
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
@@ -329,7 +330,7 @@ export function MobileBrowserPane({
       keyboardValue={keyboardValue}
       layoutRef={layoutRef}
       navigateToAddress={navigateToAddress}
-      onRenderLocally={onRenderLocally}
+      drawing={drawing}
       panResponder={panResponder}
       pointerModifiers={pointerModifiers}
       reloadPage={reloadPage}

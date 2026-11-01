@@ -1590,8 +1590,7 @@
       "reload": "Reload",
       "dialogTitle": "Browser Dialog",
       "keyboardPlaceholder": "Type on page…",
-      "sendText": "Send text to browser",
-      "renderLocally": "Draw the page on this phone"
+      "sendText": "Send text to browser"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} click modifier"

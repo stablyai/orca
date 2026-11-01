@@ -10,11 +10,15 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw, Smartphone } from 'lucide-react-native'
+import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
+import {
+  MobileBrowserDrawingButtons,
+  type MobileBrowserStreamedDrawing
+} from './MobileBrowserDrawingButtons'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
 import {
@@ -58,7 +62,7 @@ type MobileBrowserPaneViewProps = {
   keyboardValue: string
   layoutRef: RefObject<BrowserTouchLayout | null>
   navigateToAddress: () => Promise<void>
-  onRenderLocally?: () => void
+  drawing?: MobileBrowserStreamedDrawing
   panResponder: PanResponderInstance
   pointerModifiers: BrowserPointerModifier[]
   reloadPage: () => void
@@ -99,7 +103,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     keyboardValue,
     layoutRef,
     navigateToAddress,
-    onRenderLocally,
+    drawing,
     panResponder,
     pointerModifiers,
     reloadPage,
@@ -157,13 +161,12 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           value={browserViewMode}
           onChange={selectBrowserViewMode}
         />
-        {onRenderLocally && (
-          <MobileBrowserToolbarIconButton
-            label={t('browser.paneView.renderLocally', 'Draw the page on this phone')}
-            onPress={onRenderLocally}
-          >
-            <Smartphone size={15} color={buttonColor(true)} />
-          </MobileBrowserToolbarIconButton>
+        {drawing && (
+          <MobileBrowserDrawingButtons
+            drawing="stream"
+            onDrawingChange={drawing.onDrawingChange}
+            fullScreen={drawing.fullScreen}
+          />
         )}
       </View>
 

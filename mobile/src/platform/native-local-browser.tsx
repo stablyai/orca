@@ -4,7 +4,10 @@ import { MobileLocalBrowser } from '../browser/MobileLocalBrowser'
 import { MobileLocalBrowserFullScreen } from '../browser/MobileLocalBrowserFullScreen'
 import { MobileLocalBrowserToast } from '../browser/MobileLocalBrowserToast'
 import type { MobileBrowserViewMode } from '../browser/browser-screencast-request'
-import { canRenderBrowserLocally } from '../browser/use-mobile-browser-local-tunnel'
+import {
+  canRenderBrowserLocally,
+  useMobileBrowserLocalTunnel
+} from '../browser/use-mobile-browser-local-tunnel'
 import {
   browserLocalParamsSchema,
   browserViewParamsSchema,
@@ -12,7 +15,11 @@ import {
   type BridgeBrowserViewFrame
 } from '../mobile-web-shell/bridge/bridge-native-verbs'
 import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/bridge-host-errors'
-import { loadBrowserDrawing, type MobileLocalBrowserNetwork } from '../storage/preferences'
+import {
+  loadBrowserDrawing,
+  type MobileBrowserDrawing,
+  type MobileLocalBrowserNetwork
+} from '../storage/preferences'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -22,7 +29,7 @@ type Tab = {
   worktreeId: string
   url: string
   viewMode: MobileBrowserViewMode
-  network?: MobileLocalBrowserNetwork
+  network: MobileLocalBrowserNetwork
 }
 
 type Placed = Tab & {
@@ -34,6 +41,10 @@ type Placed = Tab & {
 }
 
 type FullScreen = Tab & { fromPlaced: boolean }
+
+function settingNetwork(drawing: MobileBrowserDrawing): MobileLocalBrowserNetwork {
+  return drawing === 'phone' ? 'phone' : 'host'
+}
 
 /**
  * Serves native.browser.local (the tab full screen) and native.browser.view (a native web view placed over the
@@ -97,10 +108,12 @@ export function useNativeLocalBrowser(
     async (params: unknown) => {
       const parsed = browserLocalParamsSchema.parse(params)
       requireLocal()
+      const network = settingNetwork(await loadBrowserDrawing())
       setFullScreen({
         worktreeId: parsed.worktreeId,
         url: parsed.url,
         viewMode: parsed.viewMode ?? 'mobile',
+        network,
         fromPlaced: false
       })
       return {}
@@ -136,12 +149,17 @@ export function useNativeLocalBrowser(
       if (wanted.current !== parsed.id) {
         return { ended: 'hidden' }
       }
-      if (drawing === 'stream') {
+      if (!parsed.network && drawing === 'stream') {
         return { ended: 'setting' }
       }
       endPlaced('replaced')
       return new Promise<{ ended: BridgeBrowserViewEnding }>((resolve) => {
-        const tab = { worktreeId: parsed.worktreeId, url: parsed.url, viewMode: parsed.viewMode }
+        const tab = {
+          worktreeId: parsed.worktreeId,
+          url: parsed.url,
+          viewMode: parsed.viewMode,
+          network: parsed.network ?? settingNetwork(drawing)
+        }
         live.current = tab
         place({
           ...tab,
@@ -150,6 +168,9 @@ export function useNativeLocalBrowser(
           generation: 0,
           end: (ended) => resolve({ ended })
         })
+        if (parsed.fullScreen) {
+          setFullScreen({ ...tab, fromPlaced: true })
+        }
       })
     },
     [endPlaced, place, requireLocal]
@@ -159,6 +180,16 @@ export function useNativeLocalBrowser(
     const { x, y } = event.nativeEvent.layout
     setPageOrigin((current) => (current.x === x && current.y === y ? current : { x, y }))
   }, [])
+
+  // One tunnel serves the placed view and full screen: the host holds one per connection.
+  const tunnelWorktreeId = fullScreen?.worktreeId ?? placed?.worktreeId ?? ''
+  const sharesTunnel = placed !== null && placed.worktreeId === tunnelWorktreeId
+  const tunnel = useMobileBrowserLocalTunnel(
+    client,
+    hostId,
+    tunnelWorktreeId,
+    fullScreen?.network === 'host' || (sharesTunnel && placed.network === 'host')
+  )
 
   if (!client) {
     return { serve, serveView, onPageLayout, overlay: null }
@@ -195,8 +226,15 @@ export function useNativeLocalBrowser(
             initialUrl={placed.url}
             initialNetwork={placed.network}
             initialViewMode={placed.viewMode}
+            tunnel={sharesTunnel ? tunnel : undefined}
             onViewModeChange={(viewMode) => updateLive({ viewMode })}
-            onNetworkChange={(network) => updateLive({ network })}
+            onNetworkChange={(network) => {
+              updateLive({ network })
+              const current = placedRef.current
+              if (current) {
+                place({ ...current, network })
+              }
+            }}
             onUrlChange={(url) => updateLive({ url })}
             fullScreen={{
               active: false,
@@ -218,10 +256,14 @@ export function useNativeLocalBrowser(
           url={fullScreen.url}
           network={fullScreen.network}
           viewMode={fullScreen.viewMode}
+          tunnel={tunnel}
+          onNetworkChange={(network) =>
+            setFullScreen((current) => current && { ...current, network })
+          }
           onClose={(url) => {
             const current = placedRef.current
             if (fullScreen.fromPlaced && current) {
-              const tab = { ...(live.current ?? current), url }
+              const tab = { ...(live.current ?? current), url, network: fullScreen.network }
               live.current = tab
               place({ ...current, ...tab, generation: current.generation + 1 })
             }
@@ -229,7 +271,7 @@ export function useNativeLocalBrowser(
           }}
           onStreamFromHost={() => {
             if (fullScreen.fromPlaced) {
-              endPlaced('streamed')
+              endPlaced('streamedFullScreen')
             }
             setFullScreen(null)
           }}
