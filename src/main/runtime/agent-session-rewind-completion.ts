@@ -1,3 +1,7 @@
+import {
+  cancelAgentSessionUsageLimitContinue,
+  type UsageLimitContinueIdentity
+} from '../../shared/agent-session-usage-limit-continue'
 import type { AgentJournalCursor } from '../../shared/agent-session-journal-types'
 import type { AgentSessionRewindRecord } from '../../shared/agent-session-rewind'
 import type { AgentSessionStoreState } from './agent-session-store-state'
@@ -42,7 +46,8 @@ export function commitAgentSessionRewindCompletion(
   sessionId: string,
   fence: number,
   rewind: AgentSessionRewindRecord,
-  cursor: AgentJournalCursor
+  cursor: AgentJournalCursor,
+  cancel?: UsageLimitContinueIdentity
 ): void {
   const record = draft.records.get(sessionId)
   if (
@@ -56,7 +61,7 @@ export function commitAgentSessionRewindCompletion(
   }
   const { retained: _retained, hydrationVerified: _hydrationVerified, ...current } = rewind
   draft.records.set(sessionId, {
-    ...record,
+    ...(cancel ? cancelAgentSessionUsageLimitContinue(record, cancel) : record),
     providerHandleChain: rewindProviderChain(record, rewind, fence),
     rewind: {
       ...current,

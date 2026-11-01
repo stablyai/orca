@@ -195,6 +195,11 @@ export type AgentSessionSubscribeEvent =
 
 /** Host-projected list status avoids client transcript replay; older hosts lack this additive method. */
 export type AgentSessionStatusSummary = {
+  usageLimitContinue?: {
+    turnItemId: string
+    resetsAt: number
+    state: 'scheduled' | 'cancelled' | 'failed' | 'off'
+  }
   rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
   workspaceId: string

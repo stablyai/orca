@@ -1,3 +1,4 @@
+import type { NativeChatUsageLimitAutoContinueState } from './NativeChatUsageLimitAutoContinue'
 import { createContext, useContext } from 'react'
 
 /** Host stop details; only hosts known not to support continuation suppress Continue. */
@@ -10,6 +11,8 @@ export type NativeChatOrcaStopView = {
   offeredTurnItemId: string | null
   continueNow: () => void
   usageLimitTurnItemId: string | null
+  usageLimitAutoContinue?: NativeChatUsageLimitAutoContinueState | null
+  onUsageLimitHandOffStarted?: () => void
   usageLimitContinueDisabled?: boolean
   continueUsageLimit: (hadFocus?: boolean) => void
 }

@@ -11,6 +11,9 @@ export function structuredStatusSummariesEqual(
 ): boolean {
   return (
     a.workspaceId === b.workspaceId &&
+    a.usageLimitContinue?.turnItemId === b.usageLimitContinue?.turnItemId &&
+    a.usageLimitContinue?.resetsAt === b.usageLimitContinue?.resetsAt &&
+    a.usageLimitContinue?.state === b.usageLimitContinue?.state &&
     a.agent === b.agent &&
     a.status === b.status &&
     a.hostExecutionOwned === b.hostExecutionOwned &&

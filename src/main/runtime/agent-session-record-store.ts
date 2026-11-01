@@ -1,3 +1,4 @@
+import * as usageLimitContinue from '../../shared/agent-session-usage-limit-continue'
 import { agentSessionRecordLineage } from './agent-session-record-lineage'
 import type Database from '../sqlite/sync-database'
 import { createAgentSessionOwnerProof } from './agent-session-owner-proof'
@@ -235,6 +236,11 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     return this.mutate(args.sessionId, (record) => evictAgentSessionOwner({ ...args, record }))
   }
 
+  cancelUsageLimitContinue = (id: string, cut: usageLimitContinue.UsageLimitContinueIdentity) =>
+    this.mutate(id, (record) =>
+      usageLimitContinue.cancelAgentSessionUsageLimitContinue(record, cut)
+    )
+
   transitionHandoff = (
     sessionId: string,
     transition: (record: AgentSessionRecord) => AgentSessionRecord
@@ -277,7 +283,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     args: Parameters<typeof settleAgentSessionOperationInto>[1]
   ): Promise<void> => this.transact((draft) => settleAgentSessionOperationInto(draft, args))
 
-  /** Commit settlement with the journal write; new submissions also clear Sleep in that draft. */
+  /** Commit settlement with the journal write, including any action-owned record transformation;
+   *  new submissions also clear Sleep in that draft. */
   operationOutcomeReceipt = (args: Parameters<typeof agentSessionOperationOutcomeReceipt>[1]) =>
     agentSessionOperationOutcomeReceipt(this.transactions, args)
 

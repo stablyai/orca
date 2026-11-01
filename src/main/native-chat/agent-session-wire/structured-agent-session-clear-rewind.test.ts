@@ -1,3 +1,6 @@
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { activeProviderContext } from '../../../shared/agent-session-provider-context'
@@ -55,7 +58,7 @@ async function send(text: string, turn: string) {
   return agentJournalSubmissionKey(sent.id)
 }
 
-async function seed() {
+async function seed(limited = false) {
   const old = await send('before clear', 'old')
   await clear()
   const floor = journal().context.floor()!
@@ -64,6 +67,32 @@ async function seed() {
     .items.filter((item) => item.sequence <= floor.sequence)
   const raw = canonicalPrefix(floor.sequence)
   const kept = await send('kept after clear', 'kept')
+  if (limited) {
+    const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
+    await journal().appendItem(
+      { provider: 'orca', clientMessageId: 'context-limit-turn' },
+      {
+        kind: 'turn',
+        turnId: 'kept',
+        state: 'completed',
+        outcome: 'failure',
+        startedAt: 1,
+        completedAt: 2
+      },
+      { fence, turnScope: { kind: 'thread' } }
+    )
+    await journal().appendItem(
+      { provider: 'orca', clientMessageId: 'context-limit' },
+      {
+        kind: 'status',
+        text: 'Usage limit',
+        failure: agentSessionFailureFact('usageLimitReached', {
+          usageLimit: { resetsAt: 1800000060000 }
+        })
+      },
+      { fence, turnScope: { kind: 'turn', turnItemId: 'orca:context-limit-turn' } }
+    )
+  }
   const target = await send('rewound after clear', 'target')
   const fields = { itemId: target, expectedEpoch: journal().cursor().epoch }
   const params = {
@@ -229,7 +258,10 @@ describe('rewind behind a clear boundary', () => {
   })
 
   it('rolls suffix changes and success back together, then recovers once without provider retry', async () => {
-    const { floor, raw, params } = await seed()
+    const { floor, raw, params } = await seed(true)
+    vi.spyOn(rig.store, 'cancelUsageLimitContinue').mockRejectedValue(
+      new Error('optional cancel unavailable')
+    )
     const before = journal().snapshot()
     db().exec(`CREATE TEMP TRIGGER fail_rewind BEFORE UPDATE ON agent_session_records
       WHEN instr(NEW.record_json, '"phase":"completed"') > 0
@@ -237,6 +269,7 @@ describe('rewind behind a clear boundary', () => {
     await expect(rig.host.rewind(CALLER, params)).rejects.toThrow('disk full')
     expect(journal().snapshot()).toEqual(before)
     expect(rig.store.getRecord(SESSION)?.rewind?.phase).toBe('provider-succeeded')
+    expect(rig.store.getRecord(SESSION)?.usageLimitContinueCancel).toBeUndefined()
     expect(
       rig.store.getOperationRow(CALLER.callerKey, params.envelope.clientOperationId)?.outcome.status
     ).toBe('pending')
@@ -250,6 +283,13 @@ describe('rewind behind a clear boundary', () => {
     })
     expect(rig.store.getRecord(SESSION)?.lastTurn).toBeUndefined()
     const recovered = journal().snapshot()
+    const restored = latestNativeChatUsageLimitCut(recovered.items, recovered.submissions)!
+    expect(restored.turnItemId).toBe('orca:context-limit-turn')
+    const cancel = { turnItemId: restored.turnItemId, resetsAt: restored.resetsAt }
+    expect(rig.store.getRecord(SESSION)?.usageLimitContinueCancel).toEqual(cancel)
+    expect(
+      (await openTestAgentSessionRecordStore(rig.root)).getRecord(SESSION)?.usageLimitContinueCancel
+    ).toEqual(cancel)
     await recoverStructuredRewind(
       rig.host.deps,
       SESSION,

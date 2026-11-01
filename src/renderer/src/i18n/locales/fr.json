@@ -20061,6 +20061,13 @@
         "switchAccount": "Changer de compte",
         "addAccount": "Ajouter un compte…",
         "accountUnavailable": "Cette conversation ne peut pas passer à un autre compte. Transférez-la à un autre agent."
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "Impossible d’annuler la reprise automatique. Réessayez.",
+        "openSetting": "Reprendre automatiquement à la réinitialisation des limites",
+        "cancelled": "Orca ne reprendra pas ce chat automatiquement.",
+        "scheduled": "Orca reprendra ce chat à {{time}}.",
+        "cancel": "Ne pas reprendre"
       }
     },
     "tab": {
@@ -20505,7 +20512,12 @@
         "queueSearchSteer": "orienter",
         "shellEnvSearchVariables": "variables d'environnement",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "proxy"
+        "shellEnvSearchProxy": "proxy",
+        "usageLimitContinueTitle": "Reprendre automatiquement les chats quand une limite d’utilisation est réinitialisée",
+        "usageLimitContinueCopy": "Orca envoie « Continue where you left off. » quand la limite est réinitialisée. S’applique à tous les chats dont l’heure de réinitialisation est connue.",
+        "usageLimitContinueSearchLimit": "limite d’utilisation",
+        "usageLimitContinueSearchReset": "réinitialisation",
+        "usageLimitContinueToggleLabel": "Activer ou désactiver la reprise des chats à la réinitialisation d’une limite"
       }
     },
     "agentChildRow": {

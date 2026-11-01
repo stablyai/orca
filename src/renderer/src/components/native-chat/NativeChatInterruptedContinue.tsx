@@ -1,3 +1,4 @@
+import { useNativeChatUsageLimitAutoContinue } from './use-native-chat-usage-limit-auto-continue'
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -86,6 +87,11 @@ export function useNativeChatInterruptedContinuation(input: {
   const usageLimitCut = useMemo(
     () => latestNativeChatUsageLimitCut(input.journalItems, input.submissions),
     [input.journalItems, input.submissions]
+  )
+  const usageLimitAutoContinue = useNativeChatUsageLimitAutoContinue(
+    target,
+    sessionId,
+    usageLimitCut
   )
   // The cut this client already asked to continue: hidden until the journal shows what came of it.
   const [asked, setAsked] = useState<string | null>(null)
@@ -177,6 +183,9 @@ export function useNativeChatInterruptedContinuation(input: {
       offeredTurnItemId: offered,
       continueNow,
       usageLimitTurnItemId,
+      usageLimitAutoContinue,
+      onUsageLimitHandOffStarted:
+        usageLimitAutoContinue?.kind === 'scheduled' ? usageLimitAutoContinue.cancel : undefined,
       usageLimitContinueDisabled: usageCapability === 'unknown',
       continueUsageLimit
     }),
@@ -188,6 +197,7 @@ export function useNativeChatInterruptedContinuation(input: {
       offered,
       continueNow,
       usageLimitTurnItemId,
+      usageLimitAutoContinue,
       usageCapability,
       continueUsageLimit
     ]

@@ -20188,6 +20188,13 @@
         "switchAccount": "Switch Account",
         "addAccount": "Add Account…",
         "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "Couldn't cancel automatic continuation. Try again.",
+        "openSetting": "Continue automatically when limits reset",
+        "cancelled": "Orca won't continue this chat automatically.",
+        "scheduled": "Orca will continue this chat at {{time}}.",
+        "cancel": "Don't continue"
       }
     },
     "tab": {
@@ -20586,7 +20593,12 @@
         "linkPreviewsTitle": "Link previews",
         "linkPreviewsCopy": "Hovering a web link shows a preview card. Orca fetches the page to build it, so the site can see the request.",
         "linkPreviewsSearchUnfurl": "unfurl",
-        "linkPreviewsSearchHover": "hover card"
+        "linkPreviewsSearchHover": "hover card",
+        "usageLimitContinueTitle": "Continue chats automatically when a usage limit resets",
+        "usageLimitContinueCopy": "Orca sends \"Continue where you left off.\" when the limit resets. Applies to all chats with a known reset time.",
+        "usageLimitContinueSearchLimit": "usage limit",
+        "usageLimitContinueSearchReset": "reset",
+        "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets"
       }
     },
     "agentChildRow": {

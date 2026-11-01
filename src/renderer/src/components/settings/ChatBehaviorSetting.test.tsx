@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
@@ -206,4 +207,29 @@ it('renders the Queue switch and description using the German catalog', async ()
       await i18n.changeLanguage('en')
     })
   }
+})
+
+it('shows the automatic continuation switch only for a capable host and writes the selected consent', () => {
+  const updateSettings = vi.fn()
+  setLocalRuntimeCapabilitiesForTests([])
+  const view = renderSetting({}, updateSettings)
+  const label = 'Toggle continuing chats when a usage limit resets'
+  expect(view.queryByRole('switch', { name: label })).toBeNull()
+  view.unmount()
+  setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY])
+  const supported = renderSetting({}, updateSettings)
+  fireEvent.click(supported.getByRole('switch', { name: label }))
+  expect(updateSettings).toHaveBeenCalledWith({ nativeChatAutoContinueAfterUsageLimit: true })
+})
+
+it('disables the supported automatic continuation switch until host consent is known', () => {
+  setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY])
+  const updateSettings = vi.fn()
+  const view = renderSetting({ nativeChatAutoContinueAfterUsageLimit: undefined }, updateSettings)
+  const control = view.getByRole('switch', {
+    name: 'Toggle continuing chats when a usage limit resets'
+  })
+  expect(control).toHaveProperty('disabled', true)
+  fireEvent.click(control)
+  expect(updateSettings).not.toHaveBeenCalled()
 })

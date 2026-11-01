@@ -1,9 +1,13 @@
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session-usage-limit-continue'
+import { replayJournal } from '../agent-session-journal/journal-open'
+import { renderJournalState } from '../agent-session-journal/journal-reducer'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { latestUsageLimitContinueIdentity } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
 import { isDeepStrictEqual } from 'node:util'
@@ -109,7 +113,8 @@ export async function recoverStructuredRewind(
   receipt?: (
     rewind: AgentSessionRewindRecord,
     fence: number,
-    cursor: AgentJournalCursor
+    cursor: AgentJournalCursor,
+    cancel?: UsageLimitContinueIdentity
   ) => JournalOperationReceipt,
   signal?: AbortSignal
 ): Promise<void> {
@@ -173,7 +178,8 @@ export async function applyStructuredRewindRecovery(
   receipt?: (
     rewind: AgentSessionRewindRecord,
     fence: number,
-    cursor: AgentJournalCursor
+    cursor: AgentJournalCursor,
+    cancel?: UsageLimitContinueIdentity
   ) => JournalOperationReceipt
 ): Promise<void> {
   const { store } = deps
@@ -228,12 +234,7 @@ export async function applyStructuredRewindRecovery(
   if (rewind.providerFork?.materialized && !rewind.contextClearOperationId && !alreadyReplaced) {
     const completed = rewind
     await journal.replaceEpochItems('handle_forked', fence, cut!.kept, (cursor) =>
-      inheritForkName(
-        deps,
-        sessionId,
-        receipt?.(completed, fence, cursor) ??
-          store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
-      )
+      inheritForkName(deps, sessionId, completion(completed, cursor))
     )
     return
   }
@@ -251,33 +252,33 @@ export async function applyStructuredRewindRecovery(
       { epoch: completed.expectedEpoch, sequence: completed.contextClearSequence! },
       fence,
       cut!.kept,
-      (cursor) =>
-        inheritForkName(
-          deps,
-          sessionId,
-          receipt?.(completed, fence, cursor) ??
-            store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
-        )
+      (cursor) => inheritForkName(deps, sessionId, completion(completed, cursor))
     )
     return
   }
   const cursor = alreadyReplaced
     ? journal.cursor()
     : await journal.replaceEpochItems('handle_forked', fence, cut!.kept)
-  await persistRewindRecord(store, sessionId, fence, {
-    ...rewind,
-    phase: 'completed',
-    epoch: cursor.epoch
-  })
-  await store.recordOperationOutcome({
-    callerKey: rewind.callerKey,
-    operationId: rewind.operationId,
-    outcome: {
-      status: 'succeeded',
-      sessionId,
-      rewind: { itemId: rewind.itemId, epoch: cursor.epoch }
+  await store.commitOperationReceipt(completion(rewind, cursor))
+
+  function completion(
+    completed: AgentSessionRewindRecord,
+    cursor: AgentJournalCursor
+  ): JournalOperationReceipt {
+    let staged: JournalOperationReceipt
+    return {
+      write: (db, row) => {
+        // Context rows are in this transaction; normal replacement has already committed.
+        const load = replayJournal(db, sessionId)!
+        const cancel = latestUsageLimitContinueIdentity(renderJournalState(load.state))
+        staged =
+          receipt?.(completed, fence, cursor, cancel) ??
+          store.conversationReceipts.rewind(sessionId, fence, completed, cursor, cancel)
+        staged.write(db, row)
+      },
+      committed: () => staged.committed()
     }
-  })
+  }
 }
 
 /** Settle prepared rewinds orphaned across processes; provider-only proof waits for the next proven start. */

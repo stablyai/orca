@@ -34,6 +34,7 @@ export type StructuredAgentSessionStatusFeedDeps = {
   listConversations?: () => AgentSessionConversationView[]
   /** Absent means no replaced runtime. */
   replacedRuntime?: (sessionId: string) => { fence: number } | undefined
+  readUsageLimitContinue?: (id: string) => AgentSessionStatusSummary['usageLimitContinue']
   now: () => number
   /** Observer/sink failure must not block subscriber events. */
   logger: StructuredAgentSessionLogger

@@ -16,6 +16,7 @@ import {
   journalOpenRefusal
 } from '../agent-session-journal/journal-open-failure'
 import type { JournalStopAcceptanceInput } from '../agent-session-journal/journal-stop-acceptance'
+import type { ChatStopTarget } from './structured-agent-session-chat-stop-target'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import {
   journalRowReceiptResult,
@@ -89,6 +90,50 @@ export async function acceptChatStop(
       ? { ok: true, value: { turnId: null } }
       : stopNotSaved(ctx, error)
   }
+}
+
+/** Accept a captured chat Stop; failed durable acceptance must leave the agent running. */
+export async function acceptCapturedChatStop(
+  ctx: AgentSessionTurnContext,
+  target: ChatStopTarget,
+  callerKey: string,
+  settlesOtherWork: boolean
+): Promise<Accepted<{ settled: boolean; turnId: string | null }>> {
+  if (!target.marks) {
+    const accepted = await acceptStopTarget(ctx)
+    return accepted.ok ? { ok: true, value: { settled: false, turnId: null } } : accepted
+  }
+  const sinceStop = ctx.journal.queuedMessages.userStopInForce()?.sequence
+  const handed = ctx.journal
+    .submissions()
+    .some(
+      (entry) =>
+        entry.fence === ctx.fence &&
+        (entry.handoverRecorded !== true || entry.handedOverAt !== undefined) &&
+        (entry.dispatchState === 'pending' ||
+          (entry.dispatchState === 'unknown' && !entry.recovered)) &&
+        (sinceStop === undefined || (entry.submittedSequence ?? -1) > sinceStop)
+    )
+  const accepted = await acceptChatStop(ctx, {
+    event: {
+      reason: 'user-stop',
+      caller: callerKey,
+      ...(target.eventTurnId !== null ? { turnId: target.eventTurnId } : {})
+    },
+    fence: ctx.fence
+  })
+  return accepted.ok
+    ? {
+        ok: true,
+        value: {
+          settled:
+            (accepted.value.withdrawn?.length ?? (target.queued ? 1 : 0)) > 0 ||
+            handed ||
+            settlesOtherWork,
+          turnId: accepted.value.turnId
+        }
+      }
+    : accepted
 }
 
 /** Post-COMMIT fold failure cannot undo acceptance; act on the saved capture. */

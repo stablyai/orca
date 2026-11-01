@@ -19307,6 +19307,13 @@
         "switchAccount": "계정 전환",
         "addAccount": "계정 추가…",
         "accountUnavailable": "이 채팅을 다른 계정으로 옮길 수 없습니다. 다른 에이전트에게 인계하세요."
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "자동 계속을 취소하지 못했습니다. 다시 시도하세요.",
+        "openSetting": "한도가 재설정되면 자동으로 계속하기",
+        "cancelled": "Orca가 이 채팅을 자동으로 계속하지 않습니다.",
+        "scheduled": "Orca가 {{time}}에 이 채팅을 계속합니다.",
+        "cancel": "계속하지 않기"
       }
     },
     "tab": {
@@ -19699,7 +19706,12 @@
         "queueSearchSteer": "지금 보내기",
         "shellEnvSearchVariables": "환경 변수",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "프록시"
+        "shellEnvSearchProxy": "프록시",
+        "usageLimitContinueTitle": "사용 한도가 재설정되면 채팅을 자동으로 계속하기",
+        "usageLimitContinueCopy": "한도가 재설정되면 Orca가 \"Continue where you left off.\"를 보냅니다. 재설정 시간을 알 수 있는 모든 채팅에 적용됩니다.",
+        "usageLimitContinueSearchLimit": "사용 한도",
+        "usageLimitContinueSearchReset": "재설정",
+        "usageLimitContinueToggleLabel": "사용 한도 재설정 시 채팅 계속하기 전환"
       }
     },
     "agentChildRow": {

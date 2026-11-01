@@ -19273,6 +19273,13 @@
         "switchAccount": "切换账号",
         "addAccount": "添加账号…",
         "accountUnavailable": "此聊天无法切换到其他账户。请将其移交给其他智能体。"
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "无法取消自动继续。请重试。",
+        "openSetting": "额度重置后自动继续",
+        "cancelled": "Orca 不会自动继续此聊天。",
+        "scheduled": "Orca 将在 {{time}} 继续此聊天。",
+        "cancel": "不要继续"
       }
     },
     "tab": {
@@ -19700,7 +19707,12 @@
         "queueSearchSteer": "立即发送",
         "shellEnvSearchVariables": "环境变量",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "代理"
+        "shellEnvSearchProxy": "代理",
+        "usageLimitContinueTitle": "使用额度重置后自动继续聊天",
+        "usageLimitContinueCopy": "额度重置后，Orca 会发送“Continue where you left off.”。适用于所有已知重置时间的聊天。",
+        "usageLimitContinueSearchLimit": "使用额度",
+        "usageLimitContinueSearchReset": "重置",
+        "usageLimitContinueToggleLabel": "切换使用额度重置后自动继续聊天"
       }
     },
     "agentChildRow": {

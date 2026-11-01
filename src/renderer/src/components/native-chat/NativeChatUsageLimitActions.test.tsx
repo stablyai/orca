@@ -12,6 +12,8 @@ import { buildAgentSessionContinuationPrompt } from '@/lib/agent-session-continu
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
+import { useNativeChatUsageLimitAutoContinue } from './use-native-chat-usage-limit-auto-continue'
 
 const mocks = vi.hoisted(() => ({
   readSnapshot: {
@@ -24,6 +26,17 @@ const mocks = vi.hoisted(() => ({
   snapshot: vi.fn(),
   select: vi.fn(),
   dialog: vi.fn()
+}))
+let status = new Map<string, Pick<AgentSessionStatusSummary, 'usageLimitContinue'>>()
+vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
+  useStructuredAgentSessionHostCapabilityState: () => 'supported'
+}))
+vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
+  getStructuredAgentSessionStatusFeed: () => ({
+    activate: () => () => {},
+    subscribe: () => () => {},
+    getSnapshot: () => status
+  })
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.options
@@ -56,12 +69,28 @@ vi.mock('@/lib/claude-account-switch-sessions', () => ({
   handleRunningClaudeSessionsAfterSwitch: vi.fn()
 }))
 vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog', () => ({
-  AgentSessionContinuationDialog: (props: { onOpenChange: (open: boolean) => void }) => {
+  AgentSessionContinuationDialog: (props: {
+    onOpenChange: (open: boolean) => void
+    onStarted?: () => void
+  }) => {
     mocks.dialog(props)
-    return <button onClick={() => props.onOpenChange(false)}>Cancel hand-off</button>
+    return (
+      <>
+        <button onClick={() => props.onOpenChange(false)}>Cancel hand-off</button>
+        <button
+          onClick={() => {
+            props.onOpenChange(false)
+            props.onStarted?.()
+          }}
+        >
+          Start hand-off
+        </button>
+      </>
+    )
   }
 }))
 beforeEach(() => {
+  status = new Map()
   mocks.options.mockResolvedValue(mocks.readSnapshot)
   mocks.watch.mockImplementation((target, handlers) => {
     let closed = false
@@ -91,7 +120,8 @@ function row(
   recovery: Parameters<typeof NativeChatUsageLimitActionsProvider>[0]['recovery'] = {
     readCurrent: true,
     canSwitchAccount: mocks.follows
-  }
+  },
+  automatic?: ReturnType<typeof useNativeChatUsageLimitAutoContinue>
 ) {
   const view: NativeChatOrcaStopView = {
     hostLabel: null,
@@ -100,6 +130,8 @@ function row(
     offeredTurnItemId: null,
     continueNow: vi.fn(),
     usageLimitTurnItemId: offered ? 'cut' : null,
+    usageLimitAutoContinue: automatic,
+    onUsageLimitHandOffStarted: automatic?.kind === 'scheduled' ? automatic.cancel : undefined,
     continueUsageLimit: vi.fn()
   }
   return (
@@ -301,4 +333,46 @@ it('hands off database-backed chats using labelled recent messages when no nativ
   )
   expect(source.capturedText).toContain('user: Keep the recent task context')
   expect(buildAgentSessionContinuationPrompt(source, 'full')).toBeNull()
+})
+
+it('withdraws the source schedule after hand-off starts without waiting for cancellation', async () => {
+  const target: RuntimeClientTarget = { kind: 'environment', environmentId: 'chat-host' }
+  const resetsAt = 1_800_000_000_000
+  status.set('chat', { usageLimitContinue: { turnItemId: 'cut', resetsAt, state: 'scheduled' } })
+  mocks.follows = false
+  function ScheduledRow() {
+    const automatic = useNativeChatUsageLimitAutoContinue(target, 'chat', {
+      turnItemId: 'cut',
+      resetsAt
+    })
+    return row(target, true, 'codex', [], undefined, automatic)
+  }
+  const view = render(<ScheduledRow />)
+  fireEvent.click(screen.getByRole('button', { name: 'Hand Off to Another Agent' }))
+  fireEvent.click(await screen.findByText('Cancel hand-off'))
+  expect(
+    mocks.options.mock.calls.some((call) => call[1] === 'agentSession.cancelUsageLimitContinue')
+  ).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'Hand Off to Another Agent' }))
+  await screen.findByText('Start hand-off')
+  let finish = () => {}
+  mocks.options.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve({})
+      })
+  )
+  fireEvent.click(screen.getByText('Start hand-off'))
+  expect(screen.queryByText('Cancel hand-off')).toBeNull()
+  expect(mocks.options).toHaveBeenLastCalledWith(target, 'agentSession.cancelUsageLimitContinue', {
+    sessionId: 'chat',
+    turnItemId: 'cut',
+    resetsAt
+  })
+  status = new Map([
+    ['chat', { usageLimitContinue: { turnItemId: 'cut', resetsAt, state: 'cancelled' } }]
+  ])
+  view.rerender(<ScheduledRow />)
+  expect(screen.getByText("Orca won't continue this chat automatically.")).toBeInTheDocument()
+  finish()
 })

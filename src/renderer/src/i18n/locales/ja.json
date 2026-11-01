@@ -19307,6 +19307,13 @@
         "switchAccount": "アカウントを切り替え",
         "addAccount": "アカウントを追加…",
         "accountUnavailable": "このチャットは別のアカウントに移せません。別の Agent に引き継いでください。"
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "自動続行をキャンセルできませんでした。もう一度お試しください。",
+        "openSetting": "上限がリセットされたら自動的に続ける",
+        "cancelled": "Orca はこのチャットを自動的には続けません。",
+        "scheduled": "Orca は {{time}} にこのチャットを続けます。",
+        "cancel": "続けない"
       }
     },
     "tab": {
@@ -19699,7 +19706,12 @@
         "queueSearchSteer": "今すぐ送信",
         "shellEnvSearchVariables": "環境変数",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "プロキシ"
+        "shellEnvSearchProxy": "プロキシ",
+        "usageLimitContinueTitle": "使用量の上限がリセットされたらチャットを自動的に続ける",
+        "usageLimitContinueCopy": "上限がリセットされると、Orca が「Continue where you left off.」を送信します。リセット時刻がわかっているすべてのチャットに適用されます。",
+        "usageLimitContinueSearchLimit": "使用量の上限",
+        "usageLimitContinueSearchReset": "リセット",
+        "usageLimitContinueToggleLabel": "使用量の上限リセット時にチャットを続けるかを切り替える"
       }
     },
     "agentChildRow": {

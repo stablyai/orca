@@ -258,6 +258,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         structuredAgentConfiguredArgs(agent, this.requireStore().getSettings()),
       // Production-only wiring prevents test runtimes from probing a real Claude CLI.
       claudeCliFlags: claudeCliFlagSupport,
+      usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
       },

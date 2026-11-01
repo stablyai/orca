@@ -77,6 +77,7 @@ export function createWebSettingsApi(): Pick<Partial<PreloadApi>, 'agentAwake'> 
           )
         }
         const localUpdates = { ...sanitizedUpdates }
+        delete localUpdates.nativeChatAutoContinueAfterUsageLimit
         if (runtimeEnvironment) {
           delete localUpdates.worktreeVisibilityDefaults
         }
