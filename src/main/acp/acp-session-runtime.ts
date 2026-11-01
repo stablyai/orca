@@ -1,6 +1,7 @@
 import type { Readable, Writable } from 'node:stream'
 import { z } from 'zod'
 import { AcpRpcError } from './acp-errors'
+import { AcpPromptRequest } from './acp-prompt-request'
 import { callAcpSession } from './acp-response-settlement'
 import { AcpJsonRpcPeer, type AcpPeerOptions, type AcpRequestContext } from './acp-json-rpc-peer'
 import {
@@ -43,6 +44,7 @@ const withMeta = (meta: Meta): { _meta?: Meta } => (meta ? { _meta: meta } : {})
 
 export type AcpSessionRuntimeOptions = {
   clientInfo?: InitializeRequest['clientInfo']
+  retryBusyPrompts?: boolean
   peer?: AcpPeerOptions
   onPermission?: AcpPermissionHandler
   /** After abort, handlers still reply or throw (-32800); close ends unanswered requests. */
@@ -63,7 +65,7 @@ export class AcpSessionRuntime {
   private initialized?: Promise<InitializeResponse>
   private starting?: Promise<AcpSessionStarted>
   private started?: AcpSessionStarted
-  private activePrompt?: Promise<PromptResponse>
+  private readonly prompts: AcpPromptRequest
   private reportedUpdateAnomaly = false
 
   constructor(
@@ -71,6 +73,7 @@ export class AcpSessionRuntime {
     output: Writable,
     private readonly options: AcpSessionRuntimeOptions = {}
   ) {
+    this.prompts = new AcpPromptRequest(options.retryBusyPrompts === true)
     this.peer = new AcpJsonRpcPeer(
       input,
       output,
@@ -78,7 +81,10 @@ export class AcpSessionRuntime {
         onRequest: (method, params, context) => this.handleRequest(method, params, context),
         onNotification: (method, params) => this.handleNotification(method, params),
         onDiagnostic: options.onDiagnostic,
-        onClose: options.onClose,
+        onClose: (error) => {
+          this.prompts.close(error)
+          options.onClose?.(error)
+        },
         onOtherLine: options.onOtherLine
       },
       options.peer
@@ -169,19 +175,8 @@ export class AcpSessionRuntime {
   }
 
   async prompt(prompt: PromptRequest['prompt'], meta?: Meta): Promise<PromptResponse> {
-    if (this.activePrompt) {
-      throw new Error('ACP prompt already in progress')
-    }
     const params: PromptRequest = { sessionId: this.sessionId(), prompt, ...withMeta(meta) }
-    const response = this.call('session/prompt', params, PromptResponseSchema)
-    this.activePrompt = response
-    try {
-      return await response
-    } finally {
-      if (this.activePrompt === response) {
-        this.activePrompt = undefined
-      }
-    }
+    return this.prompts.run(() => this.call('session/prompt', params, PromptResponseSchema))
   }
 
   /** Stop and steering share this notification; the adapter owns their completion policy. */
@@ -189,6 +184,7 @@ export class AcpSessionRuntime {
     if (!this.started) {
       return Promise.reject(new Error('ACP session has not started'))
     }
+    this.prompts.cancel()
     const params: CancelNotification = {
       sessionId: this.started.sessionId,
       ...withMeta(options.meta)
