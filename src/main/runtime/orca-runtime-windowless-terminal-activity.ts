@@ -3,16 +3,17 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contrac
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 import { isRemoteRuntimePtyId } from '../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeTerminalSplit } from '../../shared/runtime-terminal-contracts'
-import {
-  getConnectionExecutionHostId,
-  parseExecutionHostId,
-  type ExecutionHostId
-} from '../../shared/execution-host'
+import { parseExecutionHostId } from '../../shared/execution-host'
+import { isRestoreSpawnIntent } from '../../shared/host-spawn-admission'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { readWorkspaceRecord, writeWorkspaceRecord } from './sidebar-inputs/sort-stamp-records'
 import { createKeyedTrailingEdgeCoalescer } from './keyed-trailing-edge-coalescer'
-import { isRestoreSpawnIntent } from '../../shared/host-spawn-admission'
+import {
+  agentPaneWorkspace,
+  type AgentPaneWorkspace
+} from '../agent-hooks/agent-transition-detector'
+import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
@@ -35,8 +36,17 @@ export abstract class OrcaRuntimeWithWindowlessTerminalActivity extends OrcaRunt
     const created = await super.createTerminal(...args)
     const opts = args[1]
     // A reattach, a saved session's resume, or a pane started again is no new work in the workspace.
-    if (!created.isReattach && !isRestoreSpawnIntent(opts?.spawnIntent) && !opts?.reopensPane) {
-      this.stampWindowlessTerminalActivity(created.worktreeId, created.executionHostId)
+    if (
+      this.stampsTerminalActivity() &&
+      !created.isReattach &&
+      !isRestoreSpawnIntent(opts?.spawnIntent) &&
+      !opts?.reopensPane
+    ) {
+      const hostId = created.executionHostId
+      this.stampTerminalActivity({
+        worktreeId: created.worktreeId,
+        sshHostId: parseExecutionHostId(hostId)?.kind === 'ssh' ? (hostId ?? null) : null
+      })
     }
     return created
   }
@@ -53,33 +63,12 @@ export abstract class OrcaRuntimeWithWindowlessTerminalActivity extends OrcaRunt
     return this.stampSplit(await super.splitTerminalPane(...args))
   }
 
-  override onPtyExit(...args: Parameters<Runtime['onPtyExit']>): ReturnType<Runtime['onPtyExit']> {
-    const [ptyId, exitCode, exitIncarnationId, options = {}] = args
-    // Read first: the exit clears the stop request and may prune the record.
-    const pty = isRemoteRuntimePtyId(ptyId) ? undefined : this.ptysById.get(ptyId)
-    // The base ignores an exit of any incarnation but the one registering or registered.
-    const currentIncarnationId =
-      this.pendingPtyRegistrationIncarnations.get(ptyId)?.incarnationId ?? pty?.incarnationId
-    const incarnationId = exitIncarnationId ?? pty?.incarnationId ?? undefined
-    const priorExit = this.getPtyLivenessVerdict(ptyId)
-    const endedOnItsOwn =
-      !(exitIncarnationId && currentIncarnationId && exitIncarnationId !== currentIncarnationId) &&
-      // A stop's cleanup can report the exit again, after its stop request is spent.
-      !(priorExit?.status === 'exited' && priorExit.incarnationId === incarnationId) &&
-      // A close, kill, sleep or restart is the user's or Orca's own stop, as the window skips it.
-      !this.isPtyStopRequested(ptyId) &&
-      !this.intentionalPtyStops.endsIntentionalStop(ptyId, incarnationId) &&
-      // A lost host or dropped connection reports exits that are no work in the workspace.
-      options.hostLost !== true &&
-      (exitCode >= 0 || options.hostExitConfirmed === true || options.providerExitObserved === true)
-    const result = super.onPtyExit(...args)
-    if (pty && endedOnItsOwn) {
-      this.stampWindowlessTerminalActivity(
-        pty.worktreeId,
-        getConnectionExecutionHostId(pty.connectionId)
-      )
+  protected override notePtyEndedOnItsOwn(pty: RuntimePtyWorktreeRecord): void {
+    super.notePtyEndedOnItsOwn(pty)
+    // A paired server's terminal is that server's to record.
+    if (this.stampsTerminalActivity() && !isRemoteRuntimePtyId(pty.ptyId)) {
+      this.stampTerminalActivity(agentPaneWorkspace(pty.worktreeId, pty.connectionId))
     }
-    return result
   }
 
   // Metadata only: clients re-list the record, and the cached git scans stay.
@@ -92,32 +81,28 @@ export abstract class OrcaRuntimeWithWindowlessTerminalActivity extends OrcaRunt
     this.notifyWorktreesChanged(getRepoIdFromWorktreeId(worktreeId), { invalidateGitScans: false })
   }
 
+  // Switch point: main's sort stamps own Recent. Only a headless host (serve, orcad) stamps here: a
+  // window stamps its own, and a desktop between windows (null) stays unstamped, as before.
+  private stampsTerminalActivity(): boolean {
+    return !ORCA_SIDEBAR_INPUTS_IS_MAIN && this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
+  }
+
   private stampSplit(split: RuntimeTerminalSplit): RuntimeTerminalSplit {
-    const pty = this.getLivePtyForHandle(split.handle)?.pty
+    const pty = this.stampsTerminalActivity() ? this.getLivePtyForHandle(split.handle)?.pty : null
     if (pty) {
-      this.stampWindowlessTerminalActivity(
-        pty.worktreeId,
-        getConnectionExecutionHostId(pty.connectionId)
-      )
+      this.stampTerminalActivity(agentPaneWorkspace(pty.worktreeId, pty.connectionId))
     }
     return split
   }
 
-  private stampWindowlessTerminalActivity(
-    worktreeId: string,
-    hostId: ExecutionHostId | undefined
-  ): void {
-    // Switch point: main's sort stamps own Recent. Only a headless host (serve, orcad) stamps here: a
-    // window stamps its own, and a desktop between windows (null) stays unstamped, as before.
-    if (ORCA_SIDEBAR_INPUTS_IS_MAIN || this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID) {
-      return
-    }
-    const sshHostId = parseExecutionHostId(hostId)?.kind === 'ssh' ? (hostId ?? null) : null
-    const workspace = { worktreeId, sshHostId }
+  private stampTerminalActivity(workspace: AgentPaneWorkspace): void {
     // A WSL move freezes only this machine's projects.
     if (
-      !sshHostId &&
-      isWslMoveProjectBlocked(this.store ?? undefined, wslMoveProjectRefForWorkspace(worktreeId))
+      !workspace.sshHostId &&
+      isWslMoveProjectBlocked(
+        this.store ?? undefined,
+        wslMoveProjectRefForWorkspace(workspace.worktreeId)
+      )
     ) {
       return
     }
@@ -127,7 +112,7 @@ export abstract class OrcaRuntimeWithWindowlessTerminalActivity extends OrcaRunt
         return
       }
       writeWorkspaceRecord(this.store, workspace, { lastActivityAt: Date.now() })
-      this.sortStampNotices.schedule(worktreeId)
+      this.sortStampNotices.schedule(workspace.worktreeId)
     } catch (error) {
       // The terminal already started or ended; a failed stamp must not fail that.
       console.warn('[runtime] failed to record terminal activity:', error)

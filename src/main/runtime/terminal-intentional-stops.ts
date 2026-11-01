@@ -63,28 +63,15 @@ export class TerminalIntentionalStops {
     ptyId: string,
     exitIncarnationId: string | null | undefined
   ): readonly TerminalIntentionalStopKind[] {
-    const stop = this.stopEndedBy(ptyId, exitIncarnationId)
+    const stop = this.stopsByPtyId.get(ptyId)
     if (!stop) {
+      return NO_INTENTIONAL_STOP
+    }
+    if (stop.incarnationId && exitIncarnationId && stop.incarnationId !== exitIncarnationId) {
       return NO_INTENTIONAL_STOP
     }
     stop.incarnationId ??= exitIncarnationId ?? null
     return [...stop.ownersByKind.keys()]
-  }
-
-  /** Whether this exit ends a stop made on purpose, without claiming it. */
-  endsIntentionalStop(ptyId: string, exitIncarnationId: string | null | undefined): boolean {
-    return (this.stopEndedBy(ptyId, exitIncarnationId)?.ownersByKind.size ?? 0) > 0
-  }
-
-  private stopEndedBy(
-    ptyId: string,
-    exitIncarnationId: string | null | undefined
-  ): IntentionalStop | undefined {
-    const stop = this.stopsByPtyId.get(ptyId)
-    if (stop?.incarnationId && exitIncarnationId && stop.incarnationId !== exitIncarnationId) {
-      return undefined
-    }
-    return stop
   }
 
   /** Whether a stop of this PTY that may still be undone is in flight. */
