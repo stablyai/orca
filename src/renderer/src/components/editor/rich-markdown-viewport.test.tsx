@@ -36,13 +36,16 @@ function fixture() {
     clientHeight: { configurable: true, value: 300 }
   })
   vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 300, 300))
-  const scroll = vi.spyOn(container, 'scrollTo').mockImplementation((options) => {
-    if (typeof options !== 'object') {
-      throw new Error('Expected scroll options')
-    }
-    container.scrollTop = Math.max(0, Math.min(options.top ?? container.scrollTop, 4700))
-    container.scrollLeft = options.left ?? container.scrollLeft
-  })
+  // Annotated because the spy's type takes the (x, y) overload; the editor code passes options.
+  const scroll = vi
+    .spyOn(container, 'scrollTo')
+    .mockImplementation((options?: ScrollToOptions | number) => {
+      if (typeof options !== 'object') {
+        throw new Error('Expected scroll options')
+      }
+      container.scrollTop = Math.max(0, Math.min(options.top ?? container.scrollTop, 4700))
+      container.scrollLeft = options.left ?? container.scrollLeft
+    })
   let target = 800
   vi.spyOn(editor.view, 'coordsAtPos').mockImplementation(() => ({
     top: target - container.scrollTop + 150,

@@ -271,6 +271,7 @@ for (const returnPath of ['bare', 'removed-replace', 'native', 'escape'] as cons
     await expect
       .poll(() =>
         viewport.evaluate(async (element) => {
+          // ast-grep-ignore: test-no-real-time-wait -- proves the viewport stays put through the engine's 200 ms post-focus selection recovery window, which has no completion signal
           await new Promise((resolve) => setTimeout(resolve, 250))
           return element.scrollTop
         })
