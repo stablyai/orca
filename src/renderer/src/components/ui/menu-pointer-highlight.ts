@@ -2,6 +2,7 @@ import * as React from 'react'
 
 const ITEM_SELECTOR = '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]'
 const EDITABLE_SELECTOR = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]'
+const OPEN_POPOVER_TRIGGER_SELECTOR = '[data-slot="popover-trigger"][aria-expanded="true"]'
 const OPEN_SUBMENU_TRIGGER_SELECTOR = '[aria-haspopup="menu"][data-state="open"]'
 
 /** A cursor that stops this long over another row is not travelling into the open submenu. */
@@ -17,9 +18,10 @@ type MenuPointerHighlightState = {
   restTimer: number
 }
 
-function isEditableFocusedIn(content: HTMLElement): boolean {
+// Setup inputs can be portaled outside the menu content.
+function isEditableFocused(): boolean {
   const active = document.activeElement
-  return active instanceof Element && content.contains(active) && active.matches(EDITABLE_SELECTOR)
+  return active instanceof Element && active.matches(EDITABLE_SELECTOR)
 }
 
 /** The enabled row of this menu (not a portaled submenu) under a viewport point. */
@@ -39,8 +41,15 @@ export function syncMenuHighlightAtPoint(content: HTMLElement, x: number, y: num
     content.getAttribute('data-state') === 'closed' ||
     // Why: an open submenu means Radix's pointer-grace logic owns highlight changes.
     content.querySelector(OPEN_SUBMENU_TRIGGER_SELECTOR) ||
-    isEditableFocusedIn(content)
+    isEditableFocused() ||
+    content.querySelector(OPEN_POPOVER_TRIGGER_SELECTOR)
   ) {
+    return
+  }
+  const hit = document.elementFromPoint(x, y)
+  // Why: React bubbles wheel/scroll from portaled children (e.g. a row's setup popover); a cursor
+  // that is not over this menu says nothing about which of its rows should be highlighted.
+  if (!hit || !content.contains(hit)) {
     return
   }
   const active = document.activeElement
@@ -67,15 +76,16 @@ export function syncMenuHighlightAtPoint(content: HTMLElement, x: number, y: num
  * and never re-checks once the cursor stops, so a fast flick that drifts toward the submenu
  * leaves the old row highlighted and its submenu open until the mouse moves again. A cursor at
  * rest over a different row has clearly chosen that row: highlight it, which closes the stale
- * submenu through Radix's own focus-outside handling. If that row has its own submenu, Radix opens
- * it on the next pointer movement, as it does for any row it highlights.
+ * submenu through Radix's own focus-outside handling. Activate submenu triggers to complete the
+ * handoff without requiring another pointer movement.
  */
 export function settleMenuHighlightAfterRest(content: HTMLElement, point: Point): void {
   const openTrigger = content.querySelector(OPEN_SUBMENU_TRIGGER_SELECTOR)
   if (
     !openTrigger ||
     content.getAttribute('data-state') === 'closed' ||
-    isEditableFocusedIn(content)
+    isEditableFocused() ||
+    content.querySelector(OPEN_POPOVER_TRIGGER_SELECTOR)
   ) {
     return
   }
@@ -84,6 +94,9 @@ export function settleMenuHighlightAfterRest(content: HTMLElement, point: Point)
     return
   }
   item.focus({ preventScroll: true })
+  if (item.getAttribute('aria-haspopup') === 'menu') {
+    item.click()
+  }
 }
 
 type Handlers = {
@@ -92,6 +105,7 @@ type Handlers = {
   onPointerOver?: React.PointerEventHandler<HTMLDivElement>
   onPointerLeave?: React.PointerEventHandler<HTMLDivElement>
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>
+  onKeyDownCapture?: React.KeyboardEventHandler<HTMLDivElement>
   onScrollCapture?: React.UIEventHandler<HTMLDivElement>
 }
 
@@ -137,6 +151,9 @@ export function useMenuPointerHighlight(props: Handlers): Required<Handlers> {
       state.pointer = point
       clearRestTimer(state)
       const content = event.currentTarget
+      if (!content.querySelector(OPEN_SUBMENU_TRIGGER_SELECTOR)) {
+        return
+      }
       state.restTimer = window.setTimeout(() => {
         state.restTimer = 0
         settleMenuHighlightAfterRest(content, point)
@@ -157,8 +174,12 @@ export function useMenuPointerHighlight(props: Handlers): Required<Handlers> {
     },
     onKeyDown: (event) => {
       props.onKeyDown?.(event)
+    },
+    // Inputs can stop propagation when transferring keyboard focus to a menu item.
+    onKeyDownCapture: (event) => {
       stateRef.current.wheelArmed = false
       clearRestTimer(stateRef.current)
+      props.onKeyDownCapture?.(event)
     },
     // Capture so menus that scroll an inner list (not the content itself) are covered too.
     onScrollCapture: (event) => {
@@ -170,7 +191,7 @@ export function useMenuPointerHighlight(props: Handlers): Required<Handlers> {
       const content = event.currentTarget
       state.frame = requestAnimationFrame(() => {
         state.frame = 0
-        if (state.pointer) {
+        if (state.wheelArmed && state.pointer) {
           syncMenuHighlightAtPoint(content, state.pointer.x, state.pointer.y)
         }
       })

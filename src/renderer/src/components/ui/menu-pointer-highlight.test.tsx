@@ -28,8 +28,10 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function Menu(): React.JSX.Element {
-  const handlers = useMenuPointerHighlight({})
+type MenuProps = Pick<React.HTMLAttributes<HTMLDivElement>, 'onKeyDown' | 'onKeyDownCapture'>
+
+function Menu(props: MenuProps): React.JSX.Element {
+  const handlers = useMenuPointerHighlight(props)
   return (
     <div role="menu" data-state="open" tabIndex={-1} id="menu" {...handlers}>
       <div role="menuitem" tabIndex={-1} id="a">
@@ -42,11 +44,13 @@ function Menu(): React.JSX.Element {
   )
 }
 
-function render(): Record<'menu' | 'a' | 'aLabel' | 'b' | 'c' | 'sep', HTMLElement> {
+function render(
+  props: MenuProps = {}
+): Record<'menu' | 'a' | 'aLabel' | 'b' | 'c' | 'sep', HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
-  act(() => root!.render(<Menu />))
+  act(() => root!.render(<Menu {...props} />))
   const get = (id: string): HTMLElement => {
     const el = document.getElementById(id)
     if (!el) {
@@ -106,6 +110,83 @@ it('leaves keyboard-driven scrolling alone', () => {
   expect(document.activeElement).toBe(a)
 })
 
+it.each([false, true])(
+  'preserves keyboard focus when an input stops keydown propagation (queued frame: %s)',
+  (queuedFrame) => {
+    const { menu, a, b } = render()
+    const input = document.createElement('input')
+    menu.prepend(input)
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation()
+      a.focus()
+    })
+    input.focus()
+    wheelAt(menu, 10, 40)
+    hit = b
+    if (queuedFrame) {
+      act(() => menu.dispatchEvent(new Event('scroll')))
+      expect(frames).toHaveLength(1)
+    }
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    })
+    scroll(menu)
+    expect(document.activeElement).toBe(a)
+
+    wheelAt(menu, 10, 40)
+    scroll(menu)
+    expect(document.activeElement).toBe(b)
+  }
+)
+
+it('preserves consumer capture and bubble keydown handlers', () => {
+  const calls: string[] = []
+  const { a } = render({
+    onKeyDownCapture: (event) => calls.push(`capture:${event.key}`),
+    onKeyDown: (event) => calls.push(`bubble:${event.key}`)
+  })
+  act(() => {
+    a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+  })
+  expect(calls).toEqual(['capture:ArrowDown', 'bubble:ArrowDown'])
+})
+
+it('does not let a queued wheel frame override subsequent keyboard navigation', () => {
+  const { menu, a, b } = render()
+  wheelAt(menu, 10, 40)
+  hit = b
+  act(() => menu.dispatchEvent(new Event('scroll')))
+  expect(frames).toHaveLength(1)
+  act(() => {
+    a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    a.focus()
+    frames.splice(0).forEach((cb) => cb(0))
+  })
+  expect(document.activeElement).toBe(a)
+
+  wheelAt(menu, 10, 40)
+  scroll(menu)
+  expect(document.activeElement).toBe(b)
+})
+
+it.each(['input', 'textarea'])(
+  'preserves a portaled setup %s while wheel and rest synchronization target another row',
+  (tag) => {
+    const { menu, a, b } = render()
+    const input = document.createElement(tag)
+    document.body.append(input)
+    input.focus()
+    hit = b
+    wheelAt(menu, 10, 40)
+    scroll(menu)
+    expect(document.activeElement).toBe(input)
+
+    openSubmenuOn(a)
+    settleMenuHighlightAfterRest(menu, { x: 10, y: 40 })
+    expect(document.activeElement).toBe(input)
+  }
+)
+
 it('clears the highlight over disabled rows and separators, and skips closed menus or open submenus', () => {
   const { menu, a, b, c, sep } = render()
   a.focus()
@@ -128,6 +209,16 @@ it('clears the highlight over disabled rows and separators, and skips closed men
   menu.setAttribute('data-state', 'closed')
   syncMenuHighlightAtPoint(menu, 0, 0)
   expect(document.activeElement).toBe(menu)
+})
+
+it("ignores a cursor that is not over the menu, such as over a row's portaled popover", () => {
+  const { menu, a } = render()
+  const popover = document.createElement('div')
+  document.body.append(popover)
+  a.focus()
+  hit = popover
+  syncMenuHighlightAtPoint(menu, 0, 0)
+  expect(document.activeElement).toBe(a)
 })
 
 it('does not pull focus out of a search field inside the menu', () => {
@@ -204,4 +295,42 @@ it('settles only once the cursor has stopped, and restarts the wait on every rea
   act(() => vi.advanceTimersByTime(MENU_POINTER_REST_MS * 2))
   expect(document.activeElement).toBe(a)
   expect(menu.contains(document.activeElement)).toBe(true)
+})
+
+it.each(['button', 'div'])(
+  'preserves focus on a non-editable setup %s when scrolling over its owning row',
+  (tag) => {
+    const { menu, a, b } = render()
+    const trigger = document.createElement('button')
+    trigger.setAttribute('data-slot', 'popover-trigger')
+    trigger.setAttribute('aria-expanded', 'true')
+    a.append(trigger)
+    const control = document.createElement(tag)
+    control.tabIndex = 0
+    document.body.append(control)
+    control.focus()
+    hit = a
+    wheelAt(menu, 10, 40)
+    scroll(menu)
+    expect(document.activeElement).toBe(control)
+
+    openSubmenuOn(b)
+    settleMenuHighlightAfterRest(menu, { x: 10, y: 40 })
+    expect(document.activeElement).toBe(control)
+  }
+)
+
+it('does not schedule pointer-rest timers without an open submenu', () => {
+  vi.useFakeTimers()
+  const { a, b } = render()
+  pointerMoveAt(b, 10, 10)
+  pointerMoveAt(b, 10, 12)
+  expect(vi.getTimerCount()).toBe(0)
+
+  openSubmenuOn(a)
+  pointerMoveAt(b, 10, 14)
+  expect(vi.getTimerCount()).toBe(1)
+  a.setAttribute('data-state', 'closed')
+  pointerMoveAt(b, 10, 16)
+  expect(vi.getTimerCount()).toBe(0)
 })

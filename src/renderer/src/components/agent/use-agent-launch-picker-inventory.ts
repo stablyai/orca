@@ -275,6 +275,6 @@ export function useAgentLaunchPickerInventorySource(
       }
     )
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Only semantic inputs and visibility own observation; selected priority publishes independently after commit.
-  }, [key, open])
+  }, [key, open, source])
   return source
 }

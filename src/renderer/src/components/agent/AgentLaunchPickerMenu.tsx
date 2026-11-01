@@ -1,8 +1,17 @@
-import { memo, useId, useRef, useState, type ComponentProps, type PointerEvent } from 'react'
+import {
+  memo,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type PointerEvent
+} from 'react'
 import { Input } from '@/components/ui/input'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch-picker-rows'
@@ -96,11 +105,8 @@ export function AgentLaunchPickerMenu({
           openSetup={openSetup}
           onSetupOpenChange={setOpenSetup}
           label={setup.label}
-          initial={{
-            agent: setup.entry.agent,
-            surface: setup.entry.defaultSurface,
-            choices: setup.choices
-          }}
+          initialModel={setup.choices.model}
+          initialEffort={setup.choices.options?.effort}
           onSelectAgent={onSelectAgent}
           disabled={disabled}
           runLaunch={runLaunch}
@@ -150,7 +156,8 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   openSetup,
   onSetupOpenChange,
   label = entry.label,
-  initial,
+  initialModel,
+  initialEffort,
   disabled,
   runLaunch,
   shortcut,
@@ -160,12 +167,28 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   openSetup: string | null
   onSetupOpenChange: (id: string | null) => void
   label?: string
-  initial?: AgentPickerDraft
+  initialModel?: string
+  initialEffort?: string
   disabled?: boolean
   runLaunch: Launch
   shortcut?: string
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
 }) {
+  useUiLanguageRevision()
+  const initial = useMemo<AgentPickerDraft | undefined>(
+    () =>
+      initialModel
+        ? {
+            agent: entry.agent,
+            surface: entry.defaultSurface,
+            choices: {
+              model: initialModel,
+              ...(initialEffort ? { options: { effort: initialEffort } } : {})
+            }
+          }
+        : undefined,
+    [entry.agent, entry.defaultSurface, initialModel, initialEffort]
+  )
   const setupId = useId()
   const item = useRef<HTMLDivElement>(null)
   const configured = useRef<AgentPickerDraft | undefined>(undefined)
