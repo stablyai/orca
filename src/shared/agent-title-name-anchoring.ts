@@ -9,6 +9,8 @@ import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoratio
 import type { TerminalAgent } from './terminal-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
+export { isNeutralAgentTitleWrapper } from './terminal-title-wrapper-segments'
+
 /** Names matched as whole tokens, paired with the agent each identifies. */
 const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [
   ['claude', 'claude'],
@@ -130,23 +132,6 @@ export function agentForNamedTitlePrefix(text: string): TerminalAgent | null {
   const undecorated = stripLeadingAgentTitleDecorationOrEmpty(text).trim()
   const match = NATIVE_PAYLOAD_RE.exec(undecorated)
   return match ? agentForNativeName(undecorated.slice(0, match.index)) : null
-}
-
-/** Inspect one disjoint header, preserving shell host/cwd syntax without admitting colon task prose. */
-export function isNeutralAgentTitleWrapper(header: string): boolean {
-  // ASCII activity tokens include trailing whitespace, so classify before right trimming.
-  const lexical = header.trimStart()
-  if (stripLeadingAgentTitleDecorationOrEmpty(lexical) !== lexical) {
-    return false
-  }
-  const trimmed = lexical.trim()
-  return (
-    !trimmed.includes(':') ||
-    /^(?:[^\s@:[\]]+@(?:\[[^\]]+\]|[^\s:]+)|\[[^\]\s]+@[^\]\s]+\]):\s*(?:[~/]|[A-Za-z]:[\\/])/.test(
-      trimmed
-    ) ||
-    /^[A-Za-z]:[\\/]/.test(trimmed)
-  )
 }
 
 /** Native frames identify an agent by a complete name, a named status, or a name before task text. */

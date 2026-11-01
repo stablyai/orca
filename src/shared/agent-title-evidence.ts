@@ -26,6 +26,7 @@ import {
   getPiCompatibleTitleBrand,
   isLegacyPiCompatibleTitle
 } from './pi-compatible-synthetic-title'
+import { isCodewhaleTerminalTitle } from './codewhale-terminal-title'
 import { isDshTerminalTitle } from './dsh-terminal-title'
 import { hasQoderTitleLabelPayload, isQoderTerminalTitle } from './qoder-terminal-title'
 import {
@@ -147,6 +148,11 @@ function collectAnchoredNames(
   const nativeOpenCode = segments.some(isOpenCodeNativeTitle)
   const allowDsbTitle = vendorMarkers.length === 0 && !nativeOpenCode
 
+  // Why the whole title: its matcher judges wrapper headers, which a lone suffix segment has lost.
+  if (segments[0] && isCodewhaleTerminalTitle(segments[0])) {
+    anchored.add('codewhale')
+  }
+
   for (const segment of segments) {
     // Native wrapped titles own their envelope even when session text names other agents.
     if (isOpenCodeNativeTitle(segment)) {
@@ -245,6 +251,8 @@ function collectObserverAnchors(title: string): TerminalAgent[] {
   let agent: TerminalAgent | null
   if (!genericClaude && nativeOpenCode && isDirectOpenCodeNativeTitle(segment)) {
     agent = 'opencode'
+  } else if (isCodewhaleTerminalTitle(segment)) {
+    agent = 'codewhale'
   } else if (isDshTerminalTitle(segment) && undecorated.startsWith('🐋')) {
     agent = 'dsh'
   } else if (isQoderTerminalTitle(segment)) {
