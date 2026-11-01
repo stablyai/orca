@@ -2,14 +2,14 @@ import { atom, derived, read, set, update } from 'orca'
 
 export type Todo = { id: number; title: string; done: boolean }
 
-// Keyed and persisted: the list survives closing the panel and restarting Orca.
+// Kept in the plugin's own storage under `todos`: it survives restarts, and the worker reads it.
 export const todos = atom<Todo[]>(
   'todos',
   [
     { id: 1, title: 'Read the components guide', done: true },
     { id: 2, title: 'Edit src/panel.tsx and save', done: false }
   ],
-  { persist: 'plugin' }
+  { persist: 'storage' }
 )
 // Keyed, in memory: a save in a development folder hot reloads the panel and keeps the draft.
 export const draft = atom('draft', '')

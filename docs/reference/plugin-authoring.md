@@ -12,12 +12,12 @@ A plugin is a folder (in practice its own Git repository) with `orca-plugin.json
 Start from one of these, or scaffold one with `orca plugin create` (see [Validate](#3-validate)).
 Add the `$schema` line from `orca-gleam-syntax` to your manifest for editor completion.
 
-| Example                              | Execution        | Shows                                                                        |
-| ------------------------------------ | ---------------- | ---------------------------------------------------------------------------- |
-| `examples/plugins/orca-gleam-syntax` | `data`           | A syntax, no code                                                            |
-| `examples/plugins/hello-tsx`         | `sandboxed-ui`   | A [components](plugin-declarative-ui.md) TSX panel with no build step        |
-| `examples/plugins/hello-components`  | `sandboxed-ui`   | The same kind of [components](plugin-declarative-ui.md) panel, bundled first |
-| `examples/plugins/hello-orca`        | `trusted-worker` | A panel, a worker command and events                                         |
+| Example                              | Execution        | Shows                                                                                                                      |
+| ------------------------------------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `examples/plugins/orca-gleam-syntax` | `data`           | A syntax, no code                                                                                                          |
+| `examples/plugins/hello-tsx`         | `trusted-worker` | A [components](plugin-declarative-ui.md) TSX panel with no build step, talking to its worker, storage, settings and events |
+| `examples/plugins/hello-components`  | `sandboxed-ui`   | The same kind of [components](plugin-declarative-ui.md) panel, bundled first                                               |
+| `examples/plugins/hello-orca`        | `trusted-worker` | A panel, a worker command and events                                                                                       |
 
 Leave `publisher` out. Orca names the publisher after where the plugin comes from, the way a
 [Go module path](https://go.dev/ref/mod#module-path) is its repository path: the owner of the
@@ -68,7 +68,7 @@ Before any plugin code runs, the frame shell defines a frozen `window.orca`. It 
 supported way to talk to Orca; the messages underneath are internal and change without notice.
 
 ```js
-orca.api // { major: 1, minor: 1 }: the host API this Orca implements
+orca.api // { major: 1, minor: 2 }: the host API this Orca implements
 if (orca.host.has('workspace.readContext')) {
   // Synchronous: is the method offered to this surface by this Orca?
   const controller = new AbortController()
@@ -135,7 +135,8 @@ for images and fonts, and do not rely on storage, workers or WASM loaded by URL 
 Workers get the same calls on the `orca` object passed to `activate(orca)`:
 `orca.api`, `orca.host.call(method, params, { signal })`, `orca.host.has(method)`, plus
 `orca.commands.register(id, (args, { signal }) => …)` and `orca.events.on(event, handler)`, which
-both return `{ dispose() }`. A command's `signal` aborts when Orca stops waiting for it.
+both return `{ dispose() }`, and the panel and data APIs in
+[Panels, workers and data](#panels-workers-and-data). A command's `signal` aborts when Orca stops waiting for it.
 `orca.log(message)` writes to `orca plugin logs`. `orca.grantedCapabilities` is the frozen list of
 capability kinds the user approved (such as `['storage:own']`), fixed when the worker starts; the
 host still checks each call. In `agent.status.changed`, `state` and `mainAgent.state` are one of `working`, `blocked`, `waiting`
@@ -149,6 +150,88 @@ properties work too. JSX does not (no `.tsx` worker files). Relative imports res
 Everything else, such as `node:` builtins, resolves exactly as Node resolves it for a JavaScript
 worker. `orca/worker` holds only types, so import it with `import type`; a value import fails when
 the worker starts.
+
+### Panels, workers and data
+
+A plugin's panels, custom editors and worker are one program. A panel asks its own worker, the
+worker pushes back, and both read the same storage, settings and secrets (with the same
+capabilities). Every surface spells it the same way: frames on `window.orca`, components panels
+as imports from `orca`, workers on the `orca` from `activate`.
+
+Declare the contract once, in a file both sides include, and both type-check against it:
+
+```ts
+// src/protocol.ts
+export {}
+declare module 'orca' {
+  interface PluginRequests {
+    'todos.list': { input: { done?: boolean }; output: Todo[] }
+  }
+  interface PluginPanelEvents {
+    'todos.changed': { count: number }
+  }
+}
+```
+
+The worker answers and posts:
+
+```js
+export default function activate(orca) {
+  orca.panels.handle('todos.list', async ({ done }, { panel, signal }) => list(done))
+  // To every open panel of this plugin, or one: { panel: id } from a request's context.
+  orca.panels.post('todos.changed', { count: 3 })
+}
+```
+
+A panel asks and listens (in a frame, the same methods are on `orca.plugin`):
+
+```ts
+import { plugin } from 'orca'
+const todos = await plugin.request('todos.list', { done: false }, { timeoutMs: 5000 })
+plugin.on('todos.changed', ({ count }) => {})
+```
+
+- `plugin.request` starts the worker if it is not running, so a panel-only plugin can keep its
+  logic in a worker that runs only while someone uses it. It needs `main` (`trusted-worker`).
+- It rejects with `unknown_method` when no handler has that name, `timeout` past `timeoutMs`
+  (default 30 s, at most 120 s; the handler's `signal` aborts then, and when the panel closes),
+  `unavailable` when the worker cannot start, or the `code` the handler threw (`invalid_params`,
+  `conflict` and the other host error codes; anything else is `action_failed`).
+- Inputs and answers are JSON: an input up to 64 KiB, an answer up to 1 MiB. Posts are fire and
+  forget, up to 256 KiB each and 200 per 10 seconds per plugin.
+- Only the same plugin's panels and worker can reach each other.
+
+Storage, settings and secrets are the plugin's own, shared by every surface:
+
+```ts
+import { atom, storage, settings, secrets } from 'orca'
+await storage.set('filters', { done: false }) // storage:own
+storage.onDidChange(({ key }) => {}) // any surface's write, the person's included
+const url = await settings.get('apiUrl') // settings:own; declared ones read as their default
+await secrets.set('token', value) // secrets:own
+// A components atom kept in storage: the worker reads storage.get('todos') and its writes
+// update the atom.
+const todos = atom('todos', [], { persist: 'storage' })
+```
+
+Declare settings the person edits in `contributes.settings`; Orca shows them under the plugin in
+its Settings and checks every value against the declaration:
+
+```json
+"settings": [
+  { "key": "apiUrl", "title": "Server URL", "type": "string", "default": "https://example.com" },
+  { "key": "pageSize", "title": "Page size", "type": "integer", "default": 20, "minimum": 1 }
+],
+"capabilities": [{ "kind": "settings:own" }]
+```
+
+`type` is `string`, `number`, `integer` or `boolean`; `enum` (with `enumLabels`), `minimum`,
+`maximum`, `maxLength`, `multiline` and `placeholder` shape the control. A setting needs the
+`settings:own` capability, which is also how code reads it.
+
+Panels hear workspace and agent events the same way workers do, with the same capability:
+`on('agent.status.changed', handler)` needs `agent:read`, the workspace events `workspace:read`.
+A panel needs no `contributes.events` entry for that; it subscribes while it is open.
 
 ### Custom editors
 
@@ -376,7 +459,6 @@ arbitrary plugin UI:
 - `mcpServers`: MCP server definitions offered to the agents Orca launches.
 - `skills`: agent skills shipped as files.
 - `hooks`: agent lifecycle hooks for the agents Orca launches.
-- `settings`: typed plugin settings shown in Orca's settings UI.
 
 `skills`, `mcpServers` and `hooks` will mean what they mean in agent-plugin formats such as
 Claude Code's. Orca does not reserve `agents`, because those formats use it for subagent files.
