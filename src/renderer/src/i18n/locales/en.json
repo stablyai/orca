@@ -13532,6 +13532,10 @@
           "smoothingKw": "smoothing",
           "antialiasingKw": "antialiasing",
           "thinKw": "thin text"
+        },
+        "PluginSettingsSection": {
+          "reset": "Reset",
+          "title": "Settings"
         }
       },
       "right": {

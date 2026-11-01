@@ -111,8 +111,8 @@ export function validatePluginManifestContributions(
     ctx
   )
   rejectDuplicateValues(
-    manifest.contributes.settings,
-    (entry) => (entry as { key: string }).key,
+    manifest.contributes.settings.map((setting) => setting.key),
+    String,
     'settings',
     'setting key',
     ctx

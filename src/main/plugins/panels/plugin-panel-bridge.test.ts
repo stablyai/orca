@@ -16,8 +16,8 @@ function setup(options: { main?: string; capabilities?: PluginCapabilityKind[] }
   const plugin = { pluginKey: 'acme.todos', manifest: { main: options.main ?? 'main.mjs' } }
   const log = vi.fn()
   const bridge = new PluginPanelBridge({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bridge reads only pluginKey and manifest.main.
     findApprovedPlugin: (key) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bridge reads only pluginKey and manifest.main.
       key === plugin.pluginKey ? (plugin as never as ValidDiscoveredPlugin) : null,
     grantedCapabilities: () => options.capabilities ?? [],
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bridge calls only requestFromPanel and notifyDataChanged.
@@ -77,7 +77,7 @@ describe('PluginPanelBridge requests', () => {
     const { bridge, worker } = setup()
     worker.requestFromPanel.mockResolvedValueOnce({ big: 'x'.repeat(1024 * 1024 + 1) })
     await expect(bridge.request(request())).rejects.toMatchObject({ code: 'too_large' })
-    worker.requestFromPanel.mockResolvedValueOnce({ when: new Date() })
+    worker.requestFromPanel.mockResolvedValueOnce({ when: new Date(0) })
     await expect(bridge.request(request())).rejects.toMatchObject({ code: 'action_failed' })
     worker.requestFromPanel.mockResolvedValueOnce(undefined)
     await expect(bridge.request(request())).resolves.toBeNull()

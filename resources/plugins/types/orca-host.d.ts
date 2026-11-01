@@ -7,18 +7,16 @@ declare module 'orca/host' {
   export type {
     DataChange,
     PluginBridgeApi,
-    PluginPanelEventName,
-    PluginPanelEventPayload,
     PluginPanelEvents,
     PluginRequestArgs,
     PluginRequestInput,
-    PluginRequestName,
     PluginRequestOptions,
     PluginRequestOutput,
     PluginRequests,
     SecretsApi,
     SettingsApi,
-    StorageApi
+    StorageApi,
+    Undeclared
   } from 'orca'
   export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
   export type Disposable = { dispose(): void }

@@ -13,8 +13,8 @@ const settings = [
 function host() {
   const plugin = { manifest: { contributes: { settings } } }
   return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: settings code reads only manifest.contributes.settings.
     findValidPlugin: (key: string) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: settings code reads only manifest.contributes.settings.
       key === 'acme.todos' ? (plugin as never as ValidDiscoveredPlugin) : null,
     userDataPath: mkdtempSync(join(tmpdir(), 'orca-declared-settings-')),
     dataChanged: vi.fn()

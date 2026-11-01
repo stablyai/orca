@@ -49,9 +49,10 @@ export type PluginFrameHello = {
   locale?: string
 }
 
-/** Per-plugin bridge budgets, enforced host-side. */
+/** Per-plugin bridge budgets, enforced host-side. Why 120: a panel loading its storage atoms,
+ *  settings and first worker requests makes a burst of small calls. */
 export const PANEL_MESSAGE_MAX_BYTES = 64 * 1024
-export const PANEL_MESSAGE_RATE_LIMIT = { maxMessages: 30, perMs: 10_000 }
+export const PANEL_MESSAGE_RATE_LIMIT = { maxMessages: 120, perMs: 10_000 }
 
 /** Size-only liveness lane: count limits let a panel’s pongs exhaust the budget and starve genuine replies.
  * Pongs also spend the data budget, bounding aggregate cost; walks are capped here. */

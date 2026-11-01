@@ -38,41 +38,48 @@ declare module 'orca' {
   /** Events your worker sends with `orca.panels.post(event, payload)`. */
   // oxlint-disable-next-line typescript/consistent-type-definitions -- declaration merging needs an interface
   export interface PluginPanelEvents {}
-  /** Names declared in `PluginRequests`, or any other name (typed as JSON). */
-  export type PluginRequestName = (keyof PluginRequests & string) | (string & {})
-  export type PluginRequestInput<K extends string> = K extends keyof PluginRequests
-    ? PluginRequests[K] extends { input: infer I }
-      ? I
-      : undefined
-    : JsonValue | undefined
-  export type PluginRequestOutput<K extends string> = K extends keyof PluginRequests
-    ? PluginRequests[K] extends { output: infer O }
-      ? O
-      : null
-    : JsonValue
-  export type PluginPanelEventName = (keyof PluginPanelEvents & string) | (string & {})
-  export type PluginPanelEventPayload<K extends string> = K extends keyof PluginPanelEvents
-    ? PluginPanelEvents[K]
-    : JsonValue
+  /** What a declared request takes; `undefined` when it declares no `input`. */
+  export type PluginRequestInput<K extends keyof PluginRequests> = PluginRequests[K] extends {
+    input: infer I
+  }
+    ? I
+    : undefined
+  /** What a declared request answers with; `null` when it declares no `output`. */
+  export type PluginRequestOutput<K extends keyof PluginRequests> = PluginRequests[K] extends {
+    output: infer O
+  }
+    ? O
+    : null
   /** `timeoutMs` (at most 120000, default 30000) is how long the worker may take. */
   export type PluginRequestOptions = { signal?: AbortSignal; timeoutMs?: number }
-  export type PluginRequestArgs<K extends string> =
+  export type PluginRequestArgs<K extends keyof PluginRequests> =
     undefined extends PluginRequestInput<K>
       ? [input?: PluginRequestInput<K>, options?: PluginRequestOptions]
       : [input: PluginRequestInput<K>, options?: PluginRequestOptions]
+  /** A name the plugin did not declare, which then carries any JSON. */
+  export type Undeclared<N extends string, Declared> = N extends keyof Declared ? never : N
   /** Your plugin's own worker. */
   export type PluginBridgeApi = {
     /** Runs the worker handler `orca.panels.handle(name)` registered, starting the worker if it
      *  is not running. Rejects with `unknown_method` (no such handler), `timeout`, `unavailable`
      *  (no worker), or the `code` the handler threw. */
-    request<K extends PluginRequestName>(
+    request<K extends keyof PluginRequests>(
       name: K,
       ...args: PluginRequestArgs<K>
     ): Promise<PluginRequestOutput<K>>
+    request<N extends string>(
+      name: Undeclared<N, PluginRequests>,
+      input?: JsonValue,
+      options?: PluginRequestOptions
+    ): Promise<JsonValue>
     /** What the worker posts with `orca.panels.post(event, payload)`. */
-    on<K extends PluginPanelEventName>(
+    on<K extends keyof PluginPanelEvents>(
       event: K,
-      handler: (payload: PluginPanelEventPayload<K>) => void
+      handler: (payload: PluginPanelEvents[K]) => void
+    ): Disposable
+    on<N extends string>(
+      event: Undeclared<N, PluginPanelEvents>,
+      handler: (payload: JsonValue) => void
     ): Disposable
   }
   /** A key someone (you, another panel, the worker or the person in Settings) changed. */

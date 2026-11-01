@@ -7,16 +7,17 @@ declare module 'orca/worker' {
     Disposable,
     HostApi,
     HostApiVersion,
+    JsonValue,
     PluginEventName,
     PluginEvents,
-    PluginPanelEventName,
-    PluginPanelEventPayload,
+    PluginPanelEvents,
     PluginRequestInput,
-    PluginRequestName,
     PluginRequestOutput,
+    PluginRequests,
     SecretsApi,
     SettingsApi,
-    StorageApi
+    StorageApi,
+    Undeclared
   } from 'orca/host'
 
   export type {
@@ -38,18 +39,27 @@ declare module 'orca/worker' {
     /** Answers a panel's `plugin.request(name, input)` with a JSON value. A thrown error whose
      *  `code` is a host error code (`invalid_params`, `conflict`, ...) reaches the panel with it;
      *  any other is `action_failed`. */
-    handle<K extends PluginRequestName>(
+    handle<K extends keyof PluginRequests>(
       name: K,
       handler: (
         input: PluginRequestInput<K>,
         context: PanelRequestContext
       ) => PluginRequestOutput<K> | Promise<PluginRequestOutput<K>>
     ): Disposable
+    handle<N extends string>(
+      name: Undeclared<N, PluginRequests>,
+      handler: (input: JsonValue | undefined, context: PanelRequestContext) => unknown
+    ): Disposable
     /** To every open panel of this plugin, or one (`panel` from a request's context). Fire and
      *  forget: at most 256 KiB, 200 per 10 s. */
-    post<K extends PluginPanelEventName>(
+    post<K extends keyof PluginPanelEvents>(
       event: K,
-      payload: PluginPanelEventPayload<K>,
+      payload: PluginPanelEvents[K],
+      options?: { panel?: string }
+    ): void
+    post<N extends string>(
+      event: Undeclared<N, PluginPanelEvents>,
+      payload?: JsonValue,
       options?: { panel?: string }
     ): void
   }
