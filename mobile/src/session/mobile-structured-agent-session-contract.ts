@@ -1,4 +1,4 @@
-import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import type { NativeChatSendFollowUp } from '../../../src/shared/native-chat-follow-up-behavior'
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
@@ -15,7 +15,7 @@ import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat/n
 import type { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
-import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type {
   MobileNativeChatCommandRefusalCauses,
   MobileNativeChatSendErrorReporter

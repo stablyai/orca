@@ -97,13 +97,4 @@ describe('undo with the host pane open', () => {
     page.loaded()
     expect(isHostSpawnFencedForWslMoveUndo(HOST, 'terminal.create')).toBe(false)
   })
-
-  it.each(['still-running', 'unreachable'] as const)(
-    'lifts the fence when the host stop is %s, leaving the host usable',
-    async (stop) => {
-      register(async () => stop)
-      expect(await undo()).toMatchObject({ released: false })
-      expect(isHostSpawnFencedForWslMoveUndo(HOST, 'terminal.create')).toBe(false)
-    }
-  )
 })

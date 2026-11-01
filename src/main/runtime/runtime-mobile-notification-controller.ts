@@ -6,7 +6,7 @@ import {
   type StructuredAttentionOrigin,
   type StructuredAttentionRead,
   type StructuredAttentionState
-} from '../../shared/agent-session-attention'
+} from '../../shared/agent-session/agent-session-attention'
 import type {
   MobilePushTestResult,
   MobilePushRegisterInput,

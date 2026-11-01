@@ -122,6 +122,10 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/terminal-tail-redraw-wall-time.test.ts',
   'src/main/agent-hooks/server-transport-interference.test.ts',
   'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
+  'src/main/plugins/workers/plugin-worker-dev-restart-storage.integration.test.ts',
+  // Worker TypeScript loads through node:module registerHooks, which Bun lacks.
+  'src/main/plugins/workers/plugin-worker-source-hooks.test.ts',
+  'src/main/plugins/workers/plugin-worker-typescript-entry.integration.test.ts',
   // Reconciliation loads the real native Parcel watcher; Bun can abort on Linux ARM.
   'src/main/plugins/plugin-service-reconciliation.test.ts',
   'src/main/usage/usage-scan-worker-event-loop.test.ts',

@@ -4,7 +4,7 @@ import { boundSubagentEntryId } from '../subagent-entry-id-bounds'
 import type {
   AgentJournalBoundedPayload,
   AgentJournalItemBody
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const MAX_LEGACY_IMPORT_SUBAGENTS = 64
 

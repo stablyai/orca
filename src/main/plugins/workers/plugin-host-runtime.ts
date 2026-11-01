@@ -77,6 +77,8 @@ export type PluginWorkerOrcaApi = {
 export type PluginWorkerRuntimeOptions = {
   send: (message: PluginEnvelope) => void
   importModule?: (specifier: string) => Promise<unknown>
+  /** Runs before the entry imports; the host installs its TypeScript hooks here. */
+  prepareModuleLoading?: (pluginRoot: string) => void
   exit?: (code: number) => void
 }
 
@@ -150,6 +152,7 @@ export function createPluginWorkerRuntime(
     initialized = true
     // File URLs support Windows ESM imports; split either separator for cross-platform manifests.
     const entryUrl = pathToFileURL(join(input.pluginRoot, ...input.mainEntry.split(/[\\/]/))).href
+    options.prepareModuleLoading?.(input.pluginRoot)
     const module: unknown = await importModule(entryUrl)
     const activate = readExport(module, 'default')
     if (typeof activate !== 'function') {

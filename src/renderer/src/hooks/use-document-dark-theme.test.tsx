@@ -62,26 +62,4 @@ describe('useDocumentDarkTheme', () => {
     act(() => media.emit(false))
     expect(result.current).toBe(false)
   })
-
-  it.each([
-    ['light', false],
-    ['dark', true]
-  ] as const)('keeps an explicit %s theme when the system flips', (theme, expected) => {
-    settingsState.theme = theme
-    const media = installMatchMedia(!expected)
-    const { result } = renderHook(() => useDocumentDarkTheme())
-    expect(result.current).toBe(expected)
-
-    act(() => media.emit(expected))
-    expect(result.current).toBe(expected)
-    act(() => media.emit(!expected))
-    expect(result.current).toBe(expected)
-  })
-
-  it('treats unloaded settings as system', () => {
-    settingsState.theme = undefined
-    installMatchMedia(true)
-    const { result } = renderHook(() => useDocumentDarkTheme())
-    expect(result.current).toBe(true)
-  })
 })

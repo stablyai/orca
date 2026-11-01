@@ -1,7 +1,7 @@
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentLaunchPreferences } from '../../../../shared/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
 import { resolveAgentLaunchCommand } from '../../../../shared/tui-agent-launch-command'
 import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { structuredAgentSessionCommandTurn } from '../native-chat/agent-session-wire/structured-agent-session-command-turn'
+import { structuredAgentSessionCommandTurn } from '../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import {
   CODEX_TEST_THREAD_ID,
   codexTurnLifecycleRig

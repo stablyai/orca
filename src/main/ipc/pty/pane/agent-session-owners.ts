@@ -2,7 +2,7 @@ import {
   classifyTerminalCreationFailure,
   terminalExitError
 } from '../../../../shared/terminal-start-failure'
-import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
 import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'

@@ -1,7 +1,7 @@
 /** Model/effort must seed structured workers like saved chat selections instead of forcing PTY mode. */
 
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session/agent-session-wire'
 
 const createStructuredWorkerSession = vi.fn(async (_args: Record<string, unknown>) => ({
   identity: { handle: 'structworker_1', sessionId: 'sess_1' },

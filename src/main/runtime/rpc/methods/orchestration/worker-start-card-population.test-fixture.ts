@@ -1,6 +1,6 @@
 import type { createOrchestrationRpcHarness } from './rpc-test-harness'
 import { expect } from 'vitest'
-import type { AgentJournalSnapshot } from '../../../../../shared/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-store'
 import type { JournalHostDatabase } from '../../../../native-chat/agent-session-journal/journal-host-database'
 import { COORD } from './worker-start-card-contract-test-fixture'

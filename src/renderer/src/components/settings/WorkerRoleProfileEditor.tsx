@@ -11,7 +11,7 @@ import type { WorkerRoleProfile } from '../../../../shared/orchestration-worker-
 import { useWorkerRoleModelCatalog } from './use-worker-role-model-catalog'
 import { nativeChatSessionChoiceLabel } from '../../../../shared/native-chat-session-option-labels'
 import { sayAgentSessionFailureTranslated } from '../native-chat/agent-session-failure-words-text'
-import { notSignedInSentence } from '../../../../shared/agent-session-availability-sentences'
+import { notSignedInSentence } from '../../../../shared/agent-session/agent-session-availability-sentences'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'

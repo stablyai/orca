@@ -2,24 +2,24 @@ import { acquiredAccountAcrossLease } from '../../../../shared/agent-session-acq
 /** Pure transitions applied by the store in one durable transaction.
  * Writer admission requires reservation, observed process identity and provider-handle proof at one fence. */
 
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   adjudicateAgentSessionRestart,
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
-} from '../../../../shared/agent-session-lease-adjudication'
+} from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import {
   appendAgentSessionProviderHandleLink,
   type AgentSessionProviderHandleLink
-} from '../../../../shared/agent-session-provider-handle'
-import { agentSessionProviderHandleBelongsTo } from '../../../../shared/agent-session-provider-handle-encoding'
-import { nextAgentSessionFence } from '../../../../shared/agent-session-next-fence'
+} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleBelongsTo } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/agent-session-next-fence'
+import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session-death-evidence'
 import type {
-  AgentSessionDeathEvidence,
   AgentSessionLease,
   AgentSessionProcessIdentity,
   AgentSessionRecord
-} from '../../../../shared/agent-session-record'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record'
 
 export type AgentSessionReservation = {
   spawnToken: string

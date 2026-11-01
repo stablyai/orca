@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import { STOPPED_MESSAGE_INTERRUPTED_MARKER } from '../../../shared/agent-session-stopped-history'
-import { AgentJournalSubmissionSchema } from '../../../shared/agent-session-journal-submission-schema'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { STOPPED_MESSAGE_INTERRUPTED_MARKER } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
+import { AgentJournalSubmissionSchema } from '../../../shared/agent-session/journal/agent-session-journal-submission-schema'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   createQueuedMessageTestRig,

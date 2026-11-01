@@ -3,13 +3,13 @@
 import { readNoChoiceOptionResult } from './structured-agent-session-option-observation'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   AGENT_MESSAGE_SOURCE,
   USER_MESSAGE_SOURCE,
   type AgentSessionMessageSource
 } from '../../../shared/agent-session/agent-session-message-source'
-import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
+import type { AgentSessionOperationOutcome } from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -17,7 +17,7 @@ import type {
   AgentSessionPromptResult,
   AgentSessionQueuedSendReceipt,
   AgentSessionSendResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session/agent-session-conversation-command'
 import { DISPATCH_DOUBT_SUBMISSION_MISSING } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { StructuredAgentSessionBackgroundStopInput } from './structured-agent-session-background-stop'
@@ -25,7 +25,7 @@ import {
   agentSessionSendBodyFingerprint,
   agentSessionSendFields,
   type StructuredAgentSessionSendMutation
-} from '../../../shared/structured-agent-session-send-mutation'
+} from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
   structuredAgentSessionCompactBody

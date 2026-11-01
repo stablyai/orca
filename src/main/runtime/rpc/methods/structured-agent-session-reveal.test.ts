@@ -1,4 +1,4 @@
-import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

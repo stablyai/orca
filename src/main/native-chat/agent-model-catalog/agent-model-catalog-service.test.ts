@@ -4,9 +4,9 @@ import {
   joinHostModelListingWait,
   isHostModelListingWaitInFlight
 } from '../../../shared/host-model-listing-waits'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogFingerprintForRecord

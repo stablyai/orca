@@ -83,16 +83,16 @@ export function EmulatorDeviceFrame({
   const wheelGestureRef = useRef<PendingWheelGesture | null>(null)
   const [streamError, setStreamError] = useState(false)
   const [streamSize, setStreamSize] = useState<StreamSize | null>(null)
-  const visualStreamGeometry = useMemo(
-    () => resolveVisualStreamGeometry(streamSize, visualOrientation),
-    [streamSize, visualOrientation]
-  )
   const canInteract = isLive && !loading && !streamError
-  const { cancelKeyboardFrames, sendKeyboardFrames, sendTouch } = useEmulatorControlStream(
-    wsUrl,
-    canInteract,
-    scrcpyDeviceIdFromStreamUrl(previewUrl)
+  const scrcpyDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
+  const { cancelKeyboardFrames, reportedOrientation, sendKeyboardFrames, sendTouch } =
+    useEmulatorControlStream(wsUrl, canInteract, scrcpyDeviceId)
+  const visualStreamGeometry = useMemo(
+    () => resolveVisualStreamGeometry(streamSize, visualOrientation, reportedOrientation),
+    [reportedOrientation, streamSize, visualOrientation]
   )
+  // serve-sim takes touches in raw panel coordinates, so input undoes the picture's turn.
+  const inputRotation = scrcpyDeviceId ? 0 : visualStreamGeometry.streamRotation
   const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
     useEmulatorScreenKeyboard({
       cancelKeyboardFrames,
@@ -110,9 +110,10 @@ export function EmulatorDeviceFrame({
       mapClientPointToSimulatorScreen(
         { clientX: event.clientX, clientY: event.clientY },
         event.currentTarget.getBoundingClientRect(),
-        visualStreamGeometry.size
+        visualStreamGeometry.size,
+        inputRotation
       ),
-    [visualStreamGeometry.size]
+    [inputRotation, visualStreamGeometry.size]
   )
 
   const sendGesturePoints = useCallback(
@@ -181,7 +182,7 @@ export function EmulatorDeviceFrame({
       activePointerIdRef.current = event.pointerId
       pointerSamplesRef.current = [{ clientX: event.clientX, clientY: event.clientY }]
       lastTouchPointRef.current = point
-      liveTouchEdgeRef.current = resolveEmulatorHomeIndicatorEdge(point)
+      liveTouchEdgeRef.current = resolveEmulatorHomeIndicatorEdge(point, inputRotation)
       // Send touch phases live; iOS gesture recognizers can ignore whole drags replayed only on pointer-up.
       liveTouchRef.current = sendTouch(
         buildEmulatorGesturePoint(point, 'begin', liveTouchEdgeRef.current)
@@ -190,7 +191,7 @@ export function EmulatorDeviceFrame({
         event.currentTarget.setPointerCapture(event.pointerId)
       } catch {}
     },
-    [canInteract, enableKeyboardCapture, mapEventToScreenPoint, sendTouch]
+    [canInteract, enableKeyboardCapture, inputRotation, mapEventToScreenPoint, sendTouch]
   )
 
   const handlePointerMove = useCallback(
@@ -268,7 +269,9 @@ export function EmulatorDeviceFrame({
       const action = resolveEmulatorPointerAction(
         samples,
         event.currentTarget.getBoundingClientRect(),
-        visualStreamGeometry.size
+        visualStreamGeometry.size,
+        undefined,
+        inputRotation
       )
       if (!action) {
         return
@@ -279,7 +282,15 @@ export function EmulatorDeviceFrame({
         sendGesturePoints(action.points)
       }
     },
-    [canInteract, mapEventToScreenPoint, onTap, sendGesturePoints, sendTouch, visualStreamGeometry]
+    [
+      canInteract,
+      inputRotation,
+      mapEventToScreenPoint,
+      onTap,
+      sendGesturePoints,
+      sendTouch,
+      visualStreamGeometry
+    ]
   )
 
   const handleWheel = useCallback(
@@ -296,7 +307,9 @@ export function EmulatorDeviceFrame({
           deltaY: event.deltaY
         },
         event.currentTarget.getBoundingClientRect(),
-        visualStreamGeometry.size
+        visualStreamGeometry.size,
+        undefined,
+        inputRotation
       )
       if (!delta) {
         return
@@ -323,7 +336,7 @@ export function EmulatorDeviceFrame({
         timerId: window.setTimeout(flushWheelGesture, WHEEL_GESTURE_IDLE_MS)
       }
     },
-    [canInteract, flushWheelGesture, sendTouch, visualStreamGeometry]
+    [canInteract, flushWheelGesture, inputRotation, sendTouch, visualStreamGeometry]
   )
 
   const handleStreamSize = useCallback((size: NonNullable<StreamSize>) => {

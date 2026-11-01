@@ -1,22 +1,22 @@
-import { AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
+import { AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-create-capabilities'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import {
   isAgentSessionCreateAdmissionRefusal,
   isDefinitiveAgentSessionCreateRefusal
-} from '../../../shared/agent-session-definitive-refusal'
-import { readAgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
-import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
+} from '../../../shared/agent-session/failures/agent-session-definitive-refusal'
+import { readAgentSessionRefusalReference } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from '../../../shared/agent-session/failures/agent-session-write-failure'
 import {
   callStructuredAgentSession,
   supportsStructuredAgentSessionCreateOptionsMode,
   structuredAgentSessionHostSupports,
   supportsStructuredAgentSessionCreateMessage
 } from '@/runtime/structured-agent-session-client'
-import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionCreateParams } from '../../../shared/agent-session/structured-agent-session-create'
 import { withFrameDrawnChatTabPlacement } from './frame-drawn-chat-tab-placement'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'

@@ -7,7 +7,7 @@ import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-labe
 import { wslHostDistroForTarget } from '@/lib/wsl-host-account-owner'
 import { useAppStore } from '@/store'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import { AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
+import { AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
   getStructuredAgentSessionPendingSends,
@@ -20,13 +20,13 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { latestNativeChatOrcaStopCut } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
 import {
   latestNativeChatUsageLimitCut,
   NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE
 } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
-import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-continue-interrupted-capability'
+import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-continue-interrupted-capability'
 import type { NativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { useStructuredAgentSessionHostLabel } from './use-structured-agent-session-host-label'
 import { useNativeChatTargetRestartResuming } from '../native-chat-restart-runtimes'

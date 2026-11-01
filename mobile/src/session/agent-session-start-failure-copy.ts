@@ -1,7 +1,7 @@
 import type {
   AgentSessionFailureCopyId,
   AgentSessionFailureCopyValues
-} from '../../../src/shared/agent-session-failure-copy'
+} from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import { translate } from '../i18n/mobile-i18n'
 
 export const START_FAILURE_COPY = {

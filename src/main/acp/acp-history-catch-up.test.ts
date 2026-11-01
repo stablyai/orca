@@ -11,10 +11,10 @@ import {
   answerReplay
 } from './acp-history-catch-up.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT,
   closeProviderTimelineRigs,
@@ -24,7 +24,10 @@ import {
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
-import { agentJournalTurnBody, readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import {
+  agentJournalTurnBody,
+  readAgentJournalTurn
+} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { acpNamedTextKey } from './acp-turn-messages'
 import { isHistoricalProviderTimelineItem } from '../native-chat/agent-session-timeline/provider-timeline-history'
 import { StructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/structured-agent-session-current-work'

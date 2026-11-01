@@ -2,8 +2,8 @@
  * Age never re-mints recorded sends; only changed identity or journal evidence can justify a new attempt. */
 
 import { createHash, randomBytes } from 'node:crypto'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session/agent-session-host-authority'
 import type { OrchestrationDb } from './db'
 import type { StructuredPointerOperationRow } from './db/messages/structured-pointer-operation-store'
 

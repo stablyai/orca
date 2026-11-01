@@ -26,7 +26,7 @@ vi.mock('./host-structured-agents', () => ({
   }
 }))
 
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import { useAppStore } from '@/store'

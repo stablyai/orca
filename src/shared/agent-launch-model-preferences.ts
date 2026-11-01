@@ -1,6 +1,6 @@
 /** Use the launch catalog for every caller's model/effort validation so CLI and orchestration refusals agree. */
 
-import type { AgentLaunchPreferences } from './agent-session-host-authority'
+import type { AgentLaunchPreferences } from './agent-session/agent-session-host-authority'
 import {
   findCatalogModel,
   findCatalogOption,

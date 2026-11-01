@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
-import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import {
+  type RuntimeNavigationTarget,
   navigationTargetsClients,
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
@@ -11,16 +11,14 @@ import type { Repo } from '../../../shared/repo-types'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
-import type {
-  WorktreeStartupDraftPaste,
-  WorktreeStartupFollowup
-} from '../runtime-worktree-agent-startup'
 import {
+  type WorktreeStartupDraftPaste,
+  type WorktreeStartupFollowup,
   buildWorktreeStartupForAgent,
   buildWorktreeStartupForDraft,
   resolveWorktreeStartupDraftAgent
 } from '../runtime-worktree-agent-startup'
-import type { AgentLaunchPreferences } from '../../../shared/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../shared/agent-session/agent-session-host-authority'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorktreeLineageResolution } from '../runtime-worktree-lineage-resolution'
 import type {

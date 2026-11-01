@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { ClaudeControlRequestError } from '../../claude/claude-agent-sdk-control-requests'
 import { CLAUDE_STOP_GRACE_MS } from '../../claude/claude-request-end-wait'
 import {

@@ -18,9 +18,11 @@ import {
   useStructuredAgentSessionQueuedMessages,
   type StructuredAgentSessionQueuedMessagesController
 } from './use-structured-agent-session-queued-messages'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
-import type { AgentSessionQueuePause } from '../../../../shared/agent-session-queued-message-wire'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import type {
+  AgentSessionQueuedMessage,
+  AgentSessionQueuePause
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 
 function renderList(
   owner: StructuredAgentSessionQueuedMessagesController,

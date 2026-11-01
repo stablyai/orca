@@ -7,13 +7,38 @@ import {
   encodeServeSimTouchFrame,
   type ServeSimTouchFrame
 } from '../../../../shared/emulator-touch-frame'
+import { RotateOrientation } from '../../../../shared/rpc-contract/emulator-params'
+import type { EmulatorStreamOrientation } from './emulator-device-frame-layout'
 
 const RECONNECT_DELAY_MS = 750
 const KEYBOARD_FRAME_DELAY_MS = 4
+const SERVE_SIM_CONFIG_MESSAGE_TAG = 130
+
+// serve-sim pushes {width, height, orientation} on connect and on every rotate, fold or resize.
+function decodeServeSimOrientation(data: unknown): EmulatorStreamOrientation | undefined {
+  if (!(data instanceof ArrayBuffer)) {
+    return undefined
+  }
+  const bytes = new Uint8Array(data)
+  if (bytes[0] !== SERVE_SIM_CONFIG_MESSAGE_TAG) {
+    return undefined
+  }
+  try {
+    const config: unknown = JSON.parse(new TextDecoder().decode(bytes.subarray(1)))
+    const orientation =
+      typeof config === 'object' && config !== null && 'orientation' in config
+        ? RotateOrientation.safeParse(config.orientation)
+        : undefined
+    return orientation?.success ? orientation.data : undefined
+  } catch {
+    return undefined
+  }
+}
 
 export type EmulatorControlStream = {
   cancelKeyboardFrames: () => void
   connected: boolean
+  reportedOrientation: EmulatorStreamOrientation | null
   sendKeyboardFrames: (frames: ServeSimKeyboardFrame[]) => boolean
   sendTouch: (touch: ServeSimTouchFrame) => boolean
 }
@@ -28,6 +53,11 @@ export function useEmulatorControlStream(
   const keyboardTimerIdsRef = useRef<Set<number>>(new Set())
   const pressedKeyboardUsagesRef = useRef<Set<number>>(new Set())
   const [connected, setConnected] = useState(false)
+  // Keyed by socket URL so a paused socket keeps the last orientation instead of dropping the picture's turn.
+  const [reportedConfig, setReportedConfig] = useState<{
+    wsUrl: string
+    orientation: EmulatorStreamOrientation
+  } | null>(null)
 
   const clearKeyboardTimers = useCallback((): void => {
     for (const timerId of keyboardTimerIdsRef.current) {
@@ -80,6 +110,7 @@ export function useEmulatorControlStream(
     releasePressedKeyboardUsages(true)
   }, [clearKeyboardTimers, releasePressedKeyboardUsages])
 
+  // oxlint-disable-next-line react-doctor/effect-needs-cleanup -- cleanup closes the socket held in wsRef and stops reconnects.
   useEffect(() => {
     if (!enabled || !wsUrl) {
       setConnected(false)
@@ -106,6 +137,13 @@ export function useEmulatorControlStream(
         if (!disposed && wsRef.current === ws) {
           releasePressedKeyboardUsages()
           setConnected(true)
+        }
+      }
+
+      ws.onmessage = (event) => {
+        const orientation = decodeServeSimOrientation(event.data)
+        if (orientation && !disposed && wsRef.current === ws) {
+          setReportedConfig({ wsUrl, orientation })
         }
       }
 
@@ -195,5 +233,7 @@ export function useEmulatorControlStream(
     [getOpenSocket, sendKeyboardFrameNow]
   )
 
-  return { cancelKeyboardFrames, connected, sendKeyboardFrames, sendTouch }
+  const reportedOrientation =
+    reportedConfig && reportedConfig.wsUrl === wsUrl ? reportedConfig.orientation : null
+  return { cancelKeyboardFrames, connected, reportedOrientation, sendKeyboardFrames, sendTouch }
 }

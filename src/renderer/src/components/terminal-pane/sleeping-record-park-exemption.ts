@@ -1,4 +1,4 @@
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { activationTreatsNoteAsFinished } from '../../lib/sleeping-agent-pane-ownership'
 import { createWorktreeRecordSelector } from '@/store/worktree-record-selector-cache'

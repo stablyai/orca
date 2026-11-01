@@ -153,8 +153,8 @@ describe('electron-builder config', () => {
     const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
 
     for (const authoringOnly of [
-      'examples/plugins/hostile-panel/panel.html',
-      'examples/plugins/hostile-panel/orca-plugin.json',
+      'examples/plugins/test-fixtures/hostile-panel/panel.html',
+      'examples/plugins/test-fixtures/hostile-panel/orca-plugin.json',
       'examples/plugins/hello-orca/main.mjs',
       'examples/plugins/hello-orca/orca-plugin.json'
     ]) {
@@ -305,6 +305,30 @@ describe('electron-builder config', () => {
     expect(
       isUnpacked(join('/app', 'out', 'main', `${entryName}.js`), { isDirectory: () => false })
     ).toBe(true)
+  })
+
+  it('unpacks the plugin author typings the Node-mode CLI copies', () => {
+    const matcher = new FileMatcher(
+      '/app',
+      '/dest',
+      (value) => value,
+      electronBuilderConfig.asarUnpack
+    )
+    const isUnpacked = matcher.createFilter()
+    for (const typings of [
+      join('/app', 'resources', 'plugins', 'declarative', 'orca.d.ts'),
+      join('/app', 'resources', 'plugins', 'types', 'orca-host.d.ts'),
+      join('/app', 'resources', 'plugins', 'types', 'orca-frame.d.ts'),
+      join('/app', 'resources', 'plugins', 'types', 'orca-worker.d.ts'),
+      join('/app', 'resources', 'plugins', 'types', 'orca-testing.d.ts'),
+      // `orca plugin test` and `check` run these from a Node process.
+      join('/app', 'resources', 'plugins', 'declarative', 'orca-runtime.mjs'),
+      join('/app', 'resources', 'plugins', 'declarative', 'orca-testing.mjs'),
+      join('/app', 'resources', 'plugins', 'declarative', 'orca-test-hooks.mjs'),
+      join('/app', 'resources', 'plugins', 'declarative', 'orca-test-register.mjs')
+    ]) {
+      expect(isUnpacked(typings, { isDirectory: () => false })).toBe(true)
+    }
   })
 
   // Swept one-time /tmp asar extracts cause web-client 500s and phone bundle failures until restart (#27976).

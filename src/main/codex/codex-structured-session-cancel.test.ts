@@ -33,10 +33,8 @@ vi.mock('../windows-process-tree-kill', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   terminateWindowsProcessTree: processWork.terminateWindowsProcessTree
 }))
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type {
   CodexAppServerConnection,
@@ -52,7 +50,7 @@ import type {
   CodexStructuredSessionAdapterDeps,
   CodexStructuredSessionEvent
 } from './codex-structured-session-state'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 const USER_MESSAGE: AgentJournalMessageItem = {
