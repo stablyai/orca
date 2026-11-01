@@ -6,7 +6,10 @@ import {
   nativeChatCompletedTaskCount,
   type NativeChatTaskList
 } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
-import type { NativeChatSubagentActivity } from '../../../../../src/shared/native-chat/input/native-chat-activity'
+import {
+  nativeChatListedSubagents,
+  type NativeChatSubagentActivity
+} from '../../../../../src/shared/native-chat/input/native-chat-activity'
 import { BottomDrawer } from '../../../components/BottomDrawer'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
@@ -53,21 +56,22 @@ export function MobileNativeChatActivityBar({
   const t = useMobileTranslation()
   const [tasksOpen, setTasksOpen] = useState(false)
   const [subagentsOpen, setSubagentsOpen] = useState(false)
+  const listed = nativeChatListedSubagents(subagents)
   const showTasks = list != null && list.tasks.length > 0
-  if (!showTasks && subagents.length === 0 && !focused) {
+  if (!showTasks && listed.length === 0 && !focused) {
     return null
   }
   const completed = list ? nativeChatCompletedTaskCount(list) : 0
   const total = list?.tasks.length ?? 0
-  const working = subagents.some((agent) => agent.state === 'working')
+  const working = listed.some((agent) => agent.state === 'working')
   const taskLabel =
     total === 1
       ? t('chat.activity.taskPill', '{{completed}}/{{count}} task', { completed, count: total })
       : t('chat.activity.tasksPill', '{{completed}}/{{count}} tasks', { completed, count: total })
   const subagentLabel =
-    subagents.length === 1
-      ? t('chat.activity.subagentPill', '{{count}} subagent', { count: subagents.length })
-      : t('chat.activity.subagentsPill', '{{count}} subagents', { count: subagents.length })
+    listed.length === 1
+      ? t('chat.activity.subagentPill', '{{count}} subagent', { count: listed.length })
+      : t('chat.activity.subagentsPill', '{{count}} subagents', { count: listed.length })
   return (
     <View style={styles.bar}>
       {focused ? (
@@ -122,7 +126,7 @@ export function MobileNativeChatActivityBar({
             </View>
           </Pressable>
         ) : null}
-        {subagents.length > 0 ? (
+        {listed.length > 0 ? (
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ expanded: subagentsOpen }}
@@ -169,7 +173,7 @@ export function MobileNativeChatActivityBar({
                 }}
               />
             ) : null}
-            {subagents.map((agent, index) => (
+            {listed.map((agent, index) => (
               <View key={agent.id}>
                 {focused || index > 0 ? <View style={styles.separator} /> : null}
                 <Choice

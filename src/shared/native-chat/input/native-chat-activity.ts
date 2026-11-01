@@ -226,6 +226,19 @@ export function nativeChatSubagentActivities(
   })
 }
 
+/** Working covers pending and queued. Failed and unverifiable stay. Completed, idle, and cancelled leave. */
+const LISTED_SUBAGENT_STATES: ReadonlySet<NativeChatSubagentState> = new Set([
+  'working',
+  'failed',
+  'unverifiable'
+])
+
+export function nativeChatListedSubagents(
+  subagents: readonly NativeChatSubagentActivity[]
+): NativeChatSubagentActivity[] {
+  return subagents.filter((agent) => LISTED_SUBAGENT_STATES.has(agent.state))
+}
+
 /** Messages one subagent produced, in transcript order. */
 export function nativeChatSubagentMessages(
   messages: readonly NativeChatMessage[],
