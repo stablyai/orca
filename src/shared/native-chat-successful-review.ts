@@ -1,4 +1,4 @@
-import type { NativeChatMessage, NativeChatTextBlock } from './native-chat-types'
+import type { NativeChatMessage, NativeChatTextBlock } from './native-chat/native-chat-types'
 
 function isSuccessfulReview(block: NativeChatTextBlock): boolean {
   const frame = block.providerFrame

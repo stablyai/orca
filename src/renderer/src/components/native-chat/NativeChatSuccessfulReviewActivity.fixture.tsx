@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { MessageRow } from './NativeChatMessageRow'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 

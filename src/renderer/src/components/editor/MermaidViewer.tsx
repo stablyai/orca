@@ -1,6 +1,7 @@
 import React, { useCallback, useLayoutEffect, useRef } from 'react'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import MermaidBlock from './MermaidBlock'
+import { useMermaidDiagramExpand } from './use-mermaid-diagram-expand'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 type MermaidViewerProps = {
@@ -18,6 +19,7 @@ export default function MermaidViewer({
   const renderCompleteRef = useRef(false)
   const restoreObserverRef = useRef<ResizeObserver | null>(null)
   const isDark = useDocumentDarkTheme()
+  const expandDiagram = useMermaidDiagramExpand()
   const diagramSource = content.trim()
 
   const cancelPendingScroll = useCallback(() => {
@@ -103,12 +105,11 @@ export default function MermaidViewer({
   return (
     <div ref={rootRef} className="mermaid-viewer h-full min-h-0 overflow-auto scrollbar-editor">
       <div className="mermaid-viewer-canvas">
-        {/* DOMPurify strips foreignObject HTML labels; request native SVG text so labels survive sanitization. */}
         <MermaidBlock
           content={diagramSource}
           isDark={isDark}
-          htmlLabels={false}
           onRenderComplete={onRenderComplete}
+          onExpand={expandDiagram}
         />
       </div>
     </div>

@@ -21,6 +21,7 @@ export type WorkerShowResult = {
     taskId: string
     runId?: string
     status: string
+    followUpOf?: string | null
   } | null
   worker: {
     dispatchId?: string
@@ -43,6 +44,7 @@ type WorkerShowFields = {
   dispatchId: string
   taskId?: string
   runId?: string
+  followUpOf?: string
   state: string
   stage: string
   liveness?: string
@@ -63,6 +65,7 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
       dispatchId: value.dispatch?.id ?? value.worker.dispatchId ?? 'unknown',
       taskId: value.dispatch?.taskId,
       runId: value.dispatch?.runId ?? value.projection?.runId,
+      followUpOf: value.dispatch?.followUpOf ?? undefined,
       state: value.worker.state,
       stage: value.worker.stage,
       liveness: value.projection?.liveness.verdict,
@@ -160,7 +163,9 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         host: projection?.host.id,
         attention: nonEmpty(projection?.attention?.categories),
         autoReleaseAt: projection?.autoReleaseAt ?? worker.resource?.autoReleaseAt ?? undefined,
-        next: projection ? renderOrchestrationArgv(projection.nextAction.argv) : undefined
+        next: projection
+          ? renderOrchestrationArgv(projection.nextAction.argv)
+          : olderHostReleaseNext(worker)
       }
     }),
     scope: value.scope,
@@ -177,6 +182,13 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         }
       : undefined
   }
+}
+
+// Older runtimes send no projection and cannot close finished workers on their own.
+function olderHostReleaseNext(worker: WorkerListResult['workers'][number]): string | undefined {
+  return worker.terminalState === 'reclaimable' && !worker.resource?.autoReleaseAt
+    ? renderOrchestrationArgv(['orchestration', 'worker-release', '--dispatch', worker.dispatchId])
+    : undefined
 }
 
 function workerListWarnings(value: WorkerListResult): string[] {

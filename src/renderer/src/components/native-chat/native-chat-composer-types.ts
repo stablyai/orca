@@ -18,6 +18,7 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'
 import type { NativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import type { NativeChatRecallSource } from './native-chat-sent-prompt-history'
+import type { NativeChatSendFollowUp } from '../../../../shared/native-chat-follow-up-behavior'
 
 export type NativeChatComposerErrorDetail = {
   /** Error text Orca did not write, shown apart and copyable. */
@@ -33,6 +34,9 @@ export type NativeChatOptionPickerRequest = {
   consume: () => void
 }
 
+/** How one send goes: `alternate` does the other thing than the follow-up setting. */
+export type NativeChatComposerSendIntent = Pick<StructuredAgentSessionSendRequest, 'alternate'>
+
 export type NativeChatStructuredComposerTransport = {
   capturePresentation: CaptureStructuredAgentSessionPresentation
   conversationCommands?: readonly AgentSessionConversationCommand[]
@@ -45,6 +49,8 @@ export type NativeChatStructuredComposerTransport = {
   sendOut?: boolean
   /** Send is held for this reason, which the disabled button says. */
   sendBlockedReason?: string
+  /** What a plain send does now, and whether Cmd/Ctrl+Enter would send it the other way. */
+  sendFollowUp?: NativeChatSendFollowUp
   dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]
@@ -127,8 +133,12 @@ export type NativeChatComposerProps = {
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
   structuredTransport?: NativeChatStructuredComposerTransport
-  /** Empty-composer Cmd/Ctrl+Enter steers the newest queued draft; false falls through to ordinary send. */
-  steerQueued?: () => boolean
+  /** The chat's worktree is still being created, so there is no session or file tree yet:
+   *  text and dictation only, with no command/skill/@-file pickers, `/resume`, attachments or
+   *  file-backed pastes. The pending transport reports no session options or context usage. */
+  workspacePending?: true
+  /** Cmd/Ctrl+Shift+Enter steers the head queued card; false when it can't. */
+  steerHead?: () => boolean
   /** The chat's own notices, shown in the composer's notice card above its input. */
   notices?: readonly NativeChatComposerNotice[]
   /** The conversation Up/Down recalls prompts from. */

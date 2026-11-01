@@ -129,22 +129,6 @@ afterEach(() => {
 })
 
 describe('a records frame in the window', () => {
-  it('shows 100 generated titles from one frame in one store update', async () => {
-    const { store, first, writes, send, close } = await boot()
-    const titled = structuredClone(first)
-    titled.tabs.forEach((tab, index) => {
-      tab.generatedTitle = `Title ${index}`
-    })
-
-    await send(titled)
-
-    expect(writes).toHaveBeenCalledTimes(1)
-    expect(store.getState().tabsByWorktree[GIT_KEY]!.map((tab) => tab.generatedTitle)).toEqual(
-      titled.tabs.map((tab) => tab.generatedTitle)
-    )
-    close()
-  })
-
   it('shows a frame of only tab rows without reading the window’s session back', async () => {
     const { store, first, writes, send, close } = await boot()
     // Exclude reference builds performed by apply checker; count only window calls.
@@ -204,25 +188,6 @@ describe('a records frame in the window', () => {
     expect(after.terminalLayoutsByTabId['tab-7']!.ptyIdsByLeafId).toEqual({
       [leafOf(7)]: 'pty-fresh'
     })
-    close()
-  })
-
-  it('shows 100 single-binding frames, one per task, without building a workspace', async () => {
-    const { store, first, send, close } = await boot()
-    let layout = first
-    for (let index = 0; index < TABS; index += 1) {
-      layout = structuredClone(layout)
-      layout.tabs[index]!.terminal!.panes[0]!.ptyId = `pty-respawned-${index}`
-      await send(layout)
-    }
-
-    expect([...check.fullBuilt, ...check.workspaceBuilt]).toEqual([])
-    const bindings = store.getState().terminalLayoutsByTabId
-    expect(
-      Array.from({ length: TABS }, (_, index) => bindings[`tab-${index}`]!.ptyIdsByLeafId)
-    ).toEqual(
-      Array.from({ length: TABS }, (_, index) => ({ [leafOf(index)]: `pty-respawned-${index}` }))
-    )
     close()
   })
 

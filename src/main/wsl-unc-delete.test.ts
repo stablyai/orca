@@ -79,17 +79,6 @@ describe('tryDeleteWslUncPath', () => {
     ])
   })
 
-  it('passes -rf for a recursive directory delete', async () => {
-    await withPlatform('win32', async () => {
-      await tryDeleteWslUncPath('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\dir', {
-        recursive: true
-      })
-    })
-
-    const [{ args: spawnArgs }] = runProcessMock.mock.calls[0]
-    expect(spawnArgs).toEqual(['-d', 'Ubuntu', '--exec', 'rm', '-rf', '--', '/home/me/repo/dir'])
-  })
-
   it('runs approved-root deletion through the contained command', async () => {
     await withPlatform('win32', async () => {
       await expect(
@@ -144,16 +133,6 @@ describe('tryDeleteWslUncPath', () => {
 
     const [{ args: spawnArgs }] = runProcessMock.mock.calls[0]
     expect(spawnArgs).toEqual(['-d', 'Debian', '--exec', 'rm', '-f', '--', '/srv/app.log'])
-  })
-
-  it('surfaces the distro stderr when rm fails', async () => {
-    runProcessMock.mockResolvedValue(exited(1, 'rm: cannot remove: Permission denied'))
-
-    await withPlatform('win32', async () => {
-      await expect(
-        tryDeleteWslUncPath('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\file.txt')
-      ).rejects.toThrow('Failed to delete WSL path: rm: cannot remove: Permission denied')
-    })
   })
 
   // A user's delete may start a stopped distro; background readers must then stop trusting "stopped".

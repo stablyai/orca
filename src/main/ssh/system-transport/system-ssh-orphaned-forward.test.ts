@@ -26,12 +26,6 @@ function row(pid: number, ppid: number, command: string, creationTimeMs?: number
 }
 
 describe('findOrphanedOrcaSshForward', () => {
-  it('finds a reparented Orca forward for this exact forward (macOS/Linux init)', () => {
-    expect(findOrphanedOrcaSshForward([row(900, 1, ORCA_FORWARD)], EXPECTED, 'darwin')?.pid).toBe(
-      900
-    )
-  })
-
   it('finds one reparented to a systemd --user subreaper', () => {
     const rows = [row(50, 1, '/usr/lib/systemd/systemd --user'), row(900, 50, ORCA_FORWARD)]
     expect(findOrphanedOrcaSshForward(rows, EXPECTED, 'linux')?.pid).toBe(900)

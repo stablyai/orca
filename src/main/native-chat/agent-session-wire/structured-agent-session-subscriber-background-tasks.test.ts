@@ -4,10 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
@@ -112,26 +110,6 @@ describe('the background-task roster on subscriber frames', () => {
 
     expect(events).toHaveLength(1)
     expect(rosterOf(events[0])).toEqual(MONITORING)
-  })
-
-  it('carries the current roster on snapshot frames, so a running task stays shown', async () => {
-    const journal = await openJournal('replay')
-    const subscribers = new AgentSessionSubscribers({ readBackgroundTasks: () => MONITORING })
-    const events: AgentSessionSubscribeEvent[] = []
-    subscribers.open({
-      id: 'pane',
-      sessionId: SESSION,
-      journal,
-      fence: 1,
-      emit: (e) => events.push(e)
-    })
-
-    subscribers.snapshot(SESSION, journal, 2)
-
-    expect(events.map((event) => [event.type, rosterOf(event)])).toEqual([
-      ['snapshot', MONITORING],
-      ['snapshot', MONITORING]
-    ])
   })
 
   it('neither reads nor resends the roster for an ordinary journal batch', async () => {

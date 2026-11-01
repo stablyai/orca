@@ -16,7 +16,13 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('lucide-react-native', () => ({ RefreshCw: 'Icon' }))
+vi.mock('lucide-react-native', () => ({
+  CircleAlert: 'Icon',
+  FileText: 'Icon',
+  ListChecks: 'Icon',
+  SearchX: 'Icon',
+  WifiOff: 'Icon'
+}))
 vi.mock('../components/MobileDiffReviewLine', () => ({ MobileDiffReviewLine: () => null }))
 vi.mock('expo-haptics', () => ({
   impactAsync: vi.fn(),
@@ -76,7 +82,8 @@ function ReviewWhileUnreachable({
     staleCommentIds: controller.staleCommentIds,
     onAddNote: controller.openComposer,
     onEditNote: controller.openEditComposer,
-    onRetry: controller.retryAction ?? undefined
+    onRetry: controller.retryAction ?? undefined,
+    offline: connState !== 'connected'
   })
 }
 
@@ -94,7 +101,8 @@ async function render(onReconnect: ((hostId: string) => void) | null): Promise<R
 function retryControls(rendered: ReactTestRenderer): ReactTestInstance[] {
   return rendered.root.findAll(
     (node) =>
-      String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Retry loading review'
+      String(node.type) === 'Pressable' &&
+      node.findAll((child) => child.props.children === 'Reconnect').length > 0
   )
 }
 
@@ -102,7 +110,7 @@ describe('the review Retry while the host is unreachable', () => {
   it('is absent on the page, where nothing can re-dial', async () => {
     const rendered = await render(null)
     expect(
-      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop...')
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop')
     ).not.toHaveLength(0)
     expect(retryControls(rendered)).toHaveLength(0)
   })

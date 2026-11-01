@@ -1,4 +1,4 @@
-import type { NativeChatMessage, NativeChatTextBlock } from './native-chat-types'
+import type { NativeChatMessage, NativeChatTextBlock } from './native-chat/native-chat-types'
 
 export const APPROVED_REVIEW =
   'Automatic approval review approved (risk: medium, authorization: high): The requested local check is allowed.'

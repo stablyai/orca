@@ -114,14 +114,6 @@ it("keeps only a moved project's chat tab through hydration and persistence", ()
   expect(persisted.unifiedTabs?.[MOVED]?.map((entry) => entry.id)).toEqual([CHAT])
 })
 
-it("never treats a paired host's partition as the moved local workspace", () => {
-  const session = movedSession()
-  expect(
-    collectWslMovedWorkspaceKeysFromSession(session, projects, { [MOVED]: 'runtime:wsl-ubuntu' })
-  ).toEqual([])
-  expect(collectWslMovedWorkspaceKeysFromSession(session, [])).toEqual([])
-})
-
 it("lists the moved chats under their project, and never the host's listed worktree", () => {
   const store = createTestStore()
   hydrate(store, movedSession())

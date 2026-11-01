@@ -13,8 +13,8 @@ import {
   placeStoppedSends,
   withStopRowsAfterStoppedSends
 } from './native-chat/native-chat-stopped-before-start'
-import { compareNativeChatTranscriptMessages } from './native-chat-transcript-projection'
-import type { NativeChatMessage } from './native-chat-types'
+import { compareNativeChatTranscriptMessages } from './native-chat/transcript/native-chat-transcript-projection'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
 import { isActionableStructuredAgentSessionPrompt } from './structured-agent-session-live-turn'

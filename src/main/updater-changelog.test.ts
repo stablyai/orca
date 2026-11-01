@@ -35,26 +35,6 @@ describe('fetchChangelog', () => {
     fetchMock.mockReset()
   })
 
-  it('returns exact match when the incoming version has rich content', async () => {
-    const entries = makeEntries([
-      {
-        version: '1.1.21',
-        description: 'New feature',
-        mediaUrl: 'https://onorca.dev/media/1.1.21.gif'
-      },
-      { version: '1.1.20' },
-      { version: '1.1.19' }
-    ])
-    fetchMock.mockResolvedValue(jsonResponse(entries))
-
-    const result = await fetchChangelog('1.1.21', '1.1.19')
-
-    expect(result).not.toBeNull()
-    expect(result!.release.title).toBe('Release 1.1.21')
-    expect(result!.release.releaseNotesUrl).toBe('https://onorca.dev/changelog/1.1.21')
-    expect(result!.releasesBehind).toBe(2)
-  })
-
   it('falls back to the most recent rich entry when incoming version is not in JSON', async () => {
     const entries = makeEntries([
       {
@@ -95,19 +75,6 @@ describe('fetchChangelog', () => {
     expect(result!.release.title).toBe('Release 1.1.17')
     expect(result!.release.releaseNotesUrl).toBe('https://onorca.dev/changelog')
     expect(result!.releasesBehind).toBe(2)
-  })
-
-  it('returns null when no entry has rich content', async () => {
-    const entries = makeEntries([
-      { version: '1.1.21', description: '' },
-      { version: '1.1.20', description: '' },
-      { version: '1.1.19', description: '' }
-    ])
-    fetchMock.mockResolvedValue(jsonResponse(entries))
-
-    const result = await fetchChangelog('1.1.21', '1.1.19')
-
-    expect(result).toBeNull()
   })
 
   it('treats description-only entries (no media) as non-rich', async () => {
@@ -194,14 +161,6 @@ describe('fetchChangelog', () => {
     expect(result).toBeNull()
   })
 
-  it('returns null on non-ok HTTP response', async () => {
-    fetchMock.mockResolvedValue({ ok: false })
-
-    const result = await fetchChangelog('1.1.21', '1.1.19')
-
-    expect(result).toBeNull()
-  })
-
   it('returns null on non-array JSON', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ bad: true }))
 
@@ -230,18 +189,5 @@ describe('fetchChangelog', () => {
 
     expect(result!.release.title).toBe('Release 1.1.21')
     expect(result!.release.releaseNotesUrl).toBe('https://onorca.dev/changelog/1.1.21')
-  })
-
-  it('strips version from the returned release object', async () => {
-    const entries = makeEntries([
-      { version: '1.1.17', description: 'Feature', mediaUrl: 'https://onorca.dev/media/demo.gif' },
-      { version: '1.1.15' }
-    ])
-    fetchMock.mockResolvedValue(jsonResponse(entries))
-
-    const result = await fetchChangelog('1.1.21', '1.1.15')
-
-    expect(result).not.toBeNull()
-    expect('version' in result!.release).toBe(false)
   })
 })

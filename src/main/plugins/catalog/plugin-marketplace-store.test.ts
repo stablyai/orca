@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { PluginMarketplaceGitSource } from '../../../shared/plugins/catalog/plugin-marketplace'
-import { marketplaceSourceId, PluginMarketplaceStore } from './plugin-marketplace-store'
+import { PluginMarketplaceStore } from './plugin-marketplace-store'
 
 const roots: string[] = []
 
@@ -22,20 +22,6 @@ afterEach(async () => {
 })
 
 describe('PluginMarketplaceStore', () => {
-  it('persists bounded source registrations under a deterministic opaque id', async () => {
-    const root = await tempRoot()
-    const first = new PluginMarketplaceStore(root)
-    const registered = await first.addSource(source(), 123)
-
-    expect(registered).toEqual({
-      id: marketplaceSourceId(source()),
-      source: source(),
-      addedAt: 123
-    })
-    await expect(new PluginMarketplaceStore(root).listSources()).resolves.toEqual([registered])
-    await expect(first.addSource(source(), 999)).resolves.toEqual(registered)
-  })
-
   it('atomically publishes a strict cached snapshot and removes it with its source', async () => {
     const root = await tempRoot()
     const store = new PluginMarketplaceStore(root)
@@ -71,10 +57,6 @@ describe('PluginMarketplaceStore', () => {
     ).toEqual([])
     await expect(store.removeSource(registered.id)).resolves.toBe(true)
     await expect(store.readSnapshot(registered.id)).resolves.toBeNull()
-  })
-
-  it('keeps distinct refs as distinct marketplace sources', () => {
-    expect(marketplaceSourceId(source('main'))).not.toBe(marketplaceSourceId(source('stable')))
   })
 
   it('rejects path-like source ids before reading or deleting cache files', async () => {

@@ -22,7 +22,7 @@ import {
 } from './acp-turn-failures'
 import { acpNamedTextKey, AcpTurnMessages, type AcpTextDrop } from './acp-turn-messages'
 import type { PromptResponse } from './generated/acp-protocol.generated'
-import type { NativeChatSubagentState } from '../../shared/native-chat-types'
+import type { NativeChatSubagentState } from '../../shared/native-chat/native-chat-types'
 
 export { acpTurnEnd } from './acp-prompt-turns'
 

@@ -3,7 +3,7 @@ import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
   type NativeChatMessage
-} from '../../native-chat-types'
+} from '../native-chat-types'
 import {
   readAgentMessageSource,
   type AgentMessageSource

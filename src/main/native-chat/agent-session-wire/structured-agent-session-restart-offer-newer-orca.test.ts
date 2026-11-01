@@ -5,9 +5,7 @@ import {
   AGENT_SESSION_RECOVERY_CAPSULE_FILE,
   AgentSessionRecoveryCapsule
 } from '../../runtime/agent-session-recovery-capsule'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import {
-  insertTestJournalRowJson,
   liveTestJournalRows,
   openTestJournalHostDatabase,
   updateTestJournalRowJson
@@ -27,26 +25,17 @@ afterEach(() => vi.restoreAllMocks())
 
 function newerOrcaRow(root: string, sessionId: string = SESSION): void {
   const { db } = openTestJournalHostDatabase(root)
-  const last = liveTestJournalRows(db, sessionId).at(-1)
-  const parsed: unknown = last ? JSON.parse(last.rowJson) : null
-  if (!last || typeof parsed !== 'object' || parsed === null || !('epoch' in parsed)) {
-    throw new Error('the chat has no journal row to follow')
+  const first = liveTestJournalRows(db, sessionId)[0]
+  if (!first) {
+    throw new Error('the chat has no founding row')
   }
-  const { epoch } = parsed
-  const seq = last.seq + 1
-  insertTestJournalRowJson(
+  const anchor = JSON.parse(first.rowJson)
+  db.prepare('UPDATE journal_outcome_epochs SET format = 99 WHERE session_id = ?').run(sessionId)
+  updateTestJournalRowJson(
     db,
     sessionId,
-    seq,
-    JSON.stringify({
-      v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-      kind: 'future-mark',
-      epoch,
-      seq,
-      fence: 1,
-      ts: NOW
-    }),
-    NOW
+    1,
+    JSON.stringify({ ...anchor, v: 99, outcomeFormat: 99 })
   )
 }
 

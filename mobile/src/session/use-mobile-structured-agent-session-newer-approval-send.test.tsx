@@ -30,7 +30,9 @@ const sendRequest = vi.fn<RpcClient['sendRequest']>()
 const client: RpcClient = {
   sendRequest,
   subscribe: vi.fn<RpcClient['subscribe']>((_method, _params, onData) => {
-    listener = onData
+    if (_method === 'agentSession.subscribe') {
+      listener = onData
+    }
     return vi.fn()
   }),
   updateTerminalSubscriptionViewport: () => {},
@@ -82,7 +84,7 @@ async function sentDelivery(items: AgentJournalRenderItem[]): Promise<unknown> {
   })
   await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
   const event = snapshotEvent({ items })
-  act(() => listener?.(event))
+  await act(async () => listener?.(event))
   await act(async () => {
     await hook!.sendWithOutcome('carry on')
   })
@@ -98,7 +100,9 @@ beforeEach(() => {
       ? mutationOk({ clientMessageId: 'client-1' })
       : method === 'agentSession.options'
         ? ok({ models: [], current: {} })
-        : ok({})
+        : method === 'settings.get'
+          ? ok({ settings: { nativeChatQueueFollowUps: true } })
+          : ok({})
   )
 })
 
@@ -136,14 +140,16 @@ async function afterStop(items: AgentJournalRenderItem[]): Promise<unknown> {
       ? new Promise(() => undefined)
       : method === 'agentSession.options'
         ? ok({ models: [], current: {} })
-        : ok({})
+        : method === 'settings.get'
+          ? ok({ settings: { nativeChatQueueFollowUps: true } })
+          : ok({})
   )
   act(() => {
     renderer = create(createElement(Harness))
   })
   await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
   const event = snapshotEvent({ items: [...items, RUNNING_TURN] })
-  act(() => listener?.(event))
+  await act(async () => listener?.(event))
   act(() => hook?.cancel())
   expect(hook?.turnIndicator.stopping).toBe(true)
   return hook?.turnIndicator.afterStop
