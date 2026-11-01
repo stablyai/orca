@@ -232,7 +232,9 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   ): React.ReactNode => (
     <ChildAgentsWithIdleGroup
       childAgents={childAgents}
-      idleExpanded={isAgentSendTargetModeActive || expandedIdleChildGroups.has(parent.paneKey)}
+      // Picking shows every child flat; folding would hide send targets.
+      flat={isAgentSendTargetModeActive}
+      idleExpanded={expandedIdleChildGroups.has(parent.paneKey)}
       onToggleIdle={() => toggleIdleChildGroup(parent.paneKey)}
       layout={agentActivityDisplayMode === 'compact' ? 'compact' : 'full'}
       ariaLevel={(parent.lineage?.depth ?? 0) + 2}
@@ -255,6 +257,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
     const expanded = isLineageExpanded(agent.paneKey)
+    // Picker mode forces children open; a toggle there would silently flip stored state.
+    const canToggle = hasChildAgents && !isAgentSendTargetModeActive
     const sendTarget = sendTargetFor(agent.paneKey)
     const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
     descendantAncestorPaneKeys.add(agent.paneKey)
@@ -281,9 +285,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
               ? collapsedChildAgentsSignalState(childrenByParentPaneKey, agent.paneKey)
               : undefined
           }
-          onToggleChildAgents={
-            hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
-          }
+          onToggleChildAgents={canToggle ? () => toggleLineageParent(agent.paneKey) : undefined}
           isFocusedPane={isFocusedOrHidesFocus(agent.paneKey, expanded)}
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
@@ -313,6 +315,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
     const expanded = isLineageExpanded(agent.paneKey)
+    // Picker mode forces children open; a toggle there would silently flip stored state.
+    const canToggle = hasChildAgents && !isAgentSendTargetModeActive
     const sendTarget = sendTargetFor(agent.paneKey)
     const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
     descendantAncestorPaneKeys.add(agent.paneKey)
@@ -344,9 +348,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
               ? collapsedChildAgentsSignalState(childrenByParentPaneKey, agent.paneKey)
               : undefined
           }
-          onToggleChildAgents={
-            hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
-          }
+          onToggleChildAgents={canToggle ? () => toggleLineageParent(agent.paneKey) : undefined}
           isFocusedPane={isFocusedOrHidesFocus(agent.paneKey, expanded)}
           cacheTimerActive={cacheTimerActive}
         />

@@ -119,6 +119,7 @@ export function IdleChildAgentGroupRow({
 
 type ChildAgentsWithIdleGroupProps = {
   childAgents: DashboardAgentRowData[]
+  flat: boolean
   idleExpanded: boolean
   onToggleIdle: () => void
   layout: 'compact' | 'full'
@@ -129,13 +130,16 @@ type ChildAgentsWithIdleGroupProps = {
 /** Idle children fold behind one row so held-but-idle subagents don't crowd live work. */
 export function ChildAgentsWithIdleGroup({
   childAgents,
+  flat,
   idleExpanded,
   onToggleIdle,
   layout,
   ariaLevel,
   renderChild
 }: ChildAgentsWithIdleGroupProps): React.JSX.Element {
-  const { activeChildren, idleChildren } = partitionIdleChildAgents(childAgents)
+  const { activeChildren, idleChildren } = flat
+    ? { activeChildren: childAgents, idleChildren: [] }
+    : partitionIdleChildAgents(childAgents)
   return (
     <>
       {activeChildren.map((childAgent) => renderChild(childAgent, true))}

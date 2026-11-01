@@ -206,7 +206,10 @@
         "unconfirmed_other": "All {{count}} agents unconfirmed",
         "needsAttention_one": "{{count}} agent needs attention",
         "needsAttention_other": "All {{count}} agents needs attention"
-      }
+      },
+      "idleChildCount": "{{count}} idle",
+      "hideIdleChildren": "Hide {{count}} idle child agents",
+      "showIdleChildren": "Show {{count}} idle child agents"
     },
     "cardProperties": {
       "agentModel": "Agent model"
