@@ -22,6 +22,7 @@ export type LinearIssue = {
   }
   project?: LinearProjectSummary
   subIssues?: LinearIssueChildSummary[]
+  linkedPullRequests?: LinearIssueLinkedPullRequest[]
   labels: string[]
   labelIds: string[]
   assignee?: {
@@ -40,6 +41,13 @@ export type LinearIssueChildSummary = {
   identifier: string
   title: string
   url: string
+}
+
+export type LinearIssueLinkedPullRequest = {
+  id: string
+  title: string
+  url: string
+  subtitle?: string
 }
 
 export type LinearComment = {

@@ -70,6 +70,7 @@ async function readIssueWithSignal(
       const issue = await entry.client.issue(id)
       const mapped = await mapIssueForWorkspace(entry, issue, {
         includeChildren: true,
+        includeAttachments: true,
         includeProject: true
       })
       const descriptionImageUrls = await getDescriptionImageUrls(

@@ -1,12 +1,21 @@
 import type { Issue, IssueSearchResult } from '@linear/sdk'
-import type { LinearIssue, LinearIssueChildSummary } from '../../shared/linear/issue-types'
+import type {
+  LinearIssue,
+  LinearIssueChildSummary,
+  LinearIssueLinkedPullRequest
+} from '../../shared/linear/issue-types'
 
 type IssueWithChildren = Issue & {
   children: Issue['children']
 }
 
+type IssueWithAttachments = Issue & {
+  attachments: Issue['attachments']
+}
+
 type MapLinearIssueOptions = {
   includeChildren?: boolean
+  includeAttachments?: boolean
   includeProject?: boolean
 }
 
@@ -25,6 +34,23 @@ function mapLinearIssueChild(issue: Issue): LinearIssueChildSummary {
     title: issue.title,
     url: issue.url
   }
+}
+
+const PULL_REQUEST_URL_PATTERN =
+  /^https:\/\/(?:github\.com\/[^/]+\/[^/]+\/pull|gitlab\.com\/.+\/-\/merge_requests)\/\d+(?:[/?#]|$)/
+
+// Linear's GitHub/GitLab integrations record linked PRs as issue attachments.
+export function mapLinearLinkedPullRequests(
+  attachments: readonly { id: string; title: string; url: string; subtitle?: string | null }[]
+): LinearIssueLinkedPullRequest[] {
+  return attachments
+    .filter((attachment) => PULL_REQUEST_URL_PATTERN.test(attachment.url))
+    .map((attachment) => ({
+      id: attachment.id,
+      title: attachment.title,
+      url: attachment.url,
+      subtitle: attachment.subtitle ?? undefined
+    }))
 }
 
 // Resolve lazy SDK relations before IPC; search results expose label IDs without the labels relation.
@@ -63,6 +89,20 @@ export async function mapLinearIssue(
     }
   }
 
+  let linkedPullRequests: LinearIssueLinkedPullRequest[] | undefined
+  if (
+    options.includeAttachments &&
+    'attachments' in issue &&
+    typeof issue.attachments === 'function'
+  ) {
+    try {
+      const attachmentsConnection = await (issue as IssueWithAttachments).attachments({ first: 50 })
+      linkedPullRequests = mapLinearLinkedPullRequests(attachmentsConnection.nodes)
+    } catch {
+      // Missing PR links must not block issue display.
+    }
+  }
+
   return {
     id: issue.id,
     identifier: issue.identifier,
@@ -92,6 +132,7 @@ export async function mapLinearIssue(
         }
       : undefined,
     subIssues,
+    linkedPullRequests,
     labels: labelNames,
     labelIds,
     assignee: assignee
