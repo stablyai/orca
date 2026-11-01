@@ -566,7 +566,9 @@ describe('orca cli worktree awareness', () => {
     [['--read=false'], '--read takes no value'],
     [['--read='], '--read takes no value'],
     [['--unread=false'], '--unread takes no value'],
-    [['--unread='], '--unread takes no value']
+    [['--unread='], '--unread takes no value'],
+    [['--read=false', '--read'], '--read takes no value'],
+    [['--unread=x', '--unread'], '--unread takes no value']
   ])('rejects %j on worktree.set before resolving selectors', async (flags, message) => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -625,27 +627,29 @@ describe('orca cli worktree awareness', () => {
     )
   })
 
-  it.each(['--pin=true', '--unpin=false'])(
-    'rejects %s instead of dropping the write',
-    async (flag) => {
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const priorExitCode = process.exitCode
+  it.each([
+    { flags: ['--pin=true'] },
+    { flags: ['--unpin=false'] },
+    { flags: ['--pin=false', '--pin'] },
+    { flags: ['--unpin=x', '--unpin'] }
+  ])('rejects $flags instead of dropping the write', async ({ flags }) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
 
-      await main(
-        ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', flag, '--json'],
-        '/tmp/repo'
-      )
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', ...flags, '--json'],
+      '/tmp/repo'
+    )
 
-      expect(callMock).not.toHaveBeenCalled()
-      expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-        'takes no value.'
-      )
-      expect(process.exitCode).toBe(1)
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'takes no value.'
+    )
+    expect(process.exitCode).toBe(1)
 
-      process.exitCode = priorExitCode
-    }
-  )
+    process.exitCode = priorExitCode
+  })
 
   it('rejects contradictory pin flags on worktree.set', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

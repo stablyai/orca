@@ -25,6 +25,8 @@ export const BOOLEAN_FLAGS = CLI_BOOLEAN_FLAGS
 
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
 const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
+// Handlers reject a value for these, so a bare repeat (--pin=false --pin) must not hide it.
+const VALUE_REJECTING_FLAGS = new Set(['pin', 'unpin', 'read', 'unread'])
 
 function setFlagValue(
   flags: Map<string, string | boolean>,
@@ -112,7 +114,7 @@ export function parseArgs(
   for (const [name, value] of flagEntries) {
     if (typeof value === 'string') {
       setFlagValue(flags, name, value, repeatable)
-    } else {
+    } else if (!(VALUE_REJECTING_FLAGS.has(name) && typeof flags.get(name) === 'string')) {
       flags.set(name, value)
     }
   }
