@@ -24,13 +24,15 @@ describe('paired runtime repo add routing', () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-paired-add',
       ok: true,
-      result: { repo: remoteRepo },
+      result: { repo: remoteRepo, selectedPath: '/resolved/linked/subdir' },
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
 
+    const onResolvedSelectedPath = vi.fn()
     await store.getState().addRepoPath('/srv/paired-project', 'folder', {
-      runtimeEnvironmentId: 'paired-host'
+      runtimeEnvironmentId: 'paired-host',
+      onResolvedSelectedPath
     })
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
@@ -39,6 +41,7 @@ describe('paired runtime repo add routing', () => {
       params: { path: '/srv/paired-project', kind: 'folder' },
       timeoutMs: 15_000
     })
+    expect(onResolvedSelectedPath).toHaveBeenCalledExactlyOnceWith('/resolved/linked/subdir')
     expect(reposAdd).not.toHaveBeenCalled()
     expect(reposPickFolder).not.toHaveBeenCalled()
   })

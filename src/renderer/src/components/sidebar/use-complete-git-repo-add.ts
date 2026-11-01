@@ -11,7 +11,11 @@ import { finishProjectAddWithDefaultCheckout } from './project-added-default-che
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-export type GitRepoAddOutcome = { importedProjectGroupId?: string }
+export type GitRepoAddOutcome = {
+  importedProjectGroupId?: string
+  /** The folder the user picked; it may sit inside a linked checkout rather than the primary. */
+  selectedPath?: string
+}
 
 export type CompleteGitRepoAdd = (
   repoId: string,
@@ -72,6 +76,7 @@ export function useCompleteGitRepoAdd({
       await finishProjectAddWithDefaultCheckout({
         repoId,
         source,
+        selectedPath: outcome?.selectedPath,
         executionHostId,
         closeModal,
         setHideDefaultBranchWorkspace

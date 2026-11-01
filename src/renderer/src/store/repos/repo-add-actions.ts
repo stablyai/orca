@@ -55,20 +55,24 @@ export function createRepoAddActions(
               throw new Error(result.error)
             }
             repo = result.repo
+            if (result.selectedPath) {
+              options?.onResolvedSelectedPath?.(result.selectedPath)
+            }
           } else {
             const environmentId = target.environmentId
             // Queued behind any replayed removal, so a re-add of the same project is never undone.
             repo = await runExclusiveForRuntimeEnvironment(environmentId, async () => {
-              const added = (
-                await callRuntimeRpc<{ repo: Repo }>(
-                  target,
-                  'repo.add',
-                  { path, kind, ...(displayName ? { displayName } : {}) },
-                  { timeoutMs: 15_000 }
-                )
-              ).repo
-              clearPendingRuntimeRepoRemoval(environmentId, added.id)
-              return added
+              const result = await callRuntimeRpc<{ repo: Repo; selectedPath?: string }>(
+                target,
+                'repo.add',
+                { path, kind, ...(displayName ? { displayName } : {}) },
+                { timeoutMs: 15_000 }
+              )
+              if (result.selectedPath) {
+                options?.onResolvedSelectedPath?.(result.selectedPath)
+              }
+              clearPendingRuntimeRepoRemoval(environmentId, result.repo.id)
+              return result.repo
             })
           }
         } catch (err) {

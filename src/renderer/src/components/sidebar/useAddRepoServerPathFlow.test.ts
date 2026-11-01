@@ -132,6 +132,7 @@ describe('useAddRepoServerPathFlow', () => {
 
     expect(mocks.onWindowsDriveRefusal).not.toHaveBeenCalled()
     expect(mocks.addRepoPath).toHaveBeenCalledWith('/mnt/c/src', 'folder', {
+      onResolvedSelectedPath: expect.any(Function),
       runtimeEnvironmentId: 'ssh-env',
       onWindowsDriveRefusal: mocks.onWindowsDriveRefusal
     })
@@ -159,6 +160,7 @@ describe('useAddRepoServerPathFlow', () => {
     await result.handleAddServerPath('folder')
 
     expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'folder', {
+      onResolvedSelectedPath: expect.any(Function),
       runtimeEnvironmentId: 'box1-environment-id',
       onWindowsDriveRefusal: mocks.onWindowsDriveRefusal
     })
@@ -202,6 +204,7 @@ describe('useAddRepoServerPathFlow', () => {
       expect.objectContaining({ runtimeEnvironmentId: 'box1-environment-id' })
     )
     expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'git', {
+      onResolvedSelectedPath: expect.any(Function),
       runtimeEnvironmentId: 'box1-environment-id',
       onWindowsDriveRefusal: mocks.onWindowsDriveRefusal
     })
@@ -209,5 +212,11 @@ describe('useAddRepoServerPathFlow', () => {
       requireAuthoritative: true,
       executionHostId: 'runtime:box1-environment-id'
     })
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(
+      'server-git',
+      'runtime_server_path',
+      'runtime:box1-environment-id',
+      { selectedPath: '/server/docs' }
+    )
   })
 })

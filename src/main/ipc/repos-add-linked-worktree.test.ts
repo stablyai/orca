@@ -1,6 +1,9 @@
 /** Linked worktrees report their own toplevel; deduplicate by common repo to avoid duplicate run-target rows. */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { mkdtemp, mkdir, realpath, rm, symlink } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 
 const {
@@ -120,6 +123,29 @@ describe('repos:add with git worktrees', () => {
 
     expect(result).toEqual({ repo: expect.objectContaining({ id: 'main-repo-id' }) })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('retains the resolved linked folder when its primary is already registered', async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-local-add-checkout-')))
+    try {
+      const linked = join(root, 'linked')
+      const selected = join(linked, 'packages')
+      await mkdir(selected, { recursive: true })
+      const alias = join(root, 'alias')
+      await symlink(linked, alias, 'junction')
+      mockStore.getRepos.mockReturnValue([trackedMainRepo()])
+      getLinkedWorktreeMainRepoRootMock.mockReturnValue(MAIN_CHECKOUT)
+
+      const result = await callAdd({ path: join(alias, 'packages') })
+
+      expect(result).toMatchObject({
+        repo: { id: 'main-repo-id', path: MAIN_CHECKOUT },
+        selectedPath: selected
+      })
+      expect(mockStore.addRepo).not.toHaveBeenCalled()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('still adds a linked worktree whose main checkout is not tracked', async () => {
