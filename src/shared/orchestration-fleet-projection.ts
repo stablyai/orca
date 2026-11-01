@@ -5,7 +5,10 @@ import {
   type OrchestrationFleetAttention,
   type OrchestrationFleetAttentionCategory
 } from './orchestration-fleet-attention'
-import { projectOrchestrationFleetWorker } from './orchestration-fleet-worker-projection'
+import {
+  projectOrchestrationFleetWorker,
+  SETTLED_WORKER_STATES
+} from './orchestration-fleet-worker-projection'
 
 export const ORCHESTRATION_FLEET_PAGE_MAX = 100
 
@@ -143,7 +146,15 @@ export function refreshOrchestrationFleetLivenessAttention(worker: Orchestration
     pendingApproval: had('approval'),
     interrupted: had('interruption'),
     stoppedWithoutWorkerDone:
-      had('stopped_without_worker_done') && worker.liveness.verdict === 'live',
+      worker.liveness.verdict === 'live' &&
+      worker.outcome === 'in_progress' &&
+      !SETTLED_WORKER_STATES.has(worker.stage.worker) &&
+      worker.stage.dispatch !== 'completed' &&
+      worker.stage.dispatch !== 'failed' &&
+      worker.stage.dispatch !== 'circuit_broken' &&
+      (worker.stage.activity === 'done' || worker.stage.activity === 'waiting') &&
+      !had('input') &&
+      !had('approval'),
     lastAssistantMessage: worker.attention.lastAssistantMessage ?? worker.lastAssistantMessage,
     liveness: worker.liveness
   })

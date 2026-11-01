@@ -773,5 +773,9 @@ describe('fleet liveness and attention after a host verdict', () => {
     subject.liveness = { verdict: 'unverifiable', reason: 'host_unavailable' }
     refreshOrchestrationFleetLivenessAttention(subject)
     expect(subject.attention.categories).not.toContain('stopped_without_worker_done')
+
+    subject.liveness = { verdict: 'live', reason: 'agent_status_fresh' }
+    refreshOrchestrationFleetLivenessAttention(subject)
+    expect(subject.attention.categories).toContain('stopped_without_worker_done')
   })
 })
