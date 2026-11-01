@@ -7,6 +7,7 @@ import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
 import { selectChecksPanelReview } from '../checks-panel-review'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
+import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review-cache-state'
 import { mapGitHubReview } from '../../../../../main/source-control/forge-review-mappers'
 import { useChecksPanelGitHubReviewHydration } from './use-checks-panel-github-review-hydration'
 
@@ -31,6 +32,7 @@ const githubReview: HostedReviewInfo = {
 }
 function makeInput(review: HostedReviewInfo): HydrationInput {
   return {
+    activeWorktree: null,
     activeWorktreeId: 'worktree-1',
     branch: 'main',
     fetchPRForBranch: vi.fn(async () => null),
@@ -59,13 +61,18 @@ afterEach(() => {
 })
 describe('loading known GitHub reviews', () => {
   it.each([
-    ['eligibility', false],
-    ['hosted-review', false],
-    ['eligibility', true],
-    ['hosted-review', true]
+    ['eligibility', 'older-miss'],
+    ['hosted-review', 'older-miss'],
+    ['eligibility', 'newer-miss'],
+    ['hosted-review', 'newer-miss'],
+    ['eligibility', 'older-merged'],
+    ['hosted-review', 'older-merged'],
+    ['eligibility', 'newer-merged'],
+    ['hosted-review', 'newer-merged']
   ] as const)(
-    'reuses complete %s results without another lookup, newer absence: %s',
-    async (source, newerAbsence) => {
+    'reuses complete %s results without overwriting a newer cache entry: %s',
+    async (source, cachedResult) => {
+      const newerCache = cachedResult.startsWith('newer')
       const found: PRInfo = {
         number: 12,
         title: 'Original lookup result',
@@ -99,14 +106,39 @@ describe('loading known GitHub reviews', () => {
         undefined,
         true
       )
+      const cachedEntry = {
+        data: cachedResult.endsWith('merged')
+          ? { ...found, number: 11, state: 'merged' as const, headSha: 'previous-head' }
+          : null,
+        fetchedAt: newerCache ? 3 : 1
+      }
       useAppStore.setState({
         repos: [repo],
-        prCache: { [key]: { data: null, fetchedAt: newerAbsence ? 3 : 1 } },
+        prCache: { [key]: cachedEntry },
         hostedReviewCache:
           source === 'hosted-review' ? { [hostedKey]: { data: review, fetchedAt: 2 } } : {},
         prRefreshStates: {}
       })
       const input = makeInput(review)
+      input.activeWorktree = {
+        id: 'worktree-1',
+        repoId: repo.id,
+        path: repo.path,
+        displayName: 'main',
+        comment: '',
+        linkedIssue: null,
+        linkedPR: found.number,
+        linkedLinearIssue: null,
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0,
+        branch: 'main',
+        head: 'head-a',
+        isBare: false,
+        isMainWorktree: true
+      }
       input.prCacheKey = key
       input.hostedReviewCacheKey = hostedKey
       input.hostedReview = source === 'hosted-review' ? review : null
@@ -137,7 +169,10 @@ describe('loading known GitHub reviews', () => {
       }
       const { result, rerender } = renderHook(
         ({ ready }) => {
-          const pr = useAppStore((s) => s.prCache[key]?.data ?? null)
+          const entry = useAppStore((s) => s.prCache[key])
+          const pr = isStaleMergedGitHubReviewForHead(entry, input.activeWorktree?.head)
+            ? null
+            : (entry?.data ?? null)
           const model = {
             ...input,
             pr,
@@ -152,9 +187,9 @@ describe('loading known GitHub reviews', () => {
       expect(result.current).toBeNull()
       expect(refreshPRNow).not.toHaveBeenCalled()
       await act(async () => rerender({ ready: true }))
-      if (newerAbsence) {
+      if (newerCache) {
         expect(result.current).toBeNull()
-        expect(useAppStore.getState().prCache[key]).toEqual({ data: null, fetchedAt: 3 })
+        expect(useAppStore.getState().prCache[key]).toEqual(cachedEntry)
       } else {
         expect(result.current).toMatchObject({ title: found.title, number: 12, status: 'success' })
         expect(useAppStore.getState().prCache[key]?.data).toEqual(found)

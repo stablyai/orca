@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { setGitHubPRResultCaches } from '@/store/github/pr-result-cache'
+import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review-cache-state'
 import { isPositiveHostedReviewNumber } from '../../../../../shared/hosted-review'
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
@@ -22,6 +23,7 @@ type ChecksPanelGitHubReviewHydrationInput = Pick<
 > &
   Pick<
     ChecksPanelControllerState,
+    | 'activeWorktree'
     | 'activeWorktreeId'
     | 'branch'
     | 'fetchPRForBranch'
@@ -32,6 +34,7 @@ type ChecksPanelGitHubReviewHydrationInput = Pick<
   Pick<ChecksPanelReviewState, 'hostedReviewCreation'>
 
 export function useChecksPanelGitHubReviewHydration({
+  activeWorktree,
   activeWorktreeId,
   branch,
   fetchPRForBranch,
@@ -94,7 +97,8 @@ export function useChecksPanelGitHubReviewHydration({
       hydrationAttemptRef.current = { contextKey: hydrationContextKey, number: knownGitHubPRNumber }
       useAppStore.setState((state) => {
         if (
-          state.prCache[prCacheKey]?.data ||
+          (state.prCache[prCacheKey]?.data &&
+            !isStaleMergedGitHubReviewForHead(state.prCache[prCacheKey], activeWorktree?.head)) ||
           (state.prCache[prCacheKey]?.fetchedAt ?? 0) > fetchedAt
         ) {
           return state
@@ -139,6 +143,7 @@ export function useChecksPanelGitHubReviewHydration({
     repo,
     branch,
     activeWorktreeId,
+    activeWorktree?.head,
     pr,
     prRefreshState,
     prCacheKey,
