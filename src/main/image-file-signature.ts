@@ -1,12 +1,14 @@
 export type ImageFileSignature = {
-  mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
-  extension: 'png' | 'jpg' | 'gif' | 'webp'
+  mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/heic'
+  extension: 'png' | 'jpg' | 'gif' | 'webp' | 'heic'
 }
 
 export const IMAGE_SIGNATURE_BYTES = 12
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff]
+// iPhone photos are 'heic'; the rest are the other HEVC-coded HEIF brands.
+const HEIC_MAJOR_BRANDS = ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis']
 
 function startsWith(buffer: Uint8Array, bytes: readonly number[], offset = 0): boolean {
   return (
@@ -36,6 +38,12 @@ export function detectImageFileSignature(buffer: Uint8Array): ImageFileSignature
   }
   if (startsWithAscii(buffer, 'RIFF') && startsWithAscii(buffer, 'WEBP', 8)) {
     return { mimeType: 'image/webp', extension: 'webp' }
+  }
+  if (
+    startsWithAscii(buffer, 'ftyp', 4) &&
+    HEIC_MAJOR_BRANDS.some((brand) => startsWithAscii(buffer, brand, 8))
+  ) {
+    return { mimeType: 'image/heic', extension: 'heic' }
   }
   return null
 }
