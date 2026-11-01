@@ -11,6 +11,7 @@ import type { NativeChatTaskSeedList } from '../../shared/native-chat/input/nati
 import { projectNativeChatTranscript } from '../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { foldToolMessages } from '../../shared/native-chat/tools/native-chat-tool-fold'
 import { readNativeChatTranscript } from './transcript-reader'
+import { fillSubagentRosterActivity } from './transcript-subagent-roster-activity'
 
 export type NativeChatTranscriptActivitySeed = {
   taskList: NativeChatTaskSeedList | null
@@ -36,7 +37,8 @@ async function seedFromFile(
   }
   const taskList = latestNativeChatTaskSeed(foldToolMessages(read.messages))
   const projection = projectNativeChatTranscript(read.messages)
-  const subagents = nativeChatSubagentActivities(projection.conversation, projection.subagentRows)
+  const roster = nativeChatSubagentActivities(projection.conversation, projection.subagentRows)
+  const subagents = await fillSubagentRosterActivity(agent, filePath, roster)
   return { taskList, subagents: subagents.length > 0 ? subagents : null }
 }
 

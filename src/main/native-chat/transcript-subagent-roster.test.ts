@@ -71,7 +71,7 @@ describe('decoded subagent roster', () => {
         id: '/root/sample_greeting',
         label: 'sample_greeting',
         state: 'completed',
-        activity: null
+        activity: 'sealed'
       }
     ])
   })
@@ -111,7 +111,7 @@ describe('decoded subagent roster', () => {
           type: 'queue-operation',
           timestamp: '2026-10-31T18:10:46.179Z',
           content:
-            '<task-notification>\n<task-id>a361b8987c2d7be85</task-id>\n<status>completed</status>\n<summary>Agent "Debug mobile Recent sort" finished</summary>\n</task-notification>'
+            '<task-notification>\n<task-id>a361b8987c2d7be85</task-id>\n<status>completed</status>\n<summary>Agent "Debug mobile Recent sort" finished</summary>\n<result>Fixed and pushed as 5a332b3d778.</result>\n</task-notification>'
         }
       ],
       'claude'
@@ -122,7 +122,7 @@ describe('decoded subagent roster', () => {
         id: 'a361b8987c2d7be85',
         label: 'Debug mobile Recent sort',
         state: 'completed',
-        activity: null
+        activity: 'Fixed and pushed as 5a332b3d778.'
       }
     ])
   })

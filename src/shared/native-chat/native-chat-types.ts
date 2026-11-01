@@ -135,6 +135,8 @@ export type NativeChatSubagentEntry = {
   startedAt?: number
   /** Epoch ms the entry latched terminal. */
   settledAt?: number
+  /** One capped sheet line from the parent. Absent until a prompt or result exists. */
+  activity?: string
 }
 
 /** Provider-neutral roster revised in place by Claude/Codex activity. */

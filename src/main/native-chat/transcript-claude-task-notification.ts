@@ -1,3 +1,4 @@
+import { nativeChatRosterActivityLine } from '../../shared/native-chat/input/native-chat-roster-activity-line'
 import type {
   NativeChatMessage,
   NativeChatSubagentState
@@ -8,6 +9,7 @@ const NOTICE = /<task-notification>[\s\S]*?<\/task-notification>/
 const TASK_ID = /<task-id>\s*([^<]+?)\s*<\/task-id>/
 const STATUS = /<status>\s*([^<]+?)\s*<\/status>/
 const SUMMARY = /<summary>\s*Agent "([^"]+)"/
+const RESULT = /<result>([\s\S]*?)<\/result>/
 
 function noticeState(status: string): NativeChatSubagentState | null {
   switch (status.toLowerCase()) {
@@ -46,6 +48,8 @@ export function claudeTaskNotificationMessage(
     return null
   }
   const quoted = SUMMARY.exec(notice)?.[1]?.trim()
+  const label = quoted || id
+  const activity = nativeChatRosterActivityLine(RESULT.exec(notice)?.[1] ?? '')
   const timestamp = timestampMs(record.timestamp)
   return {
     id: fallbackId,
@@ -56,9 +60,10 @@ export function claudeTaskNotificationMessage(
       {
         type: 'subagent',
         id,
-        label: quoted || id,
+        label,
         state,
-        groupId: 'claude'
+        groupId: 'claude',
+        ...(activity && activity !== label ? { activity } : {})
       }
     ]
   }

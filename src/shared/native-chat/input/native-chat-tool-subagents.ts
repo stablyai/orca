@@ -7,6 +7,7 @@ import {
 } from '../native-chat-types'
 import { foldToolMessages } from '../tools/native-chat-tool-fold'
 import { pairToolBlocks } from '../tools/native-chat-tool-pairs'
+import { nativeChatRosterActivityLine } from './native-chat-roster-activity-line'
 
 export type NativeChatToolSubagent = {
   id: string
@@ -63,6 +64,17 @@ function pathLabel(value: string): string {
     }
   }
   return label
+}
+
+function spawnActivity(input: unknown, label: string): string | null {
+  const fields = inputFields(input)
+  if (!fields) {
+    return null
+  }
+  const prompt = typeof fields.prompt === 'string' ? fields.prompt : ''
+  const message = typeof fields.message === 'string' ? fields.message : ''
+  const line = nativeChatRosterActivityLine(prompt) ?? nativeChatRosterActivityLine(message)
+  return line && line !== label ? line : null
 }
 
 function spawnLabel(input: unknown): string | null {
@@ -219,12 +231,8 @@ export function nativeChatToolSubagentActivities(
         const failed = call.state === 'failed' || pair.result?.isError === true
         const id = ackId(pair.result?.output) ?? call.callId ?? `spawn:${message.id}:${pending}`
         pending += 1
-        note(
-          id,
-          spawnLabel(call.input) ?? ackLabel(pair.result?.output) ?? '',
-          failed ? 'failed' : 'working',
-          null
-        )
+        const label = spawnLabel(call.input) ?? ackLabel(pair.result?.output) ?? ''
+        note(id, label, failed ? 'failed' : 'working', spawnActivity(call.input, label))
       }
       if (pair.result?.output) {
         applyOutput(pair.result.output)

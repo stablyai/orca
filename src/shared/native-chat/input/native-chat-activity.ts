@@ -34,7 +34,7 @@ export type NativeChatSubagentActivity = {
   id: string
   label: string
   state: NativeChatSubagentState
-  /** One line from the child's latest message. Null when it has not said anything yet. */
+  /** One capped line. The open child's latest message, else the parent's prompt or result. */
   activity: string | null
 }
 
@@ -196,13 +196,15 @@ export function nativeChatSubagentActivities(
     note(agent.id, agent.label, agent.state, agent.activity)
   }
   // A tail that still holds the spawn must not walk a settled child back to working.
+  // The full-file seed already holds the newest parent line. A tail that still shows the spawn must not replace it.
   for (const agent of nativeChatToolSubagentActivities(conversation)) {
-    note(agent.id, agent.label, agent.state, agent.activity)
+    const held = known.get(agent.id)
+    note(agent.id, agent.label, agent.state, held?.activity ? null : agent.activity)
   }
   for (const message of conversation) {
     for (const block of message.blocks) {
       for (const entry of namedSubagents(block)) {
-        note(entry.id, entry.label, normalizeSubagentState(entry.state))
+        note(entry.id, entry.label, normalizeSubagentState(entry.state), entry.activity ?? null)
       }
     }
   }
