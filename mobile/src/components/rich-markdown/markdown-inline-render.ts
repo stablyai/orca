@@ -8,7 +8,7 @@ import { escapeAttr, escapeHtml, escapeLiteralHtml, isSafeUrl } from './markdown
 export const WORKSPACE_IMAGE_PATH_ATTRIBUTE = 'data-workspace-path'
 
 function imageSourceAttribute(href: string): string {
-  const name = /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(href) ? 'src' : WORKSPACE_IMAGE_PATH_ATTRIBUTE
+  const name = /^\s*(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(href) ? 'src' : WORKSPACE_IMAGE_PATH_ATTRIBUTE
   return `${name}="${escapeAttr(href)}"`
 }
 

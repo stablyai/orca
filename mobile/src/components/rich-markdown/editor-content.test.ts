@@ -55,6 +55,18 @@ describe('the editor document content', () => {
     expect(editor.posted).toEqual([{ type: 'change', markdown, generation: 1 }])
   })
 
+  it('shows an image an edit brings back without loading it again', async () => {
+    const loadImageSource = vi.fn(async () => 'data:image/png;base64,AAAA')
+    const editor = editorDocument(loadImageSource)
+    editor.handle.setMarkdown('![Diagram](images/diagram.png)', 1)
+    const pasted = document.createElement('img')
+    pasted.setAttribute('data-workspace-path', 'images/diagram.png')
+    editor.editor.append(pasted)
+    editor.type()
+    await vi.waitFor(() => expect(pasted.getAttribute('src')).toBe('data:image/png;base64,AAAA'))
+    expect(loadImageSource).toHaveBeenCalledOnce()
+  })
+
   it('carries the generation it was set under into every change', () => {
     const editor = editorDocument()
     editor.handle.setMarkdown('first', 4)

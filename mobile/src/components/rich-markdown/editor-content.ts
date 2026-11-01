@@ -50,6 +50,7 @@ export function emitChange(scope: RichMarkdownEditorScope) {
   }
   scope.clearTimer(scope.inputTimer)
   syncTaskCheckboxes(scope)
+  showWorkspaceImages(scope)
   const pendingGeneration = scope.documentGeneration
   scope.lastMarkdown = currentMarkdown(scope)
   post(scope, { type: 'change', markdown: scope.lastMarkdown, generation: pendingGeneration })
@@ -63,25 +64,32 @@ export function setMarkdown(scope: RichMarkdownEditorScope, markdown: string, ge
   scope.savedSelectionRange = null
   scope.selectionDroppedOnBlur = false
   scope.lastMarkdown = String(markdown || '')
+  scope.workspaceImageSources.clear()
   editorElement(scope).innerHTML = markdownToHtml(scope, scope.lastMarkdown)
   syncTaskCheckboxes(scope)
   scope.suppressInput = false
-  loadWorkspaceImages(scope)
+  showWorkspaceImages(scope)
 }
 
-// A failed load leaves the image without a source; a replaced document or stopped mount drops late answers.
-function loadWorkspaceImages(scope: RichMarkdownEditorScope) {
+// Edits reuse each render's loads (undo and paste bring back images with no source); a failed path waits for the next render.
+function showWorkspaceImages(scope: RichMarkdownEditorScope) {
   const load = scope.loadImageSource
   if (!load) {
     return
   }
   editorElement(scope)
-    .querySelectorAll<HTMLImageElement>(`img[${WORKSPACE_IMAGE_PATH_ATTRIBUTE}]`)
+    .querySelectorAll<HTMLImageElement>(`img[${WORKSPACE_IMAGE_PATH_ATTRIBUTE}]:not([src])`)
     .forEach((image) => {
-      load(image.getAttribute(WORKSPACE_IMAGE_PATH_ATTRIBUTE) ?? '').then(
-        (source) => {
-          if (!scope.stopped && image.isConnected) {
-            image.src = source
+      const path = image.getAttribute(WORKSPACE_IMAGE_PATH_ATTRIBUTE) ?? ''
+      let source = scope.workspaceImageSources.get(path)
+      if (!source) {
+        source = load(path)
+        scope.workspaceImageSources.set(path, source)
+      }
+      source.then(
+        (src) => {
+          if (!scope.stopped && !image.hasAttribute('src')) {
+            image.src = src
           }
         },
         () => {}
