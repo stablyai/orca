@@ -58,6 +58,8 @@ export type AgentModelCatalogRunnerOptions = {
   spawnImpl?: PipedProcessSpawner
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
+  /** Finish required replies even when an optional control request never completes. */
+  partialOutput?: { ready: (stdout: string) => boolean; timeoutMs: number }
 }
 
 /** Bound the listing and await child teardown before success, failure or cancellation settles. */
@@ -83,6 +85,7 @@ export async function runAgentModelCatalogListing(
   const stderrDetail = (): string =>
     providerStderrForDisplay(managed.stderrTail()).trim().slice(0, STDERR_DETAIL_MAX_CHARS)
   let timer: ReturnType<typeof setTimeout> | undefined
+  let partialTimer: ReturnType<typeof setTimeout> | undefined
   let onAbort = (): void => {}
   try {
     return await new Promise<string>((resolve, reject) => {
@@ -109,6 +112,8 @@ export async function runAgentModelCatalogListing(
         output.write(chunk)
         if (output.truncated()) {
           fail(`${launch.command} listed more than the model catalog reads`, 'output-overflow')
+        } else if (partialTimer === undefined && options.partialOutput?.ready(output.text())) {
+          partialTimer = setTimeout(() => resolve(output.text()), options.partialOutput.timeoutMs)
         }
       })
       child.stdout.on('error', () => {})
@@ -142,6 +147,7 @@ export async function runAgentModelCatalogListing(
     })
   } finally {
     clearTimeout(timer)
+    clearTimeout(partialTimer)
     options.signal?.removeEventListener('abort', onAbort)
     await managed.close()
   }

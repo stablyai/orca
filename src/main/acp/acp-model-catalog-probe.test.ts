@@ -12,6 +12,7 @@ import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { AgentModelCatalogListingStoppedError } from '../native-chat/agent-model-catalog/agent-model-catalog-failures'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
+import signinCapture from './__fixtures__/grok-catalog-signin.json'
 
 const PREFIX = ['run', '--', 'agent']
 const launcherSettings = (agent: string) => ({
@@ -82,6 +83,7 @@ function scriptedGrok(initializeMeta: Record<string, unknown>): {
       resolveLaunchEnv: () => ({ XAI_API_KEY: 'from-settings' }),
       resolveCommand: () => '/opt/grok/bin/grok',
       homePath: '/home/user',
+      runListing: vi.fn(async () => ''),
       connect: (launch) => {
         launches.push(launch)
         const runtime = new AcpSessionRuntime(agent.stdout, agent.stdin)
@@ -167,6 +169,49 @@ function scriptedOpenCode2(canDelete: boolean): {
 }
 
 describe('ACP model catalog probes', () => {
+  it('retains Grok models with its recorded sign-out banner after initialize, without creating a session', async () => {
+    const { deps, agent, launches, closed } = scriptedGrok({})
+    agent.on('initialize', (frame) => agent.reply(frame, signinCapture.initialize))
+    deps.resolveCommandSettings = () => launcherSettings('grok')
+    const runListing = vi.fn<NonNullable<AcpModelCatalogProbeDeps['runListing']>>(async () => {
+      expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize'])
+      return signinCapture.models
+    })
+    deps.runListing = runListing
+    const success = await createAcpModelCatalogProbe(GROK, deps)(GROK_HOME)
+    expect(success.unavailable).toEqual({ reason: 'notSignedIn' })
+    expect(success.models.map((model) => model.id)).toContain('grok-4.6')
+    expect(runListing).toHaveBeenCalledExactlyOnceWith(
+      { ...launches[0], args: [...PREFIX, 'models'] },
+      expect.objectContaining({ timeoutMs: 2_000 })
+    )
+    expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize'])
+    expect(closed()).toBe(1)
+  })
+
+  it('keeps usable Grok inventory when the optional status command fails', async () => {
+    const { deps } = scriptedGrok({ modelState: MODEL_STATE })
+    deps.runListing = async () => {
+      throw new Error('unsupported command')
+    }
+    const result = await createAcpModelCatalogProbe(GROK, deps)(GROK_HOME)
+    expect(result.models.length).toBeGreaterThan(0)
+    expect(result.unavailable).toBeUndefined()
+  })
+
+  it('projects an agent-authored auth-required error, retaining unknown for other failures', async () => {
+    const { deps, agent } = scriptedGrok({})
+    const { code, message, data } = signinCapture.authError
+    agent.on('x.ai/models/list', (frame) => agent.fail(frame, code, message, data))
+    await expect(createAcpModelCatalogProbe(GROK, deps)(GROK_HOME)).rejects.toMatchObject({
+      unavailable: { reason: 'notSignedIn' }
+    })
+    agent.on('x.ai/models/list', (frame) => agent.fail(frame, -32603, 'Internal error'))
+    await expect(createAcpModelCatalogProbe(GROK, deps)(GROK_HOME)).rejects.toMatchObject({
+      code: -32603
+    })
+  })
+
   it('lists Grok from initialize alone, under its pinned account, and closes the child', async () => {
     const { agent, deps, launches, closed } = scriptedGrok({ modelState: MODEL_STATE })
     deps.resolveCommandSettings = () => launcherSettings('grok')

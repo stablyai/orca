@@ -32,6 +32,8 @@ import {
 } from './acp-structured-launch-resolution'
 import { AcpStructuredOptions } from './acp-structured-options'
 import type { InitializeResponse } from './generated/acp-protocol.generated'
+import { AcpAgentError } from './acp-errors'
+import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 
 /** Session-free capability boundary: no session methods are exposed. */
 export type AcpModelCatalogConnection = {
@@ -60,7 +62,7 @@ export function createAcpModelCatalogProbe(
   spec: AcpLaunchSpec,
   deps: AcpModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
-  return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
+  const probe: AgentModelCatalogProbe = async (accountHome, options) => {
     const operation = options?.operation ?? { signal: options?.signal }
     assertStructuredAgentResolutionCurrent(operation)
     const discovery = spec.modelDiscovery
@@ -107,6 +109,7 @@ export function createAcpModelCatalogProbe(
     }
     const run = { label: spec.agent, signal: options?.signal }
     let models: AgentSessionModelOption[]
+    let unavailable: AgentModelCatalogSuccess['unavailable']
     if (listing.kind === 'command') {
       const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
         {
@@ -146,15 +149,51 @@ export function createAcpModelCatalogProbe(
         async (connection) => {
           const initialized = await connection.initialize()
           assertStructuredAgentResolutionCurrent(operation)
-          return listing.read(initialized, connection)
+          const listed = listing.read(initialized, connection).then(
+            (models) => ({ models }),
+            (error: unknown) => ({ error })
+          )
+          const signedOut = listing.signInStatus
+            ? await (deps.runListing ?? runAgentModelCatalogListing)(
+                { ...launch, args: [...prefixArgs, ...listing.signInStatus.args] },
+                { site: `${spec.agent}-signin-probe`, signal: options?.signal, timeoutMs: 2_000 }
+              )
+                .then(listing.signInStatus.signedOut)
+                .catch(() => false)
+            : false
+          assertStructuredAgentResolutionCurrent(operation)
+          const result = await listed
+          if (signedOut) {
+            unavailable = { reason: 'notSignedIn' }
+          }
+          if ('error' in result) {
+            if (unavailable) {
+              throw new AgentModelCatalogUnavailableError(unavailable)
+            }
+            throw result.error
+          }
+          return result.models
         },
         run
       )
     }
     if (models.length === 0) {
+      if (unavailable) {
+        throw new AgentModelCatalogUnavailableError(unavailable)
+      }
       throw new Error(`${spec.agent} listed no models`)
     }
-    return { models, origin: 'probe' }
+    return { models, origin: 'probe', ...(unavailable ? { unavailable } : {}) }
+  }
+  return async (home, options) => {
+    try {
+      return await probe(home, options)
+    } catch (error) {
+      if (error instanceof AcpAgentError && error.code === -32000) {
+        throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
+      }
+      throw error
+    }
   }
 }
 

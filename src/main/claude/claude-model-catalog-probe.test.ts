@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { PROVIDER_STDIN_END_GRACE_MS } from '../provider-process/provider-process-supervisor'
 import { createClaudeModelCatalogProbe } from './claude-model-catalog-probe'
+import signinCapture from './__fixtures__/catalog-signin.json'
 import { discoveredModel } from '../../shared/agent-session/options/structured-agent-session-discovered-model'
 import { resolveClaudeStructuredInvocation } from './structured/launch/claude-structured-launch-resolution'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
@@ -328,7 +329,7 @@ it.each(['high', 'low'])(
         ?.trim()
         .split('\n')
         .map((line) => JSON.parse(line))
-    ).toHaveLength(2)
+    ).toHaveLength(3)
   }
 )
 
@@ -345,6 +346,7 @@ it('qualifies only a correlated valid settings observation', async () => {
       runListing: async () =>
         LISTED +
         JSON.stringify({
+          type: 'control_response',
           response: {
             subtype: 'success',
             request_id: requestId,
@@ -353,5 +355,73 @@ it('qualifies only a correlated valid settings observation', async () => {
         })
     })
     expect((await probe(HOME('/account'))).complete).toBe(complete)
+  }
+})
+
+function controlReply(requestId: string, response: unknown): string {
+  return `${JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response } })}\n`
+}
+
+it.each(['system', 'managed'] as const)(
+  'keeps recorded models with the signed-out %s account advisory',
+  async (account) => {
+    const runListing = vi.fn<typeof runAgentModelCatalogListing>(
+      async () =>
+        controlReply('orca-model-discovery', signinCapture.models) +
+        controlReply('orca-model-settings', signinCapture.settings) +
+        controlReply('orca-signin-discovery', { account: signinCapture.accounts.signedOut })
+    )
+    const probe = createClaudeModelCatalogProbe({
+      ...probeDeps(),
+      resolveAuthPolicy: () => ({ account }),
+      runListing
+    })
+    const success = await probe(HOME('/account'))
+    expect(success).toMatchObject({ unavailable: { reason: 'notSignedIn', account } })
+    expect(success.models.length).toBeGreaterThan(0)
+    const [launch, options] = runListing.mock.calls[0] ?? []
+    expect(
+      launch?.stdin
+        ?.trim()
+        .split('\n')
+        .map((line: string) => JSON.parse(line).request.subtype)
+    ).toEqual(['list_models', 'get_settings', 'initialize'])
+    expect(
+      options?.partialOutput?.ready(controlReply('orca-model-discovery', signinCapture.models))
+    ).toBe(false)
+    expect(
+      options?.partialOutput?.ready(
+        controlReply('orca-model-discovery', signinCapture.models) +
+          controlReply('orca-model-settings', signinCapture.settings)
+      )
+    ).toBe(true)
+  }
+)
+
+it('requires definitive first-party account facts, preserving inventory when auth is unknown', async () => {
+  const cases = [
+    { account: signinCapture.accounts.apiKey },
+    { account: signinCapture.accounts.bearer },
+    { account: signinCapture.accounts.bedrock },
+    { account: { tokenSource: 'none', email: 'user@example.test' } },
+    { account: { tokenSource: 'none', subscriptionType: 'max' } },
+    { account: {} },
+    { account: undefined },
+    { account: signinCapture.accounts.signedOut, settings: signinCapture.endpointSettings },
+    { account: signinCapture.accounts.signedOut, endpoint: 'https://gateway.example.test' },
+    { account: signinCapture.accounts.signedOut, settings: {} }
+  ]
+  for (const { account, settings = signinCapture.settings, endpoint } of cases) {
+    const probe = createClaudeModelCatalogProbe({
+      ...probeDeps(),
+      resolveEnv: () => (endpoint ? { ANTHROPIC_BASE_URL: endpoint } : {}),
+      runListing: async () =>
+        controlReply('orca-model-discovery', signinCapture.models) +
+        controlReply('orca-model-settings', settings) +
+        (account === undefined ? '' : controlReply('orca-signin-discovery', { account }))
+    })
+    const success = await probe(HOME('/account'))
+    expect(success.unavailable).toBeUndefined()
+    expect(success.models.length).toBeGreaterThan(0)
   }
 })

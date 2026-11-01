@@ -12,14 +12,14 @@ import { runClaudeBackgroundAttempts } from '../../shared/claude-background-run-
 import {
   isCompleteClaudeModelListing,
   listedModels,
-  record,
-  type ListedModel
+  record
 } from './structured/launch/claude-structured-model-catalog'
 import {
   claudeFastModeSupport,
   wireClaudeModels
 } from './structured/launch/claude-structured-catalog-listing'
 import { readClaudeSettingsApplied } from './structured/launch/claude-structured-session-options'
+import { readClaudeControlResponses } from './claude-control-responses'
 import { claudeStructuredLaunchArgs } from './structured/launch/claude-structured-launch-args'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
@@ -142,7 +142,7 @@ export function createClaudeModelCatalogProbe(
     }
     const sources = await resolveClaudeChildEnvSources(launchDeps)
     assertStructuredAgentResolutionCurrent(operation)
-    const { command, prefixArgs, env } = await resolveClaudeStructuredInvocation(
+    const { command, prefixArgs, env, account } = await resolveClaudeStructuredInvocation(
       launchDeps,
       (base) => ({
         ...base,
@@ -174,9 +174,23 @@ export function createClaudeModelCatalogProbe(
                 command,
                 args: [...prefixArgs, ...argsFor(strictMcp)],
                 ...(cwd ? { cwd } : {}),
-                stdin: `${CLAUDE_MODEL_LIST_STDIN}${JSON.stringify({ type: 'control_request', request_id: 'orca-model-settings', request: { subtype: 'get_settings' } })}\n`
+                stdin: `${CLAUDE_MODEL_LIST_STDIN}${JSON.stringify({ type: 'control_request', request_id: 'orca-model-settings', request: { subtype: 'get_settings' } })}\n${JSON.stringify({ type: 'control_request', request_id: 'orca-signin-discovery', request: { subtype: 'initialize' } })}\n`
               },
-              { site: 'claude-model-catalog-probe', inheritedEnv: env, signal }
+              {
+                site: 'claude-model-catalog-probe',
+                inheritedEnv: env,
+                signal,
+                partialOutput: {
+                  timeoutMs: 2_000,
+                  ready: (stdout) => {
+                    const replies = readClaudeControlResponses(stdout)
+                    return (
+                      listedModels(replies.get('orca-model-discovery')).length > 0 &&
+                      replies.has('orca-model-settings')
+                    )
+                  }
+                }
+              }
             ).catch((error: unknown) => {
               if (error instanceof AgentModelCatalogProbeError) {
                 return error
@@ -196,37 +210,18 @@ export function createClaudeModelCatalogProbe(
           throw outcome
         }
         const stdout = outcome
-        let models: ListedModel[] = []
-        let complete = false
-        let configured: AgentModelCatalogSuccess['configured']
-        for (const line of stdout.split(/\r?\n/)) {
-          try {
-            const response = record(record(JSON.parse(line))?.response)
-            if (response?.subtype !== 'success') {
-              continue
-            }
-            const body = response.response
-            const listed = response.request_id === 'orca-model-discovery' ? listedModels(body) : []
-            if (listed.length > 0) {
-              models = listed
-              complete = isCompleteClaudeModelListing(body)
-            }
-            if (response.request_id === 'orca-model-settings') {
-              const applied = record(record(body)?.applied)
-              if (
-                applied &&
-                !Array.isArray(applied) &&
-                ['model', 'effort'].every(
-                  (key) => applied[key] == null || typeof applied[key] === 'string'
-                )
-              ) {
-                configured = readClaudeSettingsApplied(body) ?? undefined
-              }
-            }
-          } catch {
-            /* Non-JSON diagnostic output carries no catalog facts. */
-          }
-        }
+        const replies = readClaudeControlResponses(stdout)
+        const listing = replies.get('orca-model-discovery')
+        const models = listedModels(listing)
+        const settings = replies.get('orca-model-settings')
+        const applied = record(record(settings)?.applied)
+        const configured =
+          applied &&
+          ['model', 'effort'].every(
+            (key) => applied[key] == null || typeof applied[key] === 'string'
+          )
+            ? (readClaudeSettingsApplied(settings) ?? undefined)
+            : undefined
         if (models.length === 0) {
           throw new Error('claude listed no models')
         }
@@ -234,9 +229,12 @@ export function createClaudeModelCatalogProbe(
         return {
           models: wireClaudeModels(models),
           origin: 'probe',
-          complete: complete && configured !== undefined,
+          complete: isCompleteClaudeModelListing(listing) && configured !== undefined,
           ...(fastModeSupport ? { fastModeSupport } : {}),
-          ...(configured ? { configured } : {})
+          ...(configured ? { configured } : {}),
+          ...(claudeCatalogSignedOut(replies.get('orca-signin-discovery'), settings, env)
+            ? { unavailable: { reason: 'notSignedIn', account } }
+            : {})
         }
       }
     }
@@ -256,4 +254,35 @@ export function createClaudeModelCatalogProbe(
       ).run(options?.signal),
     { resolve, resolveLegacy: (home, operation) => resolve(home, undefined, 'recover', operation) }
   )
+}
+
+function claudeCatalogSignedOut(
+  initialization: unknown,
+  settings: unknown,
+  env: Readonly<Record<string, string>>
+): boolean {
+  const account = record(record(initialization)?.account)
+  const effective = record(record(settings)?.effective)
+  if (
+    !account ||
+    !effective ||
+    account.tokenSource !== 'none' ||
+    (account.apiProvider !== undefined && account.apiProvider !== 'firstParty') ||
+    (account.apiKeySource && account.apiKeySource !== 'none') ||
+    account.email ||
+    account.subscriptionType
+  ) {
+    return false
+  }
+  const configuredEnv = record(effective.env)
+  const endpoint = configuredEnv?.ANTHROPIC_BASE_URL ?? env.ANTHROPIC_BASE_URL
+  if (typeof endpoint === 'string' && endpoint.trim()) {
+    try {
+      const url = new URL(endpoint)
+      return url.protocol === 'https:' && url.hostname === 'api.anthropic.com'
+    } catch {
+      return false
+    }
+  }
+  return true
 }
