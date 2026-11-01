@@ -1,9 +1,13 @@
 # Useful Commands
 
-- **Validation**: Run the smallest checks that verify the change. Prefer focused tests; expand only for concrete risk, failures, or explicit requests. Shared imports alone don’t justify broad suites.
+- **Validation**: Run the smallest checks that verify the change. Prefer focused tests, including existing consumer suites for changed behavior; shared imports alone don’t justify broad suites. Before handing off code changes, check touched-file lint/format, appropriate project typecheck for TS/TSX edits, and applicable CI gates (e.g. `pnpm check:code-quality:changed <base>` and `pnpm check:flaky-test-pattern-ratchet`). Read-only reviews and docs-only edits do not require code test suites.
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
-- **Test**: `pnpm test [path/to/file.test.ts]`; affected only: `pnpm test:changed [path] --maxWorkers=2` ([details](.github/CONTRIBUTING.md#targeting-local-tests))
-- **Lint**: `oxlint`; format: `pnpm format`
+- **Test**: `pnpm test [path/to/file.test.ts] --maxWorkers=2`; incremental affected tests: `pnpm test:changed [path] --maxWorkers=2` ([details](.github/CONTRIBUTING.md#targeting-local-tests)). Run tests with `ORCA_BACKGROUND_LAUNCH=1`; relevant rendered UI E2E specs remain separate and need explicit, reproducible viewport/state.
+- **Lint**: `pnpm exec oxlint <files>` is basic lint only; `pnpm lint` runs the full lint gate. Check touched-file formatting with `pnpm exec oxfmt --check <files>`; format with `pnpm exec oxfmt --write <files>`. Basic lint or a single test does not cover typecheck or applicable CI rule gates.
+
+`ORCA_BACKGROUND_LAUNCH=1 pnpm check:changed --maxWorkers=2` is an optional convenience when its selected scope is reasonable; if it fans out excessively, use explicit scoped checks and report their limits. Branch-scoped gates must use the PR base (default `origin/main`; explicit `--base=<ref>` for stacked PRs with `check:changed`, positional base for `check:code-quality:changed`, `ORCA_CODE_QUALITY_BASE=<ref>` for the flaky-test ratchet). `--base=HEAD` and dirty-only checks are incremental evidence, not whole-branch validation.
+
+After final edits or rebases, rerun checks the changes can invalidate. After a CI fix, rerun the failed check and affected check types (including typecheck after TS/TSX lint repairs). Stopped or failed checks mean incomplete validation; scoped passes do not establish that full CI is green. Inspect the exact CI step on the current SHA before calling a finding unenforced, pre-existing, or resolved.
 
 # Ensure main is always releasable
 
