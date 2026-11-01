@@ -28,6 +28,11 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/accounts',
     grants: ['navigate', 'storage', 'externalLink', 'haptics']
   },
+  // Resources matches Accounts: Back and the shared layout wall, plus the haptics seam grant.
+  {
+    pathname: '/h/[hostId]/resources',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+  },
   // Create Workspace overlay needs navigate to close/open session; shared form/layout supply other grants.
   {
     pathname: '/h/[hostId]/new-workspace',

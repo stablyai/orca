@@ -576,6 +576,7 @@
       "floatingWorkspace": "Floating Workspace",
       "hideSidebar": "Hide sidebar",
       "accounts": "Accounts",
+      "resources": "Resources",
       "tasks": "Tasks",
       "moreActions": "More actions",
       "automations": "Automations"
@@ -705,6 +706,7 @@
       "host": "Host",
       "editHost": "Edit host",
       "accounts": "Accounts",
+      "resources": "Resources",
       "tasks": "Tasks",
       "terminal": "Terminal",
       "sourceControl": "Source Control",
@@ -713,6 +715,40 @@
       "pullRequest": "Pull Request",
       "workspace": "Workspace",
       "automations": "Automations"
+    }
+  },
+  "resources": {
+    "screen": {
+      "title": "Resources",
+      "notConnected": "Not connected",
+      "updateServer": "Update the server to see CPU, memory, and disk.",
+      "sampleUnreadable": "Could not read the latest resource sample.",
+      "sampleFailed": "Could not read server resources.",
+      "cpu": "CPU",
+      "cores_one": "{{count}} core",
+      "cores_other": "{{count}} cores",
+      "loadAverage": "Load {{load}}",
+      "cpuUnavailable": "CPU usage unavailable",
+      "cpuPercent": "CPU {{percent}} percent",
+      "cpuRecent": "CPU over recent samples",
+      "memory": "Memory",
+      "bytesOf": "{{used}} of {{total}}",
+      "memoryMeter": "{{used}} of {{total}}, {{percent}} percent",
+      "swap": "Swap",
+      "swapMeter": "Swap {{used}} of {{total}}, {{percent}} percent",
+      "disk": "Disk",
+      "noDisks": "No disks reported",
+      "volumeFree": "{{free}} free of {{total}}",
+      "volumeMeter": "{{label}}, {{free}} free of {{total}}, {{percent}} percent",
+      "volumeHome": "Home",
+      "volumeWorkspace": "Workspace",
+      "volumeHomeAndWorkspace": "Home and workspace",
+      "volumeNumbered": "{{label}} {{index}}",
+      "uptimeDays": "Up {{days}}d {{hours}}h",
+      "uptimeHours": "Up {{hours}}h {{minutes}}m",
+      "uptimeMinutes": "Up {{minutes}}m",
+      "updatedJustNow": "Updated just now",
+      "updatedSecondsAgo": "Updated {{seconds}}s ago"
     }
   },
   "notifications": {

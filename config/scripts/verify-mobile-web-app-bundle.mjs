@@ -79,6 +79,7 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/index.tsx', 55],
   ['./h/[hostId]/new-workspace.tsx', 66],
   ['./h/[hostId]/pr/[worktreeId].tsx', 67],
+  ['./h/[hostId]/resources.tsx', 67],
   ['./h/[hostId]/review/[worktreeId].tsx', 78],
   ['./h/[hostId]/session/[worktreeId].tsx', 93],
   ['./h/[hostId]/source-control/[worktreeId].tsx', 101],

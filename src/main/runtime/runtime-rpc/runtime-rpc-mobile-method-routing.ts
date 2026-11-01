@@ -140,6 +140,7 @@ export const EXECUTION_HOST_METHODS = [
   // Shell and agent availability are facts about the machine that spawns the process.
   'host.gitBash.isAvailable',
   'host.platform',
+  'host.resources',
   'host.pwsh.isAvailable',
   'host.wsl.isAvailable',
   'host.wsl.listDistros',

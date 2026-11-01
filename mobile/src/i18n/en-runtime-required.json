@@ -234,6 +234,12 @@
       "filesChanged_other": "{{count}} files changed"
     }
   },
+  "resources": {
+    "screen": {
+      "cores_one": "{{count}} core",
+      "cores_other": "{{count}} cores"
+    }
+  },
   "session": {
     "agentChildRow": {
       "days_one": "{{count}}d",

@@ -1145,6 +1145,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'host.peerDesktops': OrcadPeerDesktopsParamsSchema,
   'host.platform': null,
   'host.pwsh.isAvailable': null,
+  'host.resources': null,
   'host.wsl.isAvailable': null,
   'host.wsl.listDistros': null,
   'hostedReview.create': HostedReviewCreate,
