@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useCallback, useSyncExternalStore } from 'react'
 import { useNativeChatRootInputRouting } from './use-native-chat-root-input-routing'
 import {
   createNativeChatQueuedEditDraft,
@@ -12,7 +12,11 @@ import {
   openNativeChatEditDraft,
   appendToNativeChatComposerDraft,
   subscribeToNativeChatComposerDraft,
-  subscribeToNativeChatComposerDraftAppend
+  subscribeToNativeChatComposerDraftAppend,
+  nativeChatLaunchPromptDraftScopeKey,
+  readNativeChatComposerDraft,
+  hydrateNativeChatComposerDrafts,
+  nativeChatComposerDraftWritesSettled
 } from './native-chat-composer-draft-store'
 import {
   nativeChatPastedTextOperations,
@@ -420,13 +424,6 @@ it.each([10, 100])(
   }
 )
 
-import { useCallback, useSyncExternalStore } from 'react'
-import {
-  nativeChatLaunchPromptDraftScopeKey,
-  readNativeChatComposerDraft,
-  hydrateNativeChatComposerDrafts,
-  nativeChatComposerDraftWritesSettled
-} from './native-chat-composer-draft-store'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests

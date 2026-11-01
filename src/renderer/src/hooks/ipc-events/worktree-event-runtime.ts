@@ -1,12 +1,12 @@
 import { transitionLaunchDrafts } from '@/components/native-chat/native-chat-launch-draft-transition'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-export const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+export const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import type { AppState } from '../../store/types'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'

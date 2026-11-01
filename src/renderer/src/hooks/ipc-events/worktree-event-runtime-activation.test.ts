@@ -1,6 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { createWorktreeEventRuntime } from './worktree-event-runtime'
+import {
+  createWorktreeEventRuntime,
+  recentlyRenamedWorktreeIdExpiry
+} from './worktree-event-runtime'
 
 const { activateAndRevealWorktree } = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn()
@@ -63,8 +66,6 @@ it.each([false, true])(
     }
   }
 )
-
-import { recentlyRenamedWorktreeIdExpiry } from './worktree-event-runtime'
 
 it('the actual rename event protects both identities before starting discovery', async () => {
   recentlyRenamedWorktreeIdExpiry.clear()

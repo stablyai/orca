@@ -1,4 +1,4 @@
-import { afterEach, describe } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 afterEach(() => vi.restoreAllMocks())
 import { registerReposCatalogMergeIdentityTests } from './repos-catalog-merge-identity.spec'
@@ -17,7 +17,6 @@ describe('repos-shared-project-badge-color', registerReposSharedProjectBadgeColo
 describe('repos-all-hosts-folder-workspaces', registerReposAllHostsFolderWorkspacesTests)
 describe('repos-runtime-visibility-defaults', registerReposRuntimeVisibilityDefaultsTests)
 
-import { expect, it, vi } from 'vitest'
 import { createTestStore, TEST_REPO } from './store-test-helpers'
 import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
 import * as memory from '@/components/native-chat/native-chat-composer-draft-memory'

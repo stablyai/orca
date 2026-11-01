@@ -1,12 +1,16 @@
 // @vitest-environment happy-dom
-import { currentDraftScope } from './native-chat-launch-draft-source'
+import { currentDraftScope, captureLaunchDraftDestination } from './native-chat-launch-draft-source'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
-import { updateNativeChatComposerDraft } from './native-chat-composer-draft-store'
+import {
+  updateNativeChatComposerDraft,
+  readNativeChatComposerDraft,
+  clearNativeChatComposerDraftsForTests
+} from './native-chat-composer-draft-store'
 import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
 import {
   clearNativeChatDraftCacheForTests,
@@ -324,10 +328,6 @@ it('admits optional empty launch only after the shared pending-attachment bounda
 })
 
 import * as draftStore from './native-chat-composer-draft-store'
-import {
-  readNativeChatComposerDraft,
-  clearNativeChatComposerDraftsForTests
-} from './native-chat-composer-draft-store'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import { useNativeChatDraft } from './use-native-chat-draft'
 import { promptSkillRefs } from './native-chat-prompt-document'
@@ -471,7 +471,6 @@ it('recovers two distinct rich submissions across remount/new input without late
 })
 
 import { createTestStore, TEST_REPO } from '@/store/slices/store-test-helpers'
-import { captureLaunchDraftDestination } from './native-chat-launch-draft-source'
 import {
   useNativeChatPastedTextFile,
   NATIVE_CHAT_PASTED_TEXT_FILE_THRESHOLD

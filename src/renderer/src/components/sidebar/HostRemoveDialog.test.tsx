@@ -2,7 +2,7 @@
 import { currentDraftScope } from '../native-chat/native-chat-launch-draft-source'
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
@@ -156,7 +156,6 @@ it.each(['success', 'failure'] as const)(
   }
 )
 
-import { renderHook } from '@testing-library/react'
 import { useNativeChatDraft } from '../native-chat/use-native-chat-draft'
 import * as draftStore from '../native-chat/native-chat-composer-draft-store'
 import {

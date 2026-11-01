@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { countOpenRepoTerminalTabs } from './repo-removal'
 
 afterEach(() => {
@@ -31,7 +31,6 @@ describe('countOpenRepoTerminalTabs', () => {
   })
 })
 
-import { vi } from 'vitest'
 import { createTestStore, makeWorktree, TEST_REPO } from '../slices/store-test-helpers'
 import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
 

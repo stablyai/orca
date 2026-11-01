@@ -24,7 +24,8 @@ import { agentLaunchPromptScopeKey } from '@/components/agent/AgentLaunchPromptC
 import {
   clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
-  updateNativeChatComposerDraft
+  updateNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
 } from '@/components/native-chat/native-chat-composer-draft-store'
 import {
   changePrompt,
@@ -33,7 +34,6 @@ import {
 import type { AgentPickerEntry } from '../../../shared/agent-launch-picker'
 import * as launcher from './launch-agent-in-new-tab'
 import type * as StructuredLaunch from './launch-structured-agent-session'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
 
