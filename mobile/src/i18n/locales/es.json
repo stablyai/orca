@@ -560,6 +560,10 @@
       "disconnected": "No se pudo adjuntar (sin conexión)",
       "imageTooLarge": "Imagen demasiado grande para adjuntarla",
       "permissionDenied": "Permiso de acceso a las fotos denegado"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Entregado a un agente",
+      "startedAgent": "Agente iniciado"
     }
   },
   "common": {
@@ -2923,7 +2927,6 @@
       "emptyMessage": "El árbol de trabajo está limpio.",
       "emptyTitle": "No hay cambios locales",
       "generateMessage": "Generar mensaje de commit con IA",
-      "noStagedFiles": "No hay archivos preparados",
       "openActions": "Abrir acciones de control de código fuente",
       "reconnecting": "Reconectando con el escritorio…",
       "regenerateHint": "Borre el mensaje para regenerar.",
@@ -3076,9 +3079,7 @@
       "pushBeforeCreateFailed": "El push falló. Resuelve el error de push y vuelve a intentarlo."
     },
     "hubTab": {
-      "changes": "Cambios",
-      "commits": "Commits",
-      "pullRequest": "Solicitud de extracción"
+      "changes": "Cambios"
     },
     "loaders": {
       "connectingToDesktop": "Conectando con el escritorio…",
@@ -3139,7 +3140,6 @@
       "publishBranch": "Publicar rama",
       "pull": "Pull",
       "push": "Push",
-      "stageAll": "Hacer stage de todo",
       "sync": "Sincronizar"
     },
     "remoteDropdown": {

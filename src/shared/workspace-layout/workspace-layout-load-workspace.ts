@@ -1,5 +1,5 @@
-import { compareRecordedKeys, sortRecordedKeys } from './workspace-layout-recorded-key-order'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
+import { checkRunDetailsOwnerScope } from '../check-run-details-owner-scope'
 import type { Tab } from '../tab-types'
 import { normalizeTerminalLayoutPtyOwnership } from '../terminal-layout-pty-ownership'
 import { sanitizeTerminalLayoutPaneTitles } from '../terminal-pane-title-sanitization'
@@ -35,41 +35,6 @@ function takeRows({ session, key, terminalHomes }: WorkspaceLoadArgs) {
     rows.push(row)
   }
   return rows
-}
-
-/** A pane key's leaf for this tab, from the records that name one (the old window's leaf). */
-export function createRecordedLeafReader(session: WorkspaceSessionState) {
-  let keys: string[] | undefined
-  return (tabId: string): string | undefined => {
-    if (!keys) {
-      const distinct = new Set<string>()
-      for (const records of [
-        session.terminalPtyIncarnationsByPaneKey,
-        session.sleepingAgentSessionsByPaneKey,
-        session.terminalSurfaceTombstonesByPaneKey
-      ]) {
-        for (const paneKey of Object.keys(records ?? {})) {
-          distinct.add(paneKey)
-        }
-      }
-      keys = sortRecordedKeys([...distinct])
-    }
-    const prefix = `${tabId}:`
-    let low = 0
-    let high = keys.length
-    while (low < high) {
-      const middle = low + Math.floor((high - low) / 2)
-      if (compareRecordedKeys(keys[middle], prefix) < 0) {
-        low = middle + 1
-      } else {
-        high = middle
-      }
-    }
-    const first = keys[low]
-    return first?.startsWith(prefix) && !keys[low + 1]?.startsWith(prefix)
-      ? first.slice(prefix.length)
-      : undefined
-  }
 }
 
 type WorkspaceReadArgs = WorkspaceLoadArgs & {
@@ -284,6 +249,32 @@ export function loadWorkspace(
   }
   const editorViews = loadEditorViews(args, tabs)
   if (editorViews) {
+    const storedTabById = new Map<string, Tab>()
+    for (const entry of session.unifiedTabs?.[key] ?? []) {
+      if (!storedTabById.has(entry.id)) {
+        storedTabById.set(entry.id, entry)
+      }
+    }
+    for (const tab of tabs) {
+      const editorView = editorViews[tab.id]
+      const prefix = `${worktreeId}::check-details::`
+      if (tab.kind !== 'check-details' || !editorView || !tab.entityId.startsWith(prefix)) {
+        continue
+      }
+      const entry = storedTabById.get(tab.id)
+      const scope = checkRunDetailsOwnerScope(
+        entry?.executionHostId ?? args.hostId,
+        editorView.file.runtimeEnvironmentId
+      )
+      if (scope) {
+        // Keep tab IDs stable so group order, active selection and recent tabs still name the same tab.
+        tab.entityId = `${worktreeId}::check-details@${scope}::${tab.entityId.slice(prefix.length)}`
+        editorViews[tab.id] = {
+          ...editorView,
+          file: { ...editorView.file, filePath: tab.entityId }
+        }
+      }
+    }
     workspace.editorViews = editorViews
   }
   return workspace

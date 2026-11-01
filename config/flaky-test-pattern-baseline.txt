@@ -799,7 +799,7 @@
 1 test-no-wall-clock:src/main/cli/wsl-cli-registration-registry.test.ts
 1 test-no-wall-clock:src/main/codex-accounts/legacy-wsl-runtime-auth-drain-rollback-script.test.ts
 1 test-no-wall-clock:src/main/codex-accounts/service.test.ts
-6 test-no-wall-clock:src/main/codex/codex-app-server-client.test.ts
+6 test-no-wall-clock:src/main/codex/app-server/codex-app-server-client.test.ts
 2 test-no-wall-clock:src/main/codex/codex-hook-trust-derivation.test.ts
 1 test-no-wall-clock:src/main/codex/codex-session-backfill-marker.test.ts
 2 test-no-wall-clock:src/main/codex/codex-session-backfill.test.ts
@@ -1173,7 +1173,7 @@
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/mutants/family-mutants.test.ts
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/recorded-request-params.test.ts
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/rpc-recording-through-bridge.test.ts
-1 test-timeout-needs-reason:mobile/src/transport/mobile-web-bundle-host-slow-link.test.ts
+1 test-timeout-needs-reason:mobile/src/transport/web-bundle/mobile-web-bundle-host-slow-link.test.ts
 3 test-timeout-needs-reason:mobile/src/transport/rpc-client-reconnect-wait.test.ts
 1 test-timeout-needs-reason:src/cli/agent-launch-process.test.ts
 1 test-timeout-needs-reason:src/cli/runtime/launch-serve-replaced-app-restart.test.ts
@@ -1212,7 +1212,7 @@
 1 test-timeout-needs-reason:src/main/claude/claude-stream-json-connection.test.ts
 1 test-timeout-needs-reason:src/main/claude/structured/claude-structured-real-cli.test.ts
 1 test-timeout-needs-reason:src/main/claude/windows-native-hook-registration.test.ts
-2 test-timeout-needs-reason:src/main/codex/codex-app-server-teardown.integration.test.ts
+2 test-timeout-needs-reason:src/main/codex/app-server/codex-app-server-teardown.integration.test.ts
 1 test-timeout-needs-reason:src/main/codex/codex-model-catalog-probe.test.ts
 1 test-timeout-needs-reason:src/main/codex/codex-structured-real-cli-command-env.test.ts
 1 test-timeout-needs-reason:src/main/codex/codex-structured-real-cli-permissions.test.ts

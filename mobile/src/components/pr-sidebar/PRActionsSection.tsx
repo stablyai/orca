@@ -23,6 +23,8 @@ type Props = {
   // Refetch after unlinking so the view returns to the create/link empty state.
   onUnlinked: () => void
   onRecheck: () => void
+  /** False where a next-step bar already offers Merge and auto-merge. */
+  showMerge?: boolean
 }
 
 type Confirm =
@@ -38,7 +40,8 @@ export function PRActionsSection({
   client,
   worktreeId,
   onUnlinked,
-  onRecheck
+  onRecheck,
+  showMerge = true
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -64,7 +67,7 @@ export function PRActionsSection({
   const autoMergeBusy = actions.isBusy({ kind: 'autoMerge' })
   const stateBusy = actions.isBusy({ kind: 'state' })
   const unlinkBusy = unlinking || mergeBusy || autoMergeBusy || stateBusy
-  const showAutoMerge = merge.showAutoMerge
+  const showAutoMerge = showMerge && merge.showAutoMerge
   const showSecondary = avail.canClose || avail.canReopen || avail.canUnlink
   const actionError = unlinkError
     ? unlinkError.kind === 'host'
@@ -141,7 +144,7 @@ export function PRActionsSection({
 
   return (
     <View style={styles.actionsBlock}>
-      {avail.canMerge ? (
+      {showMerge && avail.canMerge ? (
         <Pressable
           style={({ pressed }) => [
             styles.actionButton,
@@ -169,7 +172,7 @@ export function PRActionsSection({
           <Text style={[styles.actionButtonText, styles.actionButtonTextMerge]}>{merge.label}</Text>
         </Pressable>
       ) : null}
-      {avail.canMerge && merge.hint ? (
+      {showMerge && avail.canMerge && merge.hint ? (
         <View style={styles.hintRow}>
           <Text style={styles.actionHint}>{merge.hint}</Text>
           {/* No mobile surface polls PR state, so a blocked Merge needs its own recheck. */}

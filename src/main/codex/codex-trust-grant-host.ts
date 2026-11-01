@@ -4,7 +4,7 @@ import {
   buildWslCodexIdentityProbe,
   WSL_CODEX_AVAILABILITY_TIMEOUT_MS
 } from '../codex-accounts/wsl-codex-command'
-import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
+import type { CodexHookTrustGrantRequest } from './app-server/codex-app-server-client'
 import {
   binaryStampsMatch,
   readCodexTrustGrantLedgerHome,

@@ -146,7 +146,7 @@ export function renderTabBarSurface({
         {/* Why: no-drag lets tab interactions work inside the titlebar's drag region (outer container stays window-draggable). */}
         <div
           data-single-tab={singleTab ? '' : undefined}
-          className="group/tab-strip relative flex min-h-0 min-w-0 max-w-full flex-1"
+          className="group/tab-strip relative flex min-h-0 w-max min-w-0 max-w-full shrink"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <div

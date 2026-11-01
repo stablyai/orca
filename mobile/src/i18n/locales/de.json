@@ -525,6 +525,10 @@
       "disconnected": "Anhängen fehlgeschlagen (nicht verbunden)",
       "imageTooLarge": "Bild zum Anhängen zu groß",
       "permissionDenied": "Zugriff auf Fotos verweigert"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "An Agenten übergeben",
+      "startedAgent": "Agent gestartet"
     }
   },
   "common": {
@@ -2846,7 +2850,6 @@
       "emptyMessage": "Der Worktree ist sauber.",
       "emptyTitle": "Keine lokalen Änderungen",
       "generateMessage": "Commit-Nachricht mit KI generieren",
-      "noStagedFiles": "Keine vorgemerkten Dateien",
       "openActions": "Aktionen der Quellcodeverwaltung öffnen",
       "reconnecting": "Verbindung zum Desktop wird wiederhergestellt…",
       "regenerateHint": "Nachricht leeren, um sie neu zu generieren.",
@@ -2987,9 +2990,7 @@
       "pushBeforeCreateFailed": "Push fehlgeschlagen. Den Push-Fehler beheben und erneut versuchen."
     },
     "hubTab": {
-      "changes": "Änderungen",
-      "commits": "Commits",
-      "pullRequest": "Pull Request"
+      "changes": "Änderungen"
     },
     "loaders": {
       "connectingToDesktop": "Verbindung zum Desktop wird hergestellt…",
@@ -3049,7 +3050,6 @@
       "publishBranch": "Branch veröffentlichen",
       "pull": "Pullen",
       "push": "Pushen",
-      "stageAll": "Alle vormerken",
       "sync": "Synchronisieren"
     },
     "remoteDropdown": {

@@ -89,7 +89,7 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/codex-hook-definition',
   'src/main/codex/codex-hook-command-form',
   'src/main/codex/codex-hook-identity',
-  'src/main/codex/codex-app-server-client',
+  'src/main/codex/app-server/codex-app-server-client',
   'src/main/codex/codex-trust-identity',
   'src/main/codex/config-toml-hook-trust-',
   'src/main/codex/config-toml-key-path',
@@ -103,7 +103,7 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/shared/codex-shell-function',
   'src/main/codex/codex-index-heal-binary-contract',
   'src/main/codex/codex-session-index-heal',
-  'src/main/codex/codex-app-server-session',
+  'src/main/codex/app-server/codex-app-server-session',
   'src/main/codex/codex-state-db',
   'src/main/sqlite/sync-database',
   'src/main/codex/app-server/codex-app-server-capability-signal',
@@ -559,8 +559,9 @@ function jobDetector(job) {
       return (files) =>
         files.some(
           (file) =>
-            !/^src\/main\/codex\/codex-app-server-(client|session)\.test\.ts(?!.)/s.test(file) &&
-            matchesPrefix(file, CODEX_INDEX_HEAL_CONTRACT_PREFIXES)
+            !/^src\/main\/codex\/app-server\/codex-app-server-(client|session)\.test\.ts(?!.)/s.test(
+              file
+            ) && matchesPrefix(file, CODEX_INDEX_HEAL_CONTRACT_PREFIXES)
         )
     case 'xterm_patch_sync':
       return (files) => files.some((file) => matchesPrefix(file, XTERM_PREFIXES))

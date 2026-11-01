@@ -7,7 +7,7 @@ import type {
 export function lookupPRForBranchOverIpc(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason,
-  options: { userRefresh?: boolean } = {}
+  options: { userRefresh?: boolean; repoOwnerExecutionHostId?: string } = {}
 ): ReturnType<Window['api']['gh']['prForBranch']> {
   const fallbackPRNumber = candidate.fallbackPRNumber ?? null
   return window.api.gh.prForBranch({
@@ -20,6 +20,9 @@ export function lookupPRForBranchOverIpc(
     acceptMergedFallbackPR:
       fallbackPRNumber !== null && (candidate.fallbackPRSource ?? null) !== null,
     currentHeadOid: candidate.currentHeadOid ?? null,
+    ...(options.repoOwnerExecutionHostId
+      ? { repoOwnerExecutionHostId: options.repoOwnerExecutionHostId }
+      : {}),
     ...(reason === 'manual' ? { wakeWslDistro: true } : {})
   })
 }

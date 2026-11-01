@@ -9,7 +9,7 @@ import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from '../../codex/app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from '../../codex/codex-app-server-connection'
+import type { openCodexAppServerConnection } from '../../codex/app-server/codex-app-server-connection'
 import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
 import { settledWithin } from '../../codex/codex-structured-dispatch-test-support'
 import { CODEX_TURN_OPEN_WAIT_MS } from '../../codex/codex-structured-turn-open-wait'

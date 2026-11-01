@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import * as workspaceLoader from './workspace-layout-load-workspace'
+import { createRecordedLeafReader } from './workspace-layout-recorded-key-order'
 import { emptySession } from './workspace-layout-session.test-fixture'
 
 it('charges actual full-key acquisition, bounded sort/query characters and suffix output at N/10N', () => {
@@ -55,7 +55,7 @@ it('charges actual full-key acquisition, bounded sort/query characters and suffi
     })
     const results: (string | undefined)[] = []
     try {
-      const reader = workspaceLoader.createRecordedLeafReader(session)
+      const reader = createRecordedLeafReader(session)
       for (let i = 1; i <= n; i++) {
         results.push(reader(`tab-${String(i).padStart(3, '0')}`))
       }
@@ -79,7 +79,7 @@ it('charges actual full-key acquisition, bounded sort/query characters and suffi
     let calls: number
     let result: string | undefined
     try {
-      result = workspaceLoader.createRecordedLeafReader(session)('short')
+      result = createRecordedLeafReader(session)('short')
       calls = slice.mock.calls.length
     } finally {
       slice.mockRestore()

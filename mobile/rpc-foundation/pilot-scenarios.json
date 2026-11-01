@@ -23084,7 +23084,7 @@
       "id": "mobile-web-bundle-manifest-read",
       "operation": "mobileWeb.bundle-manifest",
       "family": "mobileWeb.bundle-manifest",
-      "sites": ["mobile/src/transport/mobile-web-bundle-operations.ts"],
+      "sites": ["mobile/src/transport/web-bundle/mobile-web-bundle-operations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23134,7 +23134,7 @@
       "operation": "mobileWeb.bundle-fetch",
       "family": "mobileWeb.bundle-fetch",
       "sites": [
-        "mobile/src/transport/mobile-web-bundle-fetch.ts",
+        "mobile/src/transport/web-bundle/mobile-web-bundle-fetch.ts",
         "mobile/src/diagnostics/use-mobile-web-bundle-probe.ts"
       ],
       "schedules": [],
@@ -23273,7 +23273,7 @@
       "operation": "mobileWeb.bundle-fetch",
       "family": "mobileWeb.bundle-fetch",
       "sites": [
-        "mobile/src/transport/mobile-web-bundle-fetch.ts",
+        "mobile/src/transport/web-bundle/mobile-web-bundle-fetch.ts",
         "mobile/src/diagnostics/use-mobile-web-bundle-probe.ts"
       ],
       "schedules": [],
@@ -23303,7 +23303,7 @@
       "operation": "mobileWeb.bundle-fetch",
       "family": "mobileWeb.bundle-fetch",
       "sites": [
-        "mobile/src/transport/mobile-web-bundle-fetch.ts",
+        "mobile/src/transport/web-bundle/mobile-web-bundle-fetch.ts",
         "mobile/src/diagnostics/use-mobile-web-bundle-probe.ts"
       ],
       "schedules": [],

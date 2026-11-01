@@ -560,6 +560,10 @@
       "disconnected": "Échec de l'ajout (déconnecté)",
       "imageTooLarge": "Image trop volumineuse pour être jointe",
       "permissionDenied": "Accès aux photos refusé"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Confié à un agent",
+      "startedAgent": "Agent démarré"
     }
   },
   "common": {
@@ -2923,7 +2927,6 @@
       "emptyMessage": "Le worktree est propre.",
       "emptyTitle": "Aucune modification locale",
       "generateMessage": "Générer le message de commit avec l'IA",
-      "noStagedFiles": "Aucun fichier indexé",
       "openActions": "Ouvrir les actions de contrôle de code source",
       "reconnecting": "Reconnexion à l'ordinateur…",
       "regenerateHint": "Effacez le message pour le régénérer.",
@@ -3076,9 +3079,7 @@
       "pushBeforeCreateFailed": "Le push a échoué. Résolvez l'erreur de push, puis réessayez."
     },
     "hubTab": {
-      "changes": "Modifications",
-      "commits": "Commits",
-      "pullRequest": "Pull Request"
+      "changes": "Modifications"
     },
     "loaders": {
       "connectingToDesktop": "Connexion à l'ordinateur…",
@@ -3139,7 +3140,6 @@
       "publishBranch": "Publier la branche",
       "pull": "Pull",
       "push": "Push",
-      "stageAll": "Tout indexer",
       "sync": "Synchroniser"
     },
     "remoteDropdown": {
