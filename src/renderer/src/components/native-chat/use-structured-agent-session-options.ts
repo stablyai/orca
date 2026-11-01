@@ -41,9 +41,10 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     rereadOptions,
     receiveCatalog,
     isCurrentContext,
-    conversationSupport
+    conversationSupport: support,
+    sessionSupport
   } = useStructuredAgentSessionOptionState({
-    agent,
+    ...args,
     optionCatalog,
     identity: `${agent}:${sessionId}`,
     fence,
@@ -61,8 +62,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     unloadedTurnRevisions: args.unloadedTurnRevisions
   })
 
-  const awaitingOptions =
-    conversationSupport?.sessionId === sessionId && conversationSupport.fence !== fence
+  const awaitingOptions = support?.sessionId === sessionId && support.fence !== fence
   const acceptsPicks =
     (!transportEnabled || fence !== null) && launch?.seedPending !== true && !awaitingOptions
 
@@ -162,8 +162,6 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     [setOption, optionSnapshot, hostCatalog.demandModelCatalog]
   )
 
-  const support =
-    transportEnabled && conversationSupport?.sessionId === sessionId ? conversationSupport : null
   return {
     conversationCommands: support?.commands ?? [],
     /** Absent unless this host and session can change the goal. */
@@ -173,7 +171,8 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     /** Absent from a host that predates it or a session that writes no context facts. */
     contextUsage: support?.contextUsage,
     /** Absent from a host that predates it, and until the options read answers. */
-    acceptsImages: support?.acceptsImages,
+    ...sessionSupport,
+    sessionSupport,
     /** Undefined until this fence's options read answers. */
     rewind: support?.fence === fence ? support.rewind : undefined,
     optionSnapshot,
