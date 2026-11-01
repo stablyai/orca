@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { PROVIDER_STDIN_END_GRACE_MS } from '../provider-process/provider-process-supervisor'
 import { createClaudeModelCatalogProbe } from './claude-model-catalog-probe'
+import { createClaudeCommandCatalogProbe } from './claude-command-catalog-probe'
 import signinCapture from './__fixtures__/catalog-signin.json'
 import { discoveredModel } from '../../shared/agent-session/options/structured-agent-session-discovered-model'
 import { resolveClaudeStructuredInvocation } from './structured/launch/claude-structured-launch-resolution'
@@ -424,4 +425,24 @@ it('requires definitive first-party account facts, preserving inventory when aut
     expect(success.unavailable).toBeUndefined()
     expect(success.models.length).toBeGreaterThan(0)
   }
+})
+
+it('reads slash commands from the real initialize frame past error, diagnostic and oversized lines', async () => {
+  const { error, initialize } = signinCapture.commandFrames
+  const nested = (depth: number): unknown =>
+    depth === 0 ? 'orca-command-discovery' : { response: nested(depth - 1) }
+  const oversized = JSON.stringify({ type: 'control_response', response: nested(20) })
+  const list = (lines: string[]) =>
+    createClaudeCommandCatalogProbe({
+      ...probeDeps(),
+      runListing: async () => `${lines.join('\n')}\n`
+    })({ cwd: '/project', accountHomePath: '/homes/account-a' })
+  const rejected = [
+    JSON.stringify(error),
+    'orca-command-discovery control_response not ready',
+    oversized
+  ]
+  await expect(list(rejected)).rejects.toThrow('claude listed no commands')
+  const commands = await list([...rejected, JSON.stringify(initialize)])
+  expect(commands.map((command) => command.name)).toEqual(['deep-research', 'design'])
 })

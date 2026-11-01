@@ -4,83 +4,54 @@ import { AgentModelCatalogStore, type AgentModelCatalogSuccess } from './agent-m
 import type { AgentModelCatalogProbe } from './agent-model-catalog-discovery'
 import type { AgentModelCatalogReadParams } from './agent-model-catalog-service-contract'
 import { createClaudeModelCatalogProbe } from '../../claude/claude-model-catalog-probe'
-import { createAcpModelCatalogProbe } from '../../acp/acp-model-catalog-probe'
-import { acpLaunchSpecFor } from '../../acp/acp-launch-specs'
 import type { runAgentModelCatalogListing } from './agent-model-catalog-probe-runner'
 import claudeCapture from '../../claude/__fixtures__/catalog-signin.json'
-import grokCapture from '../../acp/__fixtures__/grok-catalog-signin.json'
 
 it('shares one bounded sign-in observation across N and 10N catalog demands', async () => {
   for (const callers of [10, 100]) {
-    for (const agent of ['claude', 'grok'] as const) {
-      const runListing = vi.fn<typeof runAgentModelCatalogListing>(async () => {
-        if (agent === 'grok') {
-          return grokCapture.models
-        }
-        return [
-          ['orca-model-discovery', claudeCapture.models],
-          ['orca-model-settings', claudeCapture.settings],
-          ['orca-signin-discovery', { account: claudeCapture.accounts.signedOut }]
-        ]
-          .map(([request_id, response]) =>
-            JSON.stringify({
-              type: 'control_response',
-              response: { subtype: 'success', request_id, response }
-            })
-          )
-          .join('\n')
-      })
-      const initialize = vi.fn(async () => grokCapture.initialize)
-      const close = vi.fn(async () => undefined)
-      const extension = vi.fn(async () => ({}))
-      const probe =
-        agent === 'claude'
-          ? createClaudeModelCatalogProbe({
-              resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
-              resolveEnv: () => ({}),
-              resolveCommand: () => ({
-                command: process.execPath,
-                prefixArgs: ['run', '--', 'claude']
-              }),
-              resolveAuthPolicy: () => ({ account: 'system' }),
-              runListing
-            })
-          : createAcpModelCatalogProbe(acpLaunchSpecFor('grok')!, {
-              resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
-              resolveCommand: () => process.execPath,
-              dataDirectory: '/orca-data',
-              homePath: '/home/test',
-              runListing,
-              connect: () => ({ initialize, close, requestSessionFreeExtension: extension })
-            })
-      const service = createAgentModelCatalogService({
-        store: new AgentModelCatalogStore(),
-        getConversation: () => undefined,
-        getRecord: () => undefined,
-        drivesRecord: () => true,
-        resolveAccountHome: async () => ({
-          variable: agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'GROK_HOME',
-          path: '/account'
-        }),
-        probes: { [agent]: probe }
-      })
-      const request = { agent, workspacePath: '/project' }
-      try {
-        await Promise.all(Array.from({ length: callers }, () => service.demand(request)))
-        for (let index = 0; index < callers; index++) {
-          service.snapshot(request)
-        }
-        expect(runListing).toHaveBeenCalledTimes(1)
-        expect(initialize).toHaveBeenCalledTimes(agent === 'grok' ? 1 : 0)
-        expect(extension).not.toHaveBeenCalled()
-        expect(close).toHaveBeenCalledTimes(agent === 'grok' ? 1 : 0)
-        expect(service.snapshot(request)).toMatchObject({ unavailable: { reason: 'notSignedIn' } })
-        if (agent === 'claude') {
-          expect(runListing.mock.calls[0]?.[0].stdin?.trim().split('\n')).toHaveLength(3)
-        }
-      } finally {
-        service.stop()
+    const runListing = vi.fn<typeof runAgentModelCatalogListing>(async () =>
+      [
+        ['orca-model-discovery', claudeCapture.models],
+        ['orca-model-settings', claudeCapture.settings],
+        ['orca-signin-discovery', { account: claudeCapture.accounts.signedOut }]
+      ]
+        .map(([request_id, response]) =>
+          JSON.stringify({
+            type: 'control_response',
+            response: { subtype: 'success', request_id, response }
+          })
+        )
+        .join('\n')
+    )
+    const probe = createClaudeModelCatalogProbe({
+      resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
+      resolveEnv: () => ({}),
+      resolveCommand: () => ({
+        command: process.execPath,
+        prefixArgs: ['run', '--', 'claude']
+      }),
+      resolveAuthPolicy: () => ({ account: 'system' }),
+      runListing
+    })
+    const service = createAgentModelCatalogService({
+      store: new AgentModelCatalogStore(),
+      getConversation: () => undefined,
+      getRecord: () => undefined,
+      drivesRecord: () => true,
+      resolveAccountHome: async () => ({ variable: 'CLAUDE_CONFIG_DIR', path: '/account' }),
+      probes: { claude: probe }
+    })
+    const request = { agent: 'claude', workspacePath: '/project' } as const
+    try {
+      await Promise.all(Array.from({ length: callers }, () => service.demand(request)))
+      for (let index = 0; index < callers; index++) {
+        service.snapshot(request)
       }
+      expect(runListing).toHaveBeenCalledTimes(1)
+      expect(service.snapshot(request)).toMatchObject({ unavailable: { reason: 'notSignedIn' } })
+      expect(runListing.mock.calls[0]?.[0].stdin?.trim().split('\n')).toHaveLength(3)
+    } finally {
+      service.stop()
     }
   }
 })

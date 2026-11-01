@@ -90,11 +90,11 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
         }),
       async (connection): Promise<AgentModelCatalogSuccess> => {
         let configured: AgentModelCatalogSuccess['configured']
-        let signedOut = false
+        let unknownProvider = false
         try {
           const state = discoveryStateSchema.safeParse(await connection.request('get_state'))
-          signedOut = state.success && state.data.model?.provider === 'unknown'
-          if (state.success && state.data.model && !signedOut) {
+          unknownProvider = state.success && state.data.model?.provider === 'unknown'
+          if (state.success && state.data.model && !unknownProvider) {
             configured = {
               model: piModelOptionId(state.data.model.provider, state.data.model.id),
               ...(typeof state.data.thinkingLevel === 'string' && state.data.thinkingLevel
@@ -107,21 +107,17 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
         }
         assertStructuredAgentResolutionCurrent(operation)
         options?.signal?.throwIfAborted()
+        // Pi's own "No models available" condition: no selected provider and nothing listable.
         const models = await readPiRpcModelOptions(connection).catch((error: unknown) => {
-          if (signedOut) {
+          if (unknownProvider) {
             throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
           }
           throw error
         })
-        if (signedOut && models.length === 0) {
+        if (unknownProvider && models.length === 0) {
           throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
         }
-        return {
-          models,
-          origin: 'probe',
-          ...(configured ? { configured } : {}),
-          ...(signedOut ? { unavailable: { reason: 'notSignedIn' } as const } : {})
-        }
+        return { models, origin: 'probe', ...(configured ? { configured } : {}) }
       },
       { label: 'pi', signal: options?.signal }
     )

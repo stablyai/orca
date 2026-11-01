@@ -10,10 +10,6 @@ const MODEL_BULLET = /^\s*[*-]\s+([^\s(]+)(.*)$/
 // Read markers from listed rows so preamble defaults cannot name unavailable IDs.
 const DEFAULT_MARKER = /\(default\)/
 
-export function grokModelListSignedOut(stdout: string): boolean {
-  return stdout.split(/\r?\n/).some((line) => line.trim() === 'You are not authenticated.')
-}
-
 export function parseGrokModelList(stdout: string): CommitMessageModel[] {
   const lines = stdout.split(/\r?\n/)
   // Require the header to exclude default/login preambles that resemble model IDs.

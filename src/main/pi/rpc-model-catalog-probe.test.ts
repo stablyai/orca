@@ -79,7 +79,7 @@ function catalog(request: PiRpcRequester['request'], now = Date.now) {
 }
 
 describe('Pi model catalog', () => {
-  it('projects the recorded signed-out sentinel independently of model inventory', async () => {
+  it('projects the recorded signed-out sentinel only when nothing is listable', async () => {
     const frames = readFileSync(join(import.meta.dirname, '__fixtures__/signed-out.jsonl'), 'utf8')
       .trim()
       .split('\n')
@@ -88,21 +88,22 @@ describe('Pi model catalog', () => {
       .map((frame) => JSON.parse(frame.raw))
     const state = frames.find((frame) => frame.command === 'get_state').data
     const empty = frames.find((frame) => frame.command === 'get_available_models').data
-    for (const inventory of [empty, AVAILABLE_MODELS]) {
-      const { probe, record } = catalog(async (command) =>
-        command === 'get_state' ? state : inventory
-      )
-      if (inventory === empty) {
-        await expect(probe(record.accountHome)).rejects.toMatchObject({
-          unavailable: { reason: 'notSignedIn' }
-        })
-      } else {
-        const result = await probe(record.accountHome)
-        expect(result.unavailable).toEqual({ reason: 'notSignedIn' })
-        expect(result.models.length).toBeGreaterThan(0)
-        expect(result.configured).toBeUndefined()
-      }
+    const closed = async () => {
+      throw new Error('rpc closed')
     }
+    for (const read of [async () => empty, closed]) {
+      const { probe, record } = catalog(async (command) =>
+        command === 'get_state' ? state : read()
+      )
+      await expect(probe(record.accountHome)).rejects.toMatchObject({
+        unavailable: { reason: 'notSignedIn' }
+      })
+    }
+    const listed = catalog(async (command) => (command === 'get_state' ? state : AVAILABLE_MODELS))
+    const result = await listed.probe(listed.record.accountHome)
+    expect(result.unavailable).toBeUndefined()
+    expect(result.models.length).toBeGreaterThan(0)
+    expect(result.configured).toBeUndefined()
     const { probe, record } = catalog(async (command) => (command === 'get_state' ? {} : empty))
     await expect(probe(record.accountHome)).rejects.toThrow('pi listed no models')
   })

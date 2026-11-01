@@ -5,10 +5,7 @@ import {
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentCliVersionReader } from '../agent-cli-version-probe'
-import type {
-  AgentModelCatalogProbe,
-  AgentModelCatalogSuccess
-} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type { AgentModelCatalogProbe } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
   runAgentModelCatalogListing,
   runAgentModelCatalogSession
@@ -109,7 +106,6 @@ export function createAcpModelCatalogProbe(
     }
     const run = { label: spec.agent, signal: options?.signal }
     let models: AgentSessionModelOption[]
-    let unavailable: AgentModelCatalogSuccess['unavailable']
     if (listing.kind === 'command') {
       const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
         {
@@ -149,41 +145,15 @@ export function createAcpModelCatalogProbe(
         async (connection) => {
           const initialized = await connection.initialize()
           assertStructuredAgentResolutionCurrent(operation)
-          const listed = listing.read(initialized, connection).then(
-            (models) => ({ models }),
-            (error: unknown) => ({ error })
-          )
-          const signedOut = listing.signInStatus
-            ? await (deps.runListing ?? runAgentModelCatalogListing)(
-                { ...launch, args: [...prefixArgs, ...listing.signInStatus.args] },
-                { site: `${spec.agent}-signin-probe`, signal: options?.signal, timeoutMs: 2_000 }
-              )
-                .then(listing.signInStatus.signedOut)
-                .catch(() => false)
-            : false
-          assertStructuredAgentResolutionCurrent(operation)
-          const result = await listed
-          if (signedOut) {
-            unavailable = { reason: 'notSignedIn' }
-          }
-          if ('error' in result) {
-            if (unavailable) {
-              throw new AgentModelCatalogUnavailableError(unavailable)
-            }
-            throw result.error
-          }
-          return result.models
+          return listing.read(initialized, connection)
         },
         run
       )
     }
     if (models.length === 0) {
-      if (unavailable) {
-        throw new AgentModelCatalogUnavailableError(unavailable)
-      }
       throw new Error(`${spec.agent} listed no models`)
     }
-    return { models, origin: 'probe', ...(unavailable ? { unavailable } : {}) }
+    return { models, origin: 'probe' }
   }
   return async (home, options) => {
     try {

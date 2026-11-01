@@ -15,7 +15,6 @@ import type { InitializeResponse } from './generated/acp-protocol.generated'
 import { compareAppVersions } from '../../shared/app-version'
 import type { ManagedRuntime } from '../node-runtime/managed-runtime-release'
 import { readGrokModelCatalog } from './acp-dialects/grok-model-catalog'
-import { GROK_MODEL_LIST_ARGS, grokModelListSignedOut } from '../../shared/grok-model-list-probe'
 import {
   OPENCODE_MODEL_LISTING_ARGS,
   parseOpenCodeModelListing
@@ -66,8 +65,6 @@ export type AcpModelDiscovery =
         }
       ): Promise<AgentSessionModelOption[]>
       listingNamesConfiguredModel: boolean
-      /** Read after initialize, which may silently refresh credentials. */
-      signInStatus?: { args: readonly string[]; signedOut(stdout: string): boolean }
     }
   | {
       kind: 'command'
@@ -169,7 +166,6 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   modelDiscovery: {
     kind: 'initialize',
     read: readGrokModelCatalog,
-    signInStatus: { args: GROK_MODEL_LIST_ARGS, signedOut: grokModelListSignedOut },
     listingNamesConfiguredModel: false
   },
   visualsSkill: loadGrokVisualsSkill,

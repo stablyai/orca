@@ -57,6 +57,21 @@ describe('the shared catalog probe runner', () => {
     await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 5_000 })
   }, 20_000)
 
+  it('keeps required replies when the listing deadline lands inside the optional grace', async () => {
+    const stdout = await runAgentModelCatalogListing(
+      {
+        ...node(`process.stdout.write('models\\nsettings\\n');setInterval(()=>{},1000)`),
+        env: NODE_ENV
+      },
+      {
+        site: 'test-partial-deadline',
+        timeoutMs: 3_000,
+        partialOutput: { ready: (output) => output.includes('settings\n'), timeoutMs: 60_000 }
+      }
+    )
+    expect(stdout).toBe('models\nsettings\n')
+  }, 20_000)
+
   it('answers a listing’s stdout once it exits 0, with its request on stdin', async () => {
     const stdout = await runAgentModelCatalogListing(
       {
