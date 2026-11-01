@@ -371,6 +371,9 @@ jobs:
             bun config/scripts/verify-localization-extraction.mjs
           fi
 
+      - name: Enforce no local reference provenance in changed files
+        run: pnpm run check:reference-provenance:changed -- "${{ github.event.pull_request.base.sha }}"
+
       - name: Check Zustand selector fan-out budget
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/zustand-selector-fanout-benchmark.mjs --check
