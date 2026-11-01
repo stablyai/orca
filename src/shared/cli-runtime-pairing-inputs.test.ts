@@ -4,7 +4,11 @@ import { delimiter, join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { withCliRuntimeOnPath } from './node-cli-command-resolution'
 
-const realFs = vi.hoisted(() => ({}) as { closeSync: typeof fs.closeSync })
+const realFs = vi.hoisted((): { closeSync: typeof fs.closeSync } => ({
+  closeSync: () => {
+    throw new Error('real closeSync was not captured by the node:fs mock')
+  }
+}))
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof fs>()

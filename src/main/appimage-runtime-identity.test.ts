@@ -15,7 +15,11 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveAppImageRuntimeIdentity } from './appimage-runtime-identity'
 
-const realFs = vi.hoisted(() => ({}) as { closeSync: typeof fs.closeSync })
+const realFs = vi.hoisted((): { closeSync: typeof fs.closeSync } => ({
+  closeSync: () => {
+    throw new Error('real closeSync was not captured by the node:fs mock')
+  }
+}))
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof fs>()
