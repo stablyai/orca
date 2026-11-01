@@ -79,15 +79,15 @@ describe('listAndroidDevices', () => {
   })
 
   it('lists USB devices without running the emulator binary on adb-only hosts', async () => {
-    const fake = vi.fn(
-      runner((_binary, a) =>
-        a === 'devices -l' ? 'List of devices attached\n721a6f41\tdevice model:M2007J17C' : ''
-      )
-    )
+    const binaries: string[] = []
+    const fake = runner((binary, a) => {
+      binaries.push(binary)
+      return a === 'devices -l' ? 'List of devices attached\n721a6f41\tdevice model:M2007J17C' : ''
+    })
     const adbOnly: AndroidSdkPaths = { sdkRoot: null, adb: '/usr/bin/adb', emulator: null }
-    const devices = await listAndroidDevices(fake as unknown as AndroidCommandRunner, adbOnly)
+    const devices = await listAndroidDevices(fake, adbOnly)
     expect(devices).toEqual([expect.objectContaining({ id: '721a6f41', detail: 'device' })])
-    expect(fake.mock.calls.every(([binary]) => binary === '/usr/bin/adb')).toBe(true)
+    expect(binaries.every((binary) => binary === '/usr/bin/adb')).toBe(true)
   })
 })
 
