@@ -20,12 +20,16 @@ async function runtimeCommandFor(
   method: (typeof BROWSER_RPC_METHODS)[number]
 ): Promise<string | null> {
   let recorded: string | null = null
+  // Handlers may read other runtime members first, such as an input recorder; only browser* names the command.
+  const member: unknown = new Proxy(() => ({}), {
+    get: (_target, property) => (property === 'then' ? undefined : member)
+  })
   const runtime = new Proxy({} as Record<string, unknown>, {
     get: (_target, property) => {
       if (typeof property === 'string' && recorded === null && property.startsWith('browser')) {
         recorded = property
       }
-      return () => ({})
+      return member
     }
   })
   try {
