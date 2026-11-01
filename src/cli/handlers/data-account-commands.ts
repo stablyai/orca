@@ -27,6 +27,17 @@ export async function assertDataAccountsSupported(ctx: HandlerContext): Promise<
   }
 }
 
+// Managed accounts rely on OpenCode 2's isolated `auth login --standalone`; OpenCode 1.x lacks it.
+function assertOpenCodeStandaloneLogin(help: string | null): void {
+  if (help !== null && !help.includes('--standalone')) {
+    throw new RuntimeClientError(
+      'invalid_environment',
+      'Managed OpenCode accounts need OpenCode 2. The installed `opencode` has no ' +
+        '`auth login --standalone` (OpenCode 1.x). Install OpenCode 2, or sign in with `opencode auth login`.'
+    )
+  }
+}
+
 export async function addDataAccount(
   ctx: HandlerContext,
   provider: ManagedDataAccountProvider,
@@ -36,7 +47,8 @@ export async function addDataAccount(
     extraEnv: Record<string, string>,
     json: boolean,
     session: InteractiveLoginSession
-  ) => Promise<void>
+  ) => Promise<void>,
+  readLoginHelp: (command: string, args: string[]) => string | null
 ): Promise<void> {
   if (getWslAccountTarget(ctx.cwd)?.runtime === 'wsl') {
     throw new RuntimeClientError(
@@ -58,6 +70,9 @@ export async function addDataAccount(
       'invalid_argument',
       '--integration requires an OpenCode integration ID or name.'
     )
+  }
+  if (provider === 'opencode') {
+    assertOpenCodeStandaloneLogin(readLoginHelp('opencode', ['auth', 'login', '--help']))
   }
   const directory = mkdtempSync(join(tmpdir(), `orca-account-add-${provider}-`))
   const session: InteractiveLoginSession = {

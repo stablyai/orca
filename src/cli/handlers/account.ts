@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -147,6 +147,22 @@ async function runAgentLoginInTerminal(
   })
 }
 
+function readAgentLoginHelp(command: string, args: string[]): string | null {
+  const resolvedCommand = resolveCliCommand(command)
+  try {
+    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedCommand, args)
+    const env = withCliRuntimeOnPath(
+      resolvedCommand,
+      addAgentNodePaths(stripElectronRunAsNode(process.env))
+    )
+    const probe = spawnSync(spawnCmd, spawnArgs, { encoding: 'utf8', env, timeout: 15_000 })
+    // A probe that fails proves nothing; the login then reports the real launch error.
+    return probe.error || probe.status !== 0 ? null : `${probe.stdout}${probe.stderr}`
+  } catch {
+    return null
+  }
+}
+
 async function addClaudeAccount({ client, cwd, json }: HandlerContext): Promise<void> {
   const { result: signIn } = await client.call<ClaudeAccountSignIn>(
     'accounts.beginClaudeSignIn',
@@ -269,7 +285,7 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
     }
     rejectAccountRemoteSelectionFlags(ctx, 'orca account add')
     if (agent === 'opencode' || agent === 'devin') {
-      await addDataAccount(ctx, agent, runAgentLoginInTerminal)
+      await addDataAccount(ctx, agent, runAgentLoginInTerminal, readAgentLoginHelp)
       return
     }
     // Check runtime support before spending an OAuth round trip.
