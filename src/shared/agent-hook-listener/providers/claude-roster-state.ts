@@ -190,6 +190,7 @@ export function seedClaudeSubagentRosterFromSnapshots(
       startedAt: snapshot.startedAt,
       agentType: snapshot.agentType,
       description: snapshot.description,
+      lastActivityAt: snapshot.startedAt,
       // Authoritative omission may reap phantom seeds whose finish hooks were lost offline.
       backgroundTasksAuthoritative: true,
       // Restored seeds are not confirmed live work in this runtime.
