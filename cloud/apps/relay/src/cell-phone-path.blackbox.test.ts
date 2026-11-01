@@ -108,8 +108,10 @@ describe('the memory phone path', () => {
     expect(reserve.relay.sessions.phonePathEffective()).toBe('db')
     reserve.setAdmitMode('reserve', { phonePath: 'memory' })
     expect(reserve.relay.sessions.phonePathEffective()).toBe('memory')
-    // No director has polled this process yet, so the trip waits out the boot grace too.
-    now += reserveDeadManWindowMs(reserve.config.cellId) + RESERVE_DEAD_MAN_BOOT_GRACE_MS + 1_000
+    // No director has polled this process yet: past its plain window it is still in its boot grace.
+    now += reserveDeadManWindowMs(reserve.config.cellId) + 1_000
+    expect(reserve.relay.sessions.inReserveMode()).toBe(true)
+    now += RESERVE_DEAD_MAN_BOOT_GRACE_MS
     expect(reserve.relay.sessions.inReserveMode()).toBe(false)
     expect(reserve.relay.sessions.phonePathEffective()).toBe('db')
   })
