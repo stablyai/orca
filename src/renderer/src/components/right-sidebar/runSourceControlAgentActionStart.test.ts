@@ -243,12 +243,6 @@ describe('runSourceControlAgentActionStart', () => {
   })
 })
 
-describe('runSourceControlAgentActionStart CLI arguments applicability', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-})
-
 it('confirms delivery and closes even while saving remains pending', async () => {
   mocks.launchAgentInNewTab.mockReturnValue({
     surface: { kind: 'local-terminal', tabId: 'tab-1' },

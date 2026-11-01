@@ -357,17 +357,3 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
     expect(seededDraftFor('tab-1')?.text).toBe(ISSUE_URL)
   })
 })
-
-describe('folder-workspace draft: seeded set == chat-opening set', () => {
-  beforeEach(() => {
-    mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
-    useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
-  })
-
-  afterEach(() => {
-    mocks.activateAndRevealFolderWorkspace.mockReset()
-    mocks.ensureAgentStartupInTerminal.mockReset()
-    useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
-    vi.restoreAllMocks()
-  })
-})
