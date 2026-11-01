@@ -8,6 +8,7 @@ import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
 import {
   pickCookieFile as pickFile,
   importCookiesFromFile as importFile,
+  importCookiesFromJson as importJson,
   type CookieImportOptions
 } from './browser-cookie-import-pipeline'
 import { importChromiumCookies } from './chromium/import-cookies'
@@ -33,6 +34,13 @@ export async function importCookiesFromFile(
   targetPartition: string
 ): Promise<BrowserCookieImportResult> {
   return importFile(filePath, targetPartition)
+}
+
+export async function importCookiesFromJson(
+  rawContent: string,
+  targetPartition: string
+): Promise<BrowserCookieImportResult> {
+  return importJson(rawContent, targetPartition)
 }
 
 export async function importCookiesFromBrowser(

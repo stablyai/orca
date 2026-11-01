@@ -294,6 +294,11 @@ export function buildDefaultSettings(args: {
       customAgentCommand: ''
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
-    voice: args.voice
+    voice: args.voice,
+    agentcookieSyncEnabled: false,
+    agentcookieBinaryPath: null,
+    agentcookieDetected: false,
+    agentcookieLastSyncAt: null,
+    agentcookieLastImportedCount: null
   }
 }
