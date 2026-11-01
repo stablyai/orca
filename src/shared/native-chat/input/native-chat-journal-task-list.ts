@@ -6,7 +6,7 @@ import type {
 } from '../../agent-session/journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../../agent-session/journal/agent-session-journal-producer'
 import { CODEX_PLAN_UPDATED_FRAME_KIND } from '../native-chat-provider-frame-summary'
-import { projectStructuredItemsToNativeChat } from '../../structured-agent-session-projection'
+import { projectStructuredItemsToNativeChat } from '../../agent-session/view/structured-agent-session-projection'
 import { latestNativeChatTaskSeed } from './native-chat-activity'
 import type { NativeChatTaskSeedList } from './native-chat-claude-task-updates'
 import { nativeChatTaskListTool } from './native-chat-task-list'
