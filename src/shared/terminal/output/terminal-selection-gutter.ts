@@ -88,7 +88,8 @@ function cellWidth(text: string): number {
   return width
 }
 
-type Row = { text: string; indent: number; endCol: number; terminator: string }
+// edge: a column-0 row in an agent pane (marker, spinner or done line, input box rule), never a wrapped one.
+type Row = { text: string; indent: number; endCol: number; terminator: string; edge: boolean }
 
 function rowEnd(startCol: number, text: string, cols: number): number {
   const end = startCol + cellWidth(text.trimEnd())
@@ -98,7 +99,7 @@ function rowEnd(startCol: number, text: string, cols: number): number {
 
 function continues(row: Row, next: Row, wrapWidth: number): boolean {
   const body = next.text.trimStart()
-  if (row.text.trim() === '' || body === '' || BLOCK_START.test(body)) {
+  if (next.edge || row.text.trim() === '' || body === '' || BLOCK_START.test(body)) {
     return false
   }
   if (BOX_DRAWING.test(row.text) || BOX_DRAWING.test(next.text)) {
@@ -129,7 +130,12 @@ export function cleanTerminalSelection(
   const lines = selection.split('\n').map(parseLine)
   const partialFirst = geometry.startCol > 0
   const markerFirst = !partialFirst && AGENT_MARKER.test(lines[0].text)
-  const rest = partialFirst || markerFirst ? lines.slice(1) : lines
+  // Agent text sits behind the gutter, so column-0 rows are the agent's own chrome and
+  // must not cancel the gutter (a trailing `✻ Worked for 12s` used to undo the whole pass).
+  const edge = lines.map(
+    ({ indent, text }) => geometry.joinWrappedRows && indent === 0 && text.trim() !== ''
+  )
+  const rest = lines.filter((_, i) => !edge[i] && !(i === 0 && (partialFirst || markerFirst)))
   const gutter = measureGutter(rest)
   const restHasText = rest.some(({ indent, text }) => indent !== text.length)
   if (gutter === 0 && !(markerFirst && !restHasText)) {
@@ -142,7 +148,8 @@ export function cleanTerminalSelection(
         text,
         indent: -1,
         endCol: rowEnd(geometry.startCol, text, geometry.cols),
-        terminator
+        terminator,
+        edge: false
       }
     }
     if (i === 0 && markerFirst) {
@@ -150,7 +157,8 @@ export function cleanTerminalSelection(
         text: text.slice(2),
         indent: 0,
         endCol: rowEnd(0, text, geometry.cols),
-        terminator
+        terminator,
+        edge: false
       }
     }
     const cut = Math.min(indent, gutter)
@@ -158,7 +166,8 @@ export function cleanTerminalSelection(
       text: text.slice(cut),
       indent: indent - cut,
       endCol: rowEnd(0, text, geometry.cols),
-      terminator
+      terminator,
+      edge: edge[i]
     }
   })
 

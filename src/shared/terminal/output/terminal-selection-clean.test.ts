@@ -176,6 +176,33 @@ describe('cleanTerminalSelection', () => {
     expect(cleanTerminalSelection(['● ', '  Hello'].join('\n'), at(0, 20))).toBe('Hello')
   })
 
+  it('lets column-0 agent rows through without cancelling the gutter', () => {
+    // Copied on a 46-column phone: the selection runs into the done line below the reply.
+    const reply = [
+      "The phone gets each tab's agent status",
+      '  (agentStatus.agentType), and native-chat',
+      '  code reads the same field, so the agent',
+      "  check most likely isn't the problem. That",
+      '  points to case 2: lines wrapped at the ',
+      "  desktop's width.",
+      '',
+      '✻ Worked for 1m 27s · done 17.16'
+    ].join('\n')
+    expect(cleanTerminalSelection(reply, at(2, 46))).toBe(
+      [
+        "The phone gets each tab's agent status (agentStatus.agentType), and native-chat code reads the same field, so the agent check most likely isn't the problem. That points to case 2: lines wrapped at the desktop's width.",
+        '',
+        '✻ Worked for 1m 27s · done 17.16'
+      ].join('\n')
+    )
+    const turns = [paint([PROSE[0]], 40), '────────────────────', '❯ thanks', paint([PROSE[1]], 40)]
+    expect(cleanTerminalSelection(turns.join('\n'), at(0, 40))).toBe(
+      [PROSE[0], '────────────────────', '❯ thanks', `● ${PROSE[1]}`].join('\n')
+    )
+    const shell = ['$ ls', '  indented', '  output'].join('\n')
+    expect(cleanTerminalSelection(shell, inShell(0, 40))).toBe(shell)
+  })
+
   it('without geometry behaves like the gutter pass', () => {
     const midLine = ['answer starts here', '  and continues'].join('\n')
     expect(cleanTerminalSelection(midLine)).toBe(midLine)
