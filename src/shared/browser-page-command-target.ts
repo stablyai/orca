@@ -13,4 +13,4 @@ export type BrowserHistoryNavigateCommand = BrowserPageCommandTarget & {
 export type BrowserPageTabShortcut = Pick<
   WindowShortcutInput,
   'key' | 'code' | 'alt' | 'meta' | 'control' | 'shift' | 'doubleTapModifier'
->
+> & { browserPageId?: string }

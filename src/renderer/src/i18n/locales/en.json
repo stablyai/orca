@@ -22510,7 +22510,7 @@
       "editorPreviousChange": "Go to Previous Change",
       "editorNextChange": "Go to Next Change",
       "editorAddReviewNote": "Add Review Note",
-      "sourceControlSendReviewNotes": "Send Review Notes to Agent",
+      "sourceControlSendReviewNotes": "Send Review or Browser Notes to Agent",
       "fileExplorerUndo": "Undo file operation",
       "fileExplorerRedo": "Redo file operation",
       "fileExplorerCopyPath": "Copy file path",

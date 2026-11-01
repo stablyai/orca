@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { requestBrowserAnnotationSendMenu } from '@/lib/browser-annotation-send-shortcut'
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -308,5 +309,63 @@ describe('website annotations handed to a send', () => {
 
     render(<AnnotationTrayHarness />)
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+  })
+})
+
+describe('send notes shortcut ownership', () => {
+  it('opens only the focused page menu and keeps delivery pending', () => {
+    const mounted = renderHook(() =>
+      useBrowserPageAnnotationSend({
+        browserTabId: 'page-1',
+        worktreeId: 'folder-1',
+        workspaceId: 'browser-1',
+        chromeShortcutScope: 'focused'
+      })
+    )
+    act(() => {
+      expect(requestBrowserAnnotationSendMenu({ target: null, browserPageId: 'page-2' })).toBeNull()
+    })
+    expect(mode).toBeUndefined()
+    act(() => {
+      expect(requestBrowserAnnotationSendMenu({ target: null, browserPageId: 'page-1' })).toBe(
+        'opened'
+      )
+    })
+    expect(mode?.id).toBe('browser-annotations:page-1:tray')
+    expect(mode?.worktreeId).toBe('folder-1')
+    expect(mode?.prompt).toContain('Fix this button')
+    expect(notes()).toHaveLength(1)
+    mounted.unmount()
+    expect(requestBrowserAnnotationSendMenu({ target: null, browserPageId: 'page-1' })).toBeNull()
+  })
+
+  it('does not fall back to review notes for an empty focused browser', () => {
+    store.getState().clearBrowserPageAnnotations('page-1')
+    renderHook(() =>
+      useBrowserPageAnnotationSend({
+        browserTabId: 'page-1',
+        worktreeId: 'folder-1',
+        chromeShortcutScope: 'focused'
+      })
+    )
+    expect(requestBrowserAnnotationSendMenu({ target: null })).toBe('empty')
+    expect(mode).toBeUndefined()
+  })
+
+  it('ignores inactive panes and notes already in flight', () => {
+    const { result, rerender } = renderHook(
+      ({ scope }: { scope: 'focused' | 'inactive' }) =>
+        useBrowserPageAnnotationSend({
+          browserTabId: 'page-1',
+          worktreeId: 'folder-1',
+          chromeShortcutScope: scope
+        }),
+      { initialProps: { scope: 'inactive' } }
+    )
+    expect(requestBrowserAnnotationSendMenu({ target: null })).toBeNull()
+    rerender({ scope: 'focused' })
+    act(() => result.current.handleBrowserAnnotationsHandedOff(new Promise(() => {})))
+    expect(requestBrowserAnnotationSendMenu({ target: null })).toBe('empty')
+    expect(mode).toBeUndefined()
   })
 })

@@ -1,3 +1,6 @@
+import { registerBrowserAnnotationSendShortcut } from '@/lib/browser-annotation-send-shortcut'
+import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
+import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -15,10 +18,14 @@ import {
 
 export function useBrowserPageAnnotationSend({
   browserTabId,
-  worktreeId
+  worktreeId,
+  workspaceId,
+  chromeShortcutScope = 'inactive'
 }: {
   browserTabId: string
   worktreeId: string
+  workspaceId?: string
+  chromeShortcutScope?: BrowserChromeShortcutScope
 }): {
   browserAnnotations: BrowserPageAnnotation[]
   browserAnnotationsPrompt: string
@@ -169,6 +176,39 @@ export function useBrowserPageAnnotationSend({
       }
     },
     [browserAnnotationsPrompt, closeAgentSendPopoverTargetMode, openAnnotationSendTargetMode]
+  )
+
+  useEffect(
+    () =>
+      registerBrowserAnnotationSendShortcut((request) => {
+        if (chromeShortcutScope === 'inactive') {
+          return null
+        }
+        if (
+          request.browserPageId
+            ? request.browserPageId !== browserTabId
+            : !browserChromeShortcutOwnsEvent(
+                chromeShortcutScope,
+                { target: request.target },
+                workspaceId ?? ''
+              )
+        ) {
+          return null
+        }
+        if (!browserAnnotationsPrompt) {
+          return 'empty'
+        }
+        handleAnnotationSendOpenChange(annotationTraySendModeId, true)
+        return 'opened'
+      }),
+    [
+      annotationTraySendModeId,
+      browserAnnotationsPrompt,
+      browserTabId,
+      chromeShortcutScope,
+      handleAnnotationSendOpenChange,
+      workspaceId
+    ]
   )
 
   const handleIncludePageDetailsChange = useCallback(

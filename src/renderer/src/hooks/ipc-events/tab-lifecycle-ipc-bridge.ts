@@ -25,7 +25,7 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
             cancelable: true
           }),
           // Why: keybinding matching reads this field, so a double-tap binding matches the replay too.
-          { doubleTapModifier: input.doubleTapModifier }
+          { doubleTapModifier: input.doubleTapModifier, browserPageId: input.browserPageId }
         )
       )
     )

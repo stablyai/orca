@@ -131,7 +131,7 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
   },
   {
     id: 'sourceControl.sendReviewNotes',
-    title: 'Send Review Notes to Agent',
+    title: 'Send Review or Browser Notes to Agent',
     group: 'Global',
     scope: 'global',
     // Global capture also fires in editors; include editor collisions such as Add Review Note in Settings warnings.
@@ -144,7 +144,10 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
       'send',
       'agent',
       'review',
-      'annotate'
+      'annotate',
+      'browser',
+      'design',
+      'annotations'
     ],
     // Why: unbound by default so it never collides with existing chords; users opt in via Settings.
     defaultBindings: platformBindings([])

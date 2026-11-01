@@ -261,6 +261,27 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).not.toHaveBeenCalled()
   })
 
+  it.each([true, false])('forwards the notes shortcut only for workspace guests (%s)', (owned) => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      resolveWorkspaceId: () => (owned ? 'workspace-1' : null),
+      getKeybindings: () => ({ 'sourceControl.sendReviewNotes': ['Mod+Alt+Shift+9'] })
+    })
+    const prevented = triggerBeforeInput({ key: '9', code: 'Digit9', alt: true, shift: true })
+    if (owned) {
+      expect(prevented).toHaveBeenCalledOnce()
+      expect(rendererSendMock).toHaveBeenCalledWith(
+        'ui:browserPageTabShortcut',
+        expect.objectContaining({ browserPageId: browserTabId, code: 'Digit9' })
+      )
+    } else {
+      expect(prevented).not.toHaveBeenCalled()
+      expect(rendererSendMock).not.toHaveBeenCalled()
+    }
+  })
+
   it('uses customized zoom keybindings when forwarding guest shortcuts', () => {
     setupGuestShortcutForwarding({
       browserTabId,

@@ -34,6 +34,7 @@ type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 // Share dispatch between KeyboardEvent and synthetic double-tap input.
 export type ShortcutDispatchInput = {
+  browserPageId?: string
   isComposing?: boolean
   altGraph?: boolean
   key?: string

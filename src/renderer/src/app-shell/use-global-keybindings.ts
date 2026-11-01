@@ -1,3 +1,5 @@
+import { requestBrowserAnnotationSendMenu } from '@/lib/browser-annotation-send-shortcut'
+import { isEditableKeyboardTarget } from '../components/browser-pane/host-guest/browser-keyboard'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -228,9 +230,16 @@ export function useGlobalKeybindings(args: {
         }
       }
 
-      // Run this unbound alias after built-ins; claim it only when unsent review notes exist.
+      // Keep one configurable action for the focused browser and review notes.
       if (canRevealRightSidebar && matchShortcut('sourceControl.sendReviewNotes')) {
-        if (actions.openDiffNotesSendMenuForActiveWorktree()) {
+        if (isEditableKeyboardTarget(input.target)) {
+          return
+        }
+        const browserResult = requestBrowserAnnotationSendMenu(input)
+        if (browserResult === 'empty' || (input.browserPageId && browserResult !== 'opened')) {
+          return
+        }
+        if (browserResult === 'opened' || actions.openDiffNotesSendMenuForActiveWorktree()) {
           input.preventDefault()
           notifyTerminalCapture('sourceControl.sendReviewNotes')
         }
@@ -267,6 +276,8 @@ export function useGlobalKeybindings(args: {
         return
       }
       dispatchShortcutInput({
+        browserPageId:
+          'browserPageId' in e && typeof e.browserPageId === 'string' ? e.browserPageId : undefined,
         isComposing: e.isComposing,
         altGraph: e.getModifierState('AltGraph'),
         key: e.key,
