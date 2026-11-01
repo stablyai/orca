@@ -26,6 +26,20 @@ import { useMobileStructuredAgentSession } from '../use-mobile-structured-agent-
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn(async () => null), setItem: vi.fn(), removeItem: vi.fn() }
 }))
+vi.mock('react-native-reanimated', () => ({
+  default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
+  Easing: { bezier: () => (t: number) => t },
+  ReduceMotion: { Never: 'never' },
+  useReducedMotion: () => false,
+  useSharedValue: (value: unknown) => ({ value }),
+  useAnimatedStyle: () => ({}),
+  useAnimatedRef: () => ({ current: null }),
+  useAnimatedScrollHandler: () => () => {},
+  withTiming: (to: unknown) => to,
+  withSpring: (to: unknown) => to,
+  runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+  cancelAnimation: () => {}
+}))
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
@@ -35,7 +49,7 @@ vi.mock('react-native', async () => {
       React.useImperativeHandle(ref, () => ({ scrollToEnd: vi.fn(), scrollToOffset: vi.fn() }), [])
       return React.createElement('FlatList', props)
     }),
-    Platform: { OS: 'ios' },
+    Platform: { OS: 'ios', select: (specifics: { ios?: unknown }) => specifics.ios },
     Pressable: 'Pressable',
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1, absoluteFillObject: {} },
     Text: 'Text',

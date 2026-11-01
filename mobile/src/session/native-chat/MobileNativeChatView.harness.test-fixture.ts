@@ -15,9 +15,18 @@ vi.mock('../../components/DragReorderList', () => ({ DragReorderList: 'DragReord
 vi.mock('react-native-reanimated', async () => {
   const { useRef } = await import('react')
   return {
-    default: { ScrollView: 'ScrollView' },
+    default: { ScrollView: 'ScrollView', View: 'AnimatedView' },
+    Easing: { bezier: () => (t: number) => t },
+    ReduceMotion: { Never: 'never' },
+    useReducedMotion: () => false,
     useAnimatedRef: () => useRef(null),
-    useSharedValue: (value: unknown) => useRef({ value }).current
+    useSharedValue: (value: unknown) => useRef({ value }).current,
+    useAnimatedStyle: () => ({}),
+    useAnimatedScrollHandler: () => () => {},
+    withTiming: (to: unknown) => to,
+    withSpring: (to: unknown) => to,
+    runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+    cancelAnimation: () => {}
   }
 })
 
