@@ -49,7 +49,7 @@ export function shouldRefreshGitStatusForFileChange(
   }
 
   // Why: `git status` without --ignored cannot change for gitignored paths, so build churn there is pure overhead (#30500).
-  const ignored = buildIgnoredSet(ignoredPaths)
+  const ignored = buildIgnoredSet(ignoredPaths, worktreePath)
   const canAffectStatus = (absolutePath: string): boolean => {
     const relativePath = relativePathInsideRoot(worktreePath, absolutePath)
     if (relativePath === null) {

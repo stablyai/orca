@@ -166,7 +166,7 @@ async function runGetStatus(
     if (statusResult.status === 'rejected') {
       throw statusResult.reason
     }
-    didHitLimit = statusResult.value.stoppedEarly
+    didHitLimit = statusResult.value.stoppedEarly && !parser.ignoredOverflow
     statusSucceeded = true
   } catch (error) {
     // Cancellation must reject rather than look like an empty status.
@@ -268,7 +268,9 @@ async function runGetStatus(
     head,
     branch,
     ...(readError !== undefined ? { readError } : {}),
-    ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
+    ...(options.includeIgnored && !parser.ignoredOverflow
+      ? { ignoredPaths: parser.ignoredPaths }
+      : {}),
     ...(branchLineTotal ? { branchLineTotal } : {}),
     ...(branchLineTotalUnavailable ? { branchLineTotalUnavailable } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength: parser.statusLength } : {}),
