@@ -78,9 +78,9 @@ function completion(id: string, description: string, prose: string): string {
 describe('nativeChatToolSubagentActivities', () => {
   it('names each background spawn from its ack', () => {
     expect(nativeChatToolSubagentActivities(spawnTurn())).toEqual([
-      { id: DATE_ID, label: "Report today's date", state: 'working', activity: null },
-      { id: TIP_ID, label: 'Check main branch tip', state: 'working', activity: null },
-      { id: TOPICS_ID, label: 'Count workspace topics', state: 'working', activity: null }
+      { id: DATE_ID, label: "Report today's date", state: 'working', activity: 'date' },
+      { id: TIP_ID, label: 'Check main branch tip', state: 'working', activity: 'tip' },
+      { id: TOPICS_ID, label: 'Count workspace topics', state: 'working', activity: 'topics' }
     ])
   })
 
@@ -94,8 +94,8 @@ describe('nativeChatToolSubagentActivities', () => {
     ])
     expect(nativeChatToolSubagentActivities([...spawnTurn(), waited])).toEqual([
       { id: DATE_ID, label: "Report today's date", state: 'completed', activity: DATE_PROSE },
-      { id: TIP_ID, label: 'Check main branch tip', state: 'working', activity: null },
-      { id: TOPICS_ID, label: 'Count workspace topics', state: 'working', activity: null }
+      { id: TIP_ID, label: 'Check main branch tip', state: 'working', activity: 'tip' },
+      { id: TOPICS_ID, label: 'Count workspace topics', state: 'working', activity: 'topics' }
     ])
   })
 
@@ -158,9 +158,9 @@ describe('nativeChatSubagentActivities tool merge', () => {
       }
     ])
     expect(nativeChatSubagentActivities([...spawnTurn(), roster])).toEqual([
-      { id: DATE_ID, label: 'Explore', state: 'completed', activity: null },
-      { id: TIP_ID, label: 'Check main branch tip', state: 'working', activity: null },
-      { id: TOPICS_ID, label: 'Count workspace topics', state: 'working', activity: null }
+      { id: DATE_ID, label: 'Explore', state: 'completed', activity: 'date' },
+      { id: TIP_ID, label: 'Check main branch tip', state: 'working', activity: 'tip' },
+      { id: TOPICS_ID, label: 'Count workspace topics', state: 'working', activity: 'topics' }
     ])
   })
 })
@@ -202,6 +202,30 @@ describe('Codex and Claude spawn tools', () => {
         id: '/root/sample_greeting',
         label: 'sample_greeting',
         state: 'completed',
+        activity: 'sealed'
+      }
+    ])
+  })
+
+  it('leaves a sealed Codex spawn message off the sheet', () => {
+    const activities = nativeChatToolSubagentActivities([
+      message('spawn', [
+        {
+          type: 'tool-call',
+          name: 'spawn_agent',
+          callId: 'call_sealed',
+          input: JSON.stringify({
+            task_name: '/root/sample_greeting',
+            message: `gAAAA${'x'.repeat(40)}`
+          })
+        }
+      ])
+    ])
+    expect(activities).toEqual([
+      {
+        id: 'call_sealed',
+        label: 'sample_greeting',
+        state: 'working',
         activity: null
       }
     ])
@@ -240,7 +264,8 @@ describe('Codex and Claude spawn tools', () => {
           id: 'a361b8987c2d7be85',
           label: 'Debug mobile Recent sort',
           state: 'completed',
-          groupId: 'claude'
+          groupId: 'claude',
+          activity: 'Fixed and pushed.'
         }
       ])
     ])
@@ -249,7 +274,7 @@ describe('Codex and Claude spawn tools', () => {
         id: 'a361b8987c2d7be85',
         label: 'Debug mobile Recent sort',
         state: 'completed',
-        activity: null
+        activity: 'Fixed and pushed.'
       }
     ])
   })

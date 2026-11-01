@@ -49,7 +49,8 @@ const SubagentEntry = z.object({
   state: z.string().min(1),
   tokens: z.number().optional(),
   startedAt: z.number().optional(),
-  settledAt: z.number().optional()
+  settledAt: z.number().optional(),
+  activity: z.string().optional()
 })
 
 /** Skip unknown block types, but reject malformed payloads of known types. */

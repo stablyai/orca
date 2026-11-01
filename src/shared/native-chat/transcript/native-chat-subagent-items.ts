@@ -32,7 +32,8 @@ export function subagentEntryOf(
     state: block.state,
     ...(block.tokens !== undefined ? { tokens: block.tokens } : {}),
     ...(block.startedAt !== undefined ? { startedAt: block.startedAt } : {}),
-    ...(block.settledAt !== undefined ? { settledAt: block.settledAt } : {})
+    ...(block.settledAt !== undefined ? { settledAt: block.settledAt } : {}),
+    ...(block.activity !== undefined ? { activity: block.activity } : {})
   }
 }
 
