@@ -407,6 +407,19 @@ describe('Hermes 0.22 readiness while its model waits on a provider snapshot', (
     })
     expect(result).toEqual({ settledOnHeldRead: false, outcome: 'timeout' })
   })
+
+  it('retries after a provider read that never answers', async () => {
+    const pane = await reattachedPaneAt('initial')
+    pane.serializeProviderBuffer.mockImplementationOnce(() => new Promise(() => {}))
+    await expect(waitForTranscriptIdle(pane, 20_000)).resolves.toMatchObject({ satisfied: true })
+    expect(pane.serializeProviderBuffer).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not settle on a frame older than output the runtime already holds', async () => {
+    const pane = await reattachedPaneAt('initial')
+    pane.frame.seq = pane.runtime.getPtyOutputSequence(TRANSCRIPT_PANE_PTY_ID) - 1
+    await expect(waitForTranscriptIdle(pane, 8_000)).rejects.toThrow('timeout')
+  })
 })
 
 describe.each([

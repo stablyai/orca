@@ -9,6 +9,7 @@ import type {
   RuntimeVisibleTerminalState
 } from '../../runtime-terminal-state-records'
 import {
+  AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
   VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS,
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from '../../orca-runtime-postlude'
@@ -203,25 +204,29 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
   }
 
   /** The provider's grid for a screen-ruled pane whose model waits on a snapshot to replace it, held to
-   *  the ruled screen's terms: as painted, on the PTY's own size, and with no live output during the read. */
+   *  the ruled screen's terms: as painted, on the PTY's own size, covering all output the runtime holds,
+   *  and with no live output during the read. */
   protected async readWithheldRuledScreen(ptyId: string): Promise<RuledScreen | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const sequence = this.getPtyOutputSequence(ptyId)
-    const isCurrentOn = (grid: { cols: number; rows: number }) => {
+    const isCurrentOn = (grid: { cols: number; rows: number; seq: number }) => {
       const ptySize = this.getTerminalSize(ptyId)
       return (
         this.getPtyLifecycleGeneration(ptyId) === generation &&
         this.getPtyOutputSequence(ptyId) === sequence &&
+        // One-sided on purpose: a fresh frame's reconciled seq meets or leads the runtime's count.
+        grid.seq >= sequence &&
         ptySize?.cols === grid.cols &&
         ptySize.rows === grid.rows
       )
     }
     // Why fresh and visible-only: a cached or shared frame can predate output the runtime has since
     // received, and readiness needs no history, which would cost the provider a checkpoint rebuild.
-    const snapshot = await this.captureProviderTerminalBuffer(
-      ptyId,
-      { scrollbackRows: 0 },
-      generation
+    // Bounded like every provider reader, so a provider that never answers frees the poll to retry.
+    const snapshot = await withTimeout(
+      this.captureProviderTerminalBuffer(ptyId, { scrollbackRows: 0 }, generation),
+      AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+      null
     )
     if (!snapshot || !isCurrentOn(snapshot)) {
       return null
