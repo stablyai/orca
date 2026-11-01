@@ -24,6 +24,15 @@ describe('composeActiveTerminalTheme', () => {
     })
   })
 
+  it('raises a muted dark foreground until the thumb is no fainter than the legacy grey', () => {
+    const base = { background: '#002b36', foreground: '#839496' }
+    const result = composeActiveTerminalTheme(base, settingsWith({}))
+    expect(result).toMatchObject({
+      scrollbarSliderBackground: 'rgba(131, 148, 150, 0.53)',
+      scrollbarSliderHoverBackground: 'rgba(131, 148, 150, 0.8)'
+    })
+  })
+
   it('lets the base theme override terminal scrollbar defaults', () => {
     const result = composeActiveTerminalTheme(
       {

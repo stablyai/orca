@@ -28,8 +28,9 @@ import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 import { windowBackdropActive } from '@/lib/window-backdrop'
+import { contrastRatio, over, type Rgba } from '@/lib/plugin-theme-tokens'
 
-export function hexToRgba(hex: string, alpha: number): string {
+function hexToRgb(hex: string): Rgba {
   let clean = hex.replace('#', '')
   if (clean.length === 3) {
     clean = clean
@@ -40,11 +41,42 @@ export function hexToRgba(hex: string, alpha: number): string {
   const r = Number.parseInt(clean.slice(0, 2), 16)
   const g = Number.parseInt(clean.slice(2, 4), 16)
   const b = Number.parseInt(clean.slice(4, 6), 16)
+  return [r, g, b, 1]
+}
+
+export function hexToRgba(hex: string, alpha: number): string {
+  const [r, g, b] = hexToRgb(hex)
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
 export function isHexColor(value: string): boolean {
   return HEX_COLOR_RE.test(value)
+}
+
+const LEGACY_SLIDER_GREY: Rgba = [180, 180, 185, 1]
+
+// Why: muted foregrounds (Solarized Dark, One Dark) must never draw a fainter thumb than the old fixed grey.
+function sliderAlpha(foreground: Rgba, background: Rgba, alpha: number, greyAlpha: number): number {
+  const contrastAt = ([r, g, b]: Rgba, a: number): number =>
+    contrastRatio(over([r, g, b, a], background), background)
+  const floor = contrastAt(LEGACY_SLIDER_GREY, greyAlpha)
+  let next = alpha
+  while (next < 1 && contrastAt(foreground, next) < floor) {
+    next = Math.round(next * 100 + 1) / 100
+  }
+  return next
+}
+
+function foregroundSliderColors(foreground: string, background: string | undefined): ITheme {
+  const fg = hexToRgb(foreground)
+  const bg = background && isHexColor(background) ? hexToRgb(background) : null
+  const tint = (alpha: number, greyAlpha: number): string =>
+    hexToRgba(foreground, bg ? sliderAlpha(fg, bg, alpha, greyAlpha) : alpha)
+  return {
+    scrollbarSliderBackground: tint(0.35, 0.4),
+    scrollbarSliderHoverBackground: tint(0.55, 0.6),
+    scrollbarSliderActiveBackground: tint(0.7, 0.8)
+  }
 }
 
 // Keep pure so settings preview can compose the same theme without PaneManager. baseTheme is the resolved palette
@@ -62,11 +94,7 @@ export function composeActiveTerminalTheme(
   let theme: ITheme = {
     overviewRulerBorder: 'transparent',
     ...(foreground && isHexColor(foreground)
-      ? {
-          scrollbarSliderBackground: hexToRgba(foreground, 0.35),
-          scrollbarSliderHoverBackground: hexToRgba(foreground, 0.55),
-          scrollbarSliderActiveBackground: hexToRgba(foreground, 0.7)
-        }
+      ? foregroundSliderColors(foreground, baseTheme.background)
       : {}),
     ...baseTheme
   }
