@@ -15,6 +15,7 @@ import { useAppStore } from '@/store'
 import { makeTab, makeUnifiedTab, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
 import * as presentation from '@/lib/program-status/agent-row-presentation'
 import * as worktreeStatus from '@/lib/worktree-status'
+import * as sessionTime from '@/components/right-sidebar/ai-vault-session-time'
 import { readStoreListenerCount } from '@/store/store-listener-census'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { emptyCrew } from '../../../../shared/orchestration-crew'
@@ -33,7 +34,13 @@ function row(id = 0): OrchestrationCrewRow {
     status: 'done',
     openTarget: { kind: 'terminal', handle: `term_${id}` },
     sendAddress: `dispatch:worker-${id}`,
-    task: { title: `Keep task ${id}`, state: 'active' }
+    task: { title: `Keep task ${id}`, state: 'active' },
+    latest: {
+      direction: 'from',
+      preview: 'Reported',
+      at: new Date(1_000_000).toISOString(),
+      sequence: id
+    }
   }
 }
 function panel(rows: OrchestrationCrewRow[], target: RuntimeClientTarget = local) {
@@ -85,7 +92,7 @@ it('groups the closed tab and shows the row by the live terminal state, with a q
   expect(within(body).queryByRole('img', { name: 'Working' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Collapse orchestration panel' }))
   expect(
-    screen.getByRole('button', { name: 'Show orchestration: 1 worker, 1 needs attention' })
+    screen.getByRole('button', { name: 'Show orchestration: 1 worker, 1 needs you' })
   ).toBeInTheDocument()
 })
 
@@ -144,6 +151,8 @@ it('keeps imported, missing, dispatch and failed-task peers on the Crew snapshot
 it.each([10, 100])(
   'resolves %i Crew rows under one store subscription and re-renders only the changed row',
   async (n) => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(2_000_000)
     let visits = 0
     const other = status(n, 'remote')
     const entries = Object.fromEntries(
@@ -215,6 +224,14 @@ it.each([10, 100])(
     expect(labels).toHaveBeenCalled()
     expect(new Set(labels.mock.calls.map(([value]) => value))).toEqual(new Set(['done']))
     expect(screen.getAllByRole('img', { name: 'Done' })).toHaveLength(1)
+    // One shared 30s tick re-renders only the time labels, not the rows.
+    const ages = vi.spyOn(sessionTime, 'formatTimeAgo')
+    labels.mockClear()
+    expect(screen.getAllByText('16m ago')).toHaveLength(n)
+    act(() => vi.advanceTimersByTime(30_000))
+    expect(ages).toHaveBeenCalledTimes(n)
+    expect(labels).not.toHaveBeenCalled()
+    expect(screen.getAllByText('17m ago')).toHaveLength(n)
     mounted.unmount()
     expect(readStoreListenerCount()).toBe(listeners)
   }

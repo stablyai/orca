@@ -20659,6 +20659,8 @@
       "collapse": "Collapse orchestration panel",
       "show": "Show orchestration: {{counts}}",
       "summary": "Orchestration: {{counts}}",
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you",
       "waitingPrefix": "Waiting for you · ",
       "noTask": "No shared task",
       "open": "Open {{name}}",
