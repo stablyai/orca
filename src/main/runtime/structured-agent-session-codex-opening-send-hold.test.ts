@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from '../codex/codex-scripted-child.test-fixture'
 // Drive the real host/journal/adapter and client projection with fake Codex 0.157; sends behind an unopened turn wait to steer into it.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -224,6 +225,9 @@ beforeEach(async () => {
       notify: () => {},
       respond: () => {},
       respondWithError: () => {},
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => {
         if (failingCloses > 0) {
           failingCloses -= 1

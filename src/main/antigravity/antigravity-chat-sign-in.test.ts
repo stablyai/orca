@@ -11,7 +11,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
-import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
+import { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../acp/acp-launch-specs'
 import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
@@ -68,7 +68,7 @@ afterEach(async () => {
   await Promise.all(folders.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 
-function fakeServer(agent: AcpScriptedAgent, stderr = new PassThrough()) {
+function fakeServer(agent: AcpScriptedAgent, stderr = new PassThrough(), exitOnFinish = true) {
   agent.on('initialize', (frame) => agent.reply(frame, { protocolVersion: 1 }))
   const child = Object.assign(createFakePipedChild(), {
     pid: 9_999_998,
@@ -77,10 +77,12 @@ function fakeServer(agent: AcpScriptedAgent, stderr = new PassThrough()) {
     stderr,
     kill: vi.fn(() => true)
   })
-  child.stdin.once('finish', () => {
-    child.emit('exit', 0, null)
-    child.stdout.end()
-  })
+  if (exitOnFinish) {
+    child.stdin.once('finish', () => {
+      child.emit('exit', 0, null)
+      child.stdout.end()
+    })
+  }
   return child
 }
 
@@ -100,6 +102,7 @@ async function signInAgainst(
     metaCwd?: string
     sessionResult?: Record<string, unknown>
     realLaunchSources?: boolean
+    keepRootLive?: boolean
   } = {}
 ) {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
@@ -124,7 +127,7 @@ async function signInAgainst(
       agent.reply(frame, { ...options.sessionResult, sessionId: SESSION })
     })
   })
-  const child = fakeServer(agent, stderr)
+  const child = fakeServer(agent, stderr, !options.keepRootLive)
   // Satisfy runtime resolution from PATH without downloading.
   const bin = join(stateDirectory, 'bin')
   await mkdir(bin)
@@ -670,5 +673,85 @@ it('retires a cold checking producer on effective Refresh while valid sign-in st
     if (shown && ['starting', 'waiting', 'verifying'].includes(shown.phase)) {
       await cancelAntigravityChatSignIn(DESKTOP, run.flowId)
     }
+  }
+})
+
+it('reports accepted sign-in receive failure after release and completes a same-account successor chat', async () => {
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const sourceError = Object.assign(new Error('sign-in read EIO'), { code: 'EIO' })
+  vi.mocked(terminateProviderProcessTree).mockResolvedValue({ tree: null, killDelivered: true })
+  let original: AcpAgentConnection | undefined
+  const old = await signInAgainst(printed(GOOGLE_LINK), {
+    keepRootLive: true,
+    configure: (connection) => {
+      original = connection
+    }
+  })
+  try {
+    await stateAfter(old.flowId, 'starting')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    old.child.stdout.emit('error', sourceError)
+    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.waitFor(() =>
+      expect(readAntigravityChatSignInStatus(DESKTOP).flow).toMatchObject({ phase: 'failed' })
+    )
+    if (!original) {
+      throw new Error('no original connection')
+    }
+    await expect(original.close()).rejects.toBe(sourceError)
+    expect(await original.closeOutcome()).toMatchObject({
+      accepted: true,
+      physical: { root: 'live', killDelivered: true },
+      receive: { state: 'failed', error: sourceError }
+    })
+    expect(warning.mock.calls.some((args) => args.includes(sourceError))).toBe(true)
+    expect(old.child.exitCode).toBeNull()
+    vi.useRealTimers()
+    const nextAgent = new AcpScriptedAgent()
+    const nextChild = fakeServer(nextAgent)
+    nextAgent.on('authenticate', (frame) => nextAgent.reply(frame, {}))
+    nextAgent.on('session/new', (frame) => nextAgent.reply(frame, { sessionId: SESSION }))
+    old.host.connect.mockImplementation((launch, options) =>
+      createAcpAgentConnection(launch, options, () => nextChild)
+    )
+    const next = startAntigravityChatSignIn(old.host, DESKTOP)
+    await vi.waitFor(() =>
+      expect(readAntigravityChatSignInStatus(DESKTOP).flow).toMatchObject({
+        flowId: next.flowId,
+        phase: 'signedIn'
+      })
+    )
+    expect(old.host.connect).toHaveBeenCalledTimes(2)
+    const launch = old.host.connect.mock.calls[1][0]
+    const chatAgent = new AcpScriptedAgent()
+    const chatChild = fakeServer(chatAgent)
+    chatAgent.on('session/new', (frame) => chatAgent.reply(frame, { sessionId: SESSION }))
+    const body = 'Complete original response'
+    chatAgent.on('session/prompt', (frame) => {
+      chatAgent.notify('session/update', {
+        sessionId: SESSION,
+        update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: body } }
+      })
+      chatAgent.reply(frame, { stopReason: 'end_turn' })
+    })
+    const chat = createAcpAgentConnection(launch, {}, () => chatChild)
+    const events: unknown[] = []
+    const unsubscribe = chat.subscribe((event) => events.push(event))
+    try {
+      await chat.start({ cwd: launch.cwd ?? '.', mcpServers: [] })
+      expect(
+        await chat.prompt([{ type: 'text', text: 'Healthy successor request' }])
+      ).toMatchObject({ stopReason: 'end_turn' })
+      expect(JSON.stringify(events)).toContain(body)
+      expect(chatAgent.frames.filter((frame) => frame.method === 'session/prompt')).toHaveLength(1)
+    } finally {
+      unsubscribe()
+      await chat.close()
+    }
+  } finally {
+    old.child.emit('exit', 0, null)
+    old.child.stdout.end()
+    vi.useRealTimers()
+    vi.mocked(terminateProviderProcessTree).mockResolvedValue('unverifiable')
   }
 })

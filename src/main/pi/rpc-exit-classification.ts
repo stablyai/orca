@@ -1,3 +1,4 @@
+import type { JsonlRpcCloseOutcome } from '../jsonl-rpc/agent-connection'
 import {
   agentSessionFailureFact,
   providerDiagnostic,
@@ -6,6 +7,7 @@ import {
 } from '../../shared/agent-session-failure'
 import {
   AgentSessionAcquisitionExitProvenError,
+  AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
@@ -51,4 +53,36 @@ export function piStartExitError(
   return connection.processless
     ? new AgentSessionAcquisitionExitProvenError(cause)
     : new AgentSessionAcquisitionRootExitObservedError(cause)
+}
+
+export function piCloseReport(outcome: JsonlRpcCloseOutcome, cause?: unknown): Error | undefined {
+  for (const failure of [
+    ...(outcome.receive.state === 'failed' ? [outcome.receive.error] : []),
+    ...(outcome.cleanupError === undefined ? [] : [outcome.cleanupError])
+  ]) {
+    cause =
+      cause === undefined || cause === failure
+        ? failure
+        : new AggregateError(
+            [cause, failure],
+            cause instanceof Error ? cause.message : String(cause)
+          )
+  }
+  if (!outcome.accepted) {
+    return new AgentSessionAcquisitionExitUnprovenError(cause ?? new Error('Pi close unproven'))
+  }
+  if (
+    cause !== undefined ||
+    outcome.physical.root !== 'exited' ||
+    outcome.physical.tree !== 'exited'
+  ) {
+    return (
+      piStartExitError(
+        cause ?? new Error('Pi descendant exit unproven'),
+        outcome,
+        outcome.physical
+      ) ?? undefined
+    )
+  }
+  return undefined
 }

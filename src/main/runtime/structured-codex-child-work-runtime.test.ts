@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from '../codex/codex-scripted-child.test-fixture'
 // The production runtime hands a Codex session's child work to the status sink, under the address
 // the session's own row landed under, and ends it with the provider.
 
@@ -72,6 +73,9 @@ describe('structured Codex child work through the production runtime', () => {
         notify: () => {},
         respond: () => {},
         respondWithError: () => {},
+        closeOutcome() {
+          return scriptedCodexCloseOutcome(this)
+        },
         close: async () => true
       }
       return connection

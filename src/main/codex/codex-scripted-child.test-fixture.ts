@@ -143,6 +143,9 @@ export const codexScriptedChild = (
       get closeResult() {
         return ended ? closeEvidence : undefined
       },
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => {
         if (!ended) {
           ended = true
@@ -193,4 +196,33 @@ export const codexScriptedChild = (
     resumes: () => resumed,
     closes: () => closed
   }
+}
+
+/** Preserve configured close behavior and share its accepted receipt like a real connection. */
+export function scriptedCodexCloseOutcome(
+  connection: Pick<CodexAppServerConnection, 'close' | 'closeResult' | 'closeOutcome'>
+): ReturnType<CodexAppServerConnection['closeOutcome']> {
+  const original = connection.closeOutcome
+  const current = connection.close().then((accepted) => ({
+    accepted,
+    physical: connection.closeResult ?? {
+      root: accepted ? ('exited' as const) : ('live' as const),
+      tree: accepted ? ('exited' as const) : null
+    },
+    processless: false,
+    receive: accepted ? { state: 'complete' as const } : { state: 'retained' as const }
+  }))
+  const shared = () => current
+  connection.closeOutcome = shared
+  const retry = (): void => {
+    if (connection.closeOutcome === shared) {
+      connection.closeOutcome = original
+    }
+  }
+  void current.then((outcome) => {
+    if (!outcome.accepted) {
+      retry()
+    }
+  }, retry)
+  return current
 }

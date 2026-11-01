@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { expect, vi } from 'vitest'
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
@@ -68,6 +69,9 @@ export function fakeCodexAppServer(routes: Record<string, CodexTestRoute> = {}):
       notify: () => {},
       respond: () => {},
       respondWithError: () => {},
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => {
         connection.closed = true
         return true

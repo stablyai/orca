@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
@@ -26,6 +27,9 @@ describe('Codex failed-acquisition exit proof', () => {
       notify: () => undefined,
       respond: () => undefined,
       respondWithError: () => undefined,
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close
     }
     const handshakeError = Object.assign(new Error('initialize failed'), {
@@ -68,6 +72,9 @@ describe('Codex failed-acquisition exit proof', () => {
       notify: () => undefined,
       respond: () => undefined,
       respondWithError: () => undefined,
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close
     }
     const adapter = new CodexStructuredSessionAdapter({
@@ -103,6 +110,9 @@ describe('Codex failed-acquisition exit proof', () => {
       notify: () => undefined,
       respond: () => undefined,
       respondWithError: () => undefined,
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close
     }
     const adapter = new CodexStructuredSessionAdapter({
@@ -141,6 +151,9 @@ describe('Codex failed-acquisition exit proof', () => {
       notify: () => undefined,
       respond: () => undefined,
       respondWithError: () => undefined,
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close
     }
     const adapter = new CodexStructuredSessionAdapter({
@@ -168,6 +181,8 @@ describe('Codex failed-acquisition exit proof', () => {
       'codex structured session shutdown could not prove every child stopped'
     )
     await expect(acquiring).rejects.toThrow('agent_session_acquisition_exit_unproven')
+    expect(close).toHaveBeenCalledTimes(3)
+    await expect(adapter.releaseAcquisition({ sessionId: 'session-1' })).resolves.toBe(false)
     expect(close).toHaveBeenCalledTimes(4)
   })
 })

@@ -173,20 +173,21 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   async dispatch(input: Parameters<SessionAdapter['dispatch']>[0]): Promise<DispatchOutcome> {
     const lost = this.children.sessions.get(input.sessionId)
-    if (lost && (lost.journalClosed !== null || lost.closeRequested)) {
+    if (lost && (lost.journalClosed !== null || lost.closeRequested || lost.connection.closed)) {
       // Protocol loss prevents dispatch even before exit is proven.
       return rejectedAcpDispatch(lost)
     }
     const session = this.live(input.sessionId)
+    const current = () =>
+      this.children.sessions.get(input.sessionId) === session &&
+      session.journalClosed === null &&
+      !session.closeRequested &&
+      !session.connection.closed
     const prompt = await acpDispatchPrompt(input.body, session)
     if (!Array.isArray(prompt)) {
       return { state: 'rejected', ...prompt }
     }
-    if (
-      this.children.sessions.get(input.sessionId) !== session ||
-      session.journalClosed !== null ||
-      session.closeRequested
-    ) {
+    if (!current()) {
       // Attachment reads may outlive the child; this send never reached it.
       return rejectedAcpDispatch(session)
     }
@@ -197,10 +198,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       session,
       input.executionOptions,
       (key, value) => this.setOption({ sessionId, fence, key, value, signal }),
-      () =>
-        this.children.sessions.get(input.sessionId) === session &&
-        session.journalClosed === null &&
-        !session.closeRequested,
+      current,
       signal
     )
     if (!optionsApplied) {
@@ -209,6 +207,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     input.signal?.throwIfAborted()
     await input.beforeDispatch?.()
     input.signal?.throwIfAborted()
+    if (!current()) {
+      return rejectedAcpDispatch(session)
+    }
     session.turns.dispatch({
       clientMessageId: input.clientMessageId,
       prompt,
@@ -293,12 +294,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return session?.acquisitionGeneration === generation && !session.connection.exited
   }
 
-  acknowledgeSessionRelease = (sessionId: string): void => {
-    const session = this.children.sessions.get(sessionId)
-    if (session?.ended) {
-      this.children.sessions.delete(sessionId)
-    }
-  }
+  acknowledgeSessionRelease = (sessionId: string): void =>
+    this.children.acknowledgeSessionRelease(sessionId)
 
   // Until startup opens the session, the host retains responsibility for held sends.
   heldSends = (sessionId: string): ReadonlySet<string> | undefined =>

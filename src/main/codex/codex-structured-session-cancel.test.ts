@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -102,6 +103,9 @@ function fakeCodex(): {
       notify: () => {},
       respond: () => {},
       respondWithError: () => {},
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => {
         connection.closed = true
         return true

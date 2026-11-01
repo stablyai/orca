@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from '../codex/codex-scripted-child.test-fixture'
 // Drive the real host/journal/adapter with fake Codex: interrupt answers precede turn/completed, so Stop settlement must prevent a transient failed turn.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -201,6 +202,9 @@ beforeEach(async () => {
       notify: () => {},
       respond: () => {},
       respondWithError: () => {},
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => true
     }
     return connection

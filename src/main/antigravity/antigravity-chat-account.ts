@@ -1,6 +1,7 @@
 import type {
   AntigravityChatAuth,
-  AntigravityChatSignInState
+  AntigravityChatSignInState,
+  AntigravityChatSignInStatus
 } from '../../shared/antigravity-account-types'
 import { hostFolderAccountBinding } from '../acp/acp-account-binding'
 import type { AcpAgentConnection } from '../acp/acp-agent-connection'
@@ -10,7 +11,9 @@ import { antigravityBrowserHelperWorks } from './antigravity-browser-helper'
 import { AcpLaunchGate } from '../acp/acp-launch-gate'
 
 type SignInOwner = Pick<AcpAgentConnection, 'close' | 'closeOutcome' | 'onExit' | 'exited'>
-const retained = new ProviderAcquisitionStarts<SignInOwner>()
+const retained = new ProviderAcquisitionStarts<SignInOwner>(
+  async (connection) => (await connection.closeOutcome()).accepted
+)
 const folder = hostFolderAccountBinding('GEMINI_HOME', 'antigravity-chat', ['antigravity-acp'])
 
 export const ANTIGRAVITY_LAUNCH_GATE = new AcpLaunchGate('Antigravity')
@@ -46,10 +49,24 @@ export async function closeAntigravitySignInOwner(
   home: string,
   connection: SignInOwner
 ): Promise<void> {
-  if (!(await connection.close().catch(() => false)) && !connection.exited) {
+  let outcome
+  try {
+    outcome = await connection.closeOutcome()
+  } catch (error) {
+    retained.retainFailed(home, connection)
+    ANTIGRAVITY_LAUNCH_GATE.retain(connection)
+    throw error
+  }
+  if (!outcome.accepted) {
     retained.retainFailed(home, connection)
     ANTIGRAVITY_LAUNCH_GATE.retain(connection)
     throw new AntigravitySignInCloseUnprovenError()
+  }
+  if (outcome.receive.state === 'failed') {
+    throw outcome.receive.error
+  }
+  if (outcome.cleanupError !== undefined) {
+    throw outcome.cleanupError
   }
 }
 
@@ -71,4 +88,43 @@ export const antigravityChatAccount = {
     }
     await folder.prepare?.(env)
   }
+}
+
+/** A teardown diagnostic must not replace the initiating sign-in error and its mapping. */
+export async function withAntigravitySignInOwner(
+  home: string,
+  connection: SignInOwner,
+  work: () => Promise<void>
+): Promise<void> {
+  let initiating: { error: unknown } | undefined
+  try {
+    await work()
+  } catch (error) {
+    initiating = { error }
+  }
+  try {
+    await closeAntigravitySignInOwner(home, connection)
+  } catch (cleanupError) {
+    if (cleanupError instanceof AntigravitySignInCloseUnprovenError || !initiating) {
+      throw cleanupError
+    }
+    if (cleanupError !== initiating.error) {
+      console.warn('[antigravity] sign-in cleanup failed:', cleanupError)
+    }
+  }
+  if (initiating) {
+    throw initiating.error
+  }
+}
+
+/** Hide the flow ID and sign-in link from other clients. */
+export function readAntigravityChatSignInStatus(owner: string): AntigravityChatSignInStatus {
+  const { value, revision } = antigravityChatSignIn.get()
+  if (!value.flow) {
+    return { revision, auth: value.auth, flow: null }
+  }
+  const { owner: starter, ...state } = value.flow
+  const { phase, error } = state
+  const flow = starter === owner ? state : { flowId: null, phase, ...(error ? { error } : {}) }
+  return { revision, auth: value.auth, flow }
 }

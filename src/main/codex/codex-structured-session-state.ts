@@ -12,7 +12,10 @@ import type { AgentJournalDispatchRejection } from '../../shared/agent-session-f
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from './codex-app-server-connection'
-import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
+import {
+  type CodexAcquisitionWindow,
+  createCodexAcquisitionAttempt
+} from './codex-structured-acquisition-window'
 import {
   createCodexTurnOpenWaits,
   type CodexTurnOpenWaits
@@ -239,19 +242,7 @@ export type CodexAcquisitionAttempt = {
   finish: () => void
 }
 
-export function createCodexAcquisitionAttempt(): CodexAcquisitionAttempt {
-  let finish = (): void => {}
-  const finished = new Promise<void>((resolve) => {
-    finish = resolve
-  })
-  return {
-    window: new CodexAcquisitionWindow(),
-    cancelled: false,
-    exitProven: false,
-    finished,
-    finish
-  }
-}
+export { createCodexAcquisitionAttempt } from './codex-structured-acquisition-window'
 
 export class CodexAcquisitionRegistry {
   private readonly attempts = new Map<string, CodexAcquisitionAttempt>()
@@ -300,13 +291,13 @@ export class CodexAcquisitionRegistry {
     }
   }
 
-  async closeFailedAttempt(sessionId: string, attempt: CodexAcquisitionAttempt): Promise<boolean> {
-    const stopped = (await attempt.window.connection?.close()) ?? true
-    if (stopped) {
+  async closeFailedAttempt(sessionId: string, attempt: CodexAcquisitionAttempt) {
+    const outcome = await attempt.window.connection?.closeOutcome()
+    if (!outcome || outcome.accepted) {
       attempt.exitProven = true
       this.deleteIfCurrent(sessionId, attempt)
     }
-    return stopped
+    return outcome
   }
 
   sessionIds(): IterableIterator<string> {
@@ -325,12 +316,23 @@ export async function cancelCodexAcquisitionAttempt(
   if (!attempt) {
     return true
   }
+  const original = attempt.window.connection
+  const originalView = original
+    ? { close: async () => (await original.closeOutcome()).accepted }
+    : null
   const closed = await cancelProcessAcquisition({
     cancel: () => {
       attempt.cancelled = true
       attempt.requestedClose = requestedClose
     },
-    connection: () => attempt.window.connection,
+    connection: () => {
+      const connection = attempt.window.connection
+      return connection === original
+        ? originalView
+        : connection
+          ? { close: async () => (await connection.closeOutcome()).accepted }
+          : null
+    },
     exitProven: () => attempt.exitProven,
     finished: attempt.finished
   })

@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexTurnOpenWaits } from './codex-structured-turn-open-wait'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -46,6 +47,9 @@ describe('requested-close durable turn timing', () => {
           notify: () => {},
           respond: () => {},
           respondWithError: () => {},
+          closeOutcome() {
+            return scriptedCodexCloseOutcome(this)
+          },
           close: async () => true
         },
         backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),

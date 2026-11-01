@@ -1,7 +1,11 @@
+import {
+  claudeChildClosePolicy,
+  claudeChildCloseProven
+} from '../claude/claude-child-exit-proof-ladder'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { PassThrough } from 'node:stream'
+import { Duplex, PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
@@ -388,3 +392,70 @@ describe('managed provider process', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 })
+
+it.each(['fresh', 'known'] as const)(
+  'retires the %s accepted Claude writer report while strict proof remains retryable',
+  async (path) => {
+    vi.useFakeTimers()
+    const fixture = fakeChild()
+    const incoming = new PassThrough(),
+      outgoing = new PassThrough()
+    outgoing.resume()
+    const channel = Duplex.from({ readable: incoming, writable: outgoing })
+    fixture.child.stdio[3] = channel
+    const managed = spawnManagedProviderProcess(
+      { command: 'agent', args: [] },
+      {
+        spawnImpl: fixture.spawn,
+        platform: 'darwin',
+        site: 'writer-report-test',
+        acceptClose: claudeChildCloseProven,
+        policy: claudeChildClosePolicy
+      }
+    )
+    let killed = false
+    const tree = {
+      capture: vi.fn(async () => {}),
+      refresh: async () => {},
+      reap: async () => {
+        killed = true
+        return 'unverifiable' as const
+      },
+      get treeVerdict() {
+        return 'unverifiable' as const
+      },
+      get forcedReapAttempted() {
+        return killed
+      },
+      get killDelivered() {
+        return killed
+      }
+    }
+    try {
+      incoming.write('{"kind":"spawned","pgid":')
+      if (path === 'known') {
+        const refused = managed.close(tree)
+        await vi.advanceTimersByTimeAsync(60_000)
+        expect(claudeChildCloseProven(await refused)).toBe(false)
+        expect(channel.destroyed).toBe(false)
+      }
+      const closing = managed.closeWriter(tree)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(await closing).toMatchObject({ root: 'live', killDelivered: true })
+      await managed.launchReport.closed
+      expect(channel.destroyed).toBe(true)
+      expect(channel.listenerCount('data')).toBe(0)
+      const before = tree.capture.mock.calls.length
+      const strictRetry = managed.close(tree)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(claudeChildCloseProven(await strictRetry)).toBe(false)
+      expect(tree.capture).toHaveBeenCalledTimes(before + 1)
+      expect(managed.rootExitObserved).toBe(false)
+    } finally {
+      managed.launchReport.retire()
+      incoming.destroy()
+      outgoing.destroy()
+      channel.destroy()
+    }
+  }
+)

@@ -1,3 +1,5 @@
+import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
 import type {
   JsonlRpcAgentConnection,
   JsonlRpcAgentConnectionOptions
@@ -15,6 +17,7 @@ export type PiRpcConnection = Pick<
   | 'request'
   | 'send'
   | 'close'
+  | 'closeOutcome'
   | 'pauseReading'
   | 'resumeReading'
   | 'pid'
@@ -38,4 +41,11 @@ export type PiRpcSessionDeps = PiHistoryCaptureDeps & {
     outcome: AgentSessionDispatchOutcome
   }) => void
   logger: StructuredAgentSessionLogger
+}
+
+export type PiRpcSessionAdapterDeps = PiRpcSessionDeps & {
+  resolveLaunch: (input: {
+    [K in 'identity' | 'spawnToken']: StructuredAgentSessionAcquireInput[K]
+  }) => Promise<PiRpcResolvedLaunch>
+  readProcessStartTime?: (pid: number) => Promise<number | null>
 }

@@ -1,3 +1,4 @@
+import type { ProviderReceiveDisposition } from '../../provider-process/provider-source-completion'
 export type CodexAppServerServerRequest = {
   id: number | string
   method: string
@@ -15,6 +16,14 @@ export type CodexAppServerConnectionHandlers = {
   ) => void | Promise<void>
   /** Awaited once the child has a pid and before the handshake; a rejection reaps the child. */
   onSpawned?: (pid: number) => Promise<void>
+}
+
+export type CodexCloseOutcome = {
+  accepted: boolean
+  physical: ProviderProcessCloseResult
+  processless: boolean
+  receive: ProviderReceiveDisposition
+  cleanupError?: unknown
 }
 
 export type CodexAppServerConnection = {
@@ -39,6 +48,7 @@ export type CodexAppServerConnection = {
   resumeReading?: () => void
   /** Resolves true only after the child emitted `exit` or `close`; false is unproven. */
   close: () => Promise<boolean>
+  closeOutcome: () => Promise<CodexCloseOutcome>
   /** The last close's separate root and workload observations. */
   readonly closeResult?: ProviderProcessCloseResult | null
   /** The root exited, but the forced kill of its process tree could not prove the tree gone. */

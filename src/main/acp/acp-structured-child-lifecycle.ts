@@ -57,6 +57,13 @@ export class AcpStructuredChildren {
       (pending() || lane.hasPendingDiagnostic(input.clientMessageId))
   }
 
+  acknowledgeSessionRelease(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session?.ended) {
+      this.sessions.delete(sessionId)
+    }
+  }
+
   stopAfterFailure(sessionId: string): void {
     void this.stop(sessionId, false).catch((error: unknown) => {
       const logger = neverThrowingStructuredAgentSessionLogger(

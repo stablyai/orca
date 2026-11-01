@@ -1,3 +1,4 @@
+import { createCodexConnectionClose, codexCloseReport } from './app-server/codex-app-server-close'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../provider-process/managed-provider-process'
@@ -216,19 +217,17 @@ async function connectCodexAppServer(
     }
   }
 
-  function close(): Promise<boolean> {
-    closing ||= managed.rootVerdict !== 'exited'
-    return managed.close(tree).then(async (result) => {
-      if (result.root === 'exited') {
-        handleUnexpectedEnd()
-      }
-      await finishOutput()
-      if (result.root === 'exited') {
-        await exitPublication
-      }
-      return result.root === 'exited' || result.killDelivered === true
-    })
-  }
+  const completion = createCodexConnectionClose({
+    managed,
+    tree,
+    begin: () => {
+      closing ||= managed.rootVerdict !== 'exited'
+    },
+    inputEnding: () => recordReader?.ending === true,
+    finishOutput,
+    observeRootExit: () => handleUnexpectedEnd(),
+    exitPublication: () => exitPublication
+  })
 
   const connection: CodexAppServerConnection = {
     get pid() {
@@ -253,7 +252,7 @@ async function connectCodexAppServer(
     respondWithError: (id, code, message) => writeResponse({ id, error: { code, message } }),
     pauseReading: recordReader.pause,
     resumeReading: recordReader.resume,
-    close
+    ...completion
   }
 
   let handshaking = false
@@ -268,14 +267,25 @@ async function connectCodexAppServer(
       await initializeCodexAppServerConnection(connection, 15_000)
     }
   } catch (error) {
-    if ((await close()) !== true) {
+    let outcome
+    try {
+      outcome = await completion.closeOutcome()
+    } catch (cleanupError) {
+      throw new CodexAppServerHandshakeExitUnprovenError(
+        connection,
+        new AggregateError([error, cleanupError], 'codex connection cleanup failed')
+      )
+    }
+    if (!outcome.accepted) {
       throw new CodexAppServerHandshakeExitUnprovenError(connection, error)
     }
-    throw !handshaking ||
+    const original =
+      !handshaking ||
       error instanceof CodexAppServerUnsupportedError ||
       error instanceof CodexAppServerTimeoutError
-      ? error
-      : buildExitError(error instanceof Error ? error : new Error(String(error)))
+        ? error
+        : buildExitError(error instanceof Error ? error : new Error(String(error)))
+    throw codexCloseReport(outcome, original) ?? original
   }
   return connection
 }

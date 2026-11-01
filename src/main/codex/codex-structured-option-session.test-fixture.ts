@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
@@ -14,6 +15,9 @@ export function optionSession(request: CodexAppServerConnection['request']): Cod
       notify: () => {},
       respond: () => {},
       respondWithError: () => {},
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => true
     },
     backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),

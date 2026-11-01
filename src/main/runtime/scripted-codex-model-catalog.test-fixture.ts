@@ -29,3 +29,22 @@ export const scriptedCodexCatalogSession: NonNullable<
     },
     notify: () => {}
   })
+
+export function scriptedCodexRuntimeModels() {
+  return {
+    data: [
+      {
+        model: 'gpt-live',
+        displayName: 'GPT Live',
+        hidden: false,
+        supportedReasoningEfforts: [
+          { reasoningEffort: 'medium', description: 'Balanced' },
+          { reasoningEffort: 'high', description: 'Deep reasoning' }
+        ],
+        defaultReasoningEffort: 'medium',
+        isDefault: true
+      }
+    ],
+    nextCursor: null
+  }
+}

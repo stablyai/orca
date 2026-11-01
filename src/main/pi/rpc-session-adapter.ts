@@ -1,9 +1,9 @@
+import type { PiRpcSessionAdapterDeps } from './rpc-session-contract'
 import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/structured-agent-session-provider-exit-proof'
 import { randomUUID } from 'node:crypto'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
   AgentSessionPreSpawnError,
-  AgentSessionAcquisitionRootExitObservedError,
   AgentSessionAcquisitionExitUnprovenError,
   launchPreparationFailure,
   type AgentSessionAcquisition,
@@ -12,26 +12,22 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { providerSpawnedProcessIdentity } from '../provider-process/provider-spawned-process-identity'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
-import { piStartExitError } from './rpc-exit-classification'
+import { piCloseReport } from './rpc-exit-classification'
 import { compactPiRpcSession } from './rpc-compaction'
 import { buildPiRpcLaunch } from './rpc-launch'
-import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
-import { PiRpcSession, type PiRpcSessionDeps, type PiRpcConnection } from './rpc-session'
+import { PiRpcSession, type PiRpcConnection } from './rpc-session'
 import { dispatchPiRpcMessage } from './rpc-message-dispatch'
 import { applyPiRpcSessionOption } from './rpc-options'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 
-export type PiRpcSessionAdapterDeps = PiRpcSessionDeps & {
-  resolveLaunch: (input: {
-    [K in 'identity' | 'spawnToken']: StructuredAgentSessionAcquireInput[K]
-  }) => Promise<PiRpcResolvedLaunch>
-  readProcessStartTime?: (pid: number) => Promise<number | null>
-}
+export type { PiRpcSessionAdapterDeps } from './rpc-session-contract'
 
 export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, PiRpcSession>()
   private readonly acquiring = new Set<string>()
-  private readonly starts = new ProviderAcquisitionStarts<PiRpcConnection>()
+  private readonly starts = new ProviderAcquisitionStarts<PiRpcConnection>(
+    async (connection) => (await connection.closeOutcome()).accepted
+  )
   private readonly retiring = new Set<Promise<void>>()
   constructor(private readonly deps: PiRpcSessionAdapterDeps) {}
 
@@ -105,13 +101,21 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
           ? error
           : new AgentSessionPreSpawnError(error)
       }
-      const result = await session.close(false).catch(() => null)
-      const exited = piStartExitError(error, session.connection, result)
-      if (exited) {
-        throw exited
+      let outcome
+      try {
+        outcome = await session.close(false)
+      } catch (cleanupError) {
+        this.starts.retainFailed(id, session.connection)
+        throw new AgentSessionAcquisitionExitUnprovenError(
+          new AggregateError([error, cleanupError], 'Pi acquisition cleanup failed')
+        )
       }
-      this.starts.retainFailed(id, session.connection)
-      throw new AgentSessionAcquisitionExitUnprovenError(error)
+      if (!outcome.accepted) {
+        this.starts.retainFailed(id, session.connection)
+      } else {
+        this.acknowledgeSessionRelease(id)
+      }
+      throw piCloseReport(outcome, error)
     } finally {
       this.starts.end(attempt)
       this.acquiring.delete(id)
@@ -239,14 +243,13 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       return true
     }
     const result = await session.close(requested)
-    if (result.root !== 'exited' && !result.killDelivered) {
+    if (!result.accepted) {
       return false
     }
-    if (result.root !== 'exited' || result.tree !== 'exited') {
-      throw new AgentSessionAcquisitionRootExitObservedError(
-        new Error('Pi writer stopped without descendant exit proof'),
-        result.root === 'exited' ? 'exit-observed' : 'kill-delivered'
-      )
+    this.acknowledgeSessionRelease(id)
+    const report = piCloseReport(result)
+    if (report) {
+      throw report
     }
     return true
   }

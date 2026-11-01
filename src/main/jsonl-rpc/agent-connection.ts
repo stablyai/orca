@@ -1,3 +1,4 @@
+import type { ProviderReceiveDisposition } from '../provider-process/provider-source-completion'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
@@ -21,6 +22,15 @@ import {
 import type { JsonlRpcRequestOptions } from './peer-oversized-record'
 import { resolveJsonlRpcPeerOptions, type JsonlRpcPeerOptions } from './peer-limits'
 
+export type JsonlRpcCloseOutcome = {
+  accepted: boolean
+  physical: ProviderProcessCloseResult
+  processless: boolean
+  spawnAbsence: ProviderSpawnAbsence | null
+  receive: ProviderReceiveDisposition
+  cleanupError?: unknown
+}
+
 export type JsonlRpcAgentConnectionOptions = JsonlRpcPeerHandlers & {
   peer?: JsonlRpcPeerOptions
   onExit?: (error: Error, context: { expected: boolean; exit: ProviderProcessExit }) => void
@@ -32,6 +42,8 @@ export class JsonlRpcAgentConnection {
   private readonly peer: JsonlRpcPeer
   private closing = false
   private inputDone?: Promise<void>
+  private receiveResult?: Promise<ProviderReceiveDisposition>
+  private closeAttempt?: Promise<JsonlRpcCloseOutcome>
   private streamExitTimer?: ReturnType<typeof setTimeout>
 
   constructor(
@@ -166,15 +178,55 @@ export class JsonlRpcAgentConnection {
   }
 
   /** The dialect sends abort before the supervisor closes the process connection. */
-  close(error?: Error): Promise<ProviderProcessCloseResult> {
+  closeOutcome(error?: Error): Promise<JsonlRpcCloseOutcome> {
+    if (this.closeAttempt) {
+      return this.closeAttempt
+    }
     this.closing = true
     clearTimeout(this.streamExitTimer)
     this.peer.beginInputCompletion(error ?? new JsonlRpcStreamClosedError())
-    return this.managed.close().then(async (result) => {
-      await (this.inputDone ?? this.peer.finishOnInputEnd(error ?? new JsonlRpcStreamClosedError()))
-      this.peer.close(error)
-      return result
+    const attempt = this.managed.close().then(async (physical): Promise<JsonlRpcCloseOutcome> => {
+      const accepted = physical.root === 'exited' || physical.killDelivered === true
+      const processless = this.managed.processless
+      const spawnAbsence = this.managed.spawnAbsence
+      let receive: ProviderReceiveDisposition = { state: 'retained' }
+      if (accepted || this.peer.inputEnding) {
+        this.receiveResult ??= (
+          this.inputDone ?? this.peer.finishOnInputEnd(error ?? new JsonlRpcStreamClosedError())
+        ).then(
+          () => ({ state: 'complete' as const }),
+          (error: unknown) => ({ state: 'failed' as const, error })
+        )
+        receive = await this.receiveResult
+        this.peer.close(error)
+      }
+      return { accepted, physical, processless, spawnAbsence, receive }
     })
+    this.closeAttempt = attempt
+    void attempt.then(
+      (outcome) => {
+        if (!outcome.accepted && this.closeAttempt === attempt) {
+          this.closeAttempt = undefined
+        }
+      },
+      () => {
+        if (this.closeAttempt === attempt) {
+          this.closeAttempt = undefined
+        }
+      }
+    )
+    return attempt
+  }
+
+  async close(error?: Error): Promise<ProviderProcessCloseResult> {
+    const outcome = await this.closeOutcome(error)
+    if (outcome.receive.state === 'failed') {
+      throw outcome.receive.error
+    }
+    if (outcome.cleanupError !== undefined) {
+      throw outcome.cleanupError
+    }
+    return outcome.physical
   }
 
   private readonly onError = (error: Error): void => this.peer.close(error)

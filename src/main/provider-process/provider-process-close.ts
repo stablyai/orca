@@ -56,6 +56,25 @@ export function acceptProviderWriterClose(result: ProviderProcessCloseResult): b
   return result.root === 'exited' || result.killDelivered === true
 }
 
+/** Retire the original report only when this writer operation accepts its result. */
+export function closeProviderWriter(
+  known: ProviderProcessCloseResult | null,
+  close: () => Promise<ProviderProcessCloseResult>,
+  accept: (result: ProviderProcessCloseResult) => boolean,
+  retire: () => void
+): Promise<ProviderProcessCloseResult> {
+  if (known) {
+    retire()
+    return Promise.resolve(known)
+  }
+  return close().then((result) => {
+    if (accept(result) || result.killDelivered === true) {
+      retire()
+    }
+    return result
+  })
+}
+
 /** The supervisor owns the POSIX signal ladder; its wrapper must outlive that ladder. */
 export async function closeProviderProcess(
   input: ProviderProcessCloseInput

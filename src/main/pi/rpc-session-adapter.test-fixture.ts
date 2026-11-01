@@ -72,6 +72,17 @@ export class FakeConnection implements PiRpcConnection {
   async send(frame: JsonlRpcRecord): Promise<void> {
     this.sent.push(frame)
   }
+  async closeOutcome(): ReturnType<PiRpcConnection['closeOutcome']> {
+    const physical = await this.close()
+    return {
+      accepted: physical.root === 'exited' || physical.killDelivered === true,
+      physical,
+      processless: this.processless,
+      spawnAbsence: this.spawnAbsence,
+      receive: { state: 'complete' }
+    }
+  }
+
   async close(): Promise<Awaited<ReturnType<PiRpcConnection['close']>>> {
     this.abortRequest?.()
     this.closed = true

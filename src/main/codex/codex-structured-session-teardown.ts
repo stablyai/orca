@@ -1,5 +1,8 @@
 import type { AgentSessionCloseObserver } from '../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
-import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import {
+  AgentSessionAcquisitionExitProvenError,
+  AgentSessionAcquisitionRootExitObservedError
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import {
   closeAllCodexSessions,
@@ -37,7 +40,7 @@ export class CodexStructuredSessionTeardown {
           this.deps.onEvent,
           this.deps.logger,
           true
-        )
+        ).catch((error: unknown) => this.settledError(sessionId, error))
       )
       if (
         closed &&
@@ -75,7 +78,7 @@ export class CodexStructuredSessionTeardown {
       this.deps.onEvent,
       this.deps.logger,
       false
-    )
+    ).catch((error: unknown) => this.settledError(sessionId, error))
     this.settled(sessionId, closed)
     if (
       closed &&
@@ -111,13 +114,26 @@ export class CodexStructuredSessionTeardown {
       expectedFence: fence,
       expectedAcquisitionGeneration: acquisitionGeneration,
       unexpectedReason: reason
-    }).then((closed) => this.settled(sessionId, closed))
+    }).then(
+      (closed) => this.settled(sessionId, closed),
+      (error: unknown) => this.settledError(sessionId, error)
+    )
   }
 
   closeAll = (): Promise<void> =>
     closeAllCodexSessions(this.deps.sessions, this.deps.acquisitions, (sessionId) =>
       this.close(sessionId)
     )
+
+  private settledError(sessionId: string, error: unknown): never {
+    if (
+      error instanceof AgentSessionAcquisitionRootExitObservedError ||
+      error instanceof AgentSessionAcquisitionExitProvenError
+    ) {
+      this.settled(sessionId, true)
+    }
+    throw error
+  }
 
   private settled(sessionId: string, closed: boolean): boolean {
     if (closed) {

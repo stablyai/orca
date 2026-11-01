@@ -4,10 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type {
-  AntigravityChatSignInState,
-  AntigravityChatSignInStatus
-} from '../../shared/antigravity-account-types'
+import type { AntigravityChatSignInState } from '../../shared/antigravity-account-types'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
 import { ANTIGRAVITY_LAUNCH_SPEC, type AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpPrivateTempConnect } from '../acp/acp-private-temp'
@@ -22,7 +19,8 @@ import {
   AntigravitySignInCloseUnprovenError,
   AntigravitySignInSentence,
   antigravityChatSignIn,
-  closeAntigravitySignInOwner
+  readAntigravityChatSignInStatus,
+  withAntigravitySignInOwner
 } from './antigravity-chat-account'
 import {
   antigravitySignInCallback,
@@ -203,21 +201,22 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     const stop = (): void => void server.close().catch(() => false)
     signal.addEventListener('abort', stop, { once: true })
     try {
-      await connection.authenticate('oauth-personal')
-      publish(current, { phase: 'verifying' })
-      // Authentication alone does not prove a chat can start.
-      const started = await connection.start({ cwd, mcpServers: [] }).catch((error: unknown) => {
-        const plain = error instanceof AcpAgentError && error.code === -32603
-        throw plain && antigravitySignInFailure(error) === SIGN_IN_FAILED
-          ? new AntigravitySignInSentence(SESSION_FAILED)
-          : error
+      await withAntigravitySignInOwner(home, server, async () => {
+        await server.authenticate('oauth-personal')
+        publish(current, { phase: 'verifying' })
+        // Authentication alone does not prove a chat can start.
+        const started = await server.start({ cwd, mcpServers: [] }).catch((error: unknown) => {
+          const plain = error instanceof AcpAgentError && error.code === -32603
+          throw plain && antigravitySignInFailure(error) === SIGN_IN_FAILED
+            ? new AntigravitySignInSentence(SESSION_FAILED)
+            : error
+        })
+        owned.sessionId = started.sessionId
+        current.pending = undefined
+        publishModels(accountHome, started, !server.exited)
       })
-      owned.sessionId = started.sessionId
-      current.pending = undefined
-      publishModels(accountHome, started, !connection.exited)
     } finally {
       signal.removeEventListener('abort', stop)
-      await closeAntigravitySignInOwner(home, server)
     }
   } finally {
     owned.done = true
@@ -318,14 +317,4 @@ export async function completeAntigravityChatSignIn(
 export const subscribeAntigravityChatSignIn = (onChange: () => void): (() => void) =>
   antigravityChatSignIn.subscribe(onChange)
 
-/** Hide the flow ID and sign-in link from other clients. */
-export function readAntigravityChatSignInStatus(owner: string): AntigravityChatSignInStatus {
-  const { value, revision } = antigravityChatSignIn.get()
-  if (!value.flow) {
-    return { revision, auth: value.auth, flow: null }
-  }
-  const { owner: starter, ...state } = value.flow
-  const { phase, error } = state
-  const flow = starter === owner ? state : { flowId: null, phase, ...(error ? { error } : {}) }
-  return { revision, auth: value.auth, flow }
-}
+export { readAntigravityChatSignInStatus } from './antigravity-chat-account'

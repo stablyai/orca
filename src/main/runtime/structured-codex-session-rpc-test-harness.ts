@@ -1,3 +1,5 @@
+import { scriptedCodexRuntimeModels } from './scripted-codex-model-catalog.test-fixture'
+import { scriptedCodexCloseOutcome } from '../codex/codex-scripted-child.test-fixture'
 // Drive shipped RPC/schemas/stores/lease/adapter with fake Codex JSON-RPC; tests inject notifications, blocking requests and exit through its handlers.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -81,22 +83,7 @@ function fakeCodex(): FakeCodex {
           return { turn: { id: TURN } }
         }
         if (method === 'model/list') {
-          return {
-            data: [
-              {
-                model: 'gpt-live',
-                displayName: 'GPT Live',
-                hidden: false,
-                supportedReasoningEfforts: [
-                  { reasoningEffort: 'medium', description: 'Balanced' },
-                  { reasoningEffort: 'high', description: 'Deep reasoning' }
-                ],
-                defaultReasoningEffort: 'medium',
-                isDefault: true
-              }
-            ],
-            nextCursor: null
-          }
+          return scriptedCodexRuntimeModels()
         }
         if (method === 'turn/steer') {
           return refuseUnroutedSteer(undefined)
@@ -106,6 +93,9 @@ function fakeCodex(): FakeCodex {
       notify: () => {},
       respond: (id, result) => connection.replies.push({ id, result }),
       respondWithError: (id, code) => connection.replies.push({ id, code }),
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => {
         connection.closed = true
         return true

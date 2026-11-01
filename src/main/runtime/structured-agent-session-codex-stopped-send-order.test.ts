@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from '../codex/codex-scripted-child.test-fixture'
 // Codex resume rounds turn starts to seconds; only journal order can place withdrawn sends between exchanges, including after restart.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -206,6 +207,9 @@ const openConnection: typeof openCodexAppServerConnection = async (
     notify: () => {},
     respond: () => {},
     respondWithError: () => {},
+    closeOutcome() {
+      return scriptedCodexCloseOutcome(this)
+    },
     close: async () => {
       closed = true
       return true

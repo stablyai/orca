@@ -1,9 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
+import { createAcpAgentConnection } from './acp-agent-connection'
+import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
+import { PROVIDER_SESSION } from './acp-structured-adapter.test-support'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { GROK_CONFIG_OPTIONS, waitFor } from './acp-structured-adapter.test-support'
+import { GROK_CONFIG_OPTIONS, replyChunk, waitFor } from './acp-structured-adapter.test-support'
 import {
   attachParams,
   launch,
@@ -213,3 +217,105 @@ async function expectDeliveredAfterStop(
     'Cancellation requested.'
   ])
 }
+
+it.each(['before-dispatch', 'after-beforeDispatch'] as const)(
+  'rejects host dispatch %s during finite ACP receipt, with one end and original body',
+  async (boundary) => {
+    const agents: AcpScriptedAgent[] = []
+    const children: ReturnType<typeof createFakePipedChild>[] = []
+    const f = await openHostRig({
+      deps: {
+        connect: (launch, handlers) => {
+          const agent = new AcpScriptedAgent()
+          const child = Object.assign(createFakePipedChild(9_999_995), {
+            stdin: agent.stdin,
+            stdout: agent.stdout
+          })
+          agents.push(agent)
+          children.push(child)
+          agent.on('initialize', (frame) =>
+            agent.reply(frame, { protocolVersion: 1, agentCapabilities: {} })
+          )
+          agent.on('session/new', (frame) =>
+            agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions: GROK_CONFIG_OPTIONS })
+          )
+          agent.confirmConfigOptions(GROK_CONFIG_OPTIONS)
+          agent.on('_x.ai/subagent/cancel', (frame) =>
+            agent.fail(
+              frame,
+              -32602,
+              'Invalid params',
+              'invalid params: missing field `subagentId`'
+            )
+          )
+          agent.on('_x.ai/task/kill', (frame) =>
+            agent.fail(frame, -32602, 'Invalid params', 'invalid params: missing field `sessionId`')
+          )
+          return createAcpAgentConnection(launch, handlers, () => child)
+        }
+      }
+    })
+    try {
+      expect(await f.host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
+      await f.ready()
+      const child = children[0],
+        agent = agents[0]
+      const first = await send(f.host, 'original request')
+      await waitFor(() =>
+        expect(agent.frames.some((frame) => frame.method === 'session/prompt')).toBe(true)
+      )
+      const prompt = agent.frames.find((frame) => frame.method === 'session/prompt')!
+      const body = 'Complete original response'
+      agent.notify('session/update', replyChunk(`prompt:${first}`, body))
+      agent.reply(prompt, { stopReason: 'end_turn' })
+      await waitFor(async () => expect(await f.messages()).toContain(body))
+      const dispatch = f.rig.adapter.dispatch.bind(f.rig.adapter)
+      const seen = Promise.withResolvers<void>()
+      vi.spyOn(f.rig.adapter, 'dispatch').mockImplementation(async (input) => {
+        const died = () => {
+          child.emit('exit', 1, null)
+          seen.resolve()
+        }
+        if (boundary === 'before-dispatch') {
+          died()
+        }
+        return dispatch({
+          ...input,
+          ...(boundary === 'after-beforeDispatch'
+            ? {
+                beforeDispatch: async () => {
+                  await input.beforeDispatch?.()
+                  died()
+                }
+              }
+            : {})
+        })
+      })
+      const sent = await send(f.host, 'must not reach the dead child')
+      await seen.promise
+      await waitFor(async () => {
+        const row = (await f.host.journalSnapshot(SESSION)).submissions.find(
+          (entry) => entry.clientMessageId === sent
+        )
+        expect(row).toMatchObject({
+          dispatchState: 'rejected',
+          rejection: { kind: 'providerExited', neverReachedAgent: true }
+        })
+      })
+      expect(agent.frames.filter((frame) => frame.method === 'session/prompt')).toEqual([prompt])
+      expect(f.rig.ended).toHaveLength(0)
+      // Complete received data remains owned while admission is already terminal.
+      child.stdout.end()
+      await waitFor(() => expect(f.rig.ended).toHaveLength(1))
+      await waitFor(() => expect(f.store.getRecord(SESSION)?.lease.claimStatus).toBe('released'))
+      expect(await f.messages()).toContain(body)
+    } finally {
+      for (const child of children) {
+        child.emit('exit', 0, null)
+        child.stdout.end()
+      }
+      await f.rig.adapter.closeAll()
+      await f.host.flushAllStreamedEvents({ trigger: 'quit' })
+    }
+  }
+)

@@ -1,5 +1,9 @@
+import { scriptedCodexCloseOutcome } from '../codex/codex-scripted-child.test-fixture'
 import './rpc/unused-default-rpc-methods.test-fixture'
-import { scriptedCodexCatalogSession } from './scripted-codex-model-catalog.test-fixture'
+import {
+  scriptedCodexCatalogSession,
+  scriptedCodexRuntimeModels
+} from './scripted-codex-model-catalog.test-fixture'
 // Exercise shipped RPC, schemas, capability gate, stores, lease and adapter; only the Codex app-server child is fake.
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -112,28 +116,16 @@ function fakeCodex(): CodexScript {
           return { turn: { id: TURN } }
         }
         if (method === 'model/list') {
-          return {
-            data: [
-              {
-                model: 'gpt-live',
-                displayName: 'GPT Live',
-                hidden: false,
-                supportedReasoningEfforts: [
-                  { reasoningEffort: 'medium', description: 'Balanced' },
-                  { reasoningEffort: 'high', description: 'Deep reasoning' }
-                ],
-                defaultReasoningEffort: 'medium',
-                isDefault: true
-              }
-            ],
-            nextCursor: null
-          }
+          return scriptedCodexRuntimeModels()
         }
         return {}
       },
       notify: () => {},
       respond: (id, result) => connection.replies.push({ id, result }),
       respondWithError: (id, code) => connection.replies.push({ id, code }),
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => {
         connection.closed = true
         return true

@@ -6,7 +6,7 @@ import type {
 import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
 import { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import { JsonlRpcAgentConnection } from '../jsonl-rpc/agent-connection'
-import { piExitFailure } from './rpc-exit-classification'
+import { piCloseReport, piExitFailure } from './rpc-exit-classification'
 import { PiRpcTurns } from './rpc-turns'
 import { PiRpcDialogCallbacks } from './rpc-dialog-callbacks'
 import { PiRpcOptionObservations, type PiRpcOptionWrite } from './rpc-options'
@@ -170,14 +170,21 @@ export class PiRpcSession {
     return this.optionObservations.read()
   }
 
-  async close(requested = true): ReturnType<PiRpcConnection['close']> {
+  async close(requested = true): ReturnType<PiRpcConnection['closeOutcome']> {
     this.requestedClose ||= requested
     this.dialogs.cancelAll()
-    const result = await this.connection.close()
-    if (result.killDelivered && result.root !== 'exited') {
-      await this.exit(new Error('Pi writer killed'))
+    const outcome = await this.connection.closeOutcome()
+    if (outcome.accepted && outcome.receive.state !== 'retained') {
+      if (!this.publishedExit) {
+        this.exitDelivery = this.exit(new Error('Pi writer stopped'))
+      }
+      try {
+        await this.exitDelivery
+      } catch (cleanupError) {
+        return { ...outcome, cleanupError }
+      }
     }
-    return result
+    return outcome
   }
 
   fail(error: Error): void {
@@ -192,10 +199,12 @@ export class PiRpcSession {
     }
     void this.close(false)
       .then((result) => {
-        if (result.root !== 'exited' && !result.killDelivered) {
+        const report = piCloseReport(result, this.failedCause)
+        if (report) {
           this.deps.logger.warn('Pi process exit is unverifiable', {
             scope: 'pi-stop',
-            sessionId: this.input.identity.sessionId
+            sessionId: this.input.identity.sessionId,
+            error: report
           })
         }
       })

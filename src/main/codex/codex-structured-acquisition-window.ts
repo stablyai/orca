@@ -1,3 +1,4 @@
+import type { CodexAcquisitionAttempt } from './codex-structured-session-state'
 import { CodexAppliedSettings } from './codex-structured-applied-settings'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
@@ -37,5 +38,19 @@ export class CodexAcquisitionWindow {
   drain(): (() => void)[] {
     this.state = 'published'
     return this.buffered.splice(0)
+  }
+}
+
+export function createCodexAcquisitionAttempt(): CodexAcquisitionAttempt {
+  let finish = (): void => {}
+  const finished = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+  return {
+    window: new CodexAcquisitionWindow(),
+    cancelled: false,
+    exitProven: false,
+    finished,
+    finish
   }
 }

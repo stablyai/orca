@@ -1,4 +1,4 @@
-import { PassThrough } from 'node:stream'
+import { Duplex, PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
@@ -6,7 +6,6 @@ import { ROOT_ONLY_GRACEFUL_EXIT_MS } from '../provider-process/provider-process
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import { JsonlRpcAgentConnection, type JsonlRpcAgentConnectionOptions } from './agent-connection'
-import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
 
 const teardown = vi.hoisted(() =>
@@ -16,12 +15,6 @@ vi.mock('../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: teardown
 }))
 const opened: { connection: JsonlRpcAgentConnection; exit: () => void }[] = []
-/** What the supervisor writes when it cannot spawn the agent's CLI. */
-const SPAWN_ENOENT_REPORT = `${PROVIDER_SPAWN_FAILURE_MARKER}${JSON.stringify({
-  thrown: false,
-  code: 'ENOENT',
-  message: 'spawn fixture-rpc-agent ENOENT'
-})}\n`
 const grace =
   process.platform === 'win32' ? ROOT_ONLY_GRACEFUL_EXIT_MS : PROVIDER_SUPERVISOR_MAX_STOP_MS
 
@@ -36,6 +29,10 @@ function fixture(
     stderr: new PassThrough(),
     kill: vi.fn(() => true)
   })
+  const reportInput = new PassThrough()
+  const reportOutput = new PassThrough()
+  reportOutput.resume()
+  child.stdio[3] = Duplex.from({ readable: reportInput, writable: reportOutput })
   const spawn = vi.fn<PipedProcessSpawner>(() => {
     return child
   })
@@ -63,7 +60,7 @@ function fixture(
       child.stdout.end()
     }
   })
-  return { child, spawn, connection }
+  return { child, spawn, connection, reportInput }
 }
 afterEach(async () => {
   vi.useRealTimers()
@@ -81,9 +78,11 @@ describe('JSON-lines RPC process ownership', () => {
     'marks the exit of a CLI the supervisor could not spawn as a missing executable',
     async () => {
       const onExit = vi.fn()
-      const { connection, child } = fixture({ onExit }, { cwd: process.cwd() })
+      const { connection, child, reportInput } = fixture({ onExit }, { cwd: process.cwd() })
       const pending = connection.request('get_state').catch((error: unknown) => error)
-      child.stderr.write(SPAWN_ENOENT_REPORT)
+      reportInput.write(
+        `${JSON.stringify({ kind: 'failed', thrown: false, error: { name: 'Error', message: 'spawn fixture-rpc-agent ENOENT', code: 'ENOENT' } })}\n`
+      )
       await new Promise((resolve) => setImmediate(resolve))
       child.emit('exit', 127, null)
       child.stdout.end()
@@ -101,7 +100,7 @@ describe('JSON-lines RPC process ownership', () => {
       expect.objectContaining({
         cwd: '/execution-host/folder',
         env: expect.objectContaining({ PI_CODING_AGENT_DIR: '/host/account' }),
-        stdio: ['pipe', 'pipe', 'pipe', ...(process.platform === 'win32' ? [] : ['ipc'])]
+        stdio: ['pipe', 'pipe', 'pipe', ...(process.platform === 'win32' ? [] : ['pipe'])]
       })
     )
     expect(spawn.mock.calls[0][0].env).not.toHaveProperty('STRIPPED')

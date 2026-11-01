@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionOptionsReportedEvent
@@ -115,6 +116,9 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       respond: (id, result) => connection.replies.push({ id, result }),
       respondWithError: (id, code, message) => connection.replies.push({ id, code, message }),
       // Match the real connection's synchronous exit report during close.
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => {
         connection.closeCount += 1
         if (!connection.closed) {

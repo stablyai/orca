@@ -153,6 +153,17 @@ class ScriptedPiConnection implements PiRpcConnection {
     this.exit(error)
   }
 
+  async closeOutcome(): ReturnType<PiRpcConnection['closeOutcome']> {
+    const physical = await this.close()
+    return {
+      accepted: physical.root === 'exited' || physical.killDelivered === true,
+      physical,
+      processless: this.processless,
+      spawnAbsence: this.spawnAbsence,
+      receive: { state: 'complete' }
+    }
+  }
+
   async close(): Promise<Awaited<ReturnType<PiRpcConnection['close']>>> {
     if (!this.closed) {
       this.onClosed()

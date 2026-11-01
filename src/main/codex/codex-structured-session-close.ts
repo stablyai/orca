@@ -1,3 +1,8 @@
+import { codexCloseReport } from './app-server/codex-app-server-close'
+import {
+  AgentSessionAcquisitionExitProvenError,
+  AgentSessionAcquisitionRootExitObservedError
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { settleCodexRequestEndWaiters } from './codex-request-end-wait'
 import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
@@ -117,6 +122,10 @@ export async function closeCodexPublishedSession(
   }
   if (session.ended && session.connection.closed) {
     sessions.delete(sessionId)
+    const report = codexCloseReport(await session.connection.closeOutcome())
+    if (report) {
+      throw report
+    }
     return true
   }
   // Preserve unexpected-death settlement when sink failure forces a close.
@@ -125,8 +134,8 @@ export async function closeCodexPublishedSession(
     reason: options?.unexpectedReason ?? new Error('codex session closed')
   }
   // Keep unproven closes indexed for a safe retry.
-  const exited = await session.connection.close()
-  if (exited !== true) {
+  const outcome = await session.connection.closeOutcome()
+  if (!outcome.accepted) {
     return false
   }
   if (!session.ended) {
@@ -141,7 +150,13 @@ export async function closeCodexPublishedSession(
       ...(options?.logger ? { logger: options.logger } : {})
     })
   }
-  sessions.delete(sessionId)
+  if (sessions.get(sessionId) === session) {
+    sessions.delete(sessionId)
+  }
+  const report = codexCloseReport(outcome, session.orcaClose.reason)
+  if (report) {
+    throw report
+  }
   return true
 }
 
@@ -158,20 +173,35 @@ export async function closeCodexSession(
   if (attempt && published?.connection === attempt.window.connection) {
     attempt.cancelled = true
     attempt.requestedClose = requestedClose
-    const closed = await closeCodexPublishedSession(sessions, sessionId, onEvent, {
-      requestedClose,
-      ...(logger ? { logger } : {})
-    })
-    if (closed) {
-      acquisitions.deleteIfCurrent(sessionId, attempt)
+    try {
+      const closed = await closeCodexPublishedSession(sessions, sessionId, onEvent, {
+        requestedClose,
+        ...(logger ? { logger } : {})
+      })
+      if (closed) {
+        acquisitions.deleteIfCurrent(sessionId, attempt)
+      }
+      return closed
+    } catch (error) {
+      if (
+        error instanceof AgentSessionAcquisitionRootExitObservedError ||
+        error instanceof AgentSessionAcquisitionExitProvenError
+      ) {
+        acquisitions.deleteIfCurrent(sessionId, attempt)
+      }
+      throw error
     }
-    return closed
   }
   if (!(await cancelCodexAcquisitionAttempt(attempt, requestedClose))) {
     return false
   }
   if (attempt) {
     acquisitions.deleteIfCurrent(sessionId, attempt)
+    const outcome = await attempt.window.connection?.closeOutcome()
+    const report = outcome && codexCloseReport(outcome)
+    if (report) {
+      throw report
+    }
   }
   return closeCodexPublishedSession(sessions, sessionId, onEvent, {
     requestedClose,

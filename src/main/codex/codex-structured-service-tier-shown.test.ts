@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { CODEX_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
@@ -67,6 +68,9 @@ async function hostRuns(
       notify: () => {},
       respond: () => {},
       respondWithError: () => {},
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => true
     },
     backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),

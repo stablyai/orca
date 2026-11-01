@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from '../codex/codex-scripted-child.test-fixture'
 import { openTestChats } from '../native-chat/agent-session-wire/structured-agent-session-open-test-chats.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -78,6 +79,9 @@ describe('structured session runtime provider-exit wiring', () => {
         notify: () => {},
         respond: () => {},
         respondWithError: () => {},
+        closeOutcome() {
+          return scriptedCodexCloseOutcome(this)
+        },
         close: async () => true
       }
       connections.push({ connection, handlers })
@@ -176,6 +180,9 @@ describe('structured session runtime provider-exit wiring', () => {
         notify: () => {},
         respond: () => {},
         respondWithError: () => {},
+        closeOutcome() {
+          return scriptedCodexCloseOutcome(this)
+        },
         close: async () => {
           handlers.onExit?.(new Error('requested close'))
           return true
@@ -284,6 +291,9 @@ describe('structured session runtime provider-exit wiring', () => {
         notify: () => {},
         respond: () => {},
         respondWithError: () => {},
+        closeOutcome() {
+          return scriptedCodexCloseOutcome(this)
+        },
         close: async () => true
       }
       connections.push({ connection, handlers })
@@ -382,6 +392,9 @@ describe('structured session runtime provider-exit wiring', () => {
         notify: () => {},
         respond: () => {},
         respondWithError: () => {},
+        closeOutcome() {
+          return scriptedCodexCloseOutcome(this)
+        },
         close: async () => {
           closeAttempts += 1
           if (closeAttempts === 1) {

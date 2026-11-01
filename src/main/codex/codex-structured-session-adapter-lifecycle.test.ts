@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
@@ -73,6 +74,9 @@ function fakeCodex(routes: Record<string, Route> = {}): {
       notify: () => {},
       respond: (id, result) => connection.replies.push({ id, result }),
       respondWithError: (id, code, message) => connection.replies.push({ id, code, message }),
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => {
         connection.closeCount += 1
         connection.closed = true

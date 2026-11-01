@@ -7,6 +7,7 @@ import {
 import { createProviderSourceCompletion } from './provider-source-completion'
 
 export type ProviderRecordReader = {
+  readonly ending: boolean
   pause: () => void
   resume: () => void
   finish: () => Promise<void>
@@ -40,6 +41,9 @@ export function createProviderRecordReader(input: {
   })
 
   return {
+    get ending() {
+      return source.ending
+    },
     finish: source.finish,
     pause: () => {
       if (source.ending) {

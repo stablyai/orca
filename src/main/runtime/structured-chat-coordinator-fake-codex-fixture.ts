@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from '../codex/codex-scripted-child.test-fixture'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -125,6 +126,9 @@ export function fakeCodex() {
       notify: () => {},
       respond: () => {},
       respondWithError: () => {},
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => {
         connection.closed = true
         return true

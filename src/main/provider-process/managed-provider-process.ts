@@ -26,6 +26,7 @@ import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
 import {
   acceptProviderWriterClose,
   closeProviderProcess,
+  closeProviderWriter,
   rootOnlyProviderClosePolicy,
   type ProviderProcessClosePolicy,
   type ProviderProcessCloseResult,
@@ -317,13 +318,12 @@ export function spawnManagedProviderProcess(
     },
     terminateTree,
     close,
-    closeWriter(tree) {
-      const known = knownWriterClose(tree)
-      if (known) {
-        launchReport.retire()
-        return Promise.resolve(known)
-      }
-      return close(tree)
-    }
+    closeWriter: (tree) =>
+      closeProviderWriter(
+        knownWriterClose(tree),
+        () => close(tree),
+        options.acceptClose ?? acceptProviderWriterClose,
+        () => launchReport.retire()
+      )
   }
 }

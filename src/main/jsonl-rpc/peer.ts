@@ -107,6 +107,10 @@ export class JsonlRpcPeer {
     }
   }
 
+  get inputEnding(): boolean {
+    return this.source.ending
+  }
+
   get closed(): boolean {
     return this.closing || this.terminalError !== undefined
   }

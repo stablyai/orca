@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from '../codex/codex-scripted-child.test-fixture'
 // Exercise host child-work projections without a renderer. Use literal expectations: comparing with the provider tracker would share the producer's observation bugs.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -103,6 +104,9 @@ describe('the chat strip and the session list read the same host child records',
         notify: () => {},
         respond: () => {},
         respondWithError: () => {},
+        closeOutcome() {
+          return scriptedCodexCloseOutcome(this)
+        },
         close: async () => true
       }
       return connection

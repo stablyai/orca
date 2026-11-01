@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from '../codex/codex-scripted-child.test-fixture'
 // Drive real host/journal/adapter with Codex 0.157 turn bookkeeping: Stop settles held sends when their target turn ends, including before turn/started.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -262,6 +263,9 @@ beforeEach(async () => {
       notify: () => {},
       respond: () => {},
       respondWithError: () => {},
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => {
         if (failingCloses > 0) {
           failingCloses -= 1

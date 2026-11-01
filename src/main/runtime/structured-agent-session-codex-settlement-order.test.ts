@@ -1,3 +1,4 @@
+import { scriptedCodexCloseOutcome } from '../codex/codex-scripted-child.test-fixture'
 // With only the Codex child faked, verify direct settlements follow the streamed frames that prove them, including coalesced writes.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -148,6 +149,9 @@ beforeEach(async () => {
       notify: () => {},
       respond: () => {},
       respondWithError: () => {},
+      closeOutcome() {
+        return scriptedCodexCloseOutcome(this)
+      },
       close: async () => true
     }
     return connection
