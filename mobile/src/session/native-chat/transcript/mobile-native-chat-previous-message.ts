@@ -26,8 +26,9 @@ export type PreviousMessageTarget = { key: string } | { pendingKey: string }
 
 /**
  * Nearest drawn stop above the viewport, past the align threshold.
- * Stops are in document order. An undrawn stop before the first measured one is pending
- * so a virtualized window can draw it before scrolling. Nothing measured stays unknown.
+ * Stops are in document order. An undrawn stop before the first measured one, or in
+ * the hole before the first in-view measured stop, is pending so the list can draw it.
+ * A trailing undrawn stop does not hide a measured one. Nothing measured stays unknown.
  */
 export function previousMessageTarget(
   stops: readonly PreviousMessageStop[],
@@ -35,11 +36,14 @@ export function previousMessageTarget(
 ): PreviousMessageTarget | null {
   let nearest: { key: string; top: number } | null = null
   let pendingKey: string | null = null
+  let holeKey: string | null = null
   let seenMeasured = false
   for (const stop of stops) {
     if (stop.top === undefined) {
       if (!seenMeasured) {
         pendingKey = stop.key
+      } else if (nearest) {
+        holeKey = stop.key
       }
       continue
     }
@@ -47,7 +51,11 @@ export function previousMessageTarget(
     if (stop.top < -threshold) {
       nearest = { key: stop.key, top: stop.top }
       pendingKey = null
+      holeKey = null
       continue
+    }
+    if (holeKey !== null) {
+      return { pendingKey: holeKey }
     }
     break
   }

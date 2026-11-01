@@ -44,6 +44,16 @@ describe('previous message target', () => {
     expect(previousMessageTarget(stops(-20, undefined))).toEqual({ key: 'm0' })
   })
 
+  it('asks to draw the unmeasured stop in the hole before the viewport', () => {
+    expect(previousMessageTarget(stops(-4000, undefined, undefined, 12))).toEqual({
+      pendingKey: 'm2'
+    })
+  })
+
+  it('keeps the closer measured stop when a hole sits behind it', () => {
+    expect(previousMessageTarget(stops(-4000, undefined, -30, 12))).toEqual({ key: 'm2' })
+  })
+
   it('stays unknown until a row has been measured', () => {
     expect(previousMessageTarget(stops(undefined, undefined))).toBeNull()
   })
