@@ -412,6 +412,8 @@
       "claudeRemoveFolder": "Orca elimina la carpeta de Claude de esta cuenta y su inicio de sesión de este equipo. El historial de chat compartido con Predeterminado del sistema se conserva. Si está seleccionada, el próximo Claude que inicies usará Predeterminado del sistema."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Operación de Git en otro lugar",
+      "remoteOperationInAnotherWorkspace": "Otro espacio de trabajo está ejecutando una operación de Git, como push, pull o force push. Espera a que termine antes de usar esta acción para que las operaciones no se solapen.",
       "actionModel": {
         "on": "Activado",
         "off": "Desactivado",

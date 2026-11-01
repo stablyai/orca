@@ -1,11 +1,11 @@
-import type { HooksConfig } from '../agent-hooks/installer-utils'
-import { isPlainObject } from '../agent-hooks/hooks-json-read'
+import type { HooksConfig } from '../../agent-hooks/installer-utils'
+import { isPlainObject } from '../../agent-hooks/hooks-json-read'
 import { claudeAgentViewChord, serializeClaudeAgentViewBindings } from './agent-view-keybindings'
 import {
   CLAUDE_AGENT_VIEW_COMMAND,
   CLAUDE_AGENT_VIEW_SHORTCUTS,
   normalizeClaudeAgentViewChord
-} from '../../shared/claude-agent-view'
+} from '../../../shared/claude-agent-view'
 
 export function withClaudeAgentViewShortcut(config: HooksConfig): HooksConfig | null {
   const bindings = config.bindings ?? []

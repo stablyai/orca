@@ -4,15 +4,15 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { parse } from 'jsonc-parser'
 import { claudeAgentViewChord } from './agent-view-keybindings'
-import { createAgentHookMemorySftp } from '../agent-hooks/agent-hook-memory-sftp.test-fixture'
+import { createAgentHookMemorySftp } from '../../agent-hooks/agent-hook-memory-sftp.test-fixture'
 import {
   installClaudeAgentView,
   removeClaudeAgentViewRemote,
   refreshClaudeAgentView,
-  ensureClaudeAgentViewPlugin,
-  withClaudeAgentViewShortcut,
   removeClaudeAgentView
 } from './agent-view-install'
+import { ensureClaudeAgentViewPlugin } from './agent-view-plugin'
+import { withClaudeAgentViewShortcut } from './agent-view-binding-plan'
 
 const roots: string[] = []
 afterEach(() => {

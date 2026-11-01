@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path'
 import { readFile } from 'node:fs/promises'
-import { parseHooksJsonText } from '../agent-hooks/hooks-json-read'
-import { writeHooksJsonAsync } from '../agent-hooks/hooks-json-write-async'
+import { parseHooksJsonText } from '../../agent-hooks/hooks-json-read'
+import { writeHooksJsonAsync } from '../../agent-hooks/hooks-json-write-async'
 import {
   parseClaudeAgentViewBindings,
   serializeClaudeAgentViewBindings

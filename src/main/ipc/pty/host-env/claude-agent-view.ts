@@ -1,6 +1,6 @@
 import { delimiter } from 'node:path'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { getClaudeAgentViewService } from '../../../claude/agent-view-service'
+import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import type { BuildPtyHostEnvOptions } from './types'
 
 export function applyClaudeAgentViewEnv(

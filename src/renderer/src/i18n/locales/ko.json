@@ -407,6 +407,8 @@
       "claudeRemoveFolder": "Orca는 이 컴퓨터에서 해당 계정의 Claude 폴더와 로그인 정보를 삭제합니다. 시스템 기본 계정과 공유하는 채팅 기록은 유지됩니다. 삭제한 계정이 선택되어 있었다면, 다음에 시작하는 Claude는 시스템 기본 계정을 사용합니다."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "다른 곳에서 Git 작업 실행 중",
+      "remoteOperationInAnotherWorkspace": "다른 워크스페이스에서 Git 작업(푸시, 풀, 강제 푸시 등)을 실행 중입니다. 작업이 겹치지 않도록 완료된 후 이 작업을 사용하세요.",
       "actionModel": {
         "on": "켜짐",
         "off": "꺼짐",

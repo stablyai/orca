@@ -1,10 +1,11 @@
 import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser'
-import { isPlainObject, type HooksConfig } from '../agent-hooks/installer-utils'
+import type { HooksConfig } from '../../agent-hooks/installer-utils'
+import { isPlainObject } from '../../agent-hooks/hooks-json-read'
 import {
   CLAUDE_AGENT_VIEW_COMMAND,
   CLAUDE_AGENT_VIEW_SHORTCUTS,
   normalizeClaudeAgentViewChord
-} from '../../shared/claude-agent-view'
+} from '../../../shared/claude-agent-view'
 
 export function parseClaudeAgentViewBindings(text: string | null): HooksConfig | null {
   if (text === null) {
