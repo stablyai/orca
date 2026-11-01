@@ -22,13 +22,10 @@ afterEach(async () => {
 })
 
 describe('Pi final tail before host eviction', () => {
-  it('admits text and settlements before the exit barrier while ordinary and lifecycle queues are full', async () => {
+  it('transfers text and settlements before the exit barrier while the journal is busy', async () => {
     const { journal } = await openProviderTimelineRig({ agent: 'pi' })
     const logging = testEventSinkLogging(SESSION)
-    const deferred = createDeferredStructuredAgentSessionEventSink({
-      ...logging,
-      watermarks: { maxQueuedOperations: 1, maxLifecycleQueuedOperations: 1 }
-    })
+    const deferred = createDeferredStructuredAgentSessionEventSink(logging)
     deferred.bind({ journal, fence: 1, publish: () => {} })
     const sink = providerTimelineSink(deferred.sink)
     if (!sink) {
@@ -73,12 +70,10 @@ describe('Pi final tail before host eviction', () => {
       )
     // The nested write joins behind this held read; later writes stay in the real journal queue.
     const blocked = journal.readInOrder(() => {
-      expect(append('ordinary-full')).toEqual({ accepted: true })
+      expect(append('ordinary')).toEqual({ accepted: true })
       return gate.promise
     })
-    expect(append('lifecycle-full', true)).toEqual({ accepted: true })
-    expect(append('ordinary-refused')).toEqual({ accepted: false, reason: 'backpressure' })
-    expect(append('lifecycle-refused', true)).toEqual({ accepted: false, reason: 'backpressure' })
+    expect(append('lifecycle', true)).toEqual({ accepted: true })
     const before = journal.snapshot().items.length
     vi.useFakeTimers()
     const reply = `Final reply${'r'.repeat(2 * 1024 * 1024)}`
@@ -140,37 +135,5 @@ describe('Pi final tail before host eviction', () => {
         expect.objectContaining({ kind: 'tool-call', state: 'failed' })
       ])
     )
-  })
-
-  it('keeps the final transfer operation-count limit', async () => {
-    const failures: unknown[] = []
-    const deferred = createDeferredStructuredAgentSessionEventSink({
-      ...testEventSinkLogging(SESSION),
-      onFailed: (error) => failures.push(error)
-    })
-    cleanups.push(() => deferred.close())
-    for (let index = 0; index <= 512; index += 1) {
-      expect(
-        deferred.sink.tryAppendTransition?.({
-          finalTail: true,
-          lifecycle: true,
-          publish: false,
-          steps: [
-            {
-              kind: 'settlement',
-              settlementId: `tail:${index}`,
-              reservedBytes: 1,
-              resolve: () => []
-            }
-          ]
-        })
-      ).toEqual(index < 512 ? { accepted: true } : { accepted: false, reason: 'failed' })
-    }
-    expect(failures).toEqual([
-      expect.objectContaining({
-        message: 'structured agent-session final tail exceeded its reserved capacity'
-      })
-    ])
-    await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
   })
 })

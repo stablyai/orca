@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import {
   closePiRpcAdapterFixtures,
   file,
@@ -234,5 +236,65 @@ it('keeps native idle reports off current and action progress and rejects pre-co
     expect(after.current.confirmed).not.toContain('model')
   } finally {
     held.resolve(state)
+  }
+})
+
+it('paces Pi reading from journal pressure only after startup, and keeps every received row', async () => {
+  const h = await setup()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  const reply = Promise.withResolvers<unknown>()
+  const pause = vi.fn()
+  const resume = vi.fn()
+  const { acquired, child } = await restart(
+    h,
+    (connection) => {
+      connection.requestOverride = (command) =>
+        command === 'get_state' ? reply.promise : undefined
+      connection.pauseReading = pause
+      connection.resumeReading = resume
+    },
+    { events: deferred.sink }
+  )
+  deferred.bind({ journal: h.rig.journal, fence: 8, publish: () => {} })
+  const opening = openAt8(h, acquired.acquisitionGeneration)
+  const gate = Promise.withResolvers<void>()
+  const status = (text: string) =>
+    deferred.sink.appendItem(
+      { provider: 'orca', clientMessageId: text },
+      { kind: 'status', tone: 'info', text },
+      { turnScope: { kind: 'thread' } }
+    )
+  try {
+    for (let index = 0; index < 1025; index++) {
+      status(`received-${index}`)
+    }
+    reply.resolve(state)
+    await opening
+    expect(pause).not.toHaveBeenCalled()
+    const blocked = h.rig.journal.readInOrder(() => {
+      for (let index = 0; index < 1025; index++) {
+        status(`held-${index}`)
+      }
+      return gate.promise
+    })
+    expect(pause).toHaveBeenCalledOnce()
+    // Provider output reaching the lane must not resume a journal-paused reader.
+    child.receive({ type: 'agent_start' })
+    expect(resume).not.toHaveBeenCalled()
+    gate.resolve()
+    await blocked
+    await expect(deferred.drained()).resolves.toEqual({ ok: true })
+    expect(resume).toHaveBeenCalledOnce()
+    const reopened = await h.rig.reopenJournal()
+    const texts = reopened
+      .snapshot()
+      .items.flatMap((row) => (row.body.kind === 'status' ? [row.body.text] : []))
+    expect(texts.filter((text) => text.startsWith('received-'))).toHaveLength(1025)
+    expect(texts.filter((text) => text.startsWith('held-'))).toHaveLength(1025)
+  } finally {
+    gate.resolve()
+    reply.resolve(state)
+    await opening.catch(() => {})
+    deferred.close()
   }
 })
