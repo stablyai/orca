@@ -181,13 +181,18 @@ export class WslHostAutomationWake {
 
   private async fire(): Promise<void> {
     const now = this.now()
-    for (const [environmentId, entry] of Object.entries(this.due)) {
+    for (const [environmentId, snapshot] of Object.entries(this.due)) {
+      // A learn during an earlier host's wake may have refreshed this entry; read it now.
+      const entry = this.due[environmentId] ?? snapshot
       if (entry.nextRunAt > now) {
         continue
       }
       const missed = missedRunAfterLastReady(entry, now)
+      const lastSeenReadyAt = Math.max(snapshot.lastSeenReadyAt, entry.lastSeenReadyAt)
       // Keep the following run whatever happens to this one; a connect re-learns the truth.
-      this.set(environmentId, nextWslHostAutomationDue(entry.schedules, now, entry.lastSeenReadyAt))
+      this.set(environmentId, nextWslHostAutomationDue(entry.schedules, now, lastSeenReadyAt))
+      // Saved before the boot, so a quit while it runs can't repeat this wake at the next launch.
+      this.persist()
       if (await this.deps.isConnected(environmentId)) {
         // Its own scheduler ran it; read the real next run instead of the local estimate.
         await this.learn(environmentId)

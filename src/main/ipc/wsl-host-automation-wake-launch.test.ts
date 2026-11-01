@@ -17,6 +17,8 @@ const { createWslHostAutomationWake } = await import('./wsl-host-automation-wake
 
 const HOUR = 60 * 60 * 1000
 const HOURLY = '0 * * * *'
+// Fixed, mid-hour: only Date is faked, so the wake's real timer still fires.
+const NOW = Date.UTC(2026, 10, 1, 8, 30)
 
 function due(nextRunAt: number, lastSeenReadyAt: number): WslHostAutomationDue {
   return {
@@ -34,9 +36,11 @@ describe('a launch with a stopped WSL host and a saved automation wake (E9)', ()
   beforeEach(() => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-wsl-wake-launch-'))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.useFakeTimers({ toFake: ['Date'], now: NOW })
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     wake?.dispose()
     wake = null
     rmSync(userDataPath, { recursive: true, force: true })
@@ -68,19 +72,17 @@ describe('a launch with a stopped WSL host and a saved automation wake (E9)', ()
     readWslHostAutomationWakes(userDataPath)['wsl:ubuntu']?.nextRunAt
 
   it('does not connect, so starts no holder, for a run that came due while the host was last ready', async () => {
-    const now = Date.now()
-    const ranWhileReady = nextAutomationOccurrenceAfter(HOURLY, 0, now - 2 * HOUR)
+    const ranWhileReady = nextAutomationOccurrenceAfter(HOURLY, 0, NOW - 2 * HOUR)
     // Seen ready just now, so no later run has come due since.
-    const connector = await launch(due(ranWhileReady, now))
+    const connector = await launch(due(ranWhileReady, NOW))
 
     // The launch's fire saves the following run; only then is its decision final.
-    await expect.poll(savedNextRun).toBeGreaterThan(now)
+    await expect.poll(savedNextRun).toBeGreaterThan(NOW)
     expect(connector.connect).not.toHaveBeenCalled()
   })
 
   it('still connects once for a run that came due after the host was last ready', async () => {
-    const now = Date.now()
-    const missed = nextAutomationOccurrenceAfter(HOURLY, 0, now - 2 * HOUR)
+    const missed = nextAutomationOccurrenceAfter(HOURLY, 0, NOW - 2 * HOUR)
     const connector = await launch(due(missed, missed - HOUR))
 
     await expect.poll(() => connector.connect.mock.calls.length).toBe(1)

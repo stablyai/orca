@@ -67,6 +67,9 @@ function harness(options: { due?: Record<string, WslHostAutomationDue>; connecte
     automations,
     saved,
     timerAt: () => timer?.at ?? null,
+    setNow(at: number) {
+      now = at
+    },
     /** Moves the clock to the armed timer and runs it. */
     async runTimer(at: number) {
       now = at
@@ -158,7 +161,47 @@ describe('WslHostAutomationWake', () => {
     h.subject.start()
     await h.runTimer(9 * HOUR + 30 * MINUTE)
     expect(h.wake).toHaveBeenCalledExactlyOnceWith('wsl:ubuntu')
-    expect(h.timerAt()).toBe(10 * HOUR)
+    // The following run is saved before the boot; the re-arm follows it.
+    await vi.waitFor(() => expect(h.timerAt()).toBe(10 * HOUR))
+  })
+
+  it('saves the following run before booting, so a quit during the boot cannot wake it again', async () => {
+    const h = harness({ due: { 'wsl:ubuntu': due(9 * HOUR) } })
+    let savedAtWake: number | undefined
+    h.wake.mockImplementationOnce(async () => {
+      savedAtWake = h.saved.at(-1)?.['wsl:ubuntu']?.nextRunAt
+    })
+    h.subject.start()
+    await h.runTimer(9 * HOUR + 30 * MINUTE)
+    expect(h.wake).toHaveBeenCalledOnce()
+    expect(savedAtWake).toBe(10 * HOUR)
+  })
+
+  it("keeps a fresher ready stamp a learn wrote while an earlier host's wake ran", async () => {
+    const h = harness({ due: { 'wsl:a': due(9 * HOUR), 'wsl:b': due(9 * HOUR) } })
+    let finishWake: () => void = () => {}
+    h.wake.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishWake = resolve
+        })
+    )
+    h.subject.start()
+    const fired = h.runTimer(9 * HOUR + 30 * MINUTE)
+    await vi.waitFor(() => expect(h.wake).toHaveBeenCalledWith('wsl:a'))
+    // b turns ready meanwhile; its read fails, so only the stamp moves.
+    h.setNow(9 * HOUR + 40 * MINUTE)
+    h.automations.mockRejectedValueOnce(new Error('offline'))
+    await h.subject.learn('wsl:b')
+    finishWake()
+    await fired
+    // b's turn in the same fire advances it, and must keep the newer stamp.
+    await vi.waitFor(() =>
+      expect(h.saved.at(-1)?.['wsl:b']).toMatchObject({
+        nextRunAt: 10 * HOUR,
+        lastSeenReadyAt: 9 * HOUR + 40 * MINUTE
+      })
+    )
   })
 
   it('a deleted or disabled automation no longer wakes the host once this desktop re-learns', async () => {
