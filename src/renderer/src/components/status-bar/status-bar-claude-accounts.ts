@@ -88,13 +88,17 @@ export function buildClaudeStatusSwitchGroups(
           id: null,
           label: translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'),
           active: activeId === null,
-          runtimeTarget: target
+          runtimeTarget: target,
+          email: null,
+          systemDefaultEmail: target.runtime === 'host' ? (state.systemDefaultEmail ?? null) : null
         },
         ...accountsForTarget.map((account) => ({
           id: account.id,
           label: account.email,
           active: account.id === activeId,
           runtimeTarget: target,
+          email: account.email,
+          workspace: account.organizationName?.trim() || null,
           ...(account.needsSignIn
             ? {
                 disabled: true,
@@ -198,5 +202,6 @@ export function resolveClaudeStatusAccountState(
   if (ownerEnvironmentId) {
     return runtimeState
   }
-  return getClaudeStatusAccountsFromSettings(settings, runtimeState) ?? runtimeState
+  const settingsState = getClaudeStatusAccountsFromSettings(settings, runtimeState)
+  return settingsState ? { ...runtimeState, ...settingsState } : runtimeState
 }

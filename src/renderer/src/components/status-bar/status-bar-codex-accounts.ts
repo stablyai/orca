@@ -1,7 +1,10 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { CodexRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
-import { getCodexAccountDisplayLabel } from '@/lib/codex-account-display-label'
+import {
+  getCodexAccountDisplayLabel,
+  getCodexAccountDisplayParts
+} from '@/lib/codex-account-display-label'
 import {
   getCodexStatusRuntimeKey,
   getCodexStatusRuntimeLabel,
@@ -89,13 +92,21 @@ export function buildCodexStatusSwitchGroups(
           id: null,
           label: translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'),
           active: activeId === null,
-          runtimeTarget: target
+          runtimeTarget: target,
+          // Only the host's real ~/.codex identity is resolved; WSL distros have none.
+          email: null,
+          systemDefaultEmail:
+            target.runtime === 'host' ? (state.systemDefault?.email ?? null) : null,
+          workspace:
+            target.runtime === 'host' ? (state.systemDefault?.workspaceLabel ?? null) : null
         },
         ...accountsForTarget.map((account) => ({
           id: account.id,
           label: getCodexAccountDisplayLabel(account, accountsForTarget),
           active: account.id === activeId,
-          runtimeTarget: target
+          runtimeTarget: target,
+          email: account.email,
+          ...getCodexAccountDisplayParts(account, accountsForTarget)
         }))
       ]
     }
@@ -181,5 +192,6 @@ export function resolveCodexStatusAccountState(
   if (ownerEnvironmentId) {
     return runtimeState
   }
-  return getCodexStatusAccountsFromSettings(settings) ?? runtimeState
+  const settingsState = getCodexStatusAccountsFromSettings(settings)
+  return settingsState ? { ...runtimeState, ...settingsState } : runtimeState
 }

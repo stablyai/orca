@@ -64,15 +64,18 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     (role?: string) =>
     ({
       children,
-      onSelect
+      onSelect,
+      title
     }: {
       children?: React.ReactNode
       onSelect?: (event: { preventDefault: () => void }) => void
+      title?: string
     }): React.JSX.Element =>
       React.createElement(
         'div',
         {
           role,
+          title,
           onClick: onSelect ? () => onSelect({ preventDefault: () => {} }) : undefined
         },
         children
@@ -129,8 +132,7 @@ async function openAccounts(): Promise<void> {
     })
   )
   // A remote server's roster arrives with the snapshot, not settings.
-  fireEvent.click(await screen.findByText('old@example.com'))
-  await waitFor(() => expect(screen.getAllByText('old@example.com').length).toBe(2))
+  await screen.findByTitle('old@example.com')
 }
 
 describe('status bar Claude account that needs a sign-in', () => {
@@ -164,6 +166,13 @@ describe('status bar Claude account that needs a sign-in', () => {
     expect(toastError).not.toHaveBeenCalled()
   })
 
+  it('reauthenticates the active account when its row is selected', async () => {
+    await openAccounts()
+    fireEvent.click(screen.getByTitle('old@example.com'))
+    await waitFor(() => expect(reauthenticate).toHaveBeenCalledWith({ accountId: 'old' }))
+    expect(selectClaudeProviderAccount).not.toHaveBeenCalled()
+  })
+
   it('does not ask an idle account whose usage token expired overnight to sign in', async () => {
     inactiveClaudeAccounts = [
       {
@@ -182,9 +191,9 @@ describe('status bar Claude account that needs a sign-in', () => {
       }
     ]
     await openAccounts()
-    const newRow = screen.getAllByText('new@example.com').at(-1)!.closest('[role="menuitem"]')
-    expect(newRow?.textContent).not.toContain('Sign in to see usage')
-    expect(newRow?.textContent).toContain('Updates when Claude runs')
+    const newRow = screen.getByTitle('new@example.com')
+    expect(newRow.textContent).not.toContain('Sign in to see usage')
+    expect(newRow.textContent).toContain('Updates when Claude runs')
   })
 
   it('keeps the account list in the usage roster when the selected account needs a sign-in', async () => {
@@ -226,7 +235,6 @@ describe('status bar Claude account that needs a sign-in', () => {
         })
       )
     )
-    fireEvent.click(await screen.findByText('old@example.com'))
     expect(await screen.findByText('Sign in again to use this account')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
     await waitFor(() => expect(reauthenticate).toHaveBeenCalledWith({ accountId: 'old' }))

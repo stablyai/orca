@@ -10,7 +10,16 @@ export type CodexStatusRuntimeTarget = {
   wslDistro: string | null
 }
 
-export type CodexStatusSwitchTarget = {
+/** Structured identity for one switcher row; `label` stays the full one-line form. */
+export type StatusSwitchTargetIdentity = {
+  /** Null for the System default row. */
+  email: string | null
+  systemDefaultEmail?: string | null
+  workspace?: string | null
+  identifier?: string | null
+}
+
+export type CodexStatusSwitchTarget = StatusSwitchTargetIdentity & {
   id: string | null
   label: string
   active: boolean
@@ -24,7 +33,7 @@ export type CodexStatusSwitchGroup = {
   targets: CodexStatusSwitchTarget[]
 }
 
-export type ClaudeStatusSwitchTarget = {
+export type ClaudeStatusSwitchTarget = StatusSwitchTargetIdentity & {
   id: string | null
   label: string
   active: boolean

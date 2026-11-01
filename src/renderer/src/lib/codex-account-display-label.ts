@@ -9,10 +9,16 @@ export function normalizeCodexAccountEmail(email: string | null | undefined): st
   return (email ?? '').trim().toLowerCase()
 }
 
-export function getCodexAccountDisplayDetail(
+export type CodexAccountDisplayParts = {
+  workspace: string | null
+  /** Short account ID, present only when the email and workspace alone can't tell peers apart. */
+  identifier: string | null
+}
+
+export function getCodexAccountDisplayParts(
   account: CodexDisplayAccount,
   accounts: readonly CodexDisplayAccount[]
-): string | null {
+): CodexAccountDisplayParts {
   const workspace = account.workspaceLabel?.trim() || null
   const email = normalizeCodexAccountEmail(account.email)
   const peers = accounts.filter(
@@ -23,7 +29,7 @@ export function getCodexAccountDisplayDetail(
     peers.length === 0 ||
     (workspaces.every(Boolean) && new Set(workspaces).size === workspaces.length)
   ) {
-    return workspace
+    return { workspace, identifier: null }
   }
 
   // Extend the stored account ID prefix until even same-prefix accounts are distinguishable.
@@ -34,7 +40,17 @@ export function getCodexAccountDisplayDetail(
   ) {
     length += 1
   }
-  const identifier = account.id.slice(0, length)
+  return { workspace, identifier: account.id.slice(0, length) }
+}
+
+export function getCodexAccountDisplayDetail(
+  account: CodexDisplayAccount,
+  accounts: readonly CodexDisplayAccount[]
+): string | null {
+  const { workspace, identifier } = getCodexAccountDisplayParts(account, accounts)
+  if (!identifier) {
+    return workspace
+  }
   return workspace ? `${workspace} · ${identifier}` : identifier
 }
 

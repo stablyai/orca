@@ -23,7 +23,6 @@ export {
 } from './status-bar-runtime-targets'
 export { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
 export { CodexSwitcherMenu } from './CodexSwitcherMenu'
-export { InlineUsageBars } from './InlineProviderUsage'
 export { ProviderDetailsMenu } from './ProviderDetailsMenu'
 export { ProviderSegment } from './StatusBarProviderSegment'
 

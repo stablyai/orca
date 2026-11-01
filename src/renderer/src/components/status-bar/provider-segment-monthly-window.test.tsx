@@ -106,3 +106,25 @@ describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
     ).not.toThrow()
   })
 })
+
+describe('ProviderSegment weekly-only meter', () => {
+  it('keeps the footer meter for weekly-only Codex usage', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      provider: 'codex',
+      session: null,
+      weekly: windowOf(37, 10_080),
+      updatedAt: 0,
+      error: null,
+      status: 'ok'
+    }
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" />
+    )
+
+    expect(markup).toContain('w-[48px] h-[6px]')
+    expect(markup).toContain('width:37%')
+    expect(markup).toContain('37% wk')
+  })
+})

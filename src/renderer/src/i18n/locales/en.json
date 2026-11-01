@@ -4604,10 +4604,7 @@
             "c35af53b73": "Sign in",
             "f19a63e7cd": "Sign in to see usage",
             "5c938d39ac": "wk",
-            "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "No other accounts",
-            "9332ba8684": "Switch to",
             "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
@@ -5073,6 +5070,20 @@
             },
             "mainWorktree": "main worktree",
             "detached": "detached"
+          },
+          "AccountSwitchList": {
+            "accounts": "Accounts",
+            "planLimit": "Plan limit reached",
+            "extraUsageAvailable": "Extra usage available",
+            "signInRequired": "Sign-in required",
+            "sortByName": "A–Z",
+            "sortLeastUsed": "Least used",
+            "sortLabel": "Sort accounts",
+            "usedHeading": "Used",
+            "leftHeading": "Left",
+            "filterPlaceholder": "Filter {{count}} accounts",
+            "filterLabel": "Filter accounts",
+            "noMatches": "No accounts match “{{query}}”"
           }
         }
       },

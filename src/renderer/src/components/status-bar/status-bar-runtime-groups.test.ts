@@ -18,6 +18,38 @@ import { getStatusBarPreferredWslDistro } from './status-bar-runtime-targets'
 const hostLabel = navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
 
 describe('status bar runtime switch groups', () => {
+  it('keeps host-resolved default identity while settings own local account selection', () => {
+    const settings = getDefaultSettings('/home/me')
+    const snapshot: CodexRateLimitAccountsState = {
+      accounts: [],
+      activeAccountId: 'outdated-selection',
+      systemDefault: {
+        hasAuth: true,
+        authKind: 'oauth',
+        email: 'default@example.com',
+        providerAccountId: 'provider-default',
+        workspaceLabel: 'Personal'
+      }
+    }
+    const local = resolveCodexStatusAccountState(settings, snapshot, null)
+    const groups = buildCodexStatusSwitchGroups(
+      local,
+      { runtime: 'host', wslDistro: null },
+      {
+        includeFallbackWsl: true,
+        fallbackWslDistro: 'Ubuntu'
+      }
+    )
+    expect(groups[0].targets[0]).toMatchObject({
+      active: true,
+      email: null,
+      systemDefaultEmail: 'default@example.com',
+      workspace: 'Personal'
+    })
+    expect(groups[1].targets[0]).toMatchObject({ systemDefaultEmail: null, workspace: null })
+    expect(resolveCodexStatusAccountState(settings, snapshot, 'remote')).toBe(snapshot)
+  })
+
   it.each(['host', 'wsl'] as const)(
     'keeps same-email accounts independently selectable in the %s runtime',
     (runtime) => {
@@ -46,13 +78,19 @@ describe('status bar runtime switch groups', () => {
           id: 'account-a',
           label: 'same@example.com (account-a)',
           active: false,
-          runtimeTarget: target
+          runtimeTarget: target,
+          email: 'same@example.com',
+          workspace: null,
+          identifier: 'account-a'
         },
         {
           id: 'account-b',
           label: 'same@example.com (account-b)',
           active: true,
-          runtimeTarget: target
+          runtimeTarget: target,
+          email: 'same@example.com',
+          workspace: null,
+          identifier: 'account-b'
         }
       ])
     }
