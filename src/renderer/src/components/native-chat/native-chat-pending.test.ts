@@ -18,7 +18,7 @@ import {
   commandMarkersAsMessages,
   readCommandMarkerCache
 } from './native-chat-command-marker'
-import { stripNoiseMessages } from './native-chat-noise'
+import { stripNoiseMessages } from '../../../../shared/native-chat/native-chat-noise'
 
 function userMessage(id: string, text: string, timestamp = 1): NativeChatMessage {
   return {

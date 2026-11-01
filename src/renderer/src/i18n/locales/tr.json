@@ -12742,7 +12742,7 @@
         "wslHosts": {
           "title": "WSL ana makineleri",
           "experimental": "Deneysel",
-          "description": "Orca her dağıtımın içinde bir sunucu çalıştırır. Durdurulmuş bir dağıtım yalnızca projelerinden birini açtığınızda veya buradan bağlandığınızda başlar.",
+          "description": "Orca her dağıtımın içinde bir sunucu çalıştırır. Bir proje açmak durdurulmuş bir dağıtımı asla başlatmaz: Başlat’a tıklayın, yeni bir terminal açın veya buradan bağlanın.",
           "add": "WSL dağıtımı ekle",
           "connect": "Bağlan",
           "forceUpdate": "Güncellemeyi zorla",

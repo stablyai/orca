@@ -12467,7 +12467,7 @@
         "wslHosts": {
           "title": "Hosts WSL",
           "experimental": "Experimental",
-          "description": "Orca ejecuta un servidor dentro de cada distro. Una distro detenida solo se inicia cuando abres uno de sus proyectos o la conectas aquí.",
+          "description": "Orca ejecuta un servidor dentro de cada distro. Abrir un proyecto nunca inicia una distro detenida: haz clic en Iniciar, abre una terminal nueva o conéctala aquí.",
           "add": "Agregar distro WSL",
           "connect": "Conectar",
           "turnOn": "Activar en Experimental",

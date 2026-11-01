@@ -9009,7 +9009,7 @@
         "wslHosts": {
           "title": "Hosts WSL",
           "experimental": "Experimental",
-          "description": "O Orca executa um servidor dentro de cada distribuição. Uma distribuição parada só é iniciada quando você abre um dos projetos dela ou a conecta aqui.",
+          "description": "O Orca executa um servidor dentro de cada distribuição. Abrir um projeto nunca inicia uma distribuição parada: clique em Iniciar, abra um novo terminal ou conecte-a aqui.",
           "add": "Adicionar distribuição WSL",
           "connect": "Conectar",
           "forceUpdate": "Forçar atualização",

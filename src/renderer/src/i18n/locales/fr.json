@@ -12691,7 +12691,7 @@
         "wslHosts": {
           "title": "Hôtes WSL",
           "experimental": "Expérimental",
-          "description": "Orca exécute un serveur dans chaque distro. Une distro arrêtée ne démarre que lorsque vous ouvrez l'un de ses projets ou la connectez ici.",
+          "description": "Orca exécute un serveur dans chaque distro. Ouvrir un projet ne démarre jamais une distro arrêtée : cliquez sur Démarrer, ouvrez un nouveau terminal ou connectez-la ici.",
           "add": "Ajouter une distro WSL",
           "connect": "Connecter",
           "turnOn": "Activer dans Expérimental",
