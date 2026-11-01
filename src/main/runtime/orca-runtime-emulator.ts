@@ -183,7 +183,7 @@ export class RuntimeEmulatorCommands {
   ): Promise<{ sessions: EmulatorActiveSession[] }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
-    return { sessions: bridge.listActiveSessions(worktreeId) }
+    return { sessions: await bridge.listActiveSessions(worktreeId) }
   }
 
   async emulatorUnregisterActive(params: { worktree?: string }): Promise<{ ok: true }> {

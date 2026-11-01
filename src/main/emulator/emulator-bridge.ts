@@ -47,9 +47,9 @@ export class EmulatorBridge {
     return this.iosBackend.listSimulators()
   }
 
-  /** Orca's registered sessions; without a worktree, every worktree's. */
-  listActiveSessions(worktreeId?: string): EmulatorActiveSession[] {
-    return this.sessionRegistry.listActive(worktreeId)
+  async listActiveSessions(worktreeId?: string): Promise<EmulatorActiveSession[]> {
+    // The prune drops devices stopped outside Orca before they are listed as attached.
+    return this.hasLiveManagedSessions().then(() => this.sessionRegistry.listActive(worktreeId))
   }
 
   async checkServeSimAvailable(): Promise<void> {
