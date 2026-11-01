@@ -3,7 +3,7 @@
  * to resources/plugins/declarative/orca-runtime.mjs by config/scripts/build-plugin-declarative-runtime.mjs.
  * Orca's host page installs the runtime, imports the panel module and boots it.
  */
-import { read } from './declarative-atoms'
+import { read, resetAtoms } from './declarative-atoms'
 import type { OrcaComponent } from './declarative-elements'
 import {
   createOrcaDeclarativeRuntime,
@@ -45,6 +45,7 @@ export function installOrcaDeclarativeRuntime(
   options: Pick<OrcaRuntimeOptions, 'post'> & Partial<OrcaRuntimeOptions>
 ): OrcaDeclarativeRuntime {
   runtime?.dispose()
+  resetAtoms()
   const installed = createOrcaDeclarativeRuntime({
     bridge: globalBridge(),
     colorScheme: documentColorScheme(),

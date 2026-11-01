@@ -10,6 +10,8 @@ ORCA plugin types <dir> --json
 ORCA plugin validate <dir|orca-plugin.json|orca-catalog.json> --json
 ORCA plugin inspect <dir> --json
 ORCA plugin release-entry <dir> --json
+ORCA plugin test [dir] --json
+ORCA plugin check [dir] --json
 ORCA plugin dev load <dir> [--approve <fingerprint>] --json
 ORCA plugin dev reload [<dir>] [--approve <fingerprint>] --json
 ORCA plugin dev unload <dir|plugin-key> --json
@@ -32,7 +34,11 @@ Exit codes: `0` ok, `1` error, `2` `plugin_invalid`, `3` `approval_required` or 
    `.orca/types/`, which the plugin's `tsconfig.json` extends.
 2. Edit the files. Field rules: `docs/reference/plugin-manifest.md`, `plugin-themes.md`,
    `plugin-theme-tokens.md`, `plugin-syntax.md` and `plugin-authoring.md` in the Orca repository.
-3. `plugin validate` until it passes. It is offline and never runs plugin code.
+3. `plugin validate` until it passes. It is offline and never runs plugin code. For components
+   panels, `plugin check` also renders each panel once in Node and reports runtime errors with
+   file:line, and `plugin test` runs the plugin's `*.test.ts(x)` files with `orca/testing`
+   (see `docs/reference/plugin-declarative-ui.md`, "Testing"). Both run the plugin's code
+   unsandboxed on this machine.
 4. `plugin dev load <dir>` adds the folder to Settings → Plugins → Development folders on the
    Orca host and loads it. Orca reloads it, and restarts its worker, when its files change; run
    `plugin dev reload <dir>` if a change was missed. `plugin restart <plugin-key>` stops a

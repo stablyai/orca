@@ -7,11 +7,13 @@ import { parsePluginManifest } from '../../shared/plugins/manifest/plugin-manife
 /** Plugin-relative folder `orca plugin types` owns; dev hashing and loading skip it. */
 export const PLUGIN_TYPES_DIR = '.orca/types'
 
-/** Host, frame (`window.orca`) and worker (`orca/worker`) typings, under resources/plugins/types. */
+/** Host, frame (`window.orca`), worker (`orca/worker`) and test kit (`orca/testing`) typings,
+ *  under resources/plugins/types. */
 const PLUGIN_SURFACE_TYPINGS = [
   { dir: 'orca-host', file: 'orca-host.d.ts' },
   { dir: 'orca-frame', file: 'orca-frame.d.ts' },
-  { dir: 'orca-worker', file: 'orca-worker.d.ts' }
+  { dir: 'orca-worker', file: 'orca-worker.d.ts' },
+  { dir: 'orca-testing', file: 'orca-testing.d.ts' }
 ] as const
 
 // Why one tsconfig the plugin extends: the typings and JSX settings then track the Orca that wrote

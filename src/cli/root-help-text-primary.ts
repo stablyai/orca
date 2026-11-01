@@ -52,6 +52,8 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  plugin validate           Check a plugin folder, manifest or catalog',
   '  plugin inspect            Show what a plugin would get and its content hash',
   '  plugin release-entry      Print the catalog release entry for HEAD',
+  "  plugin test               Run a plugin's tests in Node with Orca's test kit",
+  '  plugin check              Validate, then render each components panel once',
   '  plugin list               List plugins on the Orca host',
   "  plugin logs               Print a plugin's recent log lines",
   '  plugin enable             Enable a plugin (code needs --approve)',

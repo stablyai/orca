@@ -149,6 +149,59 @@ esbuild src/panel.tsx --bundle --format=esm --jsx=automatic --jsx-import-source=
 bundle. [`examples/plugins/hello-components`](../../examples/plugins/hello-components) has a build
 script.
 
+## Testing
+
+`orca plugin test [dir]` runs the plugin's `*.test.ts(x)` files in plain Node, with no Orca window:
+Node's built-in runner (`node:test`), or the plugin's own vitest when it has one installed. `orca` and
+`orca/testing` resolve to the files this Orca ships, and the plugin's sources are transpiled and
+resolved exactly as Orca loads them, so a test runs the code Orca runs. The exit code is the runner's.
+
+```tsx
+import { assert, mount, test } from 'orca/testing'
+import * as panel from './panel'
+
+test('adds a task', async () => {
+  const view = await mount(panel, { persisted: { plugin: { todos: [] } } })
+
+  await view.type({ label: 'New task' }, 'Ship it', { submit: true })
+
+  assert.ok(view.find({ role: 'button', text: /Ship it/ }))
+  assert.deepEqual(view.persisted.plugin.todos, [{ id: 1, title: 'Ship it', done: false }])
+  assert.deepEqual(view.errors, [])
+  await view.unmount()
+})
+```
+
+- `orca/testing` also exports Node's `test`, `describe`, `beforeEach`, `afterEach` and strict `assert`,
+  so tests type-check without `@types/node`. With vitest, use vitest's own `test` and `expect`.
+- `mount(module | Component, options)` boots the panel with the real runtime (persisted atoms, `setup`,
+  then the first render) and resolves once it has drawn. Options: `host`, `theme`, `locale`,
+  `visible`, `panelId`, and `persisted` (`{ plugin, workspace }` by atom key; `stored(value, version)`
+  for a value an older version wrote, to test `migrate`). Each mount starts every atom from its
+  initial value; one panel is mounted at a time.
+- Find with `find(query)` (the innermost match, or `null`) and `findAll(query)`. A query matches on
+  any of `type`, `role`, `text`, `label` (a control's `label`, a list item's or card's `title`) and
+  `testId` (the element's `key`); `text` and `label` match exactly or by RegExp.
+- Act with `press`, `type(el, text, { replace?, submit? })`, `submit`, `toggle` and `select(el, value)`,
+  on an element or a query. Each act resolves once the panel has settled: its renders, its host calls
+  and its persisted writes. `valueOf(el)` is what Orca shows in an Input, Switch or Select, with the
+  same edit protocol as Orca.
+- Inspect `tree()` (plain data for snapshots, handlers shown as `[handler]`), `errors` (what the panel
+  threw, with its stack, and renders Orca would refuse), `warnings` (props and components Orca would
+  drop) and `persisted`. `emit('theme', ...)`, `setVisible`, `rerender` and `settled` drive the rest;
+  `unmount()` ends the run, running `setup` cleanup.
+- `mockHost({ capabilities, results })` stands in for Orca's host. It refuses what Orca refuses, with
+  the same error codes: a method panels cannot call, a capability the manifest does not declare
+  (capabilities default to the manifest's), bad params, and `shell.openExternal` or `files.saveAs`
+  without a press first (each `press` grants one). `results` maps a method to a value or to a function
+  of its params, which may throw `hostError(code)`; `calls` and `callsOf(method)` record every call.
+  The stationary-control rule for gestures is not simulated.
+
+`orca plugin check [dir]` validates the plugin like `orca plugin validate`, then renders every
+components panel once against `mockHost()` and reports what the panel threw (with `file:line`),
+layouts Orca would refuse, and props it would drop. Both commands run the plugin's code in a plain
+Node process on your machine, without Orca's sandbox.
+
 ## Catalog
 
 Props are semantic: tones, sizes and gaps, never class names, styles or colours. Colour has one

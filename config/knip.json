@@ -37,6 +37,8 @@
     "**/*.test.{ts,tsx,mjs}",
     "src/preload/doc-preview-link.ts",
     "src/preload/plugin-frame-guest.ts",
+    "src/main/plugins/testing/plugin-test-hooks.ts",
+    "src/main/plugins/testing/plugin-test-register.ts",
     "src/main/ai-vault/session-scanner-service-entry.ts",
     "src/main/native-chat/wsl-transcript-fs-process-entry.ts",
     "src/main/usage/usage-scan-worker-entry.ts",
