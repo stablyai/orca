@@ -210,7 +210,8 @@ describe('Claude profile refresh from the default home', () => {
       userID: 'profile-id',
       groveConfigCache: { b: 2 },
       theme: 'light',
-      onlyHere: true
+      onlyHere: true,
+      mcpServers: shared.mcpServers
     })
     expect((await provision(f)).surfaces['.claude.json']).toBe('merged')
     expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
@@ -492,6 +493,14 @@ describe('Claude profile refresh from the default home', () => {
       await f.run(f.b)
       expect(f.state(f.userHome)).toEqual({ mcpServers: { linear: { url: 'https://linear' } } })
       expect(f.state(f.b).mcpServers).toEqual({ linear: { url: 'https://linear' } })
+      // A removal sticks even though Claude never started in the user's own file.
+      claudeSaves(join(f.a, '.claude.json'), (config) => {
+        config.mcpServers = {}
+      })
+      await f.run(f.b)
+      await f.run(f.a)
+      expect(f.state(f.userHome).mcpServers).toEqual({})
+      expect(f.state(f.b).mcpServers).toEqual({})
     })
 
     it("does not turn another writer's overwrite of the user's settings into a deletion", async () => {
@@ -523,6 +532,8 @@ describe('Claude profile refresh from the default home', () => {
       await f.run(f.b)
       claudeSaves(join(f.a, 'settings.json'), (settings) => {
         settings.enabledPlugins = { 'linear@market': true }
+        // Login settings saved on one account must never reach another account's sign-in.
+        settings.apiKeyHelper = 'a-key'
       })
       await f.run(f.a)
       expect(f.read(join(f.a, 'settings.json')).enabledPlugins).toEqual({ 'linear@market': true })

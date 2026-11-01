@@ -118,8 +118,18 @@ export function isPlainRecord(value: unknown): value is Record<string, unknown> 
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-// Orca installs its own entries here in each account, so these copy one way from the user.
-const ONE_WAY_SETTINGS: ReadonlySet<string> = new Set(['hooks', 'statusLine'])
+// Orca installs its own hooks and status line in each account, and login settings must never
+// reach another account's sign-in, so these copy one way from the user.
+export const ONE_WAY_SETTINGS: ReadonlySet<string> = new Set([
+  'hooks',
+  'statusLine',
+  'env',
+  'apiKeyHelper',
+  'awsAuthRefresh',
+  'awsCredentialExport',
+  'forceLoginMethod',
+  'forceLoginOrgUUID'
+])
 
 export function settingsUnits(settings: Record<string, unknown>): SharedUnits {
   return new Map(

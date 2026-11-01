@@ -120,6 +120,8 @@ export function reconcileClaudeSharedSettings(args: {
   accountFile: string
   base: SharedHashes | undefined
   oneWay: boolean
+  /** False copies from the user only, for a refresh that couldn't take the host lock. */
+  writeBack: boolean
 }): { outcome: ClaudeProfileSurfaceOutcome; base: SharedHashes | undefined } {
   if (lstatSync(args.accountFile, { throwIfNoEntry: false })?.isSymbolicLink()) {
     return { outcome: 'user-owned', base: args.base }
@@ -141,17 +143,18 @@ export function reconcileClaudeSharedSettings(args: {
   // Claude refuses to save settings through a link, so Orca doesn't either: those copy one way.
   const userLinked = lstatSync(args.userFile, { throwIfNoEntry: false })?.isSymbolicLink() === true
   // Claude never deletes settings.json, so only a missing account copy is not a deletion.
-  const shared = userLinked
-    ? settingsUnits(userValue)
-    : reconcileSharedUnits(
-        settingsUnits(userValue),
-        settingsUnits(accountValue),
-        args.base ?? null,
-        {
-          user: true,
-          account: account.kind === 'present'
-        }
-      )
+  const shared =
+    userLinked || !args.writeBack
+      ? settingsUnits(userValue)
+      : reconcileSharedUnits(
+          settingsUnits(userValue),
+          settingsUnits(accountValue),
+          args.base ?? null,
+          {
+            user: true,
+            account: account.kind === 'present'
+          }
+        )
   let outcome: ClaudeProfileSurfaceOutcome = 'unchanged'
   let base = hashUnits(shared)
   if (!sameUnits(settingsUnits(userValue), shared)) {
@@ -161,11 +164,10 @@ export function reconcileClaudeSharedSettings(args: {
     outcome = 'merged'
   }
   // Compare without Orca's hooks: the installer adds them to the account after this copy.
+  const sameHooks = withoutOrcaHooks(userValue) === withoutOrcaHooks(accountValue)
   const oneWay = !args.oneWay
     ? accountValue
-    : withoutOrcaHooks(userValue) === withoutOrcaHooks(accountValue)
-      ? { hooks: accountValue.hooks, statusLine: userValue.statusLine }
-      : userValue
+    : { ...userValue, hooks: sameHooks ? accountValue.hooks : userValue.hooks }
   const accountNext = withSettingsUnits(oneWay, shared)
   if (account.kind === 'present' && sameTopLevel(accountNext, accountValue)) {
     return { outcome, base }
@@ -191,6 +193,12 @@ export function createJsonFile(file: string, value: Record<string, unknown>): bo
   }
 }
 
+// Claude sets firstStartTime once per file, so a recorded value that changed means Claude
+// recreated the file: its missing values are not deletions.
+function trustsDeletions(recorded: string | undefined, current: string | undefined): boolean {
+  return recorded === undefined || recorded === current
+}
+
 function throwIfNotUpdated(outcome: string, file: string): void {
   if (outcome === 'locked' || outcome === 'unreadable') {
     throw new ClaudeProfileSurfaceError(outcome, `${file} is ${outcome}`)
@@ -205,6 +213,8 @@ export async function reconcileClaudeSharedState(args: {
   userFile: string
   accountFile: string
   base: ClaudeSharedBase
+  /** False copies from the user only, for a refresh that couldn't take the host lock. */
+  writeBack: boolean
   copyRest?: (
     user: Record<string, unknown>,
     account: Record<string, unknown>
@@ -225,12 +235,12 @@ export async function reconcileClaudeSharedState(args: {
     user = current
     const userStart =
       typeof current.firstStartTime === 'string' ? current.firstStartTime : undefined
-    // Claude sets firstStartTime once per file: a file it recreated, or Orca made and Claude
-    // never started in, has no deletions to pass on.
-    shared = reconcileSharedUnits(stateUnits(current), accountRead, args.base.state ?? null, {
-      user: userStart !== undefined && userStart === args.base.userStart,
-      account: accountStart !== undefined && accountStart === args.base.accountStart
-    })
+    shared = args.writeBack
+      ? reconcileSharedUnits(stateUnits(current), accountRead, args.base.state ?? null, {
+          user: trustsDeletions(args.base.userStart, userStart),
+          account: trustsDeletions(args.base.accountStart, accountStart)
+        })
+      : stateUnits(current)
     if (sameUnits(stateUnits(current), shared)) {
       return { kind: 'unchanged' }
     }
@@ -240,7 +250,11 @@ export async function reconcileClaudeSharedState(args: {
   throwIfNotUpdated(userOutcome, args.userFile)
   if (userOutcome === 'missing-config') {
     // A user who never ran Claude outside an account has no file yet: give it the shared values.
-    if (accountRead.size === 0 || !createJsonFile(args.userFile, withStateUnits({}, accountRead))) {
+    if (
+      !args.writeBack ||
+      accountRead.size === 0 ||
+      !createJsonFile(args.userFile, withStateUnits({}, accountRead))
+    ) {
       return { outcome: 'absent', base: args.base }
     }
     shared = accountRead

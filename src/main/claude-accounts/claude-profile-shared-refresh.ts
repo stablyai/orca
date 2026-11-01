@@ -30,7 +30,8 @@ async function copyState(
   source: string,
   target: string,
   base: ClaudeSharedBase,
-  copyRest: CopyRest
+  copyRest: CopyRest,
+  writeBack: boolean
 ): Promise<{ outcome: ClaudeProfileSurfaceOutcome; base: ClaudeSharedBase }> {
   if (lstatIfPresent(target)?.isSymbolicLink()) {
     return { outcome: 'user-owned', base }
@@ -43,7 +44,7 @@ async function copyState(
     return { outcome: 'absent', base }
   }
   const reconcile = () =>
-    reconcileClaudeSharedState({ userFile: source, accountFile: target, base, copyRest })
+    reconcileClaudeSharedState({ userFile: source, accountFile: target, base, copyRest, writeBack })
   const result = await reconcile()
   const user = readClaudeProfileObject(source)
   if (lstatIfPresent(target) || user.kind !== 'present') {
@@ -72,14 +73,16 @@ async function reconcileOtherAccount(home: string, paths: SharedPaths): Promise<
       userFile: paths.userSettings,
       accountFile: join(home, 'settings.json'),
       base: base.settings,
-      oneWay: false
+      oneWay: false,
+      writeBack: true
     }).base
   }
   if (lstatIfPresent(paths.statePath(home))?.isFile()) {
     const state = await reconcileClaudeSharedState({
       userFile: paths.userState,
       accountFile: paths.statePath(home),
-      base
+      base,
+      writeBack: true
     })
     base = state.base
   }
@@ -116,14 +119,15 @@ export async function refreshClaudeProfileSharedConfig(args: {
           resolve(home) !== resolve(profileHome) && existsSync(join(dirname(home), 'profile.json'))
       )
     : []
-  const reconcileSelf = async (): Promise<void> => {
+  const reconcileSelf = async (writeBack: boolean): Promise<void> => {
     let base = readClaudeSharedBase(profileHome, paths.source)
     await runClaudeProfileSurface(report, 'settings.json', () => {
       const result = reconcileClaudeSharedSettings({
         userFile: paths.userSettings,
         accountFile: join(profileHome, 'settings.json'),
         base: base.settings,
-        oneWay: true
+        oneWay: true,
+        writeBack
       })
       base = { ...base, settings: result.base }
       return result.outcome
@@ -133,12 +137,15 @@ export async function refreshClaudeProfileSharedConfig(args: {
         paths.userState,
         args.statePath(profileHome),
         base,
-        args.copyRest
+        args.copyRest,
+        writeBack
       )
       base = result.base
       return result.outcome
     })
-    writeClaudeSharedBase(profileHome, base)
+    if (writeBack) {
+      writeClaudeSharedBase(profileHome, base)
+    }
   }
   const lockRoot = args.dataRoot ? join(args.dataRoot, 'claude-profiles') : dirname(profileHome)
   try {
@@ -148,13 +155,13 @@ export async function refreshClaudeProfileSharedConfig(args: {
           warnClaudeProfile(report, 'shared-config', error)
         )
       }
-      await reconcileSelf()
+      await reconcileSelf(true)
     })
   } catch (error) {
     warnClaudeProfile(report, 'shared-config', error)
-    // A first launch waits for setup, so it copies the user's config even while the lock is busy.
+    // A first launch waits for setup: copy the user's config in, writing nothing back unlocked.
     if (args.firstSetup) {
-      await reconcileSelf()
+      await reconcileSelf(false)
     }
     report.surfaces['settings.json'] ??= 'failed'
     report.surfaces['.claude.json'] ??= 'failed'
