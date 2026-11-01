@@ -1,7 +1,7 @@
 import { startAgentSessionCommandMenuQuery } from '../../../src/shared/agent-session-command-menu-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
-import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'

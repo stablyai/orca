@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { StructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
-import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
-import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
+import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/agent-session/view/structured-agent-session-composer'
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome

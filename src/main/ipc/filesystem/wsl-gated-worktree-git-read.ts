@@ -1,4 +1,4 @@
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'

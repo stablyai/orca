@@ -10,11 +10,11 @@ import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journ
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-test-harness'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 
 vi.mock('./structured-agent-model-catalog-wiring', () => ({
   modelCatalogHostDeps: async () => ({})

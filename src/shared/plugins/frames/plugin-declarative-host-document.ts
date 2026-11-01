@@ -28,16 +28,18 @@ export function buildPluginDeclarativeHostBody(entry: string): string {
     'delete window[name]\n' +
     `const report = (error) => post(${scriptJson(PLUGIN_DECLARATIVE_MESSAGES.error)}, ` +
     '{ revision: 0, message: String((error && error.message) || error).slice(0, 4096) })\n' +
+    'let runtime = null\n' +
     'try {\n' +
     // Why the URL, not `orca`: the same module instance, and no bare specifier in main's bundle.
     `  const orca = await import(${scriptJson(RUNTIME_PATH)})\n` +
     // Installed before the panel module loads, so state is fetched while it downloads.
-    '  const runtime = orca.installOrcaDeclarativeRuntime({ post, awaitHydration: true })\n' +
+    '  runtime = orca.installOrcaDeclarativeRuntime({ post, awaitHydration: true })\n' +
     `  await runtime.boot(await import(${scriptJson(entryPath)}))\n` +
     '} catch (error) {\n' +
+    // The runtime's report names the plugin file and line; the fallback covers a runtime that failed.
+    "  if (runtime && typeof runtime.report === 'function') runtime.report(error)\n" +
     // Why the console too: main routes guest console errors to `orca plugin logs`.
-    '  console.error((error && error.stack) || String(error))\n' +
-    '  report(error)\n' +
+    '  else { console.error((error && error.stack) || String(error)); report(error) }\n' +
     '}\n' +
     '</script>\n'
   )

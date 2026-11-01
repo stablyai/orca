@@ -221,11 +221,6 @@
       "ordinal": 3,
       "value": {}
     },
-    "5f6bfd36288e": {
-      "name": "load-review-data",
-      "ordinal": 9,
-      "value": {}
-    },
     "73f7bfbf2ed4": {
       "actionError": "Unknown method",
       "busyAction": {
@@ -259,10 +254,11 @@
         "$rpc": "null"
       }
     },
-    "78e4e55c0f27": {
-      "name": "load-review-data",
-      "ordinal": 8,
-      "value": {}
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
     },
     "83f74636ef79": {
       "name": "git.discard#1",
@@ -296,6 +292,12 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
     },
     "8a3835098ba1": {
       "name": "git.discard#1",
@@ -332,11 +334,6 @@
           }
         }
       }
-    },
-    "92e9d747a5d2": {
-      "name": "git.stage#2",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.stage\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}"
     },
     "9e0132f8d584": {
       "actionError": "outer refused",
@@ -408,50 +405,10 @@
         }
       }
     },
-    "a8b10309c168": {
-      "name": "git.stage#2",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.stage\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}"
-    },
     "aa50219ebe9a": {
       "name": "git.discard#1",
       "ordinal": 5,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.discard\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}"
-    },
-    "b9a737200881": {
-      "name": "git.stage#2",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.stage"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filePath": "src/app.ts",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "staged": true
-          }
-        }
-      }
     },
     "bc51451c8e7b": {
       "name": "git.discard#1",
@@ -489,39 +446,6 @@
         }
       }
     },
-    "c5425fe73868": {
-      "actionError": "1 reviewed file staged",
-      "busyAction": {
-        "$rpc": "null"
-      },
-      "screenState": {
-        "branchCompare": {
-          "$rpc": "null"
-        },
-        "comments": [
-          {
-            "body": "needs a test",
-            "createdAt": 0,
-            "filePath": "src/app.ts",
-            "id": "note-1",
-            "lineNumber": 4,
-            "side": "modified",
-            "worktreeId": "workspace-1"
-          }
-        ],
-        "kind": "ready",
-        "reviewState": {
-          "files": {},
-          "version": 1
-        },
-        "status": {
-          "entries": []
-        }
-      },
-      "sendSheet": {
-        "$rpc": "null"
-      }
-    },
     "d1de63d44a74": {
       "name": "git.discard#1",
       "ordinal": 4,
@@ -555,49 +479,6 @@
             "discarded": true
           }
         }
-      }
-    },
-    "da79852368d5": {
-      "name": "git.stage#2",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.stage"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filePath": "src/app.ts",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "staged": true
-          }
-        }
-      }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
       }
     },
     "ee31fd9b8c22": {
@@ -785,7 +666,7 @@
           "sender": ["fd1322e39fc5"],
           "payloads": ["f39122ee30fc"],
           "settlements": {
-            "stage": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a"
           },
           "state": "2fc890e4b748",
           "effects": ["53b792409cec"]
@@ -797,25 +678,11 @@
           "sender": ["fd1322e39fc5", "d1de63d44a74"],
           "payloads": ["f39122ee30fc", "aa50219ebe9a"],
           "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a",
+            "discard": "84e5ca07cb7a"
           },
           "state": "2fc890e4b748",
           "effects": ["53b792409cec", "a0c4d58800db"]
-        }
-      },
-      {
-        "id": "review-git-mutations-run.normal:swept",
-        "observation": {
-          "sender": ["fd1322e39fc5", "d1de63d44a74", "b9a737200881"],
-          "payloads": ["f39122ee30fc", "aa50219ebe9a", "92e9d747a5d2"],
-          "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a",
-            "stage-reviewed": "eb79a9b3682a"
-          },
-          "state": "c5425fe73868",
-          "effects": ["53b792409cec", "a0c4d58800db", "5f6bfd36288e"]
         }
       },
       {
@@ -824,25 +691,11 @@
           "sender": ["fd1322e39fc5", "a31e28b0c98d"],
           "payloads": ["f39122ee30fc", "aa50219ebe9a"],
           "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a",
+            "discard": "84e5ca07cb7a"
           },
           "state": "2fc890e4b748",
           "effects": ["53b792409cec", "a0c4d58800db"]
-        }
-      },
-      {
-        "id": "review-git-mutations-run.result-absent:swept",
-        "observation": {
-          "sender": ["fd1322e39fc5", "a31e28b0c98d", "b9a737200881"],
-          "payloads": ["f39122ee30fc", "aa50219ebe9a", "92e9d747a5d2"],
-          "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a",
-            "stage-reviewed": "eb79a9b3682a"
-          },
-          "state": "c5425fe73868",
-          "effects": ["53b792409cec", "a0c4d58800db", "5f6bfd36288e"]
         }
       },
       {
@@ -851,25 +704,11 @@
           "sender": ["fd1322e39fc5", "500111174b81"],
           "payloads": ["f39122ee30fc", "aa50219ebe9a"],
           "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a",
+            "discard": "84e5ca07cb7a"
           },
           "state": "2fc890e4b748",
           "effects": ["53b792409cec", "a0c4d58800db"]
-        }
-      },
-      {
-        "id": "review-git-mutations-run.result-null:swept",
-        "observation": {
-          "sender": ["fd1322e39fc5", "500111174b81", "b9a737200881"],
-          "payloads": ["f39122ee30fc", "aa50219ebe9a", "92e9d747a5d2"],
-          "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a",
-            "stage-reviewed": "eb79a9b3682a"
-          },
-          "state": "c5425fe73868",
-          "effects": ["53b792409cec", "a0c4d58800db", "5f6bfd36288e"]
         }
       },
       {
@@ -878,25 +717,11 @@
           "sender": ["fd1322e39fc5", "1707a69cd9b6"],
           "payloads": ["f39122ee30fc", "aa50219ebe9a"],
           "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a",
+            "discard": "84e5ca07cb7a"
           },
           "state": "2fc890e4b748",
           "effects": ["53b792409cec", "a0c4d58800db"]
-        }
-      },
-      {
-        "id": "review-git-mutations-run.inner-ok-missing:swept",
-        "observation": {
-          "sender": ["fd1322e39fc5", "1707a69cd9b6", "b9a737200881"],
-          "payloads": ["f39122ee30fc", "aa50219ebe9a", "92e9d747a5d2"],
-          "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a",
-            "stage-reviewed": "eb79a9b3682a"
-          },
-          "state": "c5425fe73868",
-          "effects": ["53b792409cec", "a0c4d58800db", "5f6bfd36288e"]
         }
       },
       {
@@ -905,25 +730,11 @@
           "sender": ["fd1322e39fc5", "8a3835098ba1"],
           "payloads": ["f39122ee30fc", "aa50219ebe9a"],
           "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a",
+            "discard": "84e5ca07cb7a"
           },
           "state": "2fc890e4b748",
           "effects": ["53b792409cec", "a0c4d58800db"]
-        }
-      },
-      {
-        "id": "review-git-mutations-run.inner-false-string-error:swept",
-        "observation": {
-          "sender": ["fd1322e39fc5", "8a3835098ba1", "b9a737200881"],
-          "payloads": ["f39122ee30fc", "aa50219ebe9a", "92e9d747a5d2"],
-          "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a",
-            "stage-reviewed": "eb79a9b3682a"
-          },
-          "state": "c5425fe73868",
-          "effects": ["53b792409cec", "a0c4d58800db", "5f6bfd36288e"]
         }
       },
       {
@@ -932,25 +743,11 @@
           "sender": ["fd1322e39fc5", "32d4fa18fed5"],
           "payloads": ["f39122ee30fc", "aa50219ebe9a"],
           "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a",
+            "discard": "84e5ca07cb7a"
           },
           "state": "2fc890e4b748",
           "effects": ["53b792409cec", "a0c4d58800db"]
-        }
-      },
-      {
-        "id": "review-git-mutations-run.inner-false-object-error:swept",
-        "observation": {
-          "sender": ["fd1322e39fc5", "32d4fa18fed5", "b9a737200881"],
-          "payloads": ["f39122ee30fc", "aa50219ebe9a", "92e9d747a5d2"],
-          "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a",
-            "stage-reviewed": "eb79a9b3682a"
-          },
-          "state": "c5425fe73868",
-          "effects": ["53b792409cec", "a0c4d58800db", "5f6bfd36288e"]
         }
       },
       {
@@ -959,25 +756,11 @@
           "sender": ["fd1322e39fc5", "4d3162722645"],
           "payloads": ["f39122ee30fc", "aa50219ebe9a"],
           "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a",
+            "discard": "7ed3d39f0607"
           },
           "state": "9e0132f8d584",
           "effects": ["53b792409cec"]
-        }
-      },
-      {
-        "id": "review-git-mutations-run.outer-refused:swept",
-        "observation": {
-          "sender": ["fd1322e39fc5", "4d3162722645", "da79852368d5"],
-          "payloads": ["f39122ee30fc", "aa50219ebe9a", "a8b10309c168"],
-          "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a",
-            "stage-reviewed": "eb79a9b3682a"
-          },
-          "state": "c5425fe73868",
-          "effects": ["53b792409cec", "78e4e55c0f27"]
         }
       },
       {
@@ -986,25 +769,11 @@
           "sender": ["fd1322e39fc5", "f4493708b478"],
           "payloads": ["f39122ee30fc", "aa50219ebe9a"],
           "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a",
+            "discard": "7ed3d39f0607"
           },
           "state": "ee31fd9b8c22",
           "effects": ["53b792409cec"]
-        }
-      },
-      {
-        "id": "review-git-mutations-run.outer-refused-no-message:swept",
-        "observation": {
-          "sender": ["fd1322e39fc5", "f4493708b478", "da79852368d5"],
-          "payloads": ["f39122ee30fc", "aa50219ebe9a", "a8b10309c168"],
-          "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a",
-            "stage-reviewed": "eb79a9b3682a"
-          },
-          "state": "c5425fe73868",
-          "effects": ["53b792409cec", "78e4e55c0f27"]
         }
       },
       {
@@ -1013,25 +782,11 @@
           "sender": ["fd1322e39fc5", "bc51451c8e7b"],
           "payloads": ["f39122ee30fc", "aa50219ebe9a"],
           "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a",
+            "discard": "7ed3d39f0607"
           },
           "state": "73f7bfbf2ed4",
           "effects": ["53b792409cec"]
-        }
-      },
-      {
-        "id": "review-git-mutations-run.method-not-found:swept",
-        "observation": {
-          "sender": ["fd1322e39fc5", "bc51451c8e7b", "da79852368d5"],
-          "payloads": ["f39122ee30fc", "aa50219ebe9a", "a8b10309c168"],
-          "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a",
-            "stage-reviewed": "eb79a9b3682a"
-          },
-          "state": "c5425fe73868",
-          "effects": ["53b792409cec", "78e4e55c0f27"]
         }
       },
       {
@@ -1040,25 +795,11 @@
           "sender": ["fd1322e39fc5", "83f74636ef79"],
           "payloads": ["f39122ee30fc", "aa50219ebe9a"],
           "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a",
+            "discard": "7ed3d39f0607"
           },
           "state": "fa4af2435d85",
           "effects": ["53b792409cec"]
-        }
-      },
-      {
-        "id": "review-git-mutations-run.transport-rejection:swept",
-        "observation": {
-          "sender": ["fd1322e39fc5", "83f74636ef79", "da79852368d5"],
-          "payloads": ["f39122ee30fc", "aa50219ebe9a", "a8b10309c168"],
-          "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a",
-            "stage-reviewed": "eb79a9b3682a"
-          },
-          "state": "c5425fe73868",
-          "effects": ["53b792409cec", "78e4e55c0f27"]
         }
       },
       {
@@ -1067,25 +808,11 @@
           "sender": ["fd1322e39fc5", "f4b32f056985"],
           "payloads": ["f39122ee30fc", "aa50219ebe9a"],
           "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a",
+            "discard": "7ed3d39f0607"
           },
           "state": "1c6a13b5a4b5",
           "effects": ["53b792409cec"]
-        }
-      },
-      {
-        "id": "review-git-mutations-run.transport-rejection-no-message:swept",
-        "observation": {
-          "sender": ["fd1322e39fc5", "f4b32f056985", "da79852368d5"],
-          "payloads": ["f39122ee30fc", "aa50219ebe9a", "a8b10309c168"],
-          "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a",
-            "stage-reviewed": "eb79a9b3682a"
-          },
-          "state": "c5425fe73868",
-          "effects": ["53b792409cec", "78e4e55c0f27"]
         }
       }
     ]

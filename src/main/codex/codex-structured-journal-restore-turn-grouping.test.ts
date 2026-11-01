@@ -4,8 +4,8 @@ import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-se
 import { nativeChatTurnFold } from '../../shared/native-chat/transcript/native-chat-turn-fold'
 import { nativeChatTurnMembership } from '../../shared/native-chat/transcript/native-chat-turn-membership'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
-import { projectStructuredItemToNativeChat } from '../../shared/structured-agent-session-projection'
-import { selectStructuredAgentTurnBars } from '../../shared/structured-agent-session-turn-timing'
+import { projectStructuredItemToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
+import { selectStructuredAgentTurnBars } from '../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { JournalDerivedTurnScope } from '../native-chat/agent-session-journal/journal-derived-turn-scope'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
@@ -97,7 +97,8 @@ describe('grouping a Codex thread restored from full history', () => {
           draws: true,
           outlivesTurn: false,
           reportsFailure: false,
-          explainsTurn: false
+          explainsTurn: false,
+          sendsBack: false
         })),
         settledTurnKeys: new Set(bars.settledTurns.keys()),
         expandedTurnKeys: new Set()

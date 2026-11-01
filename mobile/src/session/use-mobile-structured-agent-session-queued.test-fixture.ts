@@ -6,7 +6,7 @@ import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
 } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcResponse } from '../transport/types'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
-import { activeProviderContext } from '../../../shared/agent-session-provider-context'
+import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
@@ -11,8 +11,8 @@ import type { AgentSessionQueuePause } from '../../../shared/agent-session/reque
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionMessagePayload } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import {
   StructuredAgentSessionHost,
   type StructuredAgentSessionHostDeps

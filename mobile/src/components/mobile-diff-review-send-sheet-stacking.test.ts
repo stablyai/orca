@@ -120,6 +120,7 @@ function Screen({ client }: { client: RpcClient }) {
     name: 'review',
     initialFilter: 'all',
     initialTarget: null,
+    commitOid: null,
     onOpenSession: () => {},
     onReconnect: null
   })
@@ -222,12 +223,12 @@ describe('review screen sheets never stack', () => {
   it('Review Complete → Send shows Send Notes only after Review Complete has closed', async () => {
     await mountScreen()
     await completeReview()
-    expect(shownSheets()).toEqual(['Review Complete'])
+    expect(shownSheets()).toEqual(['All files viewed'])
 
-    press(drawer('Review Complete'), 'Send notes to agent')
+    press(drawer('All files viewed'), 'Send notes to agent')
     expect(shownSheets()).toEqual([])
 
-    finishClosing('Review Complete')
+    finishClosing('All files viewed')
     expect(shownSheets()).toEqual(['Send Notes'])
   })
 
@@ -235,8 +236,8 @@ describe('review screen sheets never stack', () => {
     await mountScreen()
     await completeReview()
 
-    act(() => drawer('Review Complete').props.onClose())
-    finishClosing('Review Complete')
+    act(() => drawer('All files viewed').props.onClose())
+    finishClosing('All files viewed')
 
     expect(shownSheets()).toEqual([])
   })
@@ -255,7 +256,7 @@ describe('review screen sheets never stack', () => {
     expect(shownSheets()).toEqual([])
 
     finishClosing('Discard File')
-    expect(shownSheets()).toEqual(['Review Complete'])
+    expect(shownSheets()).toEqual(['All files viewed'])
   })
 
   it('a sheet replaced before it was ever shown is never mounted', async () => {

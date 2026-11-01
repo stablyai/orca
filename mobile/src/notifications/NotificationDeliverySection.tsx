@@ -46,6 +46,17 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
           'After 3 minutes without keyboard or mouse activity, or when locked.'
         )
       )}
+      {row(
+        'onlyWhenAgentNeedsInput',
+        t(
+          'notifications.notificationDeliverySection.onlyWhenAgentNeedsInput',
+          'Only when an agent needs me'
+        ),
+        t(
+          'notifications.notificationDeliverySection.onlyWhenAgentNeedsInputHint',
+          'Permission requests and questions. Skips finished agents.'
+        )
+      )}
       {row('sound', t('notifications.notificationDeliverySection.sound', 'Notification sound'))}
       {row(
         'suppressWhileViewing',

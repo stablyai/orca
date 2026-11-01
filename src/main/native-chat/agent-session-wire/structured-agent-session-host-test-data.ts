@@ -13,7 +13,7 @@ import type {
   AgentSessionExecutionLocation
 } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   attachFingerprintFields,

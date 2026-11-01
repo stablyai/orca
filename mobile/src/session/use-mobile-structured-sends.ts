@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import type { StructuredAgentSessionOptimisticMessage } from '../../../src/shared/structured-agent-session-message-projection'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import {
   structuredAgentSessionReadCoversSend,
   structuredAgentSessionSettledSends

@@ -5,7 +5,7 @@ import {
   claudeFrame,
   fakeClaude,
   identityFor as claudeIdentity
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import {
   acquireReadyCodexForTest,
   adapterFor as codexAdapter,

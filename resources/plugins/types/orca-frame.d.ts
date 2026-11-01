@@ -2,7 +2,16 @@
 // Mirrors src/shared/plugins/frames/plugin-panel-shell.ts (checked by plugin-frame-typings.test.ts).
 
 declare module 'orca/frame' {
-  import type { Disposable, HostApi, HostApiVersion } from 'orca/host'
+  import type {
+    Disposable,
+    HostApi,
+    HostApiVersion,
+    PluginBridgeApi,
+    PluginEvents,
+    SecretsApi,
+    SettingsApi,
+    StorageApi
+  } from 'orca/host'
 
   export type FrameTheme = { colorScheme: 'light' | 'dark' }
   /** `bytes` documents come from editors whose manifest sets `"contentKind": "bytes"`. */
@@ -17,8 +26,9 @@ declare module 'orca/frame' {
   }
   /** The whole new content, made against document `baseVersion`. */
   export type EditorEdit = { baseVersion: number; content: EditorContent }
-  /** Payloads of `orca.on(event, handler)`. */
-  export type FrameEvents = {
+  /** Payloads of `orca.on(event, handler)`: frame events, and workspace and agent events (each
+   *  needs the read capability of its domain: `workspace:read` or `agent:read`). */
+  export type FrameEvents = PluginEvents & {
     /** The `--orca-*` variables and the `light`/`dark` class on `<html>` already changed. */
     theme: FrameTheme
     /** Custom editors: a new document; `orca.document.onDidChange` is the usual way to listen. */
@@ -47,8 +57,21 @@ declare module 'orca/frame' {
     ): Disposable
     /** Orca's UI language as a BCP-47 tag. */
     readonly locale: string
+    /** Your plugin's own worker: `request` its handlers, hear what it `post`s. */
+    readonly plugin: PluginBridgeApi
+    /** The plugin's own storage, the same its worker uses (`storage:own`). */
+    readonly storage: StorageApi
+    /** The plugin's settings, declared ones with their defaults (`settings:own`). */
+    readonly settings: SettingsApi
+    /** The plugin's encrypted secrets (`secrets:own`). */
+    readonly secrets: SecretsApi
     /** Desktop isolated frames only; needs a click or key press in the frame. */
-    readonly shell?: { openExternal(url: string): Promise<{ opened: boolean }> }
+    readonly shell?: {
+      /** `reason`: the person cancelled, or Orca's window was hidden so nobody could confirm. */
+      openExternal(
+        url: string
+      ): Promise<{ opened: boolean; reason?: 'cancelled' | 'consent-unavailable' }>
+    }
     /** Desktop isolated frames only; `cancelled` when the person closes the dialog. */
     readonly files?: {
       saveAs(options: SaveAsOptions): Promise<{ status: 'saved' | 'cancelled' }>

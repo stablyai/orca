@@ -1,7 +1,5 @@
-import type {
-  AgentSessionStatusSummary,
-  AgentSessionTurnCompletionEvent
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { AGENT_DONE_QUIET_MS } from '../../../shared/agent-transitions'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import {

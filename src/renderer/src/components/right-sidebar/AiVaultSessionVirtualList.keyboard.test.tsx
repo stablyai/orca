@@ -14,7 +14,7 @@ import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
 import type { AiVaultSessionListKeyboard } from './use-ai-vault-session-keyboard-navigation'
 import type { AiVaultResumeHere } from './ai-vault-session-resume-here'
@@ -48,17 +48,20 @@ vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => ({
     })
   })
 }))
-vi.mock('@/lib/structured-agent-session-launch-admission', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  beginHostAdmittedStructuredLaunch: (args: {
-    openAdmitted: () => { settlement: Promise<StructuredAgentLaunchSettlement> } | null
-  }) => ({
-    sessionId: null,
-    tab: null,
-    settlement: args.openAdmitted()?.settlement,
-    cancel: vi.fn()
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-admission',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    beginHostAdmittedStructuredLaunch: (args: {
+      openAdmitted: () => { settlement: Promise<StructuredAgentLaunchSettlement> } | null
+    }) => ({
+      sessionId: null,
+      tab: null,
+      settlement: args.openAdmitted()?.settlement,
+      cancel: vi.fn()
+    })
   })
-}))
+)
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 const observation = vi.hoisted(() => ({ value: 'live' }))

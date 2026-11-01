@@ -1,4 +1,4 @@
-import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session-permission-modes-capability'
+import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-permission-modes-capability'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../shared/structured-agent-session-host-capability'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
@@ -10,9 +10,9 @@ import {
   AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
-  AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
-  type RuntimeCapability
-} from '../../../shared/protocol-version'
+  AGENT_SESSION_REWIND_RECOVERY_CAPABILITY
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   ensureLocalRuntimeCapabilities,

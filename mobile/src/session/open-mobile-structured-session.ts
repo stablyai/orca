@@ -6,7 +6,7 @@ import {
   type StructuredSessionOpenTarget
 } from '../../../src/shared/open-structured-agent-session'
 import { isStructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { structuredAgentSessionPaneKey } from '../../../src/shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   structuredOpenLocation,

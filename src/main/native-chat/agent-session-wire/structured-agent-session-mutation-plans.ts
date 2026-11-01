@@ -17,7 +17,7 @@ import type {
   AgentSessionPromptResult,
   AgentSessionQueuedSendReceipt,
   AgentSessionSendResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session/agent-session-conversation-command'
 import { DISPATCH_DOUBT_SUBMISSION_MISSING } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { StructuredAgentSessionBackgroundStopInput } from './structured-agent-session-background-stop'

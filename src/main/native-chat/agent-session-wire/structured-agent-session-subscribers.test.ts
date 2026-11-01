@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { StructuredAgentSessionJournalProjections } from './structured-agent-session-status-journal-projection'

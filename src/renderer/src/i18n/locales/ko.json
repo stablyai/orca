@@ -1320,7 +1320,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "워크스페이스 외부의 파일은 아직 페어링된 서버에서 미리 볼 수 없습니다.",
           "webClientUnavailable": "문서 미리보기는 웹 클라이언트에서 사용할 수 없습니다."
         }
       },

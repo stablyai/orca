@@ -11,7 +11,7 @@ import { useNotificationPaneNavigation } from './use-notification-pane-navigatio
 import { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
-import { structuredAgentSessionPaneKey } from '../../../src/shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { BridgeInitRoute } from '../mobile-web-shell/bridge/bridge-envelope'
 import { parseOrcaSessionAddress } from '../../../src/shared/orca-session-address'
 import { activateMobileUiLocale, mobileI18n } from '../i18n/mobile-i18n'

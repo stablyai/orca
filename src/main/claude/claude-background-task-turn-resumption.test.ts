@@ -7,9 +7,9 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session-journa
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
-import { projectStructuredAgentSessionStatus } from '../../shared/structured-agent-session-projection'
+import { projectStructuredAgentSessionStatus } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 
 const SESSION = 'claude-session'
 const TOOL = 'toolu_fwd'

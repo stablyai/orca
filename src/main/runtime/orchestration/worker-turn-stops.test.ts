@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentPaneChange } from '../../agent-hooks/agent-transition-detector'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
-import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'

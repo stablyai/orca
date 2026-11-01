@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
+import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { agentSessionWriteFailureText } from '../native-chat/agent-session-write-notice-text'
 import { agentLabel } from '../../../../shared/ai-vault-session-filters'

@@ -1,6 +1,6 @@
 // Share pure slash-command data across desktop/mobile without DOM/RN dependencies or mirrored catalogs.
 
-import type { AgentSessionSlashCommand } from '../../agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../agent-session/agent-session-wire'
 import type { AgentType } from '../../agent-status-types'
 
 /** Terminal replies: composer answers locally without sending; transcript surfaces an agent-written row; absent means terminal/effect-only feedback. */

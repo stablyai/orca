@@ -23,8 +23,8 @@ describe('cross-version wire routing for the send path', () => {
 
   it.each([
     'src/shared/agent-session/requests/structured-agent-session-send-evidence.ts',
-    'src/shared/structured-agent-session-composer.ts',
-    'src/shared/structured-agent-session-reducer.ts',
+    'src/shared/agent-session/view/structured-agent-session-composer.ts',
+    'src/shared/agent-session/structured-agent-session-reducer.ts',
     'src/main/runtime/orchestration/send-agent-turn.ts',
     'src/main/runtime/orchestration/orchestration-caller-identity.ts',
     'src/main/runtime/rpc/orchestration-legacy-mail.ts',

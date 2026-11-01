@@ -6,7 +6,7 @@ import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-comm
 import { registerPtyHandlers } from './pty/register-handlers'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
-import { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture

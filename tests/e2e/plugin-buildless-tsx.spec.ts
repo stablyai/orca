@@ -1,7 +1,7 @@
 /**
  * Invariant: a plugin ships TSX with no build step. The frame protocol transpiles `.tsx`/`.ts` on
  * load and resolves extensionless relative imports, for a components panel and an HTML frame
- * whose entry is a `.ts` module; a bare package import fails with an error naming the file.
+ * whose entry is a `.ts` module; a bare package import fails with an error naming file:line:col.
  */
 
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -106,7 +106,7 @@ test('an HTML frame panel can name a .ts entry, and bare imports fail by name', 
       .toBe('typed 42')
     await expect
       .poll(() => read('document.getElementById("out")?.dataset.bare'), { timeout: 15_000 })
-      .toContain('app/bare.ts: cannot import "left-pad"')
+      .toContain('app/bare.ts:1:8: cannot import "left-pad"')
   } finally {
     await disablePluginSystem(orcaPage).catch(() => undefined)
     await rm(tempRoot, { recursive: true, force: true })

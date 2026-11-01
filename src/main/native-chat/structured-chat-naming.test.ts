@@ -16,8 +16,8 @@ import { StructuredAgentSessionStatusFeed } from './agent-session-wire/structure
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../shared/agent-session-wire'
-import { agentSessionCurrentContextRows } from '../../shared/agent-session-context-clear'
+} from '../../shared/agent-session/agent-session-wire'
+import { agentSessionCurrentContextRows } from '../../shared/agent-session/agent-session-context-clear'
 import {
   firstStructuredAgentSessionPrompt,
   STRUCTURED_CHAT_NAME_PROMPT_LIMIT
@@ -26,7 +26,7 @@ import {
   type AgentSessionUserNameWrite,
   compareAndSetAgentSessionRecordName,
   setAgentSessionRecordUserName
-} from '../runtime/agent-session-record-conversation-name'
+} from '../runtime/agent-session/records/agent-session-record-conversation-name'
 import {
   createStructuredChatNamingHandler,
   type StructuredChatNameGeneration,

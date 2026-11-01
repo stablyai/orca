@@ -3,7 +3,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type * as RepoWorktrees from '../repo-worktrees'
 import { resolveAuthorizedPath } from './filesystem/filesystem-auth'
 import {
