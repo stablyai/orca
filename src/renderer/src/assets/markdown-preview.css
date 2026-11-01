@@ -1060,6 +1060,16 @@
   margin-bottom: 0.35rem;
 }
 
+.markdown-body summary.markdown-callout-header {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.markdown-body details.markdown-callout:not([open]) > summary.markdown-callout-header {
+  margin-bottom: 0;
+}
+
 .markdown-body .markdown-callout-icon {
   flex-shrink: 0;
 }

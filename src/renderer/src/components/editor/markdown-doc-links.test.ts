@@ -4,8 +4,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import Markdown from 'react-markdown'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import {
+  createMarkdownDocLinkHref,
   createMarkdownDocumentIndex,
   getMarkdownDocLinkAnchor,
+  parseMarkdownDocLinkHref,
   remarkMarkdownDocLinks,
   resolveMarkdownDocLink,
   splitMarkdownDocLinkText
