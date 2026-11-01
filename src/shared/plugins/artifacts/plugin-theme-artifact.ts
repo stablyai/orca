@@ -40,7 +40,36 @@ export const PLUGIN_APP_THEME_TOKENS = [
   '--worktree-sidebar-accent',
   '--worktree-sidebar-accent-foreground',
   '--worktree-sidebar-border',
-  '--worktree-sidebar-ring'
+  '--worktree-sidebar-ring',
+  '--worktree-sidebar-active',
+  '--worktree-sidebar-active-border',
+  '--host-badge',
+  '--host-badge-foreground',
+  '--tab-bar',
+  '--tab-active',
+  '--tab-active-foreground',
+  '--tab-active-indicator',
+  '--tab-inactive',
+  '--tab-inactive-foreground',
+  '--split-divider',
+  '--split-divider-hover',
+  '--chat-user-message',
+  '--text-link',
+  '--diff-added',
+  '--diff-added-background',
+  '--diff-added-emphasis',
+  '--diff-added-gutter',
+  '--diff-removed',
+  '--diff-removed-background',
+  '--diff-removed-emphasis',
+  '--diff-removed-gutter',
+  '--git-decoration-added',
+  '--git-decoration-modified',
+  '--git-decoration-deleted',
+  '--git-decoration-renamed',
+  '--git-decoration-untracked',
+  '--git-decoration-copied',
+  '--git-decoration-ignored'
 ] as const
 
 const THEME_TOKEN_SET = new Set<string>(PLUGIN_APP_THEME_TOKENS)
@@ -50,11 +79,11 @@ export const PLUGIN_APP_THEME_REQUIRED_TOKENS = ['--background', '--foreground']
 
 // Why: an omitted token would otherwise keep the built-in value and clash with the theme's
 // palette (e.g. a neutral grey selected row on a purple theme). A rule names source tokens
-// (first present wins) or mixes the theme's foreground into its background; the renderer's
-// contrast check still drops any derived pair that ends up unreadable.
-type DerivationRule = readonly string[] | { mixForeground: number }
+// (first present wins) or mixes the theme's foreground into its background (or `into`); the
+// renderer's contrast check still drops any derived pair that ends up unreadable.
+export type PluginThemeDerivationRule = readonly string[] | { mixForeground: number; into?: string }
 
-const DERIVED_TOKENS: Record<string, DerivationRule> = {
+const DERIVED_TOKENS: Record<string, PluginThemeDerivationRule> = {
   '--editor-surface': ['--background'],
   '--card': ['--background'],
   '--card-foreground': ['--foreground'],

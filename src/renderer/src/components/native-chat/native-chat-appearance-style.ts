@@ -139,6 +139,8 @@ export function nativeChatAppearanceStyle(
       '--secondary': 'var(--muted)',
       '--secondary-foreground': 'var(--chat-foreground-strong)',
       '--ring': 'color-mix(in srgb, var(--chat-source-foreground) 44%, var(--chat-canvas))',
+      // Why: the terminal palette owns a matching chat, so a plugin theme's bubble yields too.
+      '--chat-user-message': 'initial',
       '--chat-source-background': background,
       '--chat-source-foreground': foreground,
       '--chat-source-muted-foreground':
