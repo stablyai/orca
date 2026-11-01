@@ -6,12 +6,22 @@ const WORKTREE_TAB_DROP_TARGET_ATTR = 'data-worktree-tab-drop-target'
 
 export type ElementFromPointFn = (x: number, y: number) => Element | null
 
+export type WorktreeDropPointerEvent = Pick<
+  DragMoveEvent | DragEndEvent,
+  'activatorEvent' | 'delta'
+> &
+  Partial<Pick<DragMoveEvent | DragEndEvent, 'active'>>
+
+const EMPTY_DRAG_ACTIVE = {
+  rect: { current: { initial: null, translated: null } }
+} as unknown as DragMoveEvent['active']
+
 export function resolveHoveredWorktreeDropTarget(
-  event: Pick<DragMoveEvent | DragEndEvent, 'activatorEvent' | 'delta'>,
+  event: WorktreeDropPointerEvent,
   sourceWorktreeId: string,
   elementFromPoint?: ElementFromPointFn
 ): { targetWorktreeId: string; cardElement: Element } | null {
-  const pointer = getDragPointer(event)
+  const pointer = getDragPointer({ active: event.active ?? EMPTY_DRAG_ACTIVE, ...event })
   if (!pointer) {
     return null
   }
@@ -54,7 +64,7 @@ export function clearWorktreeTabDropHighlight(root?: ParentNode): void {
 }
 
 export function syncWorktreeTabDropHighlight(
-  event: Pick<DragMoveEvent, 'activatorEvent' | 'delta'>,
+  event: WorktreeDropPointerEvent,
   sourceWorktreeId: string,
   options?: { elementFromPoint?: ElementFromPointFn; root?: ParentNode }
 ): string | null {
