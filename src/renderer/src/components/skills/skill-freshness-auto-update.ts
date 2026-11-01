@@ -1,37 +1,61 @@
-import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
-import { bundledSkillPlanAutoUpdates } from '../../../../shared/bundled-skill-summary'
+import type { BundledSkillPlan, BundledSkillPlanEntry } from '../../../../shared/bundled-skill-plan'
+import { isBundledSkillAutoUpdateOp } from '../../../../shared/bundled-skill-summary'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-skill-target'
-import { executeBundledSkillsOnTarget } from '@/runtime/runtime-bundled-skills-client'
+import { autoUpdateBundledSkillsOnTarget } from '@/runtime/runtime-bundled-skills-client'
 
-// Why per plan digest: a run that failed or raced leaves the same plan, which must fall back to the nudge instead of looping.
+// Why per skill and observed bytes: a failed or raced update re-plans identically and must fall back to the nudge, without blocking other skills.
 const attempts = new Map<string, 'running' | 'settled'>()
 
+function attemptKey(targetKey: string, entry: BundledSkillPlanEntry): string | null {
+  const ops = entry.ops.filter(isBundledSkillAutoUpdateOp)
+  if (ops.length === 0) {
+    return null
+  }
+  const observed = ops.map((op) => [op.path, op.observed])
+  return `${targetKey}:${entry.name}@${entry.digest}:${JSON.stringify(observed)}`
+}
+
 /**
- * Silently applies a plan whose only writes replace hash-verified Orca releases.
- * Returns true while that run owns the plan, so callers suppress the consent nudge.
+ * Silently updates each skill's hash-verified Orca copies, at most once per observed state.
+ * Returns the skills a running update owns, so the nudge asks only about the rest.
  */
 export function autoUpdateUnmodifiedSkills(
   target: BundledSkillTarget,
   plan: BundledSkillPlan
-): boolean {
-  if (!bundledSkillPlanAutoUpdates(plan)) {
-    return false
+): ReadonlySet<string> {
+  const owned = new Set<string>()
+  if (plan.scope !== 'global') {
+    return owned
   }
-  const key = `${bundledSkillTargetKey(target)}:${plan.planDigest}`
-  const attempt = attempts.get(key)
-  if (attempt) {
-    return attempt === 'running'
+  const targetKey = bundledSkillTargetKey(target)
+  const started: string[] = []
+  const keys: string[] = []
+  for (const entry of plan.skills) {
+    const key = attemptKey(targetKey, entry)
+    const attempt = key ? attempts.get(key) : undefined
+    if (!key || attempt === 'settled') {
+      continue
+    }
+    owned.add(entry.name)
+    if (!attempt) {
+      attempts.set(key, 'running')
+      started.push(entry.name)
+      keys.push(key)
+    }
   }
-  attempts.set(key, 'running')
-  // Execute re-plans and refuses ops whose disk state changed since this plan, so edits made meanwhile survive.
-  void executeBundledSkillsOnTarget(target, plan.planDigest, {})
-    .catch(() => undefined)
-    .finally(() => {
-      attempts.set(key, 'settled')
-      notifyInstalledAgentSkillsChanged()
-    })
-  return true
+  if (started.length > 0) {
+    // The host re-plans under its locks and re-checks each location right before writing.
+    void autoUpdateBundledSkillsOnTarget(target, started)
+      .catch(() => null)
+      .finally(() => {
+        for (const key of keys) {
+          attempts.set(key, 'settled')
+        }
+        notifyInstalledAgentSkillsChanged()
+      })
+  }
+  return owned
 }
 
 /** @internal - tests need a clean module between cases. */

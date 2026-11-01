@@ -31,7 +31,7 @@ function editedPlan(digest?: string): BundledSkillPlan {
 }
 
 vi.mock('@/runtime/runtime-bundled-skills-client', () => ({
-  executeBundledSkillsOnTarget: mocks.execute
+  autoUpdateBundledSkillsOnTarget: mocks.execute
 }))
 
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
@@ -227,48 +227,78 @@ describe('SkillFreshnessNudge', () => {
     expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
   })
 
-  it('silently updates copies that match a shipped release', async () => {
-    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+  it('silently updates every unedited skill without a nudge', async () => {
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update'), sharedEntry('orca-linear', 'update')])
 
     await renderNudge()
     await act(async () => {})
 
-    expect(mocks.execute).toHaveBeenCalledWith({ kind: 'local' }, mocks.plan.planDigest, {})
+    expect(mocks.execute).toHaveBeenCalledWith({ kind: 'local' }, ['orca-cli', 'orca-linear'])
     expect(mocks.notifyChanged).toHaveBeenCalledTimes(1)
     expect(mocks.toastInfo).not.toHaveBeenCalled()
   })
 
-  it('asks before replacing an edited copy even when another location auto-updates', async () => {
+  it('auto-updates the unedited skill and names only the repair and edited ones', async () => {
+    mocks.plan = planOf([
+      sharedEntry('orca-cli', 'update'),
+      sharedEntry('orca-emulator', 'restore'),
+      sharedEntry('orca-linear', 'leave', { reason: 'edited', replaceable: true })
+    ])
+
+    await renderNudge()
+
+    expect(mocks.execute).toHaveBeenCalledWith({ kind: 'local' }, ['orca-cli'])
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+    expect(mocks.toastInfo.mock.calls[0]?.[1].description).toContain('orca-emulator, orca-linear')
+    expect(mocks.toastInfo.mock.calls[0]?.[1].description).not.toContain('orca-cli')
+
+    // The re-plan after the silent update keeps the same nudge.
+    mocks.plan = planOf(
+      [
+        sharedEntry('orca-cli', 'keep'),
+        sharedEntry('orca-emulator', 'restore'),
+        sharedEntry('orca-linear', 'leave', { reason: 'edited', replaceable: true })
+      ],
+      'c'.repeat(64)
+    )
+    await rerenderNudge()
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks about the edited location of a skill whose other location auto-updates', async () => {
     mocks.plan = planOf([
       planEntry('orca-cli', [
         planOp('update', '/home/u/.agents/skills/orca-cli'),
         planOp('leave', '/home/u/.claude/skills/orca-cli', { reason: 'edited', replaceable: true })
       ])
     ])
-    await renderNudge()
-    expect(mocks.execute).toHaveBeenCalledTimes(1)
 
-    // The re-plan after the silent update leaves only the edited copy.
+    await renderNudge()
+
+    expect(mocks.execute).toHaveBeenCalledWith({ kind: 'local' }, ['orca-cli'])
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+  })
+
+  it('prompts only for the skill whose silent update failed', async () => {
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update'), sharedEntry('orca-linear', 'update')])
+    await renderNudge()
+    await act(async () => {})
+    expect(mocks.toastInfo).not.toHaveBeenCalled()
+
+    // orca-linear's write failed, so the re-plan still offers the same update there.
     mocks.plan = planOf(
-      [
-        planEntry('orca-cli', [
-          planOp('keep', '/home/u/.agents/skills/orca-cli'),
-          planOp('leave', '/home/u/.claude/skills/orca-cli', {
-            reason: 'edited',
-            replaceable: true
-          })
-        ])
-      ],
+      [sharedEntry('orca-cli', 'keep'), sharedEntry('orca-linear', 'update')],
       'c'.repeat(64)
     )
     await rerenderNudge()
 
     expect(mocks.execute).toHaveBeenCalledTimes(1)
     expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+    expect(mocks.toastInfo.mock.calls[0]?.[1].description).toContain('Update orca-linear so')
   })
 
-  it('falls back to the nudge when a silent update leaves the same plan', async () => {
-    mocks.execute.mockRejectedValue(new Error('busy'))
+  it('asks before updating when the host cannot auto-update', async () => {
+    mocks.execute.mockResolvedValue(null)
     mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
     await renderNudge()
     await act(async () => {})
@@ -276,16 +306,6 @@ describe('SkillFreshnessNudge', () => {
     mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
     await rerenderNudge()
 
-    expect(mocks.execute).toHaveBeenCalledTimes(1)
-    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
-  })
-
-  it('asks before an interrupted update is repaired', async () => {
-    mocks.plan = planOf([sharedEntry('orca-cli', 'restore')])
-
-    await renderNudge()
-
-    expect(mocks.execute).not.toHaveBeenCalled()
     expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
   })
 })

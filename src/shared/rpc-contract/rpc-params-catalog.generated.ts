@@ -19,6 +19,7 @@ import {
 } from '../browser-client-host-protocol'
 import { BrowserClientPageMetadataParams } from '../browser-client-page-metadata-protocol'
 import {
+  BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
   BundledSkillPlanRequestSchema
 } from '../bundled-skill-plan'
@@ -1398,6 +1399,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'sidebarInputs.workspaceCreations': null,
   'sidebarInputs.workspaceRows': null,
   'sidebarSession.begin': SidebarSessionBeginParams,
+  'skills.autoUpdateBundledOrca': BundledSkillAutoUpdateRequestSchema,
   'skills.beginUpload': SkillUploadBeginRequestSchema,
   'skills.cancelInstall': SkillsCancelInstallParams,
   'skills.cancelUpload': SkillUploadCommitRequestSchema,

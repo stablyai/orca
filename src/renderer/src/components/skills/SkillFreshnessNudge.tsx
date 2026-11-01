@@ -59,18 +59,10 @@ export function SkillFreshnessNudge(): null {
       }
       return
     }
-    // Unedited Orca copies update without consent; only edited or unrepairable ones reach the nudge.
-    if (autoUpdateUnmodifiedSkills(target, plan)) {
-      const active = activeNudgeRef.current
-      if (active) {
-        active.persistDismissal = false
-        activeNudgeRef.current = null
-        toast.dismiss(active.id)
-      }
-      return
-    }
+    // Unedited Orca copies update without consent; the nudge names only edited, unknown or broken ones.
+    const autoUpdating = autoUpdateUnmodifiedSkills(target, plan)
     // Fingerprint host, counted skills and offered bytes so changed bundles can prompt again.
-    const fingerprint = bundledSkillNudgeKey(targetKey, plan)
+    const fingerprint = bundledSkillNudgeKey(targetKey, plan, autoUpdating)
     if (!fingerprint || dismissed.includes(fingerprint)) {
       const active = activeNudgeRef.current
       if (active) {
@@ -106,7 +98,7 @@ export function SkillFreshnessNudge(): null {
         persistedFingerprints.current.delete(fingerprint)
       })
     }
-    const names = new Set(bundledSkillNudgeEntries(plan).map((entry) => entry.name))
+    const names = new Set(bundledSkillNudgeEntries(plan, autoUpdating).map((entry) => entry.name))
     // Name outdated skills directly; translate the sentence while interpolating identifiers unchanged.
     const outdatedNames = [...names]
       .sort((left, right) => left.localeCompare(right, 'en'))

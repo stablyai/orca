@@ -1,62 +1,116 @@
+import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { bundledSkillPlanAutoUpdates } from '../../../shared/bundled-skill-summary'
-import { previewBundledSkillInstall } from './service'
+import { bundledSkillNudgeEntries } from '../../../shared/bundled-skill-summary'
+import type { BundledSkillSource } from './bundled-skill-sources'
+import { nativeBundledSkillFilesystem, type BundledSkillFilesystem } from './filesystem'
+import { autoUpdateInstalledBundledSkills, previewBundledSkillInstall } from './service'
 import {
   makeSkillHome,
-  NAME,
-  NEW_TEXT,
-  OLD_TEXT,
-  previewAndInstall,
   removeSkillHomes,
   serviceInput,
-  writeCopy
+  writeCopy,
+  type SkillHome
 } from './skill-home.test-support'
 
 afterEach(removeSkillHomes)
 
-const EDITED_TEXT = OLD_TEXT.replace('Old body', 'My own notes')
+const text = (name: string, body: string) => `---\nname: ${name}\ndescription: d\n---\n\n${body}\n`
+const digest = (value: string) => createHash('sha256').update(value).digest('hex')
+const NAMES = ['alpha', 'bravo', 'charlie']
+const SOURCES: BundledSkillSource[] = NAMES.map((name) => ({
+  name,
+  text: text(name, 'new'),
+  releasedDigests: [digest(text(name, 'old')), digest(text(name, 'new'))]
+}))
 
-describe('bundled skill auto-update eligibility', () => {
-  it('auto-updates a legacy copy whose hash matches a shipped release in every agent root', async () => {
+const skillPath = (home: SkillHome, root: 'shared' | 'claude', name: string) =>
+  join(dirname(home[root]), name)
+
+function input(home: SkillHome, filesystem: BundledSkillFilesystem = nativeBundledSkillFilesystem) {
+  return { ...serviceInput(home, { installedOnly: true, filesystem }), sources: SOURCES }
+}
+
+async function readSkill(home: SkillHome, root: 'shared' | 'claude', name: string) {
+  return readFile(join(skillPath(home, root, name), 'SKILL.md'), 'utf8').catch(() => 'missing')
+}
+
+describe('per-skill silent update of unedited Orca copies', () => {
+  it('updates every unedited skill, including CRLF legacy copies, and leaves nothing to ask', async () => {
     const home = await makeSkillHome()
-    await writeCopy(home.shared, OLD_TEXT)
-    await writeCopy(home.claude, OLD_TEXT)
-    await writeCopy(home.cursor, OLD_TEXT.replace(/\n/gu, '\r\n'))
-    const input = serviceInput(home, { agents: ['claude', 'cursor'], installedOnly: true })
-
-    const { plan } = await previewAndInstall(input)
-
-    expect(bundledSkillPlanAutoUpdates(plan)).toBe(true)
-    for (const path of [home.shared, home.claude, home.cursor]) {
-      expect(await readFile(join(path, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
+    for (const name of NAMES) {
+      await writeCopy(skillPath(home, 'shared', name), text(name, 'old'))
+      await writeCopy(skillPath(home, 'claude', name), text(name, 'old').replace(/\n/gu, '\r\n'))
     }
+
+    const result = await autoUpdateInstalledBundledSkills({ ...input(home), names: NAMES })
+
+    expect(result.skills.flatMap((skill) => skill.ops.map((op) => op.status))).toEqual(
+      Array(6).fill('done')
+    )
+    for (const name of NAMES) {
+      expect(await readSkill(home, 'shared', name)).toBe(text(name, 'new'))
+      expect(await readSkill(home, 'claude', name)).toBe(text(name, 'new'))
+    }
+    expect(bundledSkillNudgeEntries(await previewBundledSkillInstall(input(home)))).toEqual([])
   })
 
-  it.each([
-    ['edited SKILL.md', EDITED_TEXT, {}],
-    ['content no Orca build shipped', `---\nname: ${NAME}\n---\nnever shipped\n`, {}],
-    ['an added file', OLD_TEXT, { 'notes.md': 'mine' }]
-  ])('asks before replacing a copy with %s', async (_label, text, extra) => {
+  it('updates only the unedited skill and leaves a repair and an edited copy to ask about', async () => {
     const home = await makeSkillHome()
-    await writeCopy(home.shared, text, extra)
+    await writeCopy(skillPath(home, 'shared', 'alpha'), text('alpha', 'old'))
+    // An interrupted swap: the target is gone and Orca's old copy waits to be restored.
+    await writeCopy(join(dirname(home.shared), '.bravo.orca-old-1'), text('bravo', 'old'))
+    await writeCopy(skillPath(home, 'shared', 'charlie'), text('charlie', 'my own notes'))
 
-    const plan = await previewBundledSkillInstall(serviceInput(home, { installedOnly: true }))
+    const result = await autoUpdateInstalledBundledSkills({ ...input(home), names: NAMES })
 
-    expect(plan.skills[0].ops[0]).toMatchObject({ kind: 'leave', reason: 'edited' })
-    expect(bundledSkillPlanAutoUpdates(plan)).toBe(false)
+    expect(result.skills.map((skill) => skill.name)).toEqual(['alpha'])
+    expect(await readSkill(home, 'shared', 'alpha')).toBe(text('alpha', 'new'))
+    expect(await readSkill(home, 'shared', 'bravo')).toBe('missing')
+    expect(await readSkill(home, 'shared', 'charlie')).toBe(text('charlie', 'my own notes'))
+    const remaining = bundledSkillNudgeEntries(await previewBundledSkillInstall(input(home)))
+    expect(remaining.map((entry) => entry.name)).toEqual(['bravo', 'charlie'])
   })
 
-  it('updates only the unedited location and keeps the edited one', async () => {
+  it('keeps the edited location of a skill while updating its unedited one', async () => {
     const home = await makeSkillHome()
-    await writeCopy(home.shared, OLD_TEXT)
-    await writeCopy(home.claude, EDITED_TEXT)
+    await writeCopy(skillPath(home, 'shared', 'alpha'), text('alpha', 'old'))
+    await writeCopy(skillPath(home, 'claude', 'alpha'), text('alpha', 'old'), { 'notes.md': 'x' })
 
-    const { plan } = await previewAndInstall(serviceInput(home, { installedOnly: true }))
+    await autoUpdateInstalledBundledSkills({ ...input(home), names: ['alpha'] })
 
-    expect(bundledSkillPlanAutoUpdates(plan)).toBe(true)
-    expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
-    expect(await readFile(join(home.claude, 'SKILL.md'), 'utf8')).toBe(EDITED_TEXT)
+    expect(await readSkill(home, 'shared', 'alpha')).toBe(text('alpha', 'new'))
+    expect(await readSkill(home, 'claude', 'alpha')).toBe(text('alpha', 'old'))
+  })
+
+  it('leaves only the skill whose silent update failed for the prompt', async () => {
+    const home = await makeSkillHome()
+    for (const name of NAMES) {
+      await writeCopy(skillPath(home, 'shared', name), text(name, 'old'))
+    }
+    const failBravo: BundledSkillFilesystem = {
+      ...nativeBundledSkillFilesystem,
+      rename: async (source, target) => {
+        if ([source, target].some((path) => basename(path) === 'bravo')) {
+          throw Object.assign(new Error('denied'), { code: 'EPERM' })
+        }
+        return nativeBundledSkillFilesystem.rename(source, target)
+      }
+    }
+
+    const result = await autoUpdateInstalledBundledSkills({
+      ...input(home, failBravo),
+      names: NAMES
+    })
+
+    expect(result.skills.map((skill) => [skill.name, skill.ops[0]?.status])).toEqual([
+      ['alpha', 'done'],
+      ['bravo', 'failed'],
+      ['charlie', 'done']
+    ])
+    expect(await readSkill(home, 'shared', 'bravo')).toBe(text('bravo', 'old'))
+    const remaining = bundledSkillNudgeEntries(await previewBundledSkillInstall(input(home)))
+    expect(remaining.map((entry) => entry.name)).toEqual(['bravo'])
   })
 })

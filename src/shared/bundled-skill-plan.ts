@@ -144,3 +144,12 @@ export const BundledSkillExecuteRequestSchema = z.strictObject({
   request: BundledSkillPlanRequestSchema
 })
 export type BundledSkillExecuteRequest = z.infer<typeof BundledSkillExecuteRequestSchema>
+
+/** Silently updates only hash-verified Orca copies of the named installed skills; never writes elsewhere. */
+export const BundledSkillAutoUpdateRequestSchema = z.strictObject({
+  names: z
+    .array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/u))
+    .min(1)
+    .max(64)
+})
+export type BundledSkillAutoUpdateRequest = z.infer<typeof BundledSkillAutoUpdateRequestSchema>

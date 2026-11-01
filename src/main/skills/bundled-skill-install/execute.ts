@@ -8,6 +8,7 @@ import type {
   BundledSkillOutcome,
   BundledSkillPlanEntry
 } from '../../../shared/bundled-skill-plan'
+import { isBundledSkillAutoUpdateOp } from '../../../shared/bundled-skill-summary'
 import { acquireSkillInstallLock, skillInstallLockPath } from '../skill-install-lock'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import { classifyBundledSkillPath } from './classify'
@@ -211,6 +212,32 @@ async function runSkill(run: SkillRun): Promise<BundledSkillOutcome> {
   return { name: run.entry.name, status: 'ran', ops }
 }
 
+async function withTargetLocks(
+  input: BundledSkillExecuteInput,
+  unrun: (status: 'changed' | 'busy') => BundledSkillInstallResult,
+  run: () => Promise<BundledSkillInstallResult>
+): Promise<BundledSkillInstallResult> {
+  let releases: (() => Promise<void>)[]
+  try {
+    releases = await acquireLocks(input, await lockPaths(input))
+  } catch {
+    return unrun('busy')
+  }
+  try {
+    return await run()
+  } finally {
+    await releaseAll(releases)
+  }
+}
+
+function sourceFor(input: BundledSkillExecuteInput, name: string): BundledSkillSource {
+  const source = input.sources.find((candidate) => candidate.name === name)
+  if (!source) {
+    throw new Error(`bundled-skill-unknown: ${name}`)
+  }
+  return source
+}
+
 /** Re-plan under all target locks and require the previewed digest; stale previews must write nothing. */
 export async function executeBundledSkillPlan(
   input: BundledSkillExecuteInput,
@@ -221,28 +248,41 @@ export async function executeBundledSkillPlan(
     scope: input.destination.scope,
     skills: names.map((name) => ({ name, status, ops: [] }))
   })
-  const paths = await lockPaths(input)
-  let releases: (() => Promise<void>)[]
-  try {
-    releases = await acquireLocks(input, paths)
-  } catch {
-    return unrun('busy')
-  }
-  try {
+  return withTargetLocks(input, unrun, async () => {
     const { plan } = await buildBundledSkillPlan(input)
     if (plan.planDigest !== planDigest) {
       return unrun('changed')
     }
     const skills: BundledSkillOutcome[] = []
     for (const entry of plan.skills) {
-      const source = input.sources.find((candidate) => candidate.name === entry.name)
-      if (!source) {
-        throw new Error(`bundled-skill-unknown: ${entry.name}`)
-      }
-      skills.push(await runSkill({ input, entry, source }))
+      skills.push(await runSkill({ input, entry, source: sourceFor(input, entry.name) }))
     }
     return { scope: plan.scope, skills }
-  } finally {
-    await releaseAll(releases)
-  }
+  })
+}
+
+/**
+ * Plans each named installed skill under its locks and applies only hash-verified released-copy
+ * updates; edited, foreign or interrupted locations are never touched. Each write re-checks its
+ * location, and one skill's failure leaves the others' outcomes intact.
+ */
+export async function autoUpdateBundledSkills(
+  input: BundledSkillExecuteInput & { names: readonly string[] }
+): Promise<BundledSkillInstallResult> {
+  const unrun = (status: 'changed' | 'busy'): BundledSkillInstallResult => ({
+    scope: input.destination.scope,
+    skills: input.names.map((name) => ({ name, status, ops: [] }))
+  })
+  return withTargetLocks(input, unrun, async () => {
+    const { plan } = await buildBundledSkillPlan({ ...input, installedOnly: true })
+    const skills: BundledSkillOutcome[] = []
+    for (const entry of plan.skills) {
+      const ops = entry.ops.filter(isBundledSkillAutoUpdateOp)
+      if (ops.length > 0) {
+        const source = sourceFor(input, entry.name)
+        skills.push(await runSkill({ input, entry: { ...entry, ops }, source }))
+      }
+    }
+    return { scope: plan.scope, skills }
+  })
 }
