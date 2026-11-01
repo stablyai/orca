@@ -213,6 +213,51 @@ test('offscreen Mermaid label is found and scrolled into normal preview', async 
   await expect(scene.body.locator('[data-mermaid-lazy]').last()).not.toBeInViewport()
 })
 
+test('selection-held preview keeps pending Find tied to displayed content', async ({
+  scene
+}, testInfo) => {
+  await queryWhileHeld(scene, alpha)
+  const origin = scene.body.getByRole('heading', { name: 'Reading origin', exact: true })
+  const selection = await origin.evaluate(async (heading, content) => {
+    const selection = window.getSelection()
+    if (!selection) {
+      throw new Error('Missing native preview selection')
+    }
+    const range = document.createRange()
+    range.selectNodeContents(heading)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    const file = window
+      .__store!.getState()
+      .openFiles.find((entry) => entry.mode === 'markdown-preview')
+    if (!file) {
+      throw new Error('Missing active preview fixture')
+    }
+    window.dispatchEvent(
+      new CustomEvent('orca:editor-file-saved', {
+        detail: { fileId: file.id, filePath: file.filePath, content }
+      })
+    )
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+    return selection.toString()
+  }, `# Updated reading\n\n${replacementNeedle}`)
+  expect(selection).toBe('Reading origin')
+  await expect(origin).toHaveCount(1)
+  await expect(scene.body.getByRole('heading', { name: 'Updated reading' })).toHaveCount(0)
+  await release(scene, 2)
+  await scene.page.screenshot({ path: testInfo.outputPath('selection-held-find.png') })
+  await selected(scene, alpha)
+  await expect(origin).toHaveCount(1)
+  await scene.page.evaluate(() => window.getSelection()?.removeAllRanges())
+  await expect(scene.body.getByRole('heading', { name: 'Updated reading' })).toHaveCount(1)
+  await expect(scene.body.locator('.mermaid-block svg')).toHaveCount(0)
+  expect(await highlights(scene.page)).toEqual({ active: [], matches: [] })
+  await scene.search.fill(replacementNeedle)
+  await selected(scene, replacementNeedle, false)
+})
+
 test('newer Find query owns the actual active Range and navigation after rendering', async ({
   scene
 }) => {

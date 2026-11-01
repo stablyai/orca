@@ -58,10 +58,11 @@ export default function MarkdownPreview({
   useLayoutEffect(() => {
     const body = foundation.bodyRef.current
     if (body) {
-      return registerMarkdownDocumentRevision(body, () => content)
+      const renderedContent = foundation.renderedContent
+      return registerMarkdownDocumentRevision(body, () => renderedContent)
     }
     return undefined
-  }, [foundation.bodyRef, content, foundation.renderedContent])
+  }, [foundation.bodyRef, foundation.renderedContent])
   const largePreview = exceedsMarkdownRichModeSizeLimit(foundation.renderedContent)
   const recordBeforeSwap = useCallback(() => {
     foundation.rootRef.current?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
