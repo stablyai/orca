@@ -123,9 +123,8 @@ export type AgentSessionAttachmentClipboardTarget = Omit<
 >
 
 /** Extensions a pasted image's name can carry; the host picks one from the image's bytes. */
-export const AGENT_SESSION_PASTED_IMAGE_EXTENSIONS = ['png', 'jpg', 'gif', 'webp'] as const
-export type AgentSessionPastedImageExtension =
-  (typeof AGENT_SESSION_PASTED_IMAGE_EXTENSIONS)[number]
+const AGENT_SESSION_PASTED_IMAGE_EXTENSIONS = ['png', 'jpg', 'gif', 'webp'] as const
+type AgentSessionPastedImageExtension = (typeof AGENT_SESSION_PASTED_IMAGE_EXTENSIONS)[number]
 
 /** Matches the `.png`, `.jpg`… suffix of a pasted image's name. */
 export const AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE = `\\.(?:${AGENT_SESSION_PASTED_IMAGE_EXTENSIONS.join('|')})`
