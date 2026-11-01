@@ -134,6 +134,8 @@ async function runDictation(
   }
   const framesToShell = pair.toShell.length - framesBefore.toShell
   const framesToPage = pair.toPage.length - framesBefore.toPage
+  // The probe below fills every desktop slot, so end()'s final forward is refused by design; count only session refusals.
+  const sessionRefusals = refusals.length
   // Dictation’s own count alone cannot prove how much capacity others retain.
   const freeSlots = await fillFreeDesktopSlots(pair)
   capture.end()
@@ -146,7 +148,7 @@ async function runDictation(
     chunkRequests: pair.rpc.requests.filter(
       (request) => request.method === 'speech.dictation.chunk'
     ).length,
-    refusals: refusals.length
+    refusals: sessionRefusals
   }
 }
 
