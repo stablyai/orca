@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
+import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract/assignment-invariants'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { CELL_ADMIT_EFFECTIVE_FRESH_MS, RelayAssignmentStore } from './assignment-store.js'
-import type { RelayCellConfig } from './config.js'
-import { openRelayDatabase, type RelayDatabase } from './database.js'
+import type { RelayCellConfig } from '../config.js'
+import { openRelayDatabase, type RelayDatabase } from '../database.js'
 
 // Exercise admit-mode SQL, locked open-flow checks and live-reserve pins on PostgreSQL, not SQLite alone.
 

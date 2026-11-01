@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore, RelayHomeCellUnavailableError } from './assignment-store.js'
-import { ReservePaceError } from './reserve-assignment.js'
+import { ReservePaceError } from '../reserve-assignment.js'
 import {
   encodeMembership,
   type CellAdmissionMembership,
   type CellAdmissionState
-} from './cell-admission-selector.js'
-import type { RelayCellConfig } from './config.js'
+} from '../cell-admission-selector.js'
+import type { RelayCellConfig } from '../config.js'
 import {
   consumeRelayCellInventoryHold,
   openInMemoryRelayDatabase,
@@ -15,7 +15,7 @@ import {
   type RelayLockOptions,
   type RelayTransactionOptions,
   type SqlRow
-} from './database.js'
+} from '../database.js'
 
 // migration-only also holds evacuation targets, Asia rollback and failed-wave/new cells; only same-cap isolate writes rollIsolatedCells, and restore clears its stamp atomically (orca-relay-operations.md).
 const HEARTBEAT_TTL_MS = 45_000

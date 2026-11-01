@@ -1,7 +1,7 @@
 import pg from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
-import { openRelayDatabase, type RelayDatabase } from './database.js'
+import { openRelayDatabase, type RelayDatabase } from '../database.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip

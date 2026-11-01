@@ -1,4 +1,4 @@
-import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
+import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract/assignment-invariants'
 import { createHash } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentRowBusyError, RelayAssignmentStore } from './assignment-store.js'
@@ -6,9 +6,9 @@ import {
   encodeMembership,
   type CellAdmissionMembership,
   type CellAdmissionState
-} from './cell-admission-selector.js'
-import type { RelayCellConfig } from './config.js'
-import { openRelayDatabase, type RelayDatabase } from './database.js'
+} from '../cell-admission-selector.js'
+import type { RelayCellConfig } from '../config.js'
+import { openRelayDatabase, type RelayDatabase } from '../database.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip

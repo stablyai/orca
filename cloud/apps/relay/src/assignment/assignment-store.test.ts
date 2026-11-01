@@ -1,23 +1,20 @@
-import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
+import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract/assignment-invariants'
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RelayCellConfig } from './config.js'
+import type { RelayCellConfig } from '../config.js'
 import {
   RelayAssignmentRowBusyError,
   RelayAssignmentStore,
   STRANDED_MIGRATION_ABANDON_MS
 } from './assignment-store.js'
-import {
-  encodeMembership,
-  type CellAdmissionMembership
-} from './cell-admission-selector.js'
+import { encodeMembership, type CellAdmissionMembership } from '../cell-admission-selector.js'
 import {
   openInMemoryRelayDatabase,
   type RelayDatabase,
   type RelayLockOptions,
   type RelayTransactionOptions,
   type SqlRow
-} from './database.js'
+} from '../database.js'
 
 const CELLS: RelayCellConfig[] = [
   { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 2 },

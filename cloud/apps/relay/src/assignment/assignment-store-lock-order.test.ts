@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from '../assignment-store.js'
+import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayDatabase, RelayLockOptions, SqlRow } from '../database.js'
 import { openInMemoryRelayDatabase } from '../database.js'
 

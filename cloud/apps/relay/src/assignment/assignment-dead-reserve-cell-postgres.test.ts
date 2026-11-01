@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
-import type { RelayCellConfig } from './config.js'
-import { openRelayDatabase, type RelayDatabase } from './database.js'
-import { ReserveLedgerWriter } from './reserve-ledger-writer.js'
+import type { RelayCellConfig } from '../config.js'
+import { openRelayDatabase, type RelayDatabase } from '../database.js'
+import { ReserveLedgerWriter } from '../reserve-ledger-writer.js'
 
 // Only host-requested moves may leave a reserve cell proven dead by heartbeat and poll silence without a fence; live cells retain hosts.
 

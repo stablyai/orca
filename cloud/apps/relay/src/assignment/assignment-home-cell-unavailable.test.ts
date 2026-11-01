@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore, RelayHomeCellUnavailableError } from './assignment-store.js'
-import type { RelayCellConfig } from './config.js'
-import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
+import type { RelayCellConfig } from '../config.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from '../database.js'
 
 const HEARTBEAT_TTL_MS = 45_000
 const START_MS = 100
