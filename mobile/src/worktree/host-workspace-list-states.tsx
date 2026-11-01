@@ -21,7 +21,6 @@ export function HostWorkspaceListStates(
     onReconnect: (() => void) | null
     /** Offered only when nothing is filtered out, so it reads as "this host has no projects yet". */
     onAddProject?: () => void
-
   }
 ) {
   const t = useMobileTranslation()
@@ -92,12 +91,14 @@ export function HostWorkspaceListStates(
         }
         action={
           props.activeFilterCount === 0 && props.onAddProject
-            ? { label: t('worktree.hostWorkspaceListStates.addProject', 'Add a project'), onPress: props.onAddProject }
+            ? {
+                label: t('worktree.hostWorkspaceListStates.addProject', 'Add a project'),
+                onPress: props.onAddProject
+              }
             : null
         }
         bottomInset={bottomInset}
       />
-
     )
   }
   return null

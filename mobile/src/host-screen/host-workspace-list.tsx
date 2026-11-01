@@ -178,7 +178,6 @@ export function HostWorkspaceList({
         <HostWorkspaceListReopen aboveRows={sections.length > 0} />
       ) : hasRows ? null : (
         listState
-
       )}
 
       {sections.length > 0 && (
