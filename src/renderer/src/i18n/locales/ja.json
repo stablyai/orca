@@ -19614,6 +19614,7 @@
       "detectingAgents": "このワークスペースホストで Agent を検出中…",
       "detectionFailed": "このワークスペースホストで Agent を検出できませんでした。",
       "noAgents": "このワークスペースホストで有効な Agent が検出されませんでした。",
+      "onlySourceFamilyDetected": "有効かつ検出済みのエージェントは、{{agent}} と利用上限を共有するもののみです。このワークスペースのホストで別のエージェントを有効にするか、インストールしてください。",
       "context": "コンテキスト",
       "modeFocused": "要点を引き継ぐ（推奨）",
       "modeFocusedDescription": "最新の状態と現在のワークスペースを使い、必要な場合だけ過去の詳細を読みます。",

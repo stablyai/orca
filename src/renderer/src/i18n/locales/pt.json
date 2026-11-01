@@ -21290,6 +21290,7 @@
       "detectingAgents": "Detectando Agentes neste host do espaço de trabalho…",
       "detectionFailed": "Não foi possível detectar Agentes neste host do espaço de trabalho.",
       "noAgents": "Nenhum Agente ativado foi detectado neste host do espaço de trabalho.",
+      "onlySourceFamilyDetected": "Só estão ativados e detectados agentes que compartilham o limite de uso com {{agent}}. Ative ou instale um agente diferente no host deste espaço de trabalho.",
       "context": "Contexto",
       "modeFocused": "Transferência focada (Recomendado)",
       "modeFocusedDescription": "Usa o status mais recente e o espaço de trabalho atual, lendo detalhes de transcrições mais antigas somente quando necessário.",

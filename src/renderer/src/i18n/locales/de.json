@@ -20328,6 +20328,7 @@
       "detectingAgents": "Agenten auf dem Host dieses Arbeitsbereichs werden erkannt…",
       "detectionFailed": "Agenten auf dem Host dieses Arbeitsbereichs konnten nicht erkannt werden.",
       "noAgents": "Auf dem Host dieses Arbeitsbereichs wurden keine aktivierten Agenten erkannt.",
+      "onlySourceFamilyDetected": "Nur Agents, die dasselbe Nutzungslimit wie {{agent}} haben, sind aktiviert und wurden erkannt. Aktiviere oder installiere einen anderen Agent auf diesem Workspace-Host.",
       "context": "Kontext",
       "modeFocused": "Gezielte Übergabe (empfohlen)",
       "modeFocusedDescription": "Verwendet den neuesten Status und den aktuellen Arbeitsbereich. Ältere Protokolldetails werden nur bei Bedarf gelesen.",

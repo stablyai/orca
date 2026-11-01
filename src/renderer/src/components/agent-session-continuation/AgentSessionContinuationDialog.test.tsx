@@ -3,7 +3,8 @@ import { mocks, request, detection } from './AgentSessionContinuationDialog.test
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useNativeChatHandOff } from '../native-chat/use-native-chat-hand-off'
@@ -200,6 +201,7 @@ it.each([
   ['codex', true, false],
   ['claude', true, true],
   ['claude-agent-teams', true, false],
+  ['claude', true, false],
   ['claude', false, false]
 ] as const)(
   'hands off from %s with family exclusion=%s and alternative=%s',
@@ -231,6 +233,16 @@ it.each([
     const selected = avoidSourceAgent ? (hasAlternative ? 'codex' : null) : sourceAgent
     const start = screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' })
     expect(start.disabled).toBe(selected === null)
+    if (selected === null) {
+      expect(
+        screen.getByText(
+          `Only Agents sharing the usage limit with ${getAgentLabel(sourceAgent)} are enabled and detected. Enable or install a different Agent on this workspace host.`
+        )
+      ).toBeTruthy()
+      expect(
+        screen.queryByText('No enabled Agents were detected on this workspace host.')
+      ).toBeNull()
+    }
     const picker = screen.getAllByRole('combobox')[0]
     fireEvent.click(picker)
     const familyRows = screen.queryAllByRole('option', {
@@ -311,4 +323,73 @@ it('explains an empty host inventory when the enabled agent has no chat preferen
   expect(start.disabled).toBe(true)
   fireEvent.click(start)
   expect(mocks.launch).not.toHaveBeenCalled()
+})
+
+it('explains the excluded source family in Spanish', async () => {
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'claude' && agent.id !== 'claude-agent-teams')
+        .map((agent) => agent.id)
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: ['claude', 'claude-agent-teams'] })
+  try {
+    await i18n.changeLanguage(await loadRendererUiLanguage('es'))
+    render(
+      <AgentSessionContinuationDialog
+        open
+        request={{
+          ...request,
+          source: { ...request.source, sourceAgent: 'claude' },
+          avoidSourceAgent: true
+        }}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: TooltipProvider }
+    )
+    expect(
+      screen.getByText(
+        'Solo están activados y detectados agentes que comparten el límite de uso con Claude. Activa o instala un agente diferente en el host de este espacio de trabajo.'
+      )
+    ).toBeTruthy()
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Iniciar sesión nueva' }).disabled
+    ).toBe(true)
+  } finally {
+    await i18n.changeLanguage('en')
+  }
+})
+
+it('keeps an unavailable alternative and its explanation when the source family is excluded', () => {
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => !['claude', 'claude-agent-teams', 'codex'].includes(agent.id))
+        .map((agent) => agent.id)
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: ['claude', 'claude-agent-teams'] })
+  render(
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'claude' },
+        avoidSourceAgent: true
+      }}
+      onOpenChange={vi.fn()}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  expect(screen.queryByText(/Only Agents sharing|No enabled Agents were detected/)).toBeNull()
+  expect(
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
+  ).toBe(true)
+  fireEvent.click(screen.getAllByRole('combobox')[0])
+  expect(screen.getByRole('option', { name: /Codex/ }).getAttribute('aria-disabled')).toBe('true')
+  expect(screen.getByText('Not installed')).toBeTruthy()
+  expect(screen.queryAllByRole('option', { name: /Claude/ })).toHaveLength(0)
 })

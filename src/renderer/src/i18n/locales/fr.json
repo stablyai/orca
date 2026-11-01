@@ -20385,6 +20385,7 @@
       "detectingAgents": "Détection des Agents sur cet hôte d'espace de travail…",
       "detectionFailed": "Impossible de détecter des Agents sur cet hôte d'espace de travail.",
       "noAgents": "Aucun Agent activé n'a été détecté sur cet hôte d'espace de travail.",
+      "onlySourceFamilyDetected": "Seuls des agents partageant la limite d’utilisation de {{agent}} sont activés et détectés. Activez ou installez un autre agent sur l’hôte de cet espace de travail.",
       "context": "Contexte",
       "modeFocused": "Transfert ciblé (recommandé)",
       "modeFocusedDescription": "Utilise le statut le plus récent et l'espace de travail actuel, en ne lisant les détails anciens de la transcription qu'en cas de besoin.",

@@ -118,6 +118,15 @@ export function AgentSessionContinuationDialog({
         offered.includes(agent) &&
         rows.some((row) => row.agent === agent && row.kind !== 'chat-unavailable')
     )
+  const detectedEnabledAgents = (detectedIds ?? []).filter((agent) =>
+    isTuiAgentEnabled(agent, disabledAgents)
+  )
+  const onlySourceFamilyDetected =
+    detectedEnabledAgents.length > 0 &&
+    detectedEnabledAgents.every(
+      (agent) =>
+        !isContinuationAgentAllowed(agent, request?.source.sourceAgent, request?.avoidSourceAgent)
+    )
   const preparing = request === null
   const controlsDisabled = preparing || detecting || starting
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
@@ -269,10 +278,16 @@ export function AgentSessionContinuationDialog({
                 </p>
               ) : destinationModel.state === 'settled' && rows.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground">
-                  {translate(
-                    'components.agentSessionContinuation.noAgents',
-                    'No enabled Agents were detected on this workspace host.'
-                  )}
+                  {onlySourceFamilyDetected && sourceAgentLabel
+                    ? translate(
+                        'components.agentSessionContinuation.onlySourceFamilyDetected',
+                        'Only Agents sharing the usage limit with {{agent}} are enabled and detected. Enable or install a different Agent on this workspace host.',
+                        { agent: sourceAgentLabel }
+                      )
+                    : translate(
+                        'components.agentSessionContinuation.noAgents',
+                        'No enabled Agents were detected on this workspace host.'
+                      )}
                 </p>
               ) : null}
             </div>
