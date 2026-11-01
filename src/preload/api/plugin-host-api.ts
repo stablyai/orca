@@ -42,6 +42,8 @@ export type {
   PluginHostStatus
 } from '../../shared/plugins/plugin-list-entry'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
+import type { PluginDeclaredSettingsSnapshot } from '../../shared/plugins/contributions/plugin-settings-values'
+import type { PluginJsonValue } from '../../shared/plugins/workers/plugin-host-api'
 
 export type PluginHostLogLine = {
   ts: number
@@ -183,6 +185,14 @@ export type PluginsApi = {
   panelState?: (args: PluginPanelStateRequest) => Promise<PluginPanelStateResult>
   /** One open panel's pushes (`PluginPanelPush`, unvalidated); desktop only. Returns unsubscribe. */
   subscribePanelPush?: (sessionToken: string, listener: (push: unknown) => void) => () => void
+  /** The settings a plugin declares and their current values; null when it declares none. */
+  getSettings?: (args: { pluginKey: string }) => Promise<PluginDeclaredSettingsSnapshot | null>
+  /** The person's edit; `null` restores the default. */
+  setSetting?: (args: {
+    pluginKey: string
+    key: string
+    value: PluginJsonValue
+  }) => Promise<{ ok: true } | { ok: false; error: string }>
   /** Pins a Git install input to an exact commit without downloading it. */
   resolveGitSource: (args: { url: string; ref: string }) => Promise<PluginGitSourceResolution>
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>
