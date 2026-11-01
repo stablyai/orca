@@ -1754,6 +1754,20 @@ diff --git a/lib/windowsConoutConnection.js b/lib/windowsConoutConnection.js
      ConoutConnection.prototype.dispose = function () {
          if (!this._useConptyDll && this._isDisposed) {
              return;
+diff --git a/src/win/path_util.cc b/src/win/path_util.cc
+index 764c0330cf3d4b2928c3ef35efa24fa2412d9848..72a2b42456e10a5b94f30520beadda31aad2c70e 100644
+--- a/src/win/path_util.cc
++++ b/src/win/path_util.cc
+@@ -55,7 +55,8 @@ std::wstring get_shell_path(std::wstring filename) {
+   std::wstring shellpath;
+ 
+   if (file_exists(filename)) {
+-    return shellpath;
++    // Orca: return the cwd match instead of an empty path (microsoft/node-pty#1006).
++    return filename;
+   }
+ 
+   wchar_t* buffer_ = new wchar_t[MAX_ENV];
 diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
 --- a/lib/windowsPtyAgent.js
 +++ b/lib/windowsPtyAgent.js
