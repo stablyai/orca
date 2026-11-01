@@ -12,6 +12,7 @@ import {
   HIGH_PRIORITY_MAX_WRITES_PER_DRAIN,
   LARGE_BACKLOG_CHARS,
   MAX_WRITES_PER_DRAIN,
+  backgroundDrainDelayMs,
   isMessageChannelDrainEnabled,
   markTerminalOutputDrainStarted,
   queuedByTerminal,
@@ -119,7 +120,7 @@ export function drainQueuedOutputImpl(): void {
         ? isMessageChannelDrainEnabled()
           ? 0
           : HIGH_PRIORITY_DRAIN_INTERVAL_MS
-        : BACKGROUND_DRAIN_INTERVAL_MS
+        : backgroundDrainDelayMs(BACKGROUND_DRAIN_INTERVAL_MS)
     )
   }
 }

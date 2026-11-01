@@ -1,22 +1,23 @@
 // After macOS display sleep, Chromium can stay hidden without visibilitychange; real input overrides that stale state until the tracker changes again, preventing visible PTYs from losing delivery.
 
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
+import {
+  isDocumentVisibilityProvenStale,
+  setDocumentVisibilityProvenStale
+} from './stale-document-visibility-latch'
+
+export { isDocumentVisibilityProvenStale }
 
 type StaleVisibilityRecoveryListener = () => void
 
 const recoveryListeners = new Set<StaleVisibilityRecoveryListener>()
-let visibilityProvenStale = false
 let globalListenersInstalled = false
 
-export function isDocumentVisibilityProvenStale(): boolean {
-  return visibilityProvenStale
-}
-
 function onUserInteractionWithDocument(): void {
-  if (visibilityProvenStale || document.visibilityState !== 'hidden') {
+  if (isDocumentVisibilityProvenStale() || document.visibilityState !== 'hidden') {
     return
   }
-  visibilityProvenStale = true
+  setDocumentVisibilityProvenStale(true)
   recordTerminalFreezeBreadcrumb('stale-visibility-latch', {
     recoveryListenerCount: recoveryListeners.size
   })
@@ -36,10 +37,10 @@ function onUserInteractionWithDocument(): void {
 function onDocumentVisibilityChange(): void {
   recordTerminalFreezeBreadcrumb('visibilitychange', {
     state: document.visibilityState,
-    clearedStaleOverride: visibilityProvenStale
+    clearedStaleOverride: isDocumentVisibilityProvenStale()
   })
   // A genuine visibilitychange restores tracker authority.
-  visibilityProvenStale = false
+  setDocumentVisibilityProvenStale(false)
 }
 
 function installGlobalListeners(): void {
@@ -91,7 +92,7 @@ export function registerStaleDocumentVisibilityRecovery(
 }
 
 export function resetStaleDocumentVisibilityForTesting(): void {
-  visibilityProvenStale = false
+  setDocumentVisibilityProvenStale(false)
   recoveryListeners.clear()
   removeGlobalListeners()
 }

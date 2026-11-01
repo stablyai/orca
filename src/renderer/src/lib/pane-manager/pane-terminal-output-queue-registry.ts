@@ -4,6 +4,7 @@ import {
 } from './pane-terminal-foreground-render-settle'
 import { discardInFlightTerminalOutputAckCredits } from './pane-terminal-output-ack-credit'
 import { cancelTerminalWriteStallWatch } from './terminal-write-pipeline-health'
+import { isDocumentVisibilityProvenStale } from '@/components/terminal-pane/stale-document-visibility-latch'
 import {
   TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS,
   terminalOutputBacklogCapChars
@@ -160,6 +161,12 @@ function getDrainChannel(): MessageChannel {
 
 export function isMessageChannelDrainEnabled(): boolean {
   return useMessageChannelDrain
+}
+
+// Why: Chromium runs chained timers in a hidden page ~1/s, pacing sidecar-watched agents to that; a hidden page has no focused pane to protect. A visible window stuck reporting hidden keeps the bounded cadence.
+export function backgroundDrainDelayMs(visibleDelayMs: number): number {
+  const pageHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden'
+  return pageHidden && !isDocumentVisibilityProvenStale() ? 0 : visibleDelayMs
 }
 
 export function markTerminalOutputDrainStarted(): void {
