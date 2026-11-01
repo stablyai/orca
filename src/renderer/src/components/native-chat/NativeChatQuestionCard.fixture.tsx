@@ -3,7 +3,15 @@ import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 
-function QuestionControls({ invertedAccent = false }: { invertedAccent?: boolean }) {
+function QuestionControls({
+  invertedAccent = false,
+  question = 'Where should this run?',
+  description = 'Use this computer.'
+}: {
+  invertedAccent?: boolean
+  question?: string
+  description?: string
+}) {
   return (
     <div
       className="native-chat-appearance bg-chat-canvas p-4"
@@ -27,10 +35,10 @@ function QuestionControls({ invertedAccent = false }: { invertedAccent?: boolean
         prompt={{
           questions: [
             {
-              question: 'Where should this run?',
+              question,
               multiSelect: true,
               options: [
-                { label: 'Local', description: 'Use this computer.' },
+                { label: 'Local', description },
                 { label: 'Remote', description: 'Use the connected host.' }
               ]
             }
@@ -49,4 +57,16 @@ export const invertedAccent = defineFixture({
   width: 560,
   render: () => <QuestionControls invertedAccent />,
   interact: (frame) => frame.querySelector<HTMLButtonElement>('button[aria-pressed]')?.click()
+})
+
+export const multiline = defineFixture({
+  width: 560,
+  render: () => (
+    <QuestionControls
+      question={
+        'Where should this run?\n\n- Local keeps changes on this computer\n- Remote uses the host'
+      }
+      description={'Use this computer.\nKeeps the current workspace.'}
+    />
+  )
 })

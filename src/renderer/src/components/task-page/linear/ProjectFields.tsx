@@ -51,7 +51,7 @@ export function TaskPageLinearProjectFields({
         }}
         placeholder={translate('auto.components.TaskPage.ecbcc83140', 'Project name')}
         disabled={newLinearProjectSubmitting}
-        className="w-full border-none bg-transparent p-0 text-xl font-semibold text-foreground outline-none placeholder:text-muted-foreground/45 focus:outline-none focus:ring-0 focus-visible:ring-0"
+        className="w-full border-none bg-transparent p-0 text-xl font-semibold text-foreground outline-none placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-0"
       />
 
       <input
@@ -59,7 +59,7 @@ export function TaskPageLinearProjectFields({
         onChange={(event) => setNewLinearProjectDescription(event.target.value)}
         placeholder={translate('auto.components.TaskPage.579f98afcd', 'Add a short summary...')}
         disabled={newLinearProjectSubmitting}
-        className="w-full border-none bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground/45 focus:outline-none focus:ring-0 focus-visible:ring-0"
+        className="w-full border-none bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-0"
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -356,7 +356,7 @@ export function TaskPageLinearProjectFields({
           )}
           rows={8}
           disabled={newLinearProjectSubmitting}
-          className="max-h-72 min-h-40 w-full min-w-0 resize-none overflow-y-auto border-none bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground/45 scrollbar-sleek focus:outline-none focus:ring-0 focus-visible:ring-0"
+          className="max-h-72 min-h-40 w-full min-w-0 resize-none overflow-y-auto border-none bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground scrollbar-sleek focus:outline-none focus:ring-0 focus-visible:ring-0"
         />
       </div>
       <p className="text-[10px] text-muted-foreground">

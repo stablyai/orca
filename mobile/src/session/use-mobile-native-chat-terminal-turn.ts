@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatSettledTurns } from '../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import {
   mergeNativeChatLiveSession,
   nativeChatHookHasWorkingSubagents,

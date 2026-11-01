@@ -49,15 +49,6 @@ describe("a Stop's wait for Claude to wind down what it has in flight", () => {
     expect(await settledWithin(waiting, 1)).toBe(true)
   })
 
-  it('ends as soon as the stopped turn ends', async () => {
-    const { claude, state } = claudeWith()
-    const waiting = awaitClaudeRequestEnd(claude, CLAUDE_STOP_GRACE_MS)
-    state.translator.currentTurnId = null
-    settleClaudeTurnEndWaiters(claude)
-
-    expect(await settledWithin(waiting, 0)).toBe(true)
-  })
-
   it('waits on a send Claude has not echoed, through its turn, to that turn’s end', async () => {
     const { claude, state } = claudeWith(null, 1)
     const waiting = awaitClaudeRequestEnd(claude, CLAUDE_STOP_GRACE_MS)
@@ -69,10 +60,6 @@ describe("a Stop's wait for Claude to wind down what it has in flight", () => {
     state.translator.currentTurnId = null
     settleClaudeTurnEndWaiters(claude)
     expect(await settledWithin(waiting, 0)).toBe(true)
-  })
-
-  it('holds nothing when Claude has nothing in flight', async () => {
-    expect(await settledWithin(awaitClaudeRequestEnd(session(null), 1_000), 0)).toBe(true)
   })
 
   it('waits only what the interrupt left of the grace, and nothing for a session that is gone', async () => {

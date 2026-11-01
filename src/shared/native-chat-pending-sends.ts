@@ -1,5 +1,5 @@
 import { nativeChatContinuationSendText } from './native-chat-continuation-send'
-import type { NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 import {
   advancedNativeChatUserContentCounts,
   advancedNativeChatUserRows,

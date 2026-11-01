@@ -6769,12 +6769,14 @@
           "added": "Ya es un host",
           "running": "En ejecución",
           "stopped": "Detenida",
+          "unverifiable": "Desconocido",
           "title": "Agregar distro WSL",
           "description": "Orca ejecuta su servidor dentro de la distro, así que git, los archivos y las terminales se ejecutan de forma nativa en Linux. Los proyectos de esta distro que abriste a través de \\\\wsl.localhost se mueven a este host automáticamente cuando sus terminales están inactivas; los proyectos en una unidad de Windows (/mnt/…) se quedan en este equipo. Puedes devolver un proyecto movido desde la barra lateral.",
           "distro": "Distro",
           "loading": "Buscando distros WSL…",
           "placeholder": "Elige una distro",
           "stoppedHint": "{{value0}} está detenida. Agregarla la inicia.",
+          "unverifiableHint": "WSL no indicó si {{value0}} está en ejecución. Al añadirla se iniciará si hace falta.",
           "addingHint": "Instalando e iniciando el servidor Orca en la distro. La primera vez puede tardar un minuto.",
           "adding": "Configurando…",
           "startAndAdd": "Iniciar y agregar",
@@ -8930,7 +8932,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "Color magenta ANSI",
-          "03c855d15f": "Restablecer todas las anulaciones de color",
           "63f8d9336e": "Anulaciones de color",
           "e86e09b5c7": "Anula colores individuales de la terminal.",
           "1d1920dc8a": "Oculta el cursor del mouse al escribir en la terminal.",
@@ -8997,7 +8998,11 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Reiniciar ahora",
           "907131d741": "Reiniciando…",
-          "605a35d600": "El renderizador de la terminal aún no aplica este valor: xterm.js no tiene un ajuste de color para el texto en negrita. Se conserva el valor guardado."
+          "605a35d600": "El renderizador de la terminal aún no aplica este valor: xterm.js no tiene un ajuste de color para el texto en negrita. Se conserva el valor guardado.",
+          "color_overrides_dark_description": "Anula colores individuales del tema oscuro de la terminal.",
+          "color_overrides_light_description": "Anula colores individuales del tema claro de la terminal.",
+          "reset_dark_color_overrides": "Restablecer las anulaciones de color del tema oscuro",
+          "reset_light_color_overrides": "Restablecer las anulaciones de color del tema claro"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Restablecer"
@@ -12462,7 +12467,7 @@
         "wslHosts": {
           "title": "Hosts WSL",
           "experimental": "Experimental",
-          "description": "Orca ejecuta un servidor dentro de cada distro. Una distro detenida solo se inicia cuando abres uno de sus proyectos o la conectas aquí.",
+          "description": "Orca ejecuta un servidor dentro de cada distro. Abrir un proyecto nunca inicia una distro detenida: haz clic en Iniciar, abre una terminal nueva o conéctala aquí.",
           "add": "Agregar distro WSL",
           "connect": "Conectar",
           "turnOn": "Activar en Experimental",
@@ -12866,7 +12871,9 @@
           "light": "Claro",
           "languageIncomplete": "{{value0}} % traducido, demasiado incompleto para usarlo como idioma de Orca",
           "languageCoverage": "Idioma de la interfaz · {{value0}} % traducido",
-          "newFileMenu": "Se añade al menú +"
+          "newFileMenu": "Se añade al menú +",
+          "editorReplacesViewer": "Abre {{value0}} en lugar del visor de Orca",
+          "editorMayReplaceViewer": "Puede abrir {{value0}} en lugar del visor de Orca"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "Ningún otro acceso",
@@ -15881,16 +15888,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Acercar",
-          "6c89c73d9f": "Restablecer zoom",
           "be27304574": "Alejar",
-          "77bfc9b35a": "Abrir imagen en ventana emergente",
           "3ef9551ba2": "Cargando vista previa...",
-          "d9d2944855": "No se pudo cargar la vista previa del archivo"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Presione Esc para cerrar",
-          "535f4e2b56": "Cerrar",
-          "9e27b2ecaf": "Vista previa de imagen a tamaño completo"
+          "d9d2944855": "No se pudo cargar la vista previa del archivo",
+          "fitToView": "Ajustar a la vista",
+          "actualSize": "Tamaño real",
+          "expand": "Ampliar imagen"
         },
         "IpynbViewer": {
           "859bf9fc21": "Ejecutar celda",
@@ -16013,7 +16016,10 @@
           "zoomOut": "Alejar",
           "zoomIn": "Acercar",
           "fit": "Ajustar a la pantalla",
-          "close": "Cerrar"
+          "close": "Cerrar",
+          "copyPng": "Copiar como PNG",
+          "copiedPng": "Copiado como PNG",
+          "copyPngFailed": "No se pudo copiar la imagen"
         },
         "MermaidBlock": {
           "dcc132e691": "Error de diagrama:",
@@ -19300,9 +19306,7 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Actualiza Orca en este host para continuar en la interfaz de chat.",
-        "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
-        "exitUnconfirmed": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal; luego abre esta conversación desde el Historial de sesiones.",
-        "exitUnconfirmedFromTerminal": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal; luego abre esta conversación desde el Historial de sesiones."
+        "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda."
       },
       "state": {
         "loading": {
@@ -19644,13 +19648,15 @@
         "stopped": "{{distro}} está detenido",
         "start": "Iniciar",
         "unverifiable": "Orca no pudo comprobar si {{distro}} se está ejecutando",
-        "startToSend": "Inicie {{distro}} para enviar."
+        "startToSend": "Inicie {{distro}} para enviar.",
+        "startDistro": "Iniciar {{distro}}"
       },
       "interruptedContinue": {
         "continue": "Continuar",
         "failed": "No se pudo continuar este chat. Inténtalo de nuevo o envía un mensaje.",
         "explanation": "Continúa y el agente comprobará primero si su último paso terminó.",
-        "unconfirmed": "No se pudo confirmar si {{agent}} recibió Continuar. Revisa el chat antes de volver a intentarlo."
+        "unconfirmed": "No se pudo confirmar si {{agent}} recibió Continuar. Revisa el chat antes de volver a intentarlo.",
+        "usageLimitExplanation": "Pide al agente que continúe donde lo dejó. Úsalo cuando se restablezca el límite."
       },
       "rewind": {
         "unsupported": "Este chat no puede volver a un mensaje anterior.",
@@ -19828,6 +19834,13 @@
         "effortPickerFailed": "No se pudo abrir el selector de esfuerzo.",
         "modelApplyFailed": "No se pudo aplicar el modelo {{value}}.",
         "effortApplyFailed": "No se pudo aplicar el esfuerzo {{value}}."
+      },
+      "usageLimitActions": {
+        "continueNow": "Continuar ahora",
+        "leadIn": "Continúa este chat sin esperar:",
+        "switchAccount": "Cambiar de cuenta",
+        "addAccount": "Añadir cuenta…",
+        "accountUnavailable": "Este chat no se puede mover a otra cuenta. Transfiérelo a otro agente."
       }
     },
     "tab": {
@@ -21154,6 +21167,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} ya es un host.",
         "distroStopped": "{{distro}} se detuvo después de que se leyera la lista. Elige «Iniciar y agregar» para iniciarla.",
+        "distroUnverifiable": "WSL no respondió si {{distro}} está en ejecución. Actualiza la lista o añádela desde el diálogo, que la inicia si hace falta.",
         "wsl1": "{{distro}} usa WSL 1, que Orca ya no admite. Conviértela a WSL 2 en una terminal de Windows con: {{command}}",
         "notRegistered": "{{distro}} no es una distro WSL instalada. Ejecuta {{command}} en una terminal de Windows para ver las instaladas, o reinstálala e inténtalo de nuevo.",
         "sshManaged": "{{distro}} ya ejecuta el servidor Orca de «{{server}}», al que este equipo accede por SSH. Elimina primero ese servidor; aún no se admite moverlo a un host WSL."
@@ -21857,12 +21871,8 @@
       "refreshBeforeEnd": "Finalizar no está disponible hasta que se actualicen los PTY.",
       "endUnsupported": "Finalizar no está disponible para este terminal. Su host no admite las comprobaciones de seguridad necesarias. Ciérralo desde su pestaña o en su host.",
       "checkingTabs": "Comprobando pestañas…",
-      "endTitle": "¿Finalizar {{terminal}}?",
-      "endDescription": "Esto finaliza el terminal y sus procesos secundarios. El trabajo sin guardar puede perderse.",
       "lastProcess": "Último proceso visto: {{process}}",
-      "cancel": "Cancelar",
       "ending": "Finalizando…",
-      "end": "Finalizar terminal",
       "unassigned": "Sin asignar",
       "thisComputer": "Este equipo",
       "localOwnedCount_one": "{{count}} PTY de Orca en este equipo",

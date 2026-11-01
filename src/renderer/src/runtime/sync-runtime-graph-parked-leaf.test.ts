@@ -243,7 +243,7 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
 
     const graph = await captureGraph({ seedState: false })
 
-    // With the switch on, the active pane is main's own selection (runtime-leaf-record-projection.test.ts).
+    // With the switch on, the active pane is main's own selection.
     if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
       expect(graph.tabs).toContainEqual(
         expect.objectContaining({ tabId: TAB_ID, activeLeafId: LEAF })

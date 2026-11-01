@@ -277,7 +277,10 @@ describe('terminal worker turn stops', () => {
 })
 
 describe('chat worker turn stops', () => {
-  const completion = (outcome: 'success' | 'failure'): AgentSessionTurnCompletionEvent => ({
+  const completion = (
+    outcome: 'success' | 'failure',
+    turnId = 'turn-1'
+  ): AgentSessionTurnCompletionEvent => ({
     type: 'completion',
     completion: {
       scope: {
@@ -287,7 +290,7 @@ describe('chat worker turn stops', () => {
         workspaceKind: 'git-worktree'
       },
       sessionId: CHAT_SESSION,
-      turnId: 'turn-1',
+      turnId,
       outcome,
       completedAt: 1
     }
@@ -295,7 +298,7 @@ describe('chat worker turn stops', () => {
 
   it('reports a finished turn and leaves failures to the chat error escalation', () => {
     const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
-    const report = chatWorkerTurnStopReporter(ctx.deps)
+    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => run())
     const status = () => ({ status: 'idle' as const, lastAssistantMessage: 'Read the files.' })
     report(completion('failure'), status)
     expect(ctx.mail()).toHaveLength(0)
@@ -303,6 +306,93 @@ describe('chat worker turn stops', () => {
     report(completion('success'), status)
     expect(ctx.mail()).toHaveLength(1)
     expect(ctx.mail()[0].body).toContain('Read the files.')
+  })
+
+  // The report claimed a follow-up on the same chat; its task is not handed over yet.
+  function startingFollowUp(ctx: ReturnType<typeof setup>) {
+    const followUp = ctx.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 9,
+      taskSpec: 'New messages',
+      taskRunId: ctx.run.id,
+      startOptions: { agent: 'claude' },
+      followUpOf: ctx.dispatch.id
+    }).dispatch.id
+    ctx.db.prepareStartingWorkerAuthority({
+      dispatchId: followUp,
+      handle: formatOrcaSessionAddress(CHAT_SESSION),
+      paneKey: null,
+      processIncarnation: null,
+      worktreeId: 'repo::/tmp/wt',
+      effects: [],
+      setupState: 'not_applicable'
+    })
+    return followUp
+  }
+
+  function chatWithTimers(ctx: ReturnType<typeof setup>) {
+    const timers: (() => void)[] = []
+    let status: 'idle' | 'working' = 'idle'
+    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => timers.push(run))
+    return {
+      finish: (turnId: string) =>
+        report(completion('success', turnId), () => ({ status, lastAssistantMessage: 'Done.' })),
+      setStatus: (next: typeof status) => {
+        status = next
+      },
+      runTimers: () => {
+        for (const run of timers.splice(0)) {
+          run()
+        }
+      }
+    }
+  }
+
+  it('does not blame a follow-up for the turn whose report claimed it', () => {
+    const ctx = setup()
+    const followUp = startingFollowUp(ctx)
+    const chat = chatWithTimers(ctx)
+
+    chat.finish('turn-reported')
+    chat.runTimers()
+    ctx.db.markWorkerDispatchReady(followUp)
+    chat.setStatus('working')
+    chat.runTimers()
+
+    expect(ctx.mail()).toHaveLength(0)
+  })
+
+  it('drops a pending stop once a later turn of the follow-up fails', () => {
+    const ctx = setup()
+    const followUp = startingFollowUp(ctx)
+    ctx.db.markWorkerDispatchReady(followUp)
+    const timers: (() => void)[] = []
+    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => timers.push(run))
+    const idle = () => ({ status: 'idle' as const, lastAssistantMessage: 'It failed.' })
+
+    report(completion('success', 'turn-reported'), idle)
+    report(completion('failure', 'turn-follow-up'), idle)
+    for (const run of timers.splice(0)) {
+      run()
+    }
+
+    expect(ctx.mail()).toHaveLength(0)
+  })
+
+  it('still reports a follow-up whose own turn ended before its start settled', () => {
+    const ctx = setup()
+    const followUp = startingFollowUp(ctx)
+    const chat = chatWithTimers(ctx)
+
+    chat.finish('turn-follow-up')
+    chat.runTimers()
+    expect(ctx.mail()).toHaveLength(0)
+    ctx.db.markWorkerDispatchReady(followUp)
+    chat.runTimers()
+
+    expect(ctx.mail()).toMatchObject([
+      { subject: 'Worker stopped without reporting', payload: expect.stringContaining(followUp) }
+    ])
   })
 })
 

@@ -1,7 +1,7 @@
 import './mobile-prompt-render-mocks'
 import { createElement } from 'react'
 import { Pressable } from 'react-native'
-import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatSendOutcome } from '../native-chat/mobile-native-chat-send'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse, ConnectionState } from '../../transport/types'

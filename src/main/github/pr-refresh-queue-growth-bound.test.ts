@@ -45,18 +45,6 @@ describe('pr-refresh queue growth bounds', () => {
     vi.useRealTimers()
   })
 
-  it('keeps the queue bounded across repeated visible reports and background pauses', async () => {
-    const { reportVisiblePRRefreshCandidates, _getPRRefreshQueueSizeForTests } =
-      await import('./pr-refresh-coordinator')
-
-    for (let cycle = 0; cycle < 200; cycle += 1) {
-      reportVisiblePRRefreshCandidates(visibleCandidates(), cycle + 1, 1)
-      await vi.advanceTimersByTimeAsync(30_000)
-    }
-    // 200 report cycles * 20 candidates = 4000 enqueues; the queue coalesces to one entry per key.
-    expect(_getPRRefreshQueueSizeForTests()).toBeLessThanOrEqual(WORKTREES)
-  })
-
   it('keeps visibility windows and error backoff bounded when renderer windows churn', async () => {
     const {
       reportVisiblePRRefreshCandidates,

@@ -73,8 +73,8 @@ export async function startWorkerFollowUp(args: {
   plan: Extract<WorkerFollowUpPlan, { kind: 'start' }>
   from: string
   message: { subject: string; body?: string | undefined }
-  /** Unread mail this follow-up carries, read in the same claim. */
-  consumesMessageIds?: readonly string[]
+  /** The Dispatch whose unread mail this follow-up's Task tells it to check. */
+  takesMailOf?: string
 }): Promise<WorkerFollowUpOutcome> {
   const { ctx, db } = args
   const { latest, resource } = args.plan
@@ -122,7 +122,7 @@ export async function startWorkerFollowUp(args: {
           }
         },
         ...(ctx.orchestrationMutation ? { acceptedBy: ctx.orchestrationMutation } : {}),
-        ...(args.consumesMessageIds ? { consumesMessageIds: args.consumesMessageIds } : {})
+        ...(args.takesMailOf ? { takesMailOf: args.takesMailOf } : {})
       }
     )
   } catch (error) {

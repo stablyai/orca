@@ -1,3 +1,6 @@
+import { AgentSessionSelectionSchema } from '../agent-session/options/agent-session-execution-options'
+import { Identifier } from './structured-agent-session-identifiers'
+import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
 import { z } from 'zod'
 import { isAgentSessionOptions } from '../agent-session-record'
 import { measureUtf8ByteLength } from '../utf8-byte-limits'
@@ -54,3 +57,26 @@ export const SendBody = SendBodyStructure.refine(
   (value) => Buffer.byteLength(JSON.stringify(value.blocks), 'utf8') <= MAX_PROMPT_BYTES,
   'Message is too large'
 )
+
+export const SendParams = z
+  .strictObject({
+    envelope: MutationEnvelope,
+    retryUnknown: z.literal(true).optional(),
+    /** Host-held draft while active; gate strict payloads on agent-session.queued-messages.v2.
+     * Operation fingerprint only, never body fingerprint. */
+    delivery: z.literal('queue-if-active').optional(),
+    /** Requires agent-session.steer-draft.v1; the host captures running-turn choices. */
+    steer: z.literal(true).optional(),
+    /** Preserve composer options until dispatch; requires agent-session.send-options.v1. Operation fingerprint only. */
+    options: AgentSessionOptions.optional(),
+    selection: AgentSessionSelectionSchema.optional(),
+    // Strict payload: only hosts advertising the bound usage-limit send capability accept this.
+    usageLimitContinuationOfTurnItemId: Identifier('Invalid source turn item id').optional(),
+    body: SendBody
+  })
+  .strict()
+  .refine(
+    (value) => value.options === undefined || value.selection === undefined,
+    'Choose options or selection'
+  )
+  .refine((send) => !(send.steer && send.delivery), 'Steering cannot request queued delivery')

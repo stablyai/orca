@@ -10,7 +10,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalStatusItem
 } from '../../../../shared/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'

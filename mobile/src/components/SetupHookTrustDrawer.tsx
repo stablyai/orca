@@ -76,7 +76,14 @@ export function SetupHookTrustDrawer({
           </View>
 
           <View style={styles.trustActionGroup}>
-            <Pressable style={styles.trustActionRow} disabled={busy} onPress={onRunOnce}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.trustActionRow,
+                pressed && { backgroundColor: colors.translucentFill }
+              ]}
+              disabled={busy}
+              onPress={onRunOnce}
+            >
               <Check size={16} color={colors.textPrimary} />
               <Text style={styles.trustActionText}>
                 {t('components.setupHookTrustDrawer.runHooks', 'Run hooks')}
@@ -85,7 +92,14 @@ export function SetupHookTrustDrawer({
             <View style={styles.trustActionSeparator} />
             {allowAlwaysTrust ? (
               <>
-                <Pressable style={styles.trustActionRow} disabled={busy} onPress={onAlwaysTrust}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.trustActionRow,
+                    pressed && { backgroundColor: colors.translucentFill }
+                  ]}
+                  disabled={busy}
+                  onPress={onAlwaysTrust}
+                >
                   <Check size={16} color={colors.textPrimary} />
                   <Text style={styles.trustActionText}>
                     {t('components.setupHookTrustDrawer.alwaysTrustAndRun', 'Always trust and run')}
@@ -94,7 +108,14 @@ export function SetupHookTrustDrawer({
                 <View style={styles.trustActionSeparator} />
               </>
             ) : null}
-            <Pressable style={styles.trustActionRow} disabled={busy} onPress={onDontRun}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.trustActionRow,
+                pressed && { backgroundColor: colors.translucentFill }
+              ]}
+              disabled={busy}
+              onPress={onDontRun}
+            >
               <Text style={styles.trustActionText}>
                 {t('components.setupHookTrustDrawer.dontRun', "Don't run")}
               </Text>

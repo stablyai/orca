@@ -2,11 +2,11 @@
 import type { OrcadMigrationManifestSource } from '../../shared/orcad-migration/orcad-migration-manifest'
 import { isOrcadMigrationLocalWslSource } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
+import { ORCAD_WSL_DISTRO_GUID_ENV } from '../../shared/orcad-server-launch-env'
 
 export const ORCAD_MIGRATION_SOURCE_NOT_THIS_HOST = 'orcad_migration_source_not_this_host'
 
-/** Desktop-provided registry ID; guests cannot read it themselves. */
-export const ORCAD_WSL_DISTRO_GUID_ENV = 'ORCA_WSL_DISTRO_GUID'
+export { ORCAD_WSL_DISTRO_GUID_ENV }
 
 export function servesLocalWslMigrationSource(
   env: NodeJS.ProcessEnv = process.env,

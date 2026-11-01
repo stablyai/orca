@@ -6,6 +6,8 @@ export type BridgeSessionBack = {
   readonly claimed: boolean
   /** The negotiated storage keys the page's `ready` named; absent for a page that named none. */
   readonly storageKeys?: readonly string[]
+  /** The page's `ready` said it reads `connectionPath` frames. */
+  readonly connectionPathFrames?: true
   readonly terminalKeyRailClaim?: { readonly inputOwner?: string }
 }
 

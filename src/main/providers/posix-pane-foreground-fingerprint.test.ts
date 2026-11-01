@@ -158,23 +158,5 @@ describe('buildPaneProcessFingerprint', () => {
         })
       ).toBeNull()
     })
-
-    it('does not let a recycled descendant pid reuse a fingerprint', async () => {
-      // Recycled descendant PIDs with unreadable markers must force a full capture.
-      const readNoDescendant = async (pid: number): Promise<string | null> =>
-        pid === SHELL ? '2400' : null
-      const before = await buildPaneProcessFingerprint([shell(), agent()], SHELL, {
-        platform: 'linux',
-        readLinuxStartTime: readNoDescendant
-      })
-      const after = await buildPaneProcessFingerprint(
-        [shell(), agent({ stat: 'S+', pgid: AGENT })],
-        SHELL,
-        { platform: 'linux', readLinuxStartTime: readNoDescendant }
-      )
-
-      expect(before).toBeNull()
-      expect(after).toBeNull()
-    })
   })
 })

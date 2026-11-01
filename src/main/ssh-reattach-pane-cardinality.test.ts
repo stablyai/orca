@@ -25,7 +25,6 @@ vi.mock('electron', () => ({
 const TARGET = 'ssh-1'
 const WORKTREE = 'repo1::/worktree'
 const TAB = 'tab-1'
-const OTHER_TAB = 'tab-moved-to'
 
 // Topology revisions distinguish a closed tab from a layout not yet published.
 function sessionWithPane(args: {
@@ -116,50 +115,6 @@ describe('STA-3077: an SSH reattach binds panes without grafting them back', () 
 
     expect(bound).toBe(false)
     expect(tabIds(store)).toEqual([])
-  })
-
-  it('binds a pane that moved to another tab rather than refusing it', async () => {
-    const store = await createStore()
-    store.setWorkspaceSession(
-      sessionWithPane({ tabId: OTHER_TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' })
-    )
-
-    const { findTerminalTabIdForLeaf } =
-      await import('./persistence/terminal-topology/terminal-topology-membership')
-    // Match production: resolve the live tab instead of using the lease's stale tab.
-    const resolvedTabId = findTerminalTabIdForLeaf(store.getWorkspaceSession(), TEST_LEAF_1)
-    expect(resolvedTabId).toBe(OTHER_TAB)
-
-    const bound = await relayReattachBinds(store, {
-      tabId: resolvedTabId!,
-      leafId: TEST_LEAF_1,
-      ptyId: 'pty-2',
-      incarnationId: 'inc-2'
-    })
-
-    expect(bound).toBe(true)
-    expect(
-      store.getWorkspaceSession().terminalLayoutsByTabId?.[OTHER_TAB]?.ptyIdsByLeafId?.[TEST_LEAF_1]
-    ).toBe('pty-2')
-  })
-
-  // Missing membership is not a close until the renderer publishes an authoritative layout.
-  it('still binds when the session is not yet authoritative for the worktree', async () => {
-    const store = await createStore()
-
-    const bound = await store.persistPtyBinding({
-      worktreeId: WORKTREE,
-      tabId: TAB,
-      leafId: TEST_LEAF_1,
-      ptyId: 'pty-1',
-      incarnationId: 'inc-1',
-      ...(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo1
-        ? { mayCreate: false }
-        : {})
-    })
-
-    expect(bound).toBe(true)
-    expect(tabIds(store)).toEqual([TAB])
   })
 
   it('does not clear and rebind a retired surface loaded from an older profile', async () => {

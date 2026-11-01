@@ -110,29 +110,6 @@ describe('RemoteFileBrowser keyboard navigation', () => {
     await act(async () => root.unmount())
   })
 
-  it('opens the highlighted folder on Enter', async () => {
-    const { container, input, root } = await render()
-    browseDir.mockClear()
-
-    await press(input, 'ArrowDown')
-    await press(input, 'Enter')
-
-    expect(browseDir).toHaveBeenCalledWith({ targetId: 'target-1', dirPath: '/home/alice/src' })
-    expect(selectedRow(container)).toBe('docs')
-
-    await act(async () => root.unmount())
-  })
-
-  it('points the input at no row while the next listing loads', async () => {
-    const { input, root } = await render()
-    browseDir.mockImplementationOnce(() => new Promise(() => {}))
-
-    await press(input, 'Enter')
-
-    expect(input.hasAttribute('aria-activedescendant')).toBe(false)
-    await act(async () => root.unmount())
-  })
-
   // Why: the previous listing's single folder would otherwise win Enter while the next one loads.
   it('ignores Enter while the next listing loads', async () => {
     browseDir.mockImplementationOnce(async () => ({

@@ -76,7 +76,7 @@ describe('a folder whose project group mixes local and SSH repos (layout-owner b
     const { runtime, applyLayoutCommand } = runtimeWithMixedFolder()
     const reply = await runtime.applyLayoutCommand(RATIOS)
     expect(reply.ok).toBe(true)
-    expect(applyLayoutCommand).toHaveBeenCalledWith(RATIOS, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(RATIOS, ['local'], {})
   })
 })
 
@@ -85,7 +85,7 @@ describe('every folder kind routes where the window saves it (layout-owner build
   it.each(FOLDER_HOST_CASES)('$name', async ({ folder, groups, expected }) => {
     const { runtime, applyLayoutCommand } = runtimeWithMixedFolder(folder, groups)
     await runtime.applyLayoutCommand(RATIOS)
-    expect(applyLayoutCommand).toHaveBeenCalledWith(RATIOS, [expected])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(RATIOS, [expected], {})
   })
 })
 

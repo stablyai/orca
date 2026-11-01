@@ -14,7 +14,7 @@ import type {
   StructuredPointerSessionFacts
 } from './structured-mailbox-pointer-host-contract'
 import { structuredMailNotice } from './structured-mail-source'
-import type { SenderNameResolver } from './agent-message-sender'
+import type { SenderSnapshotResolver } from './agent-message-sender'
 import {
   retainReasonForDispatch,
   structuredDispatchDelivered,
@@ -40,7 +40,7 @@ type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageW
   /** The CLI name the PTY lane types for a local agent, so both lanes send the same pointer. */
   getCliCommand: () => OrchestrationCliCommand
   /** What Orca calls a sender now, snapshotted onto the message; null when it has no name. */
-  senderName: SenderNameResolver
+  senderSnapshot: SenderSnapshotResolver
   host: StructuredMailboxPointerHost
   onRetain?: (input: {
     mailboxHandle: string
@@ -247,7 +247,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       dispatchId: target.dispatchId,
       batch,
       cliCommand: this.deps.getCliCommand(),
-      senderName: this.deps.senderName
+      senderSnapshot: this.deps.senderSnapshot
     })
     const staged = batch.messages.map((message) => message.id)
     const operation = resolveStructuredPointerOperation({

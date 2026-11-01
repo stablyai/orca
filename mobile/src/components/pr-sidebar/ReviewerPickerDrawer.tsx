@@ -128,7 +128,10 @@ export function ReviewerPickerDrawer({
             return (
               <Pressable
                 key={item.login}
-                style={styles.pickerRow}
+                style={({ pressed }) => [
+                  styles.pickerRow,
+                  pressed && { backgroundColor: colors.translucentFill }
+                ]}
                 onPress={() => onToggle(item.login)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: requested }}

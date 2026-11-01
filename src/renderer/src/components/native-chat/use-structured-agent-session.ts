@@ -35,7 +35,7 @@ import { useStructuredAgentSessionRailOutline } from './use-structured-agent-ses
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
 import { structuredConversationCommandRunner } from './structured-conversation-command-send'
 import { pendingSendsOutsideQueuedCards } from './structured-agent-session-sending-queued-cards'
-import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
+import { hostStatesTurnScopes } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from './use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from './use-structured-agent-session-rewind'
@@ -92,7 +92,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     reportedThreadGoal,
     contextUsage: usageSupport,
     rewind: rewindSupport,
-    acceptsImages
+    sessionSupport
   } = useStructuredAgentSessionOptions({
     agent,
     sessionId,
@@ -309,6 +309,6 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     threadGoal,
     contextUsage: usage,
     /** Whether this session takes images, by its options report; undefined until it answers. */
-    acceptsImages
+    ...sessionSupport
   }
 }

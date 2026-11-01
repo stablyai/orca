@@ -33,6 +33,8 @@ import {
   journalStateScalars
 } from './journal-state-layout'
 import { readStoredQueuedMessageRow } from './queued-message-stored-row'
+import { readAgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import { projectStructuredAgentStartItem } from '../../../shared/structured-agent-start-projection'
 
 // Admission keeps the in-memory chat within what this build declares on every path a saved value
 // takes into it, so restating that chat on a new epoch never drops a newer build's key.
@@ -287,6 +289,62 @@ it('reads an open string such as an agent type as a value, and still refuses a k
   // @ts-expect-error `host` is a key the stored provider handle does not declare
   expect(declared<UndeclaredStorageKeys<Later, Stored>>()).toBeUndefined()
 })
+
+it.each(['codex', 'future-agent', undefined, 42])(
+  'admits actual start, message and queued sender kind %j without losing the sender',
+  async (agent) => {
+    const journal = await open(journals)
+    const sender = {
+      party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+      name: 'Inspect parser',
+      agent: 'codex'
+    }
+    const body = {
+      kind: 'message' as const,
+      role: 'user' as const,
+      blocks: [{ type: 'text' as const, text: 'Mail' }],
+      from: { kind: 'agent' as const, senders: [sender], orchestration: null }
+    }
+    await journal.appendItem(
+      item(0),
+      { kind: 'agent-start', dispatchId: 'dispatch-1', task: 'Inspect parser', worker: sender },
+      SCOPE
+    )
+    await journal.appendItem(item(1), body, SCOPE)
+    await journal.queuedMessages.insert({ messageId: 'queued-1', body })
+    await journals.closeAll()
+    // A later or damaged writer can change this declared optional value without adding any key.
+    const records = db()
+      .prepare(
+        "SELECT generation, seq, ordinal, value_json FROM journal_outcomes WHERE field IN ('items', 'queue.cards')"
+      )
+      .all()
+    expect(records.length).toBeGreaterThanOrEqual(3)
+    for (const row of records) {
+      const json = JSON.stringify(JSON.parse(String(row.value_json)), (key, value) =>
+        key === 'agent' ? agent : value
+      )
+      db()
+        .prepare(
+          'UPDATE journal_outcomes SET value_json = ? WHERE generation = ? AND seq = ? AND ordinal = ?'
+        )
+        .run(json, Number(row.generation), Number(row.seq), String(row.ordinal))
+    }
+    const reopened = await open(journals)
+    const restored = reopened.snapshot().items
+    expect(restored).toHaveLength(2)
+    const fromStart = projectStructuredAgentStartItem(restored[0])?.from
+    const fromMessage = readAgentMessageSource(
+      restored[1].body.kind === 'message' ? restored[1].body.from : undefined
+    )
+    const expected = typeof agent === 'string' ? agent : undefined
+    const queued = reopened.queuedMessages.list()[0]
+    for (const from of [fromStart, fromMessage, readAgentMessageSource(queued.body.from)]) {
+      expect(from?.senders[0]).toMatchObject({ party: sender.party, name: sender.name })
+      expect(from?.senders[0].agent).toBe(expected)
+    }
+  }
+)
 
 it('keeps explicitly opaque annotation values whole without hiding sibling or nested structured keys', () => {
   type Actual = { annotation: { future: { keys: number[] } }; nested: { kept: string } }

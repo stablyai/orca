@@ -160,6 +160,11 @@ export function useMobileHomeData() {
     () => sortedHosts.filter((host) => connections.hostStates[host.id] === 'connected'),
     [sortedHosts, connections.hostStates]
   )
+  // Before a desktop's first connect settles, "not connected" is not yet true.
+  const hostsConnecting = hosts.some((host) => {
+    const state = connections.hostStates[host.id]
+    return state === undefined || state === 'connecting' || state === 'handshaking'
+  })
   const hostConnections = useMemo(
     () => projectHomeHostConnections(connections.allClients),
     [connections.allClients]
@@ -171,6 +176,7 @@ export function useMobileHomeData() {
     hostCatalog,
     hostCatalogLoaded,
     hostConnections,
+    hostsConnecting,
     jumpBackInRows,
     router,
     setHostCatalog,

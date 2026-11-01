@@ -12,7 +12,7 @@ import {
 import { formatNativeChatFileReference } from '../../shared/agent-image-paste'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import { IMAGE_FILE_MIME_TYPES } from '../../shared/image-file-extensions'
-import type { NativeChatImageRefBlock } from '../../shared/native-chat-types'
+import type { NativeChatImageRefBlock } from '../../shared/native-chat/native-chat-types'
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit

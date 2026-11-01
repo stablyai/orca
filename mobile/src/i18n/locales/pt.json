@@ -21,7 +21,6 @@
     "panel": {
       "all": "Todos",
       "emptyScope": "Nenhuma sessão anterior de agente neste escopo.",
-      "loadFailed": "Não foi possível carregar",
       "missingResumeId": "Esta sessão não tem um ID de retomada.",
       "noSearchResults": "Nenhuma sessão corresponde à sua busca.",
       "noSessions": "Nenhuma sessão de agente",
@@ -693,7 +692,6 @@
       "loadingDiff": "Carregando diff…",
       "loadingReview": "Carregando revisão…",
       "noReviewableChanges": "Nenhuma alteração para revisar",
-      "retryLabel": "Tentar carregar a revisão novamente",
       "reviewUnavailable": "Revisão indisponível",
       "selectFile": "Selecione um arquivo para revisar.",
       "tooLargeMessage": "Este diff é grande demais para a prévia no celular.",
@@ -893,10 +891,8 @@
       "selectRunTarget": "Selecione um destino de execução"
     },
     "prSidebar": {
-      "loadFailed": "Algo deu errado.",
       "loading": "Carregando pull request…",
-      "notPermitted": "Não permitido — sua conta do GitHub não está conectada.",
-      "retryLoading": "Tentar carregar o pull request novamente"
+      "notPermitted": "Não permitido — sua conta do GitHub não está conectada."
     },
     "protocolBlockScreen": {
       "backToHosts": "Voltar para hosts",
@@ -1046,6 +1042,16 @@
       "title": "Algo deu errado",
       "tryAgain": "Tentar novamente",
       "home": "Início"
+    },
+    "svgPreview": {
+      "drawFailed": "Não foi possível desenhar este SVG",
+      "label": "Desenho {{title}}",
+      "previewDrawing": "Pré-visualizar desenho",
+      "viewSource": "Ver código-fonte SVG"
+    },
+    "mermaidDiagram": {
+      "expand": "Expandir diagrama",
+      "label": "Diagrama Mermaid"
     }
   },
   "connection": {
@@ -3163,7 +3169,6 @@
       "waitingForDesktop": "Aguardando o desktop…"
     },
     "panel": {
-      "loadFailedTitle": "Não foi possível carregar",
       "unavailableTitle": "Controle de Código-Fonte Indisponível"
     },
     "prChip": {
@@ -4004,8 +4009,7 @@
       "noFilterMatches": "Nenhum espaço de trabalho corresponde aos filtros",
       "noMatches": "Nenhum espaço de trabalho encontrado",
       "reopen": "Reabrir para atualizar",
-      "reopenDetail": "Este host lista os espaços de trabalho em um formato que esta página ainda não reconhece.",
-      "retrying": "worktree.ps falhou ({{error}}) — tentando novamente automaticamente"
+      "reopenDetail": "Este host lista os espaços de trabalho em um formato que esta página ainda não reconhece."
     },
     "workspaceListSections": {
       "all": "Todos",

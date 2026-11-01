@@ -25,7 +25,7 @@ const refs = {
 const entry = (ref) => `
   export { foldToolMessages as fold } from '${ref ? './src/shared/native-chat-tool-fold' : './src/shared/native-chat/tools/native-chat-tool-fold'}'
   import { createNativeChatMessageListProjection } from './src/renderer/src/components/native-chat/native-chat-message-list-projection'
-  import { deriveNativeChatRowContent } from './src/shared/native-chat-row-content'
+  import { deriveNativeChatRowContent } from '${ref ? './src/shared/native-chat-row-content' : './src/shared/native-chat/transcript/native-chat-row-content'}'
   import { pairNativeChatToolResults } from '${ref ? './src/shared/native-chat-tool-pairing' : './src/shared/native-chat/tools/native-chat-tool-pairing'}'
   export function createPipeline() {
     const project = createNativeChatMessageListProjection()

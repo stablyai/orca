@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { cloneStructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
+import { cloneStructuredAgentSessionOptionRecord } from './agent-session/options/structured-agent-session-option-state'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionShownSnapshot
-} from './structured-agent-session-option-view'
-import { createStructuredAgentSessionOptionState } from './structured-agent-session-options'
+} from './agent-session/options/structured-agent-session-option-view'
+import { createStructuredAgentSessionOptionState } from './agent-session/options/structured-agent-session-options'
 import {
   acceptedStructuredSessionSelectionOutcome,
   createStructuredAgentSessionOptionsWriteOwner
@@ -13,7 +13,7 @@ import {
   createStructuredSessionSelectionController,
   type SelectionOutcome
 } from './structured-agent-session-selection-operations'
-import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from './agent-session/options/structured-agent-session-seed-catalog'
 
 function harness(agent = 'codex') {
   let state = {
