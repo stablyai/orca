@@ -107,6 +107,9 @@ export function deriveWorkerTerminalListState(params: {
   if (!resource) {
     return params.agentTerminalHandle ? 'retained' : null
   }
+  if (resource.ownership_state === 'transferred') {
+    return null
+  }
   if (resource.release_state === 'released') {
     return 'released'
   }

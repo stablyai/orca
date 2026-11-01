@@ -14,7 +14,9 @@ import {
 } from './worker-terminal-attention-query'
 import {
   countWorkerTerminalInventory,
-  scanWorkerTerminalStates
+  indexHandedOnWorkerTerminalResources,
+  scanWorkerTerminalStates,
+  WORKER_TERMINAL_HANDED_ON_SQL
 } from './worker-terminal-inventory-counts'
 import {
   allowWorkerTerminalAutoClose,
@@ -210,17 +212,23 @@ export function listWorkerTerminalResources(
   const resources =
     rows.length === 0
       ? []
-      : (this.db
+      : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+        (this.db
           .prepare(
             `SELECT r.* FROM worker_terminal_resources r
-               WHERE r.owner_dispatch_id IN (${rows.map(() => '?').join(',')})`
+               WHERE r.owner_dispatch_id IN (${rows.map(() => '?').join(',')})
+                  OR ${WORKER_TERMINAL_HANDED_ON_SQL}`
           )
           .all(...rows.map((row) => row.dispatch_id)) as WorkerTerminalResourceRow[])
   const resourceByOwner = new Map(
     resources.map((resource) => [resource.owner_dispatch_id, resource])
   )
+  const handedOn = indexHandedOnWorkerTerminalResources(resources)
   return rows.map((row) => {
-    const resource = resourceByOwner.get(row.dispatch_id) ?? null
+    const owned = resourceByOwner.get(row.dispatch_id)
+    const resource = owned ?? handedOn.get(row.dispatch_id) ?? null
+    // A follow-up that took over this terminal now names it; this row no longer does.
+    const handedAway = !owned && resource !== null
     return {
       dispatchId: row.dispatch_id,
       taskId: row.task_id,
@@ -229,8 +237,8 @@ export function listWorkerTerminalResources(
       workerState: row.worker_state,
       dispatchStatus: row.dispatch_status,
       workerStage: row.worker_stage,
-      agentTerminalHandle: row.agent_terminal_handle,
-      paneKey: row.pane_key,
+      agentTerminalHandle: handedAway ? null : row.agent_terminal_handle,
+      paneKey: handedAway ? null : row.pane_key,
       worktreeId: row.worktree_id,
       terminalState: deriveWorkerTerminalListState({
         workerState: row.worker_state,

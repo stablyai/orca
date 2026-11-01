@@ -382,7 +382,7 @@ describe('orchestration worker-list pagination', () => {
     expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-a'])
   })
 
-  it('projects a 100-row page within six synchronous read statements', async () => {
+  it('projects a 100-row page within seven synchronous read statements', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
@@ -414,7 +414,7 @@ describe('orchestration worker-list pagination', () => {
     )
     expect(page.workers[49]?.projection.attention.categories).toContain('failure')
     expect(page.page).toEqual({ total: 100, limit: 100, hasMore: false, nextCursor: null })
-    expect(prepare).toHaveBeenCalledTimes(6)
+    expect(prepare).toHaveBeenCalledTimes(7)
   })
 
   it('aggregates exact inventory counts while preserving filtered totals', async () => {
@@ -549,7 +549,7 @@ describe('orchestration worker-list pagination', () => {
       await callWorkerList(runtime, { run: run.id, limit: 100, includeRemote: true })
 
       // The page cost must not grow with the number of federated rows on it.
-      expect(prepare.mock.calls.length).toBeLessThan(8)
+      expect(prepare.mock.calls.length).toBeLessThan(9)
     }
   )
 

@@ -3,9 +3,11 @@ import type {
   WorkerDispatchListState,
   WorkerTerminalListState,
   WorkerTerminalOwnershipState,
-  WorkerTerminalReleaseState
+  WorkerTerminalReleaseState,
+  WorkerTerminalResourceRow
 } from '../../worker-terminal-ownership'
 import type { OrchestrationDb } from '../orchestration-db'
+import { parseWorkerTerminalPriorOwnerIds } from '../pane-key-match'
 import type { WorkerTerminalListingSnapshot } from './worker-terminal-listing'
 
 export type WorkerTerminalStateRow = {
@@ -43,6 +45,23 @@ function buildInventoryScope(params: WorkerTerminalInventoryParams): {
   return { where, values }
 }
 
+/** A resource a follow-up took over still lists the Dispatches that held it before. */
+export const WORKER_TERMINAL_HANDED_ON_SQL = "r.prior_owner_dispatch_ids != '[]'"
+
+/** The terminal each former owner handed on, as `transferred` from that owner's side; the latest hand-off wins. */
+export function indexHandedOnWorkerTerminalResources(
+  resources: readonly WorkerTerminalResourceRow[]
+): Map<string, WorkerTerminalResourceRow> {
+  const byPriorOwner = new Map<string, WorkerTerminalResourceRow>()
+  const oldestFirst = [...resources].sort((a, b) => a.updated_at.localeCompare(b.updated_at))
+  for (const resource of oldestFirst) {
+    for (const owner of parseWorkerTerminalPriorOwnerIds(resource.prior_owner_dispatch_ids) ?? []) {
+      byPriorOwner.set(owner, { ...resource, ownership_state: 'transferred' })
+    }
+  }
+  return byPriorOwner
+}
+
 /** Derive all filtering/counting through the single state machine; newest-first order supports paging. */
 export function scanWorkerTerminalStates(
   this: OrchestrationDb,
@@ -72,6 +91,12 @@ export function scanWorkerTerminalStates(
     ownership_state: WorkerTerminalOwnershipState | null
     release_state: WorkerTerminalReleaseState | null
   }[]
+  const handedOn = indexHandedOnWorkerTerminalResources(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+    this.db
+      .prepare(`SELECT r.* FROM worker_terminal_resources r WHERE ${WORKER_TERMINAL_HANDED_ON_SQL}`)
+      .all() as WorkerTerminalResourceRow[]
+  )
   return rows.map((row) => ({
     dispatchId: row.dispatch_id,
     databaseId: row.database_id,
@@ -80,7 +105,7 @@ export function scanWorkerTerminalStates(
       agentTerminalHandle: row.agent_terminal_handle,
       resource:
         row.resource_id === null
-          ? null
+          ? (handedOn.get(row.dispatch_id) ?? null)
           : {
               ownership_state: row.ownership_state as WorkerTerminalOwnershipState,
               release_state: row.release_state as WorkerTerminalReleaseState

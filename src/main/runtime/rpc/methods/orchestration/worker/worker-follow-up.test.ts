@@ -408,6 +408,39 @@ describe('a follow-up to a finished terminal worker', () => {
     })
   })
 
+  it('lists the finished worker without the terminal its follow-up took over', async () => {
+    h.setup()
+    const { dispatchId } = await h.startSettledWorker()
+    await send(dispatchId, 'and the docs')
+    const followUpId = getFollowUpDispatch(h.db, dispatchId)!.id
+    expect(h.db.getWorkerTerminalResourceByOwner(followUpId)?.terminal_handle).toBe('term_worker')
+
+    await expect(h.call('orchestration.workerList', { run: h.activeRunId })).resolves.toMatchObject(
+      {
+        workers: expect.arrayContaining([
+          expect.objectContaining({
+            dispatchId,
+            agentTerminalHandle: null,
+            terminalState: null,
+            projection: expect.objectContaining({
+              resource: { state: 'transferred' },
+              nextAction: expect.objectContaining({ kind: 'none' })
+            })
+          }),
+          expect.objectContaining({
+            dispatchId: followUpId,
+            agentTerminalHandle: 'term_worker',
+            terminalState: 'active'
+          })
+        ]),
+        counts: { active: 1 }
+      }
+    )
+    await expect(
+      h.call('orchestration.workerList', { run: h.activeRunId, terminalState: 'retained' })
+    ).resolves.toMatchObject({ workers: [] })
+  })
+
   it('takes mail for a working worker even when its report settles the Dispatch in the same turn', async () => {
     h.setup()
     const { taskId, dispatchId } = await h.startWorker()
