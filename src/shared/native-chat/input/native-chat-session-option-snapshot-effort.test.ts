@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../agent-session-option-catalog-claude-codex'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../agent-session/options/agent-session-option-catalog-claude-codex'
 import { createNativeChatSessionOptionRecord } from './native-chat-session-option-state'
 import { buildNativeChatSessionOptionSnapshot } from './native-chat-session-option-snapshot'
 
