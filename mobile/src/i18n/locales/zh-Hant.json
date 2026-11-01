@@ -2508,6 +2508,10 @@
       "terminal": "終端機",
       "tapToFocusPane": "{{title}}，點一下以聚焦",
       "inputPane": "{{title}} · 輸入"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "工作樹已刪除。",
+      "folderWorkspaceRemoved": "資料夾工作區已移除。"
     }
   },
   "settings": {

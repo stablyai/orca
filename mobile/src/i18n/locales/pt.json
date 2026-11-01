@@ -2580,6 +2580,10 @@
       "terminal": "Terminal",
       "tapToFocusPane": "{{title}}, toque para focar",
       "inputPane": "{{title}} · Entrada"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "A worktree foi excluída.",
+      "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido."
     }
   },
   "settings": {

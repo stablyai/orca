@@ -284,6 +284,10 @@
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "The worktree was deleted.",
+      "folderWorkspaceRemoved": "The folder workspace was removed."
     }
   },
   "settings": {

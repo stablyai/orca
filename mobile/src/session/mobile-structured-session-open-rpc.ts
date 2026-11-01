@@ -43,7 +43,10 @@ export const structuredOpenReveal = openingRead(
       agent: z.string().min(1),
       readable: z.boolean()
     }),
-    z.object({ ok: z.literal(false), refusal: z.object({ code: z.string() }) })
+    z.object({
+      ok: z.literal(false),
+      refusal: z.object({ code: z.string(), details: z.unknown().optional() })
+    })
   ])
 )
 export const structuredOpenTabs = openingRead(

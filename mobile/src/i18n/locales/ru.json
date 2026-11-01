@@ -2648,6 +2648,10 @@
       "terminal": "Терминал",
       "tapToFocusPane": "{{title}}, нажмите для фокусировки",
       "inputPane": "{{title}} · Ввод"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "Рабочее дерево удалено.",
+      "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
     }
   },
   "settings": {

@@ -82,8 +82,8 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/review/[worktreeId].tsx', 78],
   ['./h/[hostId]/session/[worktreeId].tsx', 93],
   ['./h/[hostId]/source-control/[worktreeId].tsx', 101],
-  ['./h/[hostId]/tasks.tsx', 116],
-  ['./h/_layout.tsx', 120]
+  ['./h/[hostId]/tasks.tsx', 115],
+  ['./h/_layout.tsx', 119]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)

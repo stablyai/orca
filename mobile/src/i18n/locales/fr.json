@@ -2580,6 +2580,10 @@
       "terminal": "Terminal",
       "tapToFocusPane": "{{title}}, touchez pour activer",
       "inputPane": "{{title}} · Saisie"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "Le worktree a été supprimé.",
+      "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
     }
   },
   "settings": {

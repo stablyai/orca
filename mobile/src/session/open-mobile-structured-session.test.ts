@@ -52,6 +52,33 @@ function rig(existing = false) {
   }
 }
 afterEach(() => vi.useRealTimers())
+
+it.each([
+  { workspaceId: 'legacy-folder', details: { workspaceKind: 'folder' } },
+  { workspaceId: 'folder:removed', details: undefined },
+  { workspaceId: 'folder:removed', details: { workspaceKind: 'future-workspace-kind' } }
+])(
+  'keeps proven removal and its folder noun across host versions: %j',
+  async ({ workspaceId, details }) => {
+    const { client, send } = rig()
+    send.mockImplementation(async (method) => ({
+      id: 'removed',
+      ok: true,
+      result:
+        method === 'orchestration.partyLocation'
+          ? { location: { kind: 'chat', sessionId: 'live', worktreeId: workspaceId } }
+          : method === 'agentSession.reveal'
+            ? { ok: false, refusal: { code: 'agent_session_workspace_removed', details } }
+            : { tabs: [] }
+    }))
+    expect(await openMobileStructuredSession({ client, source, current: () => true })).toEqual({
+      kind: 'failed',
+      failure: { reason: 'workspace-missing', beforeEffects: true, workspaceKind: 'folder' }
+    })
+    expect(send.mock.calls.some(([method]) => method === 'session.tabs.activate')).toBe(false)
+  }
+)
+
 it('refuses a non-native agent before any host operation', async () => {
   const { client, send } = rig()
   expect(

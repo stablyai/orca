@@ -2508,6 +2508,10 @@
       "terminal": "터미널",
       "tapToFocusPane": "{{title}}, 탭하여 포커스",
       "inputPane": "{{title}} · 입력"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "워크트리가 삭제되었습니다.",
+      "folderWorkspaceRemoved": "폴더 워크스페이스가 제거되었습니다."
     }
   },
   "settings": {

@@ -1337,7 +1337,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "La sesión del agente estructurado aún no está disponible. Vuelve a intentarlo en un momento.",
         "gone": "Este chat ya no está en este anfitrión, por lo que no se puede volver a abrir aquí.",
-        "hostCannotOpen": "Este chat no se puede volver a abrir hasta que se actualice Orca."
+        "hostCannotOpen": "Este chat no se puede volver a abrir hasta que se actualice Orca.",
+        "worktreeDeleted": "El worktree se eliminó.",
+        "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Las recetas con raíz aprovisionada no admiten sparse checkout."
