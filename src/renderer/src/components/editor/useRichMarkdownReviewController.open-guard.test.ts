@@ -62,6 +62,7 @@ describe('useRichMarkdownReviewController openAnnotationPopover draft guard', ()
 
     const { result } = renderHook(() =>
       useRichMarkdownReviewController({
+        commentOwner: { kind: 'worktree', worktreeId: 'wt-1', writeHostId: 'local' },
         addDiffComment: vi.fn(),
         allDiffComments: [],
         content: 'abc',

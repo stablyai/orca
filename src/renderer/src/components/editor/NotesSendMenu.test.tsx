@@ -234,6 +234,7 @@ function renderMenu(
   hookRuntime.index = 0
   return expand(
     <NotesSendMenu<TestNote>
+      owner={{ kind: 'worktree', worktreeId: 'wt-1', hostId: 'local', writeHostId: 'local' }}
       worktreeId="wt-1"
       groupId="group-1"
       modeIdParts={['markdown-notes', 'wt-1', 'README.md', 'rail']}

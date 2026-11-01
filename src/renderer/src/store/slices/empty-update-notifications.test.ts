@@ -72,7 +72,11 @@ describe('empty store updates', () => {
     before.switchBrowserTabProfile('missing', null, 'persist:missing')
     before.recordClientHostedBrowserCloseIntents([])
     before.clearClientHostedBrowserCloseIntents('missing', [])
-    mutateDiffComments(store.setState, 'missing', () => null)
+    mutateDiffComments(
+      store.setState,
+      { kind: 'worktree', worktreeId: 'missing', writeHostId: 'local' },
+      () => null
+    )
     store.setState((state) => browserImportStateForHostUpdate(state, 'runtime:other', null))
 
     expect(store.getState()).toBe(before)

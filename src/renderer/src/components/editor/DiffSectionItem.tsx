@@ -1,3 +1,4 @@
+import { useDiffCommentOwner } from '../diff-comments/use-diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
@@ -50,6 +51,7 @@ export function DiffSectionItem({
   const diffTypography = useEditorTypography('diff')
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
+  const commentOwner = useDiffCommentOwner(worktreeId)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -106,6 +108,7 @@ export function DiffSectionItem({
       body: string
     }): Promise<boolean> => {
       return submitDiffSectionComment({
+        owner: commentOwner,
         addDiffComment,
         body,
         onAddLineComment,
@@ -114,10 +117,12 @@ export function DiffSectionItem({
         worktreeId
       })
     },
-    [addDiffComment, onAddLineComment, section, worktreeId]
+    [commentOwner, addDiffComment, onAddLineComment, section, worktreeId]
   )
 
   useDiffCommentDecorator({
+    captureCreateComment: !onAddLineComment,
+    commentOwner,
     editor: hasLineCommentAction ? modifiedEditor : null,
     monacoModelIdentity: `${modelPathBase}:modified`,
     filePath: section.path,
@@ -132,10 +137,13 @@ export function DiffSectionItem({
     canOpenDraft: !isLargeDiffLimited,
     onDeleteComment: (id) => {
       if (worktreeId) {
-        void deleteDiffComment(worktreeId, id)
+        void (commentOwner && deleteDiffComment(commentOwner, id))
       }
     },
-    onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
+    onUpdateComment: worktreeId
+      ? (id, body) =>
+          commentOwner ? updateDiffComment(commentOwner, id, body) : Promise.resolve(false)
+      : undefined,
     pendingScrollCommentId: pendingScrollForThisSection,
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })

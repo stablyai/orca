@@ -14,6 +14,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/store/worktree-diff-comments-selector', () => ({
+  selectDiffCommentOwner: () => null,
+  diffCommentOwnerKey: () => '',
   selectWorktreeDiffCommentsOrEmpty: () => []
 }))
 

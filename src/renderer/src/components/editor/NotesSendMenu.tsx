@@ -1,3 +1,4 @@
+import type { DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Send, Sparkles } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -43,6 +44,7 @@ type SendableNotesScope<TNote> = Omit<NotesSendMenuScope<TNote>, 'formatPrompt'>
 }
 
 export type NotesSendMenuProps<TNote> = {
+  owner: DiffCommentOwner | null
   worktreeId: string
   groupId: string
   modeIdParts: readonly string[]
@@ -71,6 +73,7 @@ export function buildNotesSendTargetModeId(modeIdParts: readonly string[]): stri
 }
 
 export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
+  owner,
   worktreeId,
   groupId,
   modeIdParts,
@@ -99,10 +102,12 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   const sendableScopes = useMemo<SendableNotesScope<TNote>[]>(() => {
     void inFlightVersion
     return scopes.map(({ formatPrompt, ...scope }) => {
-      const notes = scope.notes.filter((note) => !isNoteInFlight(diffCommentSendKey(note)))
+      const notes = scope.notes.filter(
+        (note) => owner && !isNoteInFlight(diffCommentSendKey(owner, note))
+      )
       return { ...scope, notes, prompt: notes.length > 0 ? formatPrompt(notes) : '' }
     })
-  }, [inFlightVersion, scopes])
+  }, [inFlightVersion, owner, scopes])
   const enabledScopes = useMemo(
     () => sendableScopes.filter((scope) => scope.notes.length > 0),
     [sendableScopes]
@@ -126,8 +131,13 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   )
   const holdInFlight = useCallback(
     (notes: readonly TNote[]) => (delivered: Promise<unknown>) =>
-      holdNotesForSend(notes.map(diffCommentSendKey), delivered, () => markDelivered(notes)),
-    [markDelivered]
+      owner &&
+      holdNotesForSend(
+        notes.map((note) => diffCommentSendKey(owner, note)),
+        delivered,
+        () => markDelivered(notes)
+      ),
+    [markDelivered, owner]
   )
 
   const openTargetMode = useCallback(

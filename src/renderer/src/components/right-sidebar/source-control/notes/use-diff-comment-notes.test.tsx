@@ -15,6 +15,8 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector({})
 }))
 vi.mock('@/store/worktree-diff-comments-selector', () => ({
+  selectDiffCommentOwner: () => null,
+  diffCommentOwnerKey: () => '',
   selectWorktreeDiffCommentsOrEmpty: () => [
     {
       id: 'c1',

@@ -1,3 +1,13 @@
+import type * as RuntimeRpcClient from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import {
+  diffCommentSendKey,
+  holdNotesForSend,
+  isNoteInFlight,
+  resetNotesInFlightForTests
+} from '@/lib/notes-send-in-flight'
+import type { AppState } from '../types'
+import { selectDiffCommentOwner, type DiffCommentOwner } from '../worktree-diff-comments-selector'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -7,6 +17,11 @@ import {
   diffCommentTwinHostId,
   selectWorktreeDiffCommentsOrEmpty
 } from '../worktree-diff-comments-selector'
+
+vi.mock('../../runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcClient>()),
+  callRuntimeRpc: vi.fn().mockResolvedValue({ ok: true })
+}))
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
@@ -77,7 +92,7 @@ function rowNotes(store: ReturnType<typeof createTwinStore>, hostId: string): st
 }
 
 function addNote(store: ReturnType<typeof createTwinStore>) {
-  return store.getState().addDiffComment({
+  return store.getState().addDiffComment(capturedOwner(store, WT), {
     worktreeId: WT,
     filePath: 'README.md',
     lineNumber: 1,
@@ -87,6 +102,8 @@ function addNote(store: ReturnType<typeof createTwinStore>) {
 }
 
 beforeEach(() => {
+  vi.mocked(callRuntimeRpc).mockClear()
+  resetNotesInFlightForTests()
   updateMeta.mockReset()
   updateMeta.mockResolvedValue({})
 })
@@ -183,9 +200,10 @@ describe('diff comments on twin worktrees', () => {
     if (!sent) {
       throw new Error('note was not saved')
     }
+    const owner = capturedOwner(store, WT)
     store.setState({ activeWorktreeId: null, activeWorkspaceExecutionHostId: null })
 
-    expect(await store.getState().clearDeliveredDiffComments(WT, [sent])).toBe(true)
+    expect(await store.getState().clearDeliveredDiffComments(owner, [sent])).toBe(true)
 
     expect(rowNotes(store, 'ssh:box')).toEqual([])
     expect(updateMeta).toHaveBeenLastCalledWith(
@@ -203,7 +221,7 @@ describe('diff comments on twin worktrees', () => {
     expect(await addNote(store)).not.toBeNull()
 
     expect(updateMeta).toHaveBeenCalledTimes(1)
-    expect(updateMeta.mock.calls[0][0]).not.toHaveProperty('executionHostId')
+    expect(updateMeta.mock.calls[0][0]).toHaveProperty('executionHostId', 'ssh:box')
   })
 
   it('saves an open unstamped row its SSH repo owns', async () => {
@@ -215,7 +233,7 @@ describe('diff comments on twin worktrees', () => {
 
     expect(await addNote(store)).not.toBeNull()
 
-    expect(updateMeta.mock.calls[0][0]).not.toHaveProperty('executionHostId')
+    expect(updateMeta.mock.calls[0][0]).toHaveProperty('executionHostId', 'ssh:box')
   })
 
   it('picks an SSH twin a paired server proxies by its own stamp', () => {
@@ -257,7 +275,7 @@ describe('diff comments on twin worktrees', () => {
   })
 
   it('keeps saves in order when a listing stamps the row mid-burst', async () => {
-    const store = createTwinStore(null)
+    const store = createTwinStore('local')
     store.setState({ worktreesByRepo: { [REPO]: [worktree(undefined)] } })
     let releaseFirst = () => {}
     updateMeta.mockImplementationOnce(
@@ -279,7 +297,7 @@ describe('diff comments on twin worktrees', () => {
   })
 
   it('rolls a failed burst back to disk when a listing stamps the row mid-burst', async () => {
-    const store = createTwinStore(null)
+    const store = createTwinStore('local')
     store.setState({ worktreesByRepo: { [REPO]: [worktree(undefined)] } })
     updateMeta.mockRejectedValue(new Error('write failed'))
 
@@ -344,7 +362,9 @@ describe('diff comments on twin worktrees', () => {
       worktreesByRepo: { [REPO]: [worktree('local'), worktree('local', [note('l1', 'old')])] }
     })
 
-    expect(await store.getState().updateDiffComment(WT, 'l1', 'new')).toBe(true)
+    expect(await store.getState().updateDiffComment(capturedOwner(store, WT), 'l1', 'new')).toBe(
+      true
+    )
 
     expect(updateMeta).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -408,7 +428,7 @@ describe('diff comments on twin worktrees', () => {
       }
     })
 
-    await store.getState().deleteDiffComment(WT, 'u1')
+    await store.getState().deleteDiffComment(capturedOwner(store, WT), 'u1')
 
     expect(updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo[REPO][0].diffComments?.map((c) => c.body)).toEqual([
@@ -467,14 +487,14 @@ describe('diff comments on twin worktrees', () => {
     const store = createTwinStore('ssh:box')
     store.setState({ worktreesByRepo: { [REPO]: [worktree('local', [note('l1', 'local note')])] } })
 
-    await store.getState().clearDiffComments(WT)
+    await store.getState().clearDiffComments(capturedOwner(store, WT))
 
     expect(updateMeta).not.toHaveBeenCalled()
     expect(rowNotes(store, 'local')).toEqual(['local note'])
   })
 
   it('still saves a lone unstamped row a listing stamps and rebuilds before the save runs', async () => {
-    const store = createTwinStore(null)
+    const store = createTwinStore('local')
     store.setState({ worktreesByRepo: { [REPO]: [worktree(undefined)] } })
 
     const pending = addNote(store)
@@ -488,4 +508,118 @@ describe('diff comments on twin worktrees', () => {
     expect(await pending).not.toBeNull()
     expect(updateMeta).toHaveBeenCalledTimes(1)
   })
+})
+
+function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
+  return (
+    selectDiffCommentOwner(store.getState(), worktreeId) ?? {
+      kind: 'worktree',
+      worktreeId,
+      hostId: 'ssh:unresolved',
+      writeHostId: 'ssh:unresolved'
+    }
+  )
+}
+
+describe('captured note owners across delivery and selection', () => {
+  it('clears only the sent twin after deferred delivery and isolates the in-flight key', async () => {
+    const store = createTwinStore('ssh:box')
+    const sent = note('same-id', 'same body')
+    store.setState({
+      worktreesByRepo: { [REPO]: [worktree('local', [sent]), worktree('ssh:box', [sent])] }
+    })
+    const ownerA = capturedOwner(store, WT)
+    let deliver = (_result: { delivered: boolean }) => {}
+    const delivered = new Promise<{ delivered: boolean }>((resolve) => {
+      deliver = resolve
+    })
+    let cleared: Promise<boolean> | undefined
+    holdNotesForSend([diffCommentSendKey(ownerA, sent)], delivered, () => {
+      cleared = store.getState().clearDeliveredDiffComments(ownerA, [sent])
+    })
+    store.setState({ activeWorkspaceExecutionHostId: 'local' })
+    const ownerB = capturedOwner(store, WT)
+    expect(isNoteInFlight(diffCommentSendKey(ownerA, sent))).toBe(true)
+    expect(isNoteInFlight(diffCommentSendKey(ownerB, sent))).toBe(false)
+    deliver({ delivered: true })
+    await delivered
+    expect(await cleared).toBe(true)
+    expect(rowNotes(store, 'ssh:box')).toEqual([])
+    expect(rowNotes(store, 'local')).toEqual(['same body'])
+    expect(updateMeta).toHaveBeenCalledExactlyOnceWith({
+      worktreeId: WT,
+      executionHostId: 'ssh:box',
+      updates: { diffComments: [] }
+    })
+    expect(isNoteInFlight(diffCommentSendKey(ownerA, sent))).toBe(false)
+  })
+
+  it('keeps add and delete on the captured host after selection changes', async () => {
+    const store = createTwinStore('ssh:box')
+    const owner = capturedOwner(store, WT)
+    store.setState({ activeWorkspaceExecutionHostId: 'local' })
+    const saved = await store.getState().addDiffComment(owner, {
+      worktreeId: WT,
+      filePath: 'a',
+      lineNumber: 1,
+      body: 'captured',
+      side: 'modified'
+    })
+    expect(saved).not.toBeNull()
+    if (!saved) {
+      throw new Error('save failed')
+    }
+    await store.getState().deleteDiffComment(owner, saved.id)
+    expect(rowNotes(store, 'local')).toEqual([])
+    expect(rowNotes(store, 'ssh:box')).toEqual([])
+    expect(updateMeta).toHaveBeenCalledTimes(2)
+    expect(updateMeta.mock.calls.every(([args]) => args.executionHostId === 'ssh:box')).toBe(true)
+  })
+
+  it('refuses every mutation when the captured twin was removed', async () => {
+    const store = createTwinStore('ssh:box')
+    const sent = note('same-id', 'same body')
+    store.setState({
+      worktreesByRepo: { [REPO]: [worktree('local', [sent]), worktree('ssh:box', [sent])] }
+    })
+    const owner = capturedOwner(store, WT)
+    store.setState({
+      activeWorkspaceExecutionHostId: 'local',
+      worktreesByRepo: { [REPO]: [worktree('local', [sent])] }
+    })
+    expect(await store.getState().clearDeliveredDiffComments(owner, [sent])).toBe(false)
+    expect(await store.getState().clearDiffComments(owner)).toBe(false)
+    expect(await store.getState().clearDiffCommentsForFile(owner, 'a')).toBe(false)
+    expect(await store.getState().markDiffCommentsSent(owner, [sent.id])).toBe(false)
+    expect(await store.getState().updateDiffComment(owner, sent.id, 'changed')).toBe(false)
+    await store.getState().deleteDiffComment(owner, sent.id)
+    expect(rowNotes(store, 'local')).toEqual(['same body'])
+    expect(updateMeta).not.toHaveBeenCalled()
+  })
+})
+
+it('keeps the paired server write authority when two servers proxy the same target', async () => {
+  const store = createTwinStore('runtime:hub-a')
+  const sent = note('same-id', 'same body')
+  store.setState({
+    worktreesByRepo: {
+      [REPO]: [
+        { ...worktree('ssh:box', [sent]), runtimeOwnerEnvironmentId: 'hub-a' },
+        { ...worktree('ssh:box', [sent]), runtimeOwnerEnvironmentId: 'hub-b' }
+      ]
+    }
+  })
+  const owner = capturedOwner(store, WT)
+  store.setState({ activeWorkspaceExecutionHostId: 'runtime:hub-b' })
+  expect(await store.getState().clearDeliveredDiffComments(owner, [sent])).toBe(true)
+  expect(store.getState().worktreesByRepo[REPO].map((row) => row.diffComments?.length)).toEqual([
+    0, 1
+  ])
+  expect(callRuntimeRpc).toHaveBeenCalledExactlyOnceWith(
+    { kind: 'environment', environmentId: 'hub-a' },
+    'worktree.set',
+    expect.objectContaining({ diffComments: [] }),
+    { timeoutMs: 15_000 }
+  )
+  expect(updateMeta).not.toHaveBeenCalled()
 })

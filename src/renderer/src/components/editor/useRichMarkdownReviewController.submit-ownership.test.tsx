@@ -67,10 +67,13 @@ function mountReview() {
   const editorRef: { current: Editor | null } = { current: editor }
   const rootRef: { current: HTMLDivElement | null } = { current: document.createElement('div') }
   const pending = Promise.withResolvers<DiffComment | null>()
-  const addDiffComment = vi.fn((_input: Omit<DiffComment, 'id' | 'createdAt'>) => pending.promise)
+  const addDiffComment = vi.fn(
+    (_owner: unknown, _input: Omit<DiffComment, 'id' | 'createdAt'>) => pending.promise
+  )
   let comments: DiffComment[] = []
   const hook = renderHook(() =>
     useRichMarkdownReviewController({
+      commentOwner: { kind: 'worktree', worktreeId: 'wt-1', hostId: 'local', writeHostId: 'local' },
       addDiffComment,
       allDiffComments: comments,
       content: 'abc xyz',

@@ -68,8 +68,11 @@ export default function CombinedDiffViewer({
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
-  const { comments: diffCommentsForWorktree, markdownReviewNotesEnabled } =
-    useVisibleWorktreeDiffComments(file.worktreeId)
+  const {
+    owner: commentOwner,
+    comments: diffCommentsForWorktree,
+    markdownReviewNotesEnabled
+  } = useVisibleWorktreeDiffComments(file.worktreeId)
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
   const canOpenWorkspaceFileBrowserForPath = useWorkspaceFileBrowserActionPredicate(file.worktreeId)
   const isDark = useDocumentDarkTheme()
@@ -90,6 +93,7 @@ export default function CombinedDiffViewer({
     sectionsRef: registry.sectionsRef
   })
   const notes = useCombinedDiffNotesActions({
+    owner: commentOwner,
     clearDiffComments,
     diffCommentsForWorktree,
     markdownReviewNotesEnabled,

@@ -1,3 +1,5 @@
+import { useShallow } from 'zustand/react/shallow'
+import { selectDiffCommentOwner } from '@/store/worktree-diff-comments-selector'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createConnectionIdForFileSelector } from '@/lib/connection-owner-resolution'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -82,6 +84,11 @@ export function useMarkdownPreviewSourceFoundation({
     worktreesByRepo,
     resolvedSourceWorktreeId,
     filePath
+  )
+  const commentOwner = useAppStore(
+    useShallow((state) =>
+      sourceWorktree ? selectDiffCommentOwner(state, sourceWorktree.id, sourceWorktree) : null
+    )
   )
   const allDiffComments = sourceWorktree?.diffComments
   const sourceRoutingWorktreeId = sourceWorktree?.id ?? resolvedSourceWorktreeId
@@ -195,6 +202,7 @@ export function useMarkdownPreviewSourceFoundation({
     clearDeliveredDiffComments,
     keybindings,
     worktreesByRepo,
+    commentOwner,
     sourceWorktree,
     sourceRoutingWorktreeId,
     sourceConnectionId,

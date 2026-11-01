@@ -1,10 +1,15 @@
+import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/qualified-worktree-execution-owner'
 import type { DiffComment } from '../../../shared/diff-comment-types'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from './types'
 import { getIndexedWorktreeById } from './worktree-repo-index'
-import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
-import { namedHostForOwnerRef } from '@/lib/resolve-owner'
+import {
+  findFolderWorkspaceOwner,
+  getExecutionHostIdForFolderWorkspace,
+  getRuntimeEnvironmentIdForFolderWorkspace
+} from '@/lib/folder-workspace-runtime-owner'
+import { namedHostForOwnerRef, runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
 import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -23,6 +28,7 @@ type DiffCommentSelectorState = Pick<AppState, 'worktreesByRepo'> &
       | 'restoredRuntimeHostIdByWorkspaceSessionKey'
       | 'runtimeEnvironments'
       | 'settings'
+      | 'repos'
     >
   >
 
@@ -94,7 +100,9 @@ export function findDiffCommentRows(
             ? rows
             : []
     const worktrees = exact.length > 0 ? exact : stamped
-    return worktrees.length > 0 ? { twin: captured, worktrees } : null
+    return worktrees.length > 0
+      ? { twin: captured, hostId: diffCommentTwinHostId(captured) ?? hint.hostId, worktrees }
+      : null
   }
   if (rows.length === 0) {
     return null
@@ -211,4 +219,110 @@ export function selectWorktreeDiffCommentsOrEmpty(
   worktreeId: string | null | undefined
 ): DiffComment[] {
   return selectWorktreeDiffComments(state, worktreeId) ?? EMPTY_DIFF_COMMENTS
+}
+
+export type DiffCommentOwner =
+  | ({ kind: 'worktree'; worktreeId: string; writeHostId: ExecutionHostId } & DiffCommentTwin)
+  | {
+      kind: 'folder'
+      worktreeId: string
+      executionHostId: ExecutionHostId
+      runtimeEnvironmentId: string | null
+    }
+
+/** Capture with the displayed list, before a composer, confirmation or delivery can outlive selection. */
+export function selectDiffCommentOwner(
+  state: DiffCommentSelectorState,
+  worktreeId: string | null | undefined,
+  displayedTwin?: DiffCommentTwin
+): DiffCommentOwner | null {
+  if (!worktreeId) {
+    return null
+  }
+  const scope = parseWorkspaceKey(worktreeId)
+  if (scope?.type === 'folder') {
+    if (!findFolderWorkspaceOwner(state, scope.folderWorkspaceId)) {
+      return null
+    }
+    const executionHostId = getExecutionHostIdForFolderWorkspace(state, scope.folderWorkspaceId)
+    return {
+      kind: 'folder',
+      worktreeId,
+      executionHostId,
+      runtimeEnvironmentId: getRuntimeEnvironmentIdForFolderWorkspace(
+        state,
+        scope.folderWorkspaceId,
+        executionHostId
+      )
+    }
+  }
+  const found = findDiffCommentRows(
+    state,
+    worktreeId,
+    displayedTwin
+      ? { twin: twinOf(displayedTwin), hostId: diffCommentTwinHostId(twinOf(displayedTwin)) }
+      : {}
+  )
+  if (!found?.twin) {
+    return null
+  }
+  const writeHostId = found.hostId ?? namedHostForOwnerRef(state, { workspaceId: worktreeId })
+  const target = runtimeTargetForWorkspaceOwner(state, { workspaceId: worktreeId })
+  const host =
+    writeHostId ??
+    resolveQualifiedWorktreeExecutionOwner(selectWorktreesByRepo(state), state.repos, worktreeId)
+      ?.hostId ??
+    (target?.kind === 'local'
+      ? 'local'
+      : target?.kind === 'environment'
+        ? toRuntimeExecutionHostId(target.environmentId)
+        : null)
+  return host ? { kind: 'worktree', worktreeId, ...found.twin, writeHostId: host } : null
+}
+
+export function diffCommentOwnerKey(owner: DiffCommentOwner): string {
+  return JSON.stringify(
+    owner.kind === 'folder'
+      ? [owner.worktreeId, owner.executionHostId, owner.runtimeEnvironmentId]
+      : [
+          owner.worktreeId,
+          owner.hostId ?? null,
+          owner.runtimeOwnerEnvironmentId ?? null,
+          owner.writeHostId
+        ]
+  )
+}
+
+export function readOwnedDiffComments(
+  state: DiffCommentSelectorState,
+  owner: DiffCommentOwner
+): DiffComment[] | undefined {
+  if (owner.kind === 'folder') {
+    const scope = parseWorkspaceKey(owner.worktreeId)
+    return scope?.type === 'folder'
+      ? findFolderWorkspaceOwner(state, scope.folderWorkspaceId, owner.executionHostId)
+          ?.diffComments
+      : undefined
+  }
+  const found = findDiffCommentRows(state, owner.worktreeId, {
+    twin: owner,
+    hostId: owner.writeHostId
+  })
+  return found ? diffCommentRowNotes(found) : undefined
+}
+
+export function hasDiffCommentOwner(
+  state: DiffCommentSelectorState,
+  owner: DiffCommentOwner
+): boolean {
+  if (owner.kind === 'folder') {
+    const scope = parseWorkspaceKey(owner.worktreeId)
+    return (
+      scope?.type === 'folder' &&
+      Boolean(findFolderWorkspaceOwner(state, scope.folderWorkspaceId, owner.executionHostId))
+    )
+  }
+  return Boolean(
+    findDiffCommentRows(state, owner.worktreeId, { twin: owner, hostId: owner.writeHostId })
+  )
 }

@@ -1,3 +1,4 @@
+import { useDiffCommentOwner } from '../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import { useEditorState, type Editor } from '@tiptap/react'
@@ -63,6 +64,7 @@ export default function RichMarkdownEditor({
   const runtimeTarget = useFileOwnerRuntimeTarget(worktreeId, runtimeEnvironmentId)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
+  const commentOwner = useDiffCommentOwner(worktreeId)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -101,6 +103,7 @@ export default function RichMarkdownEditor({
   const isEditingLinkRef = useRef(false)
   const typedEmptyOrderedListMarkerRef = useRef(false)
   const review = useRichMarkdownReviewController({
+    commentOwner,
     addDiffComment,
     allDiffComments,
     content,
@@ -325,6 +328,7 @@ export default function RichMarkdownEditor({
 
   return (
     <RichMarkdownEditorSurface
+      commentOwner={commentOwner}
       editor={editor}
       editorFontZoomLevel={editorFontZoomLevel}
       rootElement={rootRef.current}
@@ -396,11 +400,15 @@ export default function RichMarkdownEditor({
       onCopyReviewNotes={() => void review.handleCopyMarkdownReviewNotes()}
       onCopyReviewNote={(note) => void review.handleCopyMarkdownReviewNote(note)}
       onToggleReviewRail={() => review.setReviewRailOpen((open) => !open)}
-      onReviewNotesDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
+      onReviewNotesDelivered={(notes) =>
+        void (commentOwner && clearDeliveredDiffComments(commentOwner, notes))
+      }
       onReviewNoteSourceClick={review.scrollRichMarkdownReviewNoteSourceIntoView}
-      onDeleteReviewComment={(commentId) => void deleteDiffComment(worktreeId, commentId)}
+      onDeleteReviewComment={(commentId) =>
+        void (commentOwner && deleteDiffComment(commentOwner, commentId))
+      }
       onSubmitReviewCommentEdit={(commentId, body) =>
-        updateDiffComment(worktreeId, commentId, body)
+        commentOwner ? updateDiffComment(commentOwner, commentId, body) : Promise.resolve(false)
       }
       onReviewNoteContentResize={review.syncNotePositions}
       onNavigateTableOfContentsItem={navigateToTableOfContentsItem}

@@ -1,3 +1,5 @@
+import { useOwnedDiffCommentTarget } from '../diff-comments/use-diff-comment-owner'
+import type { DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import type { Editor } from '@tiptap/react'
@@ -18,6 +20,7 @@ import { useRichMarkdownReviewRailController } from './useRichMarkdownReviewRail
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 
 type UseRichMarkdownReviewControllerOptions = {
+  commentOwner: DiffCommentOwner | null
   addDiffComment: AppState['addDiffComment']
   allDiffComments: DiffComment[] | undefined
   content: string
@@ -34,6 +37,7 @@ type UseRichMarkdownReviewControllerOptions = {
 }
 
 export function useRichMarkdownReviewController({
+  commentOwner,
   addDiffComment,
   allDiffComments,
   content,
@@ -51,9 +55,8 @@ export function useRichMarkdownReviewController({
   const [annotationTarget, setAnnotationTarget] = useState<RichMarkdownAnnotationTarget | null>(
     null
   )
-  const [annotationPopover, setAnnotationPopover] = useState<RichMarkdownAnnotationTarget | null>(
-    null
-  )
+  const [annotationPopover, setAnnotationPopover, annotationOwnerRef] =
+    useOwnedDiffCommentTarget<RichMarkdownAnnotationTarget>(commentOwner)
   const annotationPopoverRef = useRef<RichMarkdownAnnotationTarget | null>(null)
   const canAnnotateRichMarkdownRef = useRef(false)
   const markdownCommentsRef = useRef<DiffComment[]>([])
@@ -164,7 +167,11 @@ export function useRichMarkdownReviewController({
         return
       }
       const submittedEditor = editorRef.current
-      const result = await addDiffComment({
+      const owner = annotationOwnerRef.current
+      if (!owner) {
+        return
+      }
+      const result = await addDiffComment(owner, {
         worktreeId,
         filePath: sourceRelativePath,
         source: 'markdown',
@@ -208,6 +215,7 @@ export function useRichMarkdownReviewController({
       editorRef,
       markdownSourceLineOffset,
       sourceRelativePath,
+      setAnnotationPopover,
       worktreeId
     ]
   )
@@ -262,6 +270,7 @@ export function useRichMarkdownReviewController({
       markdownComments,
       markdownSourceLineOffset,
       rootRef,
+      setAnnotationPopover,
       setReviewRailOpen
     ]
   )
@@ -276,7 +285,7 @@ export function useRichMarkdownReviewController({
     // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
     setAnnotationPopover(null)
     clearAllAnnotationHighlights()
-  }, [canAnnotateRichMarkdown, clearAllAnnotationHighlights])
+  }, [canAnnotateRichMarkdown, clearAllAnnotationHighlights, setAnnotationPopover])
 
   return {
     ...copyFeedback,

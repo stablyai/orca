@@ -1,4 +1,8 @@
 import {
+  useDiffCommentOwner,
+  useOwnedDiffCommentTarget
+} from '../diff-comments/use-diff-comment-owner'
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -63,6 +67,7 @@ export function useMonacoMarkdownAnnotations(params: {
     markdownAnnotationsEnabled
   } = params
 
+  const commentOwner = useDiffCommentOwner(worktreeId)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -78,7 +83,8 @@ export function useMonacoMarkdownAnnotations(params: {
     [allDiffComments, relativePath]
   )
 
-  const [commentPopover, setCommentPopover] = useState<MarkdownCommentPopoverState | null>(null)
+  const [commentPopover, setCommentPopover, commentPopoverOwnerRef] =
+    useOwnedDiffCommentTarget<MarkdownCommentPopoverState>(commentOwner)
   const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
     useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
   // Why: claim drafts synchronously so a same-tick second chord can't remount the composer before React commits state.
@@ -109,6 +115,7 @@ export function useMonacoMarkdownAnnotations(params: {
   )
 
   useDiffCommentDecorator({
+    commentOwner,
     editor: shouldShowMarkdownAnnotations ? mountedEditor : null,
     filePath: relativePath,
     worktreeId: worktreeId ?? '',
@@ -127,10 +134,13 @@ export function useMonacoMarkdownAnnotations(params: {
     },
     onDeleteComment: (id) => {
       if (worktreeId) {
-        void deleteDiffComment(worktreeId, id)
+        void (commentOwner && deleteDiffComment(commentOwner, id))
       }
     },
-    onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
+    onUpdateComment: worktreeId
+      ? (id, body) =>
+          commentOwner ? updateDiffComment(commentOwner, id, body) : Promise.resolve(false)
+      : undefined,
     formatCommentPrompt: formatMarkdownCommentPrompt,
     pendingScrollCommentId: pendingScrollForThisEditor,
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
@@ -157,7 +167,7 @@ export function useMonacoMarkdownAnnotations(params: {
       contentSub.dispose()
       layoutSub.dispose()
     }
-  }, [mountedEditor, popoverLineNumber, editorContainerRef])
+  }, [mountedEditor, popoverLineNumber, editorContainerRef, setCommentPopover])
 
   useEffect(() => {
     if (!mountedEditor || !shouldShowMarkdownAnnotations || commentPopover) {
@@ -189,16 +199,19 @@ export function useMonacoMarkdownAnnotations(params: {
     if (!commentPopover || !worktreeId) {
       return
     }
-    const result = await addDiffComment({
-      worktreeId,
-      filePath: relativePath,
-      source: 'markdown',
-      startLine: commentPopover.startLine,
-      lineNumber: commentPopover.lineNumber,
-      selectedText: commentPopover.selectedText,
-      body,
-      side: 'modified'
-    })
+    const owner = commentPopoverOwnerRef.current
+    const result = await (owner
+      ? addDiffComment(owner, {
+          worktreeId,
+          filePath: relativePath,
+          source: 'markdown',
+          startLine: commentPopover.startLine,
+          lineNumber: commentPopover.lineNumber,
+          selectedText: commentPopover.selectedText,
+          body,
+          side: 'modified'
+        })
+      : null)
     if (result) {
       setCommentPopover(null)
     } else {

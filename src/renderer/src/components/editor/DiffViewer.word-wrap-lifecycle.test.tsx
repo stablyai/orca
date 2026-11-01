@@ -70,6 +70,8 @@ vi.mock('@/store', () => ({
   useAppStore: <T,>(selector: (state: typeof fixture.state) => T) => selector(fixture.state)
 }))
 vi.mock('@/store/worktree-diff-comments-selector', () => ({
+  selectDiffCommentOwner: () => null,
+  diffCommentOwnerKey: () => '',
   selectWorktreeDiffComments: () => undefined
 }))
 vi.mock('@/lib/monaco-setup', () => ({

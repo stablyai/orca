@@ -1,9 +1,10 @@
+import type { AppState } from '@/store'
+import { diffCommentOwnerKey } from '@/store/worktree-diff-comments-selector'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { describeClipboardWriteFailure } from '@/lib/clipboard-write-failure'
-import type { DiffCommentsClearOptions } from '@/store/slices/diffComments'
 import { useVisibleWorktreeDiffComments } from '../../../diff-comments/use-visible-worktree-diff-comments'
 import {
   countPendingDiffCommentsClear,
@@ -19,15 +20,14 @@ export function useSourceControlDiffCommentNotes({
   clearDiffCommentsForFile
 }: {
   activeWorktreeId: string | null
-  clearDiffComments: (worktreeId: string, options?: DiffCommentsClearOptions) => Promise<boolean>
-  clearDiffCommentsForFile: (
-    worktreeId: string,
-    filePath: string,
-    options?: DiffCommentsClearOptions
-  ) => Promise<boolean>
+  clearDiffComments: AppState['clearDiffComments']
+  clearDiffCommentsForFile: AppState['clearDiffCommentsForFile']
 }) {
-  const { comments: diffCommentsForActive, markdownReviewNotesEnabled } =
-    useVisibleWorktreeDiffComments(activeWorktreeId)
+  const {
+    owner,
+    comments: diffCommentsForActive,
+    markdownReviewNotesEnabled
+  } = useVisibleWorktreeDiffComments(activeWorktreeId)
   const diffCommentCount = diffCommentsForActive.length
   // Index counts once so each row need not refilter every comment.
   const diffCommentCountByPath = useMemo(() => {
@@ -47,9 +47,10 @@ export function useSourceControlDiffCommentNotes({
     useState<PendingDiffCommentsClear | null>(null)
   const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
   // Reset during render so workspace switches cannot paint the old confirmation.
-  const [notesWorktreeId, setNotesWorktreeId] = useState(activeWorktreeId)
-  if (notesWorktreeId !== activeWorktreeId) {
-    setNotesWorktreeId(activeWorktreeId)
+  const ownerKey = owner ? diffCommentOwnerKey(owner) : null
+  const [notesWorktreeId, setNotesWorktreeId] = useState(ownerKey)
+  if (notesWorktreeId !== ownerKey) {
+    setNotesWorktreeId(ownerKey)
     setPendingDiffCommentsClear(null)
     setIsClearingDiffComments(false)
   }
@@ -110,8 +111,8 @@ export function useSourceControlDiffCommentNotes({
     try {
       const ok =
         pending.kind === 'all'
-          ? await clearDiffComments(pending.worktreeId, clearOptions)
-          : await clearDiffCommentsForFile(pending.worktreeId, pending.filePath, clearOptions)
+          ? await clearDiffComments(pending.owner, clearOptions)
+          : await clearDiffCommentsForFile(pending.owner, pending.filePath, clearOptions)
       if (ok) {
         setPendingDiffCommentsClear(null)
       } else {

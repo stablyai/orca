@@ -1,3 +1,4 @@
+import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
 import { Check, Copy } from 'lucide-react'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { DiffCommentCard } from '../diff-comments/DiffCommentCard'
@@ -23,6 +24,7 @@ type RichMarkdownReviewNoteLayerProps = {
   attentionCommentId: string | null
   copiedCommentId: string | null
   markdownReviewContent: string
+  owner: DiffCommentOwner | null
   worktreeId: string
   filePath: string
   onCopyNote: (note: MarkdownReviewNote) => void
@@ -39,6 +41,7 @@ export function RichMarkdownReviewNoteLayer({
   attentionCommentId,
   copiedCommentId,
   markdownReviewContent,
+  owner,
   worktreeId,
   filePath,
   onCopyNote,
@@ -58,7 +61,7 @@ export function RichMarkdownReviewNoteLayer({
     >
       {positions.map(({ comment, top }) => (
         <div
-          key={comment.id}
+          key={`${owner ? diffCommentOwnerKey(owner) : ''}:${comment.id}`}
           data-rich-markdown-review-note-id={comment.id}
           className={`rich-markdown-review-note-card ${
             activeCommentId === comment.id ? 'is-active' : ''
@@ -123,6 +126,7 @@ export function RichMarkdownReviewNoteLayer({
                   )}
                 </button>
                 <NotesSendMenu
+                  owner={owner}
                   worktreeId={worktreeId}
                   groupId={worktreeId}
                   modeIdParts={['markdown-notes', worktreeId, filePath, 'note', comment.id]}

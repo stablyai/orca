@@ -1,8 +1,9 @@
+import type { DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
 import { translate } from '@/i18n/i18n'
 
 export type PendingDiffCommentsClear =
-  | { kind: 'all'; worktreeId: string }
-  | { kind: 'file'; worktreeId: string; filePath: string }
+  | { kind: 'all'; worktreeId: string; owner: DiffCommentOwner }
+  | { kind: 'file'; worktreeId: string; owner: DiffCommentOwner; filePath: string }
 
 type DiffCommentWithPath = {
   filePath: string

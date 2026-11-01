@@ -4,9 +4,14 @@ import {
   type PendingDiffCommentsClear
 } from './source-control/notes/diff-comments-clear-dialog-state'
 
-const allPending: PendingDiffCommentsClear = { kind: 'all', worktreeId: 'wt-1' }
+const allPending: PendingDiffCommentsClear = {
+  kind: 'all',
+  worktreeId: 'wt-1',
+  owner: { kind: 'worktree', worktreeId: 'wt-1', writeHostId: 'local' }
+}
 const filePending: PendingDiffCommentsClear = {
   kind: 'file',
+  owner: { kind: 'worktree', worktreeId: 'wt-1', writeHostId: 'local' },
   worktreeId: 'wt-1',
   filePath: 'src/app.tsx'
 }

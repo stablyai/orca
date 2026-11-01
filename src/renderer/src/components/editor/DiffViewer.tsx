@@ -1,3 +1,4 @@
+import { useDiffCommentOwner } from '../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
@@ -61,6 +62,7 @@ export default function DiffViewer({
   const settings = useAppStore((s) => s.settings)
   const monacoTheme = useMonacoTheme()
   const diffTypography = useEditorTypography('diff')
+  const commentOwner = useDiffCommentOwner(worktreeId)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const language = usePluginSyntaxLanguage(filePath, coreLanguage)
@@ -126,15 +128,17 @@ export default function DiffViewer({
       if (!worktreeId) {
         return false
       }
-      const result = await addDiffComment({
-        worktreeId,
-        filePath: relativePath,
-        source: 'diff',
-        startLine,
-        lineNumber,
-        body,
-        side: 'modified'
-      })
+      const result = await (commentOwner
+        ? addDiffComment(commentOwner, {
+            worktreeId,
+            filePath: relativePath,
+            source: 'diff',
+            startLine,
+            lineNumber,
+            body,
+            side: 'modified'
+          })
+        : null)
       if (!result) {
         toast.error(
           translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
@@ -142,11 +146,13 @@ export default function DiffViewer({
       }
       return Boolean(result)
     },
-    [addDiffComment, onAddLineComment, relativePath, worktreeId]
+    [commentOwner, addDiffComment, onAddLineComment, relativePath, worktreeId]
   )
 
   // Only local diffs can edit notes; gate the decorator on a valid comment target.
   useDiffCommentDecorator({
+    captureCreateComment: !onAddLineComment,
+    commentOwner,
     editor: hasLineCommentAction ? modifiedEditor : null,
     monacoModelIdentity: modifiedModelKey ?? modelKey,
     filePath: relativePath,
@@ -161,10 +167,13 @@ export default function DiffViewer({
     canOpenDraft: !renderLimit.limited,
     onDeleteComment: (id) => {
       if (worktreeId) {
-        void deleteDiffComment(worktreeId, id)
+        void (commentOwner && deleteDiffComment(commentOwner, id))
       }
     },
-    onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
+    onUpdateComment: worktreeId
+      ? (id, body) =>
+          commentOwner ? updateDiffComment(commentOwner, id, body) : Promise.resolve(false)
+      : undefined,
     pendingScrollCommentId: pendingScrollForThisViewer,
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })

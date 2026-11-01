@@ -1,3 +1,4 @@
+import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
@@ -25,6 +26,8 @@ import { useDiffCommentDraftZone, type DiffCommentDraft } from './diff-comment-d
 export type { DiffCommentDraft }
 
 type DecoratorArgs = {
+  captureCreateComment?: boolean
+  commentOwner?: DiffCommentOwner | null
   editor: monacoEditor.ICodeEditor | null
   // Monaco destroys model-scoped view zones on model swap, so rebuild even though the editor object is stable.
   monacoModelIdentity?: string
@@ -55,6 +58,8 @@ type DecoratorArgs = {
 }
 
 export function useDiffCommentDecorator({
+  captureCreateComment = false,
+  commentOwner = null,
   editor,
   monacoModelIdentity,
   filePath,
@@ -78,6 +83,7 @@ export function useDiffCommentDecorator({
   pendingScrollCommentId,
   onPendingScrollConsumed
 }: DecoratorArgs): void {
+  const ownerKey = commentOwner ? diffCommentOwnerKey(commentOwner) : null
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const activeGroupId = useAppStore((s) =>
     worktreeId ? (s.activeGroupIdByWorktree[worktreeId] ?? worktreeId) : worktreeId
@@ -106,6 +112,7 @@ export function useDiffCommentDecorator({
   onPendingScrollConsumedRef.current = onPendingScrollConsumed
 
   const { onAddCommentClickRef, isDraftOpen } = useDiffCommentDraftZone({
+    captureCreateComment,
     editor,
     monacoModelIdentity,
     onCreateComment,
@@ -241,7 +248,7 @@ export function useDiffCommentDecorator({
       pendingScrollRef.current = null
       scrollToZoneRef.current = null
     }
-  }, [cancelScrollToZoneFrame, editor, monacoModelIdentity])
+  }, [cancelScrollToZoneFrame, editor, monacoModelIdentity, ownerKey])
 
   useEffect(() => {
     if (!editor) {
@@ -286,6 +293,7 @@ export function useDiffCommentDecorator({
 
     const renderCard = (root: Root, comment: DecoratedDiffComment): void => {
       renderDiffCommentZoneCard(root, comment, {
+        owner: commentOwner,
         worktreeId,
         filePath,
         activeGroupId,
@@ -386,6 +394,8 @@ export function useDiffCommentDecorator({
     activeGroupId,
     cancelScrollToZoneFrame,
     clearDeliveredDiffComments,
+    commentOwner,
+    ownerKey,
     comments,
     editor,
     filePath,

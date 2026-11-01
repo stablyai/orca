@@ -1,3 +1,4 @@
+import { diffCommentOwnerKey } from '@/store/worktree-diff-comments-selector'
 import { useCallback } from 'react'
 import { Check, Copy, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -36,6 +37,7 @@ export function useMarkdownPreviewAnnotationRenderers({
   markdownAnnotationsEnabled: boolean
 }) {
   const {
+    commentOwner,
     sourceWorktree,
     sourceRelativePath,
     activeAnnotationBlockKey,
@@ -61,7 +63,7 @@ export function useMarkdownPreviewAnnotationRenderers({
       blockKey: string,
       annotationQuote?: string
     ): React.ReactNode => {
-      if (!sourceWorktree || sourceRelativePath === null) {
+      if (!commentOwner || !sourceWorktree || sourceRelativePath === null) {
         return null
       }
       if (!markdownAnnotationsEnabled) {
@@ -70,7 +72,7 @@ export function useMarkdownPreviewAnnotationRenderers({
       const commentsForBlock = getMarkdownCommentsForRange(range)
 
       const handleSubmit = async (body: string): Promise<boolean> => {
-        const result = await addDiffComment({
+        const result = await addDiffComment(commentOwner, {
           worktreeId: sourceWorktree.id,
           filePath: sourceRelativePath,
           source: 'markdown',
@@ -105,6 +107,7 @@ export function useMarkdownPreviewAnnotationRenderers({
           </button>
           {activeAnnotationBlockKey === blockKey ? (
             <MarkdownPreviewAnnotationComposer
+              key={diffCommentOwnerKey(commentOwner)}
               lineNumber={range.endLine}
               startLine={range.startLine === range.endLine ? undefined : range.startLine}
               onCancel={() => setActiveAnnotationBlockKey(null)}
@@ -114,7 +117,7 @@ export function useMarkdownPreviewAnnotationRenderers({
           <div className="markdown-annotation-note-stack">
             {commentsForBlock.map((comment) => (
               <div
-                key={comment.id}
+                key={`${diffCommentOwnerKey(commentOwner)}:${comment.id}`}
                 data-markdown-review-note-id={comment.id}
                 className={`markdown-annotation-card ${
                   activeReviewCommentId === comment.id ? 'is-active' : ''
@@ -131,8 +134,14 @@ export function useMarkdownPreviewAnnotationRenderers({
                   }
                   body={comment.body}
                   sentAt={comment.sentAt}
-                  onDelete={() => void deleteDiffComment(sourceWorktree.id, comment.id)}
-                  onSubmitEdit={(body) => updateDiffComment(sourceWorktree.id, comment.id, body)}
+                  onDelete={() =>
+                    void (commentOwner && deleteDiffComment(commentOwner, comment.id))
+                  }
+                  onSubmitEdit={(body) =>
+                    commentOwner
+                      ? updateDiffComment(commentOwner, comment.id, body)
+                      : Promise.resolve(false)
+                  }
                   headerActions={
                     <>
                       <button
@@ -173,13 +182,14 @@ export function useMarkdownPreviewAnnotationRenderers({
                         )}
                       </button>
                       <MarkdownPreviewSingleNoteSendMenu
+                        owner={commentOwner}
                         worktreeId={sourceWorktree.id}
                         filePath={filePath}
                         content={renderedContent}
                         note={comment as MarkdownReviewNote}
                         modeSlot="preview-inline"
                         onDelivered={(notes) =>
-                          void clearDeliveredDiffComments(sourceWorktree.id, notes)
+                          void (commentOwner && clearDeliveredDiffComments(commentOwner, notes))
                         }
                       />
                     </>
@@ -207,6 +217,7 @@ export function useMarkdownPreviewAnnotationRenderers({
       renderedContent,
       setActiveAnnotationBlockKey,
       sourceRelativePath,
+      commentOwner,
       sourceWorktree,
       updateDiffComment
     ]
