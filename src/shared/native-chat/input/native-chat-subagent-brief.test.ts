@@ -241,4 +241,48 @@ describe('native chat subagent brief', () => {
     expect(text(framed.at(-1)!)).toBe('Hello from Grok')
     expect(framed.some((message) => text(message).includes('Subagent started'))).toBe(false)
   })
+
+  it('drops the Grok subagent_result trailer from a foreground reply', () => {
+    const childId = '01a19984-7518-7790-b750-a335273057b8'
+    const parent: NativeChatMessage = {
+      id: 'spawn',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'spawn_subagent',
+          callId: 'call-1',
+          input: {
+            description: 'Say hello',
+            prompt:
+              'Reply with exactly this sentence and nothing else: Hello from the Grok scratch subagent.'
+          }
+        },
+        {
+          type: 'tool-result',
+          callId: 'call-1',
+          output: `Hello from the Grok scratch subagent.\n\n<subagent_result>\nsubagent_id: ${childId}\n</subagent_result>`
+        }
+      ],
+      timestamp: null,
+      source: 'transcript'
+    }
+    const framed = frameNativeChatSubagentTranscript(
+      childId,
+      [
+        user(
+          'child-user',
+          'Reply with exactly this sentence and nothing else: Hello from the Grok scratch subagent.'
+        ),
+        assistant('child-end', 'Hello from the Grok scratch subagent.')
+      ],
+      [parent]
+    )
+    expect(text(framed[0]!)).toBe('Say hello')
+    expect(text(framed.at(-1)!)).toBe('Hello from the Grok scratch subagent.')
+    expect(framed.some((message) => text(message).includes('subagent_id'))).toBe(false)
+    expect(
+      framed.filter((message) => text(message) === 'Hello from the Grok scratch subagent.')
+    ).toHaveLength(1)
+  })
 })
