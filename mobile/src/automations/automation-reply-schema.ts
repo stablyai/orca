@@ -105,10 +105,14 @@ export const runSchema = z.looseObject({
   // Display-only, so a newer host kind shows by its id instead of costing the run.
   runContext: z.object({ hostId: z.string(), repoId: z.string(), path: z.string() }).nullish()
 })
-export const runsPageSchema = z.object({
-  runs: salvagingArray(runSchema),
-  nextCursor: z.string().nullish()
-})
+const readableRuns = salvagingArray(runSchema)
+export const runsPageSchema = z
+  .object({ runs: z.array(z.unknown()), nextCursor: z.string().nullish() })
+  .transform(({ runs, nextCursor }) => {
+    const readable = readableRuns.parse(runs)
+    // Derived on decode: a run this build can't read is still in the host's history.
+    return { runs: readable, nextCursor, unreadableRuns: runs.length - readable.length }
+  })
 export const projectInventorySchema = z.object({
   projects: salvagingArray(
     z.object({ id: z.string(), displayName: z.string(), kind: z.string().optional() })

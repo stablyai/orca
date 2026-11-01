@@ -509,6 +509,31 @@ describe('host-owned automation reads', () => {
     await update(5)
     expect(read().runs.at(-1)?.id).toBe('r-64')
   })
+  it('never reports a selected run that a newer host sent unreadable as gone from history', async () => {
+    const kept = { ...savedRun('kept'), createdAt: 2000 }
+    const chosen = { ...savedRun('chosen'), createdAt: 1000 }
+    let runs: unknown[] = [kept, chosen]
+    const port = automationClient(() => ({ runs, nextCursor: null }))
+    let state: ReturnType<typeof useAutomationRuns> | null = null
+    let selected: ReturnType<typeof savedRun> | undefined
+    function Probe({ revision }: { revision: number }) {
+      state = useAutomationRuns(port.client, null, revision, true, selected)
+      return null
+    }
+    const read = () => latest(() => state)
+    await act(async () => {
+      tree = create(createElement(Probe, { revision: 0 }))
+    })
+    selected = read().runs.find((run) => run.id === 'chosen')
+    runs = [kept, { ...chosen, errorParams: { retryable: true } }]
+    await act(async () => tree?.update(createElement(Probe, { revision: 1 })))
+    expect(read().error).toBeNull()
+    expect(read().unavailable).toBe(false)
+    expect(read().selected?.outputSnapshot?.content).toBe('Output for chosen')
+    runs = [kept]
+    await act(async () => tree?.update(createElement(Probe, { revision: 2 })))
+    expect(read().unavailable).toBe(true)
+  })
   it('ignores a previous connection snapshot and keeps delivery ambiguity until explicit refresh', async () => {
     const pending = deferred<unknown>()
     let listReads = 0

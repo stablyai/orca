@@ -563,6 +563,39 @@ export function registerAutomationPresentationTests({
     expect(metadata('Workspace')).toBe('Newly mounted workspace')
   })
 
+  it('lists, shows and renames an automation whose agent this build does not know without rewriting its agent', async () => {
+    const port = portFor({ ...savedAutomation(), agentId: 'future-agent' })
+    await act(async () => {
+      setTree(create(createElement(AutomationManager, { client: port.client, hostId: 'desktop' })))
+    })
+    expect(
+      root()
+        .findByType(AutomationList)
+        .props.rows.map((row: MobileAutomationRow) => row.automation.agentId)
+    ).toEqual(['future-agent'])
+    await open()
+    expect(metadata('Agent')).toBe('future-agent')
+    await press('Edit')
+    expect(
+      root()
+        .findAllByType(AutomationChoice)
+        .find((node) => node.props.label === 'Agent')!.props.options
+    ).toContainEqual({ value: 'future-agent', label: 'future-agent (saved)' })
+    await act(async () => input('Name').props.onChangeText('Renamed'))
+    await press('Continue')
+    await press('Continue')
+    await press('Save changes')
+    expect(port.send).toHaveBeenCalledWith(
+      'automation.update',
+      {
+        id: 'automation-1',
+        expectedOwner: { selector: { kind: 'self' } },
+        updates: { name: 'Renamed' }
+      },
+      { failWhenDisconnected: true }
+    )
+  })
+
   it('applies literal keyboard policy and the web font floor to actual editor inputs and saves their exact text', async () => {
     const port = portFor({ ...savedAutomation(), reuseSession: false })
     await mount(port)

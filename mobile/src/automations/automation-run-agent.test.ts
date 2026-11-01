@@ -110,6 +110,35 @@ describe('original automation pane evidence', () => {
     }
   )
 
+  it('reads the target pane past another pane with a newer verdict, never proving absence from a dropped row', async () => {
+    // Real-shaped rows from the host's terminal.list summary.
+    const pane = (fields: Record<string, unknown>) => ({
+      handle: `handle-${String(fields.tabId)}`,
+      ptyId: 'recorded-pty',
+      worktreeId: run.workspaceId,
+      worktreePath: '/saved',
+      branch: 'main',
+      tabId: 'original',
+      leafId: leaf,
+      title: 'claude',
+      connected: true,
+      writable: true,
+      lastOutputAt: 1_700_000_000_000,
+      preview: '',
+      executionHostId: 'local',
+      verdict: 'live',
+      ...fields
+    })
+    const reply = (terminals: unknown[]) => ({ ...complete, terminals, totalCount: 2 })
+    const newer = pane({ tabId: 'other', ptyId: 'other-pty', verdict: 'future-verdict' })
+    const live = automationClient(() => reply([newer, pane({})]))
+    expect(await canOpenAutomationRunAgent(live.client, run)).toBe('available')
+    const unreadableTarget = automationClient(() =>
+      reply([pane({ tabId: 'other', ptyId: 'other-pty' }), pane({ verdict: 'future-verdict' })])
+    )
+    expect(await canOpenAutomationRunAgent(unreadableTarget.client, run)).toBe('unverifiable')
+  })
+
   it('does not turn a denied read or concurrent inventory growth into evidence of absence', async () => {
     const denied = automationClient(() => {
       throw new Error('forbidden')
