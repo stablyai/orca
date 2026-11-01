@@ -10,6 +10,7 @@ export {
   isMarkdownPreviewBlockTooLarge
 } from './markdown-preview-tree-content'
 import { splitMarkdownPreviewTable } from './markdown-preview-table-chunks'
+import { getDiffContentSignature } from './diff-content-signature'
 import type { Root as MarkdownRoot, Nodes as MarkdownNodes } from 'mdast'
 import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
@@ -121,12 +122,14 @@ export function parseMarkdownPreviewDocument(content: string): {
   const blocks = tree.children.map((node, index) => {
     const anchors: string[] = []
     collectAnchors(node, anchors, headings)
-    const textLength = getMarkdownPreviewTreeText(node).length
+    const text = getMarkdownPreviewTreeText(node)
     return {
       index,
       anchors,
       sourceColumn: node.position?.start.column,
-      estimate: Math.min(1200, Math.max(40, Math.ceil(textLength / 90) * 24 + 32)),
+      estimate: Math.min(1200, Math.max(40, Math.ceil(text.length / 90) * 24 + 32)),
+      // Length guards the 32-bit hash against colliding with text of another length.
+      contentSignature: `${getDiffContentSignature(text)}:${text.length}`,
       ...sourceBounds(node)
     }
   })
