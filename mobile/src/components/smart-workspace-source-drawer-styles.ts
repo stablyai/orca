@@ -1,7 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   root: {
@@ -33,8 +32,8 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   list: {
     flex: 1,
     backgroundColor: colors.bgPanel,
-    borderTopLeftRadius: radii.card,
-    borderTopRightRadius: radii.card,
+    borderTopLeftRadius: radii.surface,
+    borderTopRightRadius: radii.surface,
     overflow: 'hidden'
   },
   listContent: {
@@ -52,16 +51,6 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
     gap: spacing.sm,
     zIndex: 2
   },
-  search: {
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
   tabRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -73,7 +62,7 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
     gap: spacing.xs,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
@@ -97,7 +86,7 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
@@ -115,7 +104,7 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   },
   crossRepo: {
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     padding: spacing.md,
@@ -134,7 +123,7 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   crossRepoDismiss: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
@@ -145,7 +134,7 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   crossRepoSwitch: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.textSecondary

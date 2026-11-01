@@ -9,6 +9,10 @@ import type {
 } from './runtime-status-types'
 import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
+import {
+  advanceRuntimeEnvironmentConnectionGeneration,
+  getRuntimeEnvironmentConnectionGeneration
+} from './runtime-status-connection-generation'
 
 /** A snapshot’s newer pairing revision signals a CLI update/rollback the renderer catalog missed (P1-C). */
 export function snapshotOutrunsCatalog(
@@ -40,7 +44,11 @@ export function applyRuntimeHostStatusSnapshot(
   }
   const entry: RuntimeEnvironmentStatus = {
     ...runtimeEnvironmentStatusFromSnapshot(snapshot),
-    connectionGeneration: previous?.connectionGeneration,
+    connectionGeneration:
+      snapshot.retired && !previous?.snapshot?.retired
+        ? advanceRuntimeEnvironmentConnectionGeneration(snapshot.environmentId)
+        : (previous?.connectionGeneration ??
+          getRuntimeEnvironmentConnectionGeneration(snapshot.environmentId)),
     hostContactEpoch: previous?.hostContactEpoch
   }
   if (entry.status) {

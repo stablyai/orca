@@ -117,7 +117,7 @@ const styles = themedStyleSheet(() => ({
   },
   trustScriptBox: {
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     padding: spacing.md,
@@ -136,7 +136,7 @@ const styles = themedStyleSheet(() => ({
   },
   trustActionGroup: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   trustActionRow: {

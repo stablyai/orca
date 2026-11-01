@@ -1,8 +1,13 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { getSingleFocusedRuntimeEnvironmentId } from '@/lib/single-runtime-legacy-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+
+/** Null waits for ownership; unsupported is a resolved host that cannot scan skills. */
+export type SkillDiscoveryRuntimeTarget = RuntimeClientTarget | { kind: 'unsupported' } | null
 
 /** Distinguishes "not known yet" from "known to be the local host", without
  *  colliding with an environment id that happens to be named the same. */
@@ -43,4 +48,58 @@ function getPairingRevision(
 ): number | undefined {
   const environment = environments.find((entry) => entry.id === environmentId)
   return environment ? (environment.pairingRevision ?? environment.createdAt) : undefined
+}
+
+/** The lifecycle fence distinguishes first confirmation from replacement, even before status arrives. */
+export function useSkillDiscoveryRuntimeIdentity(
+  runtimeTarget: RuntimeClientTarget | null
+): string | undefined {
+  const environmentId =
+    runtimeTarget?.kind === 'environment' ? runtimeTarget.environmentId : undefined
+  const selectIdentity = useMemo(() => {
+    let environments: AppState['runtimeEnvironments'] | undefined
+    let connectionGeneration: number | undefined
+    let identity: string | undefined
+    return (state: AppState): string | undefined => {
+      if (environmentId === undefined) {
+        return undefined
+      }
+      // Generation can advance without changing the catalog or status map (pre-status retirement).
+      const nextGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
+      if (environments !== state.runtimeEnvironments || connectionGeneration !== nextGeneration) {
+        environments = state.runtimeEnvironments
+        connectionGeneration = nextGeneration
+        identity = JSON.stringify([
+          getPairingRevision(environments, environmentId),
+          connectionGeneration
+        ])
+      }
+      return identity
+    }
+  }, [environmentId])
+  return useAppStore(selectIdentity)
+}
+
+/** Contact return retries discovery without changing the host's cache identity. */
+export function useSkillDiscoveryRuntimeRecovery(
+  runtimeTarget: RuntimeClientTarget | null,
+  discoveryKey: string,
+  recover: (contactEpoch: number) => Promise<unknown>
+): void {
+  const key = runtimeTarget?.kind === 'environment' ? discoveryKey : null
+  const contactEpoch = useAppStore((state) => {
+    if (runtimeTarget?.kind !== 'environment') {
+      return null
+    }
+    const entry = state.runtimeStatusByEnvironmentId.get(runtimeTarget.environmentId)
+    return entry?.status ? (entry.hostContactEpoch ?? 0) : null
+  })
+  const previousContactRef = useRef({ key, epoch: contactEpoch })
+  useEffect(() => {
+    const previous = previousContactRef.current
+    previousContactRef.current = { key, epoch: contactEpoch }
+    if (previous.key === key && previous.epoch !== contactEpoch && contactEpoch !== null) {
+      void recover(contactEpoch)
+    }
+  }, [contactEpoch, key, recover])
 }

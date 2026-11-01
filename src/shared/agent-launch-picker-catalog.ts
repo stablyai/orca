@@ -46,7 +46,8 @@ export function agentPickerEntryOptions(
   if (surface === 'chat' || entry.agent === 'codex') {
     const dynamic = discoveredModel(
       live,
-      entry.catalog.fastModeSupport?.supported !== false
+      entry.catalog.fastModeSupport?.supported !== false,
+      entry.agent
     ).options
     if (entry.agent === 'codex') {
       options = options.filter((option) => option.id !== 'serviceTier' && option.id !== 'fastMode')

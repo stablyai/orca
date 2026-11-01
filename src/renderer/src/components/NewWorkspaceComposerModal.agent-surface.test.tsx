@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { useRef } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -78,7 +79,7 @@ beforeEach(() => {
     modalData: {},
     settings: {
       ...getDefaultSettings('/test'),
-      experimentalNativeChat: true,
+      nativeChatProviders: EVERY_AGENT_CHAT,
       defaultTuiAgent: 'claude'
     }
   })
@@ -92,47 +93,66 @@ const submit = async () => {
   await act(async () => fireEvent.click(create()))
 }
 
-it('gates the selected chat at click/keyboard, preserves terminal and blank exceptions, and repairs host changes', async () => {
-  setLocalRuntimeCapabilitiesForTests(null)
-  const view = render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
-  expect(create().hasAttribute('disabled')).toBe(true)
-  await submit()
-  fireEvent.keyDown(create(), { key: 'Enter', ctrlKey: true })
-  fireEvent.keyDown(create(), { key: 'Enter', metaKey: true })
-  expect(mocks.submit).not.toHaveBeenCalled()
-  act(() => setLocalRuntimeCapabilitiesForTests(RUNTIME_CAPABILITIES))
-  fireEvent.click(screen.getByText('Blank'))
-  await submit()
-  expect(mocks.submit).toHaveBeenLastCalledWith(null, expect.objectContaining({ setupOnly: false }))
-  fireEvent.click(screen.getByText('Setup only'))
-  await submit()
-  expect(mocks.submit).toHaveBeenLastCalledWith(null, expect.objectContaining({ setupOnly: true }))
-  fireEvent.click(screen.getByText('Choose CLI'))
-  expect(screen.getByRole('combobox').textContent).toContain('Claude (CLI)')
-  await submit()
-  expect(mocks.submit.mock.calls.at(-1)?.[1].launchChoice).toMatchObject({
-    route: 'terminal-tui',
-    requestedSurface: 'terminal'
-  })
-  mocks.availability.mockReturnValue({
-    state: 'received',
-    byAgent: new Map([['claude', { agent: 'claude', state: 'available' }]])
-  })
-  fireEvent.click(screen.getByText('Choose chat'))
-  await submit()
-  expect(mocks.submit.mock.calls.at(-1)?.[1].launchChoice).toMatchObject({
-    route: 'structured-native-chat',
-    requestedSurface: 'chat'
-  })
-  mocks.host = 'ssh:other'
-  view.rerender(<NewWorkspaceComposerModal />)
-  expect(screen.getByRole('combobox').textContent).toContain('Claude (CLI)')
-  await submit()
-  expect(mocks.submit.mock.calls.at(-1)?.[1].launchChoice).toMatchObject({
-    route: 'terminal-tui',
-    requestedSurface: 'terminal'
-  })
-})
+it.each(['chat', 'terminal'] as const)(
+  'gates explicit selections over default %s, preserves terminal and blank exceptions, and repairs host changes',
+  async (agentDefaultSurface) => {
+    setLocalRuntimeCapabilitiesForTests(null)
+    const view = render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
+    expect(create().hasAttribute('disabled')).toBe(true)
+    await submit()
+    fireEvent.keyDown(create(), { key: 'Enter', ctrlKey: true })
+    fireEvent.keyDown(create(), { key: 'Enter', metaKey: true })
+    expect(mocks.submit).not.toHaveBeenCalled()
+    act(() => setLocalRuntimeCapabilitiesForTests(RUNTIME_CAPABILITIES))
+    fireEvent.click(screen.getByText('Blank'))
+    await submit()
+    expect(mocks.submit).toHaveBeenLastCalledWith(
+      null,
+      expect.objectContaining({ setupOnly: false })
+    )
+    fireEvent.click(screen.getByText('Setup only'))
+    await submit()
+    expect(mocks.submit).toHaveBeenLastCalledWith(
+      null,
+      expect.objectContaining({ setupOnly: true })
+    )
+    fireEvent.click(screen.getByText('Choose CLI'))
+    expect(screen.getByRole('combobox').textContent).toContain('Claude (CLI)')
+    await submit()
+    expect(mocks.submit.mock.calls.at(-1)?.[1].launchChoice).toMatchObject({
+      route: 'terminal-tui',
+      requestedSurface: 'terminal'
+    })
+    mocks.availability.mockReturnValue({
+      state: 'received',
+      byAgent: new Map([['claude', { agent: 'claude', state: 'available' }]])
+    })
+    fireEvent.click(screen.getByText('Choose chat'))
+    // Another window changes the default/override after the user explicitly picked Chat.
+    act(() =>
+      useAppStore.setState((state) => ({
+        settings: {
+          ...state.settings!,
+          agentDefaultSurface,
+          nativeChatProviders: { claude: false }
+        }
+      }))
+    )
+    await submit()
+    expect(mocks.submit.mock.calls.at(-1)?.[1].launchChoice).toMatchObject({
+      route: 'structured-native-chat',
+      requestedSurface: 'chat'
+    })
+    mocks.host = 'ssh:other'
+    view.rerender(<NewWorkspaceComposerModal />)
+    expect(screen.getByRole('combobox').textContent).toContain('Claude (CLI)')
+    await submit()
+    expect(mocks.submit.mock.calls.at(-1)?.[1].launchChoice).toMatchObject({
+      route: 'terminal-tui',
+      requestedSurface: 'terminal'
+    })
+  }
+)
 
 it('submits the untouched refusal-aware OpenCode CLI instead of the registered catalog chat', async () => {
   mocks.availability.mockReturnValue({
@@ -144,7 +164,7 @@ it('submits the untouched refusal-aware OpenCode CLI instead of the registered c
     useAppStore.setState({
       settings: {
         ...getDefaultSettings('/test'),
-        experimentalNativeChat: true,
+        nativeChatProviders: EVERY_AGENT_CHAT,
         defaultTuiAgent: 'opencode'
       }
     })

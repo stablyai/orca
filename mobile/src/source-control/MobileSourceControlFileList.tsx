@@ -39,7 +39,14 @@ export type FileListState = Pick<
   | 'setDiscardTarget'
 >
 
-export function MobileSourceControlFileList({ state }: { state: FileListState }) {
+export function MobileSourceControlFileList({
+  state,
+  bottomInset
+}: {
+  state: FileListState
+  /** Clears the floating commit bar, which grows with its message. */
+  bottomInset: number
+}) {
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
   const sections: FileSection[] = state.sections.map((section) => ({
@@ -84,7 +91,7 @@ export function MobileSourceControlFileList({ state }: { state: FileListState })
         )
       }
       stickySectionHeadersEnabled={false}
-      contentContainerStyle={styles.listContent}
+      contentContainerStyle={[styles.listContent, { paddingBottom: bottomInset }]}
     />
   )
 }

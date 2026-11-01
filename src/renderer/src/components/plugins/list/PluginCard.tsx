@@ -1,9 +1,11 @@
 import { BadgeCheck, Check } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { pluginOfficialLabel } from '../presentation/plugin-official-label'
 import { Badge } from '../../ui/badge'
 import { PluginCardArt, type PluginArtPalette } from './PluginCardArt'
 import type { PluginListEntry } from './plugin-list-entries'
 import { pluginArtShortcut, pluginArtTypes } from './PluginRowArt'
+import { servedPluginHostImages } from '../../../../../shared/plugins/images/plugin-image-url'
 
 type PluginCardProps = {
   entry: PluginListEntry
@@ -34,7 +36,9 @@ export function PluginCard({
   onIntent,
   onIntentEnd
 }: PluginCardProps): React.JSX.Element {
-  const cover = entry.installed?.images?.cover ?? entry.listing?.images?.cover
+  const cover =
+    servedPluginHostImages(entry.installed?.images)?.cover ??
+    servedPluginHostImages(entry.listing?.images)?.cover
   return (
     <li
       data-plugin-key={entry.pluginKey}
@@ -88,10 +92,7 @@ export function PluginCard({
             <BadgeCheck
               className="plugin-security-chrome size-3.5 shrink-0 text-muted-foreground"
               role="img"
-              aria-label={translate(
-                'auto.components.pluginCatalog.PluginListRow.official',
-                'Official'
-              )}
+              aria-label={pluginOfficialLabel()}
             />
           ) : null}
         </div>

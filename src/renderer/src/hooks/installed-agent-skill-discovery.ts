@@ -18,8 +18,13 @@ import {
 export const LOCAL_RUNTIME_TARGET: RuntimeClientTarget = { kind: 'local' }
 
 let discoveryGeneration = 0
-let pendingDiscoveryByTarget = new Map<string, Promise<SkillDiscoveryResult>>()
-let pendingDiscoverySatisfiesForcedRefreshByTarget = new Map<string, boolean>()
+type PendingDiscovery = {
+  promise: Promise<SkillDiscoveryResult>
+  force: boolean
+  retryOnFailure: boolean
+  recoveryEpoch: number | undefined
+}
+let pendingDiscoveryByTarget = new Map<string, PendingDiscovery>()
 
 /** Last completed scan for a runtime-scoped key, for a synchronous first render. */
 export function getCachedSkillDiscovery(key: string): SkillDiscoveryResult | null {
@@ -39,7 +44,6 @@ export function invalidateInstalledAgentSkillDiscovery(): void {
   clearInstalledAgentSkillDiscoveryCache()
   // Install/uninstall advances generation so older reads cannot repopulate the cache.
   pendingDiscoveryByTarget.clear()
-  pendingDiscoverySatisfiesForcedRefreshByTarget.clear()
 }
 
 export function evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(
@@ -54,7 +58,6 @@ export function evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(
     for (const pendingKey of pendingDiscoveryByTarget.keys()) {
       if (belongsToRuntime(pendingKey)) {
         pendingDiscoveryByTarget.delete(pendingKey)
-        pendingDiscoverySatisfiesForcedRefreshByTarget.delete(pendingKey)
       }
     }
   }
@@ -64,7 +67,6 @@ export function resetSkillDiscoveryCacheForTests(): void {
   invalidateInstalledAgentSkillDiscovery()
   resetInstalledAgentSkillDiscoveryCacheForTests()
   pendingDiscoveryByTarget = new Map()
-  pendingDiscoverySatisfiesForcedRefreshByTarget = new Map()
 }
 
 function normalizeSkillDiscoveryTarget(
@@ -110,13 +112,15 @@ function normalizeSkillDiscoveryTarget(
 
 function appendSkillDiscoveryFiltersToKey(
   runtimeKey: string,
-  target: SkillDiscoveryTarget | undefined
+  target: SkillDiscoveryTarget | undefined,
+  runtimeIdentity?: string
 ): string {
-  return target?.names?.length || target?.sourceKinds?.length
+  return runtimeIdentity || target?.names?.length || target?.sourceKinds?.length
     ? JSON.stringify([
         runtimeKey,
-        target.names ? [...target.names].sort() : null,
-        target.sourceKinds ? [...target.sourceKinds].sort() : null
+        target?.names ? [...target.names].sort() : null,
+        target?.sourceKinds ? [...target.sourceKinds].sort() : null,
+        ...(runtimeIdentity ? [runtimeIdentity] : [])
       ])
     : runtimeKey
 }
@@ -147,14 +151,15 @@ export function getRuntimeScopedSkillDiscoveryKey(
   runtimeTarget: RuntimeClientTarget,
   target: SkillDiscoveryTarget | undefined,
   names?: readonly string[],
-  sourceKinds?: readonly SkillSourceKind[]
+  sourceKinds?: readonly SkillSourceKind[],
+  runtimeIdentity?: string
 ): string {
   const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
   const runtimeKey =
     runtimeTarget.kind === 'environment'
       ? `runtime:${runtimeTarget.environmentId}`
       : getNormalizedSkillDiscoveryRuntimeKey(normalizedTarget)
-  return appendSkillDiscoveryFiltersToKey(runtimeKey, normalizedTarget)
+  return appendSkillDiscoveryFiltersToKey(runtimeKey, normalizedTarget, runtimeIdentity)
 }
 
 function startInstalledAgentSkillDiscovery(
@@ -163,28 +168,45 @@ function startInstalledAgentSkillDiscovery(
   runtimeTarget: RuntimeClientTarget,
   key: string,
   names?: readonly string[],
-  sourceKinds?: readonly SkillSourceKind[]
+  sourceKinds?: readonly SkillSourceKind[],
+  recoveryEpoch?: number
 ): Promise<SkillDiscoveryResult> {
   const generation = discoveryGeneration
   const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
   // Forced post-mutation rechecks must bypass host scan sharing as well as window cache.
   const requestTarget = force ? { ...normalizedTarget, refresh: true } : normalizedTarget
-  const discovery = discoverSkillsForRuntimeTarget(runtimeTarget, requestTarget)
-    .then((result) => {
-      if (generation === discoveryGeneration && pendingDiscoveryByTarget.get(key) === discovery) {
-        writeInstalledAgentSkillDiscoveryCache(key, result)
+  async function scan(): Promise<SkillDiscoveryResult> {
+    for (;;) {
+      try {
+        return await discoverSkillsForRuntimeTarget(runtimeTarget, requestTarget)
+      } catch (error) {
+        if (!pending.retryOnFailure || pendingDiscoveryByTarget.get(key) !== pending) {
+          throw error
+        }
+        // Consume one contact edge; every consumer keeps awaiting the same shared promise.
+        pending.retryOnFailure = false
       }
-      return result
-    })
-    .finally(() => {
-      if (pendingDiscoveryByTarget.get(key) === discovery) {
-        pendingDiscoveryByTarget.delete(key)
-        pendingDiscoverySatisfiesForcedRefreshByTarget.delete(key)
-      }
-    })
-  pendingDiscoveryByTarget.set(key, discovery)
-  pendingDiscoverySatisfiesForcedRefreshByTarget.set(key, force)
-  return discovery
+    }
+  }
+  const pending: PendingDiscovery = {
+    force,
+    retryOnFailure: false,
+    recoveryEpoch,
+    promise: scan()
+      .then((result) => {
+        if (generation === discoveryGeneration && pendingDiscoveryByTarget.get(key) === pending) {
+          writeInstalledAgentSkillDiscoveryCache(key, result)
+        }
+        return result
+      })
+      .finally(() => {
+        if (pendingDiscoveryByTarget.get(key) === pending) {
+          pendingDiscoveryByTarget.delete(key)
+        }
+      })
+  }
+  pendingDiscoveryByTarget.set(key, pending)
+  return pending.promise
 }
 
 /** Share one pending scan per runtime-scoped key; force rereads disk. */
@@ -193,12 +215,23 @@ export async function discoverInstalledAgentSkills(
   target?: SkillDiscoveryTarget,
   runtimeTarget: RuntimeClientTarget = LOCAL_RUNTIME_TARGET,
   names?: readonly string[],
-  sourceKinds?: readonly SkillSourceKind[]
+  sourceKinds?: readonly SkillSourceKind[],
+  runtimeIdentity?: string,
+  options: { recoveryEpoch?: number } = {}
 ): Promise<SkillDiscoveryResult> {
-  const key = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, target, names, sourceKinds)
+  const key = getRuntimeScopedSkillDiscoveryKey(
+    runtimeTarget,
+    target,
+    names,
+    sourceKinds,
+    runtimeIdentity
+  )
   if (!force) {
-    // Promote only cache-serving reads; forced refresh discards the entry instead.
-    const cachedDiscovery = readInstalledAgentSkillDiscoveryCache(key)
+    // Contact recovery preserves successful evidence even after the focus freshness window.
+    const cachedDiscovery =
+      options.recoveryEpoch !== undefined
+        ? peekInstalledAgentSkillDiscoveryCache(key)
+        : readInstalledAgentSkillDiscoveryCache(key)
     if (cachedDiscovery) {
       return cachedDiscovery
     }
@@ -206,19 +239,34 @@ export async function discoverInstalledAgentSkills(
 
   const inFlightDiscovery = pendingDiscoveryByTarget.get(key)
   if (inFlightDiscovery) {
-    if (!force || pendingDiscoverySatisfiesForcedRefreshByTarget.get(key)) {
-      return inFlightDiscovery
+    if (!force || inFlightDiscovery.force) {
+      if (
+        options.recoveryEpoch !== undefined &&
+        options.recoveryEpoch !== inFlightDiscovery.recoveryEpoch
+      ) {
+        inFlightDiscovery.recoveryEpoch = options.recoveryEpoch
+        inFlightDiscovery.retryOnFailure = true
+      }
+      return inFlightDiscovery.promise
     }
     try {
-      await inFlightDiscovery
+      await inFlightDiscovery.promise
     } catch {
       // Explicit rechecks still read disk after earlier background scan failure.
     }
     const nextPendingDiscovery = pendingDiscoveryByTarget.get(key)
     if (nextPendingDiscovery && nextPendingDiscovery !== inFlightDiscovery) {
-      return nextPendingDiscovery
+      return nextPendingDiscovery.promise
     }
   }
 
-  return startInstalledAgentSkillDiscovery(force, target, runtimeTarget, key, names, sourceKinds)
+  return startInstalledAgentSkillDiscovery(
+    force,
+    target,
+    runtimeTarget,
+    key,
+    names,
+    sourceKinds,
+    options.recoveryEpoch
+  )
 }

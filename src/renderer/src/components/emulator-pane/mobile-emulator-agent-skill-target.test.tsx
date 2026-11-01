@@ -114,7 +114,7 @@ for (const surface of ['guide', 'settings'] as const) {
       renderSurface()
       expect(mocks.discover).toHaveBeenCalledWith(
         'orca-cli',
-        expect.objectContaining({ runtimeTarget: null })
+        expect.objectContaining({ runtimeTarget: { kind: 'unsupported' } })
       )
       expect(
         await screen.findByText('Connect to this SSH host to install its skills.')

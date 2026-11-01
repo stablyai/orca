@@ -1046,8 +1046,12 @@
       "removeShortcut": "Удалить {{label}}",
       "resetDefaults": "Сбросить настройки",
       "resetDescription": "Показать все встроенные клавиши в исходном порядке",
-      "shortcutBar": "ПАНЕЛЬ СОЧЕТАНИЙ КЛАВИШ",
-      "shortcutBarDescription": "Используйте переключатели для показа или скрытия клавиш. Чтобы изменить их порядок на панели терминала, удерживайте значок перетаскивания и перемещайте клавишу."
+      "moreKeys": "ДОПОЛНИТЕЛЬНЫЕ КЛАВИШИ",
+      "moreKeysDescription": "Эти клавиши находятся под ⋯ в строке клавиш терминала. Включайте и выключайте их отображение и удерживайте маркер, чтобы перетащить клавишу в нужное место. Клавиши, уже находящиеся в строке, например Esc или стрелки, не показываются под ⋯.",
+      "directionPad": "КРЕСТОВИНА",
+      "showDirectionPad": "Показывать крестовину",
+      "showDirectionPadDescription": "Закрепить крестовину на боковой панели. Если она выключена, на панели отображаются отдельные клавиши со стрелками.",
+      "showShortcut": "Показать сочетание {{label}}"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Использовать сброс лимитов?",
@@ -1480,14 +1484,6 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Создание рабочего пространства…"
     },
-    "hostRailActions": {
-      "accounts": "Учётные записи",
-      "closeSearch": "Закрыть поиск",
-      "floatingWorkspace": "Плавающее рабочее пространство",
-      "newWorkspace": "Новое рабочее пространство",
-      "searchWorkspaces": "Поиск рабочих пространств",
-      "tasks": "Задачи"
-    },
     "hostScreenHeader": {
       "accounts": "Учётные записи",
       "activeFilters_few": "Параметры рабочих пространств (активны {{count}} фильтра)",
@@ -1501,7 +1497,8 @@
       "reconnect": "Подключиться снова",
       "searchWorkspaces": "Поиск рабочих пространств",
       "tasks": "Задачи",
-      "workspaceOptions": "Параметры рабочих пространств"
+      "workspaceOptions": "Параметры рабочих пространств",
+      "newWorkspace": "Новое рабочее пространство"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Удалить «{{name}}» ({{branch}})?",
@@ -1954,16 +1951,17 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "Добавить пользовательское сочетание клавиш",
       "dismissKeyboard": "Скрыть клавиатуру",
-      "dismissKeyboardHint": "Скрывает экранную клавиатуру и оставляет текущую сессию терминала открытой.",
-      "paste": "Вставить",
-      "pasteFromClipboard": "Вставить из буфера обмена",
       "sendKey": "Отправить {{label}}",
-      "switchToBufferedInput": "Переключиться на буферизованный ввод команд",
-      "switchToDesktopMode": "Переключиться в режим компьютера",
-      "switchToLiveInput": "Переключиться на прямой ввод в терминал",
-      "switchToPhoneMode": "Переключить в режим телефона"
+      "modifierHint": "Применяется к следующей клавише. Нажмите дважды, чтобы оставить включённой.",
+      "typeCharacter": "Ввести {{character}}",
+      "interrupt": "Прервать работу терминала",
+      "keysModeLabel": "Режим клавиш: ввод сразу отправляется в терминал. Переключиться в режим сообщений",
+      "messageModeLabel": "Режим сообщений: напишите, затем отправьте. Переключиться в режим клавиш",
+      "keysMode": "Клавиши",
+      "messageMode": "Сообщение",
+      "moreKeys": "Другие клавиши и действия",
+      "showKeyboard": "Показать клавиатуру"
     },
     "activeContent": {
       "createTab": "Создать вкладку",
@@ -2105,21 +2103,15 @@
       "titleRight": "Закрыть вкладки справа?"
     },
     "commandDock": {
-      "commandPlaceholder": "Введите команду…",
       "liveInputHint": "Вводимый текст отправляется прямо в активный терминал",
       "liveInputLabel": "Прямой ввод в терминал",
-      "sendCommand": "Отправить команду"
+      "sendCommand": "Отправить команду",
+      "messageAgentPlaceholder": "Сообщение для {{agent}}",
+      "writeCommandPlaceholder": "Напишите команду и отправьте её",
+      "theAgent": "агент"
     },
     "contentRow": {
       "dismissCreationWarning": "Закрыть предупреждение о создании рабочего пространства"
-    },
-    "diffCommentLineRow": {
-      "addNote": "Добавить заметку к строке {{line}}",
-      "deleteNote": "Удалить заметку к строке {{line}}",
-      "diffLine": "{{title}}: строка {{line}} в сравнении",
-      "line": "Строка {{line}}",
-      "placeholder": "Добавить заметку к проверке",
-      "saveNote": "Сохранить заметку"
     },
     "diffLineRow": {
       "addNoteLabel": "Добавить заметку к строке {{line}}",
@@ -2292,13 +2284,19 @@
       "requestFailed": "Ошибка запроса: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "Показывает полное название рабочего пространства и его расположение",
       "backToWorktrees": "Вернуться к рабочим деревьям",
       "moreActions": "Другие действия с сессией",
       "openFileExplorer": "Открыть файловый проводник",
       "openSourceControl": "Открыть управление версиями",
       "reconnectToDesktop": "Переподключиться к компьютеру",
       "showSidebar": "Показать боковую панель",
-      "terminalTitle": "Терминал"
+      "terminalTitle": "Терминал",
+      "terminalLayout": "Расположение терминалов",
+      "fileExplorer": "Проводник файлов",
+      "sourceControl": "Управление исходным кодом",
+      "newTab": "Новая вкладка",
+      "quickCommands": "Быстрые команды"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "История агентов",
@@ -2500,10 +2498,8 @@
       "terminal": "Терминал",
       "terminalName": "Название терминала",
       "unsavedMarkdown": "Несохранённые изменения в Markdown",
-      "urlPrompt": "Введите URL или оставьте поле пустым, чтобы открыть новую вкладку."
-    },
-    "sideRail": {
-      "backToWorktrees": "Вернуться к рабочим деревьям"
+      "urlPrompt": "Введите URL или оставьте поле пустым, чтобы открыть новую вкладку.",
+      "allowAutoClose": "Разрешить автоматическое закрытие"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "На сервере этого рабочего пространства не найдено включённых ИИ-агентов.",
@@ -2520,7 +2516,8 @@
       "checkingCapabilities": "Проверяем возможности Orca на компьютере — повторите попытку чуть позже",
       "newTab": "Новая вкладка",
       "quickCommandsUpdateRequired": "Для быстрых команд обновите Orca на компьютере",
-      "tabStatus": "{{title}}, {{status}}"
+      "tabStatus": "{{title}}, {{status}}",
+      "terminalLayout": "Расположение терминалов"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Очистить терминал",
@@ -2784,6 +2781,56 @@
       "waitForStart": "Дождитесь запуска агента.",
       "waitForTurn": "Дождитесь ответа агента или остановите его.",
       "waitMoment": "Подождите немного."
+    },
+    "workerAutoClose": {
+      "running": "Временный агент оркестрации · Закроется через 2 минуты после завершения",
+      "finished": "Временный агент оркестрации завершил работу · Закроется через {{countdown}}",
+      "keepOpen": "Оставить открытым"
+    },
+    "terminalLayoutSheet": {
+      "title": "Расположение терминалов",
+      "oneTerminal": "Один терминал",
+      "selected": "Выбрано",
+      "auto": "Авто",
+      "autoHint": "Разделить с учётом доступного места",
+      "sideBySide": "Рядом",
+      "sideBySideHint": "Два столбца, даже при открытой боковой панели",
+      "stacked": "Друг над другом",
+      "stackedHint": "Две строки при любой ориентации",
+      "selectedHint": "Выбрано · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "Не удалось сохранить расположение",
+      "saveFailedMessage": "Пока применяется это расположение. Выберите его ещё раз, чтобы повторить сохранение."
+    },
+    "terminalArrowPad": {
+      "label": "Клавиши со стрелками",
+      "hint": "Нажмите на сторону для одного нажатия стрелки или удерживайте и перетаскивайте для повтора",
+      "up": "Вверх",
+      "down": "Вниз",
+      "left": "Влево",
+      "right": "Вправо"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "Отправить {{label}}",
+      "paste": "Вставить",
+      "sending": "Отправка…",
+      "photo": "Фото",
+      "file": "Файл",
+      "desktopWidth": "Ширина компьютера",
+      "phoneWidth": "Ширина телефона",
+      "keys": "Клавиши",
+      "combos": "Комбинации",
+      "yourKeys": "Ваши клавиши",
+      "deleteKeyHint": "Удерживайте, чтобы удалить эту клавишу",
+      "addCustomKey": "Добавить свою клавишу",
+      "addKey": "Добавить клавишу"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, в фокусе",
+      "terminal": "Терминал",
+      "tapToFocusPane": "{{title}}, нажмите для фокусировки",
+      "inputPane": "{{title}} · Ввод"
     }
   },
   "settings": {
@@ -2987,7 +3034,9 @@
       "cherryPickState": "cherry-pick",
       "mergeState": "слияние",
       "rebaseState": "перебазирование",
-      "stagedCount": "В индексе: {{count}}"
+      "stagedCount": "В индексе: {{count}}",
+      "completingMerge": "Завершение…",
+      "completeMerge": "Завершить слияние"
     },
     "branchCompare": {
       "commits_few": "{{count}} коммита",
@@ -3456,6 +3505,13 @@
       "branchUnavailable": "Состояние ветки недоступно",
       "commitFailed": "Не удалось создать коммит",
       "waitingForDesktop": "Ожидание подключения к компьютеру…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "Обновите Orca на компьютере, где запущено это рабочее пространство, чтобы разрешать конфликты слияния с телефона.",
+      "markResolved": "Отметить как решённый",
+      "keepFile": "Сохранить файл",
+      "keepDeletion": "Сохранить удаление",
+      "completeMergeFailed": "Не удалось завершить слияние"
     }
   },
   "tasks": {
@@ -4146,6 +4202,15 @@
       "inProgress": "В работе",
       "inReview": "На проверке",
       "pinned": "Закреплено"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "Крестовина вверх",
+      "left": "Крестовина влево",
+      "right": "Крестовина вправо",
+      "down": "Крестовина вниз",
+      "hint": "Отправляет клавишу со стрелкой. Удерживайте для повтора."
     }
   }
 }

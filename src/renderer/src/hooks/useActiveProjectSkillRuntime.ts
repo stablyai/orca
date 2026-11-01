@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { SkillDiscoveryTarget } from '../../../shared/skills'
-import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
+import {
+  useActiveSkillDiscoveryRuntimeTarget,
+  type SkillDiscoveryRuntimeTarget
+} from './use-active-skill-discovery-runtime-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import {
@@ -29,7 +32,7 @@ import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace
 type ActiveProjectSkillRuntime = {
   projectRuntime?: ProjectExecutionRuntimeResolution
   discoveryTarget?: SkillDiscoveryTarget
-  discoveryRuntimeTarget: RuntimeClientTarget | null
+  discoveryRuntimeTarget: SkillDiscoveryRuntimeTarget
   agentRuntime?: ProjectAgentSkillRuntime
   // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
   terminalShellOverride?: string
@@ -40,10 +43,11 @@ type ActiveProjectSkillRuntime = {
 }
 
 const LOCAL_RUNTIME_TARGET = { kind: 'local' } as const
+const UNSUPPORTED_DISCOVERY_TARGET = { kind: 'unsupported' } as const
 
 /** Whether setup surfaces show the plan's pill: this machine or a paired host, not WSL yet. */
 export function shouldUseSkillFreshness(
-  runtimeTarget: RuntimeClientTarget | null,
+  runtimeTarget: SkillDiscoveryRuntimeTarget,
   agentRuntime?: ProjectAgentSkillRuntime
 ): boolean {
   return (
@@ -131,7 +135,7 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
     )
     const discoveryRuntimeTarget =
       bundledSkillTarget?.kind === 'ssh'
-        ? null
+        ? UNSUPPORTED_DISCOVERY_TARGET
         : (bundledSkillTarget ?? (localAuthority && projectRuntime ? ownerRuntimeTarget : null))
     if (!projectRuntime) {
       return {

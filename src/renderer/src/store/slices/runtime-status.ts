@@ -206,8 +206,9 @@ export const createRuntimeStatusSlice: (
         status.status !== null &&
         (previousVerifiedStatus == null ||
           previousVerifiedStatus.runtimeId !== status.status.runtimeId)
-      // First publication has no prior connection; advancing its fence would discard same-connection startup scans (#19241).
-      const connectionChanged = previous !== undefined && runtimeSessionStarted
+      // Snapshots retain verified history; an empty one only confirms startup. Legacy unreachable entries still reconnect.
+      const connectionChanged =
+        runtimeRestarted || (runtimeSessionStarted && previous !== undefined && !previous.snapshot)
       const activeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
       const connectionGeneration = connectionChanged
         ? runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(
@@ -268,11 +269,11 @@ export const createRuntimeStatusSlice: (
     dismissRuntimeDisconnectedToast(environmentId)
     set((s) => {
       runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(environmentId)
-      if (!s.runtimeStatusByEnvironmentId.has(environmentId)) {
-        return s
-      }
       const next = new Map(s.runtimeStatusByEnvironmentId)
-      next.delete(environmentId)
+      if (!next.delete(environmentId)) {
+        // Publish the advanced fence even when discovery started before the first status entry.
+        return { runtimeStatusByEnvironmentId: s.runtimeStatusByEnvironmentId }
+      }
       return { runtimeStatusByEnvironmentId: next }
     })
   },
