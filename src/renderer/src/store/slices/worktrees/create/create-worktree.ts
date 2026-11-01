@@ -35,6 +35,7 @@ import { ensureLocalRuntimeCapabilities } from '../../../../runtime/local-runtim
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
+import { showLocalBaseRefDriftWarningToast } from './local-base-ref-drift-warning-toast'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
 import { adoptRuntimeProvisionedRoot } from './runtime-provisioned-root-adoption'
 import { isRuntimeLineageParentMissingError } from '../listing/runtime-worktree-rpc-errors'
@@ -283,6 +284,7 @@ export function createCreateWorktree(
             updateSettings: get().updateSettings,
             executionHostId: creationHostId
           })
+          showLocalBaseRefDriftWarningToast(result.localBaseRefDriftWarning, result.worktree)
           if (result.baseFallback) {
             requestWorktreeBaseFallbackNotice(result.baseFallback)
           }
