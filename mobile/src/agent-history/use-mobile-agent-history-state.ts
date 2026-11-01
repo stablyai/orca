@@ -13,45 +13,29 @@ import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import type { RpcClient } from '../transport/rpc-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
-import type {
-  AiVaultScanIssue,
-  AiVaultScope,
-  AiVaultSession
-} from '../../../src/shared/ai-vault-types'
+import type { AiVaultScope } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import {
   deriveMobileAiVaultScopePaths,
   mobileAiVaultScanScopePaths
 } from './agent-history-scope-paths'
+import { agentHistoryHostStatusRead } from './mobile-agent-history-operations'
 import {
-  agentHistoryHostStatusRead,
-  agentHistorySessionScan
-} from './mobile-agent-history-operations'
+  scanMobileAgentSessions,
+  type AgentHistoryCachedSnapshot,
+  type AgentHistoryScreenState,
+  type FetchedHistoryState
+} from './agent-history-session-scanner'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export { MOBILE_AI_VAULT_CAPABILITY }
+export type { AgentHistoryScreenState }
 
-// Match desktop SESSION_LIMIT=500 for recency only; host separately caps in-scope union, so large responses still need virtualization/lazy previews.
-const MOBILE_AI_VAULT_SESSION_LIMIT = 500
 const EMPTY_NAMES: AgentSessionConversationNames = new Map()
 const noSubscription = () => () => {}
 const noNames = () => EMPTY_NAMES
-
-export type AgentHistoryScreenState =
-  | { kind: 'loading' }
-  | { kind: 'unsupported' }
-  | { kind: 'error'; message: string }
-  | {
-      kind: 'ready'
-      sessions: AiVaultSession[]
-      issues: AiVaultScanIssue[]
-    }
-
-type FetchedHistoryState =
-  | Exclude<AgentHistoryScreenState, { kind: 'ready' }>
-  | (Extract<AgentHistoryScreenState, { kind: 'ready' }> & { hostId: string; client: RpcClient })
 
 export type MobileAgentHistoryStateParams = {
   hostId: string
@@ -85,6 +69,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
   const [refreshing, setRefreshing] = useState(false)
   const generationRef = useRef(0)
   const mountedRef = useRef(true)
+  const lastSnapshotsRef = useRef<Map<string, AgentHistoryCachedSnapshot>>(new Map())
 
   useEffect(() => {
     mountedRef.current = true
@@ -183,26 +168,33 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         const scopePaths = mobileAiVaultScanScopePaths(
           deriveMobileAiVaultScopePaths(options.scope, activeWorktree, worktrees)
         )
-        const reply = await agentHistorySessionScan.request(client, {
-          limit: MOBILE_AI_VAULT_SESSION_LIMIT,
-          force: options.force,
-          scopePaths
-        })
+        const cacheKey = (scopePaths ?? []).join('\0')
+        const previousSnapshot = lastSnapshotsRef.current.get(cacheKey)
+        const result = await interpretOrThrowRefusalMessage(
+          () =>
+            scanMobileAgentSessions(client, {
+              scopePaths,
+              force: options.force,
+              previous: previousSnapshot
+            }),
+          t('agentHistory.useAgentHistoryState.loadFailed', 'Unable to load agent sessions')
+        )
         if (!isCurrent()) {
           return
         }
-        const result = interpretOrThrowRefusalMessage(
-          () => agentHistorySessionScan.interpret(reply),
-          t('agentHistory.useAgentHistoryState.loadFailed', 'Unable to load agent sessions')
-        )
+        if (result.fingerprint) {
+          lastSnapshotsRef.current.set(cacheKey, {
+            fingerprint: result.fingerprint,
+            sessions: result.sessions,
+            issues: result.issues
+          })
+        }
         setScreenState({
           kind: 'ready',
           hostId,
           client,
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checks both containers; the rows stay the host's own records because `agent` is a vocabulary this client echoes back on resume. aivault-history-screen-listed `normal` records a full row: every member the cards and the resume path read unguarded.
-          sessions: result.sessions as AiVaultSession[],
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reader, same container check; the issue rows are the host's AiVaultScanIssue and are only counted, never read member-wise (MobileAgentSessionHistoryPanel.tsx:335).
-          issues: result.issues as AiVaultScanIssue[]
+          sessions: result.sessions,
+          issues: result.issues
         })
       } catch (err) {
         if (!isCurrent()) {

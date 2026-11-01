@@ -13,7 +13,9 @@ export const agentHistoryHostStatusSchema = z.looseObject({
 // Keep rows opaque: expanding agent vocabulary must survive newer hosts and echo back unchanged on resume; narrowing would reject/drop new sessions.
 export const agentHistorySessionScanSchema = z.looseObject({
   sessions: z.array(z.unknown()),
-  issues: z.array(z.unknown())
+  issues: z.array(z.unknown()),
+  fingerprint: z.string().optional(),
+  unchanged: z.boolean().optional()
 })
 
 // Require repos array: null/non-array containers break return/member/find reads. Keep rows opaque so newer executionHostId spellings degrade in resolver, not reject whole catalog.

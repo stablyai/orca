@@ -28,6 +28,25 @@ describe('agent history reply schemas', () => {
     expect(agentHistorySessionScanSchema.safeParse({ sessions: [], issues: [] }).success).toBe(true)
   })
 
+  it('parses conditional fingerprint and unchanged flags when present', () => {
+    const full = agentHistorySessionScanSchema.parse({
+      sessions: [],
+      issues: [],
+      fingerprint: 'fp-123'
+    })
+    expect(full.fingerprint).toBe('fp-123')
+    expect(full.unchanged).toBeUndefined()
+
+    const unchanged = agentHistorySessionScanSchema.parse({
+      sessions: [],
+      issues: [],
+      fingerprint: 'fp-123',
+      unchanged: true
+    })
+    expect(unchanged.fingerprint).toBe('fp-123')
+    expect(unchanged.unchanged).toBe(true)
+  })
+
   it('keeps a session row whose agent this build has never heard of', () => {
     // Pass through growing agent vocabulary from newer hosts so rows survive and resume echoes host’s spelling.
     const parsed = agentHistorySessionScanSchema.parse({
