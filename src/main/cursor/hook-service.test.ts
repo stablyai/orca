@@ -26,7 +26,7 @@ import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
 
 const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -NonInteractive -EncodedCommand \S+$/
 
 // Cold Windows launcher chains need extra CI time; this tests correctness rather than latency.
 const HOOK_RUN_TIMEOUT_MS = 30_000
