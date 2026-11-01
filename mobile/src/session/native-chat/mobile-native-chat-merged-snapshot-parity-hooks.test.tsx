@@ -300,7 +300,9 @@ async function mountPhone(): Promise<Phone> {
     },
     send: () => {
       const origin = latest!.captureSendOrigin(NEVER_OPENED)!
-      act(() => latest!.acceptSend(origin, NEVER_OPENED))
+      act(() => {
+        latest!.acceptSend(origin, NEVER_OPENED)
+      })
     },
     read: () => {
       const view = renderer!.root.findByType(MobileNativeChatView).props

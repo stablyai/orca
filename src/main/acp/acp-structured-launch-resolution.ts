@@ -46,6 +46,7 @@ import {
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
+import { assertAcpDependency } from '../hermes/hermes-acp-preflight'
 
 export type AcpStructuredLaunch = StructuredAgentCommand & {
   spec: AcpLaunchSpec
@@ -205,6 +206,7 @@ export function acpStructuredLaunchPart(
       }
     )
     const cwd = await basis.launchDirectory()
+    await assertAcpDependency(spec.agent, { program: command, prefixArgs, cwd, env })
     const visuals = spec.visualsSkill ? await basis.visuals() : null
     // PATH may have changed since chat creation.
     const launchVersion = await checkAcpLaunchVersion(

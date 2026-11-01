@@ -1,4 +1,5 @@
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
+import { HERMES_TRANSCRIPT_RUNTIME_CAPABILITY } from './native-chat/native-chat-hermes-capability'
 import * as agentLaunchCapabilities from './agent-launch-runtime-capability'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
@@ -112,6 +113,7 @@ export const SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY =
   'agent-session.saved-resume-origin.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
+  HERMES_TRANSCRIPT_RUNTIME_CAPABILITY,
   SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
   ...HOST_RUNTIME_CAPABILITIES,
   ...DEVICE_KEY_RUNTIME_CAPABILITIES,

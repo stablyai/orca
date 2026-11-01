@@ -1,4 +1,5 @@
 import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
+import { canReadHermesTranscriptHere, hermesTranscriptDeps } from './transcript-hermes'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import type { AgentType } from '../../shared/agent-status-types'
 import type {
@@ -38,6 +39,11 @@ export async function readNativeChatTranscript(
   sessionId: string,
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {
+  if (agent === 'hermes') {
+    return canReadHermesTranscriptHere(options)
+      ? readOpenCodeNativeChatTranscriptFull(sessionId, hermesTranscriptDeps)
+      : { error: 'Transcript unavailable', notFound: true }
+  }
   if (resolveNativeChatTranscriptAgent(agent) === 'opencode') {
     return readOpenCodeNativeChatTranscriptFull(
       sessionId,

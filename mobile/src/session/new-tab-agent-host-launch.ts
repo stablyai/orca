@@ -2,7 +2,10 @@ import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat/nati
 import type { MobileQuickCommandLaunch } from '../terminal/quick-commands'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
-import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-launch-runtime-capability'
+import {
+  AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
+} from '../../../src/shared/agent-launch-runtime-capability'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import {
@@ -65,6 +68,12 @@ export async function launchNewTabAgentThroughHost(args: {
   reportCreateFailure: (hostReason: string) => void
   setCreateError: (message: string) => void
 }): Promise<boolean> {
+  if (
+    args.agent === 'hermes' &&
+    !args.hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY)
+  ) {
+    return false
+  }
   const { options, pendingSelectionRef, showToast } = args
   const prompt = options?.agentPrompt ?? options?.initialPrompt
   const reservation = reserveMobileAgentLaunch(args.agent)
@@ -77,7 +86,10 @@ export async function launchNewTabAgentThroughHost(args: {
         hostCapabilities: args.hostCapabilities
       })
   const hostCapabilities = launchContext?.hostCapabilities ?? args.hostCapabilities
-  const surface = mobileStructuredChatLaunchSurface(args.agent, launchContext)
+  const surface =
+    args.agent === 'hermes'
+      ? 'terminal'
+      : mobileStructuredChatLaunchSurface(args.agent, launchContext)
   const afterTabId = hostCapabilities?.includes(AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY)
     ? hostTabIdOf(args.getSessionTabs(), args.activeSessionTabId)
     : undefined

@@ -302,7 +302,7 @@ const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'hermes',
   command: 'hermes',
   args: ({ fullAccess }) => (fullAccess ? ['--yolo', 'acp'] : ['acp']),
-  env: {},
+  env: { HERMES_YOLO_MODE: '0' },
   dialect: HERMES_ACP_DIALECT,
   loginCommand: agentSessionSignInFor('hermes')?.loginCommand ?? [],
   // `hermes-setup` is interactive and authenticates only after credentials exist.

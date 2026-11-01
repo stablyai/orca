@@ -52,7 +52,16 @@ export function useMobileNewTabAgentOptions(args: {
     }
 
     let stale = false
-    const cached = getCachedNewTabAgentInventory(hostId, workspaceKey)
+    const cachedInventory = getCachedNewTabAgentInventory(hostId, workspaceKey)
+    const cached = cachedInventory
+      ? {
+          ...cachedInventory,
+          options: cachedInventory.options.map(({ agent, label }) => ({
+            agent,
+            label
+          }))
+        }
+      : null
     // Mirror the desktop detection rule locally because its hook depends on the desktop store.
     const observedTargets = observedTargetsRef.current
     const target = `${hostId}\u0000${workspaceKey}\u0000${hostRefusesOtherRuntime}`
@@ -76,11 +85,14 @@ export function useMobileNewTabAgentOptions(args: {
         client,
         hostCapabilities
       }).catch(() => null)
+      if (stale) {
+        return
+      }
       const options = withMobileStructuredChatLaunch(inventory.options, launchContext)
       const snapshotUnproven = hostCapabilities == null || hostCapabilities.length === 0
       // An empty gate list is not a host answer. Caching it would keep the hint off after status arrives.
       if (!snapshotUnproven || options.some((option) => option.opensAsChat)) {
-        setCachedNewTabAgentInventory(hostId, workspaceKey, { ...inventory, options })
+        setCachedNewTabAgentInventory(hostId, workspaceKey, inventory)
       }
       setOptions(options)
       setLoadState('loaded')

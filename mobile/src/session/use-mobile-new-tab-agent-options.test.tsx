@@ -7,6 +7,7 @@ import {
   WORKSPACE_ON_OTHER_RUNTIME
 } from '../../../src/shared/protocol-version'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
 import { WorkspaceExecutionHostContext } from '../navigation/workspace-execution-host'
 import { useMobileNewTabAgentOptions } from './use-mobile-new-tab-agent-options'
 
@@ -44,7 +45,10 @@ function probes(client: { sendRequest: ReturnType<typeof vi.fn> }): unknown[] {
     .filter((method) => method !== 'settings.get')
 }
 
-function mountDrawer(hostId: string) {
+function mountDrawer(
+  hostId: string,
+  hostCapabilities: string[] = [PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY]
+) {
   const setLoadState = vi.fn()
   const setOptions = vi.fn()
   function Probe({ client, open }: { client: RpcClient; open: boolean }) {
@@ -52,7 +56,7 @@ function mountDrawer(hostId: string) {
       client,
       connState: 'connected',
       hostId,
-      hostCapabilities: [PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY],
+      hostCapabilities,
       worktreeId: 'folder:fw-1',
       open,
       setLoadState,
@@ -88,6 +92,37 @@ function mountDrawer(hostId: string) {
 }
 
 describe('useMobileNewTabAgentOptions', () => {
+  it('does not publish a launch context after the drawer closes', async () => {
+    const drawer = mountDrawer('host-late-context', [
+      PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
+      STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+    ])
+    const reply = Promise.withResolvers<RpcResponse>()
+    const client = createClient({ agents: () => claude })
+    client.sendRequest.mockImplementation(async (method: string) => {
+      if (method === 'agentSession.agents') {
+        return reply.promise
+      }
+      if (method === 'settings.get') {
+        return { ok: true, result: { settings: {} } }
+      }
+      if (method === 'preflight.detectAgents') {
+        return claude
+      }
+      throw new Error(`unexpected request: ${method}`)
+    })
+    await drawer.render(client, true)
+    expect(client.sendRequest).toHaveBeenCalledWith('agentSession.agents', {})
+    await drawer.render(client, false)
+    drawer.reset()
+    await act(async () => {
+      reply.resolve({ id: '1', ok: true, result: { agents: [] } })
+      await reply.promise
+    })
+    expect(drawer.states()).toEqual([])
+    expect(drawer.setOptions).not.toHaveBeenCalled()
+    drawer.unmount()
+  })
   it('#21856: reopening the drawer shows the last agents at once and does not detect again', async () => {
     const drawer = mountDrawer('host-reopen')
     const host: FakeHost = { agents: () => ({ id: '1', ok: true, result: ['claude', 'codex'] }) }

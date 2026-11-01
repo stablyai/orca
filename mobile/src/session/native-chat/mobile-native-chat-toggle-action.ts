@@ -9,7 +9,6 @@ import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-nati
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { translate } from '../i18n/mobile-i18n'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
-import { hermesAcpLoadSessionId } from '../../../src/shared/hermes-session-id'
 import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat/native-chat-agent-support'
 import {
   resolveMobileNativeChat,
@@ -27,13 +26,11 @@ export function getMobileNativeChatToggleActions(args: {
   tabs: readonly ToggleTab[]
   isTabChatView: (tabId: string) => boolean
   nativeChatTranscriptIsLocalReadable: boolean
+  hermesOverlaySupported?: boolean
   structuredAgents?: readonly string[]
   /** terminal.list identity. Used only when the tab itself does not name an agent, and only for Hermes. */
   hostAgentIdentity?: string | null
-  /** Host advertises resume-history, so an ACP uuid can be session/load'd. */
-  hermesResumeSupported?: boolean
   onClose: () => void
-  onHermesTerminalChat?: (request: { tabId: string; providerSessionId: string | null }) => void
   onToggle: (tabId: string) => void
 }): ActionSheetAction[] {
   const { terminalHandle, tabs, isTabChatView, onClose, onToggle } = args
@@ -43,10 +40,18 @@ export function getMobileNativeChatToggleActions(args: {
   if (!tab) {
     return []
   }
-  if (!resolveMobileNativeChat(tab, args.nativeChatTranscriptIsLocalReadable)) {
-    const hermes = hermesTerminalChatAction(tab, args)
-    if (hermes) {
-      return [hermes]
+  if (
+    !resolveMobileNativeChat(
+      tab,
+      args.nativeChatTranscriptIsLocalReadable,
+      args.hermesOverlaySupported
+    )
+  ) {
+    if (
+      (terminalLaunchAgent(tab) ?? args.hostAgentIdentity) === 'hermes' &&
+      !args.hermesOverlaySupported
+    ) {
+      return []
     }
     return structuredChatTerminalExplanation(tab, args.structuredAgents ?? [])
   }
@@ -71,49 +76,6 @@ export function getMobileNativeChatToggleActions(args: {
 
 function terminalLaunchAgent(tab: MobileNativeChatTab): string | null {
   return tab.launchAgent ?? tab.agentStatus?.agentType ?? tab.agent ?? null
-}
-
-function hermesNamedTerminal(
-  tab: MobileNativeChatTab,
-  hostAgentIdentity: string | null | undefined
-): boolean {
-  const named = terminalLaunchAgent(tab)
-  if (named === 'hermes') {
-    return true
-  }
-  // A host identity must not relabel a terminal that already names another agent.
-  return !named && hostAgentIdentity === 'hermes'
-}
-
-function hermesTerminalChatAction(
-  tab: ToggleTab,
-  args: {
-    hostAgentIdentity?: string | null
-    hermesResumeSupported?: boolean
-    onClose: () => void
-    onHermesTerminalChat?: (request: { tabId: string; providerSessionId: string | null }) => void
-  }
-): ActionSheetAction | null {
-  // A registry that listed other agents and dropped Hermes still has this terminal to switch.
-  if (!hermesNamedTerminal(tab, args.hostAgentIdentity)) {
-    return null
-  }
-  const hookId = tab.agentStatus?.providerSession?.id
-  const providerSessionId =
-    args.hermesResumeSupported && hookId
-      ? hermesAcpLoadSessionId('hermes', { providerSessionId: hookId })
-      : null
-  return {
-    id: providerSessionId ? 'switchHermesTerminalToChat' : 'startHermesChat',
-    label: providerSessionId
-      ? translate('session.nativeChatToggleAction.switchHermesTerminalToChat', 'Switch to Chat')
-      : translate('session.nativeChatToggleAction.startHermesChat', 'Start new chat'),
-    icon: MessageSquare,
-    onPress: () => {
-      args.onClose()
-      args.onHermesTerminalChat?.({ tabId: tab.id, providerSessionId })
-    }
-  }
 }
 
 // A structured chat is a new session. The running terminal has no transcript this view can adopt.

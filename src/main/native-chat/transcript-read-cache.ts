@@ -1,4 +1,5 @@
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
+import { canReadHermesTranscriptHere, hermesTranscriptDeps } from './transcript-hermes'
 import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
 import type { AgentType } from '../../shared/agent-status-types'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
@@ -73,6 +74,11 @@ export async function readNativeChatTranscriptCached(
   sessionId: string,
   transcriptPath?: string
 ): Promise<ReadTranscriptResult> {
+  if (agent === 'hermes') {
+    return canReadHermesTranscriptHere({ transcriptPath })
+      ? readOpenCodeNativeChatTranscriptFull(sessionId, hermesTranscriptDeps)
+      : { error: 'Transcript unavailable', notFound: true }
+  }
   if (resolveNativeChatTranscriptAgent(agent) === 'opencode') {
     return readOpenCodeNativeChatTranscriptFull(
       sessionId,

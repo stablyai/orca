@@ -161,6 +161,7 @@ describe('ACP agents in the runtime registrations', () => {
     })
     expect(registration?.launchCheck).toBeUndefined()
     const spec = acpLaunchSpecFor('hermes')
+    expect(spec?.env.HERMES_YOLO_MODE).toBe('0')
     expect(spec?.args({ fullAccess: false, pluginDir: '/plugin' })).toEqual(['acp'])
     expect(spec?.args({ fullAccess: true, pluginDir: '/plugin' })).toEqual(['--yolo', 'acp'])
     expect(spec?.historyCatchUp).toBeUndefined()

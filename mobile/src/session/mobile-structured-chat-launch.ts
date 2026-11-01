@@ -21,6 +21,7 @@ export type MobileStructuredChatLaunchContext = {
 }
 
 let currentContext: MobileStructuredChatLaunchContext | null = null
+let latestContextLoad = 0
 const listeners = new Set<() => void>()
 
 export function readMobileStructuredChatLaunchContext(): MobileStructuredChatLaunchContext | null {
@@ -114,6 +115,7 @@ export async function loadMobileStructuredChatLaunchContext(args: {
   client: RpcClient
   hostCapabilities: readonly string[] | null | undefined
 }): Promise<MobileStructuredChatLaunchContext> {
+  const contextLoad = ++latestContextLoad
   const hostCapabilities = await capabilitiesForStructuredChat(args.client, args.hostCapabilities)
   const [defaultView, registeredAgents] = await Promise.all([
     loadDefaultSessionView(),
@@ -125,6 +127,8 @@ export async function loadMobileStructuredChatLaunchContext(args: {
     canRequestSurface: hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY) === true,
     hostCapabilities
   }
-  publishMobileStructuredChatLaunch(context)
+  if (contextLoad === latestContextLoad) {
+    publishMobileStructuredChatLaunch(context)
+  }
   return context
 }
