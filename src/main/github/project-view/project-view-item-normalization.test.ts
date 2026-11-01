@@ -7,7 +7,19 @@ describe('normalizeItem item type', () => {
       {
         id: 'draft',
         type: 'DRAFT_ISSUE',
-        content: { __typename: 'DraftIssue', title: 'Draft', body: 'Draft body' }
+        content: { __typename: 'DraftIssue', title: 'Draft', body: 'Draft body' },
+        fieldValues: {
+          nodes: [
+            {
+              __typename: 'ProjectV2ItemFieldSingleSelectValue',
+              field: { id: 'status', name: 'Status', dataType: 'SINGLE_SELECT' },
+              optionId: 'todo',
+              name: 'Todo',
+              color: 'GRAY'
+            }
+          ],
+          pageInfo: { hasNextPage: false }
+        }
       },
       0
     )
@@ -16,7 +28,8 @@ describe('normalizeItem item type', () => {
       ok: true,
       row: {
         itemType: 'DRAFT_ISSUE',
-        content: { title: 'Draft', body: 'Draft body', repository: null, number: null, url: null }
+        content: { title: 'Draft', body: 'Draft body', repository: null, number: null, url: null },
+        fieldValuesByFieldId: { status: { kind: 'single-select', name: 'Todo' } }
       }
     })
   })
