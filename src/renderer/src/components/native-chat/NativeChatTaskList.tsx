@@ -1,4 +1,4 @@
-import { Circle, CircleCheck, CircleDot, ChevronRight, ListChecks } from 'lucide-react'
+import { Ban, Circle, CircleCheck, CircleDot, ChevronRight, ListChecks } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -18,6 +18,9 @@ function statusLabel(task: NativeChatTask): string {
   }
   if (task.status === 'in_progress') {
     return translate('components.native-chat.taskList.inProgress', 'In progress')
+  }
+  if (task.status === 'cancelled') {
+    return translate('components.native-chat.taskList.cancelled', 'Cancelled')
   }
   return translate('components.native-chat.taskList.pending', 'Pending')
 }
@@ -39,17 +42,28 @@ function changeLabel(change: NativeChatTaskChange): string {
       })
     case 'updated':
       return translate('components.native-chat.taskList.updated', 'Updated {{task}}', { task })
+    case 'cancelledTask':
+      return translate('components.native-chat.taskList.cancelledTask', 'Cancelled {{task}}', {
+        task
+      })
   }
 }
 
 function TaskRow({ task, label }: { task: NativeChatTask; label?: string }): React.JSX.Element {
   const Icon =
-    task.status === 'completed' ? CircleCheck : task.status === 'in_progress' ? CircleDot : Circle
+    task.status === 'completed'
+      ? CircleCheck
+      : task.status === 'in_progress'
+        ? CircleDot
+        : task.status === 'cancelled'
+          ? Ban
+          : Circle
   return (
     <li
       className={cn(
         'flex items-start gap-1.5',
-        task.status === 'in_progress' && 'font-medium text-chat-foreground-strong'
+        task.status === 'in_progress' && 'font-medium text-chat-foreground-strong',
+        !label && (task.status === 'completed' || task.status === 'cancelled') && 'line-through'
       )}
     >
       <Icon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
@@ -57,7 +71,7 @@ function TaskRow({ task, label }: { task: NativeChatTask; label?: string }): Rea
       <span
         className={cn(
           'min-w-0 whitespace-pre-wrap break-words',
-          !label && task.status === 'completed' && 'line-through'
+          !label && (task.status === 'completed' || task.status === 'cancelled') && 'line-through'
         )}
       >
         {label ?? nativeChatTaskLabel(task)}
@@ -96,9 +110,19 @@ export function NativeChatTaskList({
 }: {
   list: TaskList
   previous?: TaskList
-  presentation?: 'inline' | 'composer'
+  presentation?: 'inline' | 'composer' | 'sheet'
 }): React.JSX.Element {
   const completed = nativeChatCompletedTaskCount(list)
+  if (presentation === 'sheet') {
+    return (
+      <div className="max-h-80 overflow-y-auto px-3 py-2 text-xs text-muted-foreground">
+        <Checklist list={list} />
+        {list.explanation ? (
+          <p className="whitespace-pre-wrap break-words">{list.explanation}</p>
+        ) : null}
+      </div>
+    )
+  }
   if (presentation === 'composer') {
     return (
       <Collapsible className="rounded-md border border-border bg-muted/30">

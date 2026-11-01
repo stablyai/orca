@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight, Circle, CircleCheck, CircleDot, ListChecks } from 'lucide-react-native'
+import { Ban, ChevronRight, Circle, CircleCheck, CircleDot, ListChecks } from 'lucide-react-native'
 import {
   diffNativeChatTaskLists,
   nativeChatCompletedTaskCount,
@@ -39,13 +39,20 @@ function TaskRow({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const copy = nativeChatTaskListCopy(t)
-  const statusWord = {
+  const statusWord: Record<NativeChatTask['status'], string> = {
     completed: copy.completed,
     in_progress: copy.inProgress,
-    pending: copy.pending
+    pending: copy.pending,
+    cancelled: copy.cancelled
   }
   const Icon =
-    task.status === 'completed' ? CircleCheck : task.status === 'in_progress' ? CircleDot : Circle
+    task.status === 'completed'
+      ? CircleCheck
+      : task.status === 'in_progress'
+        ? CircleDot
+        : task.status === 'cancelled'
+          ? Ban
+          : Circle
   const active = task.status === 'in_progress'
   return (
     <View
@@ -67,7 +74,7 @@ function TaskRow({
           styles.taskText,
           toolType(fontScale).row,
           active && styles.taskActive,
-          !label && task.status === 'completed' && styles.struck
+          !label && (task.status === 'completed' || task.status === 'cancelled') && styles.struck
         ]}
       >
         {label ?? nativeChatTaskLabel(task)}
@@ -137,17 +144,30 @@ export function MobileNativeChatTaskList({
   list,
   previous,
   fontScale,
-  disclosureKey
+  disclosureKey,
+  variant = 'card'
 }: {
   list: TaskList
   previous?: TaskList
   fontScale: number
   disclosureKey?: string
+  /** `sheet` is the current list inside the tasks drawer. `card` is the inline transcript diff. */
+  variant?: 'card' | 'sheet'
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const completed = nativeChatCompletedTaskCount(list)
   const copy = nativeChatTaskListCopy(t, { completed, total: list.tasks.length })
+  if (variant === 'sheet') {
+    return (
+      <View>
+        <Checklist list={list} fontScale={fontScale} />
+        {list.explanation ? (
+          <Text style={[styles.lineMeta, toolType(fontScale).meta]}>{list.explanation}</Text>
+        ) : null}
+      </View>
+    )
+  }
   const changes = previous ? diffNativeChatTaskLists(previous, list) : null
   const type = toolType(fontScale)
   return (

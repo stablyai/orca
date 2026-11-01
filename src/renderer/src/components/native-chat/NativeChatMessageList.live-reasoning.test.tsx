@@ -353,6 +353,18 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
     return message
   }
 
+  function taskPill(name: string): HTMLElement {
+    return screen.getByRole('button', { name })
+  }
+
+  function taskSheet(): HTMLElement {
+    const sheet = document.querySelector('[data-slot="popover-content"]')
+    if (!(sheet instanceof HTMLElement)) {
+      throw new Error('task sheet closed')
+    }
+    return sheet
+  }
+
   function transcript(messages: NativeChatMessage[], sessionId = 'live-codex') {
     return (
       <NativeChatMessageList
@@ -385,25 +397,21 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       const active = frame(2, 'inProgress')
       const last = frame(3, 'completed')
       const { rerender, container } = render(transcript([first]))
-      const toggle = screen.getByRole('button', { name: 'Tasks 0 of 1 task completed' })
+      const toggle = taskPill('0/1 task')
       const viewport = container.querySelector('.overflow-y-auto')!
       expect(viewport.contains(toggle)).toBe(false)
       fireEvent.click(toggle)
       rerender(transcript([first, active]))
-      expect(within(toggle.parentElement!).getByText('Verify').closest('li')).toHaveClass(
+      expect(within(taskSheet()).getByText('Verify').closest('li')).toHaveClass(
         'text-chat-foreground-strong'
       )
       expect(within(viewport as HTMLElement).getByText('Started Verify')).toBeInTheDocument()
       rerender(transcript([last]))
-      expect(
-        within(
-          screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' }).parentElement!
-        ).getByText('Verify')
-      ).toHaveClass('line-through')
+      expect(within(taskSheet()).getByText('Verify').closest('li')).toHaveClass('line-through')
       expect(screen.getAllByText('Keep verification visible')).toHaveLength(2)
       rerender(transcript([first, active, last]))
       expect(screen.getAllByText('Verify')).toHaveLength(2)
-      expect(screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' })).toBe(toggle)
+      expect(taskPill('1/1 task')).toBe(toggle)
       expect(screen.getByText('Started Verify')).toBeInTheDocument()
       expect(screen.queryByText('notification:turn/plan/updated')).toBeNull()
       expect(projectNativeChatTaskListFrames([last])[0]).toBe(
@@ -427,13 +435,9 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
         ]
       }
       render(transcript([tool, frame(3, 'completed')]))
-      fireEvent.click(screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' }))
+      fireEvent.click(taskPill('1/1 task'))
       expect(screen.getAllByText('Verify')).toHaveLength(2)
-      expect(
-        within(
-          screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' }).parentElement!
-        ).getByText('Verify')
-      ).toHaveClass('line-through')
+      expect(within(taskSheet()).getByText('Verify').closest('li')).toHaveClass('line-through')
     })
 
     it('keeps malformed, truncated, other-provider, and plan-document frames unchanged', () => {
@@ -468,9 +472,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       render(transcript([unknown, failure, frame(3, 'inProgress')]))
       expect(screen.queryByText('notification:future/event')).toBeNull()
       expect(screen.getByText('codex · notification:future/failure')).toBeInTheDocument()
-      expect(
-        screen.getByRole('button', { name: 'Tasks 0 of 1 task completed' })
-      ).toBeInTheDocument()
+      expect(taskPill('0/1 task')).toBeInTheDocument()
     })
 
     it('does not consume a neighboring tool failure as a notification result', () => {
@@ -485,9 +487,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
         ]
       }
       render(transcript([frame(1, 'pending'), command]))
-      expect(
-        screen.getByRole('button', { name: 'Tasks 0 of 1 task completed' })
-      ).toBeInTheDocument()
+      expect(taskPill('0/1 task')).toBeInTheDocument()
       openToolRunMembers()
       expect(screen.getByText('Verification failed', { selector: 'pre' })).toHaveClass(
         'text-destructive'
@@ -540,21 +540,14 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
         ]
       }
       const { rerender } = render(transcript([last]))
-      fireEvent.click(screen.getByRole('button', { name: 'Tasks 1 of 2 tasks completed' }))
+      fireEvent.click(taskPill('1/2 tasks'))
       rerender(transcript([first, last]))
       expect(screen.getAllByText('Read')).toHaveLength(2)
       expect(screen.getByText('Completed Read')).toBeInTheDocument()
-      expect(
-        within(
-          screen.getByRole('button', { name: 'Tasks 1 of 2 tasks completed' }).parentElement!
-        ).getByText('Read')
-      ).toHaveClass('line-through')
+      expect(within(taskSheet()).getByText('Read').closest('li')).toHaveClass('line-through')
       expect(screen.getByText('Ready for verification')).toBeInTheDocument()
       rerender(transcript([first], 'two'))
-      expect(screen.getByRole('button', { name: 'Tasks 0 of 2 tasks completed' })).toHaveAttribute(
-        'aria-expanded',
-        'false'
-      )
+      expect(taskPill('0/2 tasks')).toHaveAttribute('aria-expanded', 'false')
       expect(screen.getAllByText('Read')).toHaveLength(1)
       rerender(transcript([], 'three'))
       expect(screen.queryByText('Tasks')).toBeNull()

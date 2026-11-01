@@ -1,4 +1,4 @@
-export type NativeChatTaskStatus = 'pending' | 'in_progress' | 'completed'
+export type NativeChatTaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
 export type NativeChatTask = {
   content: string
   status: NativeChatTaskStatus
@@ -6,7 +6,7 @@ export type NativeChatTask = {
 }
 export type NativeChatTaskList = { tasks: NativeChatTask[]; explanation?: string }
 export type NativeChatTaskChange = {
-  kind: 'added' | 'removed' | 'started' | 'completed' | 'pending' | 'updated'
+  kind: 'added' | 'removed' | 'started' | 'completed' | 'pending' | 'cancelled' | 'updated'
   task: NativeChatTask
 }
 export type NativeChatTaskListTool = 'todowrite' | 'update_plan'
@@ -53,12 +53,7 @@ export function normalizeNativeChatTaskList(
     if (!item || !content) {
       continue
     }
-    const status =
-      item.status === 'in_progress' || (tool === 'update_plan' && item.status === 'inProgress')
-        ? 'in_progress'
-        : item.status === 'completed'
-          ? 'completed'
-          : 'pending'
+    const status = nativeChatTaskStatus(item.status, tool)
     const activeForm = tool === 'todowrite' ? nonemptyString(item.activeForm) : undefined
     tasks.push({ content, status, ...(activeForm ? { activeForm } : {}) })
   }
@@ -75,6 +70,7 @@ export const NATIVE_CHAT_TASK_LIST_COPY = {
   completed: 'Completed',
   inProgress: 'In progress',
   pending: 'Pending',
+  cancelled: 'Cancelled',
   empty: 'No tasks',
   progress: '{{completed}} of {{total}} tasks completed',
   added: 'Added {{task}}',
@@ -83,6 +79,7 @@ export const NATIVE_CHAT_TASK_LIST_COPY = {
   finished: 'Completed {{task}}',
   reset: 'Marked pending: {{task}}',
   updated: 'Updated {{task}}',
+  cancelledTask: 'Cancelled {{task}}',
   unchanged: 'Tasks unchanged',
   showAll: 'Full task list'
 } as const
@@ -94,6 +91,7 @@ export type NativeChatTaskChangeCopyKey =
   | 'finished'
   | 'reset'
   | 'updated'
+  | 'cancelledTask'
 
 /** Which sentence a change reads as, and the task it names. */
 export function nativeChatTaskChangeWords(change: NativeChatTaskChange): {
@@ -111,7 +109,26 @@ export function nativeChatTaskChangeWords(change: NativeChatTaskChange): {
       return { key: 'reset', task: change.task.content }
     case 'updated':
       return { key: 'updated', task: nativeChatTaskLabel(change.task) }
+    case 'cancelled':
+      return { key: 'cancelledTask', task: change.task.content }
   }
+}
+
+/** Known provider words. Anything else stays pending so a newer status is not dropped or marked done. */
+export function nativeChatTaskStatus(
+  status: unknown,
+  tool?: NativeChatTaskListTool
+): NativeChatTaskStatus {
+  if (status === 'in_progress' || (tool === 'update_plan' && status === 'inProgress')) {
+    return 'in_progress'
+  }
+  if (status === 'completed') {
+    return 'completed'
+  }
+  if (status === 'cancelled' || status === 'canceled') {
+    return 'cancelled'
+  }
+  return 'pending'
 }
 
 export function nativeChatCompletedTaskCount(list: NativeChatTaskList): number {
@@ -155,7 +172,9 @@ export function diffNativeChatTaskLists(
             ? 'completed'
             : task.status === 'in_progress'
               ? 'started'
-              : 'pending',
+              : task.status === 'cancelled'
+                ? 'cancelled'
+                : 'pending',
         task
       })
     } else if (before.activeForm !== task.activeForm) {
