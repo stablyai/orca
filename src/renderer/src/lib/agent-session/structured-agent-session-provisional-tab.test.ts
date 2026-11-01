@@ -222,6 +222,32 @@ function openChat(
 }
 
 describe('a provisional structured chat tab', () => {
+  it.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)(
+    'reports the replacement chat only after main publishes its tab',
+    async () => {
+      layoutApplyTestTransport.answerWith((command) =>
+        command.type === 'openAgentSessionTab' ? 'pending' : 'apply'
+      )
+      const opened = vi.fn()
+      const launch = beginStructuredAgentSessionProvisionalLaunch({
+        plan: planSettlingAs(new StructuredAgentSessionCreateRefusalError('no'), ''),
+        hooks: {},
+        focusIntent: { request: mocks.focus, cancel: vi.fn() },
+        onTabOpenSettled: opened
+      })
+
+      await vi.waitFor(() => expect(layoutApplyTestTransport.pendingCount).toBe(1))
+      expect(opened).not.toHaveBeenCalled()
+      expect(useAppStore.getState().getTab(launch?.tab?.id ?? '')).toBeNull()
+
+      layoutApplyTestTransport.answerWith('apply')
+      layoutApplyTestTransport.answerPending()
+      await main.settle()
+      expect(opened).toHaveBeenCalledWith(launch?.tab?.id)
+      expect(useAppStore.getState().getTab(launch?.tab?.id ?? '')).toBeDefined()
+    }
+  )
+
   it.each(['before', 'after'] as const)(
     'retains a draft initialized %s host publication through close and reopen',
     async (order) => {

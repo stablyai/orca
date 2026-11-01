@@ -5,15 +5,23 @@ type PendingCreationListener = (state: PendingCreationState) => void
 type BeginArgs = {
   beforeOpen?: (sessionId: string) => boolean | void
   hooks?: { signal?: AbortSignal }
+  onTabOpenSettled?: (tabId: string | null) => void
   plan?: { prompt?: string; promptDelivery?: string; draftFromScope?: string }
 }
 const mocks = vi.hoisted(() => {
   let listener: PendingCreationListener | null = null
+  const state: PendingCreationState & {
+    activeView: string
+    activePendingCreationId: string | null
+    updatePendingWorktreeCreation: (id: string, patch: unknown) => void
+  } = {
+    activeView: 'terminal',
+    activePendingCreationId: 'creation-1',
+    pendingWorktreeCreations: Object.fromEntries([['creation-1', {}]]),
+    updatePendingWorktreeCreation: vi.fn<(id: string, patch: unknown) => void>()
+  }
   return {
-    state: {
-      pendingWorktreeCreations: Object.fromEntries([['creation-1', {}]]),
-      updatePendingWorktreeCreation: vi.fn<(id: string, patch: unknown) => void>()
-    },
+    state,
     get listener() {
       return listener
     },
@@ -21,8 +29,14 @@ const mocks = vi.hoisted(() => {
       listener = value
     },
     unsubscribe: vi.fn<() => void>(),
-    beginStructuredAgentSessionProvisionalLaunch:
-      vi.fn<(args: BeginArgs) => { sessionId: string; tab: { id: string } } | null>(),
+    beginStructuredAgentSessionProvisionalLaunch: vi.fn<
+      (args: BeginArgs) => {
+        sessionId: string
+        tab: { id: string }
+        settlement: Promise<{ kind: 'structured'; sessionId: string }>
+        cancel: () => void
+      } | null
+    >(),
     activateAndRevealWorktree: vi.fn<(worktreeId: string, options?: unknown) => unknown>()
   }
 })
@@ -72,16 +86,72 @@ const baseArgs = {
   primaryTabId: null
 }
 
+function launchHandle() {
+  return {
+    sessionId: 'session-1',
+    tab: { id: 'agent-session:session-1' },
+    settlement: new Promise<{ kind: 'structured'; sessionId: string }>(() => {}),
+    cancel: vi.fn()
+  }
+}
+
 describe('launchStructuredWorktreeSession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.state.pendingWorktreeCreations = Object.fromEntries([['creation-1', {}]])
     mocks.listener = null
+    mocks.state.activePendingCreationId = 'creation-1'
     mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: null })
     mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
       args.beforeOpen?.('session-1')
-      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
+      args.onTabOpenSettled?.('agent-session:session-1')
+      return launchHandle()
     })
+  })
+
+  it('keeps the pending chat until the layout owner publishes its replacement', async () => {
+    let openTab: BeginArgs['onTabOpenSettled']
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      args.beforeOpen?.('session-1')
+      openTab = args.onTabOpenSettled
+      return launchHandle()
+    })
+
+    const completion = launchStructuredWorktreeSession(baseArgs)
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    openTab?.('agent-session:session-1')
+    await completion
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1', {
+      providesInitialSurface: true,
+      worktreeCreationId: 'creation-1'
+    })
+  })
+
+  it('preserves navigation while waiting for the replacement chat', async () => {
+    let openTab: BeginArgs['onTabOpenSettled']
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      openTab = args.onTabOpenSettled
+      return launchHandle()
+    })
+
+    const completion = launchStructuredWorktreeSession(baseArgs)
+    mocks.state.activePendingCreationId = null
+    openTab?.('agent-session:session-1')
+    await completion
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it('cancels a launch dismissed while waiting for its chat tab', async () => {
+    const launch = launchHandle()
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockReturnValue(launch)
+
+    const completion = launchStructuredWorktreeSession(baseArgs)
+    mocks.state.pendingWorktreeCreations = {}
+    mocks.listener?.(mocks.state)
+
+    await expect(completion).resolves.toMatchObject({ cancelled: true })
+    expect(launch.cancel).toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
   it('does not launch after the pending creation was cancelled', async () => {
@@ -102,9 +172,7 @@ describe('launchStructuredWorktreeSession', () => {
       mocks.listener?.(mocks.state)
       mocks.state.pendingWorktreeCreations = pending
       const allowed = args.beforeOpen?.('session-1')
-      return allowed === false
-        ? null
-        : { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
+      return allowed === false ? null : launchHandle()
     })
 
     await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
