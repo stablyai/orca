@@ -1,4 +1,4 @@
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalLeafIntoTabRequest } from '../../../shared/terminal-leaf-move'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Tab } from '../../../shared/tab-types'

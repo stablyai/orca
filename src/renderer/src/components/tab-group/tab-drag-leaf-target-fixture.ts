@@ -1,5 +1,5 @@
 import type { DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
