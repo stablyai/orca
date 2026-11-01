@@ -145,7 +145,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Switch between Chat UI and terminal** defaults to `Cmd+Shift+J` on macOS and `Ctrl+Shift+J` on Windows / Linux in a supported agent tab. Remap it or remove its binding here. Existing custom shortcuts keep their chords. On Windows / Linux, **Switch worktree** takes precedence when it uses the same chord; terminal-first can allow the toggle from terminal input.
 - **Add Review Note** defaults to `Cmd+Shift+A` (macOS) / `Ctrl+Shift+A` (Windows / Linux); remappable.
 - **Send Review Notes to Agent** ships unbound; assign it here to open the send-notes menu for the active worktree's diff notes without using the mouse.
-- **Delete workspace** defaults to `Cmd+Shift+Backspace` on macOS and `Ctrl+Shift+Backspace` on Windows / Linux. Hover the sidebar workspace you mean to delete; Orca still asks for confirmation.
+- **Delete workspace** defaults to `Cmd+Shift+Backspace` on macOS and `Ctrl+Shift+Backspace` on Windows / Linux. It acts on the selected workspace. The first press shows a prompt on that workspace's sidebar row; press the shortcut again within a few seconds to delete it. Press Escape, switch workspace, or wait to cancel. Workspaces with child workspaces still open the delete dialog.
 
 ## Repository
 

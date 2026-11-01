@@ -12,9 +12,9 @@ import {
 } from '../components/sidebar/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import {
-  deleteHoveredWorkspaceImmediately,
-  resolveHoveredWorkspaceDeleteTarget
-} from '../components/sidebar/hovered-workspace-delete'
+  requestActiveWorkspaceDelete,
+  resolveActiveWorkspaceDeleteTarget
+} from '../components/sidebar/active-workspace-delete'
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -222,12 +222,12 @@ export function createAppCommandHandlers(
           return false
         }
         const store = useAppStore.getState()
-        const target = resolveHoveredWorkspaceDeleteTarget(store)
+        const target = resolveActiveWorkspaceDeleteTarget(store)
         if (!target) {
           return false
         }
         return claim('workspace.delete', () => {
-          deleteHoveredWorkspaceImmediately(store, target)
+          requestActiveWorkspaceDelete(store, target)
         })
       }
     ],

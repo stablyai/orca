@@ -647,6 +647,49 @@ describe('delete worktree flow', () => {
     )
   })
 
+  it('skips the plain confirmation when the caller already confirmed', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: false }
+    setWorktrees([{ id: 'wt-1', displayName: 'one' }])
+
+    runWorktreeDelete('wt-1', { confirmed: true })
+
+    expect(mocks.state.openModal).not.toHaveBeenCalled()
+    // Why: no force — a dirty worktree must still be refused by git.
+    expect(mocks.state.removeWorktree).toHaveBeenCalledWith(
+      { id: 'wt-1', executionHostId: null },
+      false
+    )
+  })
+
+  it('still opens the dialog for a confirmed parent with child workspaces', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: false }
+    setWorktrees([
+      { id: 'parent', displayName: 'parent' },
+      { id: 'child', displayName: 'child' }
+    ])
+    const parent = mocks.state.worktreeMap.get('parent')!
+    const child = mocks.state.worktreeMap.get('child')!
+    mocks.state.worktreeLineageById = {
+      child: {
+        worktreeId: child.id,
+        worktreeInstanceId: child.instanceId,
+        parentWorktreeId: parent.id,
+        parentWorktreeInstanceId: parent.instanceId,
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+    }
+
+    runWorktreeDelete('parent', { confirmed: true })
+
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).toHaveBeenCalledWith(
+      'delete-worktree',
+      expect.objectContaining({ worktreeId: 'parent', allowSkipConfirm: false })
+    )
+  })
+
   // Folder shortcuts use another funnel; missing Git worktree records must not imply their disappearance.
   it('stays silent for a folder workspace, which this funnel does not route', () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }

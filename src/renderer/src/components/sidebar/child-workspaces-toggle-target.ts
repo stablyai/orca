@@ -6,7 +6,6 @@ import {
 import type { AppState } from '@/store/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getHoveredWorkspaceIdentity } from './hovered-workspace-delete'
 import { computeRenderedSidebarRows } from './rendered-sidebar-worktree-order'
 import {
   computeVisibleWorktrees,
@@ -24,7 +23,19 @@ type ChildWorkspacesToggleState = Pick<
   AppState,
   'activeWorkspaceExecutionHostId' | 'activeWorktreeId' | 'worktreeLineageById' | 'worktreesByRepo'
 >
-type HoverDocument = NonNullable<Parameters<typeof getHoveredWorkspaceIdentity>[0]>
+type HoverDocument = Pick<Document, 'activeElement' | 'querySelectorAll'>
+
+export function getHoveredWorkspaceIdentity(
+  doc: HoverDocument = document
+): { hostIdentity: string; workspaceId: string } | null {
+  const hoveredRows = doc.querySelectorAll<HTMLElement>(
+    '[data-worktree-sidebar] [role="option"][data-worktree-id]:hover'
+  )
+  const row = hoveredRows.item(hoveredRows.length - 1)
+  const workspaceId = row?.dataset.worktreeId
+  const hostIdentity = row?.dataset.worktreeHostIdentity
+  return workspaceId && hostIdentity ? { workspaceId, hostIdentity } : null
+}
 
 function resolveTargetWorktree(
   state: ChildWorkspacesToggleState,
@@ -32,7 +43,7 @@ function resolveTargetWorktree(
 ): Worktree | undefined {
   const hovered = getHoveredWorkspaceIdentity(doc)
   if (hovered) {
-    // Hovered cards outrank active ones, matching workspace deletion shortcuts.
+    // Hovered cards outrank the active one.
     return getAllWorktreesFromState(state).find(
       (worktree) =>
         worktree.id === hovered.workspaceId &&
