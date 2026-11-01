@@ -22493,6 +22493,7 @@
       "workspaceRename": "Renomear worktree",
       "workspaceDelete": "Excluir Espaço de Trabalho",
       "workspaceOpenBoard": "Alternar Quadro do Espaço de Trabalho",
+      "workspaceNextAttention": "Ir para o próximo espaço de trabalho que precisa de atenção",
       "dashboardToggle": "Alternar Painel de Agentes",
       "workspaceSelectByIndex": "Selecionar Espaço de Trabalho 1–9",
       "voiceDictation": "Ditado",

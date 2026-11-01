@@ -21841,6 +21841,7 @@
       "workspaceRename": "워크트리 이름 바꾸기",
       "workspaceDelete": "워크스페이스 삭제",
       "workspaceOpenBoard": "워크스페이스 보드 전환",
+      "workspaceNextAttention": "주의가 필요한 다음 워크스페이스로 이동",
       "dashboardToggle": "에이전트 대시보드 전환",
       "workspaceSelectByIndex": "워크스페이스 1–9 선택",
       "voiceDictation": "받아쓰기",

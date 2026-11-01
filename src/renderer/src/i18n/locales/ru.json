@@ -2073,6 +2073,9 @@
         "folderAccessFix": "Исправить"
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "Нет рабочих пространств, требующих внимания"
+        },
         "sshManagedServer": {
           "refusedBlocked": "Orca не удалось настроиться на этом SSH-сервере. Причина указана в разделе «SSH-серверы» в настройках."
         }
@@ -22983,6 +22986,7 @@
       "workspaceCreate": "Создать рабочее дерево",
       "workspaceDelete": "Удалить рабочее пространство",
       "workspaceOpenBoard": "Показать или скрыть доску рабочих пространств",
+      "workspaceNextAttention": "Перейти к следующему рабочему пространству, требующему внимания",
       "workspaceRename": "Переименовать рабочее дерево",
       "workspaceSelectByIndex": "Выбрать рабочее пространство 1–9",
       "worktreeHistoryBack": "Перейти назад по истории рабочих деревьев",

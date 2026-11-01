@@ -21895,6 +21895,7 @@
       "workspaceRename": "重命名工作树",
       "workspaceDelete": "删除工作区",
       "workspaceOpenBoard": "切换工作区看板",
+      "workspaceNextAttention": "前往下一个需要注意的工作区",
       "dashboardToggle": "切换智能体仪表盘",
       "workspaceSelectByIndex": "选择工作区 1–9",
       "voiceDictation": "听写",

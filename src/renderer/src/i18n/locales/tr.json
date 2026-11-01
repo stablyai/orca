@@ -2001,6 +2001,9 @@
         "folderAccessFix": "Düzelt"
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "İlgi gerektiren çalışma alanı yok"
+        },
         "sshManagedServer": {
           "refusedBlocked": "Orca bu SSH sunucusuna kurulamadı. Nedenini Ayarlar → SSH sunucuları bölümünde görebilirsiniz."
         }
@@ -22156,6 +22159,7 @@
       "workspaceRename": "Worktree'yi yeniden adlandır",
       "workspaceDelete": "Çalışma alanını sil",
       "workspaceOpenBoard": "Çalışma alanı panosunu göster/gizle",
+      "workspaceNextAttention": "İlgi gerektiren sonraki çalışma alanına git",
       "dashboardToggle": "Ajan panosunu göster/gizle",
       "workspaceSelectByIndex": "1–9 numaralı çalışma alanını seç",
       "voiceDictation": "Dikte",
