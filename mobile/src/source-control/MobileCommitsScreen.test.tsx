@@ -297,6 +297,35 @@ describe('MobileCommitsScreen', () => {
     expect(list?.props.refreshControl.props.refreshing).toBe(false)
   })
 
+  it("opens a commit's file in the shared diff screen against that commit", async () => {
+    const openDiffForFile = vi.fn()
+    const client = createFakeRpcClient()
+    client.sendRequest = routedSend(() => Promise.resolve(historyResponse('expandable')))
+    await act(async () => {
+      renderer = create(
+        createElement(MobileCommitsScreen, {
+          client,
+          connState: 'connected',
+          worktreeId: 'wt-1',
+          hostId: 'host-1',
+          bottomInset: 0,
+          openDiffForFile
+        })
+      )
+      await settle()
+    })
+    await openFirstCommit()
+    const fileRow = renderer?.root.find(
+      (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'src/app.ts'
+    )
+    await act(async () => fileRow?.props.onPress())
+    expect(openDiffForFile).toHaveBeenCalledWith({
+      kind: 'commit',
+      filePath: 'src/app.ts',
+      commitOid: 'commit-1'
+    })
+  })
+
   it('wipes commits when the worktree identity changes', async () => {
     let historyCalls = 0
     const sendRequest = routedSend(() => {

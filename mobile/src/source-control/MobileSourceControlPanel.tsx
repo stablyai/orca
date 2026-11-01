@@ -317,6 +317,7 @@ export function MobileSourceControlPanel({
         worktreeId={worktreeId}
         bottomInset={insets.bottom}
         padTop={!embedded}
+        openDiffForFile={state.openDiffForFile}
       >
         {(openCommit) => (
           <View style={styles.container}>
