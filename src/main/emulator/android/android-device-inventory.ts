@@ -12,13 +12,21 @@ export async function listRunningAdbDevices(
   return parseAdbDevices(result.stdout).filter((device) => device.state === 'device')
 }
 
-/** Null when adb fails, so a failed census never reads as every device gone. */
+/** Every adb state, including emulators still booting ("offline"). Null when adb fails, so a
+ * failed census never reads as every device gone. */
+export async function listConfirmedAdbDevices(
+  runner: AndroidCommandRunner,
+  sdk: AndroidSdkPaths
+): Promise<AndroidAdbDevice[] | null> {
+  const result = await runner(sdk.adb, adbDevicesArgs)
+  return result.code === 0 ? parseAdbDevices(result.stdout) : null
+}
+
 export async function listConfirmedAdbSerials(
   runner: AndroidCommandRunner,
   sdk: AndroidSdkPaths
 ): Promise<string[] | null> {
-  const result = await runner(sdk.adb, adbDevicesArgs)
-  return result.code === 0 ? parseAdbDevices(result.stdout).map((device) => device.serial) : null
+  return (await listConfirmedAdbDevices(runner, sdk))?.map((device) => device.serial) ?? null
 }
 
 export async function resolveRunningAvdNames(
@@ -45,9 +53,9 @@ export async function findRunningAvdSerial(
   runner: AndroidCommandRunner,
   sdk: AndroidSdkPaths,
   avdName: string,
-  running: AndroidAdbDevice[]
+  devices: AndroidAdbDevice[]
 ): Promise<string | null> {
-  const names = await resolveRunningAvdNames(runner, sdk, running)
+  const names = await resolveRunningAvdNames(runner, sdk, devices)
   for (const [serial, name] of names) {
     if (name === avdName) {
       return serial

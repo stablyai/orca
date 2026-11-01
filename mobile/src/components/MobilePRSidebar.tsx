@@ -307,7 +307,12 @@ export function MobilePRSidebar({ onRetry, bottomInset = 0, ...input }: SidebarP
     },
     [refetch]
   )
-  const tab = useMobilePrTab({ ...input, onOpenScreen: setScreen, onCreateSettled })
+  const tab = useMobilePrTab({
+    ...input,
+    onOpenScreen: setScreen,
+    onCreateSettled,
+    live: screen === 'comments' ? 'details' : 'checks'
+  })
   const refresh = () => refetch({ includeDetails: true })
   const prMenuGroups = usePrTabMenuGroups(tab, refresh)
   // Without a PR the dock still needs Refresh, e.g. after a PR is opened on the web.

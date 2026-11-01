@@ -10,6 +10,7 @@ import {
 import { usePrTabMenuGroups } from '../components/pr-sidebar/use-pr-tab-menu'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
+import type { SourceControlHubScreen } from './use-source-control-hub-navigation'
 import type { MobilePrActions } from '../session/use-mobile-pr-actions'
 import type { MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
 
@@ -18,6 +19,9 @@ export type MobilePrTabOpeners = { createPr: () => void; merge: () => void }
 
 type Args = {
   state: MobileSourceControlState
+  activeTab: SourceControlHubTab
+  /** The screen pushed over the hub, so Checks and Comments stay live while open. */
+  hubPage: SourceControlHubScreen | null
   worktreeId: string
   prController: MobilePrSidebarController
   prBranch: string | null
@@ -36,6 +40,8 @@ type Args = {
 // The hub's wiring of the PR tab: its state, Create PR follow-through, sheet openers and ⋯ menu.
 export function useMobileSourceControlPrTab({
   state,
+  activeTab,
+  hubPage,
   worktreeId,
   prController,
   prBranch,
@@ -107,6 +113,13 @@ export function useMobileSourceControlPrTab({
     ]
   )
   const prTab = useMobilePrTab({
+    // Comments keep their threads fresh; the tab and Checks need only the PR and its checks.
+    live:
+      hubPage === 'comments'
+        ? 'details'
+        : hubPage === 'checks' || activeTab === 'pr'
+          ? 'checks'
+          : false,
     state: prTabState,
     refetch: refetchPr,
     client,

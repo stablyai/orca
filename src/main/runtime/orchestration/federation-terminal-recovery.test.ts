@@ -1,3 +1,4 @@
+import { createFederationSyncDatabase } from './federation-sync-test-harness'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 
@@ -17,13 +18,12 @@ describe('terminal federation acknowledgment recovery', () => {
       }
     })
     const sync = vi.spyOn(runtime, 'syncOrchestrationFederatedDispatch').mockReturnValue(blocked)
-    runtime.setOrchestrationDb({
-      listActiveFederatedDispatches: () => [],
-      findNextTerminalFederatedDispatchPendingAcknowledgment: () => ({
-        dispatchId: 'dispatch_1',
-        rowId: 1
-      })
-    } as never)
+    const { db } = createFederationSyncDatabase()
+    db.findNextTerminalFederatedDispatchPendingAcknowledgment = () => ({
+      dispatchId: 'dispatch_1',
+      rowId: 1
+    })
+    runtime.setOrchestrationDb(db)
     expect(sync).toHaveBeenCalledTimes(1)
 
     runtime.stopOrchestrationFederationRelay()
