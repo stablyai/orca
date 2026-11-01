@@ -8,6 +8,8 @@ import { isSkillRootUnavailableError } from './skill-scan-coalescer'
 
 /** Set by a test to run at a chosen point inside the walk; cleared after each. */
 let onStat: ((path: string) => Promise<void>) | null = null
+const readdirPaths: string[] = []
+const readdirCalls: Promise<unknown>[] = []
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
@@ -17,12 +19,20 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       const result = await (actual.stat as (...args: unknown[]) => Promise<unknown>)(path, ...rest)
       await onStat?.(path)
       return result
+    },
+    readdir: (path: string, options: { withFileTypes: true }) => {
+      const read = actual.readdir(path, options)
+      readdirPaths.push(path)
+      readdirCalls.push(read.catch(() => undefined))
+      return read
     }
   }
 })
 
 afterEach(() => {
   onStat = null
+  readdirPaths.length = 0
+  readdirCalls.length = 0
 })
 
 async function makeTree(): Promise<string> {
@@ -72,6 +82,30 @@ describe('findSkillFiles', () => {
     expect(withinDepth.filter((path) => /[\\/]link\d{2}[\\/]SKILL\.md$/.test(path))).toHaveLength(1)
     expect(withinDepth).toHaveLength(2)
     expect(statPaths).toHaveLength(32)
+  })
+
+  // Listings are read ahead of the walk; a linked directory it leaves as already visited must not pull in its whole subtree.
+  it('reads no deeper into a second link to an already visited directory', async () => {
+    const base = await makeTree()
+    const root = join(base, 'skills')
+    const target = join(base, 'shared')
+    await writeFileAt(join(target, 'sub', 'deep', 'leaf', 'SKILL.md'))
+    await mkdir(root, { recursive: true })
+    const linkType = process.platform === 'win32' ? 'junction' : 'dir'
+    await symlink(target, join(root, 'one'), linkType)
+    await symlink(target, join(root, 'two'), linkType)
+
+    const found = await findSkillFiles(root, 9)
+    // Reads started ahead can finish after the walk returns; settle them and any reads they queue.
+    while (readdirCalls.length > 0) {
+      await Promise.all(readdirCalls.splice(0))
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+
+    expect(found).toHaveLength(1)
+    // readdir order varies by filesystem; whichever link comes second is the one left.
+    const skipped = join(root, found[0].startsWith(join(root, 'one')) ? 'two' : 'one')
+    expect(readdirPaths.filter((path) => path.startsWith(join(skipped, 'sub', 'deep')))).toEqual([])
   })
 
   it('returns nothing for a missing root rather than throwing', async () => {
