@@ -12,6 +12,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { imageSourcePathFromText } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { claudeTaskNotificationMessage } from './transcript-claude-task-notification'
 import { claudeContentBlocks } from './transcript-record-blocks'
 import { unwrapClaudePastedContentBlock } from '../../shared/claude-pasted-content'
 import { unwrapClaudeBashInputBlock } from '../../shared/claude-bash-input'
@@ -75,6 +76,10 @@ export function decodeClaudeTranscriptLine(
   const parsed = parseJsonObject(line)
   if (!parsed) {
     return null
+  }
+  const notification = claudeTaskNotificationMessage(parsed, fallbackId)
+  if (notification) {
+    return notification
   }
   const record = claudeQueuedPromptAsUserRecord(parsed) ?? parsed
   const role = record.type

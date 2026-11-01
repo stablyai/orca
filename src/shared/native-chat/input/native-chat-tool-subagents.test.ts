@@ -165,6 +165,96 @@ describe('nativeChatSubagentActivities tool merge', () => {
   })
 })
 
+describe('Codex and Claude spawn tools', () => {
+  it('keeps one Codex child when spawn_agent settles', () => {
+    const activities = nativeChatSubagentActivities([
+      message('spawn', [
+        {
+          type: 'tool-call',
+          name: 'spawn_agent',
+          callId: 'call_greeting',
+          input: JSON.stringify({ task_name: 'sample_greeting', message: 'sealed' })
+        }
+      ]),
+      message(
+        'out',
+        [
+          {
+            type: 'tool-result',
+            callId: 'call_greeting',
+            output: '{"task_name":"/root/sample_greeting"}'
+          }
+        ],
+        { role: 'tool' }
+      ),
+      message('done', [
+        {
+          type: 'subagent',
+          id: '/root/sample_greeting',
+          label: 'sample_greeting',
+          state: 'completed',
+          groupId: 'turn-1'
+        }
+      ])
+    ])
+    expect(activities).toEqual([
+      {
+        id: '/root/sample_greeting',
+        label: 'sample_greeting',
+        state: 'completed',
+        activity: null
+      }
+    ])
+  })
+
+  it('reads a Claude Agent id and lets the notification settle it', () => {
+    const activities = nativeChatSubagentActivities([
+      message('call', [
+        {
+          type: 'tool-call',
+          name: 'Agent',
+          callId: 'toolu_1',
+          input: {
+            description: 'Debug mobile Recent sort',
+            prompt: 'look',
+            subagent_type: 'debugger',
+            run_in_background: true
+          }
+        }
+      ]),
+      message(
+        'result',
+        [
+          {
+            type: 'tool-result',
+            callId: 'toolu_1',
+            output:
+              'Async agent launched successfully.\nagentId: a361b8987c2d7be85 (internal ID - do not mention to user.)'
+          }
+        ],
+        { role: 'tool' }
+      ),
+      message('note', [
+        {
+          type: 'subagent',
+          id: 'a361b8987c2d7be85',
+          label: 'Debug mobile Recent sort',
+          state: 'completed',
+          groupId: 'claude'
+        }
+      ])
+    ])
+    expect(activities).toEqual([
+      {
+        id: 'a361b8987c2d7be85',
+        label: 'Debug mobile Recent sort',
+        state: 'completed',
+        activity: null
+      }
+    ])
+  })
+})
+
 describe('readNativeChatSubagentActivities', () => {
   it('drops a seed that is not a roster', () => {
     expect(

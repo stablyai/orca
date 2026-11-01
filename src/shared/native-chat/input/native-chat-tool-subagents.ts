@@ -1,4 +1,4 @@
-// Grok records a child as a spawn_subagent call. The roster otherwise only sees subagent blocks.
+// Grok records a child as spawn_subagent. Codex uses spawn_agent. Claude uses Agent or Task.
 
 import {
   NATIVE_CHAT_SUBAGENT_STATES,
@@ -15,11 +15,12 @@ export type NativeChatToolSubagent = {
   activity: string | null
 }
 
-const SPAWN_TOOL = 'spawnsubagent'
+const SPAWN_TOOLS = new Set(['spawnsubagent', 'spawnagent', 'agent', 'task'])
 const LABEL_LIMIT = 80
 const ACTIVITY_LIMIT = 160
 const MAX_ACTIVITIES = 64
-const SPAWN_ID = /^subagent_id:\s*(\S+)\s*$/m
+const SPAWN_ID = /subagent_id:\s*(\S+)/
+const AGENT_ID = /agentId:\s*(\S+)/
 const ACK_DESCRIPTION = /^description:\s*(.+)$/m
 const SUBAGENT_COMMAND = /^Command: \[subagent(?::[^\]]*)?\]\s*(.*)$/m
 
@@ -43,8 +44,29 @@ function isSubagentState(value: string): value is NativeChatSubagentState {
   return NATIVE_CHAT_SUBAGENT_STATES.some((state) => state === value)
 }
 
+function inputFields(input: unknown): Record<string, unknown> | null {
+  if (typeof input === 'string') {
+    try {
+      return record(JSON.parse(input))
+    } catch {
+      return null
+    }
+  }
+  return record(input)
+}
+
+function pathLabel(value: string): string {
+  let label = value
+  for (const part of value.split('/')) {
+    if (part.length > 0) {
+      label = part
+    }
+  }
+  return label
+}
+
 function spawnLabel(input: unknown): string | null {
-  const fields = record(input)
+  const fields = inputFields(input)
   if (!fields) {
     return null
   }
@@ -52,18 +74,47 @@ function spawnLabel(input: unknown): string | null {
   if (description) {
     return oneLine(description, LABEL_LIMIT)
   }
+  const taskName = typeof fields.task_name === 'string' ? fields.task_name.trim() : ''
+  if (taskName) {
+    return oneLine(pathLabel(taskName), LABEL_LIMIT)
+  }
   const prompt = typeof fields.prompt === 'string' ? fields.prompt.trim() : ''
   const line = prompt.split('\n')[0]?.trim() ?? ''
   return line ? oneLine(line, LABEL_LIMIT) : null
 }
 
+function outputFields(output: string | undefined): Record<string, unknown> | null {
+  if (!output) {
+    return null
+  }
+  try {
+    return record(JSON.parse(output))
+  } catch {
+    return null
+  }
+}
+
 function ackId(output: string | undefined): string | null {
-  return output ? (SPAWN_ID.exec(output)?.[1] ?? null) : null
+  if (!output) {
+    return null
+  }
+  const named = SPAWN_ID.exec(output)?.[1] ?? AGENT_ID.exec(output)?.[1]
+  if (named) {
+    return named
+  }
+  const taskName = outputFields(output)?.task_name
+  return typeof taskName === 'string' && taskName.trim() ? taskName.trim() : null
 }
 
 function ackLabel(output: string | undefined): string | null {
   const line = output ? ACK_DESCRIPTION.exec(output)?.[1]?.trim() : undefined
-  return line ? oneLine(line, LABEL_LIMIT) : null
+  if (line) {
+    return oneLine(line, LABEL_LIMIT)
+  }
+  const taskName = outputFields(output)?.task_name
+  return typeof taskName === 'string' && taskName.includes('/')
+    ? oneLine(pathLabel(taskName), LABEL_LIMIT)
+    : null
 }
 
 function sectionState(status: string): NativeChatSubagentState | null {
@@ -164,7 +215,7 @@ export function nativeChatToolSubagentActivities(
   for (const message of folded) {
     for (const pair of pairToolBlocks(message.blocks)) {
       const call = pair.call
-      if (call && canonical(call.name) === SPAWN_TOOL) {
+      if (call && SPAWN_TOOLS.has(canonical(call.name))) {
         const failed = call.state === 'failed' || pair.result?.isError === true
         const id = ackId(pair.result?.output) ?? call.callId ?? `spawn:${message.id}:${pending}`
         pending += 1
