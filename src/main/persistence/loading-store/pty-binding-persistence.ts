@@ -27,9 +27,13 @@ import {
 } from './pty-binding-span'
 import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placement'
 import type {
+  TerminalLeafIntoTabRequest,
+  TerminalLeafIntoTabResult,
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
 } from '../../../shared/terminal-leaf-move'
+import { moveLeafIntoTab } from '../terminal-topology/terminal-topology-commit-into-tab'
+import { assignWorkspaceSessionPartition } from '../terminal-topology/terminal-topology-membership'
 import {
   admitPane,
   moveLeaf,
@@ -241,6 +245,13 @@ export class PtyBindingPersistenceOperations {
     )
   }
 
+  /** Joins a single-leaf tab into an existing tab and closes it, committed before the renderer applies. */
+  moveTerminalLeafIntoTab(request: TerminalLeafIntoTabRequest): Promise<TerminalLeafIntoTabResult> {
+    return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
+      moveLeafIntoTab(request, this.topology())
+    )
+  }
+
   admitTerminalPane(
     admission: TerminalPaneAdmission,
     hostId?: string | null
@@ -280,14 +291,7 @@ function writePtyBinding(
   const { runtime, sessions } = owner[ptyBindingPersistenceOperationsContext]
   const sessionBeforeBinding = cloneWorkspaceSessionState(session)
   const restore = (restoredSession = sessionBeforeBinding): void => {
-    if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
-      runtime.state.workspaceSession = restoredSession
-    } else {
-      runtime.state.workspaceSessionsByHostId = {
-        ...runtime.state.workspaceSessionsByHostId,
-        [resolvedHostId]: restoredSession
-      }
-    }
+    assignWorkspaceSessionPartition(runtime.state, resolvedHostId, restoredSession)
   }
   try {
     if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {

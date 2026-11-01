@@ -4190,9 +4190,6 @@
             "legacyDragCannotRetarget": "Diese Sitzung wurde aus einem älteren Orca-Fenster gezogen. Orca kann sie daher nicht dem ausgewählten Codex-Konto zuordnen. Die Sitzung stattdessen über den Sitzungsverlauf fortsetzen.",
             "legacyDragPrepareFailed": "Orca konnte diese ältere Codex-Sitzung nicht vorbereiten. Das Fortsetzen erneut versuchen."
           },
-          "TabGroupDropOverlay": {
-            "paneColumnLabel": "Neuer Teilbereich"
-          },
           "useTabGroupCreationCommands": {
             "duplicateBrowserTabFailed": "Die gekoppelte Laufzeitumgebung konnte den verwalteten Browser-Tab nicht duplizieren."
           }

@@ -66,7 +66,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     }
     // Match HTTP key normalization so local and remote events share one pane.
     const physicalPaneKey = envelope.paneKey.trim()
-    let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
+    let paneKey = this.resolveLeafAliasPaneKey(physicalPaneKey) ?? physicalPaneKey
     const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })

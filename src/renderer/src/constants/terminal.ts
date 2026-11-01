@@ -45,6 +45,8 @@ export type SplitTerminalPaneDetail = {
   telemetrySource?: TerminalPaneSplitSource
   newLeafId?: string
   ptyId?: string
+  /** Which side of the source pane the new pane sits on; omitted means the default (after). */
+  placement?: 'before' | 'after'
 }
 
 export type RequestActiveTerminalPaneSplitDetail = {

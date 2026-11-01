@@ -69,6 +69,10 @@ vi.mock('./TabSessionSurfaceSwitchMenuItems', () => ({
   TabSessionSurfaceSwitchMenuItems: () => null
 }))
 
+vi.mock('./TerminalTabMoveIntoTabMenuSection', () => ({
+  TerminalTabMoveIntoTabMenuSection: () => null
+}))
+
 vi.mock('./use-tab-strip-slot-props', () => ({
   useTabStripSlotProps: () => ({ className: '', 'data-tab-strip-slot': '' })
 }))
