@@ -59,7 +59,10 @@ describe('capturePluginPanelPng', () => {
   it('captures the rect and scales a HiDPI image to one pixel per point', async () => {
     const target = contents()
     const shot = await capturePluginPanelPng(target, { x: 900, y: 40, width: 360, height: 700 })
-    expect(target.capturePage).toHaveBeenCalledWith({ x: 900, y: 40, width: 360, height: 700 })
+    expect(target.capturePage).toHaveBeenCalledWith(
+      { x: 900, y: 40, width: 360, height: 700 },
+      { stayHidden: true }
+    )
     expect(shot).toMatchObject({ width: 360, height: 700 })
     expect(shot.png.toString()).toBe('png')
   })

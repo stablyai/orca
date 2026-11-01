@@ -96,8 +96,9 @@ export function compositeBitmap(
   return out
 }
 
-// Why retry: a hidden window's first frame after an override (theme, width) can come back as a
-// bare background on Linux; a drawn panel always has more than a couple of colors.
+// Why retry as well: a fallback in case even a stayHidden capture returns a bare background (Linux CI).
+// Why stayHidden: Electron's documented way to keep a hidden window rendering for the capture.
+const HIDDEN_CAPTURE = { stayHidden: true }
 const BLANK_RETRY_WAIT_MS = 150
 const BLANK_RETRIES = 8
 
@@ -119,7 +120,7 @@ async function captureUntilDrawn(
   wait: (ms: number) => Promise<void>
 ): Promise<NativeImage> {
   const grab = async (): Promise<NativeImage> => {
-    const shot = await contents.capturePage(target)
+    const shot = await contents.capturePage(target, HIDDEN_CAPTURE)
     return shot.isEmpty() ? shot : atSize(shot, target.width, target.height)
   }
   let image = await grab()
@@ -153,7 +154,7 @@ export async function capturePluginPanelPng(
   }
   // An html panel's guest is drawn over this capture below, so only a bare host is retried.
   let image: NativeImage = guest
-    ? await contents.capturePage(target)
+    ? await contents.capturePage(target, HIDDEN_CAPTURE)
     : await captureUntilDrawn(contents, target, wait)
   if (image.isEmpty()) {
     throw new Error('Orca drew nothing to capture; try again once its window has loaded.')
