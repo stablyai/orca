@@ -159,7 +159,8 @@ export class BrowserNetworkTunnelClient {
       closeTunnel: (error) => this.close(error),
       flushWrites: (target) => this.flushStreamWrites(target),
       claimApplicationBytes: (bytes) => this.claimApplicationBytes(bytes),
-      retire: (target, error) => this.retireStream(target, error)
+      retire: (target, error) => this.retireStream(target, error),
+      fail: (target, error) => this.failStream(target, error)
     })
   }
 

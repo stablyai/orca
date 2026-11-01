@@ -2,6 +2,7 @@ import { once } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import {
   BrowserNetworkTunnelOpcode,
+  decodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelWindowUpdate
 } from '../../shared/browser-network-tunnel-protocol'
@@ -75,6 +76,40 @@ describe('BrowserNetworkTunnelClient aggregate memory', () => {
     socket.settleRead(3)
     expect(registry.evidence().retainedBytes).toBe(0)
     route.client.close()
+  })
+
+  it('fails only the stream whose destination bytes exceed the shared budget', async () => {
+    const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({
+      hostMaxBytes: 10,
+      processMaxBytes: 100
+    })
+    const onClosed = vi.fn()
+    const sent: Uint8Array[] = []
+    const client = new BrowserNetworkTunnelClient({
+      tunnelGeneration: TUNNEL_GENERATION,
+      sendBinary: (bytes) => {
+        sent.push(bytes)
+        return true
+      },
+      outboundMemory: registry.acquire('host-a')!,
+      onClosed
+    })
+    const holding = await open(client, 1)
+    const overflowing = await open(client, 2)
+    overflowing.on('error', () => undefined)
+
+    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array(8), 1))
+    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array(8), 2))
+
+    expect(onClosed).not.toHaveBeenCalled()
+    expect(decodeBrowserNetworkTunnelFrame(sent.at(-1)!)).toMatchObject({
+      opcode: BrowserNetworkTunnelOpcode.Error,
+      streamId: 2
+    })
+    expect(overflowing.destroyed).toBe(true)
+    expect(holding.destroyed).toBe(false)
+    expect(registry.evidence().retainedBytes).toBe(8)
+    client.close()
   })
 
   it('releases a source-write claim only after credited transport handoff', async () => {
