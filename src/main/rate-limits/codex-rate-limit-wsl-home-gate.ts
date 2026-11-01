@@ -27,8 +27,7 @@ const defaultDeps: WslHomeGateDeps = {
 
 /**
  * A background quota poll never starts a stopped distro (E9). The distro is resolved once, gated,
- * then pinned for paths and probes, so the probe can't run in a distro it didn't read; the account
- * is still looked up in the target's own lane (the default lane stays the default lane).
+ * then pinned for the home lookup, so the probe can't run in a distro it didn't read.
  */
 export async function resolveCodexRateLimitHomeUnlessStopped(
   source: CodexRateLimitHomeSource,

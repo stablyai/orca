@@ -27,7 +27,7 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
 
   /**
    * `probeHome: false` never runs wsl.exe for the guest home: an uncached one reads as unknown.
-   * `pinnedWslDistro` fixes the distro for paths and probes; the account is still the target lane's.
+   * `pinnedWslDistro` names the distro for paths, probes and the account lane, as launch's target does.
    */
   protected getWslCodexHomePathForSelection(
     target: CodexAccountSelectionTarget,
@@ -37,13 +37,10 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     const pathTarget: CodexAccountSelectionTarget = options.pinnedWslDistro
       ? { runtime: 'wsl', wslDistro: options.pinnedWslDistro }
       : this.resolveWslDefaultTarget(target)
-    // A pinned default reads that distro's lane first, then the default lane the target named.
+    // A pin names the distro, so the account is that distro's lane, exactly as launch reads it.
     const account = this.getActiveAccount(
       settings.codexManagedAccounts,
-      options.pinnedWslDistro
-        ? (getSelectedCodexAccountIdForTarget(settings, pathTarget) ??
-            getSelectedCodexAccountIdForTarget(settings, target))
-        : getSelectedCodexAccountIdForTarget(settings, target)
+      getSelectedCodexAccountIdForTarget(settings, options.pinnedWslDistro ? pathTarget : target)
     )
     if (account) {
       const accountHome = this.getWslLaunchCodexHomePath(account, pathTarget.wslDistro?.trim())

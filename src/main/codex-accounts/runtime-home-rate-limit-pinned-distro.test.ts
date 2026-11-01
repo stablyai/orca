@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
+import type { CodexAccountSelectionTarget } from '../../shared/codex-selection-lane'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createManagedAuth,
@@ -35,14 +36,34 @@ function account(id: string, distro: string, managedHomePath: string) {
   }
 }
 
+async function serviceFor(wsl: Record<string, string>, accounts: ReturnType<typeof account>[]) {
+  const store = createStore(
+    createSettings({
+      codexManagedAccounts: accounts,
+      activeCodexManagedAccountId: null,
+      activeCodexManagedAccountIdsByRuntime: { host: null, wsl }
+    })
+  )
+  const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+  // Launch's own home lookup, for its resolved (named) target.
+  class LaunchHomeProbe extends CodexRuntimeHomeService {
+    launchHome(target: CodexAccountSelectionTarget): string | null {
+      return this.getWslCodexHomePathForSelection(target)
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness store implements every Store member this service reads.
+  return new LaunchHomeProbe(store as never)
+}
+
 describe('Codex quota poll home with a gated, pinned WSL distro (E9)', () => {
+  let wslHome: string
+
   beforeEach(() => {
     setupRuntimeHomeTest()
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const wslHome = join(testState.userDataDir, 'wsl-home')
+    wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
-      // The cached `--list` default disagrees with the gated one; the pin must win for paths.
-      getDefaultWslDistro: () => 'Debian',
+      getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome,
       getWslHomeAsync: async () => wslHome
     }))
@@ -55,29 +76,29 @@ describe('Codex quota poll home with a gated, pinned WSL distro (E9)', () => {
     teardownRuntimeHomeTest()
   })
 
-  it('keeps the default-lane account when the gated default distro is pinned', async () => {
+  it('reads the same home launch uses for a default-lane pick: the named lane, not __default__', async () => {
     const defaultHome = createManagedAuth(testState.userDataDir, 'acc-default', '{"a":"d"}\n')
-    const debianHome = createManagedAuth(testState.userDataDir, 'acc-debian', '{"a":"b"}\n')
-    const store = createStore(
-      createSettings({
-        codexManagedAccounts: [
-          account('acc-default', 'Ubuntu', defaultHome),
-          account('acc-debian', 'Debian', debianHome)
-        ],
-        activeCodexManagedAccountId: null,
-        activeCodexManagedAccountIdsByRuntime: {
-          host: null,
-          wsl: { __default__: 'acc-default', Debian: 'acc-debian' }
-        }
-      })
-    )
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness store implements every Store member this service reads.
-    const service = new CodexRuntimeHomeService(store as never)
+    const service = await serviceFor({ __default__: 'acc-default' }, [
+      account('acc-default', 'Ubuntu', defaultHome)
+    ])
+
+    const poll = service.prepareForRateLimitFetch({ runtime: 'wsl' }, 'Ubuntu')
+    const launch = service.launchHome({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+
+    expect(poll).toEqual({ kind: 'ready', codexHomePath: launch })
+    expect(launch).not.toBe(defaultHome)
+  })
+
+  it('reads the same managed home launch uses for the pinned distro’s own pick', async () => {
+    const ubuntuHome = createManagedAuth(testState.userDataDir, 'acc-ubuntu', '{"a":"u"}\n')
+    const service = await serviceFor({ Ubuntu: 'acc-ubuntu' }, [
+      account('acc-ubuntu', 'Ubuntu', ubuntuHome)
+    ])
 
     expect(service.prepareForRateLimitFetch({ runtime: 'wsl' }, 'Ubuntu')).toEqual({
       kind: 'ready',
-      codexHomePath: defaultHome
+      codexHomePath: ubuntuHome
     })
+    expect(service.launchHome({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(ubuntuHome)
   })
 })
