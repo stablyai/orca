@@ -44,7 +44,8 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
   })
   const { inputError, checkOnInteraction } = useEmulatorInputCheck(
     worktreeId,
-    session?.attached ? session.info?.deviceUdid || session.info?.device || null : null
+    session?.attached ? session.info?.deviceUdid || session.info?.device || null : null,
+    streamKey
   )
   const visibleError = error ?? inputError
 

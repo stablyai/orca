@@ -528,7 +528,8 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     const send = vi.fn()
     const waitForEndpointReady = vi.fn(async () => true)
     const bridge = new EmulatorBridge({ waitForEndpointReady })
-    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const active: EmulatorSessionInfo = { ...session('device-1'), backend: 'ios' }
+    bridge.registerActiveEmulator('wt-1', active, { managed: true })
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
@@ -542,13 +543,13 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
 
     const res = await commands.emulatorAttach({ device: 'device-1', worktree: 'wt-1' })
 
-    expect(res).toEqual({ attached: true, info: session('device-1') })
+    expect(res).toEqual({ attached: true, info: active })
     expect(execServeSimCommandMock).not.toHaveBeenCalled()
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(send).toHaveBeenCalledWith('ui:emulatorAutoAttach', {
       worktreeId: 'wt-1',
-      info: session('device-1')
+      info: active
     })
   })
 

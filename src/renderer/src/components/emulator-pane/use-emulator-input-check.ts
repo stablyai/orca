@@ -9,7 +9,12 @@ function isInputBlockedError(error: unknown): error is Error {
 }
 
 // Pane touches go straight to the helper socket, and Device Hub can take input over mid-session.
-export function useEmulatorInputCheck(worktreeId: string, liveTarget: string | null) {
+// attachKey changes on every attach, so reattaching the same device after the fix rechecks.
+export function useEmulatorInputCheck(
+  worktreeId: string,
+  liveTarget: string | null,
+  attachKey: string | undefined
+) {
   const [blocked, setBlocked] = useState<{ target: string; message: string } | null>(null)
   const lastCheckAtRef = useRef(0)
 
@@ -30,7 +35,7 @@ export function useEmulatorInputCheck(worktreeId: string, liveTarget: string | n
 
   useEffect(() => {
     void runCheck()
-  }, [runCheck])
+  }, [runCheck, attachKey])
 
   const checkOnInteraction = useCallback(() => {
     if (Date.now() - lastCheckAtRef.current >= INTERACTION_RECHECK_MS) {
