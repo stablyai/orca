@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { contentSnapshotId } from './content-snapshot-id'
 // Any catalog of opaque rows: the desktop's own worktree.ps rows or a paired server's.
 type Catalog = { worktrees: unknown[] }
 
@@ -11,24 +11,18 @@ export type WorktreeCatalogSnapshotReply<Result extends Catalog> =
       rowsFromBase: (number | Result['worktrees'][number])[]
     })
 
-// Use 192 SHA-256 bits for practical collision resistance; this is catalog identity, not authentication.
-const SNAPSHOT_ID_LENGTH = 32
 // Why: home, the host screen and other phones each poll their own base; a dozen covers them without holding rows.
 const RECENT_SNAPSHOT_LIMIT = 16
 
 // Row hashes only, never row content: eviction costs one full reply, never correctness.
 const recentRowHashes = new Map<string, readonly string[]>()
 
-function digest(value: string): string {
-  return createHash('sha256').update(value).digest('base64url').slice(0, SNAPSHOT_ID_LENGTH)
-}
-
 function identify(result: Catalog): {
   snapshotId: string
   rowHashes: string[]
 } {
-  const rowHashes = result.worktrees.map((row) => digest(JSON.stringify(row)))
-  const snapshotId = digest(JSON.stringify({ ...result, worktrees: rowHashes }))
+  const rowHashes = result.worktrees.map((row) => contentSnapshotId(JSON.stringify(row)))
+  const snapshotId = contentSnapshotId(JSON.stringify({ ...result, worktrees: rowHashes }))
   return { snapshotId, rowHashes }
 }
 

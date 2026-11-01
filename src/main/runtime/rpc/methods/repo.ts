@@ -1,4 +1,5 @@
 import { defineMethod } from '../core'
+import { resolveReplySnapshot } from '../content-snapshot-id'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 import {
@@ -27,6 +28,7 @@ import {
   RepoCreate,
   RepoHooksCheck,
   RepoIssueCommandWrite,
+  RepoList,
   RepoPath,
   RepoReorder,
   RepoSearchRefs,
@@ -40,14 +42,18 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.list',
     permission: 'workspace',
-    params: null,
-    handler: (_params, context) => {
+    params: RepoList,
+    handler: (params, context) => {
       context.runtime.enrichMissingRepoGitRemoteIdentities?.()
-      return {
+      const reply = {
         repos: context.runtime
           .listVisibleRepos()
           .map((repo) => projectRepoVisibilityForClient(repo, context))
       }
+      // Why: callers that never send the field get the byte-exact legacy response.
+      return params.afterSnapshotId === undefined
+        ? reply
+        : resolveReplySnapshot(reply, params.afterSnapshotId)
     }
   }),
   ...PROJECT_RUNTIME_METHODS,
