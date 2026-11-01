@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../../shared/agent-launch-surface'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -125,6 +126,34 @@ describe('a launch whose terminal fails', () => {
     const response = await replay(runtime, EXISTING_LAUNCH)
 
     expect(response).toMatchObject({ ok: false, error: { code: 'runtime_unavailable' } })
+  })
+
+  it('reports a disabled agent failure before spawn with agent_unconfigured and replays it', async () => {
+    const runtime = runtimeStub({ settings: { disabledTuiAgents: ['claude'] } })
+    failingCreate(
+      runtime,
+      new OrchestrationError(
+        'agent_unconfigured',
+        'Agent claude is disabled. Choose an enabled agent.'
+      ),
+      false
+    )
+
+    const response = await replay(runtime, EXISTING_LAUNCH)
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'agent_unconfigured',
+        message: 'Agent claude is disabled. Choose an enabled agent.'
+      }
+    })
+    expect(outcomeOf(OPERATION_ID)).toMatchObject({
+      status: 'failed',
+      code: 'agent_unconfigured',
+      message: 'Agent claude is disabled. Choose an enabled agent.'
+    })
+    expect(await replay(runtimeStub({ settings: {} }), EXISTING_LAUNCH)).toMatchObject(response)
   })
 
   it('answers a retry of the same operation from the record instead of launching again', async () => {
