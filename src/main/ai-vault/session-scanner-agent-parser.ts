@@ -13,6 +13,7 @@ import { parseMuseSessionFile } from './session-scanner-muse-parser'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
 import { parseJcodeSessionFile } from './session-scanner-jcode-parser'
 import { parseKiroSessionFile } from './session-scanner-kiro-parser'
+import { parseQwenSessionFile } from './session-scanner-qwen-parser'
 import {
   captureOpenCodeSqliteSessionViaWorker,
   captureOpenCode2SqliteSessionViaWorker,
@@ -145,5 +146,7 @@ export async function parseAgentSessionFile(
       return parseJcodeSessionFile(candidate.file, platform, messages)
     case 'kiro':
       return parseKiroSessionFile(candidate.file, platform, messages)
+    case 'qwen-code':
+      return parseQwenSessionFile(candidate.file, platform, messages)
   }
 }
