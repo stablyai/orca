@@ -20,8 +20,8 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     searchKeywords: ['shortcut', 'chat', 'chat ui', 'native chat', 'terminal', 'toggle', 'switch'],
     defaultBindings: {
       darwin: ['Mod+Shift+J'],
-      linux: ['Mod+J', 'Mod+Shift+J'],
-      win32: ['Mod+J', 'Mod+Shift+J']
+      linux: ['Mod+Alt+Shift+J', 'Mod+Shift+J'],
+      win32: ['Mod+Alt+Shift+J', 'Mod+Shift+J']
     }
   },
   {
