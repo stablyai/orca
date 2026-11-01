@@ -1,5 +1,6 @@
 import { agentSenderPublicationPatch } from '../agent-sender-associations'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { reconcileTerminalHostAliases } from '../terminal-host-alias-snapshot'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -54,11 +55,15 @@ export function applyWebSessionTabsSnapshotWithContext(
     : {}
   const worktreeId = rawSnapshot.worktree
   if (
-    state.tabsByWorktree[worktreeId]?.some(
-      (tab) =>
-        tab.hostTerminalAlias?.executionHostId === `runtime:${environmentId}` &&
-        tab.hostTerminalAlias.worktreeId === worktreeId
-    )
+    state.tabsByWorktree[worktreeId]?.some((tab) => {
+      const alias = tab.hostTerminalAlias
+      const host = parseExecutionHostId(alias?.executionHostId)
+      return (
+        host?.kind === 'runtime' &&
+        host.environmentId === environmentId &&
+        alias?.worktreeId === worktreeId
+      )
+    })
   ) {
     return reconcileTerminalHostAliases(state, state, rawSnapshot, environmentId)
   }
