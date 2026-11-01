@@ -79,6 +79,7 @@ export function makeFakeSettings(telemetry: GlobalSettings['telemetry']): Global
 }
 
 export function makeFakeStore(settings: GlobalSettings): Store {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fakes every Store method telemetry reads or writes; other methods are never called.
   return {
     getSettings: vi.fn(() => settings),
     getUI: vi.fn(() => ({ featureTipsSeenIds: [] })),
