@@ -1,4 +1,3 @@
-import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { PickerModal } from '../components/PickerModal'
 import { openMobilePrUrl } from '../components/mobile-pr-url'
@@ -7,14 +6,11 @@ import type { MobileSourceControlState } from './use-mobile-source-control-state
 
 type Props = {
   state: MobileSourceControlState
-  actionSheetActions: ActionSheetAction[]
 }
 
-export function MobileSourceControlModals({ state, actionSheetActions }: Props) {
+export function MobileSourceControlModals({ state }: Props) {
   const t = useMobileTranslation()
   const {
-    showActionSheet,
-    setShowActionSheet,
     discardTarget,
     setDiscardTarget,
     showBranchPicker,
@@ -24,21 +20,12 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
     setCreatedPrUrl,
     createdPrWarning,
     setCreatedPrWarning,
-    branchLabel,
     checkoutBranch,
     runGitAction
   } = state
 
   return (
     <>
-      <ActionSheetModal
-        visible={showActionSheet}
-        title={t('sourceControl.modals.actionsTitle', 'Source Control')}
-        message={branchLabel}
-        actions={actionSheetActions}
-        onClose={() => setShowActionSheet(false)}
-      />
-
       <ConfirmModal
         visible={discardTarget !== null}
         title={t('sourceControl.modals.discardTitle', 'Discard Change')}

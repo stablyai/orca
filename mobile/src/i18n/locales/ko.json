@@ -2666,7 +2666,6 @@
       "checkingReviewStatus": "리뷰 상태를 확인 중입니다.",
       "checkoutBeforePublish": "커밋을 게시하기 전에 브랜치를 체크아웃하세요.",
       "commitStagedChanges": "스테이징된 변경 사항을 커밋하세요.",
-      "commits": "커밋",
       "committing": "커밋이 진행 중입니다.",
       "createPr": "PR 작성",
       "enterCommitMessage": "커밋하려면 커밋 메시지를 입력하세요.",
@@ -2694,23 +2693,11 @@
       "resolveFailed": "브랜치의 기준점을 확인할 수 없습니다."
     },
     "branchCard": {
-      "branchCount": "브랜치 변경 {{count}}개",
-      "changedCount": "변경 {{count}}개",
-      "cherryPickState": "체리픽",
-      "mergeState": "병합",
-      "rebaseState": "리베이스",
-      "stagedCount": "{{count}}개 스테이징됨",
       "completingMerge": "완료 중…",
       "completeMerge": "병합 완료"
     },
     "branchCompare": {
-      "commits_one": "커밋 {{count}}개",
-      "commits_other": "커밋 {{count}}개",
-      "files_one": "파일 {{count}}개",
-      "files_other": "파일 {{count}}개",
-      "sectionTitle": "브랜치에 커밋됨",
-      "summary": "{{files}} - {{baseRef}} 대비",
-      "summaryWithCommits": "{{files}} - {{commits}} - {{baseRef}} 대비"
+      "sectionTitle": "브랜치에 커밋됨"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "비교할 기본 브랜치를 확인할 수 없습니다.",
@@ -2769,11 +2756,8 @@
       "emptyMessage": "워크트리에 변경 사항이 없습니다.",
       "emptyTitle": "로컬 변경 사항 없음",
       "generateMessage": "AI로 commit 메시지 생성",
-      "openActions": "소스 제어 작업 열기",
       "reconnecting": "데스크톱에 다시 연결 중…",
-      "regenerateHint": "다시 생성하려면 메시지를 지웁니다.",
-      "stageAll": "모두 스테이지",
-      "unstageAll": "모두 언스테이징"
+      "regenerateHint": "다시 생성하려면 메시지를 지웁니다."
     },
     "createPrAction": {
       "checkingStatus": "리뷰 상태 확인 중…",
@@ -2802,20 +2786,15 @@
       "titleUnpublishedForcePushCount_one": "브랜치 커밋 {{count}}개를 lease로 강제 푸시하고 필요하면 업스트림을 설정합니다.",
       "titleUnpublishedForcePushCount_other": "브랜치 커밋 {{count}}개를 lease로 강제 푸시하고 필요하면 업스트림을 설정합니다."
     },
-    "fileList": {
-      "committedSection": "브랜치에 커밋됨"
-    },
     "fileRows": {
       "addedByThem": "상대 쪽에서 추가됨",
       "addedByUs": "우리 쪽에서 추가됨",
       "bothAdded": "양쪽에서 추가됨",
       "bothDeleted": "양쪽에서 삭제됨",
       "bothModified": "양쪽에서 수정됨",
-      "committedSection": "브랜치에 커밋됨",
       "committedUnavailable": "커밋된 변경 사항을 확인할 수 없습니다.",
       "deletedByThem": "상대 쪽에서 삭제됨",
       "deletedByUs": "우리 쪽에서 삭제됨",
-      "discardFile": "{{path}} 변경사항 취소",
       "loadingCommitted": "커밋된 변경 사항 로드 중…",
       "openChangedFile": "변경된 파일 {{path}} 열기",
       "openCommittedChange": "{{path}}의 커밋된 변경 사항 열기",
@@ -2848,9 +2827,7 @@
       "waitingForDesktop": "데스크톱 응답 대기 중…"
     },
     "gitStatus": {
-      "changes": "변경 사항",
-      "conflicts": "충돌",
-      "stagedChanges": "스테이징된 변경 사항"
+      "conflicts": "충돌"
     },
     "header": {
       "backToSession": "세션으로 돌아가기",
@@ -2918,7 +2895,6 @@
       "waitingForDesktop": "데스크톱 연결 대기 중…"
     },
     "modals": {
-      "actionsTitle": "소스 제어",
       "currentBranch": "현재",
       "discardButton": "버리기",
       "discardConfirmMessage": "\"{{path}}\"의 변경 사항을 버리시겠습니까? 이 작업은 되돌릴 수 없습니다.",
@@ -2930,15 +2906,6 @@
     },
     "panel": {
       "unavailableTitle": "소스 제어 사용 불가"
-    },
-    "prChip": {
-      "createPr": "PR 생성",
-      "loading": "PR 로드 중…",
-      "loadingLabel": "PR 로드 중",
-      "openLabel": "PR #{{number}}, {{state}}, {{checks}}. PR 열기.",
-      "openWithComments_one": "PR #{{number}}, {{state}}, {{checks}}, 해결되지 않은 댓글 {{count}}개. PR 열기.",
-      "openWithComments_other": "PR #{{number}}, {{state}}, {{checks}}, 해결되지 않은 댓글 {{count}}개. PR 열기.",
-      "unavailableLabel": "PR 확인 불가: {{message}}"
     },
     "prCreate": {
       "authRequired": "{{reviewLabel}} 생성 전에 인증하세요.",
@@ -3027,7 +2994,6 @@
       "noBranch": "브랜치 없음"
     },
     "state": {
-      "noUpstream": "업스트림 없음",
       "syncStatus": "{{ahead}}개 앞섬, {{behind}}개 뒤처짐"
     },
     "textGenerationFailure": {

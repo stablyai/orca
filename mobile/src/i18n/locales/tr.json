@@ -2670,7 +2670,6 @@
       "checkingReviewStatus": "İnceleme durumu kontrol ediliyor.",
       "checkoutBeforePublish": "Commit'leri yayınlamadan önce bir branch'i checkout edin.",
       "commitStagedChanges": "Stage edilmiş değişiklikleri commit'leyin.",
-      "commits": "Commit'ler",
       "committing": "Commit işlemi sürüyor.",
       "createPr": "PR Oluştur",
       "enterCommitMessage": "Commit'lemek için bir commit mesajı girin.",
@@ -2698,23 +2697,11 @@
       "resolveFailed": "Temel branch belirlenemedi"
     },
     "branchCard": {
-      "branchCount": "branch'te {{count}}",
-      "changedCount": "{{count}} değişiklik",
-      "cherryPickState": "cherry-pick",
-      "mergeState": "merge",
-      "rebaseState": "rebase",
-      "stagedCount": "{{count}} stage edildi",
       "completingMerge": "Tamamlanıyor…",
       "completeMerge": "Birleştirmeyi tamamla"
     },
     "branchCompare": {
-      "commits_one": "{{count}} commit",
-      "commits_other": "{{count}} commit",
-      "files_one": "{{count}} dosya",
-      "files_other": "{{count}} dosya",
-      "sectionTitle": "Branch'e Commit Edildi",
-      "summary": "{{files}} - {{baseRef}} ile karşılaştırma",
-      "summaryWithCommits": "{{files}} - {{commits}} - {{baseRef}} ile karşılaştırma"
+      "sectionTitle": "Branch'e Commit Edildi"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "Karşılaştırma için temel branch belirlenemedi.",
@@ -2773,11 +2760,8 @@
       "emptyMessage": "Çalışma ağacı temiz.",
       "emptyTitle": "Yerel değişiklik yok",
       "generateMessage": "Commit mesajını AI ile oluştur",
-      "openActions": "Kaynak kontrolü eylemlerini aç",
       "reconnecting": "Masaüstüne yeniden bağlanılıyor…",
-      "regenerateHint": "Yeniden oluşturmak için mesajı temizleyin.",
-      "stageAll": "Tümünü Stage Et",
-      "unstageAll": "Tümünü Stage'den Çıkar"
+      "regenerateHint": "Yeniden oluşturmak için mesajı temizleyin."
     },
     "createPrAction": {
       "checkingStatus": "İnceleme durumu kontrol ediliyor…",
@@ -2806,20 +2790,15 @@
       "titleUnpublishedForcePushCount_one": "Branch'teki {{count}} commit'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın.",
       "titleUnpublishedForcePushCount_other": "Branch'teki {{count}} commit'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın."
     },
-    "fileList": {
-      "committedSection": "Branch'e Commit'lendi"
-    },
     "fileRows": {
       "addedByThem": "Karşı tarafça eklendi",
       "addedByUs": "Tarafımızdan eklendi",
       "bothAdded": "İki tarafta da eklendi",
       "bothDeleted": "İki tarafta da silindi",
       "bothModified": "İki tarafta da değiştirildi",
-      "committedSection": "Branch'e Commit'lendi",
       "committedUnavailable": "Commit'lenen değişiklikler kullanılamıyor.",
       "deletedByThem": "Karşı tarafça silindi",
       "deletedByUs": "Tarafımızdan silindi",
-      "discardFile": "{{path}} değişikliklerini at",
       "loadingCommitted": "Commit'lenen değişiklikler yükleniyor…",
       "openChangedFile": "Değiştirilen {{path}} dosyasını aç",
       "openCommittedChange": "{{path}} için commit'lenen değişikliği aç",
@@ -2852,9 +2831,7 @@
       "waitingForDesktop": "Masaüstü bekleniyor…"
     },
     "gitStatus": {
-      "changes": "Değişiklikler",
-      "conflicts": "Conflict'ler",
-      "stagedChanges": "Stage Edilen Değişiklikler"
+      "conflicts": "Conflict'ler"
     },
     "header": {
       "backToSession": "Oturuma dön",
@@ -2922,7 +2899,6 @@
       "waitingForDesktop": "Masaüstü bekleniyor…"
     },
     "modals": {
-      "actionsTitle": "Kaynak Kontrolü",
       "currentBranch": "geçerli",
       "discardButton": "At",
       "discardConfirmMessage": "“{{path}}” dosyasındaki değişiklikler atılsın mı? Bu işlem geri alınamaz.",
@@ -2934,15 +2910,6 @@
     },
     "panel": {
       "unavailableTitle": "Kaynak Kontrolü Kullanılamıyor"
-    },
-    "prChip": {
-      "createPr": "Pull request oluştur",
-      "loading": "Pull request yükleniyor…",
-      "loadingLabel": "Pull request yükleniyor",
-      "openLabel": "#{{number}} numaralı pull request, {{state}}, {{checks}}. Pull request'i aç.",
-      "openWithComments_one": "#{{number}} numaralı pull request, {{state}}, {{checks}}, {{count}} çözülmemiş yorum. Pull request'i aç.",
-      "openWithComments_other": "#{{number}} numaralı pull request, {{state}}, {{checks}}, {{count}} çözülmemiş yorum. Pull request'i aç.",
-      "unavailableLabel": "Pull request kullanılamıyor: {{message}}"
     },
     "prCreate": {
       "authRequired": "Bir {{reviewLabel}} oluşturmadan önce kimliğinizi doğrulayın.",
@@ -3031,7 +2998,6 @@
       "noBranch": "Branch yok"
     },
     "state": {
-      "noUpstream": "Upstream yok",
       "syncStatus": "{{ahead}} ileride, {{behind}} geride"
     },
     "textGenerationFailure": {

@@ -22700,6 +22700,7 @@
       "serveSimUnavailable": "serve-sim을 사용할 수 없습니다.",
       "serveSimNoEndpoints": "serve-sim이 스트림 엔드포인트를 반환하지 않았습니다.",
       "serveSimEndpointUnreachable": "serve-sim이 시작되었지만 스트림 엔드포인트에 연결할 수 없습니다.",
+      "deviceHubInputBlocked": "Xcode의 Device Hub가 이 시뮬레이터의 입력을 가져가서 탭과 입력이 전달되지 않습니다. Device Hub를 종료한 다음 시뮬레이터를 다시 연결하세요.",
       "androidSdkMissing": "Android SDK를 찾을 수 없습니다. Android Studio를 설치하고 ANDROID_HOME을 설정하세요.",
       "adbUnavailable": "adb를 사용할 수 없습니다.",
       "noAndroidDevices": "Android 장치나 AVD를 찾을 수 없습니다. Android Studio에서 생성하세요.",
