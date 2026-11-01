@@ -11,6 +11,8 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftToAgentPtyWhenReady: vi.fn()
 }))
 
+vi.mock('./launch-agent-paste-timeout-notice', () => ({ showGeneratedInputNotice: vi.fn() }))
+
 // Pip console-script agents expose python/python3 foreground comm rather than their agent name.
 const INTERPRETER_WRAPPED_AGENTS = [
   { agent: 'aider', expectedProcess: TUI_AGENT_CONFIG.aider.expectedProcess }

@@ -1,3 +1,8 @@
+import { isWebClientLocation } from '@/lib/web-client-location'
+import {
+  applyGeneratedInputNotices,
+  subscribeLocalGeneratedInputNotices
+} from '@/runtime/generated-agent-input-notices'
 import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
@@ -98,6 +103,10 @@ export function registerRuntimeClientIpcBridge(
     event: RuntimeClientEvent,
     generation = getEnvironmentSshStateGeneration(environmentId)
   ): void => {
+    if (event.type === 'generatedInputNoticesChanged') {
+      applyGeneratedInputNotices({ kind: 'environment', environmentId }, event.notices)
+      return
+    }
     if (event.type === 'worktreeTerminalSleepState') {
       applyHostWorktreeTerminalSleepState(environmentId, event)
       return
@@ -208,6 +217,10 @@ export function registerRuntimeClientIpcBridge(
       .catch((error) => {
         console.error('Failed to activate runtime-created worktree:', error)
       })
+  }
+
+  if (!isWebClientLocation()) {
+    unsubs.push(subscribeLocalGeneratedInputNotices())
   }
 
   setRuntimeEnvironmentCatalogRefresher(async () => {

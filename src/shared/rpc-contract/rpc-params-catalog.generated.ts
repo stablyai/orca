@@ -154,7 +154,10 @@ import {
 } from './browser-params'
 import { ScreencastUnsubscribe } from './browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-params'
-import { ClientEventsUnsubscribeParams } from './client-events-params'
+import {
+  ClientEventsUnsubscribeParams,
+  DismissGeneratedInputNoticeParams
+} from './client-events-params'
 import {
   NativeChatSessionOptionsMutation,
   PRBotAuthorOverrideUpdate,
@@ -1469,6 +1472,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.closeTab': TerminalHandle,
   'terminal.create': TerminalCreateParams,
   'terminal.createAgentSession': CreateAgentSessionParams,
+  'terminal.dismissGeneratedInputNotice': DismissGeneratedInputNoticeParams,
   'terminal.ensureAgentSession': EnsureAgentSessionParams,
   'terminal.focus': TerminalFocus,
   'terminal.getAutoRestoreFit': TerminalGetAutoRestoreFitParams,

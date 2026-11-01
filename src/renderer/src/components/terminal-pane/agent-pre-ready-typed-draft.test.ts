@@ -27,11 +27,13 @@ const {
   toastInfo,
   waitForAgentDraftInputReady,
   sendAgentDraftPasteContent,
-  onPasteTimeout
+  onPasteTimeout,
+  recoveryNotice
 } = vi.hoisted(() => ({
   waitForAgentDraftInputReady: vi.fn(),
   sendAgentDraftPasteContent: vi.fn(async () => true),
   onPasteTimeout: vi.fn(),
+  recoveryNotice: vi.fn(),
   notifyCodexPaneBoundForStaleSweep: vi.fn(),
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
@@ -53,7 +55,10 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
 
-vi.mock('@/lib/agent-draft-readiness', () => ({ waitForAgentDraftInputReady }))
+vi.mock('@/lib/agent-draft-readiness', () => ({
+  waitForAgentDraftInputReady,
+  agentInputIsAdmitted: async () => true
+}))
 
 const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
   requestTerminalPaneRecovery: vi.fn(async () => undefined)
@@ -98,7 +103,10 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 vi.mock('@/lib/agent-draft-paste-content', () => ({ sendAgentDraftPasteContent }))
 
 vi.mock('@/lib/launch-agent-paste-timeout-notice', () => ({
-  createPasteReadinessTimeoutNotice: () => ({ onTimeout: onPasteTimeout, wasNotified: () => false })
+  createPasteReadinessTimeoutNotice: (args: unknown) => {
+    recoveryNotice(args)
+    return { onTimeout: onPasteTimeout, wasNotified: () => false }
+  }
 }))
 
 vi.mock('@/store', () => ({
@@ -272,7 +280,8 @@ describe('agent pane keys typed before its PTY binds', () => {
     expect(waitForAgentDraftInputReady).toHaveBeenCalledWith(
       'pty-1',
       expect.any(Number),
-      expect.any(String)
+      expect.any(String),
+      'claude'
     )
     expect(sendAgentDraftPasteContent).toHaveBeenCalledWith(
       'pty-1',
@@ -283,7 +292,7 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.dispose()
   })
 
-  it('drops them with a notice when the agent never reports ready', async () => {
+  it('keeps exact held keys in recovery when the agent never reports ready', async () => {
     waitForAgentDraftInputReady.mockResolvedValue(false)
     const pane = connectAgentPane()
     await flushAsyncTicks(20)
@@ -294,6 +303,7 @@ describe('agent pane keys typed before its PTY binds', () => {
 
     expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
     expect(onPasteTimeout).toHaveBeenCalledOnce()
+    expect(recoveryNotice).toHaveBeenCalledWith(expect.objectContaining({ content: 'hello' }))
     pane.dispose()
   })
 

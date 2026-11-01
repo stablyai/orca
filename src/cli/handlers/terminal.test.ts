@@ -487,6 +487,25 @@ describe('terminal send CLI', () => {
     })
   })
 
+  it('preserves the agent-naming readiness refusal without retrying the prompt', async () => {
+    const message =
+      'Claude could not take your prompt. Answer any dialog in its terminal, then retry.'
+    const call = vi.fn().mockRejectedValue(new RuntimeClientError('internal_error', message))
+    await expect(
+      TERMINAL_HANDLERS['terminal send']({
+        flags: new Map<string, string | true>([
+          ['terminal', 'term-1'],
+          ['text', 'exact prompt'],
+          ['enter', true]
+        ]),
+        client: promptClient(call, true),
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toThrow(message)
+    expect(call).toHaveBeenCalledOnce()
+  })
+
   it('passes retry identity and observation wait only for agent prompts', async () => {
     const call = vi.fn().mockResolvedValue({
       result: {

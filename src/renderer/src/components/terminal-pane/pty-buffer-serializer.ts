@@ -1,6 +1,7 @@
 // Serve mobile snapshots from the desktop xterm that owns the exact screen state.
 
 import type { IDisposable } from '@xterm/xterm'
+import type { RuledScreen } from '../../../../shared/screen-input-veto'
 
 export type SerializeOpts = {
   scrollbackRows?: number
@@ -25,6 +26,7 @@ export type SerializeFn = (
 // Owner symbols prevent stale StrictMode/unmount cleanup from removing a replacement registration.
 type SerializerEntry = {
   fn: SerializeFn
+  readInputScreen?: () => Promise<RuledScreen | null>
   clear?: () => void
   resetInputModes?: () => void
   owner: symbol
@@ -43,7 +45,7 @@ let listenerAttached = false
 export function registerPtySerializer(
   ptyId: string,
   serialize: SerializeFn,
-  actions: Pick<SerializerEntry, 'clear' | 'resetInputModes'> = {}
+  actions: Pick<SerializerEntry, 'clear' | 'resetInputModes' | 'readInputScreen'> = {}
 ): () => void {
   const owner = Symbol(ptyId)
   serializersByPtyId.set(ptyId, { fn: serialize, ...actions, owner })
@@ -100,6 +102,12 @@ export function registerPtyTitleSource(
 /** Grounds the pane's own records only; the host grounds its models on its own request. */
 export function resetPtyRendererInputModes(ptyId: string): void {
   serializersByPtyId.get(ptyId)?.resetInputModes?.()
+}
+
+export async function readPtyInputScreen(ptyId: string): Promise<RuledScreen | null> {
+  const entry = serializersByPtyId.get(ptyId)
+  const screen = await entry?.readInputScreen?.()
+  return serializersByPtyId.get(ptyId) === entry ? (screen ?? null) : null
 }
 
 export function hasPtySerializer(ptyId: string): boolean {

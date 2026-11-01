@@ -1,12 +1,6 @@
 import type { TuiAgent } from './tui-agent'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from './generated-agent-input-readiness'
 
-const DEFAULT_DRAFT_PASTE_READY_TIMEOUT_MS = 8000
-
-export function resolveDraftPasteReadyTimeoutMs(agent?: TuiAgent, overrideMs?: number): number {
-  return (
-    overrideMs ??
-    (agent ? TUI_AGENT_CONFIG[agent].draftPasteReadyTimeoutMs : undefined) ??
-    DEFAULT_DRAFT_PASTE_READY_TIMEOUT_MS
-  )
+export function resolveDraftPasteReadyTimeoutMs(_agent?: TuiAgent, overrideMs?: number): number {
+  return overrideMs ?? GENERATED_AGENT_INPUT_TIMEOUT_MS
 }

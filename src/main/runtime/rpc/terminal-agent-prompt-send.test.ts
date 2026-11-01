@@ -19,6 +19,10 @@ function makeRequest(params: unknown): RpcRequest {
 function makeRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    getTerminalPtyIdForHandle: vi.fn().mockReturnValue('pty-1'),
+    waitForGeneratedTerminalInput: vi.fn().mockResolvedValue(true),
+    generatedInputScreenIsClear: vi.fn().mockResolvedValue(true),
+    generatedInputRefusal: () => new Error('Claude could not take your prompt'),
     ...overrides
   } as OrcaRuntimeService
 }
@@ -55,10 +59,40 @@ describe('terminal agent prompt send RPC', () => {
     expect(sendTerminalAgentPrompt).toHaveBeenCalledWith('terminal-1', 'review this change', {
       inputKind: 'driving',
       inputSource: 'programmatic',
-      beforeWrite: undefined,
+      inputReady: true,
+      inputDeadline: expect.any(Number),
+      beforeWrite: expect.any(Function),
       observationSignal: undefined
     })
     expect(sendTerminal).not.toHaveBeenCalled()
+  })
+
+  it('refuses generated orchestration input through the shared gate before any write', async () => {
+    const runtime = makeRuntime({
+      resolveLiveLeafForHandle: vi.fn(() => ({ ptyId: 'pty-1' })),
+      getDriver: vi.fn(() => ({ kind: 'desktop' })),
+      waitForGeneratedTerminalInput: vi.fn(async () => false),
+      sendTerminal: vi.fn(),
+      sendTerminalAgentPrompt: vi.fn()
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const response = await dispatcher.dispatch(
+      makeRequest({
+        terminal: 'terminal-1',
+        text: 'exact prompt',
+        enter: true,
+        agentPrompt: true,
+        client: { id: 'orca-cli', type: 'desktop' }
+      })
+    )
+    expect(response.ok).toBe(false)
+    if (response.ok) {
+      throw new Error('unsafe admission')
+    }
+    expect(response.error.message).toContain('Claude could not take your prompt')
+    expect(runtime.waitForGeneratedTerminalInput).toHaveBeenCalledWith('terminal-1', undefined)
+    expect(runtime.sendTerminal).not.toHaveBeenCalled()
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
   it('preserves direct input when the CLI target is not a proven settlement agent', async () => {
@@ -130,8 +164,10 @@ describe('terminal agent prompt send RPC', () => {
     async (agentPrompt) => {
       const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
         () => {},
-        'claude'
+        'claude',
+        () => true
       )
+      runtime.onPtyData('pty-prompt', '\x1b[?2004h❯\u00a0', Date.now())
       const selecting = Promise.withResolvers<void>()
       const release = Promise.withResolvers<boolean>()
       vi.spyOn(runtime, 'isTerminalRunningSettledPromptAgent').mockImplementation(() => {

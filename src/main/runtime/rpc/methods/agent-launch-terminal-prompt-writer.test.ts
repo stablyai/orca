@@ -26,6 +26,7 @@ async function deliverAbortingAt(agent: TuiAgent, abortWhen: (data: string) => b
       controller.abort()
     }
   }, agent)
+  runtime.onPtyData('pty-prompt', '\x1b[?2004h❯\u00a0', Date.now())
   vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
     handle,
     condition: 'tui-idle',

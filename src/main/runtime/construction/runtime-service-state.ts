@@ -76,6 +76,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     onConsumerAvailabilityChanged: () => this.refreshTerminalSideEffectConsumerAvailability()
   })
 
+  readonly generatedInputNotices = this.clientEvents.generatedInputNotices
+
   protected readonly nativeChatDraftResolutions = new RuntimeNativeChatDraftResolutions({
     resolveOwner: (handle) => this.resolveNativeChatLaunchDraftOwner(handle),
     listMobileSnapshots: () => this.mobileSessionTabsByWorktree,

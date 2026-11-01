@@ -1,3 +1,4 @@
+import type { GeneratedAgentInputNotice } from './generated-agent-input-notice'
 import type { CreateWorktreeResult } from './worktree/create-types'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -12,6 +13,7 @@ import type { WorktreeSortOrderUpdate } from './worktree/sort-order-update'
 import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-feed-contract'
 
 export type RuntimeClientEvent =
+  | { type: 'generatedInputNoticesChanged'; notices: GeneratedAgentInputNotice[] }
   | { type: 'reposChanged' }
   | { type: 'nativeChatQueueFollowUpsChanged'; queueFollowUps: boolean }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */
@@ -66,6 +68,7 @@ export type RuntimeClientEvent =
 export type RuntimeClientEventStreamMessage =
   | ({ type: 'ready'; subscriptionId: string } & {
       snapshot?: {
+        generatedInputNotices?: GeneratedAgentInputNotice[]
         nativeChatQueueFollowUps?: boolean
         repos?: unknown[]
         sshStates?: { targetId: string; state: SshConnectionState }[]

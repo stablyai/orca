@@ -23,7 +23,8 @@ export function pasteAgentLaunchPromptOnceReady(args: {
     worktreeId,
     tabId,
     agent,
-    submitted: submit
+    submitted: submit,
+    content: args.content
   })
   return deliverLaunchPromptToAgentTab({
     tabId,

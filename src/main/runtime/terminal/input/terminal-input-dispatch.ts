@@ -227,6 +227,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     prompt: string,
     options: RuntimeAgentPromptWriteOptions
   ): Promise<RuntimeTerminalSend> {
+    options = { ...options, inputDeadline: options.inputDeadline ?? Date.now() + 60_000 }
     // Why the consuming agent: the foreground process reads the bytes; launchAgent covers startup.
     const payloadFor = (ptyId: string): string => {
       // Why: a launch prompt replaced the desktop's draft paste, so it sends that paste's bytes.

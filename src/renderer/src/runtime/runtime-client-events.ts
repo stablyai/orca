@@ -36,7 +36,7 @@ export async function subscribeRuntimeClientEvents(
   return { unsubscribe: handle.unsubscribe }
 }
 
-function handleRuntimeClientEventResponse(
+export function handleRuntimeClientEventResponse(
   response: RuntimeRpcResponse<unknown>,
   onEvent: (event: RuntimeClientEvent) => void,
   onError: (error: unknown) => void,
@@ -51,6 +51,12 @@ function handleRuntimeClientEventResponse(
   }
   const message = response.result as RuntimeClientEventStreamMessage
   if (message.type === 'ready') {
+    if (message.snapshot?.generatedInputNotices) {
+      onEvent({
+        type: 'generatedInputNoticesChanged',
+        notices: message.snapshot.generatedInputNotices
+      })
+    }
     for (const sshState of message.snapshot?.sshStates ?? []) {
       const state = admitSshConnectionState(sshState.state, sshState.targetId)
       if (state) {
@@ -82,6 +88,7 @@ function isRuntimeClientEvent(
   message: RuntimeClientEventStreamMessage
 ): message is RuntimeClientEvent {
   return (
+    message.type === 'generatedInputNoticesChanged' ||
     message.type === 'reposChanged' ||
     message.type === 'worktreesChanged' ||
     message.type === 'nativeChatLaunchDraftResolved' ||

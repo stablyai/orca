@@ -57,6 +57,11 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
   subscribeToRuntimeTerminalData: testState.subscribeToRuntimeTerminalData
 }))
 
+vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({
+  readPtyInputScreen: async () => ({ lines: ['❯ '], alternateScreen: false })
+}))
+vi.mock('./launch-agent-paste-timeout-notice', () => ({ showGeneratedInputNotice: vi.fn() }))
+
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
 const RENDER_QUIET_MS = 1500
@@ -91,6 +96,10 @@ describe('post-paste submit retry Enter', () => {
     testState.sendRuntimePtyInputVerified.mockReset()
     testState.sendRuntimePtyInputVerified.mockResolvedValue(true)
     testState.inspectRuntimeTerminalProcess.mockReset()
+    testState.inspectRuntimeTerminalProcess.mockResolvedValue({
+      foregroundProcess: 'node',
+      hasChildProcesses: true
+    })
     testState.subscribeToRuntimeTerminalData.mockReset()
   })
 
@@ -116,6 +125,10 @@ describe('post-paste submit retry Enter', () => {
   })
 
   it('sends exactly one Enter for agents without a submit retry delay', async () => {
+    testState.inspectRuntimeTerminalProcess.mockResolvedValue({
+      foregroundProcess: 'gemini',
+      hasChildProcesses: false
+    })
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
@@ -196,7 +209,7 @@ async function signalCodexComposerReady(): Promise<void> {
   await flushMicrotasks()
 }
 
-async function flushMicrotasks(iterations = 2): Promise<void> {
+async function flushMicrotasks(iterations = 30): Promise<void> {
   for (let index = 0; index < iterations; index += 1) {
     await Promise.resolve()
   }

@@ -153,16 +153,12 @@ async function deliverAgentStartupToTerminal(
   const draftPrompt = startup.draftPrompt ?? null
   // Legacy stdin-after-start agents need live typed/submitted prompts; wait for agent ownership before writing.
   if (startup.followupPrompt) {
-    const delivered = await sendFollowupPromptWhenAgentReady({
+    await sendFollowupPromptWhenAgentReady({
       ptyId,
       agent: startup.agent,
       expectedProcess: startup.expectedProcess,
       prompt: startup.followupPrompt
     })
-    // Report dropped follow-ups so users know to open the workspace and paste manually.
-    if (!delivered) {
-      showAutomationPromptNotSentToast(startup.agent)
-    }
   }
 
   // Share atomic unsubmitted bracketed paste with direct work-item launches.
@@ -174,7 +170,8 @@ async function deliverAgentStartupToTerminal(
       // draftPrompt exists only without native-prefill delivery, so this paste is the first attempt.
       forcePaste: true,
       // Why: surface a dropped draft instead of silently losing it.
-      onTimeout: () => showAutomationPromptNotSentToast(startup.agent)
+      onTimeout: (certainty) =>
+        showAutomationPromptNotSentToast(startup.agent, draftPrompt, certainty)
     })
   }
 }

@@ -13,6 +13,13 @@ import {
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    waitForGeneratedTerminalInput: vi.fn(async () => true),
+    generatedInputScreenIsClear: vi.fn(async () => true),
+    generatedInputRefusal: () =>
+      new Error(
+        'Claude could not take your prompt. Answer any dialog in its terminal, then retry.'
+      ),
+    getTerminalPtyIdForHandle: () => 'pty-1',
     beginMobileInputFloor: vi.fn((ptyId: string, clientId: string) => ({
       commit: async () => {
         await overrides.mobileTookFloor?.(ptyId, clientId)

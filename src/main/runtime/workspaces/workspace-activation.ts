@@ -1,3 +1,4 @@
+import { captureGeneratedInputRecovery } from '../generated-agent-input-notices'
 import { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
 import {
   type RuntimeNavigationTarget,
@@ -210,7 +211,12 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
   }
 
   protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
-    pasteWorktreeStartupDraftWhenReady(this.getWorktreeStartupReadinessHost(), handle, draft)
+    const recover = captureGeneratedInputRecovery(this, handle, draft.agent, draft.content)
+    pasteWorktreeStartupDraftWhenReady(
+      { ...this.getWorktreeStartupReadinessHost(), recover },
+      handle,
+      draft
+    )
   }
 
   /** Before first input only: await composer readiness without startup dialogs or Codex provisional headers. stopOnDialog returns early for the caller's idle report. */
@@ -281,7 +287,16 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     options?: StartupFollowupPromptOptions
   ): Promise<boolean> {
     const host = this.getWorktreeStartupReadinessHost()
-    return deliverStartupFollowupPrompt(this, host, handle, followup, options)
+    const recover = options?.agentLaunch
+      ? null
+      : captureGeneratedInputRecovery(this, handle, followup.agent, followup.prompt)
+    return deliverStartupFollowupPrompt(this, host, handle, followup, {
+      ...options,
+      onRefused: (certainty) => {
+        options?.onRefused?.(certainty)
+        recover?.(certainty)
+      }
+    })
   }
 
   async provisionManagedWorktreeTerminals(

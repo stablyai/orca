@@ -166,13 +166,32 @@ export const TERMINAL_SEND_METHODS = [
       }
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
       const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
-      const beforeWrite =
-        orchestrationMutation && params.agentPrompt === true
-          ? async (ptyId?: string): Promise<void> => {
-              await assertSendPreconditions?.(ptyId)
+      const generated =
+        params.agentPrompt === true &&
+        hasText &&
+        params.interrupt !== true &&
+        params.inputKind !== 'query-reply'
+      const inputDeadline = Date.now() + 60_000
+      if (generated && !(await runtime.waitForGeneratedTerminalInput(params.terminal, signal))) {
+        throw runtime.generatedInputRefusal(
+          runtime.getTerminalPtyIdForHandle(params.terminal) ?? ''
+        )
+      }
+      const beforeWrite = generated
+        ? async (ptyId?: string): Promise<void> => {
+            await assertSendPreconditions?.(ptyId)
+            if (
+              !ptyId ||
+              !(await runtime.generatedInputScreenIsClear(ptyId)) ||
+              Date.now() >= inputDeadline
+            ) {
+              throw runtime.generatedInputRefusal(ptyId ?? '')
+            }
+            if (orchestrationMutation) {
               markMutationEffectPossible?.()
             }
-          : assertSendPreconditions
+          }
+        : assertSendPreconditions
       const useSettledAgentPrompt =
         params.agentPrompt === true &&
         hasText &&
@@ -197,6 +216,8 @@ export const TERMINAL_SEND_METHODS = [
         result = useSettledAgentPrompt
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
               inputKind: 'driving',
+              inputReady: true,
+              inputDeadline,
               inputSource,
               beforeWrite,
               observationSignal: signal,
