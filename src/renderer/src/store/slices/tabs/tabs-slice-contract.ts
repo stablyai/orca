@@ -158,6 +158,11 @@ export type TabsSlice = {
     targetGroupId: string,
     opts?: { index?: number; activate?: boolean; recordInteraction?: boolean }
   ) => boolean
+  moveTabToWorktree: (
+    tabId: string,
+    targetWorktreeId: string,
+    opts?: { activateWorktree?: boolean; recordInteraction?: boolean }
+  ) => boolean
   dropUnifiedTab: (
     tabId: string,
     target: {

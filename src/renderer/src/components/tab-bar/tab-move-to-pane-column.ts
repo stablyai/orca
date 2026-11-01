@@ -82,3 +82,49 @@ export function moveTabToNewPaneColumn(args: {
   }
   return moved
 }
+
+export type MoveToWorktreeTarget = {
+  id: string
+  label: string
+}
+
+export function resolveMoveToWorktreeTargets(unifiedTabId: string): MoveToWorktreeTarget[] {
+  const state = useAppStore.getState()
+  const sourceWorktreeId = Object.entries(state.unifiedTabsByWorktree ?? {}).find(([, tabs]) =>
+    tabs.some((candidate) => candidate.id === unifiedTabId)
+  )?.[0]
+  if (!sourceWorktreeId) {
+    return []
+  }
+  const sourceRepoId = sourceWorktreeId.includes('::') ? sourceWorktreeId.split('::')[0] : null
+  const worktreesByRepo = state.worktreesByRepo ?? {}
+  const sameRepo: MoveToWorktreeTarget[] = []
+  const otherRepos: MoveToWorktreeTarget[] = []
+
+  for (const [repoKey, worktrees] of Object.entries(worktreesByRepo)) {
+    if (!Array.isArray(worktrees)) {
+      continue
+    }
+    for (const wt of worktrees) {
+      if (!wt || wt.isArchived || wt.id === sourceWorktreeId) {
+        continue
+      }
+      const label = wt.displayName || wt.branch?.replace(/^refs\/heads\//, '') || wt.path || wt.id
+      const entry: MoveToWorktreeTarget = { id: wt.id, label }
+      if (sourceRepoId && (wt.repoId === sourceRepoId || repoKey === sourceRepoId)) {
+        sameRepo.push(entry)
+      } else {
+        otherRepos.push(entry)
+      }
+    }
+  }
+  return [...sameRepo, ...otherRepos]
+}
+
+export function moveTabToTargetWorktree(unifiedTabId: string, targetWorktreeId: string): boolean {
+  const state = useAppStore.getState()
+  if (typeof state.moveTabToWorktree !== 'function') {
+    return false
+  }
+  return state.moveTabToWorktree(unifiedTabId, targetWorktreeId)
+}

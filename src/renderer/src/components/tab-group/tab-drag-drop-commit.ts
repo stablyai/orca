@@ -12,6 +12,10 @@ import {
 import { isPaneDropData, isTabDragData, type TabDragItemData } from './tab-drag-data'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
+import {
+  clearWorktreeTabDropHighlight,
+  resolveHoveredWorktreeDropTarget
+} from './cross-worktree-tab-drop'
 
 type AppState = ReturnType<typeof useAppStore.getState>
 
@@ -41,6 +45,19 @@ export function commitTabDragDrop({
   }
 
   const state = useAppStore.getState()
+  const hoveredWorktreeTarget = resolveHoveredWorktreeDropTarget(event, worktreeId)
+  clearWorktreeTabDropHighlight()
+  if (hoveredWorktreeTarget && typeof state.moveTabToWorktree === 'function') {
+    const movedCrossWorktree = state.moveTabToWorktree(
+      activeData.unifiedTabId,
+      hoveredWorktreeTarget.targetWorktreeId
+    )
+    if (movedCrossWorktree) {
+      finishDrag(false, activeData)
+      return
+    }
+  }
+
   const paneColumnSplit = resolveActivePaneColumnSplitTarget({
     event,
     groupsByWorktree: state.groupsByWorktree,
