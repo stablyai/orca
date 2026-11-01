@@ -124,13 +124,26 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
             {translate('auto.components.mobile.slides.HomeSlide.aefd110ea5', 'Pair a desktop')}
           </div>
         </div>
+
+        <HomeSectionRow
+          icon={<ListTodoIcon />}
+          title={translate('auto.components.mobile.slides.HomeSlide.a4c3f7b7aa', 'Tasks')}
+          subtitle={translate(
+            'auto.components.mobile.slides.HomeSlide.6bf743c08d',
+            'Issues and pull requests'
+          )}
+        />
+        <HomeSectionRow
+          icon={<CalendarClockIcon />}
+          title={translate('auto.components.mobile.slides.HomeSlide.eda5c8d01b', 'Automations')}
+          subtitle={translate(
+            'auto.components.mobile.slides.HomeSlide.cd2ad5b641',
+            'Schedule agent work and view runs'
+          )}
+        />
       </div>
 
       <div className="mp-home-bottom-bar">
-        <div className="mp-home-bar-button is-secondary">
-          <ListTodoIcon />
-          <span>{translate('auto.components.mobile.slides.HomeSlide.a4c3f7b7aa', 'Tasks')}</span>
-        </div>
         <div className="mp-home-bar-button is-primary">
           <PlusIcon />
           <span>
@@ -172,6 +185,35 @@ function JumpBackInRow({
   )
 }
 
+// Phone Home's Tasks and Automations sections: a heading over a one-row group.
+function HomeSectionRow({
+  icon,
+  title,
+  subtitle
+}: {
+  icon: React.JSX.Element
+  title: string
+  subtitle: string
+}): React.JSX.Element {
+  return (
+    <>
+      <div className="mp-home-heading">{title}</div>
+      <div className="mp-home-group">
+        <div className="mp-home-row">
+          <div className="mp-home-status">{icon}</div>
+          <div className="mp-home-text">
+            <div className="mp-home-title">{title}</div>
+            <div className="mp-home-subtitle">{subtitle}</div>
+          </div>
+          <div className="mp-home-trailing">
+            <ChevronIcon />
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
 function OrcaLogo(): React.JSX.Element {
   return (
     <svg className="mp-orca-logo" viewBox="0 0 318.60232 202.66667" fill="currentColor" aria-hidden>
@@ -207,6 +249,19 @@ function ListTodoIcon(): React.JSX.Element {
       <path d="M13 6h8" />
       <path d="M13 12h8" />
       <path d="M13 18h8" />
+    </svg>
+  )
+}
+
+function CalendarClockIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5" />
+      <path d="M16 2v4" />
+      <path d="M8 2v4" />
+      <path d="M3 10h5" />
+      <path d="M17.5 17.5 16 16.3V14" />
+      <circle cx="16" cy="16" r="6" />
     </svg>
   )
 }

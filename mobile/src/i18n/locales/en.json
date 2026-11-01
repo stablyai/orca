@@ -545,6 +545,9 @@
       "heading": "Jump back in",
       "lastOpened": "Last opened",
       "connectToOpen": "Connect {{desktop}} to open"
+    },
+    "sections": {
+      "tasksSubtitle": "Issues and pull requests"
     }
   },
   "hooks": {
