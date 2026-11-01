@@ -16,6 +16,10 @@ import { DEFAULT_BROWSER_MEMORY_SAVER_HOURS } from '../browser/guest-lifecycle/b
 import { DEFAULT_DISABLED_TUI_AGENTS } from '../agent-launch/catalog/tui-agent-selection'
 import { UI_LANGUAGE_SYSTEM } from '../i18n/ui-language'
 import {
+  DEFAULT_WINDOW_TITLE_SEPARATOR,
+  DEFAULT_WINDOW_TITLE_TEMPLATE
+} from '../window-title-format'
+import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from '../sidebar-list/appearance/left-sidebar-appearance'
@@ -279,6 +283,9 @@ export function buildDefaultSettings(args: {
     codexTerminalServerIsolation: true,
     codexSharedServerWarning: true,
     tabAutoGenerateTitle: false,
+    windowTitleShowWorkspace: false,
+    windowTitleTemplate: DEFAULT_WINDOW_TITLE_TEMPLATE,
+    windowTitleSeparator: DEFAULT_WINDOW_TITLE_SEPARATOR,
     confirmClosePinnedTab: true,
     editorPreviewTabsEnabled: true,
     keepComputerAwakeWhileAgentsRun: false,

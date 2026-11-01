@@ -13,6 +13,7 @@ import PinnedTabCloseDialog from './components/terminal-pane/layout/close/Pinned
 import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/sidebar/workspace-creation/base-ref-update/WorktreeBaseFallbackDialog'
 import ClaudeAccountSwitchDialog from './components/provider-accounts/claude/ClaudeAccountSwitchDialog'
+import { useWindowTitle } from './app-shell/use-window-title'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
 import { AppWorkspaceShell } from './app-shell/AppWorkspaceShell'
@@ -61,6 +62,8 @@ function App(): React.JSX.Element {
   }
   const floatingWorkspace = useFloatingWorkspacePanel()
   const onboardingGate = useOnboardingAndFeatureTips()
+  useWindowTitle()
+import { useWindowTitle } from './app-shell/use-window-title'
 
   useAppShellServices()
   // Load drafts before the startup chain so no failed step can skip them.

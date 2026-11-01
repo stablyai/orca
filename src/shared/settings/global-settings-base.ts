@@ -1,6 +1,7 @@
 import type { AntigravityChatAuthSettings } from '../agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { EmulatorOpeningSettings } from '../emulator/emulator-opening-preferences'
 import type { BrowserExtensionGlobalSettings } from '../browser/extensions/browser-extension-settings'
+import type { WindowTitleGlobalSettings } from '../window-title-format'
 import type { ClaudeAgentViewSettings } from '../agent-hook-listener/providers/claude/view/claude-agent-view'
 import type { WorktreeCardDisplaySettings } from '../worktree/card-display-settings-types'
 import type { BrowserLinkOpeningSettings } from '../browser/navigation/browser-link-opening-settings'
@@ -74,6 +75,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   BrowserMemorySaverGlobalSettings &
   PerfNoticeGlobalSettings &
   NestedWorkerDepthSettings &
+  WindowTitleGlobalSettings &
   AgentWorkspaceTrustSettings &
   KeybindingGlobalSettings &
   WorkspaceCleanupPolicySettings &

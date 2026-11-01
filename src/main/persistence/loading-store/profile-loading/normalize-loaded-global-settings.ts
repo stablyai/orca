@@ -31,6 +31,10 @@ import { replaceRetiredSpeechModelId } from '../../../speech/model-catalog'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { VoiceSettings } from '../../../../shared/speech/speech-types'
 import { dictationShortcutModeSettings } from '../../../../shared/speech/dictation/dictation-shortcut-mode'
+import {
+  normalizeWindowTitleSeparator,
+  normalizeWindowTitleTemplate
+} from '../../../../shared/window-title-format'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
 
@@ -170,6 +174,9 @@ export function normalizeLoadedGlobalSettings(
     mobilePairingCustomAddress,
     mobilePairingCustomAddresses,
     machineName: normalizeMachineName(parsed.settings?.machineName),
+    windowTitleShowWorkspace: parsed.settings?.windowTitleShowWorkspace === true,
+    windowTitleTemplate: normalizeWindowTitleTemplate(parsed.settings?.windowTitleTemplate),
+    windowTitleSeparator: normalizeWindowTitleSeparator(parsed.settings?.windowTitleSeparator),
     minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
     // Default-on values round-trip off-platform; macOS consumers gate the actual effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,

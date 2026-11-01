@@ -31,6 +31,10 @@ import { normalizeMachineName } from '../../../shared/remote-runtime/host-metada
 import { normalizeWorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
+  normalizeWindowTitleSeparator,
+  normalizeWindowTitleTemplate
+} from '../../../shared/window-title-format'
+import {
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
@@ -215,6 +219,14 @@ export function updateSettings(
   }
   if ('machineName' in updates) {
     sanitizedUpdates.machineName = normalizeMachineName(updates.machineName)
+  }
+  if ('windowTitleTemplate' in updates) {
+    sanitizedUpdates.windowTitleTemplate = normalizeWindowTitleTemplate(updates.windowTitleTemplate)
+  }
+  if ('windowTitleSeparator' in updates) {
+    sanitizedUpdates.windowTitleSeparator = normalizeWindowTitleSeparator(
+      updates.windowTitleSeparator
+    )
   }
   if ('mobilePairingCustomAddress' in updates) {
     sanitizedUpdates.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(

@@ -12,6 +12,7 @@ import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-form
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
+import { getWindowTitleEntries } from './appearance-window-title-search'
 
 export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
@@ -302,6 +303,7 @@ export function getAppearancePaneSearchEntries(
     ...getTitlebarEntries(),
     ...(options.showTilingWindowMode ? [getTilingWindowModeEntry()] : []),
     ...getReduceVisualEffectsEntries(),
+    ...getWindowTitleEntries(),
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
     ...(options.showWorkspaceCardLayout ? [getWorkspaceCardLayoutEntry()] : []),

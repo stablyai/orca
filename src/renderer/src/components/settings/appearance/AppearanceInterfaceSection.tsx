@@ -33,6 +33,7 @@ import {
 } from './themes/AppearanceThemeControl'
 import { useIconThemePickerLabels } from './use-appearance-picker-labels'
 import { AppearanceLanguageSetting } from './AppearanceLanguageSetting'
+import { AppearanceWindowTitleSetting } from './AppearanceWindowTitleSetting'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -291,6 +292,10 @@ export function AppearanceInterfaceSection({
           }
         />
       </SearchableSetting>
+
+      <AppearanceWindowTitleSetting {...{ settings, updateSettings, forceVisiblePrimary }} />
+
+      <AppearanceWindowTitleSetting {...{ settings, updateSettings, forceVisiblePrimary }} />
 
       {showAdvanced ? (
         <SettingsGroupDisclosure>
