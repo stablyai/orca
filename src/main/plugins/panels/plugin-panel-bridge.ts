@@ -25,6 +25,8 @@ const PLUGIN_JSON_VALUE = z.json()
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginWorkerHandle } from '../workers/plugin-host-process'
 import { PluginHostCallError } from '../workers/plugin-host-call-scope'
+import type { PluginRuntimeDelegate } from '../workers/plugin-host-service-bindings'
+import { readPluginWorkspaceChange } from '../plugin-runtime-binding'
 
 type PushChannel = {
   pluginKey: string
@@ -37,6 +39,8 @@ export type PluginPanelBridgeDependencies = {
   ensureWorker: (plugin: ValidDiscoveredPlugin) => Promise<PluginWorkerHandle>
   runningWorker: (pluginKey: string) => PluginWorkerHandle | null
   log: (pluginKey: string) => (line: string) => void
+  /** For replaying the current workspace to a panel that subscribes to `workspace.changed`. */
+  runtimeDelegate?: () => PluginRuntimeDelegate | null
   now?: () => number
 }
 
@@ -61,6 +65,8 @@ export class PluginPanelBridge {
   private readonly postBudgets = new Map<string, PanelMessageBudget>()
   // By panel, not channel: a frame may subscribe before its renderer opens the channel.
   private readonly subscriptions = new Map<string, Set<PluginEventName>>()
+  // Subscriptions still owed their current state, delivered once the panel's channel is open.
+  private readonly replays = new Map<string, Set<PluginEventName>>()
 
   constructor(private readonly deps: PluginPanelBridgeDependencies) {}
 
@@ -68,6 +74,7 @@ export class PluginPanelBridge {
   open(caller: PluginPanelCaller, pluginKey: string, deliver: PushChannel['deliver']): () => void {
     const channel: PushChannel = { pluginKey, deliver }
     this.channels.set(caller.id, channel)
+    void this.replay(caller.id)
     return () => {
       if (this.channels.get(caller.id) === channel) {
         this.channels.delete(caller.id)
@@ -79,6 +86,7 @@ export class PluginPanelBridge {
   close(panelId: string): void {
     this.channels.delete(panelId)
     this.subscriptions.delete(panelId)
+    this.replays.delete(panelId)
     this.lifetimes.get(panelId)?.abort()
     this.lifetimes.delete(panelId)
   }
@@ -94,6 +102,35 @@ export class PluginPanelBridge {
     const events = this.subscriptions.get(panelId) ?? new Set<PluginEventName>()
     events.add(event)
     this.subscriptions.set(panelId, events)
+    // Why: a panel that subscribes after the last change (or before Orca focused a workspace)
+    // would otherwise show nothing until the next one.
+    if (event === 'workspace.changed') {
+      const owed = this.replays.get(panelId) ?? new Set<PluginEventName>()
+      owed.add(event)
+      this.replays.set(panelId, owed)
+      void this.replay(panelId)
+    }
+  }
+
+  /** Delivers the current state for each subscription still owed it, once the channel is open. */
+  private async replay(panelId: string): Promise<void> {
+    const channel = this.channels.get(panelId)
+    const owed = this.replays.get(panelId)
+    const delegate = this.deps.runtimeDelegate?.()
+    if (!channel || !owed || !delegate) {
+      return
+    }
+    this.replays.delete(panelId)
+    for (const event of owed) {
+      const payload = await readPluginWorkspaceChange(delegate)
+      if (
+        this.channels.get(panelId) === channel &&
+        this.subscriptions.get(panelId)?.has(event) &&
+        this.deps.grantedCapabilities(channel.pluginKey)?.includes(PLUGIN_EVENT_CAPABILITY[event])
+      ) {
+        channel.deliver({ kind: 'event', event, payload })
+      }
+    }
   }
 
   /** Whether an open panel subscribed to `event`. */

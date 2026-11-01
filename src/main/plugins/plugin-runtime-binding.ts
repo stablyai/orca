@@ -7,6 +7,7 @@ import {
   projectPluginWorkspaceContext,
   terminalForPane,
   type PluginAgentStatusRow,
+  type PluginWorkspaceContext,
   type PluginWorkspaceTerminal
 } from './workers/plugin-workspace-projection'
 
@@ -80,6 +81,17 @@ export function createPluginAgentStatusForwarder(
   }
 }
 
+/** The `workspace.changed` payload for the context as it is now. */
+export async function readPluginWorkspaceChange(
+  delegate: PluginRuntimeDelegate
+): Promise<{ context: PluginWorkspaceContext }> {
+  const context = await delegate.resolveActiveWorktreeContext().catch(() => null)
+  const terminals = context
+    ? await listWorkspaceTerminals(delegate, context.worktreeId).catch(() => [])
+    : []
+  return { context: projectPluginWorkspaceContext(context, terminals) }
+}
+
 /**
  * `workspace.changed`: after workspace session writes settle (focus moves, terminals open, close
  * or are renamed), re-read the context and emit when it differs from the last one sent.
@@ -98,15 +110,11 @@ export function watchPluginWorkspaceContext(input: {
       last = null
       return
     }
-    const context = await input.delegate.resolveActiveWorktreeContext().catch(() => null)
-    const terminals = context
-      ? await listWorkspaceTerminals(input.delegate, context.worktreeId).catch(() => [])
-      : []
-    const projected = projectPluginWorkspaceContext(context, terminals)
-    const signature = JSON.stringify(projected)
+    const change = await readPluginWorkspaceChange(input.delegate)
+    const signature = JSON.stringify(change)
     if (signature !== last) {
       last = signature
-      input.events.emitEvent('workspace.changed', { context: projected })
+      input.events.emitEvent('workspace.changed', change)
     }
   }
   const stop = input.onSessionWritten(() => {

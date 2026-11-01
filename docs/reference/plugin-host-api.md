@@ -184,7 +184,7 @@ A worker receives the events its manifest lists in `contributes.events` through 
 | `workspace.created` | `{ workspaceId: string; kind: "worktree" \| "folder"; path: string; branch: string }` | A worktree workspace was created. |
 | `workspace.removed` | `{ workspaceId: string; kind: "worktree" \| "folder"; path: string }` | A worktree workspace was removed. |
 | `agent.status.changed` | `{ workspaceId: string \| null; paneKey: string; terminalId?: string; title?: string; state: "working" \| "blocked" \| "waiting" \| "done"; receivedAt: number; mainAgent?: { state: "working" \| "blocked" \| "waiting" \| "done"; outcome?: "success" \| "failure" \| "cancellation" \| "superseded" \| "interruption" \| "unconfirmed"; stateStartedAt: number } }` | An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it. |
-| `workspace.changed` | `{ context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } \| null }` | The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. |
+| `workspace.changed` | `{ context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } \| null }` | The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context. |
 
 ## Errors
 

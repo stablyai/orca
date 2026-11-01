@@ -46,8 +46,9 @@ agent events with `on(...)` (frames: `orca.on`) without `contributes.events`.
 2. Push `on('agent.status.changed', ({ terminalId, title, state }) => ...)` into
    `ctx.subscriptions` and update the row with that `terminalId` (the id `workspace.readContext`
    lists and `terminal.sendText` takes; `paneKey` is Orca's own id).
-3. Push `on('workspace.changed', ...)` too and re-run `agents.list`: it fires when focus moves or
-   terminals open, close or are renamed, with the new `readContext` answer in `context`.
+3. Push `on('workspace.changed', ...)` too and re-run `agents.list`: it fires once with the
+   current context as you subscribe, then when focus moves or terminals open, close or are
+   renamed, with the new `readContext` answer in `context`.
 4. Keep the rows in an atom and render them as a `Table` (or `List`/`ListItem`); show "since" with
    a `{ type: 'relative', at: stateStartedAt }` cell, which Orca keeps current. Never poll.
 5. Test it with `mockHost({ results: { 'agents.list': { agents: [...] } } })` and

@@ -160,3 +160,23 @@ describe('worker entry', () => {
     )
   })
 })
+
+describe('workspace.changed in workers', () => {
+  it('replays the current context to a handler as it subscribes', async () => {
+    let orca!: PluginWorkerOrcaApi
+    const { send, runtime } = await activate((api) => (orca = api))
+    const handler = vi.fn()
+    const disposed = vi.fn()
+    orca.events.on('workspace.changed', handler)
+    orca.events.on('workspace.changed', disposed).dispose()
+    const reads = send.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.method === 'workspace.readContext')
+    expect(reads).toHaveLength(2)
+    for (const read of reads) {
+      await runtime.handleMessage({ orca: 1, kind: 'res', id: read.id, result: { branch: 'main' } })
+    }
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledWith({ context: { branch: 'main' } }))
+    expect(disposed).not.toHaveBeenCalled()
+  })
+})

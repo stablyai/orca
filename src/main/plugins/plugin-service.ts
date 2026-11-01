@@ -82,7 +82,8 @@ export class PluginService {
       grantedCapabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
       ensureWorker: (plugin) => this.workerController.ensure(plugin),
       runningWorker: (pluginKey) => this.workerController.runningHandle(pluginKey),
-      log: (pluginKey) => this.installed.captureLog(pluginKey, 'warn')
+      log: (pluginKey) => this.installed.captureLog(pluginKey, 'warn'),
+      runtimeDelegate: () => this.runtimeDelegate
     })
     this.hostCall = createPluginServiceHostCall((pluginKey, caller) =>
       resolvePluginServiceHostCallPolicy({

@@ -275,7 +275,8 @@ To show the workspace's agents, list them once with `agents.list` (`agent:read`)
 `workspace.readContext` lists (with each terminal's `title`) and `terminal.sendText` takes; an
 event's `paneKey` is Orca's own pane id. `workspace.changed` (`workspace:read`) carries the new
 `workspace.readContext` answer whenever focus moves to another workspace or its terminals open,
-close or are renamed, so a panel never polls.
+close or are renamed, and once right when a panel or worker subscribes, so a panel never polls
+and never starts out stale.
 
 ```ts
 import { atom, host, on, read, set, update } from 'orca'

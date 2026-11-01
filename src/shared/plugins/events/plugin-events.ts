@@ -87,7 +87,7 @@ export const PLUGIN_EVENT_SUMMARIES: Record<PluginEventName, string> = {
   'agent.status.changed':
     'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it.',
   'workspace.changed':
-    'The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers.'
+    'The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context.'
 }
 
 export type PluginEventPayload<E extends PluginEventName> = z.infer<

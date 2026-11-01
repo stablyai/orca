@@ -1,7 +1,7 @@
 /**
  * Invariant: a panel can show the workspace's agents without polling. `agents.list` names each
  * agent's terminal, `agent.status.changed` reaches the panel with the same `terminalId`, and
- * `workspace.changed` arrives when a terminal opens.
+ * `workspace.changed` arrives on subscribe (the current context) and again when a terminal opens.
  */
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -79,6 +79,17 @@ test('a panel lists agents and hears their status and workspace changes', async 
       'workspace.readContext'
     )
     expect(context.terminals.length).toBeGreaterThan(0)
+    // Replay on subscribe: the panel heard the focused workspace without any change happening.
+    await expect
+      .poll(async () => {
+        const changes =
+          (await readInGuest<{ context: { displayName: string } | null }[]>(
+            guest,
+            'window.__seen.workspace'
+          )) ?? []
+        return changes[0]?.context?.displayName ?? null
+      })
+      .not.toBeNull()
 
     const endpoint = await readHookEndpoint(electronApp)
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)

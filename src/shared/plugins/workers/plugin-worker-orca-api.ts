@@ -139,9 +139,23 @@ export function createPluginWorkerOrcaApi(input: {
         const handlers = tables.events.get(name) ?? new Set()
         tables.events.set(name, handlers)
         const v1Payload = name !== event || event === 'agent.status.changed'
-        return addTo(handlers, (payload: unknown) =>
+        const subscription = addTo(handlers, (payload: unknown) =>
           handler(v1Payload ? withV1WorktreeId(payload) : payload)
         )
+        if (event !== 'workspace.changed') {
+          return subscription
+        }
+        // Replay on subscribe: the handler starts from the context as it is now.
+        let active = true
+        void hostCall('workspace.readContext')
+          .then((context) => active && handler({ context }))
+          .catch(() => undefined)
+        return {
+          dispose: () => {
+            active = false
+            subscription.dispose()
+          }
+        }
       }
     }),
     host: Object.freeze({
