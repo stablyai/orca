@@ -18,6 +18,11 @@ vi.mock('../terminal-pane/remote-server-outage', () => ({
   selectWorkspaceRuntimeEnvironmentId: (_state: unknown, worktreeId: string | null) =>
     worktreeId === 'wt-wsl' ? 'wsl:ubuntu' : null
 }))
+// The workspace's owner, so every selector on the path reads a full workspace instead of the store's repos.
+vi.mock('@/lib/workspace-row-owner-host', () => ({
+  workspaceOwnerHostId: (_state: unknown, worktreeId: string) =>
+    worktreeId === 'wt-wsl' ? 'runtime:wsl:ubuntu' : null
+}))
 
 function Probe({ worktreeId }: { worktreeId: string | null }) {
   const host = useStoppedWslHost(worktreeId)
