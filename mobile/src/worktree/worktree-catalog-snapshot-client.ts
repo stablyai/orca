@@ -66,7 +66,38 @@ export function admitWorktreeCatalogResponse(
   return { kind: 'invalid' }
 }
 
+export type WorktreeCatalogSnapshotParams = {
+  afterSnapshotId?: string | null
+  acceptRowDelta: true
+  exactActivity?: true
+}
+
+/** Sends one catalog read with the snapshot fields; the refusal code is the host's, or request_failed. */
+export type WorktreeCatalogRequest = (
+  client: RpcClient,
+  snapshot: WorktreeCatalogSnapshotParams
+) => Promise<{ accepted: true; value: unknown } | { accepted: false; code: string }>
+
+const desktopCatalogRequest: WorktreeCatalogRequest = async (client, snapshot) => {
+  const reply = await worktreeCatalogRead.request(client, {
+    limit: WORKTREE_PS_FULL_LIMIT,
+    ...snapshot
+  })
+  const catalog = worktreeCatalogRead.interpret(reply)
+  if (catalog.accepted) {
+    return { accepted: true, value: catalog.value }
+  }
+  // The refusal code the caller reports lives on the envelope; no acceptance policy carries it.
+  const code = reply.ok ? undefined : reply.error?.code
+  return {
+    accepted: false,
+    code: typeof code === 'string' && code.length > 0 ? code : 'request_failed'
+  }
+}
+
 export type WorktreeCatalogSnapshotOptions = {
+  /** The catalog this client snapshots; the desktop's own worktree.ps when absent. */
+  request?: WorktreeCatalogRequest
   /**
    * Read uncoarsened activity, as a reader that ranks or shows it did before snapshots. With no token
    * the read sends no snapshot id at all, so a host without row deltas answers its exact legacy catalog.
@@ -91,20 +122,13 @@ export class WorktreeCatalogSnapshotClient {
     }
     const requestedSnapshotId = this.snapshotId
     const exact = this.options.exactActivity === true
-    const reply = await worktreeCatalogRead.request(client, {
-      limit: WORKTREE_PS_FULL_LIMIT,
+    const catalog = await (this.options.request ?? desktopCatalogRequest)(client, {
       ...(exact && requestedSnapshotId === null ? {} : { afterSnapshotId: requestedSnapshotId }),
       acceptRowDelta: true,
-      ...(exact ? { exactActivity: true } : {})
+      ...(exact ? { exactActivity: true as const } : {})
     })
-    const catalog = worktreeCatalogRead.interpret(reply)
     if (!catalog.accepted) {
-      // The refusal code the caller reports lives on the envelope; no acceptance policy carries it.
-      const code = reply.ok ? undefined : reply.error?.code
-      return {
-        kind: 'request_failed',
-        code: typeof code === 'string' && code.length > 0 ? code : 'request_failed'
-      }
+      return { kind: 'request_failed', code: catalog.code }
     }
     return {
       kind: 'response',
