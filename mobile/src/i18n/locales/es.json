@@ -1050,6 +1050,11 @@
       "title": "Algo salió mal",
       "tryAgain": "Volver a intentar",
       "home": "Inicio"
+    },
+    "native-chat": {
+      "userMessage": {
+        "automationInstructions": "Instrucciones de automatización"
+      }
     }
   },
   "connection": {
