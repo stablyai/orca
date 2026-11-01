@@ -17,6 +17,11 @@ import { createDevServeConfig } from './config/build-plugins/dev-serve-config'
 import { resolveBuildSourceCommit } from './config/scripts/build-source-commit.mjs'
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
+  // Keep the pure-JS preview decoder and its dependency versions inside the worker bundle.
+  '@jimp/core',
+  '@jimp/js-jpeg',
+  '@jimp/js-png',
+  '@jimp/plugin-resize',
   'stream-json',
   'stream-chain',
   '@xterm/headless',

@@ -14,6 +14,7 @@ export const ORCAD_SERVER_BUILD_TARGET = 'node24'
 // Host entry points must load before Orca selects its bundled runtime.
 const ORCAD_COMPAT_BUILD_TARGET = 'node18'
 export const ORCAD_CHILD_ENTRY_POINTS = {
+  imagePreview: 'src/main/runtime/runtime-image-preview-worker-entry.ts',
   watcher: 'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.ts',
   daemon: 'src/main/daemon/daemon-entry.ts',
   writer: 'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts',
