@@ -17,6 +17,7 @@ test('opens an unregistered host HTML path from a terminal and keeps asset acces
   orcaPage,
   testRepoPath
 }, testInfo) => {
+  // Boots a paired hub and client, then opens two documents and approves their asset folders.
   test.setTimeout(240_000)
   const directory = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-outside-html-')))
   const filePath = path.join(directory, 'proposal.html')
