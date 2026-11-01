@@ -5,19 +5,22 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { claudeUnwrittenUserMessageError } from '../../claude/claude-agent-sdk-user-message-queue'
-import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from '../../claude/structured/claude-structured-session-adapter'
 import {
   fakeClaude,
   PROVIDER_SESSION_ID,
   type FakeConnection
-} from '../../claude/claude-structured-session-test-support'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+} from '../../claude/structured/claude-structured-session-test-support'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
@@ -113,6 +116,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

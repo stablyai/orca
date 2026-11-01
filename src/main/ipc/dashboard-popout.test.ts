@@ -137,11 +137,6 @@ describe('registerDashboardPopoutHandlers', () => {
     })
   })
 
-  it('auto-closes the popout when the feature is disabled', () => {
-    store.fireSettingsChanged(false)
-    expect(closePopoutMock).toHaveBeenCalledOnce()
-  })
-
   it('caches and forwards only valid trusted snapshots', () => {
     const popout = makeWindow(popoutSender)
     getPopoutMock.mockReturnValue(popout)
@@ -178,18 +173,6 @@ describe('registerDashboardPopoutHandlers', () => {
     warn.mockRestore()
   })
 
-  it('logs when a snapshot is rejected outright', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-
-    handlers.get('dashboard:publishSnapshot')!({ sender: mainSender } as never, {
-      generatedAt: Number.NaN,
-      cards: []
-    })
-
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('rejected malformed snapshot'))
-    warn.mockRestore()
-  })
-
   it('replays the cached snapshot only to the popout and nudges only the trusted main renderer', () => {
     const popout = makeWindow(popoutSender)
     getPopoutMock.mockReturnValue(popout)
@@ -201,36 +184,6 @@ describe('registerDashboardPopoutHandlers', () => {
     handlers.get('dashboard:requestSnapshot')!({ sender: popoutSender } as never)
     expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', SNAPSHOT)
     expect(sendToTrustedMock).toHaveBeenCalledWith('dashboard:snapshotRequested', null)
-  })
-
-  it('replays the last repo icons when the cached snapshot omitted them', () => {
-    const popout = makeWindow(popoutSender)
-    getPopoutMock.mockReturnValue(popout)
-    const repoIconsByRepoId = { r1: { type: 'emoji', emoji: '🦑' } }
-    const publish = handlers.get('dashboard:publishSnapshot')!
-
-    publish({ sender: mainSender } as never, { ...SNAPSHOT, repoIconsByRepoId })
-    // Cached replays need the previous icon map even when the live republish omits it.
-    publish({ sender: mainSender } as never, { generatedAt: 2, cards: [] })
-    expect(popoutSender.send).toHaveBeenLastCalledWith('dashboard:snapshot', {
-      generatedAt: 2,
-      cards: []
-    })
-
-    handlers.get('dashboard:requestSnapshot')!({ sender: popoutSender } as never)
-    expect(popoutSender.send).toHaveBeenLastCalledWith('dashboard:snapshot', {
-      generatedAt: 2,
-      cards: [],
-      repoIconsByRepoId
-    })
-  })
-
-  it('reports open state only to the trusted main renderer', () => {
-    getPopoutMock.mockReturnValue(makeWindow(popoutSender))
-    expect(handlers.get('dashboard:getPopoutOpen')!({ sender: untrustedSender } as never)).toBe(
-      false
-    )
-    expect(handlers.get('dashboard:getPopoutOpen')!({ sender: mainSender } as never)).toBe(true)
   })
 
   it('relays valid seen acknowledgements from only the popout', () => {

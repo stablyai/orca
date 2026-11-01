@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
-import { eraseRpcMethods, type RpcContext } from '../../../core'
+import { isStreamingMethod, eraseRpcMethods, type RpcContext } from '../../../core'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
@@ -58,7 +58,7 @@ describe('orchestration.check on a federated attachment across a restart', () =>
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (entry) => entry.name === 'orchestration.check'
     )
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error('orchestration.check is not registered')
     }
     const parsed = method.params
@@ -95,7 +95,7 @@ describe('orchestration.check on a federated attachment across a restart', () =>
     store.markRemoteAttachmentReady(dispatchId)
   }
 
-  it('replays the coordinator instruction and takes its ack after the app restarts', async () => {
+  it('keeps a handled coordinator instruction handled and acks idempotently after the app restarts', async () => {
     directory = mkdtempSync(join(tmpdir(), 'orca-federated-check-'))
     const path = join(directory, 'orchestration.db')
 
@@ -123,12 +123,11 @@ describe('orchestration.check on a federated attachment across a restart', () =>
     expect(deliveryId).not.toBeNull()
     ;(db as OrchestrationDb).close()
 
-    // The worker's process outlives the app; its instruction is still unacknowledged.
+    // The worker's process outlives the app; an older CLI may still ack the handled batch.
     const second = launch(path)
-    const replayed = await check(second)
-    expect(replayed.deliveryId).toBe(deliveryId)
-    expect(replayed.replayed).toBe(true)
-    expect(replayed.messages.map((message) => message.id)).toEqual(['msg_federated_1'])
+    expect(await check(second)).toMatchObject({ deliveryId: null, count: 0 })
+    const history = await check(second, { all: true })
+    expect(history.messages.map((message) => message.id)).toEqual(['msg_federated_1'])
 
     const acknowledged = await check(second, { ack: deliveryId })
     expect(acknowledged.acknowledged).toBe(deliveryId)

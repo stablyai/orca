@@ -2,15 +2,18 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   adapterFor,
   answerWithOpenedTurn,
   fakeCodex,
   THREAD_ID
 } from '../../codex/codex-structured-session-adapter-fixture'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
@@ -207,6 +210,7 @@ it('steers inherited applied inputs and sends an explicit effort or tier change 
   } finally {
     await host.flushAllStreamedEvents()
     await adapter.closeAll()
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   }
 })

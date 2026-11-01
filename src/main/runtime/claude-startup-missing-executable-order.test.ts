@@ -18,7 +18,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime,
   waitForStructuredAgentSessionRecovery
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import {
   createTestParams,
   CREATE_TEST_CALLER as CALLER
@@ -27,9 +27,9 @@ import {
   hostTestMessage,
   HOST_TEST_SESSION as SESSION
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createStructuredAgentSessionOperationId } from '../../shared/structured-agent-session-mutation'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 const trace = vi.hoisted(() => {
   let rows: {

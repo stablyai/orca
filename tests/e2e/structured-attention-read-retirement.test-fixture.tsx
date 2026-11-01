@@ -8,20 +8,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 import type { NotificationSettings } from '../../src/shared/notification-settings-types'
-import type { AgentJournalRenderItem } from '../../src/shared/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../src/shared/agent-session-wire'
+import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionHistoryPage } from '../../src/shared/agent-session/agent-session-wire'
 import type { RuntimeRpcResponse } from '../../src/shared/runtime-rpc-envelope'
 import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'
 import {
   structuredAgentSessionPaneKey,
   projectStructuredAgentSessionStatusState
-} from '../../src/shared/structured-agent-session-projection'
+} from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
 } from '../../src/main/runtime/runtime-mobile-notification-controller'
-import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/structured-agent-session-mobile-attention'
+import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
 import {
   call,
   installStructuredHostStub,
@@ -51,6 +51,7 @@ export const REMOTE_TARGET = { kind: 'environment', environmentId: 'relay-host' 
 export const NOTIFICATION_SETTINGS: NotificationSettings = {
   enabled: true,
   agentTaskComplete: true,
+  agentNeedsInput: true,
   terminalBell: true,
   suppressWhenFocused: true,
   customSoundId: 'system',
@@ -211,6 +212,7 @@ beforeEach(() => {
     readNotificationSettings: () => ({ ...NOTIFICATION_SETTINGS, suppressWhenFocused: false }),
     readWorkspaceLabels: () => ({}),
     isWorkspaceMuted: () => false,
+    readOrchestration: () => undefined,
     dispatch: (event) => controller.dispatch(event),
     reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
     now: () => 42
@@ -226,6 +228,7 @@ beforeEach(() => {
       ]
     ]),
     readStatusState: () => projectStructuredAgentSessionStatusState(fixture.items),
+    readChildWork: () => undefined,
     now: hostClock
   })
   fixture = {

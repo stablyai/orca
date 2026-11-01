@@ -1,6 +1,6 @@
 import { drainAgentHookSpoolAsync, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
-import { ClaudeAgentViewBridge } from '../../claude/agent-view-bridge'
+import { ClaudeAgentViewBridge } from '../../claude/agent-view/agent-view-bridge'
 
 export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServerRuntimeEnv {
   readonly claudeAgentViews = new ClaudeAgentViewBridge()
@@ -70,6 +70,7 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
         }
       }
       this.ownerStateInitialized = true
+      this.activateClaudeHelperObservations()
     }
   }
 }

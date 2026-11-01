@@ -129,13 +129,13 @@ const styles = themedStyleSheet(() => ({
   cancelButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   submitButton: {
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   buttonPressed: {
     opacity: 0.7

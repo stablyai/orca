@@ -35,7 +35,7 @@ export type CodexAppServerConnection = {
     /** `timeoutMs` null: no deadline; the caller bounds the wait. */
     options?: {
       timeoutMs?: number | null
-      onReply?: () => void
+      onReply?: (result?: unknown) => void
       onResult?: (result: unknown) => void
     }
   ) => Promise<unknown>

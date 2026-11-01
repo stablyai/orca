@@ -1,4 +1,4 @@
-import type { AgentSessionUnavailable } from '../../shared/agent-session-availability'
+import type { AgentSessionUnavailable } from '../../shared/agent-session/agent-session-availability'
 import type { spawnProcess } from '@orca/process-host'
 import type { ProviderLaunchReport } from '../provider-process/provider-launch-report'
 import type { AgentGenerationFailureOutput } from './agent-failure-output'

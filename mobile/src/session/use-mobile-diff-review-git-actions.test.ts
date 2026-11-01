@@ -55,7 +55,6 @@ describe('useMobileDiffReviewGitActions', () => {
         client,
         connState: 'connected',
         worktreeId: 'wt-1',
-        queue: [RENAMED_STAGED],
         setActionError,
         setBusyAction: () => {},
         loadReviewData: async () => {}

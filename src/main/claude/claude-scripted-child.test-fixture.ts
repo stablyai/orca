@@ -82,6 +82,7 @@ export const claudeScriptedChild: ScriptedAgentChildFactory = () => {
       exitVerdict: { root: 'live', tree: 'unverifiable' },
       initializationResult: () => init,
       getContextUsage: async () => ({}),
+      renameSession: async () => {},
       getSettings: async () => ({ effective: {} }),
       supportedModels: async () => [{ value: 'sonnet', displayName: 'Sonnet' }],
       setModel: async () => {},

@@ -144,16 +144,22 @@ export function claudeMainAgentStatusForPayload(
 export function markClaudeLeadTurnInterrupted(
   state: HookListenerState,
   paneKey: string
+): ReturnType<typeof markClaudeLeadTurnDone> {
+  return markClaudeLeadTurnDone(state, paneKey, 'cancellation')
+}
+
+/** End the lead turn without its Stop hook; an absent outcome is unknown, as on a plain Stop. */
+export function markClaudeLeadTurnDone(
+  state: HookListenerState,
+  paneKey: string,
+  outcome?: 'cancellation'
 ): {
   state: AgentStatusState
   workingMode?: AgentWorkingMode
   mainAgent?: AgentMainAgentStatus
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
 } {
-  const record = setClaudeMainAgentTurnState(state, paneKey, {
-    state: 'done',
-    outcome: 'cancellation'
-  })
+  const record = setClaudeMainAgentTurnState(state, paneKey, { state: 'done', outcome })
   const resolved = resolveClaudePaneStatus(state, paneKey, record)
   const mainAgent = claudeMainAgentStatusForPayload(record)
   return {

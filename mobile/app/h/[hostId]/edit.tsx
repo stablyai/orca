@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../../../src/theme/mobile-theme'
 import { themedStyleSheet } from '../../../src/theme/themed-styles'
 import { useMobileColorScheme } from '../../../src/theme/use-mobile-color-scheme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
@@ -20,21 +20,11 @@ import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-ed
 import { usePrimeHosts, useRefreshHostClient } from '../../../src/transport/host-client-hooks'
 import type { HostProfile } from '../../../src/transport/types'
 import { hostOs } from '../../../src/platform/host-os'
-import { SideSafeArea } from '../../../src/layout/side-safe-area'
 import { translate } from '../../../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../src/i18n/use-mobile-translation'
 import { TextField } from '../../../src/components/composer-input/TextField'
 
-// The host group leaves the Duo's status-bar rail to its pages; this native screen pads it.
-export default function EditHostRoute() {
-  return (
-    <SideSafeArea>
-      <EditHostScreen />
-    </SideSafeArea>
-  )
-}
-
-function EditHostScreen() {
+export default function EditHostScreen() {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const router = useRouter()
@@ -183,7 +173,7 @@ function EditHostScreen() {
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>
         <Pressable
-          style={styles.backButton}
+          style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
           onPress={leave}
           accessibilityRole="button"
           accessibilityLabel={t('common.back', 'Back')}
@@ -212,7 +202,10 @@ function EditHostScreen() {
       {loadError ? (
         <View style={styles.errorState}>
           <Text style={styles.errorText}>{loadError}</Text>
-          <Pressable style={styles.secondaryButton} onPress={leave}>
+          <Pressable
+            style={({ pressed }) => [styles.secondaryButton, pressed && pressedStyle]}
+            onPress={leave}
+          >
             <Text style={styles.secondaryButtonText}>{t('host.edit.goBack', 'Go back')}</Text>
           </Pressable>
         </View>
@@ -328,7 +321,7 @@ const styles = themedStyleSheet(() => ({
     minWidth: 64,
     height: 34,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.surfaceBright,
     alignItems: 'center',
     justifyContent: 'center'
@@ -395,7 +388,7 @@ const styles = themedStyleSheet(() => ({
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   secondaryButtonText: {

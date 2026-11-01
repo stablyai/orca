@@ -1,7 +1,15 @@
-import type { AgentSessionAccountKind } from '../../../shared/agent-session-availability'
-import { CLAUDE_DEFAULT_SETTING_SOURCES } from '../claude-structured-launch-resolution'
-import type { ClaudeAuthDiagnostic, ClaudeSession } from './claude-structured-session-state'
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
+import { CLAUDE_DEFAULT_SETTING_SOURCES } from './launch/claude-structured-launch-resolution'
+import type { ClaudeSession } from './claude-structured-session-state'
 import { AgentSessionAcquisitionRefusal } from '../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
+
+export type ClaudeAuthDiagnostic = {
+  apiKeySourceConfigured: boolean
+  baseUrlConfigured: boolean
+  authTokenConfigured: boolean
+  apiKeyConfigured: boolean
+  settingSources: readonly string[]
+}
 
 export type ClaudeInitObservation = {
   providerSessionId: string

@@ -11,7 +11,7 @@ import {
   agentSessionFailureFact,
   providerDiagnostic,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {

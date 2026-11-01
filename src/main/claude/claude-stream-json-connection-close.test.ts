@@ -1,4 +1,4 @@
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'

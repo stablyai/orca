@@ -18,9 +18,9 @@ import {
 // First-hand writer death evidence ends the child record in finally. Attempt/report every bookkeeping step;
 // expected changes presentation, never whether the dead child remains recorded.
 
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { PROVIDER_EXIT_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { PROVIDER_EXIT_ROW_PREFIX } from '../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'

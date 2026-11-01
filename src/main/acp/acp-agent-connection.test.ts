@@ -403,7 +403,8 @@ it.each(['root-exit', 'requested-close'] as const)(
       await import('./acp-structured-adapter.test-support')
     const { closeProviderTimelineRigs } =
       await import('../native-chat/agent-session-timeline/provider-timeline-assembler-test-support')
-    const { readAgentJournalTurn } = await import('../../shared/agent-session-turn-record')
+    const { readAgentJournalTurn } =
+      await import('../../shared/agent-session/lifecycle/agent-session-turn-record')
     const agent = new AcpScriptedAgent()
     const child = Object.assign(createFakePipedChild(), {
       pid: 9_999_999,

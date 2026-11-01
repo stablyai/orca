@@ -6,7 +6,7 @@ import {
   type NativeChatSettledTurns,
   type NativeChatTurnStatus,
   type NativeChatTurnTimingByTurn
-} from '../../../../shared/native-chat-turn-status'
+} from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 
 export type { NativeChatTurnStatus }
 

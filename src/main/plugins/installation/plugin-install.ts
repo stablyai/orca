@@ -34,6 +34,7 @@ import {
   splitQualifiedPluginKey
 } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { readPluginManifestText } from '../plugin-manifest-file'
+import { pluginCatalogTakeoverError } from './plugin-catalog-install-guard'
 
 export type { PluginInstallResult } from './plugin-install-staging'
 
@@ -101,6 +102,8 @@ export async function installPluginFromGit(input: {
   url: string
   /** `#ref` suffix: branch, tag, or full commit SHA. Empty = default branch. */
   ref: string
+  /** Commit the user was shown before installing; a ref that moved since fails. */
+  expectedCommit?: string
   hostVersion: string
   blockedPluginReason?: (pluginKey: string) => string | null
 }): Promise<PluginInstallResult> {
@@ -122,6 +125,9 @@ export async function installPluginFromGit(input: {
         destination: stagingDir,
         workingDirectory: tmpdir()
       })
+      if (input.expectedCommit && resolvedCommit !== input.expectedCommit) {
+        return { ok: false, error: 'plugin Git ref moved after it was checked; try again' }
+      }
       // Why the declared one last: a URL with no owner segment (`host/repo.git`) names nobody.
       const publisher =
         reinstall ?? gitUrlPluginPublisher(input.url) ?? (await declaredPublisher(stagingDir))
@@ -179,14 +185,13 @@ export async function installPluginFromMarketplace(input: {
       return { ok: false, error: 'plugin was removed before its update installed' }
     }
     // Why: a second catalog listing the same id must never take over an install silently.
-    if (
-      installedFrom &&
-      (installedFrom.url !== input.marketplace.url || installedFrom.ref !== input.marketplace.ref)
-    ) {
-      return {
-        ok: false,
-        error: `${input.expectedPluginKey} is installed from ${installedFrom.url}; remove it first to install it from another catalog`
-      }
+    const takeoverError = pluginCatalogTakeoverError(
+      input.expectedPluginKey,
+      entry?.source,
+      input.marketplace
+    )
+    if (takeoverError) {
+      return { ok: false, error: takeoverError }
     }
     const stagingDir = await mkdtemp(join(tmpdir(), 'orca-plugin-marketplace-install-'))
     try {

@@ -6,15 +6,15 @@ import { turnInputFor } from './codex-structured-message-options'
 import { reportedCodexPermissionMode } from './codex-structured-thread-open'
 import { admitCodexTurnPermission } from './codex-structured-turn-permission'
 import type { CodexSkillReport } from './codex-structured-skill-report'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentJournalMessageItem,
   AgentJournalTurnJoin
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
-import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+import { isCodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import { codexTurnRequestOptions } from './codex-structured-service-tier'
@@ -24,13 +24,6 @@ import {
   type CodexTurnOpenWaits
 } from './codex-structured-turn-open-wait'
 import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
-
-/** Allowlist turn overrides so saved options cannot replace the thread's permission policy. */
-const CODEX_TURN_OPTION_KEYS = new Set(['model', 'effort', 'personality', 'serviceTier'])
-
-export function isCodexTurnOptionKey(key: string): boolean {
-  return CODEX_TURN_OPTION_KEYS.has(key)
-}
 
 function checkDispatchAuthority(
   host: CodexTurnHost,
@@ -211,7 +204,13 @@ export async function startCodexTurn(
         },
         {
           timeoutMs: input.timeoutMs,
-          onReply: input.onReply,
+          onReply: (reply) => {
+            const turnId = readCodexTurnId(reply)
+            if (turnId) {
+              host.dispatchEchoes.repliedTurn(input.clientMessageId, host.threadId, turnId)
+            }
+            input.onReply?.()
+          },
           onResult: receiveStarted
         }
       )

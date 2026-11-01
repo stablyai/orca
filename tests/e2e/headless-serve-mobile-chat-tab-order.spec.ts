@@ -6,7 +6,7 @@ import { pairMobileClient } from './helpers/paired-mobile-client'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams
-} from '../../src/shared/structured-agent-session-create'
+} from '../../src/shared/agent-session/structured-agent-session-create'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
 import type { RuntimeWorktreePsSummary } from '../../src/shared/runtime-worktree-contracts'
 

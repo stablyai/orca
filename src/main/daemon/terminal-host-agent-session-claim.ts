@@ -1,9 +1,11 @@
+import { terminalStartError } from '../../shared/terminal-start-failure'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalCreationWork } from './terminal-creation-work'
 import type {
   ClaimedAgentPtyOwnerRegistry,
   PtyCreationDisposition
 } from '../../shared/claimed-agent-pty-owner'
-import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 
@@ -18,6 +20,21 @@ export type InternalCreateOrAttachOptions = CreateOrAttachOptions & {
   cancelSignal?: AbortSignal
 }
 
+function observeClaimedSessionExit(
+  onExit: InternalCreateOrAttachOptions['streamClient']['onExit']
+) {
+  let observedExit: { incarnationId: string; cause?: TerminalExitCause } | undefined
+  return {
+    get exit() {
+      return observedExit
+    },
+    onExit: (code: number, incarnationId: string, cause?: TerminalExitCause): void => {
+      observedExit = { incarnationId, cause }
+      onExit(code, incarnationId, cause)
+    }
+  }
+}
+
 export async function createOrAttachClaimedAgentSession(args: {
   options: InternalCreateOrAttachOptions
   owners: ClaimedAgentPtyOwnerRegistry
@@ -29,7 +46,16 @@ export async function createOrAttachClaimedAgentSession(args: {
     return await args.createOrAttach(args.options)
   }
   let created: CreateOrAttachResult | null = null
+  const observed = observeClaimedSessionExit(args.options.streamClient.onExit)
   const ensured = await args.owners.ensure({
+    exitedDuringStart: () =>
+      terminalStartError(
+        'agent_session_exited_during_start',
+        created?.isNew && created.incarnationId === observed.exit?.incarnationId
+          ? observed.exit.cause
+          : undefined,
+        created?.incarnationId
+      ),
     creation: args.options.creationWork?.completion,
     onJoin: (creation) => {
       if (creation) {
@@ -43,7 +69,11 @@ export async function createOrAttachClaimedAgentSession(args: {
     spawn: async ({ generation }) => {
       created = await args.createOrAttach({
         ...args.options,
-        agentSessionGeneration: generation
+        agentSessionGeneration: generation,
+        streamClient: {
+          ...args.options.streamClient,
+          onExit: observed.onExit
+        }
       })
       return { ptyId: args.options.sessionId }
     },

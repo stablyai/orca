@@ -23,7 +23,7 @@ import { NO_ACP_CHILD_STOPS } from './acp-structured-child-stop'
 import { prepareAcpStructuredLaunch } from './acp-structured-launch-preparation'
 import { AcpStructuredOptions } from './acp-structured-options'
 import { AcpStructuredPrompts } from './acp-structured-prompts'
-import { AcpLoadHistory } from './acp-history-replay'
+import { AcpLoadHistory } from './history/acp-history-replay'
 import {
   asReattachHistory,
   routeAcpSessionEvent,

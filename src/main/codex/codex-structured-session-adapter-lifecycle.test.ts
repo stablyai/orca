@@ -1,14 +1,12 @@
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import { AgentSessionAcquisitionExitUnprovenError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { CodexCloseOutcome } from './app-server/codex-app-server-connection-types'
 import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -16,14 +14,14 @@ import type {
 import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
-} from './codex-app-server-connection'
+} from './app-server/codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  CodexStructuredSessionAdapter,
-  type CodexStructuredLaunch,
-  type CodexStructuredSessionEvent
-} from './codex-structured-session-adapter'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import type {
+  CodexStructuredLaunch,
+  CodexStructuredSessionEvent
+} from './codex-structured-session-state'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 

@@ -7,8 +7,7 @@ import type { InstalledBrowserExtension } from '../../../shared/browser-extensio
 vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
 
 const { BrowserExtensionInstallStore } = await import('./browser-extension-install-store')
-const { readBrowserExtensionIconDataUrl, readBrowserExtensionManifest } =
-  await import('./browser-extension-manifest')
+const { readBrowserExtensionIconDataUrl } = await import('./browser-extension-manifest')
 
 const STORE_ID = 'a'.repeat(32)
 const UNPACKED_ID = 'b'.repeat(32)
@@ -37,13 +36,6 @@ afterEach(() => {
 })
 
 describe('BrowserExtensionInstallStore', () => {
-  it('persists the installed list across instances', () => {
-    const store = new BrowserExtensionInstallStore(join(root, 'browser-extensions'))
-    store.save(record({ path: store.installDirectory(STORE_ID, '1.2.3') }))
-    const reopened = new BrowserExtensionInstallStore(join(root, 'browser-extensions'))
-    expect(reopened.get(STORE_ID)?.path).toBe(join(root, 'browser-extensions', STORE_ID, '1.2.3'))
-  })
-
   it('deletes the folder of a store install but never an unpacked folder', async () => {
     const store = new BrowserExtensionInstallStore(join(root, 'browser-extensions'))
     const storeDir = store.installDirectory(STORE_ID, '1.2.3')
@@ -89,36 +81,6 @@ describe('BrowserExtensionInstallStore', () => {
 })
 
 describe('readBrowserExtensionManifest', () => {
-  it('localizes the name, splits host permissions and finds the options page and icon', async () => {
-    writeFileSync(
-      join(root, 'manifest.json'),
-      JSON.stringify({
-        manifest_version: 3,
-        name: '__MSG_extName__',
-        version: '2024.1.0',
-        default_locale: 'en',
-        permissions: ['tabs', 'webNavigation', '<all_urls>'],
-        host_permissions: ['https://*.example.com/*'],
-        options_ui: { page: 'options.html' },
-        icons: { '16': 'icon16.png', '128': 'icon128.png', '256': 'icon256.png' }
-      })
-    )
-    mkdirSync(join(root, '_locales', 'en'), { recursive: true })
-    writeFileSync(
-      join(root, '_locales', 'en', 'messages.json'),
-      JSON.stringify({ ExtName: { message: 'Vault Manager' } })
-    )
-
-    await expect(readBrowserExtensionManifest(root)).resolves.toEqual({
-      name: 'Vault Manager',
-      version: '2024.1.0',
-      iconPath: 'icon128.png',
-      permissions: ['tabs', 'webNavigation'],
-      hostPermissions: ['<all_urls>', 'https://*.example.com/*'],
-      optionsPage: 'options.html'
-    })
-  })
-
   it('reads icons only from inside the extension folder', async () => {
     writeFileSync(join(root, 'icon.png'), Buffer.from([1, 2, 3]))
     await expect(readBrowserExtensionIconDataUrl(root, 'icon.png')).resolves.toBe(

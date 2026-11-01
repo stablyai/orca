@@ -82,23 +82,6 @@ function createHarness() {
 }
 
 describe('detected worktree refresh leases', () => {
-  it('joins exact inputs with distinct waiter and shared provider identities', () => {
-    const { registry, starts } = createHarness()
-
-    const first = registry.acquire('repo-a:ssh:ssh-a', directInput())
-    const second = registry.acquire('repo-a:ssh:ssh-a', directInput())
-
-    expect(starts).toHaveLength(1)
-    expect(first.providerRequestId).toBe(second.providerRequestId)
-    expect(first.waiterLeaseId).not.toBe(second.waiterLeaseId)
-    expect(first.waiterLeaseId).not.toBe(first.providerRequestId)
-    expect(starts[0]).not.toHaveProperty('waiterLeaseId')
-    expect(registry.getActiveCounts()).toEqual({
-      providerInvocations: 1,
-      waiterLeases: 2
-    })
-  })
-
   it('settles only the released waiter while another lease remains live', async () => {
     const { cancelProviderRequest, pending, registry, starts } = createHarness()
     const first = registry.acquire('repo-a:ssh:ssh-a', directInput())

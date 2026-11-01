@@ -1,5 +1,5 @@
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
+import type { SubmissionRejectionFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { StructuredAgentSessionSetOptionInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AcpAgentError } from './acp-errors'

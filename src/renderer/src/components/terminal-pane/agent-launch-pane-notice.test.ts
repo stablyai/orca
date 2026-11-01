@@ -66,6 +66,47 @@ describe('localized startup failure surfaces', () => {
   })
 })
 
+it.each(['not-started', 'unconfirmed'] as const)(
+  'shows capacity once in a %s launch notice, retaining uncertainty',
+  (kind) => {
+    const pane = render(
+      React.createElement(AgentLaunchPaneNotice, {
+        refusal:
+          kind === 'not-started'
+            ? {
+                kind,
+                code: 'agent_session_exited_during_start',
+                initialOutputDiagnostic: 'git-bash-console-capacity'
+              }
+            : { kind, initialOutputDiagnostic: 'git-bash-console-capacity' },
+        agentId: 'codex',
+        tabId: 'capacity'
+      })
+    )
+    expect(pane.container.textContent).toContain('Close some Git Bash terminals')
+    expect(pane.container.textContent?.match(/128/g)).toHaveLength(1)
+    expect(pane.container.textContent?.includes("Couldn't confirm Codex started")).toBe(
+      kind === 'unconfirmed'
+    )
+  }
+)
+
+it('keeps translated uncertainty and the capacity fallback on the shipped Chinese surface', async () => {
+  await i18n.changeLanguage(await loadRendererUiLanguage('zh'))
+  const pane = render(
+    React.createElement(AgentLaunchPaneNotice, {
+      refusal: { kind: 'unconfirmed', initialOutputDiagnostic: 'git-bash-console-capacity' },
+      agentId: 'codex',
+      tabId: 'capacity-fallback'
+    })
+  )
+  expect(pane.container.textContent).toContain('无法确认 Codex 已启动。请先检查其终端，再重试。')
+  expect(pane.container.textContent).toContain(
+    'Git Bash reported its limit of 128 open terminals on this PC while starting Codex.'
+  )
+  expect(pane.container.textContent?.match(/128/g)).toHaveLength(1)
+})
+
 describe('which pane shows it', () => {
   const outcome = { kind: 'not-started' as const, code: 'boom' }
   const tab = { agentLaunchPane: { leafId: 'leaf-1', outcome } }

@@ -1,3 +1,7 @@
+import {
+  terminalPaneViewport,
+  type TerminalPaneViewport
+} from '../session/mobile-terminal-pane-layout'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,7 +16,8 @@ vi.mock('react-native', () => ({
 
 const HANDLE = 'term-1'
 
-function refitHarness(cellWidth: number) {
+/** The session's refit over one open terminal whose document reported a `cellWidth` box. */
+function refitHarness(cellWidth: number, split = false) {
   const terminal: TerminalWebViewHandle = {
     prepareForForegroundRecovery: vi.fn(),
     write: vi.fn(),
@@ -36,11 +41,30 @@ function refitHarness(cellWidth: number) {
   const terminalFrameRef: { current: { width: number; height: number } | null } = {
     current: { width: 427, height: 710 }
   }
+  const terminalPaneViewportsRef = { current: new Map<string, TerminalPaneViewport>() }
+  const firstGeometry = terminalPaneViewport(terminalPaneViewportsRef.current, HANDLE)
+  firstGeometry.terminalFrameRef.current = { width: 300, height: 350 }
+  const secondGeometry = terminalPaneViewport(terminalPaneViewportsRef.current, 'term-2')
+  secondGeometry.terminalFrameRef.current = { width: 250, height: 350 }
+  const second: TerminalWebViewHandle = {
+    ...terminal,
+    fitDimensions: vi.fn((frame) => ({
+      cols: Math.floor(frame.width / 10),
+      rows: Math.floor(frame.height / 20)
+    }))
+  }
+  const visibleTerminalHandlesRef = { current: [HANDLE, 'term-2'] }
   let refit: ReturnType<typeof useTerminalViewportRefit> | undefined
   function Probe() {
     refit = useTerminalViewportRefit({
       activeHandleRef: { current: HANDLE },
-      terminalRefs: { current: new Map([[HANDLE, terminal]]) },
+      terminalRefs: {
+        current: new Map([
+          [HANDLE, terminal],
+          ['term-2', second]
+        ])
+      },
+      ...(split ? { terminalPaneViewportsRef, visibleTerminalHandlesRef } : {}),
       terminalFrameRef,
       viewportRef,
       viewportMeasuredRef: { current: true },
@@ -60,6 +84,10 @@ function refitHarness(cellWidth: number) {
   })
   return {
     terminal,
+    second,
+    firstGeometry,
+    secondGeometry,
+    visibleTerminalHandlesRef,
     viewportRef,
     subscribeToTerminal,
     report: (handle: string) => act(() => refit!.notifyTerminalCellBoxChange(handle)),
@@ -121,5 +149,26 @@ describe('a new cell box for the open terminal', () => {
     })
     expect(harness.terminal.fitDimensions).toHaveBeenLastCalledWith({ width: 420, height: 710 })
     expect(harness.viewportRef.current).toEqual({ cols: 54, rows: 47 })
+  })
+})
+
+describe('visible split viewport refits', () => {
+  it('refits both panes independently using legacy resubscribe and ignores hidden panes', async () => {
+    const harness = refitHarness(10, true)
+    harness.report('term-2')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(harness.firstGeometry.viewportRef.current).toEqual({ cols: 30, rows: 47 })
+    expect(harness.secondGeometry.viewportRef.current).toEqual({ cols: 25, rows: 17 })
+    expect(harness.subscribeToTerminal.mock.calls).toEqual([[HANDLE], ['term-2']])
+    harness.subscribeToTerminal.mockClear()
+    harness.visibleTerminalHandlesRef.current = [HANDLE]
+    harness.secondGeometry.terminalFrameRef.current = { width: 500, height: 700 }
+    harness.report('term-2')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(harness.subscribeToTerminal).not.toHaveBeenCalled()
   })
 })

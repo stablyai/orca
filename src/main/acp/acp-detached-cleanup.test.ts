@@ -16,7 +16,7 @@ import {
 import { HOST_TEST_SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
-import { activeProviderContext } from '../../shared/agent-session-provider-context'
+import { activeProviderContext } from '../../shared/agent-session/agent-session-provider-context'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import { ROOT_ONLY_GRACEFUL_EXIT_MS } from '../provider-process/provider-process-close'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'

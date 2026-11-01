@@ -231,6 +231,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     getConnectionId: () => (bridged() ? null : inner.getConnectionId?.()),
     ownsRecovery: () => (bridged() ? false : (inner.ownsRecovery?.() ?? false)),
     retryRecovery: () => (bridged() ? false : (inner.retryRecovery?.() ?? false)),
+    reopenAfterHostReturned: () => !bridged() && (inner.reopenAfterHostReturned?.() ?? false),
     setOutputPaused: (paused) => {
       if (!bridged()) {
         return inner.setOutputPaused?.(paused) ?? false

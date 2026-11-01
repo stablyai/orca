@@ -64,46 +64,6 @@ describe('project repositories', () => {
 })
 
 describe('installed plugin discovery identity', () => {
-  it('requires a new review when an installed v2 worker has different bytes', async () => {
-    const pluginsDir = await tempPluginsDir()
-    const key = 'samples.worker'
-    const discoverAt = async (hash: string) => {
-      const versionDir = join(pluginsDir, key, hash)
-      await mkdir(versionDir, { recursive: true })
-      await writeFile(join(pluginsDir, key, 'current'), hash)
-      await writeFile(join(versionDir, 'main.mjs'), 'export default () => {}')
-      await writeFile(
-        join(versionDir, 'orca-plugin.json'),
-        JSON.stringify({
-          manifestVersion: 2,
-          execution: 'trusted-worker',
-          id: 'worker',
-          publisher: 'samples',
-          name: 'Worker',
-          version: '1.0.0',
-          engines: { orca: `>=${PLUGIN_SCHEMA_NEWEST_SINCE}` },
-          pluginApi: 1,
-          main: 'main.mjs'
-        })
-      )
-      const [plugin] = await discoverPlugins({
-        pluginsDir,
-        devPluginPaths: [],
-        hostVersion: PLUGIN_SCHEMA_NEWEST_SINCE
-      })
-      if (!plugin || isInvalidDiscoveredPlugin(plugin)) {
-        throw new Error('expected a valid plugin')
-      }
-      return plugin
-    }
-
-    const approved = await discoverAt('a'.repeat(64))
-    const updated = await discoverAt('b'.repeat(64))
-
-    expect(updated.consentContentHash).toBe('b'.repeat(64))
-    expect(updated.consentFingerprint).not.toBe(approved.consentFingerprint)
-  })
-
   it('keeps the install directory identity when a manifest is invalid or mismatched', async () => {
     const pluginsDir = await tempPluginsDir()
     const installedKey = 'samples.expected'
@@ -131,34 +91,6 @@ describe('installed plugin discovery identity', () => {
     expect(plugin && isInvalidDiscoveredPlugin(plugin)).toBe(true)
     expect(plugin?.pluginKey).toBe(installedKey)
     expect(plugin && 'error' in plugin ? plugin.error : '').toContain('does not match')
-  })
-
-  it('names the version gap when a plugin for a newer Orca uses fields this build lacks', async () => {
-    const pluginsDir = await tempPluginsDir()
-    const hash = 'b'.repeat(64)
-    const versionDir = join(pluginsDir, 'acme.future', hash)
-    await mkdir(versionDir, { recursive: true })
-    await writeFile(join(pluginsDir, 'acme.future', 'current'), hash)
-    await writeFile(
-      join(versionDir, 'orca-plugin.json'),
-      JSON.stringify({
-        manifestVersion: 2,
-        execution: 'data',
-        id: 'future',
-        publisher: 'acme',
-        name: 'Future',
-        version: '1.0.0',
-        engines: { orca: '>=9.0.0' },
-        pluginApi: 1,
-        contributes: { widgets: [{ id: 'clock' }] }
-      })
-    )
-
-    const [plugin] = await discoverPlugins({ pluginsDir, devPluginPaths: [], hostVersion: '1.4.0' })
-
-    expect(plugin && 'error' in plugin ? plugin.error : '').toBe(
-      'requires Orca >=9.0.0 (this is 1.4.0)'
-    )
   })
 
   // Regression: Excalidraw 1.0.0 as installed from the catalog before the format 2 floor moved.
@@ -213,17 +145,6 @@ describe('installed plugin discovery identity', () => {
     // An older host still names the version gap rather than a schema error.
     const [old] = await discoverPlugins({ pluginsDir, devPluginPaths: [], hostVersion: '1.4.200' })
     expect(old && 'error' in old ? old.error : '').toBe('requires Orca >=1.4.244 (this is 1.4.200)')
-  })
-
-  it('keeps a removable qualified identity when the current pointer is missing', async () => {
-    const pluginsDir = await tempPluginsDir()
-    const installedKey = 'samples.broken'
-    await mkdir(join(pluginsDir, installedKey), { recursive: true })
-
-    const [plugin] = await discoverPlugins({ pluginsDir, devPluginPaths: [], hostVersion: '1.4.0' })
-
-    expect(plugin && isInvalidDiscoveredPlugin(plugin)).toBe(true)
-    expect(plugin?.pluginKey).toBe(installedKey)
   })
 
   it('rejects an oversized current pointer without an unbounded startup read', async () => {

@@ -4,7 +4,7 @@ import {
   providerDiagnostic,
   providerDiagnosticOf,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,

@@ -3,6 +3,7 @@ import { Trans } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { i18n } from '@/i18n/i18n'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
 
 /** Shared two-column tip layout: copy and actions on the left, a feature visual on the right. */
 export function FeatureTipDialogFrame({
@@ -10,12 +11,15 @@ export function FeatureTipDialogFrame({
   onOpenChange,
   onOpenAutoFocus,
   visual,
+  copyClassName,
   children
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onOpenAutoFocus: ComponentProps<typeof DialogContent>['onOpenAutoFocus']
   visual: ReactNode
+  /** Adjusts the copy column, e.g. its padding, for one tip. */
+  copyClassName?: string
   children: ReactNode
 }): JSX.Element {
   return (
@@ -26,7 +30,12 @@ export function FeatureTipDialogFrame({
         showCloseButton
         onOpenAutoFocus={onOpenAutoFocus}
       >
-        <div className="scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col justify-between overflow-y-auto px-8 py-9 md:shrink-0 md:basis-1/2">
+        <div
+          className={cn(
+            'scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col justify-between overflow-y-auto px-8 py-9 md:shrink-0 md:basis-1/2',
+            copyClassName
+          )}
+        >
           {children}
         </div>
         <div className="flex min-h-0 min-w-0 shrink-0 self-stretch overflow-hidden bg-muted/60 md:basis-1/2 md:border-l md:border-border/70">

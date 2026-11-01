@@ -2,8 +2,8 @@ import type { ClaudeOpenTurn } from './claude-open-turn'
 import type { createClaudeStreamedThinking } from './claude-streamed-thinking'
 import type { ClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 import { claudeStreamTurnSource, claudeStreamTurnStartSource } from './claude-turn-opening'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import { claudeRecord, claudeText } from './structured/journal/claude-structured-item-translation'
 
 // Stream and final frames have different UUIDs; reconcile by message.id and block order to avoid duplicate rows.
 

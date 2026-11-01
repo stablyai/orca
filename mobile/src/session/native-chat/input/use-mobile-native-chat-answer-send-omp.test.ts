@@ -12,10 +12,6 @@ import {
 } from '../mobile-native-chat-stale-input'
 import { resetMobileNativeChatTerminalWritesForTests } from '../mobile-native-chat-terminal-write-lock'
 
-vi.mock('../../../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
-
 const prompt: AskPrompt = {
   questions: [{ question: 'Pick', multiSelect: true, options: [{ label: 'A' }, { label: 'B' }] }]
 }

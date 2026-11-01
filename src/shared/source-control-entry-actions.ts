@@ -1,5 +1,8 @@
 import type { GitStatusEntry } from './git-status-types'
-import { isStageableStatusEntry } from './source-control-discard-all-sequence'
+import {
+  isStageableStatusEntry,
+  isWorktreeUndiscardableGitlink
+} from './source-control-discard-all-sequence'
 
 /** Share row/bulk eligibility; submodule-internal rows are read-only because parent Git cannot mutate their working tree. */
 
@@ -16,6 +19,7 @@ export function canDiscardStatusEntry(entry: GitStatusEntry): boolean {
     entry.conflictStatus !== 'unresolved' &&
     entry.conflictStatus !== 'resolved_locally' &&
     !entry.submoduleRoot &&
+    !isWorktreeUndiscardableGitlink(entry) &&
     (entry.area === 'unstaged' || entry.area === 'untracked')
   )
 }

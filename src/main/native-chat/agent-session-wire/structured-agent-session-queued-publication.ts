@@ -5,8 +5,8 @@ import {
   type AgentSessionQueuedMessage,
   type AgentSessionQueuedMessagePausedReason,
   type AgentSessionQueuePause
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   queuePauseLiftOnItsWay,

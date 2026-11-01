@@ -1,6 +1,15 @@
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow, MessageType } from './types'
 
+export function federatedMessageNamesOnlyHome(
+  params: { to?: string; run?: string },
+  homeRunId: string
+): boolean {
+  return (
+    (!params.to || params.to === `run:${homeRunId}`) && (!params.run || params.run === homeRunId)
+  )
+}
+
 /** Reports about the worker's own task; gates and handoffs stay with the Run's coordinator. */
 export function isDispatchReportType(type: MessageType | undefined): boolean {
   return (

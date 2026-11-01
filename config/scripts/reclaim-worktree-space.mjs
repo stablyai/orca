@@ -53,13 +53,17 @@ export async function reclaimWorktreeSpace({
       'reclaim-vite-caches.mjs',
       'reclaim-vitest-module-caches.mjs',
       'reclaim-worktree-generated-files.mjs',
-      'reclaim-dev-worktree-profiles.mjs'
+      'reclaim-dev-worktree-profiles.mjs',
+      'reclaim-release-test-caches.mjs'
     ]
-    if (!automatic && testsStopped) {
-      scripts.unshift('reclaim-release-test-caches.mjs')
-    }
     for (const script of scripts) {
-      const args = [resolve(import.meta.dirname, script), '--repo', repoRoot]
+      // Children import src/shared/*.ts, which Node reparses as ESM with a noisy warning.
+      const args = [
+        '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON',
+        resolve(import.meta.dirname, script),
+        '--repo',
+        repoRoot
+      ]
       if (apply) {
         args.push('--apply')
       }
@@ -69,7 +73,7 @@ export async function reclaimWorktreeSpace({
       if (script === 'reclaim-release-test-caches.mjs') {
         args.unshift('--import', import.meta.resolve('tsx'))
         args.push('--min-age-days', String(releaseCacheMinAgeDays))
-        if (testsStopped) {
+        if (testsStopped && !automatic) {
           args.push('--tests-stopped')
         }
       }

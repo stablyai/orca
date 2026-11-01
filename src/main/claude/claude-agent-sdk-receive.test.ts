@@ -3,9 +3,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { createClaudeUserMessageQueue } from './claude-agent-sdk-user-message-queue'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
-import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
-import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { buildClaudePermissionCallbacks } from './structured/claude-structured-inbound-control'
+import { ClaudePromptRegistry } from './claude-prompt-registry'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import {
   openProviderTimelineRig,

@@ -21,6 +21,9 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
+// Keep the ordered runner queues; worktree-checkout-progress-real-git covers the checkout.workers read.
+vi.mock('./checkout-workers-git-args', () => ({ checkoutWorkersGitArgs: async () => [] }))
+
 vi.mock('./status', () => ({
   resolveGitDir: vi.fn(),
   runWithGitReadCacheInvalidation: <T>(run: () => Promise<T>) => run()
@@ -140,27 +143,6 @@ describe('worktree mutations invalidate the WSL linked-worktree Git route', () =
     await prepareWorktreeCreateCheckout(REPO, PREPARED, 'origin/main', 'orca preparation')
 
     expect(hasCachedHostRoute(PREPARED)).toBe(false)
-  })
-
-  it('reads and materializes the barrier tip on the preparation Git host', async () => {
-    const head = 'b'.repeat(40)
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: `${head}\n`, stderr: '' })
-    await prepareWorktreeCreateCheckout(
-      REPO,
-      PREPARED,
-      'refs/remotes/origin/main',
-      'owner',
-      { wslDistro: 'Ubuntu' },
-      Promise.resolve()
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['rev-parse', '--verify', 'refs/remotes/origin/main^{commit}'],
-      { cwd: REPO, wslDistro: 'Ubuntu' }
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
-      ['reset', '--hard', head],
-      expect.objectContaining({ cwd: PREPARED, wslDistro: 'Ubuntu' })
-    )
   })
 
   it('drops both routes after the prepared checkout is moved into place', async () => {

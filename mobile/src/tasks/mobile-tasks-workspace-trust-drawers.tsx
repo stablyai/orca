@@ -12,8 +12,10 @@ import {
   X
 } from './mobile-tasks-dependencies'
 import { TASK_SECONDARY_DRAWER_Z_INDEX, setupSourceLabel } from './mobile-tasks-legacy-foundation'
+import { LIST_LEADING_INSET, ListGroup, ListRow } from '../components/list/ListGroup'
 import { styles } from './mobile-tasks-legacy-styles'
 import { translate } from '../i18n/mobile-i18n'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresentationModel) {
   const {
@@ -96,16 +98,17 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
           </View>
           <View style={styles.drawerActionRow}>
             <Pressable
-              style={styles.secondaryActionButton}
+              style={({ pressed }) => [styles.secondaryActionButton, pressed && pressedStyle]}
               disabled={workspaceSparseSaving}
               onPress={() => setWorkspaceSparseDraft(null)}
             >
               <Text style={styles.secondaryActionText}>{translate('common.cancel', 'Cancel')}</Text>
             </Pressable>
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.primaryActionButton,
-                !canSaveWorkspaceSparseDraft ? styles.fieldButtonDisabled : undefined
+                !canSaveWorkspaceSparseDraft ? styles.fieldButtonDisabled : undefined,
+                pressed && pressedStyle
               ]}
               disabled={!canSaveWorkspaceSparseDraft}
               onPress={() => void saveWorkspaceSparsePreset()}
@@ -154,9 +157,18 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
             <Text style={styles.setupPromptCommand}>{setupPrompt.command}</Text>
           </View>
 
-          <View style={styles.actionGroup}>
-            <Pressable
-              style={styles.actionRow}
+          <ListGroup separatorInset={LIST_LEADING_INSET}>
+            <ListRow
+              key="action-1"
+              title={
+                creatingKey === setupPrompt.item.key
+                  ? translate('tasks.workspaceTrustDrawers.creating', 'Creating...')
+                  : translate(
+                      'tasks.workspaceTrustDrawers.runSetupAndCreate',
+                      'Run setup and create'
+                    )
+              }
+              leading={<Check size={16} color={colors.textPrimary} />}
               disabled={creatingKey === setupPrompt.item.key}
               onPress={() =>
                 void createWorkspace(
@@ -171,20 +183,14 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
                   setupPrompt.sparseCheckoutOverride
                 )
               }
-            >
-              <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.actionText}>
-                {creatingKey === setupPrompt.item.key
-                  ? translate('tasks.workspaceTrustDrawers.creating', 'Creating...')
-                  : translate(
-                      'tasks.workspaceTrustDrawers.runSetupAndCreate',
-                      'Run setup and create'
-                    )}
-              </Text>
-            </Pressable>
-            <View style={styles.actionSeparator} />
-            <Pressable
-              style={styles.actionRow}
+            />
+            <ListRow
+              key="action-2"
+              title={translate(
+                'tasks.workspaceTrustDrawers.skipSetupAndCreate',
+                'Skip setup and create'
+              )}
+              leading={<X size={16} color={colors.textPrimary} />}
               disabled={creatingKey === setupPrompt.item.key}
               onPress={() =>
                 void createWorkspace(
@@ -199,16 +205,8 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
                   setupPrompt.sparseCheckoutOverride
                 )
               }
-            >
-              <X size={16} color={colors.textPrimary} />
-              <Text style={styles.actionText}>
-                {translate(
-                  'tasks.workspaceTrustDrawers.skipSetupAndCreate',
-                  'Skip setup and create'
-                )}
-              </Text>
-            </Pressable>
-          </View>
+            />
+          </ListGroup>
         </View>
       ) : null}
     </BottomDrawer>
@@ -266,9 +264,11 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
             <Text style={styles.setupPromptCommand}>{orcaYamlTrustPrompt.scriptContent}</Text>
           </View>
 
-          <View style={styles.actionGroup}>
-            <Pressable
-              style={styles.actionRow}
+          <ListGroup separatorInset={LIST_LEADING_INSET}>
+            <ListRow
+              key="action-3"
+              title={translate('tasks.workspaceTrustDrawers.runHooks', 'Run hooks')}
+              leading={<Check size={16} color={colors.textPrimary} />}
               disabled={creatingKey === orcaYamlTrustPrompt.item.key}
               onPress={() =>
                 void (async () => {
@@ -303,15 +303,14 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
                   }
                 })()
               }
-            >
-              <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.actionText}>
-                {translate('tasks.workspaceTrustDrawers.runHooks', 'Run hooks')}
-              </Text>
-            </Pressable>
-            <View style={styles.actionSeparator} />
-            <Pressable
-              style={styles.actionRow}
+            />
+            <ListRow
+              key="action-4"
+              title={translate(
+                'tasks.workspaceTrustDrawers.alwaysTrustAndRun',
+                'Always trust and run'
+              )}
+              leading={<Check size={16} color={colors.textPrimary} />}
               disabled={creatingKey === orcaYamlTrustPrompt.item.key}
               onPress={() =>
                 void (async () => {
@@ -346,15 +345,11 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
                   }
                 })()
               }
-            >
-              <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.actionText}>
-                {translate('tasks.workspaceTrustDrawers.alwaysTrustAndRun', 'Always trust and run')}
-              </Text>
-            </Pressable>
-            <View style={styles.actionSeparator} />
-            <Pressable
-              style={styles.actionRow}
+            />
+            <ListRow
+              key="action-5"
+              title={translate('tasks.workspaceTrustDrawers.dontRun', "Don't run")}
+              leading={<X size={16} color={colors.textPrimary} />}
               disabled={creatingKey === orcaYamlTrustPrompt.item.key}
               onPress={() => {
                 const prompt = orcaYamlTrustPrompt
@@ -371,13 +366,8 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
                   prompt.sparseCheckoutOverride
                 )
               }}
-            >
-              <X size={16} color={colors.textPrimary} />
-              <Text style={styles.actionText}>
-                {translate('tasks.workspaceTrustDrawers.dontRun', "Don't run")}
-              </Text>
-            </Pressable>
-          </View>
+            />
+          </ListGroup>
         </View>
       ) : null}
     </BottomDrawer>

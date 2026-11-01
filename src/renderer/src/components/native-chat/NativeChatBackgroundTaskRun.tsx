@@ -6,7 +6,7 @@ import {
   normalizeBackgroundTaskKind,
   normalizeBackgroundTaskState
 } from '../../../../shared/native-chat/input/native-chat-background-task-row'
-import type { NativeChatBackgroundTaskBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatBackgroundTaskBlock } from '../../../../shared/native-chat/native-chat-types'
 import { formatBackgroundTaskTokens } from '../../../../shared/background-task-roster'
 import {
   backgroundTaskStateReason,

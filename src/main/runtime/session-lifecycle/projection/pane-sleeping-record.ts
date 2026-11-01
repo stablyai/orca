@@ -1,5 +1,5 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { findLegacyNumericSleepingRecord } from '../../../../shared/sleeping-record-legacy-pane-key'
 import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stable-pane-id'
 import { resolveRuntimePaneTitleLeafIdFromRoot } from '../../../../shared/runtime-pane-title-leaf-id'

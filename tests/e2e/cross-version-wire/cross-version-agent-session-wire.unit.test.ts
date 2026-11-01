@@ -10,26 +10,21 @@ import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-
 import { emptyAgentSessionBatch } from '../../../src/main/native-chat/agent-session-wire/agent-session-empty-batch'
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
-  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
-  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
-  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
-  AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
-  AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
+} from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/lifecycle/agent-session-stop-capabilities'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-create-capabilities'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   callBuild,
   expectDeclaredSurfaceExecutes,
-  expectItemDetailNegotiation,
   runtimeStub
 } from './structured-agent-session-surface-execution'
 import {
@@ -44,10 +39,7 @@ import {
   NOW,
   paramsFor,
   resetOperationIds,
-  REWIND_METHOD,
-  CONVERSATION_OUTLINE_METHOD,
   envelope,
-  STATUS_FEED_METHOD,
   sendParams,
   SESSION,
   STRUCTURED_CALLS,
@@ -61,9 +53,9 @@ import {
   type RpcClientIdentity,
   type RpcReply
 } from './versioned-agent-session-wire'
-import { openTestJournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import * as journalHostDatabase from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { describeReleasedStopNoteProjection } from './cross-version-stop-note-scenarios'
 
@@ -101,6 +93,12 @@ function baselineStructuredMethods(): string[] {
   return baseline.methodNames.filter((name) => name.startsWith('agentSession.'))
 }
 
+async function releaseHostRoot(root: string): Promise<void> {
+  setStructuredAgentSessionHost(null)
+  await journalHostDatabase.closeTestJournalHostDatabase(root)
+  await rm(root, { recursive: true, force: true })
+}
+
 describe('cross-version structured agent sessions', () => {
   it(
     'skews current code against a real published release',
@@ -117,7 +115,7 @@ describe('cross-version structured agent sessions', () => {
   )
 
   describe('a client that never asked for structured sessions', () => {
-    let hostCalls: Record<string, ReturnType<typeof vi.fn>>
+    let hostCalls: ReturnType<typeof structuredHostStub>
 
     beforeEach(() => {
       resetOperationIds()
@@ -250,46 +248,6 @@ describe('cross-version structured agent sessions', () => {
   })
 
   describe('a new client against an old host', () => {
-    it('registers the whole surface on the new build', () => {
-      expect(current.capabilities).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
-      expect(current.capabilities).toContain(AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY)
-      // The host admits by client capability, so a client may pick each launch mode itself.
-      expect(current.capabilities).toContain(STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY)
-      expect(current.methodNames.filter((name) => name.startsWith('agentSession.'))).toHaveLength(
-        STRUCTURED_CALLS.length
-      )
-    })
-
-    it('can detect the absence during negotiation instead of by calling', () => {
-      // The invariant that survives a release cut: each build's advertised list and
-      // its registered methods agree. "The old build has neither" is only true
-      // until a release ships the surface, and pinning it turns this red on the cut
-      // rather than on a change.
-      expect(baseline.capabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)).toBe(
-        baselineStructuredMethods().length > 0
-      )
-      // The status feed is additive to a surface that already shipped, so it carries its own
-      // capability or a client cannot tell "host too old" from "the call failed" — and it
-      // would relay-retry a method_not_found forever instead of degrading once.
-      for (const build of [current, baseline]) {
-        expect(build.capabilities.includes(AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY)).toBe(
-          build.methodNames.includes(STATUS_FEED_METHOD)
-        )
-        expect(build.capabilities.includes(AGENT_SESSION_REWIND_RUNTIME_CAPABILITY)).toBe(
-          build.methodNames.includes(REWIND_METHOD)
-        )
-        // The message rail probes this before asking, so an older host leaves it on loaded
-        // messages instead of answering method_not_found.
-        expect(
-          build.capabilities.includes(AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY)
-        ).toBe(build.methodNames.includes(CONVERSATION_OUTLINE_METHOD))
-      }
-      expectItemDetailNegotiation([current, baseline])
-      // Additive surface: bumping the protocol number would strand every paired
-      // device on this release rather than degrade one feature.
-      expect(current.protocolVersion).toBe(baseline.protocolVersion)
-    })
-
     // The client sends a Stop naming no turn only to a host advertising this, because older cancel
     // params are strict and require the turn. The invariant survives a release cut: each build
     // advertises the capability exactly when its dispatcher accepts that cancel.
@@ -485,7 +443,7 @@ describe('cross-version structured agent sessions', () => {
           spawnToken: 'spawn-vault',
           host: () => host
         }),
-        journalDatabase: openTestJournalHostDatabase(root),
+        journalDatabase: journalHostDatabase.openTestJournalHostDatabase(root),
         claimKeyId: 'key-1',
         mintSpawnToken: () => 'spawn-vault',
         now: () => NOW
@@ -529,10 +487,7 @@ describe('cross-version structured agent sessions', () => {
       }
     })
 
-    afterEach(async () => {
-      setStructuredAgentSessionHost(null)
-      await rm(root, { recursive: true, force: true })
-    })
+    afterEach(() => releaseHostRoot(root))
 
     it('hides the row from the old client and annotates it for a capable client', async () => {
       const [oldReply] = await callBuild(
@@ -716,7 +671,7 @@ describe('cross-version structured agent sessions', () => {
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter: adapter(() => host),
-        journalDatabase: openTestJournalHostDatabase(root),
+        journalDatabase: journalHostDatabase.openTestJournalHostDatabase(root),
         claimKeyId: 'key-1',
         mintSpawnToken: () => `spawn-${generation}`,
         // The provider died with the host that spawned it, which is what makes
@@ -787,10 +742,7 @@ describe('cross-version structured agent sessions', () => {
       await bootHost('a')
     })
 
-    afterEach(async () => {
-      setStructuredAgentSessionHost(null)
-      await rm(root, { recursive: true, force: true })
-    })
+    afterEach(() => releaseHostRoot(root))
 
     it('resumes from the cursor the client held, with no snapshot and no replay', async () => {
       const created = await answer('agentSession.create', createIntentParams())

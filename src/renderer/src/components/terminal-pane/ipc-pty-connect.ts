@@ -1,4 +1,4 @@
-import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
+import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { readTerminalSpawnDeferral } from '../../../../shared/host-spawn-admission'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
@@ -20,6 +20,7 @@ import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
+const LOCAL_SESSION_NOT_FOUND = /Session not found: \S/
 
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
 
@@ -180,6 +181,10 @@ function handleConnectError(
   const message =
     readIpcErrorDetail(error) ?? (error instanceof Error ? error.message : String(error))
   if (connectionId && options.sessionId && isSshSessionGoneError(message)) {
+    return { id: options.sessionId, sessionExpired: true }
+  }
+  // The local daemon's SessionNotFoundError: the pane respawns either way, so it needs no toast.
+  if (!connectionId && options.sessionId && LOCAL_SESSION_NOT_FOUND.test(message)) {
     return { id: options.sessionId, sessionExpired: true }
   }
   if (message.includes('was explicitly killed')) {

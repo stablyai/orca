@@ -1,16 +1,16 @@
 import { expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import { createAgentSessionCurrentRequestsReader } from '../../../shared/agent-session-current-requests-reader'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { createAgentSessionCurrentRequestsReader } from '../../../shared/agent-session/requests/agent-session-current-requests-reader'
 import type {
   AgentSessionCurrentRequestsMarker,
   AgentSessionCurrentRequestsPiece
-} from '../../../shared/agent-session-current-requests-wire'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../shared/agent-session-current-requests-capability'
+} from '../../../shared/agent-session/requests/agent-session-current-requests-wire'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../shared/agent-session/requests/agent-session-current-requests-capability'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../../shared/structured-agent-session-reducer'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
 import { readCurrentRequestsPiece } from './agent-session-current-requests'
 
 const marker: AgentSessionCurrentRequestsMarker = {

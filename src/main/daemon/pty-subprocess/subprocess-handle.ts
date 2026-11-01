@@ -39,7 +39,7 @@ export function createDaemonPtySubprocessHandle(args: {
   const proc = args.process
   // node-pty exposes destroy at runtime but omits it from IPty.
   const nativeProc: DisposableNativePty = proc
-  const physical = args.physicalOwner ?? createDaemonPtyPhysicalOwner(proc)
+  const physical = args.physicalOwner ?? createDaemonPtyPhysicalOwner(proc, args.shellPath)
   physical.observeExit()
   const events = new PtyPreListenerEvents()
   let dead = false
@@ -115,11 +115,14 @@ export function createDaemonPtySubprocessHandle(args: {
     if (process.platform !== 'win32') {
       nativeProc.kill = () => {}
     }
-    events.acceptExit({
+    events.acceptExit(
       exitCode,
-      signal,
-      hostReportsChildExitStatus: reportsChildExitStatus
-    })
+      physical.resolveExitCause({
+        exitCode,
+        signal,
+        hostReportsChildExitStatus: reportsChildExitStatus
+      })
+    )
   }
   const exitSubscription = physical.onExit(acceptExit)
 

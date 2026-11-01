@@ -1,6 +1,7 @@
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
 import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { ImeInput } from '@/lib/ime-text-field'
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, LoaderCircle, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -43,6 +44,7 @@ export function LinearIssueSubIssues({
   const [createdSubIssues, setCreatedSubIssues] = useState<LinearIssueChildSummary[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [openingSubIssueId, setOpeningSubIssueId] = useState<string | null>(null)
+  const openReadRef = useRef<(() => void) | null>(null)
   const openRequestIdRef = useRef(0)
   const createRequestIdRef = useRef(0)
   const mountedRef = useMountedRef()
@@ -50,39 +52,58 @@ export function LinearIssueSubIssues({
     () => mergeLinearSubIssues(issue.subIssues, createdSubIssues),
     [createdSubIssues, issue.subIssues]
   )
+  useEffect(() => {
+    setOpeningSubIssueId(null)
+    return () => {
+      openReadRef.current?.()
+      openRequestIdRef.current += 1
+    }
+  }, [issue.id, sourceContext])
   const handleOpenSubIssue = useCallback(
-    async (subIssue: LinearIssueChildSummary) => {
+    (subIssue: LinearIssueChildSummary) => {
+      openReadRef.current?.()
       const requestId = ++openRequestIdRef.current
       setOpeningSubIssueId(subIssue.id)
-      try {
-        const fullIssue = await fetchLinearIssue(subIssue.id, issue.workspaceId, {
-          sourceContext
-        })
-        if (!mountedRef.current || requestId !== openRequestIdRef.current) {
-          return
-        }
-        if (fullIssue) {
-          onOpenIssue(fullIssue)
-        } else {
-          toast.error(
-            translate('auto.components.LinearIssueWorkspace.9a1317cdd3', 'Failed to load sub-issue')
-          )
-        }
-      } catch (error) {
-        if (mountedRef.current && requestId === openRequestIdRef.current) {
-          toast.error(
-            error instanceof Error
-              ? taskProviderErrorText(error.message)
-              : translate(
+      let opened = false
+      let release = () => {}
+      release = observeLinearIssueRead(
+        fetchLinearIssue(subIssue.id, issue.workspaceId, { sourceContext }),
+        () => mountedRef.current && requestId === openRequestIdRef.current,
+        (lease, view) => {
+          if (opened || view.kind === 'loading') {
+            return
+          }
+          if (view.kind === 'abandoned') {
+            opened = true
+            setOpeningSubIssueId((previous) =>
+              mountedRef.current && requestId === openRequestIdRef.current ? null : previous
+            )
+            release()
+            return
+          }
+          lease.commit(view, false, (_, fullIssue) => {
+            opened = true
+            setOpeningSubIssueId((previous) =>
+              mountedRef.current && requestId === openRequestIdRef.current ? null : previous
+            )
+            if (fullIssue) {
+              onOpenIssue(fullIssue)
+            } else {
+              toast.error(
+                translate(
                   'auto.components.LinearIssueWorkspace.9a1317cdd3',
                   'Failed to load sub-issue'
                 )
-          )
+              )
+            }
+            release()
+            return true
+          })
         }
-      } finally {
-        if (mountedRef.current && requestId === openRequestIdRef.current) {
-          setOpeningSubIssueId(null)
-        }
+      )
+      openReadRef.current = release
+      if (opened) {
+        release()
       }
     },
     [fetchLinearIssue, issue.workspaceId, mountedRef, onOpenIssue, sourceContext]

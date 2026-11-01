@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   LOCAL_EXECUTION_HOST_ID,

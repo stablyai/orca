@@ -1,4 +1,4 @@
-import { getClaudeAgentViewService } from '../../../claude/agent-view-service'
+import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'

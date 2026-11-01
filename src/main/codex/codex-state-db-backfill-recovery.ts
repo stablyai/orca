@@ -9,7 +9,7 @@ import { resolveCodexCommand } from '../codex-cli/command'
 import {
   spawnCodexAppServerProcess,
   type CodexAppServerSpawn
-} from './codex-app-server-process-tree-kill'
+} from './app-server/codex-app-server-process-tree-kill'
 import {
   spawnCodexBackfillRecoveryProcess,
   stopCodexBackfillRecoveryProcess,

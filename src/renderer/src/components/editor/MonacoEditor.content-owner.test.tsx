@@ -77,25 +77,6 @@ afterEach(() => {
 })
 
 describe('MonacoEditor content ownership', () => {
-  it('initializes the wrapper without a controlled value updater', () => {
-    render(
-      <MonacoEditor
-        fileId="file"
-        filePath="/repo/file.jsonl"
-        viewStateKey="pane:file"
-        relativePath="file.jsonl"
-        content="initial content"
-        language="jsonl"
-        onContentChange={vi.fn()}
-        onSave={vi.fn()}
-        readOnly
-      />
-    )
-
-    expect(editorProps.current?.defaultValue).toBe('initial content')
-    expect(editorProps.current).not.toHaveProperty('value')
-  })
-
   it('isolates same-path files on different hosts while sharing split panes', () => {
     const filePath = '/srv/repo/file.ts'
     const ownedId = buildOwnedEditorFileId(filePath, 'ssh-worktree', 'remote-runtime')

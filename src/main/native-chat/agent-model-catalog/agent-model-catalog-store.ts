@@ -192,15 +192,18 @@ export class AgentModelCatalogStore {
   /** Learn defaults only for existing catalogs; null clears facts the next chat no longer resolves. */
   recordConfiguredDefault(
     fingerprint: string,
-    choice: AgentModelCatalogConfiguredChoice | null
+    choice: AgentModelCatalogConfiguredChoice | null,
+    source?: AgentModelCatalogEntry['live']
   ): void {
     const previous = this.entries.get(fingerprint)
-    const entry = previous && entryWithConfiguredDefault(previous, choice, this.now())
-    if (!entry) {
+    const entry = previous && entryWithConfiguredDefault(previous, choice, this.now(), source)
+    if (!previous || !entry) {
       return
     }
     this.entries.set(fingerprint, entry)
-    this.persistence?.save(() => [...this.entries.values()])
+    if (agentModelCatalogListingKey(previous) !== agentModelCatalogListingKey(entry)) {
+      this.persistence?.save(() => [...this.entries.values()])
+    }
     this.listingWaiters.notify(fingerprint)
   }
 

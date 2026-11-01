@@ -1,7 +1,7 @@
 import { settledDaemonRestart } from '../../daemon/daemon-restart-state'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { LocalPtyProvider } from '../../providers/local-pty-provider'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/terminal-startup-cwd'
@@ -115,10 +115,9 @@ export function registerPtyHandlers(
   const getLocalPtyProviderStartupPromise = (
     hostId: ResolvedPtyHost = LOCAL_EXECUTION_HOST_ID
   ): Promise<void> | undefined => {
-    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
-      return undefined
-    }
-    return options?.awaitLocalPtyProviderStartup?.() ?? options?.awaitLocalPtyStartup?.()
+    return hostId === LOCAL_EXECUTION_HOST_ID
+      ? (options?.awaitLocalPtyProviderStartup?.() ?? options?.awaitLocalPtyStartup?.())
+      : undefined
   }
 
   // macOS window reactivation can re-register; remove old handlers first.
@@ -219,14 +218,24 @@ export function registerPtyHandlers(
     worktreeId: string | undefined,
     sessionId?: string,
     cwd?: string,
-    passiveWslRestore?: boolean
+    passiveWslRestore?: boolean,
+    connectionId?: string | null
   ): Promise<void> | void =>
-    assertWorkspaceAcceptsNewPtyImpl(store, worktreeId, sessionId, cwd, passiveWslRestore)
+    assertWorkspaceAcceptsNewPtyImpl(
+      store,
+      worktreeId,
+      sessionId,
+      cwd,
+      passiveWslRestore,
+      connectionId
+    )
   const resolvePtySpawnStartupCwd = (
     worktreeId: string | undefined,
     cwd: string | undefined,
-    missingDirFallback?: TerminalStartupCwdMissingDirFallback
-  ): string | undefined => resolvePtySpawnStartupCwdImpl(store, worktreeId, cwd, missingDirFallback)
+    missingDirFallback?: TerminalStartupCwdMissingDirFallback,
+    connectionId?: string | null
+  ): string | undefined =>
+    resolvePtySpawnStartupCwdImpl(store, worktreeId, cwd, missingDirFallback, connectionId)
   const prepareCodexResumeHomeBound = (
     args: Parameters<typeof prepareCodexResumeHome>[1]
   ): ReturnType<typeof prepareCodexResumeHome> =>

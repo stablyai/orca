@@ -1,10 +1,10 @@
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import type { StructuredAgentStartupFailure } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ProviderReceiveDisposition } from '../provider-process/provider-source-completion'
 import type { CanUseTool, OnUserDialog } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudeControlSurface } from './claude-agent-sdk-control-requests'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
-import type { ClaudeStructuredSdkOptions } from './claude-structured-launch-resolution'
+import type { ClaudeStructuredSdkOptions } from './structured/launch/claude-structured-launch-resolution'
 
 export type ClaudeStreamJsonLaunch = {
   /** Orca's resolved user CLI; the SDK falls back to a bundled binary that is not installed. */

@@ -7,18 +7,18 @@ import {
   adapterFor,
   identityFor,
   PROVIDER_SESSION_ID
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import { fakeCodexAppServer } from '../../codex/codex-structured-dispatch-test-support'
 import { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
 import {
   codexProviderHandle,
   claudeProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import {
   closeTestJournalHostDatabase,

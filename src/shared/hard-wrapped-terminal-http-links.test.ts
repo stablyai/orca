@@ -125,6 +125,25 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
     )
   })
 
+  it('reconstructs an overlay URL when only its first row shows a frame in the gutter', () => {
+    const inner = 'http://example.com/aaaa'
+    const rows = [
+      `ls | g|${inner}|`,
+      `todo  |${'b'.repeat(inner.length)}|`,
+      `  in  |${'c'.repeat(inner.length)}|`,
+      `Final |${'dddd'.padEnd(inner.length, ' ')}|`
+    ].map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates[0]?.text).toBe(
+      `${inner}${'b'.repeat(inner.length)}${'c'.repeat(inner.length)}dddd`
+    )
+  })
+
   it('reconstructs a URL in a nested frame whose left label repeats on every row', () => {
     const inner = 'http://example.com/aaaa'
     const rows = [
@@ -160,6 +179,54 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
 
     expect(candidates[0]?.text).toBe(
       `${inner}${'b'.repeat(inner.length)}${'c'.repeat(inner.length)}dddd`
+    )
+  })
+
+  it.each([
+    [
+      'a single-column table',
+      ['│ https://example.com/aaaaaaaaaa │', '│ README.md                      │']
+    ],
+    [
+      'rows with filled cells right of it',
+      [
+        '│ https://example.com/aaaaaaaaaa │ ok   │',
+        '│ src/renderer/terminal-pane.tsx │ todo │',
+        '│ README.md                      │ done │'
+      ]
+    ],
+    [
+      'a row labelled further left',
+      [
+        '│ 1 │ doc │ https://example.com/aaaaaaaaaa │',
+        '│ 2 │     │ notes                          │'
+      ]
+    ],
+    [
+      'an overlay over screen text',
+      ['todo  |http://example.com/aaaa|', '      |README.md              |']
+    ],
+    [
+      'a box beside an open split pane',
+      ['│ https://example.com/aaaaaaaaaa │ │ $ ls', '│ README.md                      │ │']
+    ]
+  ])('does not join a URL that fills its cell onto the next rows in %s', (_, rowTexts) => {
+    const rows = rowTexts.map(bufferLineWithCellColumns)
+
+    expect(
+      buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, rows.length)
+    ).toEqual([])
+  })
+
+  it('ends a wrapped cell URL at the next row that fills a cell left of it again', () => {
+    const rows = [
+      '│ doc │ https://example.com/aaaaaaaaaa │',
+      '│     │ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb │',
+      '│ doc │ README.md                      │'
+    ].map(bufferLineWithCellColumns)
+
+    expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)[0]?.text).toBe(
+      `https://example.com/aaaaaaaaaa${'b'.repeat(30)}`
     )
   })
 

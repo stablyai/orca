@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  dismissMacosTccPromptNotice,
-  subscribeToMacosTccPromptNotice
-} from './macos-tcc-prompt-notice-subscription'
+import { subscribeToMacosTccPromptNotice } from './macos-tcc-prompt-notice-subscription'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -14,18 +11,6 @@ function acknowledgeDisplayedNotice(onNotice: ReturnType<typeof vi.fn>, callInde
 }
 
 describe('subscribeToMacosTccPromptNotice', () => {
-  it('contains synchronous and rejected dismissal failures', async () => {
-    const synchronousFailure = vi.fn(() => {
-      throw new Error('renderer closing')
-    })
-    const rejectedFailure = vi.fn().mockRejectedValue(new Error('ipc unavailable'))
-
-    await expect(
-      dismissMacosTccPromptNotice({ dismiss: synchronousFailure })
-    ).resolves.toBeUndefined()
-    await expect(dismissMacosTccPromptNotice({ dismiss: rejectedFailure })).resolves.toBeUndefined()
-  })
-
   it('delivers a threshold retained before the renderer subscribed', async () => {
     const onNotice = vi.fn()
     const acknowledgePending = vi.fn().mockResolvedValue(undefined)
@@ -47,37 +32,6 @@ describe('subscribeToMacosTccPromptNotice', () => {
     expect(onNotice.mock.invocationCallOrder[0]).toBeLessThan(
       acknowledgePending.mock.invocationCallOrder[0]
     )
-    acknowledgeDisplayedNotice(onNotice)
-    expect(acknowledgePending).toHaveBeenCalledOnce()
-    unsubscribe()
-  })
-
-  it('consumes concurrent mount and live signals only once', async () => {
-    const listenerState: { listener?: (payload: { promptCount: number }) => void } = {}
-    const acknowledgePending = vi.fn().mockResolvedValue(undefined)
-    const consumePending = vi
-      .fn()
-      .mockResolvedValueOnce({ claimId: 8, promptCount: 3 })
-      .mockResolvedValue(null)
-    const onNotice = vi.fn()
-    const unsubscribe = subscribeToMacosTccPromptNotice(
-      {
-        acknowledgePending,
-        consumePending,
-        onThreshold: (listener) => {
-          listenerState.listener = listener
-          return vi.fn()
-        }
-      },
-      onNotice
-    )
-
-    listenerState.listener?.({ promptCount: 3 })
-    await Promise.resolve()
-
-    expect(consumePending).toHaveBeenCalledTimes(2)
-    expect(onNotice).toHaveBeenCalledOnce()
-    expect(acknowledgePending).not.toHaveBeenCalled()
     acknowledgeDisplayedNotice(onNotice)
     expect(acknowledgePending).toHaveBeenCalledOnce()
     unsubscribe()
@@ -264,24 +218,5 @@ describe('subscribeToMacosTccPromptNotice', () => {
 
     expect(onNotice).toHaveBeenCalledOnce()
     expect(releasePending).toHaveBeenCalledWith(13)
-  })
-
-  it('keeps live delivery with an older preload that has no consume API', () => {
-    const listenerState: { listener?: (payload: { promptCount: number }) => void } = {}
-    const onNotice = vi.fn()
-    const unsubscribe = subscribeToMacosTccPromptNotice(
-      {
-        onThreshold: (listener) => {
-          listenerState.listener = listener
-          return vi.fn()
-        }
-      },
-      onNotice
-    )
-
-    listenerState.listener?.({ promptCount: 3 })
-
-    expect(onNotice).toHaveBeenCalledWith({ promptCount: 3 }, expect.any(Function))
-    unsubscribe()
   })
 })

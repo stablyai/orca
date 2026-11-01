@@ -2,14 +2,7 @@ import type { PiRpcSessionAdapterDeps } from './rpc-session-contract'
 import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/structured-agent-session-provider-exit-proof'
 import { randomUUID } from 'node:crypto'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import {
-  AgentSessionPreSpawnError,
-  AgentSessionAcquisitionExitUnprovenError,
-  launchPreparationFailure,
-  type AgentSessionAcquisition,
-  type StructuredAgentSessionAcquireInput,
-  type StructuredAgentSessionAdapter
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import * as Adapter from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { providerSpawnedProcessIdentity } from '../provider-process/provider-spawned-process-identity'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { piCloseReport } from './rpc-exit-classification'
@@ -22,7 +15,7 @@ import { supportsSupervisedProviderChildLocation } from '../provider-process/sup
 
 export type { PiRpcSessionAdapterDeps } from './rpc-session-contract'
 
-export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
+export class PiRpcSessionAdapter implements Adapter.StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, PiRpcSession>()
   private readonly acquiring = new Set<string>()
   private readonly starts = new ProviderAcquisitionStarts<PiRpcConnection>(
@@ -32,33 +25,35 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   constructor(private readonly deps: PiRpcSessionAdapterDeps) {}
 
   supportsLocation = supportsSupervisedProviderChildLocation
-  supportsCreate: NonNullable<StructuredAgentSessionAdapter['supportsCreate']> = (
+  supportsCreate: NonNullable<Adapter.StructuredAgentSessionAdapter['supportsCreate']> = (
     location,
     agent
   ) => agent === 'pi' && this.supportsLocation(location)
 
-  async acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> {
+  async acquire(
+    input: Adapter.StructuredAgentSessionAcquireInput
+  ): Promise<Adapter.AgentSessionAcquisition> {
     const id = input.identity.sessionId
     if (this.acquiring.has(id)) {
-      throw new AgentSessionPreSpawnError(new Error('Pi session already owns a child'))
+      throw new Adapter.AgentSessionPreSpawnError(new Error('Pi session already owns a child'))
     }
     this.acquiring.add(id)
     const attempt = this.starts.begin(input.signal)
     let session: PiRpcSession | undefined
     try {
       if (attempt.signal.aborted) {
-        throw new AgentSessionPreSpawnError(new Error('Pi closed while starting'))
+        throw new Adapter.AgentSessionPreSpawnError(new Error('Pi closed while starting'))
       }
       if (!(await this.starts.stopFailed(id))) {
-        throw new AgentSessionAcquisitionExitUnprovenError(
+        throw new Adapter.AgentSessionAcquisitionExitUnprovenError(
           new Error('Previous Pi start has not exited')
         )
       }
       this.acknowledgeSessionRelease(id)
       if (this.sessions.has(id)) {
-        throw new AgentSessionPreSpawnError(new Error('Pi session already owns a child'))
+        throw new Adapter.AgentSessionPreSpawnError(new Error('Pi session already owns a child'))
       }
-      let launch: PiRpcResolvedLaunch
+      let launch: Awaited<ReturnType<PiRpcSessionAdapterDeps['resolveLaunch']>>
       try {
         launch = await waitForPromiseWithSignal(
           this.deps.resolveLaunch({ identity: input.identity, spawnToken: input.spawnToken }),
@@ -67,11 +62,11 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       } catch (error) {
         // A start withdrawn while resolving is a close, not a failed preparation.
         throw attempt.signal.aborted
-          ? new AgentSessionPreSpawnError(error)
-          : launchPreparationFailure(error)
+          ? new Adapter.AgentSessionPreSpawnError(error)
+          : Adapter.launchPreparationFailure(error)
       }
       if (attempt.signal.aborted) {
-        throw new AgentSessionPreSpawnError(new Error('Pi closed while starting'))
+        throw new Adapter.AgentSessionPreSpawnError(new Error('Pi closed while starting'))
       }
       const spec = buildPiRpcLaunch(launch)
       const fresh = !launch.sessionFile && !launch.forkFile
@@ -96,17 +91,17 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       }
     } catch (error) {
       if (!session) {
-        throw error instanceof AgentSessionPreSpawnError ||
-          error instanceof AgentSessionAcquisitionExitUnprovenError
+        throw error instanceof Adapter.AgentSessionPreSpawnError ||
+          error instanceof Adapter.AgentSessionAcquisitionExitUnprovenError
           ? error
-          : new AgentSessionPreSpawnError(error)
+          : new Adapter.AgentSessionPreSpawnError(error)
       }
       let outcome
       try {
         outcome = await session.close(false)
       } catch (cleanupError) {
         this.starts.retainFailed(id, session.connection)
-        throw new AgentSessionAcquisitionExitUnprovenError(
+        throw new Adapter.AgentSessionAcquisitionExitUnprovenError(
           new AggregateError([error, cleanupError], 'Pi acquisition cleanup failed')
         )
       }
@@ -122,7 +117,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     }
   }
 
-  open: NonNullable<StructuredAgentSessionAdapter['open']> = async (input) => {
+  open: NonNullable<Adapter.StructuredAgentSessionAdapter['open']> = async (input) => {
     const session = this.sessions.get(input.sessionId)
     if (
       !session ||
@@ -135,7 +130,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     return session.open(input.signal)
   }
 
-  dispatch: StructuredAgentSessionAdapter['dispatch'] = async (input) => {
+  dispatch: Adapter.StructuredAgentSessionAdapter['dispatch'] = async (input) => {
     const session = this.session(input.sessionId, input.fence)
     return dispatchPiRpcMessage(
       session,
@@ -145,10 +140,10 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     )
   }
 
-  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = async (input) =>
+  compact: NonNullable<Adapter.StructuredAgentSessionAdapter['compact']> = async (input) =>
     compactPiRpcSession(this.session(input.sessionId, input.fence), input.command)
 
-  cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = async (input) => {
+  cancelTurn: Adapter.StructuredAgentSessionAdapter['cancelTurn'] = async (input) => {
     const session = this.session(input.sessionId, input.fence)
     const turnId = input.resolveLiveTurnId ? input.resolveLiveTurnId() : session.lane.openTurnId
     if (input.turnId !== undefined && input.turnId !== turnId) {
@@ -162,54 +157,55 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     await session.connection.request('abort', {}, { timeoutMs: 2_000 })
     return { cancelled: true, ...(turnId ? { turnId } : {}) }
   }
-  awaitStoppedRequestEnd: NonNullable<StructuredAgentSessionAdapter['awaitStoppedRequestEnd']> =
-    async (id, at) => {
-      const session = this.sessions.get(id)
-      const turn = session?.lane.openTurnId
-      if (!session) {
-        return
-      }
-      let timer: ReturnType<typeof setTimeout> | undefined
-      try {
-        if (turn) {
-          await Promise.race([
-            session.lane.whenTurnLeaves(turn),
-            new Promise<void>((resolve) => {
-              timer = setTimeout(resolve, Math.max(0, at + 2_000 - Date.now()))
-              timer.unref()
-            })
-          ])
-        }
-      } finally {
-        clearTimeout(timer)
-      }
-      try {
-        await session.connection.request('get_state', {}, { timeoutMs: 1_000 })
-      } catch (error) {
-        this.deps.logger.warn('Pi checkpoint could not be read before stopping', {
-          scope: 'pi-stop-checkpoint',
-          sessionId: id,
-          error
-        })
-      }
+  awaitStoppedRequestEnd: NonNullable<
+    Adapter.StructuredAgentSessionAdapter['awaitStoppedRequestEnd']
+  > = async (id, at) => {
+    const session = this.sessions.get(id)
+    const turn = session?.lane.openTurnId
+    if (!session) {
+      return
     }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      if (turn) {
+        await Promise.race([
+          session.lane.whenTurnLeaves(turn),
+          new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, Math.max(0, at + 2_000 - Date.now()))
+            timer.unref()
+          })
+        ])
+      }
+    } finally {
+      clearTimeout(timer)
+    }
+    try {
+      await session.connection.request('get_state', {}, { timeoutMs: 1_000 })
+    } catch (error) {
+      this.deps.logger.warn('Pi checkpoint could not be read before stopping', {
+        scope: 'pi-stop-checkpoint',
+        sessionId: id,
+        error
+      })
+    }
+  }
   routePromptCancel(): { kind: 'dismiss' } {
     return { kind: 'dismiss' }
   }
-  dismissPrompt: NonNullable<StructuredAgentSessionAdapter['dismissPrompt']> = (input) =>
+  dismissPrompt: NonNullable<Adapter.StructuredAgentSessionAdapter['dismissPrompt']> = (input) =>
     this.session(input.sessionId, input.fence).dialogs.respond(
       input.itemId,
       null,
       input.commit,
       input.answer
     )
-  answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
+  answerPrompt: Adapter.StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
     this.session(input.sessionId, input.fence).dialogs.respond(
       input.itemId,
       input.response,
       input.commit
     )
-  setOption: StructuredAgentSessionAdapter['setOption'] = (input) => {
+  setOption: Adapter.StructuredAgentSessionAdapter['setOption'] = (input) => {
     const session = this.session(input.sessionId, input.fence)
     return applyPiRpcSessionOption(
       session.connection,
@@ -220,15 +216,23 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       session.optionProof
     )
   }
-  readOptions: NonNullable<StructuredAgentSessionAdapter['readOptions']> = async (input) =>
+  readOptions: NonNullable<Adapter.StructuredAgentSessionAdapter['readOptions']> = async (input) =>
     this.session(input.sessionId, input.fence).readOptions()
   readCommands = (id: string) => this.sessions.get(id)?.startup.commands
-  holdsDispatch(id: string): boolean {
-    return this.sessions.get(id)?.turns.holdsDispatch ?? false
+  /** Pi's /name uses the owned running session; at-rest startup/teardown is not implemented. */
+  renameProviderSession: NonNullable<
+    Adapter.StructuredAgentSessionAdapter['renameProviderSession']
+  > = async ({ record, providerSessionId, name }) => {
+    const session = this.sessions.get(record.sessionId)
+    if (session?.connection.closed !== false) {
+      return
+    }
+    if (session.openedLink?.handle.nativeId === providerSessionId) {
+      await session.connection.request('set_session_name', { name }, { timeoutMs: 5_000 })
+    }
   }
-  heldSends(id: string): ReadonlySet<string> | undefined {
-    return this.sessions.get(id)?.heldSends
-  }
+  holdsDispatch = (id: string): boolean => this.sessions.get(id)?.turns.holdsDispatch ?? false
+  heldSends = (id: string): ReadonlySet<string> | undefined => this.sessions.get(id)?.heldSends
   holdsLiveProviderProcess(id: string, generation: string): boolean {
     const session = this.sessions.get(id)
     return session?.generation === generation && !session.connection.closed
@@ -263,9 +267,8 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     this.sessions.get(id)?.fail(new Error('Pi event sink failed'))
     return this.close(id, false)
   }
-  disposeSession(id: string): Promise<boolean> {
-    return this.closeSession(id)
-  }
+  disposeSession: NonNullable<Adapter.StructuredAgentSessionAdapter['disposeSession']> =
+    this.closeSession
   acknowledgeSessionRelease(id: string): void {
     const session = this.sessions.get(id)
     if (

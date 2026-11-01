@@ -8,7 +8,7 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
 import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
 
 export type StructuredAgentSessionChildExit = {

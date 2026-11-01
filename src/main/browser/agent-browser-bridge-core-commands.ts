@@ -1,3 +1,4 @@
+import type { BrowserSnapshotOptions } from '../../shared/rpc-contract/browser-observation-params'
 import type {
   BrowserSnapshotResult,
   BrowserClickResult,
@@ -15,16 +16,32 @@ import {
   waitForAbortedNavigationReplacement
 } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeQueue } from './agent-browser-bridge-queue'
+import { assertRemoteCliPageAccess } from './remote-cli-page-admission'
+import { agentBrowserSnapshotArgs } from './agent-browser-snapshot-arguments'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
-  async snapshot(worktreeId?: string, browserPageId?: string): Promise<BrowserSnapshotResult> {
+  async snapshot(
+    worktreeId?: string,
+    browserPageId?: string,
+    options: BrowserSnapshotOptions = {}
+  ): Promise<BrowserSnapshotResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
-      const result = (await this.execAgentBrowser(sessionName, [
-        'snapshot'
-      ])) as BrowserSnapshotResult
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's snapshot --json answers the snapshot and refs of BrowserSnapshotResult; page fields are set below.
+      const result = (await this.execAgentBrowser(
+        sessionName,
+        agentBrowserSnapshotArgs(options)
+      )) as BrowserSnapshotResult
+      // The agent now holds this tree, so its next action diffs against a fresh baseline.
+      this.forgetDeltaBaseline(sessionName)
+      // agent-browser's snapshot carries neither, so read them off the page it captured.
+      const wc = this.requireTargetWebContents(target)
+      // The page may have navigated somewhere an SSH host must not see while the snapshot ran.
+      assertRemoteCliPageAccess(wc.id)
       return {
         ...result,
-        browserPageId: target.browserPageId
+        browserPageId: target.browserPageId,
+        url: wc.getURL(),
+        title: wc.getTitle()
       }
     })
   }
@@ -34,7 +51,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClickResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -49,7 +66,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClickResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -63,8 +80,13 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     )
   }
 
-  async goto(url: string, worktreeId?: string, browserPageId?: string): Promise<BrowserGotoResult> {
-    return this.enqueueTargetedCommand(
+  async goto(
+    url: string,
+    worktreeId?: string,
+    browserPageId?: string,
+    options: { reportEffects?: boolean } = {}
+  ): Promise<BrowserGotoResult> {
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (_sessionName, target) => {
@@ -148,7 +170,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         }
         return { url: navigatedWebContents.getURL(), title: navigatedWebContents.getTitle() }
       },
-      { ensureSession: false }
+      { ensureSession: false, ...options }
     )
   }
 
@@ -161,7 +183,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     await assertClipboardTextWriteWithinLimitWithYield(value)
     // agent-browser's fill types into whatever holds focus and sends text per character; set the
     // resolved element's value in one call instead.
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {

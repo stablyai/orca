@@ -1,20 +1,20 @@
 import { MobileMarkdownPreviewImage } from './MobileMarkdownPreviewImage'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import { useState } from 'react'
-import { Pressable, ScrollView, View } from 'react-native'
-import { Code, Pencil } from 'lucide-react-native'
+import { ScrollView } from 'react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
-import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   MobileFilePreviewSourceText,
   MobileFilePreviewTruncatedNote
 } from './MobileFilePreviewSourceText'
+import type { MarkdownPreviewMode } from './MobileMarkdownPreviewModeBar'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+
+// Lifts the 13pt base to 14pt body text; headings scale with it.
+const DOCUMENT_TEXT_SCALE = 14 / 13
 
 type Props = {
+  mode: MarkdownPreviewMode
   relativePath: string
   content: string
   truncated: boolean
@@ -26,6 +26,7 @@ type Props = {
 }
 
 export function MobileFileMarkdownPreview({
+  mode,
   relativePath,
   content,
   truncated,
@@ -36,93 +37,36 @@ export function MobileFileMarkdownPreview({
   onOpenFile
 }: Props) {
   useMobileColorScheme()
-  const t = useMobileTranslation()
-  const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
-  const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
-  const [previousInitialLine, setPreviousInitialLine] = useState(initialLine)
-  // Switch modes before paint for a new file or line target; do not flash the previous manual mode.
-  if (relativePath !== previousRelativePath || initialLine !== previousInitialLine) {
-    setPreviousRelativePath(relativePath)
-    setPreviousInitialLine(initialLine)
-    setMode(initialLine ? 'source' : 'preview')
-  }
-  const previewSelected = mode === 'preview'
-  const sourceSelected = mode === 'source'
-
-  return (
-    <View style={styles.modeContainer}>
-      <View style={styles.modeToolbar}>
-        <Pressable
-          style={[styles.modeToggle, sourceSelected && styles.modeToggleActive]}
-          onPress={() => setMode('source')}
-          accessibilityRole="button"
-          accessibilityState={{ selected: sourceSelected }}
-          accessibilityLabel={t('files.fileMarkdownPreview.viewSource', 'View Markdown source')}
-        >
-          <Code
-            size={15}
-            color={sourceSelected ? colors.textPrimary : colors.textSecondary}
-            strokeWidth={2.2}
-          />
-        </Pressable>
-        <Pressable
-          style={[styles.modeToggle, previewSelected && styles.modeToggleActive]}
-          onPress={() => setMode('preview')}
-          accessibilityRole="button"
-          accessibilityState={{ selected: previewSelected }}
-          accessibilityLabel={t(
-            'files.fileMarkdownPreview.viewPreview',
-            'View rendered Markdown preview'
-          )}
-        >
-          <Pencil
-            size={15}
-            color={previewSelected ? colors.textPrimary : colors.textSecondary}
-            strokeWidth={2.2}
-          />
-        </Pressable>
-        <MobileSourceCopyButton
-          key={relativePath}
-          text={content}
-          partial={truncated}
-          accessibilityLabel={
-            truncated
-              ? t('files.fileMarkdownPreview.copyLoadedSource', 'Copy loaded Markdown source')
-              : t('files.fileMarkdownPreview.copySource', 'Copy Markdown source')
-          }
-        />
-      </View>
-      {mode === 'preview' ? (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
-          {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
-          <MobileMarkdown
-            content={content}
-            onOpenFile={onOpenFile}
-            renderImage={
-              worktreeId
-                ? (href, alt) => (
-                    <MobileMarkdownPreviewImage
-                      key={`${worktreeId}:${relativePath}:${href}`}
-                      client={client ?? null}
-                      worktreeId={worktreeId}
-                      documentPath={relativePath}
-                      href={href}
-                      alt={alt}
-                    />
-                  )
-                : undefined
-            }
-          />
-        </ScrollView>
-      ) : (
-        <MobileFilePreviewSourceText
-          relativePath={relativePath}
-          content={content}
-          truncated={truncated}
-          byteLength={byteLength}
-          initialLine={initialLine}
-        />
-      )}
-    </View>
+  return mode === 'preview' ? (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
+      {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
+      <MobileMarkdown
+        content={content}
+        textScale={DOCUMENT_TEXT_SCALE}
+        onOpenFile={onOpenFile}
+        renderImage={
+          worktreeId
+            ? (href, alt) => (
+                <MobileMarkdownPreviewImage
+                  key={`${worktreeId}:${relativePath}:${href}`}
+                  client={client ?? null}
+                  worktreeId={worktreeId}
+                  documentPath={relativePath}
+                  href={href}
+                  alt={alt}
+                />
+              )
+            : undefined
+        }
+      />
+    </ScrollView>
+  ) : (
+    <MobileFilePreviewSourceText
+      relativePath={relativePath}
+      content={content}
+      truncated={truncated}
+      byteLength={byteLength}
+      initialLine={initialLine}
+    />
   )
 }

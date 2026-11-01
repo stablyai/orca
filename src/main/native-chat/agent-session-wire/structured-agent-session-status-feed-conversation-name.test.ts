@@ -7,10 +7,10 @@ import { createTrackedJournalOpener } from '../agent-session-journal/journal-hos
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
+import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionStatusEvent } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredChatNamingFailure } from './structured-agent-session-host-types'
 
 const journals = createTrackedJournalOpener()

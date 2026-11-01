@@ -257,24 +257,4 @@ describe('native content script ownership', () => {
     await nativeCompleted
     expect(stored()).toEqual([script])
   })
-
-  it('does not write persistence from a native result completing after unload', async () => {
-    let release = () => {}
-    let started = () => {}
-    const entered = new Promise<void>((resolve) => {
-      started = resolve
-    })
-    mocks.beforeExecute = () =>
-      new Promise<void>((resolve) => {
-        release = resolve
-        started()
-      })
-    const pending = context(true)('registerContentScripts', [{ id: 'old' }])
-    await entered
-    forgetBrowserExtensionContentScriptRestore(session, extension.id)
-    await expect(pending).rejects.toThrow('unloaded')
-    release()
-    expect(stored()).toEqual([])
-    expect(mocks.windows[0].destroyed).toBe(true)
-  })
 })

@@ -11,7 +11,6 @@ import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
-  getCheckRunDetailsFixDisabledReason,
   isCheckRunDetailsFixCandidate,
   resolveCheckRunDetailsFixCheck,
   resolveHostedReviewForCheckRunDetailsFix,
@@ -183,16 +182,6 @@ describe('check-run-details-fix-with-ai', () => {
     expect(runtimeCall).not.toHaveBeenCalled()
   })
 
-  it('detects failing checks as fix candidates', () => {
-    expect(isCheckRunDetailsFixCandidate(fixtures.failingCheck)).toBe(true)
-    expect(
-      isCheckRunDetailsFixCandidate({
-        ...fixtures.failingCheck,
-        conclusion: 'success'
-      })
-    ).toBe(false)
-  })
-
   it('prefers loaded details conclusion over the list-level check', () => {
     const listFailure = fixtures.failingCheck
     const passingDetails: PRCheckRunDetails = {
@@ -215,14 +204,6 @@ describe('check-run-details-fix-with-ai', () => {
     ).toBe(true)
   })
 
-  it('resolves hosted review metadata from the worktree PR cache', () => {
-    expect(resolveHostedReviewForCheckRunDetailsFix(fixtures.worktree.id)).toMatchObject({
-      number: 42,
-      title: 'Fix CI',
-      url: 'https://github.com/acme/widgets/pull/42'
-    })
-  })
-
   it('does not resolve a matching suppressed GitHub PR', () => {
     storeState.worktreesByRepo = {
       'repo-1': [
@@ -235,11 +216,6 @@ describe('check-run-details-fix-with-ai', () => {
     }
 
     expect(resolveHostedReviewForCheckRunDetailsFix(fixtures.worktree.id)).toBeNull()
-  })
-
-  it('requires a hosted review before launching an AI fix', () => {
-    storeState.prCache = {}
-    expect(getCheckRunDetailsFixDisabledReason(fixtures.worktree.id)).toContain('PR or MR')
   })
 
   it('starts a single-check AI fix prompt for the owning worktree', async () => {

@@ -18,12 +18,23 @@ Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 
-Add-Type -TypeDefinition @"
+Add-Type -ReferencedAssemblies @(
+    'System.dll',
+    [Windows.Automation.AutomationElement].Assembly.Location,
+    [Windows.Automation.AutomationIdentifier].Assembly.Location
+) -TypeDefinition @"
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 public static class OrcaDesktopWin32 {
+    // Default proxy discovery needs a typed caller before PowerShell's dynamic stack frames.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    public static void InitializeAutomation() {
+        System.Windows.Automation.ClientSettings.RegisterClientSideProviders(
+            new System.Windows.Automation.ClientSideProviderDescription[0]);
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT {
         public int Left;
@@ -144,6 +155,8 @@ public static class OrcaDesktopWin32 {
     }
 }
 "@
+
+[OrcaDesktopWin32]::InitializeAutomation()
 
 $MaxNodes = 1200
 $MaxDepth = 64

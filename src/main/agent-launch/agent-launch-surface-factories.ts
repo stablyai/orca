@@ -1,3 +1,4 @@
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 /**
  * The factories `executeAgentLaunch` is handed: how a surface and a workspace are BUILT once the
  * executor has decided which. Separate from the executor because they are the contract each caller
@@ -9,8 +10,8 @@ import type {
   AgentLaunchPrompt,
   AgentLaunchMode
 } from '../../shared/agent-launch-intent'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
-import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../shared/agent-launch-preferences'
@@ -52,6 +53,7 @@ export type AgentLaunchSurfaceFactory = {
     /** Omit when the runtime reports no pane; never invent one. */
     paneKey?: string
     warning?: string
+    terminalCreation?: RuntimeTerminalCreate
     promptRodeLaunchCommand?: boolean
   }>
   /** Paste into a live PTY; return false on failure without failing the running launch. */
@@ -60,6 +62,7 @@ export type AgentLaunchSurfaceFactory = {
     agent: TuiAgent
     /** Reused terminals have no fresh launch readiness signal to await. */
     freshLaunch: boolean
+    terminalCreation?: RuntimeTerminalCreate
     prompt: AgentLaunchPrompt
     /** Abort readiness waits and refuse pending pastes. */
     signal?: AbortSignal
@@ -113,6 +116,7 @@ export type AgentLaunchWorkspaceFactory = {
     /** Null means local; absent means unresolved. */
     connectionId?: string | null
     startupTerminalHandle: string | undefined
+    startupTerminalCreation?: RuntimeTerminalCreate
     startupTerminalPaneKey?: string
     warning?: string
     promptRodeLaunchCommand?: boolean

@@ -18,13 +18,13 @@ import {
   hostTestMessage,
   HOST_TEST_SESSION as SESSION
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createStructuredAgentSessionOperationId } from '../../shared/structured-agent-session-mutation'
+import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 
 let directory: string | undefined
 let releaseOpen: (() => void) | undefined

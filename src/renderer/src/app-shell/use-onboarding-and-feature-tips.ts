@@ -7,13 +7,15 @@ import {
   isCliFeatureTipCompleted
 } from '../components/feature-tips/feature-tip-startup-gate'
 import {
+  isChatUiLaunchTipHeldOut,
+  trackChatUiFeatureTipExposure,
+  trackChatUiFeatureTipShown,
   trackCmdJPaletteFeatureTipShown,
   trackOrcaCliFeatureTipShown
 } from '../components/feature-tips/feature-tip-telemetry'
 import { useAppStore } from '../store'
 import { isWebClientLocation } from '../lib/web-client-location'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import { isInNativeChatUpgradeTipAudience } from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
 
 export type OnboardingGate = ReturnType<typeof useOnboardingAndFeatureTips>
 
@@ -30,15 +32,13 @@ export function useOnboardingAndFeatureTips() {
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
-  const inNativeChatUpgradeTipAudience = useAppStore((s) =>
-    isInNativeChatUpgradeTipAudience(s.nativeChatUpgradeTipVariant)
-  )
+  const chatUiLaunchTipVariant = useAppStore((s) => s.chatUiLaunchTipVariant)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const actions = useAppStore(
     useShallow((s) => ({
       openModal: s.openModal,
       markFeatureTipsSeen: s.markFeatureTipsSeen,
-      setNativeChatUpgradeTipVariant: s.setNativeChatUpgradeTipVariant,
+      setChatUiLaunchTipVariant: s.setChatUiLaunchTipVariant,
       setContextualToursAutoEligible: s.setContextualToursAutoEligible,
       setContextualToursOnboardingVisible: s.setContextualToursOnboardingVisible
     }))
@@ -99,16 +99,16 @@ export function useOnboardingAndFeatureTips() {
 
     let cancelled = false
     void window.api.onboarding
-      .getNativeChatUpgradeTipVariant()
+      .getChatUiLaunchTipVariant()
       .then((variant) => {
         if (!cancelled) {
-          actions.setNativeChatUpgradeTipVariant(variant)
+          actions.setChatUiLaunchTipVariant(variant)
         }
       })
       .catch(() => {
         // Fail closed without holding other tips behind this read.
         if (!cancelled) {
-          actions.setNativeChatUpgradeTipVariant('none')
+          actions.setChatUiLaunchTipVariant('none')
         }
       })
 
@@ -123,7 +123,7 @@ export function useOnboardingAndFeatureTips() {
       cliInstalled: featureTipCliInstalled,
       featureTipsSeenIds,
       featureInteractions,
-      inNativeChatUpgradeTipAudience,
+      chatUiLaunchTipVariant,
       onboarding,
       persistedUIReady,
       promptedThisSession: promptedThisSessionRef.current,
@@ -142,11 +142,22 @@ export function useOnboardingAndFeatureTips() {
       return
     }
 
+    if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant) {
+      trackChatUiFeatureTipExposure(chatUiLaunchTipVariant, settings ?? null)
+      if (isChatUiLaunchTipHeldOut(settings ?? null)) {
+        // Control behaves as if the tip never existed, so the next pending tip may take this launch.
+        actions.markFeatureTipsSeen(['chat-ui-here'])
+        return
+      }
+    }
+
     promptedThisSessionRef.current = true
     if (featureTipsDecision.tipId === 'orca-cli') {
       trackOrcaCliFeatureTipShown('app_open')
     } else if (featureTipsDecision.tipId === 'cmd-j-palette') {
       trackCmdJPaletteFeatureTipShown('app_open')
+    } else if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant) {
+      trackChatUiFeatureTipShown(chatUiLaunchTipVariant)
     }
     // Mark seen when shown so a crash before dismissal cannot repeat the tip.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
@@ -157,10 +168,10 @@ export function useOnboardingAndFeatureTips() {
   }, [
     activeModal,
     actions,
+    chatUiLaunchTipVariant,
     featureTipCliInstalled,
     featureInteractions,
     featureTipsSeenIds,
-    inNativeChatUpgradeTipAudience,
     onboarding,
     persistedUIReady,
     settings

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 import type { Repo } from '../shared/repo-types'
 import type { CreateWorktreeArgs } from '../shared/worktree/create-types'
 import type { ExecutionHostId } from '../shared/execution-host'

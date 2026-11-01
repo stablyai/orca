@@ -1,8 +1,8 @@
 // Background-task rows outlive turn settlement; only their own updates or session end settle them.
 
-import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { canReplaceBackgroundTaskState } from '../../../shared/native-chat/input/native-chat-background-task-row'
-import { isBackgroundTaskBlock } from '../../../shared/native-chat-types'
+import { isBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
 
 export function relightsProviderTimelineBackgroundTask(
   held: AgentJournalItemBody | null,

@@ -1,11 +1,11 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalRenderItem
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget

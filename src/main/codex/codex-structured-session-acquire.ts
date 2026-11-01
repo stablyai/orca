@@ -3,11 +3,11 @@ import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger
 } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
   isAgentSessionProviderHandleInNamespace
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   launchPreparationFailure,
   type AgentSessionAcquisition
@@ -22,7 +22,7 @@ import {
   createCodexSessionJournalTranslator,
   createCodexAcquisitionJournalDisposer
 } from './codex-structured-session-journal'
-import { spawnCodexAppServerConnection } from './codex-app-server-connection'
+import { spawnCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import { codexSpawnedProcessIdentity } from './codex-structured-owner-identity'
 import {
   closeCodexPublishedSession,
@@ -30,7 +30,10 @@ import {
   observeCodexSessionExit
 } from './codex-structured-session-close'
 import { openCodexStructuredSession } from './codex-structured-session-start'
-import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../shared/agent-session/failures/agent-session-failure'
 import { providerSpawnAbsent } from '../provider-process/provider-executable-missing'
 import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {

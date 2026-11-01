@@ -9,7 +9,7 @@ import {
 import {
   spawnCodexAppServerProcess,
   type CodexAppServerSpawn
-} from './codex-app-server-process-tree-kill'
+} from './app-server/codex-app-server-process-tree-kill'
 import type { CodexStateDbBackfillStatus } from './codex-state-db'
 import { runCodexStateDbBackfillRecovery } from './codex-state-db-backfill-recovery'
 import { alive, createSupervisedProbeRig, waitFor } from './supervised-probe-owner.test-fixture'

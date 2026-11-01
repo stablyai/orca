@@ -1,4 +1,4 @@
-import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
 import type { SessionState, ShellReadyState } from './types'
 
 export type SessionInfo = {

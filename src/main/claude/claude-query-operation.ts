@@ -1,5 +1,5 @@
 import type { Query } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import type { ManagedProviderProcess } from '../provider-process/managed-provider-process'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'

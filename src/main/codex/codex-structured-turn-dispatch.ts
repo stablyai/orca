@@ -2,14 +2,17 @@ import {
   StructuredAgentSessionInputNotAdmitted,
   type StructuredAgentSessionAdmitFreshInput
 } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
-import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentJournalMessageItem,
   AgentJournalTurnJoin
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
-import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+import { isCodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import {
   codexAnsweredTurn,
   codexDispatchRejection,

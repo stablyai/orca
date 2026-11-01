@@ -2,19 +2,33 @@
 // user values. `batch` parses commands from stdin without that scan.
 export const AGENT_BROWSER_BATCH_ARGS = ['batch', '--json'] as const
 
-export function agentBrowserBatchInput(command: readonly string[]): string {
+export function agentBrowserBatchInput(...commands: readonly (readonly string[])[]): string {
   // serde_json rejects lone surrogates; argv used to turn them into U+FFFD.
-  return JSON.stringify([command.map((token) => token.toWellFormed())])
+  return JSON.stringify(commands.map((command) => command.map((token) => token.toWellFormed())))
 }
 
 export type AgentBrowserEnvelope = { success?: boolean; data?: unknown; error?: string }
 
-/** Parses --json output; a one-command batch reply becomes the single-command envelope. */
-export function parseAgentBrowserJsonOutput(stdout: string): AgentBrowserEnvelope {
+type AgentBrowserBatchEntry = { result?: unknown }
+
+/** Parses --json output; Orca's own one-command batch reply becomes the single-command envelope. */
+export function parseAgentBrowserJsonOutput(
+  stdout: string,
+  { cliArgv = false }: { cliArgv?: boolean } = {}
+): AgentBrowserEnvelope {
   const parsed = JSON.parse(stdout)
-  // Orca batches one command; a longer array is a passthrough `exec batch` reply.
-  if (!Array.isArray(parsed) || parsed.length !== 1) {
+  if (!Array.isArray(parsed)) {
     return withoutDaemonLifecycle(parsed)
+  }
+  // An argv `batch` is the caller's own (`exec batch`); its steps report their own failures.
+  if (cliArgv) {
+    return {
+      success: true,
+      data: parsed.map((entry: AgentBrowserBatchEntry) => ({
+        ...entry,
+        result: withoutLifecycle(entry?.result)
+      }))
+    }
   }
   const [entry] = parsed
   return withoutDaemonLifecycle({
@@ -24,18 +38,29 @@ export function parseAgentBrowserJsonOutput(stdout: string): AgentBrowserEnvelop
   })
 }
 
-// agent-browser 0.31+ adds its daemon's launch bookkeeping to every reply; it is not page data.
 function withoutDaemonLifecycle(envelope: AgentBrowserEnvelope): AgentBrowserEnvelope {
-  const data = envelope?.data
+  const data = withoutLifecycle(envelope?.data)
+  return data === envelope?.data ? envelope : { ...envelope, data }
+}
+
+// agent-browser 0.31+ adds its daemon's launch bookkeeping to every reply; it is not page data.
+function withoutLifecycle(data: unknown): unknown {
   if (!data || typeof data !== 'object' || Array.isArray(data) || !('lifecycle' in data)) {
-    return envelope
+    return data
   }
   const { lifecycle: _lifecycle, ...rest } = data
-  return { ...envelope, data: rest }
+  return rest
 }
 
 /** Every snapshot form (plain, --full, --delta) answers with `snapshot`; annotated screenshots with `annotations`. */
 export function agentBrowserResultMintsRefs(data: unknown): boolean {
+  if (Array.isArray(data)) {
+    // An `exec batch` reply mints refs through any snapshot step that ran.
+    return data.some(
+      (step: AgentBrowserBatchEntry & { success?: boolean }) =>
+        step?.success === true && agentBrowserResultMintsRefs(step.result)
+    )
+  }
   if (!data || typeof data !== 'object') {
     return false
   }

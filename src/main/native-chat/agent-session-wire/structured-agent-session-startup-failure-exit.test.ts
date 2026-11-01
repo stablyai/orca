@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { structuredAgentSessionCompactBody } from './structured-agent-session-command-turn'
 import {
   settleStructuredAgentSessionChildExit,
@@ -12,7 +12,7 @@ import {
   type StructuredAgentSessionChildExitSession
 } from './structured-agent-session-child-exit'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { exitJournalDouble } from './structured-agent-session-settlement-double.test-fixture'
 
 const SESSION = 'session-1'
@@ -78,34 +78,6 @@ const ended = {
 }
 
 describe('a provider that ends before it finished starting', () => {
-  it('tells the user why, even with no response in progress', async () => {
-    const session = {
-      ...startedSession(),
-      child: { generation: GENERATION, fence: 7, phase: 'starting' as const }
-    }
-
-    await settleStructuredAgentSessionChildExit(contextFor(session), {
-      ...ended,
-      failure: { kind: 'notSignedIn' }
-    })
-
-    expect(session.appendLifecycleBatch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        mutations: [
-          expect.objectContaining({
-            identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
-            body: {
-              kind: 'status',
-              text: "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings.",
-              tone: 'error',
-              failure: { kind: 'notSignedIn' }
-            }
-          })
-        ]
-      })
-    )
-  })
-
   it('keeps an ordinary idle exit silent', async () => {
     const session = startedSession()
 

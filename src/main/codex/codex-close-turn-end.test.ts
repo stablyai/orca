@@ -1,7 +1,7 @@
 import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import { createCodexTurnOpenWaits } from './codex-structured-turn-open-wait'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'

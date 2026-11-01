@@ -16,11 +16,11 @@ function hasControlCharacter(value: string): boolean {
 }
 const iconSlotSchema = z.enum(PLUGIN_ICON_THEME_SLOTS)
 
-const fileNameSchema = z
+const entryNameSchema = z
   .string()
   .min(1)
   .max(128)
-  .refine((name) => !/[\\/]/.test(name) && !hasControlCharacter(name), 'unsafe file name')
+  .refine((name) => !/[\\/]/.test(name) && !hasControlCharacter(name), 'unsafe name')
 const fileExtensionSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9+._-]{0,31}$/)
 
 // Why: z.record drops an own `__proto__` key, but a file may legitimately be named that.
@@ -46,27 +46,39 @@ function ownKeyRecord<Value>(keySchema: z.ZodType<string>, valueSchema: z.ZodTyp
 
 const ICON_SLOT_SET: ReadonlySet<string> = new Set(PLUGIN_ICON_THEME_SLOTS)
 
+/** Name-keyed maps, each lowercased on parse. */
+const ICON_THEME_NAME_MAPS = [
+  'fileNames',
+  'fileExtensions',
+  'folderNames',
+  'folderNamesExpanded'
+] as const
+type PluginIconThemeNameMap = (typeof ICON_THEME_NAME_MAPS)[number]
+
 function pluginIconThemeArtifactSchema(strictness: PluginArtifactStrictness) {
   const icons = z.partialRecord(iconSlotSchema, pluginRelativePathSchema)
+  const nameMap = (key: z.ZodType<string>) =>
+    ownKeyRecord(key, pluginRelativePathSchema).default({})
   const fields = {
     schemaVersion: z.literal(1),
     icons: (strictness === 'strict'
       ? icons
       : z.preprocess(pickKnownArtifactKeys(ICON_SLOT_SET), icons)
     ).default({}),
-    fileNames: ownKeyRecord(fileNameSchema, pluginRelativePathSchema).default({}),
-    fileExtensions: ownKeyRecord(fileExtensionSchema, pluginRelativePathSchema).default({})
+    fileNames: nameMap(entryNameSchema),
+    fileExtensions: nameMap(fileExtensionSchema),
+    // Why these names: popular file icon themes use them, so ports keep their keys.
+    folderNames: nameMap(entryNameSchema),
+    folderNamesExpanded: nameMap(entryNameSchema)
   }
   return strictness === 'strict' ? z.strictObject(fields) : z.object(fields)
 }
 
 export type PluginIconThemeArtifact = {
   icons: Partial<Record<PluginIconThemeSlot, string>>
-  fileNames: Record<string, string>
-  fileExtensions: Record<string, string>
-}
+} & Record<PluginIconThemeNameMap, Record<string, string>>
 
-/** Lowercases name and extension keys so lookups match on case-insensitive filesystems. */
+/** Lowercases every name-map key so lookups match on case-insensitive filesystems. */
 export function parsePluginIconThemeArtifact(
   raw: string,
   strictness: PluginArtifactStrictness = 'tolerant'
@@ -84,19 +96,31 @@ export function parsePluginIconThemeArtifact(
     }
     return result
   }
-  const artifact = {
+  const artifact: PluginIconThemeArtifact = {
     icons: parsed.icons,
     fileNames: lowercaseKeys(parsed.fileNames, 'file name'),
-    fileExtensions: lowercaseKeys(parsed.fileExtensions, 'file extension')
+    fileExtensions: lowercaseKeys(parsed.fileExtensions, 'file extension'),
+    folderNames: lowercaseKeys(parsed.folderNames, 'folder name'),
+    folderNamesExpanded: lowercaseKeys(parsed.folderNamesExpanded, 'expanded folder name')
   }
-  const mappings =
-    Object.keys(artifact.icons).length +
-    Object.keys(artifact.fileNames).length +
-    Object.keys(artifact.fileExtensions).length
+  const mappings = pluginIconThemeIconRefs(artifact).length
   if (mappings > ICON_THEME_MAPPING_LIMIT) {
     throw new Error(`icon theme exceeds ${ICON_THEME_MAPPING_LIMIT} mappings`)
   }
   return artifact
+}
+
+/** Every slot and name mapping's target, in a stable order; one entry per mapping. */
+export function pluginIconThemeIconRefs<Ref>(
+  theme: { icons: Partial<Record<PluginIconThemeSlot, Ref>> } & Record<
+    PluginIconThemeNameMap,
+    Record<string, Ref>
+  >
+): Ref[] {
+  return [
+    ...Object.values(theme.icons),
+    ...ICON_THEME_NAME_MAPS.flatMap((map) => Object.values(theme[map]))
+  ].filter((ref): ref is Ref => ref !== undefined)
 }
 
 export const PLUGIN_ICON_SVG_MAX_BYTES = 64 * 1024
@@ -133,15 +157,12 @@ const pluginIconThemeRegistrationObjectSchema = pluginIconThemeMetadataSchema.ex
   svgs: z.array(z.string().max(PLUGIN_ICON_SVG_MAX_BYTES)).max(PLUGIN_ICON_THEME_MAX_SVGS),
   icons: z.partialRecord(iconSlotSchema, svgIndexSchema),
   fileNames: ownKeyRecord(z.string(), svgIndexSchema),
-  fileExtensions: ownKeyRecord(z.string(), svgIndexSchema)
+  fileExtensions: ownKeyRecord(z.string(), svgIndexSchema),
+  folderNames: ownKeyRecord(z.string(), svgIndexSchema),
+  folderNamesExpanded: ownKeyRecord(z.string(), svgIndexSchema)
 })
 const pluginIconThemeRegistrationSchema = pluginIconThemeRegistrationObjectSchema.refine(
-  (theme) =>
-    [
-      ...Object.values(theme.icons),
-      ...Object.values(theme.fileNames),
-      ...Object.values(theme.fileExtensions)
-    ].every((index) => index < theme.svgs.length),
+  (theme) => pluginIconThemeIconRefs(theme).every((index) => index < theme.svgs.length),
   'icon index outside svgs'
 )
 

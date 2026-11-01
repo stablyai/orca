@@ -23,7 +23,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
     radius?: number,
     modifiers?: BrowserMouseModifier[]
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (_sessionName, target) => {
@@ -45,6 +45,8 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
           releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
           // Hit testing can activate an element; recheck access after awaiting focus.
           assertRemoteCliBrowserAccess(target.webContentsId)
+          // A DOM-activated tap fires no guest input event, so credit it before it can open a link.
+          this.browserManager.creditPageInput(target.webContentsId)
           const point =
             cdpButton === 'left'
               ? // DOM activation drops modifiers; let CDP dispatch modifier clicks.
@@ -102,13 +104,17 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+    const run = async (sessionName: string): Promise<unknown> => {
       const args = ['find', locator, value, action]
       if (text) {
         args.push(text)
       }
       return await this.execAgentBrowser(sessionName, args)
-    })
+    }
+    // `text` reads the element; every other find action acts on it.
+    return action === 'text'
+      ? this.enqueueTargetedCommand(worktreeId, browserPageId, run)
+      : this.enqueuePageAction(worktreeId, browserPageId, run)
   }
 
   async setDevice(name: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {

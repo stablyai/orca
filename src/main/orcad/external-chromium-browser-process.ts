@@ -4,6 +4,7 @@ import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands
 import { BrowserError } from '../browser/browser-error'
 import { assertUploadFilesExist } from '../browser/browser-upload-files'
 import {
+  agentBrowserEvalCommand,
   ExternalChromiumBrowserSession,
   type ExternalChromiumLaunch
 } from './external-chromium-browser-session'
@@ -18,11 +19,15 @@ import {
   type ExternalChromiumPageRecord as PageRecord
 } from './external-chromium-tab-projection'
 import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
+import { runExternalChromiumPageInput } from './external-chromium-page-input'
+import { agentBrowserSnapshotArgs } from '../browser/agent-browser-snapshot-arguments'
+import { Snapshot } from '../../shared/rpc-contract/browser-observation-params'
 const AgentBrowserSnapshot = z.object({
   refs: z
     .record(z.string(), z.object({ name: z.string().optional(), role: z.string().optional() }))
     .optional(),
-  snapshot: z.string().optional()
+  // An object for --delta/--full: agent-browser's full, unchanged or delta answer.
+  snapshot: z.union([z.string(), z.looseObject({ kind: z.string() })]).optional()
 })
 
 export class ExternalChromiumBrowserProcess {
@@ -138,7 +143,7 @@ export class ExternalChromiumBrowserProcess {
     const page = await this.tabs.resolveTargetPage(host, params)
     await this.session.selectPage(page.agentPageId)
     if (method === 'browserSnapshot') {
-      return this.snapshot(page)
+      return this.snapshot(page, params)
     }
     if (method === 'browserScreenshot') {
       return this.session.screenshot(params, false)
@@ -160,19 +165,16 @@ export class ExternalChromiumBrowserProcess {
       return this.session.run(['open', url])
     }
     if (method === 'browserEval') {
-      // eval reads a leading -b or --stdin as its own option; base64 never starts with "-".
-      const expression = Buffer.from(String(params.expression ?? '')).toString('base64')
-      return this.session.run(['eval', '-b', expression])
+      return this.session.run(agentBrowserEvalCommand(String(params.expression ?? '')))
     }
     if (method === 'browserWait') {
       const { args, processTimeoutMs } = externalChromiumWaitCommand(params)
       await this.session.run(args, { timeoutMs: processTimeoutMs })
       return { waited: true }
     }
-    if (method === 'browserSelectAll') {
-      await this.session.run(['focus', String(params.element ?? '')])
-      await this.session.run(['press', 'Control+a'])
-      return { selected: String(params.element ?? '') }
+    const input = await runExternalChromiumPageInput(this.session, method, params)
+    if (input !== null) {
+      return input
     }
     if (method === 'browserBack' || method === 'browserForward' || method === 'browserReload') {
       await this.session.run([method.slice('browser'.length).toLowerCase()])
@@ -195,8 +197,10 @@ export class ExternalChromiumBrowserProcess {
     return normalizeExternalChromiumCommandResult(method, params, result)
   }
 
-  private async snapshot(page: PageRecord): Promise<unknown> {
-    const data = AgentBrowserSnapshot.parse(await this.session.run(['snapshot']))
+  private async snapshot(page: PageRecord, params: Record<string, unknown>): Promise<unknown> {
+    const data = AgentBrowserSnapshot.parse(
+      await this.session.run(agentBrowserSnapshotArgs(Snapshot.parse(params)))
+    )
     return externalChromiumSnapshotResult(page, data, await this.tabs.describePage(page))
   }
 }

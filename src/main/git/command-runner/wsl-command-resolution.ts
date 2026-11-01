@@ -49,7 +49,7 @@ export type ResolvedCommand = {
   cwd: string | undefined
   wsl: WslPathInfo | null
   wslMode: 'direct-git' | 'login-shell' | 'non-login-shell' | null
-  /** Present only when the caller opted into a fenced login-shell read. */
+  /** Present only for a fenced (buffered) login-shell read. */
   captured?: WslCapturedLoginShellCommand
   termination?: WslProcessGroupTermination
 }

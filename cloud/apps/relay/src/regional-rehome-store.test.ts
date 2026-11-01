@@ -7,7 +7,7 @@ import {
   REGIONAL_REHOME_QUARANTINE_FAILURES,
   REGIONAL_REHOME_QUARANTINE_MS,
   REGIONAL_REHOME_REDRAIN_SEND_LIMIT
-} from './assignment-store.js'
+} from './assignment/assignment-store.js'
 import {
   openInMemoryRelayDatabase,
   type RelayDatabase,

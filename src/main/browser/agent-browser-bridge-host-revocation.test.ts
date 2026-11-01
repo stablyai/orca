@@ -527,4 +527,27 @@ describe('AgentBrowserBridge under a host revocation', () => {
 
     expect(startedInHostScope).toBe(false)
   })
+
+  it('never reports the URL or title of a desktop page a snapshot ended up on', async () => {
+    let admitted = true
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'snapshot') {
+        // The page navigates to a desktop-local document while agent-browser answers.
+        admitted = false
+      }
+      cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
+    })
+    webContentsFromIdMock.mockReturnValue(
+      mockWebContents(100, 'file:///Users/me/notes.txt', 'notes')
+    )
+
+    await expect(
+      runInRemoteCliBrowserScope(
+        WORKSPACE,
+        () => bridge.snapshot(undefined, 'tab-1'),
+        undefined,
+        () => admitted
+      )
+    ).rejects.toMatchObject({ code: 'desktop_browser_bridge_unrouted' })
+  })
 })

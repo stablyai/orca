@@ -1,4 +1,4 @@
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 import { spawnProcessOnWorkerThread } from './worker-thread-child-process/worker-thread-child-process'
 import type {
   WorkspaceSpaceAnalysis,
