@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import SourceControl from './SourceControl'
+import { createSourceControlRemoteState } from './source-control-remote-state.test-fixture'
 import {
   VIRTUALIZED_LIST_MIN_ROWS,
   VIRTUALIZED_LIST_OVERSCAN,
@@ -114,9 +115,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     gitBranchCompareSummaryByWorktree: { [mocks.activeWorktree.id]: null },
     gitBranchLineTotalByWorktree: {},
     gitConflictOperationByWorktree: {},
-    remoteStatusesByWorktree: {},
-    isRemoteOperationActive: false,
-    inFlightRemoteOpKind: null,
+    ...createSourceControlRemoteState(),
     settings: null,
     hostedReviewCache: {},
     prCache: {},

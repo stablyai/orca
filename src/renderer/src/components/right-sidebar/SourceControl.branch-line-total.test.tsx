@@ -10,6 +10,7 @@ import {
   getBranchLineTotalMergeBase
 } from './branch-line-total-request-gate'
 import SourceControl from './SourceControl'
+import { createSourceControlRemoteState } from './source-control-remote-state.test-fixture'
 
 const MERGE_BASE = '1f3c0d9a5b6e7f8091a2b3c4d5e6f708192a3b4c'
 
@@ -108,9 +109,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     gitBranchCompareSummaryByWorktree: { [mocks.activeWorktree.id]: readySummary },
     gitBranchLineTotalByWorktree: {},
     gitConflictOperationByWorktree: {},
-    remoteStatusesByWorktree: {},
-    isRemoteOperationActive: false,
-    inFlightRemoteOpKind: null,
+    ...createSourceControlRemoteState(),
     settings: null,
     hostedReviewCache: {},
     prCache: {},

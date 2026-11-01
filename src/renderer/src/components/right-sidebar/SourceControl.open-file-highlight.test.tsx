@@ -8,6 +8,7 @@ import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 import { toBranchCompareSnapshot } from '@/store/slices/editor/git/git-status-reconciliation'
 import SourceControl from './SourceControl'
+import { createSourceControlRemoteState } from './source-control-remote-state.test-fixture'
 
 const mocks = vi.hoisted(() => {
   const activeRepo = {
@@ -111,9 +112,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     gitBranchCompareSummaryByWorktree: { [mocks.activeWorktree.id]: null },
     gitBranchLineTotalByWorktree: {},
     gitConflictOperationByWorktree: {},
-    remoteStatusesByWorktree: {},
-    isRemoteOperationActive: false,
-    inFlightRemoteOpKind: null,
+    ...createSourceControlRemoteState(),
     settings: null,
     hostedReviewCache: {},
     prCache: {},
