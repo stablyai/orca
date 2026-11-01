@@ -159,8 +159,6 @@ function StarNagToast({
           variant="secondary"
           size="sm"
           className="w-[84px]"
-          // Modal-safe: only defers this toast.
-          data-toast-modal-safe
           onClick={later}
           disabled={busy || status === 'starred' || status === 'opened'}
         >

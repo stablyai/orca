@@ -67,6 +67,9 @@ for (const theme of ['dark', 'light'] as const) {
         .filter({ hasText: 'Cannot open folder on selected runtime' })
         .first()
       await expect(toast).toBeVisible()
+      // A new error raised by the modal stays readable and dismissible above its backdrop.
+      await expect(toast.locator('[data-title]')).toBeVisible()
+      await expect(toast.locator('[data-close-button]')).toBeVisible()
       await expect(pathField).toHaveValue(missingPath)
       await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
       await page.screenshot({
@@ -134,25 +137,24 @@ for (const theme of ['dark', 'light'] as const) {
             await cdp.detach()
           }
         }
-        // Default-deny: a custom toast's unmarked action is visibly inert above the modal.
-        await expect(customToast.getByRole('button', { name: 'Open GitHub' })).toHaveAttribute(
-          'aria-disabled',
-          'true'
-        )
-        // Modal-safe: Later only defers the toast, so it runs without touching the modal.
+        // Above a modal only the message and close stay; other controls are hidden and inert.
+        // includeHidden: visibility:hidden also drops the controls from the accessibility tree.
+        const later = customToast.getByRole('button', {
+          name: 'Later',
+          exact: true,
+          includeHidden: true
+        })
+        await expect(later).toHaveCSS('visibility', 'hidden')
+        await expect(
+          customToast.getByRole('button', { name: 'Open GitHub', includeHidden: true })
+        ).toHaveCSS('visibility', 'hidden')
+        await expect(customToast.getByText('Onboarding completed!')).toBeVisible()
         await pathField.click()
-        await clickToastControl(customToast.getByRole('button', { name: 'Later', exact: true }))
-        await expect(customToast).toBeHidden()
+        await later.dispatchEvent('click')
+        await expect(customToast).toBeVisible()
         await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
         await expect(pathField).toHaveValue(missingPath)
         expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
-        await client.app.evaluate(({ BrowserWindow }) => {
-          BrowserWindow.getAllWindows()[0].webContents.send('star-nag:show', {
-            mode: 'web',
-            surface: 'toast'
-          })
-        })
-        await expect(customToast).toBeVisible()
         await clickToastControl(customToast.getByRole('button', { name: 'Dismiss', exact: true }))
         await expect(customToast).toBeHidden()
         await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
@@ -173,14 +175,13 @@ for (const theme of ['dark', 'light'] as const) {
       const actionToast = page
         .locator('[data-sonner-toast]')
         .filter({ hasText: 'A device tried to connect but is not paired' })
-      const action = actionToast.getByRole('button', { name: 'Open Mobile Settings' })
-      await expect(action).toBeVisible()
-      // Navigating actions stay blocked above a modal, and must look it rather than look live.
-      await expect(action).toHaveAttribute('aria-disabled', 'true')
-      await expect(action).toHaveAttribute('title', 'Close the dialog to use this')
-      await expect(action).toHaveCSS('opacity', '0.5')
-      await expect(action).toHaveCSS('cursor', 'not-allowed')
-      await action.click({ force: true })
+      const action = actionToast.getByRole('button', {
+        name: 'Open Mobile Settings',
+        includeHidden: true
+      })
+      await expect(actionToast.locator('[data-title]')).toBeVisible()
+      await expect(action).toHaveCSS('visibility', 'hidden')
+      await action.dispatchEvent('click')
       await actionToast.locator('[data-title]').click()
       await expect(actionToast).toBeVisible()
       await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
@@ -241,8 +242,8 @@ for (const theme of ['dark', 'light'] as const) {
       await page.evaluate(() => document.body.setAttribute('data-scroll-locked', '1'))
       await expect(toaster).toHaveCSS('z-index', '47')
       await page.evaluate(() => document.body.removeAttribute('data-scroll-locked'))
-      await expect(action).not.toHaveAttribute('aria-disabled')
-      await expect(action).toHaveCSS('opacity', '1')
+      // The action returns once the last modal overlay is gone, and runs normally.
+      await expect(action).toBeVisible()
       await action.click()
       await expect(page.getByPlaceholder('Search settings')).toBeVisible()
       await assertHiddenIsolation(client.app, testInfo, 'client-final-isolation')
@@ -255,8 +256,17 @@ for (const theme of ['dark', 'light'] as const) {
   })
 }
 
+async function showUnpairedDeviceToast(app: ElectronApplication): Promise<void> {
+  // A real persistent action toast, fed a synthetic notification.
+  await app.evaluate(({ ipcMain, BrowserWindow }) => {
+    ipcMain.removeHandler('mobile:consumePendingUnpairedDeviceAuthFailure')
+    ipcMain.handle('mobile:consumePendingUnpairedDeviceAuthFailure', () => true)
+    BrowserWindow.getAllWindows()[0].webContents.send('mobile:unpairedDeviceAuthFailure')
+  })
+}
+
 for (const theme of ['dark', 'light'] as const) {
-  test(`a navigating toast action cannot unmount a settings dialog draft (${theme})`, async ({
+  test(`a hidden toast action cannot unmount a settings dialog draft (${theme})`, async ({
     electronApp,
     orcaPage: page
   }) => {
@@ -266,111 +276,45 @@ for (const theme of ['dark', 'light'] as const) {
       store.openSettingsPage()
       store.openSettingsTarget({ pane: 'browser', repoId: null })
     }, theme)
+    const unpairedToast = page
+      .locator('[data-sonner-toast]')
+      .filter({ hasText: 'A device tried to connect but is not paired' })
+    const action = unpairedToast.getByRole('button', {
+      name: 'Open Mobile Settings',
+      includeHidden: true
+    })
+    const mobilePane = page.getByText('Control terminals and agents from your phone.')
+
+    // An older persistent toast, raised before the modal opened, stays dismissible over it.
+    await showUnpairedDeviceToast(electronApp)
+    await expect(action).toBeVisible()
     await page.getByRole('button', { name: 'Add Profile', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'New Browser Profile' })
     await expect(dialog).toBeVisible()
     const nameField = dialog.getByRole('textbox')
     await nameField.fill('Draft profile name')
-
-    await electronApp.evaluate(({ ipcMain, BrowserWindow }) => {
-      ipcMain.removeHandler('mobile:consumePendingUnpairedDeviceAuthFailure')
-      ipcMain.handle('mobile:consumePendingUnpairedDeviceAuthFailure', () => true)
-      BrowserWindow.getAllWindows()[0].webContents.send('mobile:unpairedDeviceAuthFailure')
-    })
-    const action = page
-      .locator('[data-sonner-toast]')
-      .filter({ hasText: 'A device tried to connect but is not paired' })
-      .getByRole('button', { name: 'Open Mobile Settings' })
-    await expect(action).toBeVisible()
-    await expect(action).toHaveAttribute('aria-disabled', 'true')
-    await expect(action).toHaveCSS('opacity', '0.5')
-    // Before default-deny, this switched to Mobile settings and unmounted the dialog with its draft.
-    await action.click({ force: true })
-    const mobilePane = page.getByText('Control terminals and agents from your phone.')
+    await expect(unpairedToast.locator('[data-title]')).toBeVisible()
+    await expect(action).toHaveCSS('visibility', 'hidden')
+    await unpairedToast.locator('[data-close-button]').click()
+    await expect(unpairedToast).toBeHidden()
     await expect(dialog).toBeVisible()
     await expect(nameField).toHaveValue('Draft profile name')
-    expect(await nameField.evaluate((input) => input === document.activeElement)).toBe(true)
+    await expect(nameField).toBeFocused()
+
+    // Before #36888, this action looked live; letting it run switched panes and dropped the draft.
+    await showUnpairedDeviceToast(electronApp)
+    await expect(unpairedToast.locator('[data-title]')).toBeVisible()
+    await expect(action).toHaveCSS('visibility', 'hidden')
+    await action.dispatchEvent('click')
+    await expect(dialog).toBeVisible()
+    await expect(nameField).toHaveValue('Draft profile name')
+    await expect(nameField).toBeFocused()
     await expect(mobilePane).toBeHidden()
 
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(dialog).toBeHidden()
-    await expect(action).not.toHaveAttribute('aria-disabled')
+    await expect(action).toBeVisible()
     await action.click()
     await expect(mobilePane).toBeVisible()
   })
 }
-
-test('closing a dialog opened by a modal-safe toast action returns focus to the modal draft', async ({
-  electronApp,
-  orcaPage: page
-}) => {
-  await page.evaluate(() => {
-    const store = window.__store!.getState()
-    store.openSettingsPage()
-    store.openSettingsTarget({ pane: 'browser', repoId: null })
-  })
-  await page.getByRole('button', { name: 'Add Profile', exact: true }).click()
-  const profileDialog = page.getByRole('dialog', { name: 'New Browser Profile' })
-  const nameField = profileDialog.getByRole('textbox')
-  await nameField.fill('Draft')
-  const reviewDialog = page.getByRole('dialog', { name: 'Update skills' })
-
-  const dismissals = {
-    close: () => reviewDialog.getByRole('button', { name: 'Close', exact: true }).click(),
-    minimize: () => reviewDialog.getByRole('button', { name: 'Minimize', exact: true }).click(),
-    // Radix arms a just-opened sibling dialog's Escape a render late; until then Escape is a
-    // no-op (never closes the draft beneath), so retry until the review dialog takes it.
-    escape: () =>
-      expect(async () => {
-        await page.keyboard.press('Escape')
-        await expect(reviewDialog).toBeHidden({ timeout: 500 })
-        await expect(profileDialog).toBeVisible()
-      }).toPass()
-  }
-  for (const [dismissal, dismiss] of Object.entries(dismissals)) {
-    // A synthetic outdated-skill plan; a fresh digest per round so the nudge shows again.
-    await electronApp.evaluate(({ app, ipcMain }, digest) => {
-      ipcMain.removeHandler('skills:bundledPlan')
-      ipcMain.handle('skills:bundledPlan', () => ({
-        scope: 'global',
-        homeDirectory: app.getPath('home'),
-        planDigest: `plan-${digest}`,
-        skills: [
-          {
-            name: 'orca-cli',
-            digest,
-            ops: [
-              {
-                kind: 'update',
-                path: `${app.getPath('home')}/.agents/skills/orca-cli`,
-                role: 'shared',
-                agents: [],
-                observed: { kind: 'folder', entries: ['SKILL.md:file'], skillDigest: 'old' },
-                content: 'files',
-                cleanup: []
-              }
-            ]
-          }
-        ]
-      }))
-    }, `digest-${dismissal}`)
-    await page.evaluate(() =>
-      window.dispatchEvent(new Event('orca:installed-agent-skills-changed'))
-    )
-    const update = page
-      .locator('[data-sonner-toast]')
-      .filter({ hasText: 'An installed Orca skill is out of date' })
-      .getByRole('button', { name: 'Update skill' })
-    await expect(update).toBeVisible()
-    await expect(update).not.toHaveAttribute('aria-disabled')
-    await update.click()
-    await expect(reviewDialog).toBeVisible()
-
-    await dismiss()
-    await expect(reviewDialog).toBeHidden()
-    await expect(profileDialog).toBeVisible()
-    await expect(nameField, `${dismissal} returns focus to the draft`).toBeFocused()
-    await page.keyboard.type(` ${dismissal}`)
-  }
-  await expect(nameField).toHaveValue('Draft close minimize escape')
-})

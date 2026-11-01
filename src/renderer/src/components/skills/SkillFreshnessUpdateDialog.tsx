@@ -214,11 +214,6 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
     getSkillFreshnessUpdateDialogOpenRequest
   )
   const open = openRequest !== null
-  // Kept past close: the request is consumed before Radix fires onCloseAutoFocus.
-  const [returnFocus, setReturnFocus] = useState(() => openRequest?.onCloseAutoFocus)
-  if (openRequest && openRequest.onCloseAutoFocus !== returnFocus) {
-    setReturnFocus(() => openRequest.onCloseAutoFocus)
-  }
   const target = openRequest?.target === undefined ? activeTarget : openRequest.target
   const targetKey = target ? bundledSkillTargetKey(target) : null
   const state = useSkillFreshness(target)
@@ -308,7 +303,6 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
       <DialogContent
         aria-describedby={undefined}
         closeButtonVariant="minimize"
-        onCloseAutoFocus={returnFocus}
         className="scrollbar-sleek max-h-[85vh] overflow-y-auto sm:max-w-xl"
       >
         <DialogHeader>
