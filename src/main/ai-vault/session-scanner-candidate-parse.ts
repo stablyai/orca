@@ -2,6 +2,7 @@ import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import { isConversationNameRequestSession } from './conversation-name-request-sessions'
 import { candidateFileTime } from './antigravity-transcript-candidates'
 import {
+  aiVaultAgentLabel,
   isAiVaultSessionResumableContent,
   isAiVaultSessionRecoverableEmpty,
   type AiVaultScanIssue,
@@ -190,7 +191,9 @@ function unreadableTranscriptIssue(
     executionHostId,
     agent: candidate.agent,
     path: candidate.file.path,
-    ...aiVaultScanIssueText('sessionMetadataUnreadable')
+    ...aiVaultScanIssueText('transcriptTooLarge', {
+      params: { label: aiVaultAgentLabel(candidate.agent) }
+    })
   }
 }
 

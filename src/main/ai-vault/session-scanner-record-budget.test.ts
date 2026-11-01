@@ -8,7 +8,7 @@ import {
 } from './session-scanner-parse-cache'
 import { getSessionParseCacheEntry } from './session-parse-cache-store'
 import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
-import { codexFixture } from './session-scanner-codex-fixtures'
+import { codexFixture, codexWorkerFixtureLines } from './session-scanner-codex-fixtures'
 import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './session-transcript-record-budget'
@@ -156,7 +156,22 @@ it('reports skipped-only conversation content without treating an empty file as 
       executionHostId: 'local',
       agent: 'claude',
       path,
-      ...aiVaultScanIssueText('sessionMetadataUnreadable')
+      ...aiVaultScanIssueText('transcriptTooLarge', { params: { label: 'Claude' } })
     }
   ])
+})
+
+it('keeps a non-user Codex transcript out of the list and issues after a skipped record', async () => {
+  const root = await tempRoot('orca-record-budget-worker-')
+  const roots = isolatedScanRoots(root)
+  const dir = roots.codexSessionsDir
+  const path = join(dir, codexFixture().fileName)
+
+  await mkdir(dir, { recursive: true })
+  await writeFile(path, OVERSIZED)
+  await appendFile(path, `\n${codexWorkerFixtureLines().join('\n')}\n`)
+
+  const result = await scanAiVaultSessions(roots)
+  expect(result.sessions.find((entry) => entry.filePath === path)).toBeUndefined()
+  expect(result.issues).toEqual([])
 })

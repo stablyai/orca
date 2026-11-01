@@ -20856,6 +20856,7 @@
     "scanIssues": {
       "issuesOmitted": "已省略其他掃描問題。",
       "sessionMetadataUnreadable": "本次掃描無法讀取工作階段後設資料。",
+      "transcriptTooLarge": "有一個 {{label}} 對話過大，無法在工作階段歷史記錄中載入。請嘗試直接在 {{label}} 中繼續該對話。",
       "openCodeScannerUnavailable": "由於無法啟動背景掃描器，已跳過 OpenCode 歷史記錄；應用程式仍可正常回應。",
       "openCodeScanIncomplete": "OpenCode 歷史記錄掃描未完成：{{detail}}",
       "openCodeWslReaderPreparing": "正在準備 WSL SQLite 讀取器。設定完成後請重新整理 Vault。",

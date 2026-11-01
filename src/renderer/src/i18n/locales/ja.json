@@ -20833,6 +20833,7 @@
     "scanIssues": {
       "issuesOmitted": "その他のスキャンの問題は省略されました。",
       "sessionMetadataUnreadable": "今回のスキャンではセッションのメタデータを読み取れませんでした。",
+      "transcriptTooLarge": "{{label}} の会話が大きすぎるため、セッション履歴に読み込めません。{{label}} で直接再開してみてください。",
       "openCodeScannerUnavailable": "バックグラウンドスキャナーを起動できなかったため、OpenCode の履歴をスキップしました。アプリの応答性は保たれています。",
       "openCodeScanIncomplete": "OpenCode の履歴スキャンが完了しませんでした: {{detail}}",
       "openCodeWslReaderPreparing": "WSL 用 SQLite リーダーを準備しています。セットアップ完了後に Vault を更新してください。",

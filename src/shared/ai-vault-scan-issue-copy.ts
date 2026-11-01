@@ -2,6 +2,8 @@
 export const AI_VAULT_SCAN_ISSUE_COPY = {
   issuesOmitted: 'Additional scan issues were omitted.',
   sessionMetadataUnreadable: 'Session metadata could not be read this scan.',
+  transcriptTooLarge:
+    'A {{label}} conversation is too large to load in Session History. Try resuming it in {{label}} directly.',
   openCodeScannerUnavailable:
     'OpenCode history was skipped because its background scanner could not start; the app remains responsive.',
   openCodeScanIncomplete: 'OpenCode history scan did not complete: {{detail}}',

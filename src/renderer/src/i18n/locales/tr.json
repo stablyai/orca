@@ -21159,6 +21159,7 @@
     "scanIssues": {
       "issuesOmitted": "Ek tarama sorunları gösterilmedi.",
       "sessionMetadataUnreadable": "Bu taramada oturum meta verileri okunamadı.",
+      "transcriptTooLarge": "Bir {{label}} konuşması Oturum Geçmişi'nde yüklenemeyecek kadar büyük. Doğrudan {{label}} içinde sürdürmeyi deneyin.",
       "openCodeScannerUnavailable": "Arka plan tarayıcısı başlatılamadığı için OpenCode geçmişi atlandı; uygulama yanıt vermeye devam ediyor.",
       "openCodeScanIncomplete": "OpenCode geçmiş taraması tamamlanamadı: {{detail}}",
       "openCodeWslReaderPreparing": "WSL SQLite okuyucusu hazırlanıyor. Kurulum tamamlandıktan sonra Vault bölümünü yenileyin.",
