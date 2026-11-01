@@ -171,6 +171,7 @@ export const EXECUTION_HOST_METHODS = [
   'repo.list',
   'repo.saveSparsePreset',
   'repo.searchRefs',
+  'repo.show',
   'repo.sparsePresets',
   'repo.update',
   'settings.getAgentLaunch',
