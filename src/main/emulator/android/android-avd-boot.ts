@@ -4,8 +4,12 @@ import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { bootCompletedArgs, isBootCompleted } from './adb-devices'
-import { bootAvdArgs, listAvdsArgs, parseAvdList } from './avd-manager'
-import { findRunningAvdSerial, listRunningAdbDevices } from './android-device-inventory'
+import { bootAvdArgs } from './avd-manager'
+import {
+  findRunningAvdSerial,
+  listAvdNames,
+  listRunningAdbDevices
+} from './android-device-inventory'
 import { emulatorProbeError } from '../emulator-probe'
 
 export type AndroidBootOptions = {
@@ -29,8 +33,8 @@ export async function bootAndroidDevice(
     return existing
   }
   // Reject stale serials before launching an invalid AVD and waiting out the boot timeout.
-  const avds = parseAvdList((await runner(sdk.emulator, listAvdsArgs)).stdout)
-  if (!avds.includes(deviceOrName)) {
+  const avds = await listAvdNames(runner, sdk)
+  if (!sdk.emulator || !avds.includes(deviceOrName)) {
     throw new EmulatorError(
       'emulator_device_not_found',
       emulatorFailureText('unknownDeviceOrAvd', { device: deviceOrName })

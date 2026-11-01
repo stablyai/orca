@@ -8,6 +8,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileGitHistoryItem } from './git-history-reply-schema'
 import { MobileCommitDetailPage } from './MobileCommitDetailPage'
+import type { MobileDiffFileTarget } from './use-mobile-source-control-openers'
 import { MobileGitHistoryList, type MobileGitHistoryListProps } from './MobileGitHistoryList'
 
 type OpenCommit = (commit: MobileGitHistoryItem) => void
@@ -17,12 +18,14 @@ type Props = Omit<MobileGitHistoryListProps, 'onOpenCommit'> & {
   embedded?: boolean
   // Set by a parent whose own commit page covers more than this list, e.g. the whole Source Control screen.
   onOpenCommit?: OpenCommit
+  openDiffForFile?: (target: MobileDiffFileTarget) => void
 }
 
 // The branch's commits; a commit opens over them unless the parent hosts the commit page itself.
 export const MobileCommitsScreen = memo(function MobileCommitsScreen({
   embedded = false,
   onOpenCommit,
+  openDiffForFile,
   ...props
 }: Props) {
   const list = (open: OpenCommit) => <MobileGitHistoryList {...props} onOpenCommit={open} />
@@ -37,6 +40,7 @@ export const MobileCommitsScreen = memo(function MobileCommitsScreen({
       worktreeId={props.worktreeId}
       bottomInset={props.bottomInset}
       padTop={false}
+      openDiffForFile={openDiffForFile}
     >
       {list}
     </MobileCommitPageHost>
@@ -58,6 +62,7 @@ export function MobileCommitPageHost({
   worktreeId,
   bottomInset,
   padTop,
+  openDiffForFile,
   children
 }: {
   client: RpcClient | null
@@ -66,6 +71,7 @@ export function MobileCommitPageHost({
   bottomInset: number
   // The page covers a screen-top header, so it pads under the status bar unless an ancestor already did.
   padTop: boolean
+  openDiffForFile?: (target: MobileDiffFileTarget) => void
   children: (openCommit: OpenCommit) => ReactNode
 }) {
   const pager = useOptionPager<'commit'>()
@@ -97,6 +103,11 @@ export function MobileCommitPageHost({
         commit={commit}
         bottomInset={bottomInset}
         onBack={close}
+        onOpenFile={
+          openDiffForFile
+            ? (filePath) => openDiffForFile({ kind: 'commit', filePath, commitOid: commit.id })
+            : undefined
+        }
       />
     ) : null
   return (

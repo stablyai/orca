@@ -28,6 +28,7 @@ import {
   AgentLaunchReplay,
   type AgentLaunchParams
 } from '../../../../shared/rpc-contract/agent-launch-params'
+import { prepareAgentHandoffCard } from './agent-launch-handoff-card'
 import {
   agentLaunchFailureCode,
   launchFailureWithoutEffectsCode
@@ -146,6 +147,7 @@ async function executeAdmittedAgentLaunch(
     throw error
   }
   const terminalSpawn = trackTerminalSpawnDispatch()
+  const handedOff = prepareAgentHandoffCard(params, context)
   let result: AgentLaunchResult
   try {
     result = await runAgentLaunch(resolved, context, view, {
@@ -174,7 +176,7 @@ async function executeAdmittedAgentLaunch(
   }
   // Failed settlement leaves the provisional prompt unconfirmed (unknown for older callers), never not-delivered that invites duplication.
   await settleQuietly(admission.settle(result))
-  return result
+  return handedOff(result)
 }
 
 function runReplaySafeAgentLaunch(

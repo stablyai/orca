@@ -14,8 +14,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 const SDK: AndroidSdkPaths = {
   sdkRoot: '/sdk',
   adb: '/sdk/adb',
-  emulator: '/sdk/emulator',
-  avdmanager: '/sdk/avdmanager'
+  emulator: '/sdk/emulator'
 }
 
 const ok = (stdout: string): AndroidCommandResult => ({ stdout, stderr: '', code: 0 })

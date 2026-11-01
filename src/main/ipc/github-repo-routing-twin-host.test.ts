@@ -86,6 +86,30 @@ describe('registered GitHub repo lookup for a repo id on two hosts', () => {
     ).toBe(samePathSshTwin)
   })
 
+  it('keeps checks and comments on the requested host when both copies share a path', () => {
+    const store = storeWith([localTwin, samePathSshTwin])
+    expect(
+      assertRegisteredGitHubRepo(
+        {
+          repoPath: localTwin.path,
+          repoId: localTwin.id,
+          repoOwnerExecutionHostId: 'ssh:builder'
+        },
+        store
+      )
+    ).toBe(samePathSshTwin)
+    expect(() =>
+      assertRegisteredGitHubRepo(
+        {
+          repoPath: localTwin.path,
+          repoId: localTwin.id,
+          repoOwnerExecutionHostId: 'ssh:missing'
+        },
+        store
+      )
+    ).toThrow('host does not match repository host')
+  })
+
   it("keeps a lone row's own host over a stale candidate host", () => {
     const result = validateAutomaticPRRefreshCandidate(
       candidate({ repoPath: localTwin.path, connectionId: 'gone' }),

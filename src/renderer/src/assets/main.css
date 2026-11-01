@@ -2673,6 +2673,39 @@ html.native-shell .app-layout {
   transform-origin: center;
 }
 
+.tab-entry-omnibox > input:focus:placeholder-shown:not(:read-only) {
+  caret-color: transparent;
+}
+
+.tab-entry-omnibox:has(> input:focus:placeholder-shown:not(:read-only))::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: calc(var(--spacing) * 3);
+  top: 50%;
+  width: 2px;
+  height: 1em;
+  transform: translateY(-50%);
+  background: color-mix(in srgb, currentColor 85%, transparent);
+  pointer-events: none;
+  animation: tab-entry-caret 850ms step-end infinite;
+}
+
+@keyframes tab-entry-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-entry-omnibox::after {
+    animation: none !important;
+  }
+}
+
 /* CLI feature tip — terminal cursor inside the agent-control command. */
 @keyframes cli-tip-caret {
   0%,

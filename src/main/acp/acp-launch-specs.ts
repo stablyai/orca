@@ -1,4 +1,4 @@
-import type { AcpHistoryTurnIdentity } from './acp-history-replay'
+import type { AcpHistoryTurnIdentity } from './history/acp-history-replay'
 import { join } from 'node:path'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'

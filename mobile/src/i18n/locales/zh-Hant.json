@@ -521,6 +521,10 @@
       "disconnected": "附加失敗（連線已中斷）",
       "imageTooLarge": "圖片太大，無法附加",
       "permissionDenied": "照片存取權限遭拒"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "已交接給代理程式",
+      "startedAgent": "已啟動代理程式"
     }
   },
   "common": {
@@ -2842,7 +2846,6 @@
       "emptyMessage": "工作樹沒有變更。",
       "emptyTitle": "沒有本機變更",
       "generateMessage": "使用 AI 產生提交訊息",
-      "noStagedFiles": "沒有已暫存的檔案",
       "openActions": "開啟原始碼控制操作",
       "reconnecting": "正在重新連線至電腦…",
       "regenerateHint": "清除訊息以重新產生。",
@@ -2983,9 +2986,7 @@
       "pushBeforeCreateFailed": "推送失敗。請解決推送錯誤後再試一次。"
     },
     "hubTab": {
-      "changes": "變更",
-      "commits": "提交",
-      "pullRequest": "PR"
+      "changes": "變更"
     },
     "loaders": {
       "connectingToDesktop": "正在連線至電腦…",
@@ -3045,7 +3046,6 @@
       "publishBranch": "發布分支",
       "pull": "拉取",
       "push": "推送",
-      "stageAll": "暫存全部",
       "sync": "同步"
     },
     "remoteDropdown": {

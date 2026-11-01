@@ -3,7 +3,10 @@ import type { AgentType } from '../../../shared/agent-status-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 import { createClaudeTranscriptItemReader } from '../../claude/claude-transcript-item-reader'
-import { matchAcpHistoryTurns, type AcpHistoryCandidate } from '../../acp/acp-history-turn-matching'
+import {
+  matchAcpHistoryTurns,
+  type AcpHistoryCandidate
+} from '../../acp/history/acp-history-turn-matching'
 import { acpNamedTextKey } from '../../acp/acp-turn-messages'
 import { GROK_ACP_DIALECT } from '../../acp/acp-dialects/grok-dialect'
 import { OPENCODE_ACP_DIALECT } from '../../acp/acp-dialects/opencode-dialect'
