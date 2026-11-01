@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { useClipboardReader } from '../../../platform/clipboard'
 import { usePageBridgeClientIfPresent } from '../../../transport/client-context.web'
-import type { MobileComposerPastedImage } from './mobile-native-chat-composer-image-paste'
+import {
+  mobileComposerPastedImageFromClipboardData,
+  type MobileComposerPastedImage
+} from './mobile-native-chat-composer-image-paste'
 
 type ReadClipboardImage = () => Promise<MobileComposerPastedImage | null>
 
@@ -16,7 +19,7 @@ function MobileComposerClipboardImageSource({
     if (!image) {
       return null
     }
-    return { base64: image.data }
+    return mobileComposerPastedImageFromClipboardData(image.data)
   }, [clipboard])
   useEffect(() => {
     readRef.current = read

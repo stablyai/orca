@@ -79,51 +79,83 @@ export function mobileComposerImagePastePromptText(
   return onlyLabels ? '' : text
 }
 
-/** A second path for the same paste can still be reading after the first one attaches. */
-export const MOBILE_COMPOSER_PASTE_IMAGE_DEDUPE_MS = 2_000
+const PASTED_IMAGE_DATA_URL_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
 
-export function selectMobileComposerPasteImages(
-  images: readonly MobileComposerPastedImage[],
-  seenAt: ReadonlyMap<string, number>,
-  now: number
-): { images: readonly MobileComposerPastedImage[]; seenAt: Map<string, number> } {
-  const seen = new Map<string, number>()
-  for (const [key, at] of seenAt) {
-    if (now - at < MOBILE_COMPOSER_PASTE_IMAGE_DEDUPE_MS) {
-      seen.set(key, at)
-    }
+// A clipboard read can already be a data URL. Preview must not prefix that URL again.
+export function mobileComposerPastedImageFromClipboardData(
+  data: string
+): MobileComposerPastedImage {
+  const base64 = data.replace(PASTED_IMAGE_DATA_URL_RE, '')
+  return {
+    base64,
+    uri: PASTED_IMAGE_DATA_URL_RE.test(data) ? data : `data:image/png;base64,${base64}`
   }
-  const accepted: MobileComposerPastedImage[] = []
-  for (const image of images) {
-    const at = seen.get(image.base64)
-    if (at !== undefined && now - at < MOBILE_COMPOSER_PASTE_IMAGE_DEDUPE_MS) {
-      continue
-    }
-    seen.set(image.base64, now)
-    accepted.push(image)
-  }
-  return { images: accepted, seenAt: seen }
 }
 
-/** File bytes and a clipboard read of the same paste can resolve in either order. */
-export function createMobileComposerPasteImageDelivery(now: () => number = Date.now): {
+/** An edit draft pastes only through its own handler. The route handler belongs to the live chat. */
+export function mobileComposerImagePasteTarget(
+  explicit: MobileComposerImagePasteHandler | undefined,
+  route: MobileComposerImagePasteHandler | undefined,
+  editing: boolean
+): MobileComposerImagePasteHandler | undefined {
+  return explicit ?? (editing ? undefined : route)
+}
+
+type SettledComposerPaste =
+  | { ok: true; images: readonly MobileComposerPastedImage[] }
+  | { ok: false; error: unknown }
+
+/** Drop repeated bytes inside one paste, including a file read and a clipboard read still in flight. */
+export function selectMobileComposerPasteImages(
+  images: readonly MobileComposerPastedImage[],
+  seen: ReadonlySet<string>
+): { images: readonly MobileComposerPastedImage[]; seen: Set<string> } {
+  const next = new Set(seen)
+  const accepted: MobileComposerPastedImage[] = []
+  for (const image of images) {
+    if (next.has(image.base64)) {
+      continue
+    }
+    next.add(image.base64)
+    accepted.push(image)
+  }
+  return { images: accepted, seen: next }
+}
+
+/** Overlapping reads share one seen set. It clears once they settle, so the next paste is kept. */
+export function createMobileComposerPasteImageDelivery(): {
   take(
     incoming: Promise<readonly MobileComposerPastedImage[]> | readonly MobileComposerPastedImage[]
   ): Promise<readonly MobileComposerPastedImage[]>
 } {
-  let seenAt = new Map<string, number>()
+  let seen = new Set<string>()
+  let inflight = 0
   let chain: Promise<void> = Promise.resolve()
   return {
     take(incoming) {
+      inflight += 1
+      const settled = Promise.resolve(incoming).then(
+        (images): SettledComposerPaste => ({ ok: true, images }),
+        (error: unknown): SettledComposerPaste => ({ ok: false, error })
+      )
       const run = chain.then(async () => {
-        const images = await incoming
-        const selected = selectMobileComposerPasteImages(images, seenAt, now())
-        seenAt = selected.seenAt
+        const result = await settled
+        if (!result.ok) {
+          throw result.error
+        }
+        const selected = selectMobileComposerPasteImages(result.images, seen)
+        seen = selected.seen
         return selected.images
       })
+      const finish = (): void => {
+        inflight -= 1
+        if (inflight === 0) {
+          seen = new Set()
+        }
+      }
       chain = run.then(
-        () => undefined,
-        () => undefined
+        () => finish(),
+        () => finish()
       )
       return run
     }

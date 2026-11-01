@@ -142,6 +142,40 @@ describe('normalizeImageTranscriptMessages', () => {
     expect(out.map((message) => message.id)).toEqual(['prompt', 'companion'])
   })
 
+  it('does not fold a following source when both timestamps are missing', () => {
+    const prompt = { ...userText('prompt', '[Image #1] caption'), timestamp: null }
+    const companion = {
+      ...userText('companion', '[Image: source: /tmp/a.png]'),
+      timestamp: null
+    }
+    const out = normalizeImageTranscriptMessages([prompt, companion])
+
+    expect(out.map((message) => message.id)).toEqual(['prompt', 'companion'])
+    expect(out[1]!.blocks).toEqual([{ type: 'image-ref', path: '/tmp/a.png' }])
+  })
+
+  it('inserts a new companion after the prompt reference it follows', () => {
+    const prompt: NativeChatMessage = {
+      ...userText('prompt', '[Image #1] [Image #2] caption'),
+      blocks: [
+        { type: 'image-ref', path: '/tmp/a.png' },
+        { type: 'text', text: '[Image #1] [Image #2] caption' }
+      ]
+    }
+    const out = normalizeImageTranscriptMessages([
+      prompt,
+      userText('kept', '[Image: source: /tmp/a.png]'),
+      userText('added', '[Image: source: /tmp/b.png]')
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' },
+      { type: 'text', text: 'caption' }
+    ])
+  })
+
   it('does not repeat a source path the prompt already shows', () => {
     const prompt: NativeChatMessage = {
       ...userText('prompt', '[Image #1] caption'),

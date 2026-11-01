@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MOBILE_COMPOSER_PASTE_IMAGE_DEDUPE_MS,
   createMobileComposerPasteImageDelivery,
   mobileComposerImagePasteDecision,
   mobileComposerImagePastePromptText,
+  mobileComposerImagePasteTarget,
+  mobileComposerPastedImageFromClipboardData,
   selectMobileComposerPasteImages,
   spliceMobileComposerPasteText,
   type MobileComposerImagePasteSnapshot,
@@ -47,34 +48,43 @@ describe('mobileComposerImagePastePromptText', () => {
   })
 })
 
+describe('mobileComposerPastedImageFromClipboardData', () => {
+  it('stores the payload and keeps the original data URL for preview', () => {
+    expect(mobileComposerPastedImageFromClipboardData('data:image/jpeg;base64,aGVsbG8=')).toEqual({
+      base64: 'aGVsbG8=',
+      uri: 'data:image/jpeg;base64,aGVsbG8='
+    })
+    expect(mobileComposerPastedImageFromClipboardData('aGVsbG8=')).toEqual({
+      base64: 'aGVsbG8=',
+      uri: 'data:image/png;base64,aGVsbG8='
+    })
+  })
+})
+
+describe('mobileComposerImagePasteTarget', () => {
+  it('keeps an edit session off the live chat paste handler', () => {
+    const route = (): void => undefined
+    const explicit = (): void => undefined
+    expect(mobileComposerImagePasteTarget(undefined, route, true)).toBeUndefined()
+    expect(mobileComposerImagePasteTarget(undefined, route, false)).toBe(route)
+    expect(mobileComposerImagePasteTarget(explicit, route, true)).toBe(explicit)
+  })
+})
+
 describe('selectMobileComposerPasteImages', () => {
   const image = (base64: string): MobileComposerPastedImage => ({ base64 })
 
-  it('keeps one copy when the file paste and the clipboard fallback carry the same bytes', () => {
-    const files = selectMobileComposerPasteImages(
+  it('keeps one copy of each image inside a single paste', () => {
+    const selected = selectMobileComposerPasteImages(
       [image('abc'), image('abc'), image('def')],
-      new Map(),
-      1_000
-    )
-    const clipboard = selectMobileComposerPasteImages([image('abc')], files.seenAt, 1_500)
-
-    expect(files.images).toEqual([image('abc'), image('def')])
-    expect(clipboard.images).toEqual([])
-  })
-
-  it('accepts the same bytes again after the paste window', () => {
-    const first = selectMobileComposerPasteImages([image('abc')], new Map(), 1_000)
-    const again = selectMobileComposerPasteImages(
-      [image('abc')],
-      first.seenAt,
-      1_000 + MOBILE_COMPOSER_PASTE_IMAGE_DEDUPE_MS
+      new Set()
     )
 
-    expect(again.images).toEqual([image('abc')])
+    expect(selected.images).toEqual([image('abc'), image('def')])
   })
 
   it('keeps one image when a file paste and a clipboard read of the same bytes finish together', async () => {
-    const gate = createMobileComposerPasteImageDelivery(() => 5_000)
+    const gate = createMobileComposerPasteImageDelivery()
     let resolveFile: (images: readonly MobileComposerPastedImage[]) => void = () => undefined
     let resolveClipboard: (images: readonly MobileComposerPastedImage[]) => void = () => undefined
     const file = new Promise<readonly MobileComposerPastedImage[]>((resolve) => {
@@ -90,12 +100,33 @@ describe('selectMobileComposerPasteImages', () => {
 
     await expect(fromFile).resolves.toEqual([image('same')])
     await expect(fromClipboard).resolves.toEqual([])
+    await expect(gate.take([image('same')])).resolves.toEqual([image('same')])
   })
 
   it('still accepts the next paste after a failed read', async () => {
-    const gate = createMobileComposerPasteImageDelivery(() => 1_000)
+    const gate = createMobileComposerPasteImageDelivery()
 
     await expect(gate.take(Promise.reject(new Error('read failed')))).rejects.toThrow('read failed')
+    await expect(gate.take([image('abc')])).resolves.toEqual([image('abc')])
+  })
+
+  it('reports a later rejection while an earlier read is still pending', async () => {
+    const gate = createMobileComposerPasteImageDelivery()
+    let resolveFirst: (images: readonly MobileComposerPastedImage[]) => void = () => undefined
+    const first = new Promise<readonly MobileComposerPastedImage[]>((resolve) => {
+      resolveFirst = resolve
+    })
+    const fromFirst = gate.take(first)
+    const laterError = gate.take(Promise.reject(new Error('later failed'))).then(
+      () => null,
+      (error: Error) => error.message
+    )
+
+    await Promise.resolve()
+    resolveFirst([image('abc')])
+
+    await expect(fromFirst).resolves.toEqual([image('abc')])
+    await expect(laterError).resolves.toBe('later failed')
     await expect(gate.take([image('abc')])).resolves.toEqual([image('abc')])
   })
 })

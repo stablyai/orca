@@ -169,17 +169,7 @@ export function hasImagePromptMarker(message: NativeChatMessage): boolean {
   return message.blocks.some((block) => isTextBlock(block) && IMAGE_PROMPT_MARKER.test(block.text))
 }
 
-function imageRefPaths(blocks: readonly NativeChatBlock[]): Set<string> {
-  const paths = new Set<string>()
-  for (const block of blocks) {
-    if (isImageRefBlock(block) && block.path) {
-      paths.add(block.path)
-    }
-  }
-  return paths
-}
-
-/** Companions Claude writes after the prompt share its clock. A later image does not. */
+/** Companions Claude writes after the prompt share its clock. A missing clock is not that clock. */
 function equalTimestampImageSourceRun(
   messages: readonly NativeChatMessage[],
   start: number,
@@ -192,6 +182,7 @@ function equalTimestampImageSourceRun(
     const candidatePaths = imageSourcePathsFromMessage(candidate)
     if (
       candidate.source !== prompt.source ||
+      prompt.timestamp == null ||
       candidate.timestamp !== prompt.timestamp ||
       candidatePaths.length === 0
     ) {
@@ -265,19 +256,18 @@ export function normalizeImageTranscriptMessages(
       : null
     if (following) {
       normalized ??= messages.slice(0, index)
-      const present = imageRefPaths(message.blocks)
-      const refs: NativeChatBlock[] = []
+      const blocks = [...stripImagePromptMarkersFromTextBlocks(message.blocks)]
+      let cursor = 0
       for (const path of following.paths) {
-        if (present.has(path)) {
+        const existing = blocks.findIndex((block) => isImageRefBlock(block) && block.path === path)
+        if (existing !== -1) {
+          cursor = existing + 1
           continue
         }
-        present.add(path)
-        refs.push({ type: 'image-ref', path })
+        blocks.splice(cursor, 0, { type: 'image-ref', path })
+        cursor += 1
       }
-      normalized.push({
-        ...message,
-        blocks: [...refs, ...stripImagePromptMarkersFromTextBlocks(message.blocks)]
-      })
+      normalized.push({ ...message, blocks })
       index = following.end - 1
       continue
     }

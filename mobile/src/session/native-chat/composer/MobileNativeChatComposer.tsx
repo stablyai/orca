@@ -28,7 +28,10 @@ import {
   type MobileNativeChatSessionOptionPickersProps
 } from '../input/MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import type { MobileComposerImagePasteHandler } from './mobile-native-chat-composer-image-paste'
+import {
+  mobileComposerImagePasteTarget,
+  type MobileComposerImagePasteHandler
+} from './mobile-native-chat-composer-image-paste'
 import { MobileNativeChatImagePasteContext } from './mobile-native-chat-image-paste-context'
 import { useMobileComposerClipboardImageReader } from './use-mobile-composer-clipboard-image'
 import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
@@ -146,7 +149,11 @@ export function MobileNativeChatComposer({
   const t = useMobileTranslation()
   const clipboardImage = useMobileComposerClipboardImageReader()
   const imagePasteFromRoute = useContext(MobileNativeChatImagePasteContext)
-  const imagePaste = onPasteImages ?? imagePasteFromRoute
+  const imagePaste = mobileComposerImagePasteTarget(
+    onPasteImages,
+    imagePasteFromRoute,
+    editSession !== undefined
+  )
   const fallbackInputRef = useRef<TextInput>(null)
   const fieldRef = inputRef ?? fallbackInputRef
   const [focused, setFocused] = useState(false)

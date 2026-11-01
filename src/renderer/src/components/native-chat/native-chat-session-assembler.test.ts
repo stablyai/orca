@@ -193,6 +193,31 @@ describe('assembleNativeChatSession', () => {
     ])
   })
 
+  it('does not move a following companion ahead of the prompt when both timestamps are missing', () => {
+    const prompt = msg({
+      id: 'a-prompt',
+      role: 'user',
+      timestamp: null,
+      blocks: [{ type: 'text', text: '[Image #1] what do you see' }]
+    })
+    const companion = msg({
+      id: 'z-companion',
+      role: 'user',
+      timestamp: null,
+      blocks: [{ type: 'text', text: '[Image: source: /tmp/3d.png]' }]
+    })
+
+    const session = assembleNativeChatSession({
+      sources: { transcript: [prompt, companion] },
+      sessionId: 's1',
+      agent: 'claude'
+    })
+
+    expect(session.messages.map((message) => message.id)).toEqual(['a-prompt', 'z-companion'])
+    expect(session.messages[0]?.blocks).toEqual([{ type: 'text', text: 'what do you see' }])
+    expect(session.messages[1]?.blocks).toEqual([{ type: 'image-ref', path: '/tmp/3d.png' }])
+  })
+
   it('does not move an equal-timestamp companion across an unrelated row', () => {
     const prompt = msg({
       id: 'a-prompt',
