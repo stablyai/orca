@@ -655,14 +655,12 @@
       "noReviewableChanges": "レビュー可能な変更がありません",
       "reviewUnavailable": "レビューを利用できません",
       "selectFile": "レビューするファイルを選択してください。",
-      "tooLargeMessage": "この差分は大きすぎるため、モバイルではプレビューできません。",
-      "tryDifferentFilter": "別のレビューフィルターを試してください。"
+      "tooLargeMessage": "この差分は大きすぎるため、モバイルではプレビューできません。"
     },
     "diffReviewDrawers": {
       "addNote": "メモを追加",
       "cancelNote": "メモの入力をキャンセル",
       "clearSentNotes": "送信済みのメモをクリア",
-      "completeTitle": "レビュー完了",
       "copyNotes": "メモをコピー",
       "deleteNote": "メモの削除",
       "discard": "破棄",
@@ -670,13 +668,8 @@
       "discardTitle": "ファイルの変更を破棄",
       "editNote": "メモを編集",
       "fileNote": "ファイルのメモ",
-      "fileSummary_one": "レビュー済みファイル {{fileCount}} 件、メモ {{count}} 件",
-      "fileSummary_other": "レビュー済みファイル {{fileCount}} 件、メモ {{count}} 件",
-      "filesSummary_one": "レビュー済みファイル {{fileCount}} 件、メモ {{count}} 件",
-      "filesSummary_other": "レビュー済みファイル {{fileCount}} 件、メモ {{count}} 件",
       "lineNumber": "{{lineNumber}} 行目",
       "loadingSessions": "Agent セッションを読み込み中…",
-      "markUnreviewed": "未レビューにする",
       "newAgentSession": "新規 Agent セッション",
       "openInSession": "セッションで開く",
       "reviewNote": "レビューメモ",
@@ -684,11 +677,6 @@
       "sendNotes": "メモを送信",
       "sendNotesLabel": "Agent にメモを送信",
       "sendUnsentNotes": "未送信のメモを送信",
-      "stageReviewed": "レビュー済みをステージ",
-      "stageReviewedFiles": "レビュー済みファイルをステージ",
-      "stageReviewedLabel": "レビュー済みファイルをステージ",
-      "stageableFiles_one": "レビュー済みの未ステージファイル {{count}} 件をステージできます。",
-      "stageableFiles_other": "レビュー済みの未ステージファイル {{count}} 件をステージできます。",
       "statusUnreadable": "このホストの状態を読み取れませんでした。再試行中…",
       "terminal": "ターミナル",
       "terminalLabel": "{{title}} ({{id}})",
@@ -697,57 +685,17 @@
       "updateRequired": "コンピュータの Orca を更新してください。"
     },
     "diffReviewFileSummary": {
-      "branch": "ブランチ",
-      "branchFrom": "ブランチ（変更元: {{oldPath}}）",
       "changed": "変更あり",
       "editFileNote": "ファイルのメモを編集",
-      "hunk": "ハンク",
-      "nextHunk": "次のハンク",
-      "notes_one": "メモ {{count}} 件",
-      "notes_other": "メモ {{count}} 件",
-      "previousHunk": "前のハンク",
-      "reviewed": "レビュー済み",
-      "staged": "ステージ済み",
-      "stagedFrom": "ステージ済み（変更元: {{oldPath}}）",
-      "stale": "古いメモ",
-      "staleCount": "古いメモ {{count}} 件",
-      "unstaged": "未ステージ",
-      "unstagedFrom": "未ステージ（変更元: {{oldPath}}）"
+      "stale": "古いメモ"
     },
     "diffReviewFooter": {
-      "addFileNote": "ファイルにメモを追加",
-      "discard": "破棄",
-      "discardFile": "ファイルの変更を破棄",
-      "markFileReviewed": "ファイルをレビュー済みにする",
-      "markReviewed": "レビュー済みにする",
       "nextFile": "次のファイル",
-      "note": "メモ",
-      "previousFile": "前のファイル",
-      "reviewed": "レビュー済み",
-      "stage": "ステージ",
-      "stageFile": "ファイルをステージ",
-      "unstage": "アンステージ",
-      "unstageFile": "ファイルをアンステージ"
+      "previousFile": "前のファイル"
     },
     "diffReviewHeader": {
-      "filterAll": "全て",
-      "filterBranch": "ブランチ",
-      "filterNotes": "メモ",
-      "filterStaged": "ステージ済み",
-      "filterUnreviewed": "未レビュー",
-      "filterUnstaged": "未ステージ",
-      "openPullRequestSidebar": "PR サイドバーを開く",
       "openReviewActions": "レビュー操作を開く",
-      "reviewedProgress": "{{reviewedCount}}/{{queueLength}} レビュー済み",
-      "showAllFiles": "レビュー対象の全ファイルを表示",
-      "showBranchFiles": "ブランチのレビュー対象ファイルを表示",
-      "showNotesFiles": "メモのあるレビュー対象ファイルを表示",
-      "showStagedFiles": "ステージ済みのレビュー対象ファイルを表示",
-      "showUnreviewedFiles": "未レビューのファイルを表示",
-      "showUnstagedFiles": "未ステージのレビュー対象ファイルを表示",
-      "title": "変更点",
-      "unsentNotes_one": "未送信のメモ {{count}} 件",
-      "unsentNotes_other": "未送信のメモ {{count}} 件"
+      "title": "変更点"
     },
     "diffReviewLine": {
       "addNoteOnLine": "{{number}} 行目にメモを追加",
@@ -2408,9 +2356,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "ソース管理の操作に失敗しました。",
-      "reviewedFilesStaged_one": "レビュー済みファイル {{count}} 件をステージしました。",
-      "reviewedFilesStaged_other": "レビュー済みファイル {{count}} 件をステージしました。",
-      "stageResults": "{{staged}} 件はステージ済み、{{failed}} 件は失敗",
       "waitingForDesktop": "デスクトップへの接続待ち…"
     },
     "useDiffReviewInteractions": {

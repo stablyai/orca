@@ -8,15 +8,14 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { formatMobileBranchEntryMeta } from './mobile-branch-entry-format'
-import {
-  statusColor,
-  type MobileBranchEntryView,
-  type MobileGitStatusEntryView
+import type {
+  MobileBranchEntryView,
+  MobileGitStatusEntryView
 } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import { styles } from './mobile-source-control-styles'
 import { mobileConflictResolutionLabel } from './mobile-source-control-conflict-actions'
-import { getUnstageablePaths } from './mobile-git-status'
+import { getUnstageablePaths, statusColor } from './mobile-git-status'
 
 type RowState = Pick<
   MobileSourceControlState,

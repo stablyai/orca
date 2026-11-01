@@ -6,6 +6,7 @@ export type ReviewSheet =
   | { kind: 'discard'; target: MobileDiffReviewQueueItem }
   | { kind: 'composer'; composer: ComposerState }
   | { kind: 'completion' }
+  | { kind: 'files' }
 
 export type ReviewSheetKind = ReviewSheet['kind']
 

@@ -44,7 +44,16 @@ export const gitBranchCompareResultSchema = z.looseObject({
   entries: salvagingArray(gitBranchChangeEntrySchema).nullish()
 })
 
+// The diff screen diffs a commit's files against this parent; null is a root commit.
 export const gitCommitCompareResultSchema = z.looseObject({
+  summary: salvagedOptional(
+    'summary',
+    z.looseObject({
+      parentOid: z.string().nullable().optional(),
+      status: z.string().optional(),
+      errorMessage: z.string().optional()
+    })
+  ),
   entries: salvagingArray(gitChangedFileSchema)
 })
 

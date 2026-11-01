@@ -9861,6 +9861,82 @@
       ]
     },
     {
+      "id": "diff-review-commit-file-diff",
+      "operation": "session.diff-review-load",
+      "family": "session.diff-review",
+      "sites": [
+        "mobile/src/session/mobile-diff-review-loaders.ts",
+        "mobile/src/session/mobile-diff-review-commit-loader.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "commit-snapshot",
+          "id": "commit"
+        },
+        {
+          "complete": "git.commitCompare#1",
+          "params": {
+            "worktree": "id:repo-9::/w",
+            "commitId": "c0ffee0123456789abcdef0123456789abcdef01"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "summary": {
+                "commitOid": "c0ffee0123456789abcdef0123456789abcdef01",
+                "parentOid": "beef0123456789abcdef0123456789abcdef0123",
+                "compareRef": "c0ffee0",
+                "baseRef": "beef012",
+                "changedFiles": 1,
+                "status": "ready"
+              },
+              "entries": [
+                {
+                  "path": "src/app.ts",
+                  "status": "modified",
+                  "added": 2,
+                  "removed": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "commit"
+        },
+        {
+          "action": "diff",
+          "id": "commit-file",
+          "args": {
+            "scope": "commit"
+          }
+        },
+        {
+          "complete": "git.commitDiff#1",
+          "params": {
+            "worktree": "id:repo-9::/w",
+            "filePath": "src/app.ts",
+            "commitOid": "c0ffee0123456789abcdef0123456789abcdef01",
+            "parentOid": "beef0123456789abcdef0123456789abcdef0123"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "text",
+              "originalContent": "a\n",
+              "modifiedContent": "a\nb\n",
+              "originalIsBinary": false,
+              "modifiedIsBinary": false
+            }
+          }
+        },
+        {
+          "checkpoint": "commit-file"
+        }
+      ]
+    },
+    {
       "id": "diff-review-branch-compare",
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
@@ -22462,26 +22538,6 @@
         },
         {
           "checkpoint": "discarded"
-        },
-        {
-          "action": "stage-reviewed",
-          "id": "stage-reviewed"
-        },
-        {
-          "complete": "git.stage#2",
-          "params": {
-            "filePath": "src/app.ts",
-            "worktree": "id:workspace-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "staged": true
-            }
-          }
-        },
-        {
-          "checkpoint": "swept"
         }
       ]
     },

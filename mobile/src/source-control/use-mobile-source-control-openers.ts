@@ -2,11 +2,10 @@ import { useCallback } from 'react'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { buildMobileReviewFileRoute, type MobileReviewRouteArea } from './mobile-review-route'
 
-export type MobileDiffFileTarget = {
-  kind: 'changes'
-  filePath: string
-  area: MobileReviewRouteArea
-}
+// A changed file in the worktree or on the branch, or a file in one commit (diffed against its parent).
+export type MobileDiffFileTarget =
+  | { kind: 'changes'; filePath: string; area: MobileReviewRouteArea }
+  | { kind: 'commit'; filePath: string; commitOid: string }
 
 type Params = {
   hostId: string
@@ -27,7 +26,9 @@ export function useMobileSourceControlOpeners({ hostId, worktreeId, name }: Para
           worktreeId,
           worktreeName: name,
           filePath: target.filePath,
-          area: target.area
+          ...(target.kind === 'commit'
+            ? { area: 'commit', commitOid: target.commitOid }
+            : { area: target.area })
         })
       )
     },

@@ -11,7 +11,6 @@ import {
   RefreshCw,
   type LucideIcon
 } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
 import type { MobileSourceControlActionIcon } from './mobile-source-control-actions'
 import type {
   MobileGitBranchChangeEntry,
@@ -25,7 +24,6 @@ import {
   isMobileGitDiscardableEntry,
   isMobileGitStageableEntry,
   isMobileGitUnstageableEntry,
-  type MobileGitFileStatus,
   type MobileGitStatusEntry
 } from './mobile-git-status'
 
@@ -118,21 +116,4 @@ export function formatBranchLabel(branch: string | undefined, head: string | und
     return branch.slice('refs/heads/'.length)
   }
   return branch || head?.slice(0, 7) || translate('sourceControl.screenState.noBranch', 'No branch')
-}
-
-export function statusColor(status: MobileGitFileStatus): string {
-  switch (status) {
-    case 'added':
-    case 'copied':
-      return colors.statusGreen
-    case 'deleted':
-      return colors.statusRed
-    case 'renamed':
-      return colors.accentBlue
-    case 'untracked':
-      return colors.statusAmber
-    case 'modified':
-    default:
-      return colors.textSecondary
-  }
 }

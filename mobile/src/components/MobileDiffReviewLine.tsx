@@ -15,8 +15,8 @@ type Props = {
   line: MobileHighlightedDiffLine<MobileDiffLine>
   comments: readonly DiffComment[]
   staleCommentIds: ReadonlySet<string>
-  active: boolean
-  onAddNote: (lineNumber: number) => void
+  /** Absent where lines take no notes, e.g. a past commit's files. */
+  onAddNote?: (lineNumber: number) => void
   onEditNote: (comment: DiffComment) => void
 }
 
@@ -45,22 +45,20 @@ export function MobileDiffReviewLine({
   line,
   comments,
   staleCommentIds,
-  active,
   onAddNote,
   onEditNote
 }: Props) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const lineNumber = mobileDiffLineNumber(line)
-  const canComment = canCommentOnLine(line)
+  const canComment = onAddNote !== undefined && canCommentOnLine(line)
 
   return (
     <View
       style={[
         styles.row,
         line.kind === 'add' && styles.addedRow,
-        line.kind === 'delete' && styles.deletedRow,
-        active && styles.activeRow
+        line.kind === 'delete' && styles.deletedRow
       ]}
       accessible
       accessibilityLabel={accessibilityLabelForLine(line, t)}
@@ -72,7 +70,7 @@ export function MobileDiffReviewLine({
         disabled={!canComment}
         onPress={() => {
           if (canComment && line.newLineNumber !== undefined) {
-            onAddNote(line.newLineNumber)
+            onAddNote?.(line.newLineNumber)
           }
         }}
         accessibilityRole={canComment ? 'button' : 'text'}
@@ -130,10 +128,6 @@ const styles = themedStyleSheet(() => ({
   },
   deletedRow: {
     backgroundColor: colors.diffDeletedBg
-  },
-  activeRow: {
-    borderLeftWidth: 2,
-    borderLeftColor: colors.accentBlue
   },
   prefix: {
     width: 18,

@@ -655,14 +655,12 @@
       "noReviewableChanges": "沒有可審查的變更",
       "reviewUnavailable": "無法使用審查功能",
       "selectFile": "請選取要審查的檔案。",
-      "tooLargeMessage": "此差異過大，無法在手機上預覽。",
-      "tryDifferentFilter": "請嘗試其他審查篩選條件。"
+      "tooLargeMessage": "此差異過大，無法在手機上預覽。"
     },
     "diffReviewDrawers": {
       "addNote": "新增備註",
       "cancelNote": "取消編輯備註",
       "clearSentNotes": "清除已傳送的備註",
-      "completeTitle": "審查完成",
       "copyNotes": "複製備註",
       "deleteNote": "刪除備註",
       "discard": "放棄",
@@ -670,13 +668,8 @@
       "discardTitle": "放棄檔案變更",
       "editNote": "編輯備註",
       "fileNote": "檔案備註",
-      "fileSummary_one": "已審查 {{fileCount}} 個檔案，{{count}} 則備註",
-      "fileSummary_other": "已審查 {{fileCount}} 個檔案，{{count}} 則備註",
-      "filesSummary_one": "已審查 {{fileCount}} 個檔案，{{count}} 則備註",
-      "filesSummary_other": "已審查 {{fileCount}} 個檔案，{{count}} 則備註",
       "lineNumber": "第 {{lineNumber}} 行",
       "loadingSessions": "正在載入代理程式工作階段…",
-      "markUnreviewed": "標記為未審查",
       "newAgentSession": "新增代理程式工作階段",
       "openInSession": "在工作階段中開啟",
       "reviewNote": "審查備註",
@@ -684,11 +677,6 @@
       "sendNotes": "傳送備註",
       "sendNotesLabel": "將備註傳送給代理程式",
       "sendUnsentNotes": "傳送未傳送的備註",
-      "stageReviewed": "暫存已審查檔案",
-      "stageReviewedFiles": "暫存已審查的檔案",
-      "stageReviewedLabel": "暫存已審查的檔案",
-      "stageableFiles_one": "{{count}} 個已審查但未暫存的檔案可供暫存",
-      "stageableFiles_other": "{{count}} 個已審查但未暫存的檔案可供暫存",
       "statusUnreadable": "無法讀取此主機的狀態。正在重試…",
       "terminal": "終端機",
       "terminalLabel": "{{title}} ({{id}})",
@@ -697,57 +685,17 @@
       "updateRequired": "請更新電腦上的 Orca"
     },
     "diffReviewFileSummary": {
-      "branch": "分支",
-      "branchFrom": "分支，原路徑：{{oldPath}}",
       "changed": "已變更",
       "editFileNote": "編輯檔案備註",
-      "hunk": "差異區塊",
-      "nextHunk": "下一個差異區塊",
-      "notes_one": "{{count}} 則備註",
-      "notes_other": "{{count}} 則備註",
-      "previousHunk": "上一個差異區塊",
-      "reviewed": "已審查",
-      "staged": "已暫存",
-      "stagedFrom": "已暫存，原路徑：{{oldPath}}",
-      "stale": "已過時",
-      "staleCount": "{{count}} 則已過時",
-      "unstaged": "未暫存",
-      "unstagedFrom": "未暫存，原路徑：{{oldPath}}"
+      "stale": "已過時"
     },
     "diffReviewFooter": {
-      "addFileNote": "新增檔案備註",
-      "discard": "放棄",
-      "discardFile": "放棄檔案變更",
-      "markFileReviewed": "將檔案標記為已審查",
-      "markReviewed": "標記為已審查",
       "nextFile": "下一個檔案",
-      "note": "備註",
-      "previousFile": "上一個檔案",
-      "reviewed": "已審查",
-      "stage": "暫存",
-      "stageFile": "暫存檔案",
-      "unstage": "取消暫存",
-      "unstageFile": "取消暫存檔案"
+      "previousFile": "上一個檔案"
     },
     "diffReviewHeader": {
-      "filterAll": "全部",
-      "filterBranch": "分支",
-      "filterNotes": "備註",
-      "filterStaged": "已暫存",
-      "filterUnreviewed": "未審查",
-      "filterUnstaged": "未暫存",
-      "openPullRequestSidebar": "開啟 PR 側邊欄",
       "openReviewActions": "開啟審查操作選單",
-      "reviewedProgress": "已審查 {{reviewedCount}}/{{queueLength}}",
-      "showAllFiles": "顯示所有審查檔案",
-      "showBranchFiles": "顯示分支的審查檔案",
-      "showNotesFiles": "顯示有備註的檔案",
-      "showStagedFiles": "顯示已暫存的檔案",
-      "showUnreviewedFiles": "顯示未審查的檔案",
-      "showUnstagedFiles": "顯示未暫存的檔案",
-      "title": "變更",
-      "unsentNotes_one": "{{count}} 則未傳送的備註",
-      "unsentNotes_other": "{{count}} 則未傳送的備註"
+      "title": "變更"
     },
     "diffReviewLine": {
       "addNoteOnLine": "在第 {{number}} 行新增備註",
@@ -2408,9 +2356,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "原始碼控制操作失敗",
-      "reviewedFilesStaged_one": "已暫存 {{count}} 個已審查的檔案",
-      "reviewedFilesStaged_other": "已暫存 {{count}} 個已審查的檔案",
-      "stageResults": "已暫存 {{staged}} 個，{{failed}} 個失敗",
       "waitingForDesktop": "正在等待電腦…"
     },
     "useDiffReviewInteractions": {

@@ -1,20 +1,9 @@
-import type { Dispatch, RefObject, SetStateAction } from 'react'
+import { useRef, type Dispatch, type SetStateAction } from 'react'
 import { translate } from '../i18n/mobile-i18n'
-import type { FlatList } from 'react-native'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
-import { triggerSelection } from '../platform/haptics'
-import { findNextMobileDiffHunkIndex, findPreviousMobileDiffHunkIndex } from './mobile-diff-hunks'
-import type {
-  MobileDiffReviewQueueFilter,
-  MobileDiffReviewQueueItem
-} from './mobile-diff-review-queue'
-import type {
-  ComposerState,
-  ReviewDiffLine,
-  ReviewDiffState,
-  ReviewScreenState
-} from './mobile-diff-review-screen-model'
+import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
+import type { ComposerState, ReviewScreenState } from './mobile-diff-review-screen-model'
 import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 import { sourceFileDiffOpenRun } from '../source-control/mobile-source-file-open-operations'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
@@ -30,20 +19,17 @@ type InteractionInput = {
   hostId: string
   worktreeId: string
   screenState: ReviewScreenState
-  diffState: ReviewDiffState
   currentItem: MobileDiffReviewQueueItem | null
   queue: MobileDiffReviewQueueItem[]
   filteredQueue: MobileDiffReviewQueueItem[]
-  filter: MobileDiffReviewQueueFilter
   currentIndex: number
-  activeHunkIndex: number | null
   composer: ComposerState | null
   composerBody: string
-  listRef: RefObject<FlatList<ReviewDiffLine> | null>
   setScreenState: Dispatch<SetStateAction<ReviewScreenState>>
-  setFilter: Dispatch<SetStateAction<MobileDiffReviewQueueFilter>>
-  setCurrentIndex: Dispatch<SetStateAction<number>>
-  setActiveHunkIndex: Dispatch<SetStateAction<number | null>>
+  selectIndex: (index: number) => void
+  /** Keeps a file open by key, through the reload that follows a mutation. */
+  selectKey: (key: string) => void
+  moveSelection: (direction: 'next' | 'previous') => void
   setComposerBody: Dispatch<SetStateAction<string>>
   setActionError: Dispatch<SetStateAction<string | null>>
   setBusyAction: Dispatch<SetStateAction<string | null>>
@@ -61,20 +47,16 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     hostId,
     worktreeId,
     screenState,
-    diffState,
     currentItem,
     queue,
     filteredQueue,
-    filter,
     currentIndex,
-    activeHunkIndex,
     composer,
     composerBody,
-    listRef,
     setScreenState,
-    setFilter,
-    setCurrentIndex,
-    setActiveHunkIndex,
+    selectIndex,
+    selectKey,
+    moveSelection,
     setComposerBody,
     setActionError,
     setBusyAction,
@@ -84,15 +66,18 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     onReconnect
   } = input
 
+  // Bumped by every file the reader picks, so a slow save or stage never overrides a newer pick.
+  const navigationRef = useRef(0)
+
   const {
     closeComposer,
     deleteComment,
     markReviewed,
-    markUnreviewed,
     openComposer,
     openEditComposer,
     saveCommentsAndReviewState,
-    saveComposer
+    saveComposer,
+    toggleItemViewed
   } = useMobileDiffReviewCommentActions({
     client,
     connState,
@@ -101,22 +86,21 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     currentItem,
     queue,
     filteredQueue,
-    filter,
     currentIndex,
     composer,
     composerBody,
     setScreenState,
-    setCurrentIndex,
+    selectIndex,
+    navigationRef,
     setComposerBody,
     setActionError,
     sheets
   })
 
-  const { runGitMutation, stageReviewedFiles } = useMobileDiffReviewGitActions({
+  const { runGitMutation } = useMobileDiffReviewGitActions({
     client,
     connState,
     worktreeId,
-    queue,
     setActionError,
     setBusyAction,
     loadReviewData
@@ -140,48 +124,24 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     copyNotes,
     createTerminalAndSend,
     deleteComment,
-    jumpHunk: (direction: 'next' | 'previous') => {
-      if (diffState.kind !== 'ready') {
-        return
-      }
-      const currentLineIndex =
-        activeHunkIndex === null ? -1 : (diffState.hunks[activeHunkIndex]?.startIndex ?? -1)
-      const nextIndex =
-        direction === 'next'
-          ? findNextMobileDiffHunkIndex(diffState.hunks, currentLineIndex)
-          : findPreviousMobileDiffHunkIndex(diffState.hunks, currentLineIndex)
-      const target = nextIndex === null ? null : diffState.hunks[nextIndex]
-      if (!target || nextIndex === null) {
-        return
-      }
-      setActiveHunkIndex(nextIndex)
-      listRef.current?.scrollToIndex({
-        index: target.startIndex,
-        animated: true,
-        viewPosition: 0.16
-      })
-      triggerSelection()
-    },
     markReviewed,
-    markUnreviewed,
+    selectItem: (item: MobileDiffReviewQueueItem) => {
+      navigationRef.current += 1
+      selectKey(item.key)
+    },
     moveFile: (direction: 'next' | 'previous') => {
-      if (filteredQueue.length === 0) {
-        return
-      }
-      setCurrentIndex((index) =>
-        direction === 'next'
-          ? index + 1 >= filteredQueue.length
-            ? 0
-            : index + 1
-          : index - 1 < 0
-            ? filteredQueue.length - 1
-            : index - 1
-      )
+      navigationRef.current += 1
+      moveSelection(direction)
     },
     openComposer,
     openEditComposer,
     openInSession: async () => {
-      if (!client || !currentItem || currentItem.scope === 'branch') {
+      // Only working-tree files have a desktop diff tab.
+      if (
+        !client ||
+        !currentItem ||
+        (currentItem.scope !== 'unstaged' && currentItem.scope !== 'staged')
+      ) {
         return
       }
       const response = await sourceFileDiffOpenRun.request(client, {
@@ -211,11 +171,20 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     }),
     runGitMutation,
     saveComposer,
-    selectFilter: (nextFilter: MobileDiffReviewQueueFilter) => {
-      setFilter(nextFilter)
-      setCurrentIndex(0)
-    },
     sendPromptToTerminal,
-    stageReviewedFiles
+    // Staging drops the file from the uncommitted queue; land on the file after it, wrapping from the last.
+    stageAndOpenNext: async () => {
+      if (!currentItem?.canStage) {
+        return
+      }
+      const nextItem =
+        filteredQueue.length > 1 ? filteredQueue[(currentIndex + 1) % filteredQueue.length] : null
+      const navigation = navigationRef.current
+      const staged = await runGitMutation('git.stage', currentItem)
+      if (staged && nextItem && navigation === navigationRef.current) {
+        selectKey(nextItem.key)
+      }
+    },
+    toggleItemViewed
   }
 }

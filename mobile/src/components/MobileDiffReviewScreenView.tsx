@@ -12,7 +12,13 @@ import { useMobileDiffReviewOverflowActions } from './use-mobile-diff-review-ove
 import { MobilePRSidebar } from './MobilePRSidebar'
 import { RightDrawer } from './RightDrawer'
 import { mobilePrSidebarStyles, PR_SIDEBAR_DOCK_WIDTH } from './pr-sidebar/mobile-pr-sidebar-styles'
-import { canDockPrSidebar, resolvePresentationMode } from './mobile-pr-sidebar-presentation'
+import {
+  canDockPrSidebar,
+  resolvePresentationMode,
+  shouldShowTrigger
+} from './mobile-pr-sidebar-presentation'
+import { mobileDiffReviewPositionLabel } from '../session/mobile-diff-review-screen-model'
+import { getRuntimePathBasename } from '../../../src/shared/cross-platform-path'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -26,13 +32,21 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
   const [contentRowWidth, setContentRowWidth] = useState(0)
-  const overflowActions = useMobileDiffReviewOverflowActions(controller)
   const canDockSidebar = canDockPrSidebar({
     isWideLayout,
     availableWidth: contentRowWidth,
     dockWidth: PR_SIDEBAR_DOCK_WIDTH
   })
   const presentationMode = resolvePresentationMode(isWideLayout, canDockSidebar)
+  // A docked sidebar needs no menu entry; phones reach the pull request from ⋯.
+  const overflowActions = useMobileDiffReviewOverflowActions(controller, {
+    showPullRequest: shouldShowTrigger({
+      isGithubRepo: controller.prSidebarIsGithubRepo,
+      isWideLayout,
+      canDock: presentationMode === 'inline'
+    })
+  })
+  const item = controller.currentItem
   // Dock GitHub sidebar only when wide; otherwise showPRSidebar toggles RightDrawer overlay.
   const showInlineDock = presentationMode === 'inline' && controller.prSidebarIsGithubRepo
   const gitStatus = controller.screenState.kind === 'ready' ? controller.screenState.status : null
@@ -55,30 +69,30 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <MobileDiffReviewHeader
         actions={overflowActions}
-        filter={controller.filter}
-        isWideLayout={isWideLayout}
-        prSidebarIsGithubRepo={controller.prSidebarIsGithubRepo}
-        prSidebarCanDock={presentationMode === 'inline'}
-        queueLength={controller.queue.length}
-        reviewedCount={controller.reviewedCount}
-        unsentCount={controller.unsentComments.length}
+        fileName={item ? getRuntimePathBasename(item.filePath) : null}
+        subtitle={
+          item
+            ? mobileDiffReviewPositionLabel({
+                scope: item.scope,
+                position: controller.currentIndex + 1,
+                count: controller.filteredQueue.length,
+                viewedCount: controller.reviewedCount
+              })
+            : ''
+        }
         onBack={onBack}
-        onOpenPRSidebar={controller.openPRSidebar}
-        onSelectFilter={controller.selectFilter}
+        onOpenFiles={() => controller.openSheet({ kind: 'files' })}
       />
       <View style={{ flex: 1, flexDirection: 'row' }} onLayout={handleContentRowLayout}>
         {/* Keep diff layout full; wide sidebar and diff scroll independently. */}
         <View style={{ flex: 1, minWidth: 0 }}>
-          {controller.currentItem ? (
+          {item ? (
             <MobileDiffReviewFileSummary
-              currentIndex={controller.currentIndex}
-              diffState={controller.diffState}
               fileNotes={controller.fileNotes}
-              filteredCount={controller.filteredQueue.length}
-              item={controller.currentItem}
+              item={item}
               staleCommentIds={controller.staleCommentIds}
               onEditNote={controller.openEditComposer}
-              onJumpHunk={controller.jumpHunk}
+              onToggleViewed={(target) => void controller.toggleItemViewed(target)}
             />
           ) : null}
           {controller.actionError ? (
@@ -87,30 +101,25 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             </View>
           ) : null}
           <MobileDiffReviewBody
-            activeHunkIndex={controller.activeHunkIndex}
             commentsByLine={controller.commentsByLine}
-            currentItem={controller.currentItem}
+            currentItem={item}
             diffState={controller.diffState}
             filteredCount={controller.filteredQueue.length}
-            listRef={controller.listRef}
             screenState={controller.screenState}
             staleCommentIds={controller.staleCommentIds}
             onAddNote={controller.openComposer}
             onEditNote={controller.openEditComposer}
             onRetry={controller.retryAction ?? undefined}
             offline={controller.connState !== 'connected'}
-            onShowAll={
-              controller.filter === 'all' ? undefined : () => controller.selectFilter('all')
-            }
+            filter={controller.filter}
+            onBack={onBack}
           />
-          {controller.currentItem ? (
+          {item ? (
             <MobileDiffReviewFooter
               busyAction={controller.busyAction}
-              item={controller.currentItem}
-              onAddFileNote={() => controller.openComposer(0)}
-              onDiscard={(target) => controller.openSheet({ kind: 'discard', target })}
-              onGitMutation={(method, item) => void controller.runGitMutation(method, item)}
-              onMarkReviewed={() => void controller.markReviewed()}
+              item={item}
+              onMarkViewed={() => void controller.markReviewed()}
+              onStageAndOpenNext={() => void controller.stageAndOpenNext()}
               onMoveFile={controller.moveFile}
             />
           ) : null}
