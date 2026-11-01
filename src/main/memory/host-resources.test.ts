@@ -131,6 +131,22 @@ describe('host resource parsers', () => {
       { role: 'workspace', usedBytes: 1, freeBytes: 1, totalBytes: 2, usedPercent: 50 }
     ])
   })
+
+  it('keeps zero-device volumes apart when another entry has a device id', async () => {
+    const { dedupeHostVolumes } = await loadHostResources()
+
+    expect(
+      dedupeHostVolumes([
+        measurement('home', 0, 'C:\\', 3, 1, 4),
+        measurement('workspace', 0, 'D:\\', 1, 1, 2),
+        measurement('workspace', 5, 'E:\\', 8, 2, 10)
+      ])
+    ).toEqual([
+      { role: 'home', usedBytes: 3, freeBytes: 1, totalBytes: 4, usedPercent: 75 },
+      { role: 'workspace', usedBytes: 1, freeBytes: 1, totalBytes: 2, usedPercent: 50 },
+      { role: 'workspace', usedBytes: 8, freeBytes: 2, totalBytes: 10, usedPercent: 80 }
+    ])
+  })
 })
 
 describe('collectHostResources', () => {
@@ -259,6 +275,34 @@ describe('collectHostResources', () => {
     const third = await collectHostResources([], readers)
     expect(waits).toEqual([200, 200])
     expect(third.cpu.percent).toBe(30)
+  })
+
+  it('keeps the cpu baseline across a sample that arrives inside one second', async () => {
+    let now = 10_000
+    const samples = [[cpuTimes(0, 0)], [cpuTimes(10, 90)], [cpuTimes(110, 90)], [cpuTimes(20, 180)]]
+    let cursor = 0
+    const { collectHostResources } = await loadHostResources()
+    const readers = {
+      now: () => now,
+      wait: async (ms: number) => {
+        now += ms
+      },
+      readCpus: () => {
+        const times = samples[Math.min(cursor, samples.length - 1)] ?? []
+        cursor += 1
+        return times.map((sample) => cpuInfo(sample, 'Xeon'))
+      },
+      uptime: () => 42
+    }
+
+    await collectHostResources([], readers)
+    now += 10
+    const shortGap = await collectHostResources([], readers)
+    expect(shortGap.cpu.percent).toBe(100)
+
+    now += 5_000
+    const later = await collectHostResources([], readers)
+    expect(later.cpu.percent).toBe(10)
   })
 
   it('dedupes statfs volumes without keeping paths', async () => {

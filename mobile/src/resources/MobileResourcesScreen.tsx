@@ -17,7 +17,7 @@ import { useRouteHandoff } from '../navigation/route-handoff'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useHostClient } from '../transport/host-client-hooks'
-import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
+import { startRuntimeStatusProbe } from '../transport/runtime-status-probe'
 import {
   appendCpuSampleHistory,
   hostResourcesPollDelayMs,
@@ -26,7 +26,7 @@ import {
 import { styles } from './mobile-resources-screen-styles'
 import { ResourcesSections } from './resource-sections'
 
-type Capability = 'unknown' | 'present' | 'absent'
+type Capability = 'unknown' | 'present' | 'absent' | 'unreadable'
 type SampleProblem = 'unreadable' | 'failed'
 
 export function MobileResourcesScreen() {
@@ -73,8 +73,14 @@ export function MobileResourcesScreen() {
     if (client === null || connState !== 'connected') {
       return
     }
-    return startRuntimeCapabilityProbe(client, (capabilities) => {
-      setCapability(capabilities.includes(HOST_RESOURCES_RUNTIME_CAPABILITY) ? 'present' : 'absent')
+    return startRuntimeStatusProbe(client, (status) => {
+      if (status === null) {
+        setCapability('unreadable')
+        return
+      }
+      setCapability(
+        status.capabilities.includes(HOST_RESOURCES_RUNTIME_CAPABILITY) ? 'present' : 'absent'
+      )
     })
   }, [client, connState, hostId])
 
@@ -164,6 +170,8 @@ export function MobileResourcesScreen() {
         {t('resources.screen.updateServer', 'Update the server to see CPU, memory, and disk.')}
       </Text>
     )
+  } else if (capability === 'unreadable') {
+    body = <Text style={styles.problem}>{problemCopy('failed', t)}</Text>
   } else if (snapshot === null && sampleProblem === null) {
     body = (
       <View style={styles.loading}>

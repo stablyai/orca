@@ -11,7 +11,7 @@ const transport = vi.hoisted(() => {
   const sendRequest = vi.fn()
   return {
     state: 'connected' as 'connected' | 'disconnected',
-    capabilities: ['host.resources.v1'] as string[],
+    capabilities: ['host.resources.v1'] as readonly string[] | null,
     sendRequest,
     client: { sendRequest }
   }
@@ -68,12 +68,12 @@ vi.mock('../transport/host-client-hooks', () => ({
   })
 }))
 
-vi.mock('../transport/runtime-capability-probe', () => ({
-  startRuntimeCapabilityProbe: (
+vi.mock('../transport/runtime-status-probe', () => ({
+  startRuntimeStatusProbe: (
     _client: unknown,
-    onCapabilities: (capabilities: readonly string[]) => void
+    onStatus: (status: { capabilities: readonly string[] } | null) => void
   ) => {
-    onCapabilities(transport.capabilities)
+    onStatus(transport.capabilities === null ? null : { capabilities: transport.capabilities })
     return () => {}
   }
 }))
@@ -159,6 +159,14 @@ describe('MobileResourcesScreen', () => {
     transport.capabilities = []
     const tree = await render()
     expect(text(tree)).toContain('Update the server to see CPU, memory, and disk.')
+    expect(transport.sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('shows a read error when the status probe cannot decode the host', async () => {
+    transport.capabilities = null
+    const tree = await render()
+    expect(text(tree)).toContain('Could not read server resources.')
+    expect(text(tree)).not.toContain('Update the server to see CPU, memory, and disk.')
     expect(transport.sendRequest).not.toHaveBeenCalled()
   })
 

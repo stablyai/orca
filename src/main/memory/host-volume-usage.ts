@@ -38,10 +38,9 @@ export function dedupeHostVolumes(
   entries: readonly HostVolumeMeasurement[]
 ): HostResourcesVolume[] {
   const comparable = entries.filter(isSafeMeasurement)
-  const groupByRoot = comparable.length > 0 && comparable.every((entry) => entry.dev === 0)
   const groups = new Map<string, VolumeGroup>()
   for (const [index, entry] of comparable.entries()) {
-    const key = groupByRoot ? `root:${entry.root}` : `dev:${entry.dev}`
+    const key = entry.dev === 0 ? `root:${entry.root}` : `dev:${entry.dev}`
     const existing = groups.get(key)
     if (!existing) {
       groups.set(key, {
