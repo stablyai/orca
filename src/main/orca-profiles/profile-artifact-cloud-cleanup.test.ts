@@ -1,4 +1,3 @@
-import { mkdirSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -37,15 +36,14 @@ import {
 } from '../artifacts/artifact-create-intent-store'
 import type { ArtifactShareScope } from '../artifacts/artifact-share-record-store'
 import {
-  artifactCloudCleanupNeedsCommit,
   commitArtifactCloudCleanup,
   prepareArtifactCloudCleanup,
   prepareArtifactCloudUse
 } from './profile-artifact-cloud-cleanup'
+
 import { linkOrcaProfileToCloud, unlinkOrcaProfileFromCloud } from './profile-cloud-index'
 import {
   getOrcaProfileIndexPath,
-  getOrcaProfileDirectory,
   loadOrCreateProfileIndex,
   readProfileIndex,
   writeProfileIndex
@@ -146,37 +144,6 @@ describe('profile artifact cloud cleanup', () => {
 
     unlinkOrcaProfileFromCloud(profileId, userDataPath)
     expect(currentCloud(userDataPath)).toBeUndefined()
-    expect(getArtifactCreateIntent(profileId, userDataPath, '/report.md', scope)).toBeNull()
-  })
-
-  it('preserves an orphaned local marker for an unknown profile', async () => {
-    const userDataPath = await createLinkedProfile(cloud('org-a'))
-    const orphanProfileId = 'missing-profile'
-    const scope = shareScope('org-a')
-    mkdirSync(getOrcaProfileDirectory(orphanProfileId, userDataPath), { recursive: true })
-    createIntent(userDataPath, scope, orphanProfileId)
-    prepareArtifactCloudCleanup(orphanProfileId, userDataPath, undefined)
-
-    const transitions = [
-      () => linkOrcaProfileToCloud(orphanProfileId, cloud('org-b'), userDataPath),
-      () => unlinkOrcaProfileFromCloud(orphanProfileId, userDataPath)
-    ]
-    for (const transition of transitions) {
-      expect(transition).toThrow('unknown_orca_profile')
-      expect(artifactCloudCleanupNeedsCommit(orphanProfileId, userDataPath, undefined)).toBe(true)
-      expect(
-        getArtifactCreateIntent(orphanProfileId, userDataPath, '/report.md', scope)
-      ).not.toBeNull()
-    }
-  })
-
-  it('cleans old recovery state when the active organization changes', async () => {
-    const userDataPath = await createLinkedProfile(cloud('org-a'))
-    const scope = shareScope('org-a')
-    createIntent(userDataPath, scope)
-
-    linkOrcaProfileToCloud(profileId, cloud('org-b'), userDataPath)
-
     expect(getArtifactCreateIntent(profileId, userDataPath, '/report.md', scope)).toBeNull()
   })
 

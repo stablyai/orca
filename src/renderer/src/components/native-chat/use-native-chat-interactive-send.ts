@@ -8,7 +8,7 @@ import {
   nativeChatStopSendsSecondEscape,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
-} from '../../../../shared/native-chat-agent-support'
+} from '../../../../shared/native-chat/native-chat-agent-support'
 import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,

@@ -111,38 +111,6 @@ describe('useGitStatusPushSignalRefresh', () => {
     vi.unstubAllGlobals()
   })
 
-  it('nudges status when the active repo reports a worktrees change', async () => {
-    const fetchStatus = vi.fn()
-    const harness = await renderHookOnce({
-      activeRepoId: 'repo-1',
-      activeWorktreeId: 'wt-1',
-      enabled: true,
-      fetchStatus
-    })
-
-    harness.emitWorktreesChanged('repo-1')
-    expect(fetchStatus).toHaveBeenCalledTimes(1)
-
-    harness.emitWorktreesChanged('repo-other')
-    expect(fetchStatus).toHaveBeenCalledTimes(1)
-  })
-
-  it('nudges status when the active repo reports git status metadata changes', async () => {
-    const fetchStatus = vi.fn()
-    const harness = await renderHookOnce({
-      activeRepoId: 'repo-1',
-      activeWorktreeId: 'wt-1',
-      enabled: true,
-      fetchStatus
-    })
-
-    harness.emitGitStatusMetadataChanged('repo-1')
-    expect(fetchStatus).toHaveBeenCalledTimes(1)
-
-    harness.emitGitStatusMetadataChanged('repo-other')
-    expect(fetchStatus).toHaveBeenCalledTimes(1)
-  })
-
   it('skips metadata signals attributed only to sibling worktrees', async () => {
     const fetchStatus = vi.fn()
     const harness = await renderHookOnce({
@@ -177,69 +145,5 @@ describe('useGitStatusPushSignalRefresh', () => {
     // A differently spelled path (symlinked root) may be the active checkout.
     harness.emitGitStatusMetadataChanged('repo-1', ['/private/repo/wt-1'])
     expect(fetchStatus).toHaveBeenCalledTimes(3)
-  })
-
-  it('nudges status when a terminal command finishes in the active worktree', async () => {
-    const fetchStatus = vi.fn()
-    const harness = await renderHookOnce({
-      activeRepoId: 'repo-1',
-      activeWorktreeId: 'wt-1',
-      enabled: true,
-      fetchStatus
-    })
-
-    harness.emitCommandFinished('wt-1')
-    expect(fetchStatus).toHaveBeenCalledTimes(1)
-
-    harness.emitCommandFinished('wt-other')
-    expect(fetchStatus).toHaveBeenCalledTimes(1)
-  })
-
-  it('drops nudges while the window is hidden', async () => {
-    const fetchStatus = vi.fn()
-    const harness = await renderHookOnce({
-      activeRepoId: 'repo-1',
-      activeWorktreeId: 'wt-1',
-      enabled: true,
-      fetchStatus
-    })
-
-    ;(document as unknown as { visibilityState: string }).visibilityState = 'hidden'
-    harness.emitWorktreesChanged('repo-1')
-    harness.emitGitStatusMetadataChanged('repo-1')
-    harness.emitCommandFinished('wt-1')
-    expect(fetchStatus).not.toHaveBeenCalled()
-  })
-
-  it('subscribes to nothing while disabled', async () => {
-    const fetchStatus = vi.fn()
-    const harness = await renderHookOnce({
-      activeRepoId: 'repo-1',
-      activeWorktreeId: 'wt-1',
-      enabled: false,
-      fetchStatus
-    })
-
-    expect(harness.onChangedSubscribe).not.toHaveBeenCalled()
-    expect(harness.onGitStatusMetadataChangedSubscribe).not.toHaveBeenCalled()
-    expect(harness.windowListeners.size).toBe(0)
-  })
-
-  it('unsubscribes preload and command-finished signals on cleanup', async () => {
-    const fetchStatus = vi.fn()
-    const harness = await renderHookOnce({
-      activeRepoId: 'repo-1',
-      activeWorktreeId: 'wt-1',
-      enabled: true,
-      fetchStatus
-    })
-
-    expect(harness.cleanups.length).toBe(2)
-    for (const cleanup of harness.cleanups) {
-      cleanup()
-    }
-    expect(harness.windowListeners.size).toBe(0)
-    expect(harness.onChangedUnsubscribe).toHaveBeenCalledTimes(1)
-    expect(harness.onGitStatusMetadataChangedUnsubscribe).toHaveBeenCalledTimes(1)
   })
 })

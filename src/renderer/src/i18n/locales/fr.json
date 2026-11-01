@@ -6993,12 +6993,14 @@
           "added": "Déjà un hôte",
           "running": "En cours",
           "stopped": "Arrêtée",
+          "unverifiable": "Inconnu",
           "title": "Ajouter une distro WSL",
           "description": "Orca exécute son serveur dans la distro, de sorte que git, les fichiers et les terminaux s'exécutent nativement sous Linux. Les projets de cette distro que vous avez ouverts via \\\\wsl.localhost sont déplacés automatiquement vers cet hôte dès que leurs terminaux sont inactifs ; les projets situés sur un lecteur Windows (/mnt/…) restent sur cet ordinateur. Vous pouvez ramener un projet déplacé depuis la barre latérale.",
           "distro": "Distro",
           "loading": "Recherche des distros WSL…",
           "placeholder": "Choisissez une distro",
           "stoppedHint": "{{value0}} est arrêtée. L'ajouter la démarre.",
+          "unverifiableHint": "WSL n’a pas indiqué si {{value0}} est en cours d’exécution. L’ajouter la démarre si nécessaire.",
           "addingHint": "Installation et démarrage du serveur Orca dans la distro. La première fois peut prendre une minute.",
           "adding": "Configuration…",
           "startAndAdd": "Démarrer et ajouter",
@@ -9200,7 +9202,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "Couleur ANSI magenta",
-          "03c855d15f": "Réinitialiser toutes les surcharges de couleurs",
           "63f8d9336e": "Surcharges de couleurs",
           "e86e09b5c7": "Remplacer individuellement les couleurs du terminal.",
           "1d1920dc8a": "Masquer le curseur de la souris pendant la saisie dans le terminal.",
@@ -9267,7 +9268,11 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Redémarrer maintenant",
           "907131d741": "Redémarrage…",
-          "605a35d600": "Non encore appliqué par le moteur de rendu du terminal — xterm.js n'a pas d'emplacement dédié aux couleurs en gras. Une valeur enregistrée est conservée."
+          "605a35d600": "Non encore appliqué par le moteur de rendu du terminal — xterm.js n'a pas d'emplacement dédié aux couleurs en gras. Une valeur enregistrée est conservée.",
+          "color_overrides_dark_description": "Remplacer individuellement les couleurs du thème de terminal sombre.",
+          "color_overrides_light_description": "Remplacer individuellement les couleurs du thème de terminal clair.",
+          "reset_dark_color_overrides": "Réinitialiser les surcharges de couleurs du thème sombre",
+          "reset_light_color_overrides": "Réinitialiser les surcharges de couleurs du thème clair"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Réinitialiser"
@@ -12686,7 +12691,7 @@
         "wslHosts": {
           "title": "Hôtes WSL",
           "experimental": "Expérimental",
-          "description": "Orca exécute un serveur dans chaque distro. Une distro arrêtée ne démarre que lorsque vous ouvrez l'un de ses projets ou la connectez ici.",
+          "description": "Orca exécute un serveur dans chaque distro. Ouvrir un projet ne démarre jamais une distro arrêtée : cliquez sur Démarrer, ouvrez un nouveau terminal ou connectez-la ici.",
           "add": "Ajouter une distro WSL",
           "connect": "Connecter",
           "turnOn": "Activer dans Expérimental",
@@ -13090,7 +13095,9 @@
           "light": "Clair",
           "languageIncomplete": "Traduit à {{value0}} %, trop incomplet pour servir de langue à Orca",
           "languageCoverage": "Langue de l’interface · traduite à {{value0}} %",
-          "newFileMenu": "S’ajoute au menu +"
+          "newFileMenu": "S’ajoute au menu +",
+          "editorReplacesViewer": "Ouvre {{value0}} à la place de la visionneuse d’Orca",
+          "editorMayReplaceViewer": "Peut ouvrir {{value0}} à la place de la visionneuse d’Orca"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "Aucun autre accès",
@@ -16105,16 +16112,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Zoom avant",
-          "6c89c73d9f": "Réinitialiser le zoom",
           "be27304574": "Zoom arrière",
-          "77bfc9b35a": "Ouvrir l'image dans une fenêtre indépendante",
           "3ef9551ba2": "Chargement de l'aperçu...",
-          "d9d2944855": "Échec du chargement de l'aperçu du fichier"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Appuyez sur Échap pour fermer",
-          "535f4e2b56": "Fermer",
-          "9e27b2ecaf": "Aperçu de l'image en taille réelle"
+          "d9d2944855": "Échec du chargement de l'aperçu du fichier",
+          "fitToView": "Ajuster à la vue",
+          "actualSize": "Taille réelle",
+          "expand": "Agrandir l’image"
         },
         "IpynbViewer": {
           "859bf9fc21": "Exécuter la cellule",
@@ -16237,7 +16240,10 @@
           "zoomOut": "Zoom arrière",
           "zoomIn": "Zoom avant",
           "fit": "Ajuster à l'écran",
-          "close": "Fermer"
+          "close": "Fermer",
+          "copyPng": "Copier en PNG",
+          "copiedPng": "Copié en PNG",
+          "copyPngFailed": "Impossible de copier l’image"
         },
         "MermaidBlock": {
           "dcc132e691": "Erreur de diagramme :",
@@ -19520,9 +19526,7 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Mettez à jour Orca sur cet hôte pour continuer dans l'interface de chat.",
-        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse.",
-        "exitUnconfirmedFromTerminal": "{{agent}} exécute déjà cette conversation dans un autre terminal. Quittez {{agent}} là-bas ou fermez ce terminal, puis ouvrez cette conversation depuis l’historique des sessions.",
-        "exitUnconfirmed": "{{agent}} exécute déjà cette conversation dans un autre terminal. Quittez {{agent}} là-bas ou fermez ce terminal, puis ouvrez cette conversation depuis l’historique des sessions."
+        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse."
       },
       "state": {
         "loading": {
@@ -19864,7 +19868,8 @@
         "stopped": "{{distro}} est arrêté",
         "start": "Démarrer",
         "unverifiable": "Orca n'a pas pu vérifier si {{distro}} est en cours d'exécution",
-        "startToSend": "Démarrez {{distro}} pour envoyer."
+        "startToSend": "Démarrez {{distro}} pour envoyer.",
+        "startDistro": "Démarrer {{distro}}"
       },
       "interruptedContinue": {
         "continue": "Continuer",
@@ -20912,6 +20917,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} est déjà un hôte.",
         "distroStopped": "{{distro}} s'est arrêtée depuis la lecture de la liste. Choisissez « Démarrer et ajouter » pour la démarrer.",
+        "distroUnverifiable": "WSL n’a pas répondu si {{distro}} est en cours d’exécution. Actualisez la liste, ou ajoutez-la depuis la boîte de dialogue, qui la démarre si nécessaire.",
         "wsl1": "{{distro}} utilise WSL 1, qu'Orca ne prend plus en charge. Convertissez-la en WSL 2 dans un terminal Windows avec : {{command}}",
         "notRegistered": "{{distro}} n'est pas une distro WSL installée. Exécutez {{command}} dans un terminal Windows pour voir celles qui sont installées, ou réinstallez-la et réessayez.",
         "sshManaged": "{{distro}} exécute déjà le serveur Orca de « {{server}} », auquel cet ordinateur accède via SSH. Supprimez d'abord ce serveur ; son déplacement vers un hôte WSL n'est pas encore pris en charge."
@@ -21857,12 +21863,8 @@
       "refreshBeforeEnd": "La terminaison n’est pas disponible avant l’actualisation des PTY.",
       "endUnsupported": "La terminaison n’est pas disponible pour ce terminal. Son hôte ne prend pas en charge les vérifications de sécurité requises. Fermez-le depuis son onglet ou sur son hôte.",
       "checkingTabs": "Vérification des onglets…",
-      "endTitle": "Terminer {{terminal}} ?",
-      "endDescription": "Cette action termine le terminal et ses processus enfants. Du travail non enregistré peut être perdu.",
       "lastProcess": "Dernier processus observé : {{process}}",
-      "cancel": "Annuler",
       "ending": "Arrêt…",
-      "end": "Terminer le terminal",
       "unassigned": "Non attribué",
       "thisComputer": "Cet ordinateur",
       "localOwnedCount_one": "{{count}} PTY Orca sur cet ordinateur",

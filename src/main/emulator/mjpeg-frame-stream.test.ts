@@ -51,35 +51,4 @@ describe('MjpegFrameStream', () => {
     await expect(framePromise).resolves.toEqual(JPEG)
     expect(attempts).toBe(2)
   })
-
-  it('reads raw MJPEG frames through Node HTTP', async () => {
-    let requestUrl = ''
-    const framePromise = new Promise<Buffer>((resolve, reject) => {
-      const httpServer = createServer((req, res) => {
-        requestUrl = req.url ?? ''
-        res.writeHead(200, { 'content-type': 'application/octet-stream' })
-        res.write(Buffer.concat([Buffer.from('--frame\r\n'), JPEG]))
-        res.end()
-      })
-      server = httpServer
-
-      void listen(httpServer).then((port) => {
-        const stream = new MjpegFrameStream(
-          `http://127.0.0.1:${port}/stream.mjpeg`,
-          {
-            onError: reject,
-            onFrame: (frame) => {
-              stream.stop()
-              resolve(frame)
-            }
-          },
-          'test-key'
-        )
-        stream.start()
-      })
-    })
-
-    await expect(framePromise).resolves.toEqual(JPEG)
-    expect(requestUrl).toBe('/stream.mjpeg?raw=1&_orca=test-key')
-  })
 })

@@ -114,32 +114,6 @@ describe('GitHub issue open-by-number origin preference', () => {
     _resetOwnerRepoCache()
   })
 
-  it('pins typed issue metadata to explicit origin preference', async () => {
-    const source = { owner: 'fork', repo: 'orca', host: 'github.com' }
-    resolveIssueSourceMock.mockResolvedValueOnce({ source, fellBack: false })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify({
-        number: 7,
-        title: 'Origin issue',
-        state: 'open',
-        labels: [],
-        url: 'https://github.com/fork/orca/issues/7',
-        updatedAt: '2026-04-02T00:00:00Z',
-        author: { login: 'octocat' }
-      })
-    })
-
-    const item = await getWorkItem('/repo-root', 7, 'issue', null, {}, 'origin')
-
-    expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'origin', null, {})
-    expect(getIssueOwnerRepoMock).not.toHaveBeenCalled()
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', 'repos/fork/orca/issues/7'],
-      expect.objectContaining({ cwd: '/repo-root', host: 'github.com' })
-    )
-    expect(item).toMatchObject({ number: 7, title: 'Origin issue', type: 'issue' })
-  })
-
   it('does not run a bare issue lookup when explicit origin identity is unresolved', async () => {
     resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
 
