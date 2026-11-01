@@ -1,17 +1,34 @@
+import * as crypto from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatUiLaunchTipVariant } from '../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { TelemetrySettings } from '../../shared/telemetry-settings-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import { TUI_AGENT_AUTO_PICK_ORDER } from '../../shared/tui-agent-selection'
 import type { Store } from '../persistence/loading-store/store'
 import {
-  ensureChatUiLaunchTipCohort,
+  ensureChatUiLaunchTipCohort as assignCohort,
   isChatUiLaunchTipDeferredForConsent
 } from './chat-ui-launch-tip-cohort'
-import { makeFakeSettings, restoreConsentEnv, stashAndClearConsentEnv } from './client-test-harness'
+import { experimentCohortProps } from './experiment-cohort-props'
+import { commonPropsSchema } from '../../shared/telemetry-events'
+import { hasChatUiLaunchTipEligibleHarness } from '../native-chat/chat-ui-launch-tip-targeting'
+import {
+  BASE_COMMON,
+  makeFakeSettings,
+  restoreConsentEnv,
+  stashAndClearConsentEnv
+} from './client-test-harness'
+
+vi.mock('node:crypto', async (importOriginal) => ({
+  ...(await importOriginal<typeof crypto>()),
+  randomInt: vi.fn(() => 0)
+}))
 
 function makeStore(
   telemetry: Partial<TelemetrySettings>,
   variant: ChatUiLaunchTipVariant = 'chat-ui-off',
-  seen: string[] = []
+  seen: string[] = [],
+  preferences: Partial<GlobalSettings> = {}
 ): Store {
   const settings = makeFakeSettings({
     optedIn: true,
@@ -19,6 +36,7 @@ function makeStore(
     existedBeforeTelemetryRelease: true,
     ...telemetry
   })
+  Object.assign(settings, preferences)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies every Store method the cohort assignment reads or writes.
   return {
     getSettings: () => settings,
@@ -30,23 +48,174 @@ function makeStore(
   } as unknown as Store
 }
 
+function ensureChatUiLaunchTipCohort(store: Store) {
+  return assignCohort(store, hasChatUiLaunchTipEligibleHarness)
+}
+
 describe('ensureChatUiLaunchTipCohort', () => {
   let env: Record<string, string | undefined>
   beforeEach(() => {
     env = stashAndClearConsentEnv()
+    vi.mocked(crypto.randomInt)
+      .mockReset()
+      .mockImplementation(() => 0)
   })
   afterEach(() => {
     restoreConsentEnv(env)
   })
 
-  it('enrolls a profile still due the tip once and keeps the frozen cohort', () => {
+  it.each([
+    { draw: 0, cohort: 'treatment' },
+    { draw: 1, cohort: 'control' },
+    { draw: 2, cohort: 'control' },
+    { draw: 3, cohort: 'control' },
+    { draw: 4, cohort: 'control' }
+  ])('assigns draw $draw to $cohort and keeps the frozen cohort', ({ draw, cohort }) => {
+    vi.mocked(crypto.randomInt).mockImplementation(() => draw)
     const store = makeStore({})
-    const cohort = ensureChatUiLaunchTipCohort(store)
-    expect(['control', 'treatment']).toContain(cohort)
+    expect(ensureChatUiLaunchTipCohort(store)).toBe(cohort)
+    expect(crypto.randomInt).toHaveBeenCalledWith(5)
     expect(store.getSettings().telemetry?.chatUiLaunchTipCohort).toBe(cohort)
     expect(store.getSettings().telemetry?.installId).toBe('install')
     expect(ensureChatUiLaunchTipCohort(store)).toBe(cohort)
     expect(store.updateSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['chat-ui-off', 'chat-ui-on'] as const)(
+    'splits the %s card treatment equally and freezes eligibility across restarts',
+    (variant) => {
+      for (const draw of [0, 1]) {
+        vi.mocked(crypto.randomInt)
+          .mockReset()
+          .mockImplementationOnce(() => 0)
+          .mockImplementationOnce(() => draw)
+        const store = makeStore({}, variant, [], { agentDefaultSurface: 'terminal' })
+        expect(ensureChatUiLaunchTipCohort(store)).toBe('treatment')
+        expect(crypto.randomInt).toHaveBeenNthCalledWith(1, 5)
+        expect(crypto.randomInt).toHaveBeenNthCalledWith(2, 2)
+        const targeting = store.getSettings().telemetry?.chatUiLaunchTipTargeting
+        expect(targeting).toEqual(
+          draw === 0 ? { mode: 'all' } : { mode: 'eligible-harnesses', eligible: true }
+        )
+        store.getSettings().agentDefaultSurface = 'chat'
+        expect(ensureChatUiLaunchTipCohort(store)).toBe('treatment')
+        expect(store.getSettings().telemetry?.chatUiLaunchTipTargeting).toEqual(targeting)
+        expect(store.updateSettings).toHaveBeenCalledTimes(1)
+      }
+    }
+  )
+
+  it.each([
+    {
+      name: 'all Chat',
+      enabled: ['claude', 'codex'],
+      surface: 'chat',
+      overrides: {},
+      eligible: false
+    },
+    {
+      name: 'CLI-only harness',
+      enabled: ['aider'],
+      surface: 'terminal',
+      overrides: {},
+      eligible: false
+    },
+    {
+      name: 'Chat plus CLI-only harness',
+      enabled: ['codex', 'aider'],
+      surface: 'chat',
+      overrides: { aider: false },
+      eligible: false
+    },
+    {
+      name: 'per-harness CLI override',
+      enabled: ['codex'],
+      surface: 'chat',
+      overrides: { codex: false },
+      eligible: true
+    },
+    {
+      name: 'per-harness Chat override',
+      enabled: ['codex'],
+      surface: 'terminal',
+      overrides: { codex: true },
+      eligible: false
+    },
+    {
+      name: 'mixed supported harnesses',
+      enabled: ['claude', 'codex'],
+      surface: 'chat',
+      overrides: { claude: false },
+      eligible: true
+    },
+    { name: 'all disabled', enabled: [], surface: 'terminal', overrides: {}, eligible: false }
+  ] as const)('targets $name using settings only', ({ enabled, surface, overrides, eligible }) => {
+    vi.mocked(crypto.randomInt)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 1)
+    const store = makeStore({}, 'chat-ui-off', [], {
+      agentDefaultSurface: surface,
+      nativeChatProviders: overrides,
+      disabledTuiAgents: TUI_AGENT_AUTO_PICK_ORDER.filter(
+        (agent) => !enabled.some((candidate) => candidate === agent)
+      )
+    })
+    ensureChatUiLaunchTipCohort(store)
+    expect(store.getSettings().telemetry?.chatUiLaunchTipTargeting).toEqual({
+      mode: 'eligible-harnesses',
+      eligible
+    })
+  })
+
+  it.each(['control', 'treatment'] as const)('preserves existing %s assignments', (cohort) => {
+    const store = makeStore({ chatUiLaunchTipCohort: cohort })
+    expect(ensureChatUiLaunchTipCohort(store)).toBe(cohort)
+    expect(crypto.randomInt).not.toHaveBeenCalled()
+    expect(store.updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('keeps failed capability checks in the filtered arm without showing everyone instead', () => {
+    vi.mocked(crypto.randomInt)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 1)
+    const resolve = vi.fn(() => {
+      throw new Error('capability check unavailable')
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const store = makeStore({})
+      expect(assignCohort(store, resolve)).toBe('treatment')
+      expect(store.getSettings().telemetry?.chatUiLaunchTipTargeting).toEqual({
+        mode: 'eligible-harnesses',
+        eligible: false
+      })
+      expect(assignCohort(store, resolve)).toBe('treatment')
+      expect(resolve).toHaveBeenCalledOnce()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('emits schema-valid targeting props immediately after enrollment without harness settings', () => {
+    vi.mocked(crypto.randomInt)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 1)
+    const store = makeStore({ onboardingLanguageCohort: 'treatment' })
+    const props = experimentCohortProps(store, hasChatUiLaunchTipEligibleHarness)
+    expect(props).toEqual({
+      onboarding_language_v1: 'treatment',
+      chat_ui_launch_tip_v1: 'treatment',
+      chat_ui_launch_tip_targeting_v1: 'eligible-harnesses'
+    })
+    expect(commonPropsSchema.safeParse({ ...BASE_COMMON, ...props }).success).toBe(true)
+  })
+
+  it('ignores malformed targeting metadata rather than disabling all telemetry', () => {
+    const store = makeStore({ chatUiLaunchTipCohort: 'treatment' })
+    Object.assign(store.getSettings().telemetry!, { chatUiLaunchTipTargeting: { mode: 'invalid' } })
+    const props = experimentCohortProps(store, hasChatUiLaunchTipEligibleHarness)
+    expect(props.chat_ui_launch_tip_targeting_v1).toBeUndefined()
+    expect(commonPropsSchema.safeParse({ ...BASE_COMMON, ...props }).success).toBe(true)
   })
 
   it('holds the tip unenrolled while the banner is pending, then enrolls after acknowledgement', () => {

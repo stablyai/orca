@@ -371,3 +371,29 @@ it('keeps frozen imported originals separate for each Store and prepared export'
     original: false
   })
 })
+
+it.each([true, false])(
+  'preserves filtered eligibility %s and cohort across profile reloads',
+  async (eligible) => {
+    writeDataFile({ settings: { experimentalNativeChat: false } })
+    const store = createStore()
+    const targeting = { mode: 'eligible-harnesses' as const, eligible }
+    store.updateSettings({
+      telemetry: {
+        ...store.getSettings().telemetry!,
+        chatUiLaunchTipCohort: 'treatment',
+        chatUiLaunchTipTargeting: targeting
+      }
+    })
+    store.flush()
+    const reopened = await reopen()
+    expect(reopened.getSettings().telemetry).toMatchObject({
+      chatUiLaunchTipCohort: 'treatment',
+      chatUiLaunchTipTargeting: targeting
+    })
+    reopened.updateSettings({ agentDefaultSurface: 'chat', nativeChatProviders: { codex: true } })
+    reopened.flush()
+    const again = await reopen()
+    expect(again.getSettings().telemetry?.chatUiLaunchTipTargeting).toEqual(targeting)
+  }
+)

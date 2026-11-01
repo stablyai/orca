@@ -102,6 +102,7 @@ export const chatUiFeatureTipExposureSchema = z
     variant: chatUiFeatureTipVariantSchema,
     launch_tip_cohort: z.enum(['control', 'treatment', 'unassigned']),
     shown: z.boolean(),
+    targeting: z.enum(['all', 'eligible-harnesses']).optional(),
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()

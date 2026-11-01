@@ -61,11 +61,17 @@ export function trackChatUiFeatureTipAction(
   }
 }
 
-/** Control profiles never see the Chat UI launch tip; unenrolled ones (no consent, contributor builds) do. */
+/** Unenrolled and legacy treatment profiles retain the original announcement behavior. */
 export function isChatUiLaunchTipHeldOut(
   settings: Pick<GlobalSettings, 'telemetry'> | null
 ): boolean {
-  return settings?.telemetry?.chatUiLaunchTipCohort === 'control'
+  const telemetry = settings?.telemetry
+  return (
+    telemetry?.chatUiLaunchTipCohort === 'control' ||
+    (telemetry?.chatUiLaunchTipCohort === 'treatment' &&
+      telemetry.chatUiLaunchTipTargeting?.mode === 'eligible-harnesses' &&
+      telemetry.chatUiLaunchTipTargeting.eligible !== true)
+  )
 }
 
 export function wasChatUiLaunchTipShown(
@@ -83,7 +89,10 @@ export function trackChatUiFeatureTipExposure(
     track('chat_ui_feature_tip_exposure', {
       variant: CHAT_UI_TIP_TELEMETRY_VARIANT[variant],
       launch_tip_cohort: settings?.telemetry?.chatUiLaunchTipCohort ?? 'unassigned',
-      shown: !isChatUiLaunchTipHeldOut(settings)
+      shown: !isChatUiLaunchTipHeldOut(settings),
+      ...(settings?.telemetry?.chatUiLaunchTipTargeting
+        ? { targeting: settings.telemetry.chatUiLaunchTipTargeting.mode }
+        : {})
     })
   }
 }

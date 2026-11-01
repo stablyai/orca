@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Store } from '../persistence/loading-store/store'
@@ -17,6 +18,10 @@ const { createPostHogClient } = vi.hoisted(() => {
   Object.assign(globalThis, { ORCA_BUILD_IDENTITY: 'stable', ORCA_POSTHOG_WRITE_KEY: 'test-key' })
   return { createPostHogClient: vi.fn() }
 })
+vi.mock('node:crypto', async (importOriginal) => ({
+  ...(await importOriginal<typeof crypto>()),
+  randomInt: vi.fn(() => 0)
+}))
 vi.mock('./posthog-transport', async (importOriginal) => ({
   ...(await importOriginal<typeof PostHogTransport>()),
   createPostHogClient
@@ -56,7 +61,7 @@ describe('deferred PostHog client start', () => {
       existedBeforeTelemetryRelease: false
     })
     store = makeFakeStore(settings)
-    initTelemetry(store, scheduleClientStart)
+    initTelemetry(store, scheduleClientStart, () => false)
   })
 
   afterEach(async () => {
@@ -68,6 +73,37 @@ describe('deferred PostHog client start', () => {
     scheduleClientStart.mockReset()
     restoreConsentEnv(envStash)
   })
+
+  it.each([true, false])(
+    'captures the filtered arm with local eligibility %s through real initialization',
+    (eligible) => {
+      vi.mocked(store.getChatUiLaunchTipVariant).mockReturnValue('chat-ui-off')
+      vi.mocked(crypto.randomInt)
+        .mockImplementationOnce(() => 0)
+        .mockImplementationOnce(() => 1)
+      const resolveEligibility = vi.fn(() => eligible)
+      scheduleClientStart.mockClear()
+      initTelemetry(store, scheduleClientStart, resolveEligibility)
+      expect(resolveEligibility).toHaveBeenCalledWith(settings)
+      expect(settings.telemetry?.chatUiLaunchTipTargeting).toEqual({
+        mode: 'eligible-harnesses',
+        eligible
+      })
+      expect(track('app_opened', {})).toBe(true)
+      scheduleClientStart.mock.calls[0][0]()
+      expect(sdk.capture).toHaveBeenCalledWith(
+        expect.objectContaining({
+          properties: expect.objectContaining({
+            chat_ui_launch_tip_v1: 'treatment',
+            chat_ui_launch_tip_targeting_v1: 'eligible-harnesses'
+          })
+        })
+      )
+      const properties = sdk.capture.mock.calls[0][0].properties
+      expect(properties).not.toHaveProperty('eligible')
+      expect(properties).not.toHaveProperty('nativeChatProviders')
+    }
+  )
 
   it('holds startup events, then replays them in order with their original timestamps', () => {
     expect(track('app_opened', {})).toBe(true)

@@ -1,6 +1,10 @@
 import { randomInt } from 'node:crypto'
 import type { Store } from '../persistence/loading-store/store'
 import { resolveConsent } from './consent'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { ChatUiLaunchTipTargeting } from '../../shared/telemetry-settings-types'
+
+export type ChatUiLaunchTipEligibility = (settings: GlobalSettings) => boolean
 
 export type ChatUiLaunchTipCohort = 'control' | 'treatment'
 
@@ -12,7 +16,10 @@ let deferredForConsent = false
  * banner is unresolved the tip waits, so the exposure is never spent unmeasured; opted-out and
  * contributor builds stay unenrolled and see the tip as before.
  */
-export function ensureChatUiLaunchTipCohort(store: Store): ChatUiLaunchTipCohort | undefined {
+export function ensureChatUiLaunchTipCohort(
+  store: Store,
+  resolveEligibility: ChatUiLaunchTipEligibility
+): ChatUiLaunchTipCohort | undefined {
   deferredForConsent = false
   try {
     const settings = store.getSettings()
@@ -33,8 +40,16 @@ export function ensureChatUiLaunchTipCohort(store: Store): ChatUiLaunchTipCohort
       deferredForConsent = consent === 'pending_banner'
       return undefined
     }
-    const cohort: ChatUiLaunchTipCohort = randomInt(2) === 0 ? 'control' : 'treatment'
-    store.updateSettings({ telemetry: { ...telemetry, chatUiLaunchTipCohort: cohort } })
+    const cohort: ChatUiLaunchTipCohort = randomInt(5) === 0 ? 'treatment' : 'control'
+    const targeting =
+      cohort === 'treatment' ? assignTargeting(settings, resolveEligibility) : undefined
+    store.updateSettings({
+      telemetry: {
+        ...telemetry,
+        chatUiLaunchTipCohort: cohort,
+        ...(targeting ? { chatUiLaunchTipTargeting: targeting } : {})
+      }
+    })
     return cohort
   } catch (err) {
     // Startup must not fail over an experiment; unenrolled profiles see the tip as before.
@@ -46,4 +61,19 @@ export function ensureChatUiLaunchTipCohort(store: Store): ChatUiLaunchTipCohort
 /** True when this launch holds the tip back until the telemetry banner is resolved. */
 export function isChatUiLaunchTipDeferredForConsent(): boolean {
   return deferredForConsent
+}
+
+function assignTargeting(
+  settings: GlobalSettings,
+  resolveEligibility: ChatUiLaunchTipEligibility
+): ChatUiLaunchTipTargeting {
+  if (randomInt(2) === 0) {
+    return { mode: 'all' }
+  }
+  try {
+    return { mode: 'eligible-harnesses', eligible: resolveEligibility(settings) }
+  } catch (error) {
+    console.warn('[telemetry] chat UI launch tip eligibility failed', error)
+    return { mode: 'eligible-harnesses', eligible: false }
+  }
 }
