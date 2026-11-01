@@ -9,6 +9,7 @@ import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkil
 import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
 import { autoUpdateBundledSkillsOnTarget } from '@/runtime/runtime-bundled-skills-client'
+import { useAppStore } from '@/store'
 import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-store'
 
 // Why per skill and observed bytes: a failed or raced update re-plans identically and must fall back to the nudge, without blocking other skills.
@@ -78,6 +79,42 @@ function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
   }
 }
 
+function targetLabel(target: BundledSkillTarget): string {
+  if (target.kind === 'local') {
+    return translate('auto.components.skills.host.local', 'This machine')
+  }
+  const environment =
+    target.kind === 'environment'
+      ? useAppStore
+          .getState()
+          .runtimeEnvironments.find((candidate) => candidate.id === target.environmentId)
+      : undefined
+  return environment?.name ?? translate('auto.components.skills.host.remote', 'Connected runtime')
+}
+
+/** The host-side folder where the executor preserves edits that raced a swap. */
+function skillBackupDirectory(homeDirectory: string): string {
+  const separator = /^[a-z]:[\\/]|^\\\\/iu.test(homeDirectory) ? '\\' : '/'
+  const home = homeDirectory.replace(/[\\/]+$/u, '')
+  return [home, '.agents', '.orca-skill-backups'].join(separator)
+}
+
+/** A lost or timed-out reply may follow a committed swap, so its backups must not go unmentioned. */
+function reportUncertainOutcome(target: BundledSkillTarget, plan: BundledSkillPlan): void {
+  warnAboutEdits(
+    translate(
+      'auto.components.skills.skillFreshnessAutoUpdate.uncertainTitle',
+      "Orca couldn't confirm the skill update on {{value0}}",
+      { value0: targetLabel(target) }
+    ),
+    translate(
+      'auto.components.skills.skillFreshnessAutoUpdate.uncertainDescription',
+      "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}.",
+      { value0: targetLabel(target), value1: skillBackupDirectory(plan.homeDirectory) }
+    )
+  )
+}
+
 /**
  * Silently updates each skill's hash-verified Orca copies, at most once per observed state.
  * Returns the skills a running update owns, so the nudge asks only about the rest.
@@ -119,7 +156,11 @@ export function autoUpdateUnmodifiedSkills(
     void runAutomaticSkillUpdate(target, started, () =>
       autoUpdateBundledSkillsOnTarget(target, started)
     )
-      .then((ran) => reportPreservedEdits(ran?.value ?? null))
+      .then(
+        (ran) => reportPreservedEdits(ran?.value ?? null),
+        // Settling the keys below means the same state is never retried; the nudge takes over.
+        () => reportUncertainOutcome(target, plan)
+      )
       .catch(() => undefined)
       .finally(() => {
         const settled = attemptsByTarget.get(targetKey) ?? new Map<string, AttemptState>()

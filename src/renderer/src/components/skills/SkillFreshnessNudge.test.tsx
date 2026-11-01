@@ -491,4 +491,40 @@ describe('SkillFreshnessNudge', () => {
     expect(_skillFreshnessAutoUpdateAttemptCount()).toBe(0)
     expect(mocks.execute).toHaveBeenCalledTimes(1)
   })
+
+  it('warns about an uncertain outcome when the reply is lost after the host commits', async () => {
+    const committed = planOf([sharedEntry('orca-cli', 'keep')], 'c'.repeat(64))
+    mocks.execute.mockImplementation(async () => {
+      // The host swapped the copy (possibly backing up a racing edit), then the connection dropped.
+      mocks.plan = committed
+      throw new Error('runtime connection lost')
+    })
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+
+    await renderNudge()
+    await act(async () => {})
+    await rerenderNudge()
+
+    expect(mocks.toastWarning).toHaveBeenCalledTimes(1)
+    const [title, options] = mocks.toastWarning.mock.calls[0] ?? []
+    expect(title).toContain('This machine')
+    expect(options.description).toContain('/home/u/.agents/.orca-skill-backups')
+    expect(options.duration).toBe(Number.POSITIVE_INFINITY)
+    expect(getSkillUpdateRun('local').state).toBe('idle')
+    expect(mocks.toastInfo).not.toHaveBeenCalled()
+  })
+
+  it('hands an uncertain state to the nudge instead of retrying it', async () => {
+    mocks.execute.mockRejectedValue(new Error('timed out'))
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+    await renderNudge()
+    await act(async () => {})
+
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+    await rerenderNudge()
+
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+    expect(mocks.toastWarning).toHaveBeenCalledTimes(1)
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+  })
 })
