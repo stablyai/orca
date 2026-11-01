@@ -4,7 +4,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalThreadGoal
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import {
   agentSessionCurrentContextRows,
   agentSessionHasOlderTranscript,

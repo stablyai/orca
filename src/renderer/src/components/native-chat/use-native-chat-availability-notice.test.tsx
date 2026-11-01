@@ -3,8 +3,8 @@ import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   structuredAgentSessionDeliveryNotices,
   structuredAgentSessionStartFailureFacts

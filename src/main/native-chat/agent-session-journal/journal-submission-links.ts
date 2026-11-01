@@ -1,4 +1,4 @@
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Reverse links derive from submission rows and share the reducer lifetime. */
 export class JournalSubmissionLinks {

@@ -432,8 +432,7 @@
       "cancel": "Manter filtros"
     },
     "startupWorktreeRefresh": {
-      "loading": "Descobrindo espaços de trabalho…",
-      "description": "Mais espaços de trabalho podem aparecer enquanto os projetos locais e remotos são carregados."
+      "loading": "Descobrindo espaços de trabalho…"
     },
     "wslMoved": {
       "movedToHost": "Movido para o host {{distro}}",

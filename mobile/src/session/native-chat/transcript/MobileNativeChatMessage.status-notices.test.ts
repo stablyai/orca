@@ -1,8 +1,8 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalStatusItem } from '../../../../../src/shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalItemBody } from '../../../../../src/shared/agent-session-journal-schemas'
+import type { AgentJournalStatusItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,

@@ -3,7 +3,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalApprovalItem,
   AgentJournalItemBody,
@@ -11,7 +11,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalToolCallItem,
   AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/native-chat-background-task-row'
 import {

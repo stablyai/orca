@@ -1,16 +1,16 @@
 import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalProducerLinkage,
-  AgentJournalRowAttribution,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+  AgentJournalRowAttribution
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentJournalLinkageFields,
   namesAgentJournalProducer
-} from '../../../shared/agent-session-journal-producer'
+} from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { JournalLifecycleMutation } from './journal-row-schema'
 import { boundRunningToolOutput } from './journal-payload-bounds'
 

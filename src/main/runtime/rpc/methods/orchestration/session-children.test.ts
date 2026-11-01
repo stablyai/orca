@@ -6,7 +6,7 @@ import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../shar
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../../../../shared/agent-session-journal-types'
+} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   hostTestAttachParams,
   hostTestMessage,

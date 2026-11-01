@@ -5,7 +5,7 @@ import { withProviderRequestTimeout } from '../../provider-process/provider-requ
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import * as startFlight from './structured-agent-session-start-flight'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from './structured-agent-session-send-settlement'
 import {

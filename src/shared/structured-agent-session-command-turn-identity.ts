@@ -1,5 +1,5 @@
-import { agentJournalItemKey } from './agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from './agent-session-journal-types'
+import { agentJournalItemKey } from './agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from './agent-session-journal-identity'
 
 /** Submission-keyed command turn; the queue retains refused cards until this turn records why. */
 export function structuredAgentSessionCommandTurnIdentity(

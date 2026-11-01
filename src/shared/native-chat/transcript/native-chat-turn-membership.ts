@@ -5,14 +5,14 @@ import {
 // Share desktop/mobile keys anchored on the opening user entry or provider-resumed turn record.
 // Explicit conversation/missing-turn scopes own no turn; legacy hosts fall back to journal order, then position.
 
-import { agentJournalSubmissionKey } from '../../agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../agent-session-journal-producer'
-import { isQueuedAgentJournalSubmission } from '../../agent-session-queued-submission'
+import { agentJournalSubmissionKey } from '../../agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../agent-session/journal/agent-session-journal-producer'
+import { isQueuedAgentJournalSubmission } from '../../agent-session/requests/agent-session-queued-submission'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
-} from '../../agent-session-journal-types'
+} from '../../agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../agent-session-turn-record'
 import {
   nativeChatJournalOrderTurnKeys,
@@ -22,7 +22,7 @@ import {
   type NativeChatOpensTurn
 } from './native-chat-turn-grouping'
 import type { NativeChatMessage, NativeChatRole } from '../native-chat-types'
-import { dispatchWasWithdrawn } from '../../structured-agent-session-dispatch-rejection'
+import { dispatchWasWithdrawn } from '../../agent-session/requests/structured-agent-session-dispatch-rejection'
 import { inSendOrder } from '../native-chat-send-order'
 import { runningStructuredAgentSessionTurnScope } from '../../structured-agent-session-live-turn'
 import { nativeChatOpeningTurnKey } from './native-chat-messages-waiting-behind-live-turn'

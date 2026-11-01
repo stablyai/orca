@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import { pairToolBlocks } from '../../shared/native-chat/tools/native-chat-tool-pairs'
 import { pairNativeChatToolResults } from '../../shared/native-chat/tools/native-chat-tool-pairing'
 import { projectNativeChatTranscript } from '../../shared/native-chat/transcript/native-chat-transcript-projection'

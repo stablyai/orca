@@ -20216,8 +20216,7 @@
       "quitDuringMoveConfirm": "그래도 종료"
     },
     "startupWorktreeRefresh": {
-      "loading": "워크스페이스를 찾는 중…",
-      "description": "로컬 및 원격 프로젝트를 불러오는 동안 워크스페이스가 더 표시될 수 있습니다."
+      "loading": "워크스페이스를 찾는 중…"
     },
     "createProject": {
       "errors": {

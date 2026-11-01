@@ -15,8 +15,8 @@ import type {
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../src/shared/agent-session-journal-types'
-import { parseAgentJournalItemKey } from '../../src/shared/agent-session-journal-item-key'
+} from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import { parseAgentJournalItemKey } from '../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type { Tab } from '../../src/shared/tab-types'
 import type { AppState } from '../../src/renderer/src/store/types'
 import { createCodexJournalTranslator } from '../../src/main/codex/codex-structured-journal-translation'

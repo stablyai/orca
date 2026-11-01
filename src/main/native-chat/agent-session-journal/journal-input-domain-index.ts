@@ -9,7 +9,7 @@ import {
   type InputPlaceQuery
 } from './journal-input-place-index'
 import type { QueuedMessageRow } from './queued-message-table'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 
 type Node = { index: JournalInputPlaceIndex; left?: Node; right?: Node }
 const LIMIT = Number.MAX_SAFE_INTEGER

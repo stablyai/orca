@@ -1,15 +1,15 @@
 import { journalItemEchoFields } from '../native-chat/agent-session-journal/journal-item-echo'
 import { expect, it } from 'vitest'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   chat as catchUpChat,
   turn as catchUpTurn
 } from './codex-structured-thread-catch-up.test'
-import { agentSessionSendBodyFingerprint } from '../../shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { agentSessionFailureFact } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredRewindCut } from '../native-chat/agent-session-wire/structured-rewind-cut'
 import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
 

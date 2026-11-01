@@ -16,7 +16,7 @@ import { quotedProviderDetail } from '../../../../shared/agent-session-failure-q
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { TuiAgent } from '../../../../shared/tui-agent'

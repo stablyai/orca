@@ -1,4 +1,4 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import * as journalFactory from '../agent-session-journal/journal-store-factory'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'

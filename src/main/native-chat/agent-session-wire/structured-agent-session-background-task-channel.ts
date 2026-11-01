@@ -1,6 +1,6 @@
 import { structuredAgentSessionOwnerStatus } from './structured-agent-session-owner-status'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
-import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session-current-requests-wire'
+import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session/requests/agent-session-current-requests-wire'
 import { readCurrentRequestsPiece } from './agent-session-current-requests'
 import type {
   AgentSessionHistoryRequest,
