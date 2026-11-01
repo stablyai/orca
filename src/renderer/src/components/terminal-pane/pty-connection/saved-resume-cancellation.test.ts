@@ -163,7 +163,6 @@ it.each(['refused', 'same-C', 'different-D'] as const)(
       resumeOrigin: 'saved',
       resumeSource: source,
       useLiveEntry: false,
-      hasSleepingRecord: false,
       sleepingRecordEntry: null
     }
     const registry: Record<string, AgentLaunchConfigRegistryEntry> = {}

@@ -348,7 +348,6 @@ describe('handleReattachResult empty reattach under a hibernation note', () => {
     launchConfig: { agentArgs: '', agentEnv: {} },
     launchToken: 'token-1',
     useLiveEntry: false,
-    hasSleepingRecord: true,
     sleepingRecordEntry: { paneKey: record.paneKey, record }
   }
 

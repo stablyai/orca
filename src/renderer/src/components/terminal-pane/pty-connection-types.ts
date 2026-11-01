@@ -46,7 +46,6 @@ export type PtyPaneStartup = {
   telemetry?: EventProps<'agent_started'>
   /** Initial prompt-start status for agents that lack native prompt hooks. */
   initialAgentStatus?: { agent: TuiAgent; prompt: string }
-  /** Show the restored-session banner when this startup command mounts. */
 } | null
 
 export type PaneProcessExit = {

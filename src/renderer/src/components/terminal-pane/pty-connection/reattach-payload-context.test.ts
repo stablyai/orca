@@ -82,7 +82,6 @@ describe('reattach payload context', () => {
       launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
       launchToken: 'transport-launch-token',
       useLiveEntry: false,
-      hasSleepingRecord: false,
       sleepingRecordEntry: null
     } as ColdRestoreAgentResumeStartup
     const buildColdRestoreAgentResumeStartup = vi.fn()
@@ -136,7 +135,6 @@ it.each(['missing', 'different', 'admitted'] as const)(
         launchToken: 'saved-C',
         resumeSource: { cancelled: false },
         useLiveEntry: false,
-        hasSleepingRecord: false,
         sleepingRecordEntry: null
       }
       const apply = vi.fn((value) => Boolean(value))
@@ -204,7 +202,6 @@ it.each(['missing', 'admitted', 'prepared'] as const)(
         launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
         launchToken: 'replacement-token',
         useLiveEntry: false,
-        hasSleepingRecord: true,
         sleepingRecordEntry: { paneKey: record.paneKey, record }
       }
       const session = createSession({

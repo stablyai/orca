@@ -338,7 +338,6 @@ describe('connectPanePty: a restore the host kept asleep', () => {
         launchToken: 'token',
         launchConfig: { agentArgs: '', agentEnv: {} },
         useLiveEntry: false,
-        hasSleepingRecord: true,
         resumeSource: source,
         sleepingRecordEntry: {
           paneKey,
