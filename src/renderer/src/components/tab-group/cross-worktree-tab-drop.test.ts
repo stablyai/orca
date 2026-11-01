@@ -205,7 +205,7 @@ describe('T597 cross-worktree tab drag-and-drop & Move to Workspace', () => {
             id: editorUnifiedId,
             entityId: editorFileId,
             worktreeId: sourceWorktreeId,
-            groupId: sourceGroupId,
+            groupId: 'group-src',
             contentType: 'editor',
             label: 'README.md',
             customTitle: null,
@@ -219,7 +219,7 @@ describe('T597 cross-worktree tab drag-and-drop & Move to Workspace', () => {
         ...prev.groupsByWorktree,
         [sourceWorktreeId]: [
           {
-            id: sourceGroupId,
+            id: 'group-src',
             worktreeId: sourceWorktreeId,
             activeTabId: tabId,
             tabOrder: [tabId, editorUnifiedId],
