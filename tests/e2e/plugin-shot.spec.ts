@@ -13,6 +13,7 @@ import { expect, test } from './helpers/orca-app'
 import { orcaCliResult } from './helpers/compiled-orca-cli'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { disablePluginSystem, enableDevPlugins } from './helpers/plugin-smoke'
+import { createPluginFromTemplate } from '../../src/cli/plugin-authoring/plugin-create'
 import { ISOLATED_FRAMES_E2E } from './helpers/plugin-frame-guest'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
@@ -275,7 +276,12 @@ test('plugin shot --act types and presses on the hidden components panel before 
     const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
     const shownBefore = await windowsShown(electronApp)
     const client = new RuntimeClient(userDataDir, 60_000, null, null)
-    type ActShot = { png: string; errors: string[]; actions?: { ok: boolean; error?: string }[] }
+    type ActShot = {
+      png: string
+      errors: string[]
+      actions?: { ok: boolean; error?: string }[]
+      restored?: boolean
+    }
 
     const before = await client.call<ActShot>('plugins.shot', { pluginKey, width: 360 })
     // Orca's floating launcher parks over the sidebar; a capture hides it so it is never in a shot.
@@ -308,15 +314,149 @@ test('plugin shot --act types and presses on the hidden components panel before 
       { ok: false, error: 'not run: an earlier action failed' }
     ])
     expect(acted.result.errors).toEqual([])
+    // The shot shows the acted panel; afterwards the persisted list and the draft are put back.
     expect(acted.result.png).not.toBe(before.result.png)
-    // The guest ran the handlers: the task is listed and toggled done, as Orca draws it.
-    const task = orcaPage.getByRole('button', { name: /Ship the act/ })
-    await expect(task).toBeVisible()
-    await expect(task).toContainText('Done')
+    expect(acted.result.restored).toBe(true)
+    await expect(orcaPage.getByRole('heading', { name: 'Tasks' })).toBeVisible()
+    await expect(orcaPage.getByRole('button', { name: /Ship the act/ })).toHaveCount(0)
     await expect(orcaPage.getByRole('textbox', { name: 'New task' })).toHaveValue('')
     // The launcher is back once the capture ended; the window never showed.
     await expect.poll(() => launcher.count()).toBe(launchers)
     expect(await windowsShown(electronApp)).toEqual(shownBefore)
+  } finally {
+    await disablePluginSystem(orcaPage).catch(() => undefined)
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
+test('plugin shot waits for a cold worker, and --act state is put back after the capture', async ({
+  electronApp,
+  orcaPage
+}) => {
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  const tempRoot = await mkdtemp(join(tmpdir(), 'orca-plugin-shot-worker-'))
+  try {
+    const created = await createPluginFromTemplate({
+      dir: join(tempRoot, 'shot-counter'),
+      template: 'worker-panel',
+      id: 'shot-counter',
+      name: 'Shot Counter'
+    })
+    await enableDevPlugins(orcaPage, [created.path])
+    const pluginKey = await devPluginKey(orcaPage, 'Shot Counter')
+    const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+    const client = new RuntimeClient(userDataDir, 60_000, null, null)
+    type WorkerShot = {
+      panelId: string
+      pendingRequests?: number
+      actions?: { ok: boolean; error?: string }[]
+      restored?: boolean
+    }
+
+    // The first shot starts the panel and its worker: it waits for counter.get's answer.
+    const cold = await client.call<WorkerShot>('plugins.shot', { pluginKey })
+    expect(cold.result.pendingRequests).toBe(0)
+    const surface = orcaPage.locator(
+      `[data-plugin-panel-surface="plugin:${pluginKey}/${cold.result.panelId}"]`
+    )
+    // Read at once, no retry: the capture already showed the worker's total, not the placeholder.
+    expect(await surface.innerText()).toMatch(/Counter\s+0\b/)
+
+    // `step` is persisted ('plugin'): the act flips it for the shot only.
+    const acted = await client.call<WorkerShot>(
+      'plugins.shot',
+      { pluginKey, acts: [{ press: { text: 'Step 10' } }] },
+      { timeoutMs: 60_000 }
+    )
+    expect(acted.result).toMatchObject({ actions: [{ ok: true }], restored: true })
+    await expect(surface.getByRole('button', { name: 'Add 1' })).toBeVisible()
+    const later = await client.call<WorkerShot>('plugins.shot', { pluginKey })
+    expect(later.result.pendingRequests).toBe(0)
+    await expect(surface.getByRole('button', { name: 'Add 1' })).toBeVisible()
+    await expect(surface.getByRole('button', { name: 'Step 10' })).toBeVisible()
+  } finally {
+    await disablePluginSystem(orcaPage).catch(() => undefined)
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
+test('plugin shot --act sorts and activates a Table row, then puts the panel back', async ({
+  electronApp,
+  orcaPage
+}) => {
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  const tempRoot = await mkdtemp(join(tmpdir(), 'orca-plugin-shot-table-'))
+  const pluginRoot = join(tempRoot, 'shot-table')
+  try {
+    await mkdir(join(pluginRoot, 'src'), { recursive: true })
+    await writeFile(
+      join(pluginRoot, 'orca-plugin.json'),
+      JSON.stringify({
+        manifestVersion: 2,
+        execution: 'sandboxed-ui',
+        id: 'shot-table',
+        name: 'Shot Table',
+        version: '1.0.0',
+        engines: { orca: '>=1.4.246' },
+        pluginApi: 1,
+        contributes: {
+          panels: [{ id: 'files', title: 'Shot Table', entry: 'src/panel.tsx', ui: 'components' }]
+        },
+        capabilities: []
+      })
+    )
+    await writeFile(
+      join(pluginRoot, 'src', 'panel.tsx'),
+      [
+        "import { atom, read, set, Stack, Table, Text } from 'orca'",
+        "const sort = atom({ column: 'name', direction: 'asc' })",
+        "const opened = atom('none')",
+        'export default function Panel() {',
+        '  const by = read(sort)',
+        "  const names = ['alpha', 'beta', 'gamma'].sort()",
+        "  if (by.direction === 'desc') names.reverse()",
+        '  return (',
+        '    <Stack>',
+        '      <Text>{`Sorted ${by.direction}, opened ${read(opened)}`}</Text>',
+        '      <Table',
+        '        label="Files"',
+        "        columns={[{ key: 'name', label: 'Name', sortable: true }]}",
+        '        rows={names.map((name) => ({ key: name, cells: { name } }))}',
+        '        sort={by}',
+        '        onSortChange={(next) => set(sort, next)}',
+        '        onRowAction={({ key }) => set(opened, key)}',
+        '      />',
+        '    </Stack>',
+        '  )',
+        '}',
+        ''
+      ].join('\n')
+    )
+    await enableDevPlugins(orcaPage, [pluginRoot])
+    const pluginKey = await devPluginKey(orcaPage, 'Shot Table')
+    const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+    const client = new RuntimeClient(userDataDir, 60_000, null, null)
+    type TableShot = { png: string; actions?: { ok: boolean }[]; restored?: boolean }
+
+    const before = await client.call<TableShot>('plugins.shot', { pluginKey })
+    await expect(orcaPage.getByText('Sorted asc, opened none')).toBeVisible()
+    const table = { label: 'Files' }
+    const acted = await client.call<TableShot>(
+      'plugins.shot',
+      {
+        pluginKey,
+        acts: [
+          { sort: table, column: 'name' },
+          { activateRow: table, key: 'gamma' }
+        ]
+      },
+      { timeoutMs: 60_000 }
+    )
+    expect(acted.result).toMatchObject({ actions: [{ ok: true }, { ok: true }], restored: true })
+    expect(acted.result.png).not.toBe(before.result.png)
+    await expect(orcaPage.getByText('Sorted asc, opened none')).toBeVisible()
   } finally {
     await disablePluginSystem(orcaPage).catch(() => undefined)
     await rm(tempRoot, { recursive: true, force: true })

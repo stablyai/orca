@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agent-session-wire'
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
+import { waitForStructuredAgentSessionRecovery } from './agent-session/structured-agent-session-runtime'
 import {
   createScriptedClaudeRuntime,
   scriptedClaudeExitError

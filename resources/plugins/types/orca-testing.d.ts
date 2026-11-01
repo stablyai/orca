@@ -127,6 +127,9 @@ declare module 'orca/testing' {
     findAll(query: TestQuery): TestElement[]
     /** The drawn tree as plain data, for snapshots; handlers show as `[handler]`. */
     tree(): TreeSnapshot | string | null
+    /** One line per thing a person notices first: headings, callouts, empty states, table and
+     *  tree sizes, the selected tab, loading placeholders, danger or warning text. */
+    summary(): string[]
     /** Each act grants one gesture (a press) and resolves once the panel has settled. */
     press(target: Target): Promise<void>
     /** Types after what the field holds (`replace` clears it first); `submit` presses Enter. */
@@ -156,6 +159,8 @@ declare module 'orca/testing' {
     activateItem(target: Target, key: string): Promise<void>
     /** Tree: the items Orca shows expanded. */
     expandedOf(target: Target): string[]
+    /** Table: the column keys Orca shows at `width` px (wide when omitted), after `hideBelow`. */
+    columnsOf(target: Target, view?: { width?: number }): string[]
     /** Table: row keys in the order Orca draws them. */
     rowsOf(target: Target): string[]
     /** What Orca shows in a value control: text, a flag, a number, a tab, or selected keys. */

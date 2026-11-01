@@ -101,16 +101,6 @@ export function PluginDeclarativePanel({
 
   useReportDeclarativePanelDraw(tabKey, guest.url, rendered?.document ?? null, issue)
 
-  usePluginFrameHost({
-    surface: 'panel',
-    frameRef,
-    frameKey,
-    sessionToken,
-    declarative: channel,
-    consumeHostActivation: consumePress,
-    onUnresponsive
-  })
-
   const shownDocument = rendered?.document ?? ''
   const revision = rendered?.revision ?? 0
   const onEvent = useCallback<PluginDeclarativeEmit>(
@@ -130,7 +120,23 @@ export function PluginDeclarativePanel({
     },
     [admitPress, revision, sendToGuest, shownDocument]
   )
-  usePluginPanelActDriver(tabKey, rendered?.tree ?? null, onEvent)
+  const { viewEpoch, trackHostCall } = usePluginPanelActDriver({
+    tabKey,
+    tree: rendered?.tree ?? null,
+    document: rendered?.document ?? null,
+    send: onEvent,
+    sendToGuest
+  })
+  usePluginFrameHost({
+    surface: 'panel',
+    frameRef,
+    frameKey,
+    sessionToken,
+    declarative: channel,
+    consumeHostActivation: consumePress,
+    trackHostCall,
+    onUnresponsive
+  })
   // A click on Orca's own Link (or a Markdown link): no frame-activation check, but its control
   // must have settled, and main keeps the URL allowlist and rate limit.
   const onOpenLink = (href: string, gestureId: string): void => {
@@ -167,8 +173,8 @@ export function PluginDeclarativePanel({
       ) : null}
       {reloads > 0 ? <PluginDeclarativeReloadedNotice key={reloads} /> : null}
       <PluginDeclarativeView
-        // A new guest document starts its value controls' edit counts over.
-        key={shownDocument}
+        // A new guest document starts its value controls' edit counts over; so does a --act restore.
+        key={`${shownDocument}:${viewEpoch}`}
         tree={rendered?.tree ?? null}
         onEvent={onEvent}
         onOpenLink={onOpenLink}

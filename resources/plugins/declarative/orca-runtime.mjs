@@ -257,6 +257,17 @@ function applyStorageValue(key, value) {
     assign(inner, value === void 0 ? inner.initial : value, false);
   }
 }
+function captureAtomValues() {
+  const values = /* @__PURE__ */ new Map();
+  for (const inner of writableAtoms) {
+    values.set(inner, inner.value);
+  }
+  return () => {
+    for (const [inner, value] of values) {
+      assign(inner, value, true);
+    }
+  };
+}
 function hydrateAtoms(scope, values) {
   snapshot[scope] = new Map(values);
   for (const target of keyed.values()) {
@@ -359,7 +370,11 @@ var PLUGIN_DECLARATIVE_MESSAGES = {
   /** guest → host, `{ entries: [{ scope, key, version, value }] }`: persisted atoms changed. */
   persist: "ui.persist",
   /** guest → host, `{ document, entries: [{ key, version, value? }] }`: keyed memory atoms changed. */
-  retain: "ui.retain"
+  retain: "ui.retain",
+  /** host → guest, `{ document }`: remember every atom's value before `orca plugin shot --act`. */
+  snapshot: "ui.snapshot",
+  /** host → guest, `{ document }`: put the atoms back to the last `ui.snapshot`. */
+  restore: "ui.restore"
 };
 var PLUGIN_DECLARATIVE_CATALOG_VERSION = 3;
 var PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
@@ -755,27 +770,6 @@ function createMemoryRetention(post) {
   };
 }
 
-// src/shared/plugins/declarative/runtime/declarative-renderer-support.ts
-var MIN_RENDER_INTERVAL_MS = 16;
-var MAX_RETAINED_RENDERS = 32;
-var HYDRATION_TIMEOUT_MS = 3e3;
-function errorMessage(error) {
-  return describePluginError(error).slice(0, 4096);
-}
-function defaultSchedule(flush, delayMs) {
-  if (delayMs > 0) {
-    setTimeout(flush, delayMs);
-  } else {
-    queueMicrotask(flush);
-  }
-}
-function newDocumentId(now) {
-  return `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-function isCallable(value) {
-  return typeof value === "function";
-}
-
 // src/shared/plugins/declarative/runtime/declarative-host-messages.ts
 function readHostMessage(payload) {
   if (typeof payload !== "object" || payload === null) {
@@ -814,6 +808,47 @@ function readStoredValues(raw) {
     }
   }
   return values;
+}
+
+// src/shared/plugins/declarative/runtime/declarative-act-snapshot.ts
+function actSnapshotSubscriptions(on2, document2) {
+  let restore = null;
+  const ours = (payload) => readHostMessage(payload).document === document2;
+  return [
+    on2(PLUGIN_DECLARATIVE_MESSAGES.snapshot, (payload) => {
+      if (ours(payload)) {
+        restore = captureAtomValues();
+      }
+    }),
+    on2(PLUGIN_DECLARATIVE_MESSAGES.restore, (payload) => {
+      if (ours(payload) && restore) {
+        const pending = restore;
+        restore = null;
+        pending();
+      }
+    })
+  ];
+}
+
+// src/shared/plugins/declarative/runtime/declarative-renderer-support.ts
+var MIN_RENDER_INTERVAL_MS = 16;
+var MAX_RETAINED_RENDERS = 32;
+var HYDRATION_TIMEOUT_MS = 3e3;
+function errorMessage(error) {
+  return describePluginError(error).slice(0, 4096);
+}
+function defaultSchedule(flush, delayMs) {
+  if (delayMs > 0) {
+    setTimeout(flush, delayMs);
+  } else {
+    queueMicrotask(flush);
+  }
+}
+function newDocumentId(now) {
+  return `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+function isCallable(value) {
+  return typeof value === "function";
 }
 
 // src/shared/plugins/declarative/runtime/declarative-panel-context.ts
@@ -1121,6 +1156,7 @@ function createOrcaDeclarativeRuntime(options) {
     bridge.on(PLUGIN_DECLARATIVE_MESSAGES.ack, acknowledge),
     bridge.on(PLUGIN_DECLARATIVE_MESSAGES.hydrate, panel.hydrate),
     bridge.on(PLUGIN_DECLARATIVE_MESSAGES.visibility, panel.setVisibility),
+    ...actSnapshotSubscriptions(bridge.on.bind(bridge), document2),
     bridge.on("theme", (payload) => {
       const { colorScheme } = readHostMessage(payload);
       if ((colorScheme === "light" || colorScheme === "dark") && read(theme.atom).colorScheme !== colorScheme) {

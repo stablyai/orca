@@ -32,7 +32,7 @@ import {
 } from './pty-launch-race-test-fixture'
 
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture

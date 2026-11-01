@@ -5,7 +5,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-sessio
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agent-session-wire'
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
+import { waitForStructuredAgentSessionRecovery } from './agent-session/structured-agent-session-runtime'
 import {
   createScriptedClaudeRuntime,
   scriptedClaudeExitError

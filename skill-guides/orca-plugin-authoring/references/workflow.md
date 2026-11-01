@@ -35,18 +35,26 @@ re-checks changed commands and shortcuts), `ORCA plugin dev unload <dir>`.
 ## Seeing and showing the panel
 
 - `ORCA plugin shot <plugin-key> [--panel <id>] [--theme light|dark] [--width <px>] [--out <png>] --json`
-  waits for the panel's current code to draw, then writes a PNG cropped to it (default
-  `.orca/shots/<plugin-key>-<panel>.png` in the plugin folder when run inside one, else in
-  `<cwd>`) and returns `{ path, width, height, theme, themeApplied, themeReason?, settled, errors,
-  actions? }`. Check a narrow `--width` and both themes. `--theme` applies only while Orca's
+  waits for the panel's current code to draw and, for a components panel, for its host calls
+  (`plugin.request` included) to answer and redraw (at most 3s more), then writes a PNG cropped to
+  it (default `.orca/shots/<plugin-key>-<panel>.png` in the plugin folder when run inside one, else
+  in `<cwd>`) and returns `{ path, width, height, theme, themeApplied, themeReason?, settled,
+  errors, pendingRequests?, actions?, restored? }`. `pendingRequests` above 0 means a worker had
+  not answered, so the PNG may show the loading state. Check a narrow `--width` and both themes. `--theme` applies only while Orca's
   window is hidden or minimized; otherwise `themeApplied` is false with a `themeReason`, so
   nothing on the user's screen repaints.
 - `--act '<json>'` drives a components panel before the capture, in the test kit's verbs:
   `[{"type":{"label":"New task"},"text":"Ship","submit":true},{"press":{"text":"Add"}},
   {"select":{"label":"View"},"value":"done"},{"toggle":{"label":"Hide done"}}]` (at most 20;
-  queries take `text`, `label`, `testId`, `type`, `role`). Each act goes through Orca's own
-  control, then waits for the panel to redraw; `actions` has one `{ ok, error? }` each, the first
-  failure skips the rest and exits 1. It needs Orca's window hidden or minimized, so it never
+  queries take `text`, `label`, `testId`, `type`, `role`). Also `{"slide":Q,"value":7}`, for a
+  Table `{"sort":Q,"column":"name"}`, `{"selectRows":Q,"keys":["a"]}`,
+  `{"activateRow":Q,"key":"a"}`, `{"loadMore":Q}`, and for a Tree `{"expand":Q,"key":"src"}`,
+  `collapse`, `selectItem`, `activateItem` (same `key`). Each act goes through Orca's own control,
+  then waits for the panel to redraw and its host calls to answer; `actions` has one
+  `{ ok, error? }` each, the first failure skips the rest and exits 1. After the capture the
+  panel's atoms are put back, persisted ones included (`restored`; false if it reloaded
+  meanwhile), but not what handlers changed elsewhere: a `plugin.request` that wrote worker
+  storage stays written. It needs Orca's window hidden or minimized, so it never
   clicks under the user, and refuses html panels. Acts are not a person's press: a Link's href
   stays closed and `shell.openExternal` / `files.saveAs` are refused.
 - `ORCA plugin open <plugin-key> [--panel <id> | --editor <file>]` shows the panel in the right
@@ -80,8 +88,10 @@ Both run the plugin's code on this machine, outside Orca's sandbox: only on code
   would refuse, props it would drop, and host calls Orca would refuse (`host refused …` warnings,
   even when the panel caught the error). With a worker (`main`), it mounts the worker on the same
   host first, so the panel's `plugin.request` reaches its `orca.panels.handle` handlers; a worker
-  that fails to activate is an issue named `worker (<file>): …`. Exit `0`, `1`
-  `plugin_check_failed`, `2` invalid.
+  that fails to activate is an issue named `worker (<file>): …`. Each result carries a `summary`
+  of what drew (headings, callouts, empty states, table sizes, the selected tab) and, with
+  `--json`, the whole `tree`: read them to confirm each scenario shows what it should. Exit `0`,
+  `1` `plugin_check_failed`, `2` invalid.
 
 The full kit API, generated from this Orca, is in `references/testing.md`.
 

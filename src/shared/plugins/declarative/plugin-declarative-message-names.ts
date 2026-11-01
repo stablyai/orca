@@ -24,7 +24,11 @@ export const PLUGIN_DECLARATIVE_MESSAGES = {
   /** guest → host, `{ entries: [{ scope, key, version, value }] }`: persisted atoms changed. */
   persist: 'ui.persist',
   /** guest → host, `{ document, entries: [{ key, version, value? }] }`: keyed memory atoms changed. */
-  retain: 'ui.retain'
+  retain: 'ui.retain',
+  /** host → guest, `{ document }`: remember every atom's value before `orca plugin shot --act`. */
+  snapshot: 'ui.snapshot',
+  /** host → guest, `{ document }`: put the atoms back to the last `ui.snapshot`. */
+  restore: 'ui.restore'
 } as const
 
 /** Grows with the component catalog, so plugins can feature-detect with `ui.catalog`. */

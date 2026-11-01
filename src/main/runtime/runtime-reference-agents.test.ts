@@ -26,7 +26,7 @@ vi.mock('./structured-worker-authority', () => ({
 vi.mock('./orchestration/structured-session-mail-address', () => ({
   structuredSessionMailReach: () => ({ kind: observations.reachable ? 'reachable' : 'ended' })
 }))
-vi.mock('./agent-session-record-store-slot', () => ({
+vi.mock('./agent-session/records/agent-session-record-store-slot', () => ({
   peekOpenedAgentSessionRecordStore: () => null
 }))
 

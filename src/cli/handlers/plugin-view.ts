@@ -31,8 +31,12 @@ export type PluginShotReply = {
   themeReason?: string
   settled: boolean
   errors: string[]
+  /** Host calls still unanswered at the capture (components panels); absent on older hosts. */
+  pendingRequests?: number
   /** Present when `acts` were sent; absent from hosts that predate --act. */
   actions?: PluginShotActResult[]
+  /** With acts: the panel's atoms were put back after the capture; absent on older hosts. */
+  restored?: boolean
 }
 
 /** `ifShown` and the panel was not on screen: the host opened, switched and captured nothing. */
@@ -49,7 +53,9 @@ export type PluginShotSaved = {
   themeReason?: string
   settled: boolean
   errors: string[]
+  pendingRequests?: number
   actions?: PluginShotActResult[]
+  restored?: boolean
 }
 
 type PluginOpenReply =
@@ -139,7 +145,9 @@ async function shoot(
     ...(reply.themeReason ? { themeReason: reply.themeReason } : {}),
     settled: reply.settled,
     errors: reply.errors,
-    ...(reply.actions ? { actions: reply.actions } : {})
+    ...(reply.pendingRequests === undefined ? {} : { pendingRequests: reply.pendingRequests }),
+    ...(reply.actions ? { actions: reply.actions } : {}),
+    ...(reply.restored === undefined ? {} : { restored: reply.restored })
   }
 }
 
@@ -174,9 +182,17 @@ export function formatPluginShot(shot: PluginShotSaved, requestedTheme?: string)
     ...(shot.settled
       ? []
       : ['  note: the panel had not finished drawing; this is what it showed.']),
+    ...(shot.pendingRequests
+      ? [
+          `  note: ${shot.pendingRequests} host call(s) (plugin.request included) were unanswered after 3s; the panel may still show its loading state.`
+        ]
+      : []),
     ...(shot.actions ?? []).map((action, index) =>
       action.ok ? `  act ${index + 1}: ok` : `  act ${index + 1} failed: ${action.error}`
     ),
+    ...(shot.restored === false
+      ? ['  note: the panel reloaded during --act, so its acted state was not put back.']
+      : []),
     ...shot.errors.map((error) => `  error: ${error}`)
   ].join('\n')
 }

@@ -24,6 +24,7 @@ import { findPluginTestFiles, runPluginTests } from '../plugin-authoring/plugin-
 import { checkPluginPanels, formatPluginPanelCheck } from '../plugin-authoring/plugin-panel-check'
 import { RuntimeClientError } from '../runtime/types'
 import { PLUGIN_INVALID_CODE } from '../../shared/plugins/approval/plugin-cli-approval'
+import { formatPluginGrantLines } from '../plugin-authoring/plugin-grant-lines'
 
 function optionalString(flags: Map<string, string | boolean>, name: string): string | undefined {
   const value = flags.get(name)
@@ -36,10 +37,7 @@ function formatGrants(report: PluginValidationReport): string[] {
     return []
   }
   return [
-    `${plugin.pluginKey} ${plugin.version} (${plugin.grants.execution})`,
-    `  ${plugin.grants.executionDescription}`,
-    ...plugin.grants.capabilities.map((capability) => `  - ${capability.description}`),
-    ...plugin.grants.contributions.map((item) => `  adds ${item.kind}: ${item.name}`),
+    ...formatPluginGrantLines(plugin),
     plugin.needsApproval
       ? '  Loading or enabling it needs --approve <fingerprint>; Orca prints the fingerprint.'
       : '  Content only: loads without approval.'

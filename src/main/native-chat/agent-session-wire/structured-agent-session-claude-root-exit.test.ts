@@ -8,7 +8,7 @@ import {
   fakeClaude,
   identityFor
 } from '../../claude/structured/claude-structured-session-test-support'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase

@@ -1,5 +1,5 @@
 import { CODEX_MINIMUM_SUPPORTED_VERSION } from '../../shared/codex-cli-installation'
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 
 /** Runtime deps that put a scripted Codex child where the real app-server would spawn. It speaks
  *  the supported protocol, so it reports that version; its fake pid has a fixed start time. */
