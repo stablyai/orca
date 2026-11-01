@@ -21,7 +21,7 @@ import {
   root,
   savedIds
 } from '../structured-agent-session-tab-authority.test-support'
-import { ensureStructuredAgentSessionHost } from '../structured-agent-session-runtime'
+import { ensureStructuredAgentSessionHost } from '../agent-session/structured-agent-session-runtime'
 import { fakeCodex, resetProviderFaults } from '../structured-chat-coordinator-fake-codex-fixture'
 import { structuredWorkerIdentities } from '../structured-worker-identity'
 import { releaseStructuredWorkerSession } from './methods/orchestration-structured-worker-session'

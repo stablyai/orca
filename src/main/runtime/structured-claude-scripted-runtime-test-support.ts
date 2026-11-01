@@ -25,7 +25,7 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 /** The error a real CLI's exit reaches the adapter as: Orca's message, the stderr as a log detail. */

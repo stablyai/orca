@@ -25,7 +25,7 @@ import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-sess
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'

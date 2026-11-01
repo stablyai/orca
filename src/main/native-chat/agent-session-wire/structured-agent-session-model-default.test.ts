@@ -13,7 +13,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { createTestParams } from './structured-agent-session-create-test-fixture'
-import { recordAgentSessionRanOptions } from '../../runtime/agent-session-record-options'
+import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
 import { effectiveAgentSessionOptions } from '../../../shared/agent-session-default-model'
 import { optionSession } from '../../codex/codex-structured-option-session.test-fixture'
 import { resolvedCodexMessageOptions } from '../../codex/codex-structured-message-options'

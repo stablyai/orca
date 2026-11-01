@@ -3786,7 +3786,8 @@
           },
           "PendingNativeChatCreation": {
             "sendBlockedFailed": "Retry creating the worktree to send",
-            "sendBlockedHeld": "Sends when the worktree is ready"
+            "sendBlockedHeld": "Sends when the worktree is ready",
+            "openingChat": "Opening chat…"
           },
           "WorktreeSetupSteps": {
             "prepare": "Prepare workspace",

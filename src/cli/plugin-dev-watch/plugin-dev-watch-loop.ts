@@ -6,6 +6,7 @@ import type {
   PluginDevWatchStatus
 } from './plugin-dev-watch-events'
 import { PluginLogFollower } from './plugin-log-follower'
+import { devLoadWithApproval, type PluginDevWatchConfirm } from './plugin-dev-watch-approval'
 import { PluginFrameLogDedupe, type PluginDevWatchLogLine } from './plugin-frame-log-dedupe'
 import {
   createPluginDevWatchCheckQueue,
@@ -20,7 +21,8 @@ import {
 /** What the loop asks of the Orca host; the handler binds it to RPC for one folder. */
 export type PluginDevWatchHost = {
   refreshTypes(): Promise<string[]>
-  devLoad(): Promise<DevLoadResult>
+  /** `approvalFingerprint` overrides `--approve` once the person approved at the prompt. */
+  devLoad(approvalFingerprint?: string): Promise<DevLoadResult>
   list(): Promise<PluginHostListEntry[]>
   logs(pluginKey: string, after: string | undefined): Promise<LogsResult>
   /** Re-checks the folder's approval; null when it needs none. */
@@ -41,6 +43,8 @@ export type PluginDevWatchDeps = {
   onInterrupt(listener: () => void): () => void
   exitNow(code: number): void
   isConnectionLost(error: unknown): boolean
+  /** Only for a person at a terminal without `--json`: asks to approve a first load that needs it. */
+  confirm?: PluginDevWatchConfirm
 }
 
 // Why these rates: logs feel live at 500 ms, and the plugin list (a projection of every plugin) is
@@ -131,11 +135,12 @@ async function startShooter(
 }
 
 /** Loads the folder, then streams its logs and reload status until interrupted. Returns the exit
- *  code. A failed first load throws (approval_required exits 3 like `orca plugin dev load`). */
+ *  code. A failed first load throws (approval_required exits 3 like `orca plugin dev load`) unless
+ *  the person approves it at the `confirm` prompt. */
 export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<number> {
   const { host, emit } = deps
   const typeFiles = await host.refreshTypes()
-  const loaded = await host.devLoad()
+  const loaded = await devLoadWithApproval((fingerprint) => host.devLoad(fingerprint), deps.confirm)
   const { pluginKey } = loaded
   let snapshot = snapshotOf(loaded.plugin)
   emit({

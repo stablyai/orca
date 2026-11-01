@@ -18,7 +18,7 @@ import type { AgentProviderSessionMetadata } from '../../shared/agent-session/li
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import type { PtyBindingSourceExpectation } from '../persistence'
+import type { PtyBindingSourceExpectation } from '../persistence/loading-store/store'
 import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {

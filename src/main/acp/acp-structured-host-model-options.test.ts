@@ -24,7 +24,7 @@ import {
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import { withLiveCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { AcpStructuredOptions } from './acp-structured-options'
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'

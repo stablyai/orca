@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { filePreviewForPath, isDocumentPreview } from '../../shared/file-preview-kind'
 import { resolveLocalFileRequestPath } from '../ipc/local-file-access-resolution'
 import { openLocalRegularFile } from '../ipc/filesystem/local-regular-file-read'

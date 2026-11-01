@@ -38,6 +38,10 @@ const tableProps = z
             label: requiredLabel,
             align: z.enum(['start', 'center', 'end']).optional(),
             width: z.enum(['auto', 'xs', 'sm', 'md', 'lg']).optional(),
+            /** An `auto` column's floor, so the main column keeps room in a narrow panel. */
+            minWidth: z.enum(['auto', 'xs', 'sm', 'md']).optional(),
+            /** Drop this column while the table is narrower than this (sm 360px, md 480px). */
+            hideBelow: z.enum(['sm', 'md']).optional(),
             sortable: flag
           })
           .strict()

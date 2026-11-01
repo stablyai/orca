@@ -5,7 +5,7 @@ import {
   requireLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
 } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-launch-directory'
+import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
 import type {
   AtRestCommandChange,
   StructuredAgentSessionAtRestCommands

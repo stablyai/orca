@@ -231,7 +231,8 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner.ts',
   'src/main/claude/claude-model-catalog-probe.ts',
   'src/main/runtime/agent-session-record-store',
-  'src/main/runtime/agent-session-recovery-capsule',
+  'src/main/runtime/agent-session/records/agent-session-record-store',
+  'src/main/runtime/agent-session/records/agent-session-recovery-capsule',
   'src/shared/agent-session-resume-marker',
   'src/main/runtime/rpc/dispatcher',
   // Run on every request the suites dispatch, whatever its method.

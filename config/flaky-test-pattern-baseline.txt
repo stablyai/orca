@@ -288,7 +288,6 @@
 1 test-no-real-time-wait:src/main/daemon/daemon-host-file-hash-cache.test.ts
 1 test-no-real-time-wait:src/main/daemon/daemon-idle-inventory-budget.test.ts
 1 test-no-real-time-wait:src/main/daemon/daemon-idle-shutdown.test.ts
-1 test-no-real-time-wait:src/main/daemon/daemon-pty-adapter-cold-restore-reanchor.test.ts
 2 test-no-real-time-wait:src/main/daemon/daemon-pty-adapter-daemon-recovery.test.ts
 6 test-no-real-time-wait:src/main/daemon/daemon-pty-adapter-history-checkpoints.test.ts
 2 test-no-real-time-wait:src/main/daemon/daemon-pty-adapter-history-recovery.test.ts
@@ -421,10 +420,10 @@
 1 test-no-real-time-wait:src/main/runtime/runtime-rpc-dispatch-inject-long-poll.test.ts
 6 test-no-real-time-wait:src/main/runtime/runtime-rpc-long-poll-transport.test.ts
 1 test-no-real-time-wait:src/main/runtime/sidebar-inputs/paired-server-rows-producer.test.ts
-1 test-no-real-time-wait:src/main/runtime/structured-agent-session-legacy-send-behind-command.test.ts
-1 test-no-real-time-wait:src/main/runtime/structured-agent-session-provider-operations-while-starting.test.ts
-1 test-no-real-time-wait:src/main/runtime/structured-agent-session-runtime-exit.test.ts
-1 test-no-real-time-wait:src/main/runtime/structured-agent-session-runtime.test.ts
+1 test-no-real-time-wait:src/main/runtime/agent-session/structured-agent-session-legacy-send-behind-command.test.ts
+1 test-no-real-time-wait:src/main/runtime/agent-session/structured-agent-session-provider-operations-while-starting.test.ts
+1 test-no-real-time-wait:src/main/runtime/agent-session/structured-agent-session-runtime-exit.test.ts
+1 test-no-real-time-wait:src/main/runtime/agent-session/structured-agent-session-runtime.test.ts
 4 test-no-real-time-wait:src/main/runtime/structured-agent-shell-environment.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-chat-coordinator-mail.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-chat-worker-error-escalation.test.ts
@@ -812,7 +811,6 @@
 1 test-no-wall-clock:src/main/daemon/daemon-automatic-work-resume.test.ts
 1 test-no-wall-clock:src/main/daemon/daemon-host-relocation.test.ts
 2 test-no-wall-clock:src/main/daemon/daemon-idle-shutdown.test.ts
-1 test-no-wall-clock:src/main/daemon/daemon-pty-adapter-cold-restore-reanchor.test.ts
 3 test-no-wall-clock:src/main/daemon/daemon-pty-adapter-history-checkpoints.test.ts
 3 test-no-wall-clock:src/main/daemon/daemon-self-retirement-respawn.test.ts
 1 test-no-wall-clock:src/main/daemon/daemon-shutdown-final-checkpoint-caller-deadline.test.ts
@@ -989,8 +987,8 @@
 2 test-no-wall-clock:src/main/runtime/runtime-rpc-websocket-bind-host.test.ts
 4 test-no-wall-clock:src/main/runtime/runtime-worktree-structured-agent-rows-liveness.test.ts
 1 test-no-wall-clock:src/main/runtime/structured-agent-launch-support.test.ts
-2 test-no-wall-clock:src/main/runtime/structured-agent-session-held-signal.test.ts
-1 test-no-wall-clock:src/main/runtime/structured-agent-session-provider-operations-while-starting.test.ts
+2 test-no-wall-clock:src/main/runtime/agent-session/structured-agent-session-held-signal.test.ts
+1 test-no-wall-clock:src/main/runtime/agent-session/structured-agent-session-provider-operations-while-starting.test.ts
 1 test-no-wall-clock:src/main/runtime/structured-child-records-switch.test.ts
 1 test-no-wall-clock:src/main/runtime/structured-codex-child-work-runtime.test.ts
 1 test-no-wall-clock:src/main/runtime/terminal-create-closed-tab-durability.test.ts
@@ -1093,7 +1091,6 @@
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts
 3 test-no-wall-clock:src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts
 1 test-no-wall-clock:src/renderer/src/components/terminal-pane/terminal-link-worktree-root-activation.test.ts
-1 test-no-wall-clock:src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-workspace-surface-ids.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/terminal/initial-terminal-structured-launch.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/workspace-cleanup/use-workspace-cleanup-removal.agent-stop.test.tsx

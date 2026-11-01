@@ -36,7 +36,16 @@ function entry(
 const passed: PluginDevWatchCheckResult = {
   ok: true,
   invalid: [],
-  panels: [{ panel: 'todos', entry: 'src/panel.tsx', elements: 12, issues: [], warnings: [] }]
+  panels: [
+    {
+      panel: 'todos',
+      entry: 'src/panel.tsx',
+      elements: 12,
+      summary: ['Heading "Tasks"'],
+      issues: [],
+      warnings: []
+    }
+  ]
 }
 const failed: PluginDevWatchCheckResult = {
   ok: false,
@@ -46,6 +55,7 @@ const failed: PluginDevWatchCheckResult = {
       panel: 'todos',
       entry: 'src/panel.tsx',
       elements: 0,
+      summary: [],
       issues: [{ kind: 'plugin', message: 'boom', location: 'src/panel.tsx:4:7' }],
       warnings: []
     }

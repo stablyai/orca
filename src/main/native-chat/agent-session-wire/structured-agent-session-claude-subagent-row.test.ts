@@ -23,8 +23,8 @@ import {
   type FakeConnection
 } from '../../claude/structured/claude-structured-session-test-support'
 import { claudeStartupSettled } from '../../claude/structured/claude-structured-startup-settled-test-support'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
 import {
   closeTestJournalHostDatabases,

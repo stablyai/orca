@@ -1,5 +1,5 @@
 import { dialog, type BrowserWindow } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import { translateMain } from '../../i18n/main-i18n'
 
 type GrantStore = Pick<Store, 'getSettings' | 'updateSettings'>

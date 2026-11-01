@@ -1,8 +1,8 @@
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { afterEach, expect, it, vi } from 'vitest'
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE
