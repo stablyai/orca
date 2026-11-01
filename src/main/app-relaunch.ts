@@ -13,6 +13,13 @@ export type AppRelaunchReason =
   | 'windows-administrator'
   | 'wsl-drive-conversion'
 
+let relaunchRequested = false
+
+/** A relaunch quit is a restart, so quit-time teardown must keep what the next launch reattaches. */
+export function isAppRelaunchRequested(): boolean {
+  return relaunchRequested
+}
+
 export function relaunchApp(
   reason: AppRelaunchReason,
   data?: CrashReportBreadcrumbData,
@@ -20,6 +27,7 @@ export function relaunchApp(
 ): void {
   // Persist the cause before relaunch can exit this process.
   recordDurableCrashBreadcrumb('app_relaunch_requested', { ...data, reason })
+  relaunchRequested = true
   runWithLaunchPath(() => app.relaunch(options ?? getWindowsAdministratorRelaunchOptions()))
 }
 

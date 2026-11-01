@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { PtyManagementSession } from '../../../../preload/api-types'
 import { SearchableSetting } from './SearchableSetting'
+import { SettingsSwitchRow } from './SettingsFormControls'
 import { getManageSessionsSearchEntries } from './terminal-search'
 import { useAppStore } from '../../store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -37,6 +38,10 @@ export function ManageSessionsSection(): React.JSX.Element {
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
+  const stopTerminalSessionsOnQuit = useAppStore(
+    (s) => s.settings?.stopTerminalSessionsOnQuit === true
+  )
+  const updateSettings = useAppStore((s) => s.updateSettings)
 
   const ptyIdToTabId = useMemo(() => {
     const map = new Map<string, string>()
@@ -214,6 +219,7 @@ export function ManageSessionsSection(): React.JSX.Element {
   }, [pendingKillSession, handleKillOne])
 
   const isBusy = busyKind !== null || daemonActions.isBusy
+  const [manageSessionsEntry, stopOnQuitEntry] = getManageSessionsSearchEntries()
 
   return (
     <section className="space-y-4">
@@ -233,9 +239,24 @@ export function ManageSessionsSection(): React.JSX.Element {
       </div>
 
       <SearchableSetting
-        title={getManageSessionsSearchEntries()[0].title}
-        description={getManageSessionsSearchEntries()[0].description}
-        keywords={getManageSessionsSearchEntries()[0].keywords}
+        title={stopOnQuitEntry.title}
+        description={stopOnQuitEntry.description}
+        keywords={stopOnQuitEntry.keywords}
+      >
+        <SettingsSwitchRow
+          label={stopOnQuitEntry.title}
+          description={stopOnQuitEntry.description}
+          checked={stopTerminalSessionsOnQuit}
+          onChange={() =>
+            void updateSettings({ stopTerminalSessionsOnQuit: !stopTerminalSessionsOnQuit })
+          }
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={manageSessionsEntry.title}
+        description={manageSessionsEntry.description}
+        keywords={manageSessionsEntry.keywords}
         className="space-y-3"
         id={MANAGE_SESSIONS_SECTION_ID}
       >
