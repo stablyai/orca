@@ -33,3 +33,28 @@ export function collapsedChildrenSignalState(
 ): AgentDotState | undefined {
   return SIGNAL_STATE_ORDER.find((state) => children.some((child) => child.dotState === state))
 }
+
+// Lists remount as the workspace list scrolls; keep disclosures for the session, bounded like desktop's cache.
+const MAX_REMEMBERED_DISCLOSURES = 512
+const openDisclosureKeys = new Set<string>()
+
+export function isDisclosureOpen(key: string): boolean {
+  return openDisclosureKeys.has(key)
+}
+
+export function toggleDisclosure(key: string): void {
+  if (openDisclosureKeys.delete(key)) {
+    return
+  }
+  openDisclosureKeys.add(key)
+  if (openDisclosureKeys.size > MAX_REMEMBERED_DISCLOSURES) {
+    const oldest = openDisclosureKeys.values().next().value
+    if (oldest !== undefined) {
+      openDisclosureKeys.delete(oldest)
+    }
+  }
+}
+
+export function clearDisclosuresForTests(): void {
+  openDisclosureKeys.clear()
+}

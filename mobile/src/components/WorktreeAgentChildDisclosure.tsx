@@ -8,9 +8,9 @@ import type { AgentDotState } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { AGENT_ROW_INDENT_PER_DEPTH } from './WorktreeAgentRow'
 
-// Grow the 14 pt controls to 44 pt targets without spreading the dense agent rows apart.
-const CHILD_TOGGLE_HIT_SLOP = { top: 15, bottom: 15, left: 8, right: 8 } as const
-const IDLE_GROUP_HIT_SLOP = { top: 15, bottom: 15 } as const
+// Grow the 14 pt controls toward 44 pt downward only: later siblings win hit tests, so top slop would steal taps from the row above.
+const CHILD_TOGGLE_HIT_SLOP = { top: 0, bottom: 15, left: 8, right: 8 } as const
+const IDLE_GROUP_HIT_SLOP = { top: 0, bottom: 15 } as const
 
 type ChildToggleProps = {
   count: number

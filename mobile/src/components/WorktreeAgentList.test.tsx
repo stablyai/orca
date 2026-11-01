@@ -1,9 +1,13 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { clearDisclosuresForTests } from '../worktree/agent-child-disclosure'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
+
+// Disclosures persist in a module cache across list remounts; isolate each test.
+beforeEach(clearDisclosuresForTests)
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -204,6 +208,19 @@ describe('WorktreeAgentList', () => {
     await pressByLabel(renderer!, 'Show 3 child agents')
     expect(paneKeys()).toEqual(['parent', 'busy'])
     await pressByLabel(renderer!, 'Show 2 idle child agents')
+    expect(paneKeys()).toEqual(['parent', 'busy', 'idle-1', 'idle-2'])
+
+    // Scrolling the workspace list remounts cards; the user's disclosures must survive.
+    act(() => renderer?.unmount())
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeAgentList, {
+          agents: [fresh('parent'), fresh('busy', 'parent'), idle('idle-1'), idle('idle-2')],
+          now,
+          unvisited: false
+        })
+      )
+    })
     expect(paneKeys()).toEqual(['parent', 'busy', 'idle-1', 'idle-2'])
   })
 })

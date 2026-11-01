@@ -1,9 +1,13 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
+import { clearDisclosuresForTests } from '../worktree/agent-child-disclosure'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
 import { WorktreeAgentList } from './WorktreeAgentList'
+
+// Disclosures persist in a module cache across list remounts; isolate each test.
+beforeEach(clearDisclosuresForTests)
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
