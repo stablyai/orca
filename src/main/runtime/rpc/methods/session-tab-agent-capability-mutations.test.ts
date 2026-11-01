@@ -3,9 +3,9 @@ import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../../../shared/protocol-version'
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import type { RuntimeCapability } from '../../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'

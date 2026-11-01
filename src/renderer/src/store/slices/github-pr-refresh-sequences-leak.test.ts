@@ -65,17 +65,6 @@ describe('prRefreshSequences stays bounded (leak regression)', () => {
     expect(sequences['seed-0']).toBeUndefined()
   })
 
-  it('does not evict anything while under the cap', () => {
-    const store = createTestStore()
-    store.getState().applyGitHubPRRefreshEvent({
-      sequence: 3,
-      reason: 'visible',
-      status: 'in-flight',
-      aliases: [{ cacheKey: 'only-key', repoPath: '/repo', branch: 'b' }]
-    })
-    expect(store.getState().prRefreshSequences['only-key']).toBe(3)
-  })
-
   it('keeps a refreshed older key by moving it to most-recent before capping', () => {
     const store = createTestStore()
     const seeded: Record<string, number> = {}

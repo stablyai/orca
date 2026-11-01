@@ -1,5 +1,5 @@
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { isLegacyAgentSessionAccountHome } from '../../../../shared/agent-session-account-home'
+import { isLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'

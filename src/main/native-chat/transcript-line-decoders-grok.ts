@@ -1,4 +1,4 @@
-import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   asRecord,
   extractString,
@@ -6,6 +6,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
+import { AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE } from '../../shared/agent-session/agent-session-attachments'
 
 export function decodeGrokTranscriptLine(
   line: string,
@@ -209,11 +210,16 @@ function normalizeGrokUserQueryBlock(block: NativeChatBlock): NativeChatBlock[] 
   ]
 }
 
+const GROK_PASTED_IMAGE_QUERY = new RegExp(
+  String.raw`^((?:[a-z]:[\\/]|\/|[\\/]{2}[^\\/\r\n]+[\\/][^\\/\r\n]+[\\/])(?:.*?[\\/])?orca-paste-[^\\/\r\n]+?` +
+    AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE +
+    String.raw`)([\s\S]*)$`,
+  'i'
+)
+
 function splitGrokPastedImageQuery(text: string): { path: string; query: string } | null {
   // Grok 0.2.93 concatenates clipboard temp paths with prompts; recover the attachment separately.
-  const match = text.match(
-    /^((?:[a-z]:[\\/]|\/|[\\/]{2}[^\\/\r\n]+[\\/][^\\/\r\n]+[\\/])(?:.*?[\\/])?orca-paste-[^\\/\r\n]+?\.png)([\s\S]*)$/i
-  )
+  const match = text.match(GROK_PASTED_IMAGE_QUERY)
   if (!match?.[1]) {
     return null
   }

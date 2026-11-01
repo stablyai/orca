@@ -1,6 +1,6 @@
-import { getClaudeAgentViewService } from '../claude/agent-view-service'
+import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { listSystemFontFamilies } from '../system-fonts'
@@ -59,6 +59,7 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   // Plugin consent and enablement require main's reviewed-fingerprint handlers.
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
+  delete sanitizedArgs.pluginExternalHostGrants
   return sanitizedArgs
 }
 

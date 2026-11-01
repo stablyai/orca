@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type { SetStateAction } from 'react'
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -10,7 +11,12 @@ import {
   type HostedReviewForBranchArgs,
   type HostedReviewInfo
 } from '../../../../../shared/hosted-review'
+import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
+import { selectChecksPanelReview } from '../checks-panel-review'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import type { PRComment } from '../../../../../shared/github/comment-types'
+import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   __resetHostedReviewBranchCacheForTests,
@@ -23,6 +29,8 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
 
 import HostedReviewActions from '../HostedReviewActions'
 import { useChecksPanelManualRefresh } from './use-checks-panel-manual-refresh'
+import { useChecksPanelPolling } from './use-checks-panel-polling'
+import { useChecksPanelReviewData } from './use-checks-panel-review-data'
 
 type RefreshInput = Parameters<typeof useChecksPanelManualRefresh>[0]
 
@@ -55,6 +63,20 @@ const lookup = vi.fn(() => provider())
 let olderHost = false
 // The paired runtime's request timeout: the click gives up while its host lookup runs on.
 let clickTimesOut = false
+
+function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
+  return {
+    number: 12,
+    title: 'Test PR',
+    state: 'open',
+    url: 'https://github.com/acme/repo/pull/12',
+    checksStatus: 'pending',
+    updatedAt: '2026-05-12T00:00:00Z',
+    mergeable: 'MERGEABLE',
+    headSha: 'head-sha',
+    ...overrides
+  }
+}
 
 function cacheKey(): string {
   return getHostedReviewCacheKey(
@@ -452,4 +474,230 @@ describe('a Checks refresh click', () => {
     )
     expect(forBranch).toHaveBeenLastCalledWith(expect.objectContaining({ userRefresh: true }))
   })
+})
+
+it.each(['merged', 'open'] as const)(
+  'a GitHub click uses the post-click %s PR head',
+  async (state) => {
+    const old = Promise.withResolvers<{ kind: 'found'; pr: PRInfo; fetchedAt: number }>()
+    const open = makePR({ number: 42, headSha: 'head-a' })
+    const merged = makePR({ number: 42, state, headSha: 'head-b' })
+    const refreshPRNow = vi
+      .fn()
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValueOnce({ kind: 'found', pr: merged, fetchedAt: 2 })
+    vi.stubGlobal('api', { gh: { refreshPRNow } })
+    const key = getGitHubPRCacheKey(
+      repo.path,
+      repo.id,
+      'main',
+      useAppStore.getState().settings,
+      undefined,
+      undefined,
+      true
+    )
+    useAppStore.setState({ prCache: { [key]: { data: open, fetchedAt: 1 } }, prRefreshStates: {} })
+    const fetchPR = useAppStore.getState().fetchPRForBranch
+    const before = fetchPR(repo.path, 'main', { force: true, reason: 'visible', repoId: repo.id })
+    const input = { ...baseInput(), pr: open, prCacheKey: key, fetchPRForBranch: fetchPR }
+    input.fetchPRChecks = vi.fn(async () => [
+      { name: 'build', status: 'completed' as const, conclusion: 'success' as const, url: null }
+    ])
+    const panel = renderPanel(input)
+    let click: Promise<void> = Promise.resolve()
+    act(() => {
+      click = panel.result.current.handleRefresh()
+    })
+    // Let main's pre-click response finish too, so a buggy joined click completes with head-a.
+    old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
+    await act(async () => {
+      await Promise.all([before, click])
+    })
+    expect(input.fetchPRChecks).toHaveBeenCalledWith(
+      repo.path,
+      42,
+      'main',
+      'head-b',
+      merged.prRepo,
+      expect.anything()
+    )
+    const pr = useAppStore.getState().prCache[key]?.data
+    const review = selectChecksPanelReview({
+      pr,
+      hostedReview: null,
+      linkedPR: null,
+      suppressedGitHubPR: null,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null
+    })
+    expect(review?.state).toBe(state)
+    expect(input.refreshInFlightRef.current).toBe(false)
+  }
+)
+
+it('a failed GitHub click without cached metadata is not a successful no-PR answer', async () => {
+  vi.stubGlobal('api', {
+    gh: { refreshPRNow: vi.fn().mockRejectedValue(new Error('transport unavailable')) }
+  })
+  useAppStore.setState({ prCache: {}, prRefreshStates: {} })
+  const key = getGitHubPRCacheKey(repo.path, repo.id, 'main')
+  const input = {
+    ...baseInput(),
+    prCacheKey: key,
+    fetchPRForBranch: useAppStore.getState().fetchPRForBranch
+  }
+  const panel = renderPanel(input)
+  await act(async () => panel.result.current.handleRefresh())
+  expect(useAppStore.getState().prCache[key]).toBeUndefined()
+  expect(useAppStore.getState().prRefreshStates[key]).toMatchObject({
+    status: 'error',
+    errorType: 'unknown'
+  })
+  expect(input.setChecks).not.toHaveBeenCalled()
+  expect(input.setComments).not.toHaveBeenCalled()
+  expect(panel.result.current.manualRefreshError).toBeNull()
+  expect(input.refreshInFlightRef.current).toBe(false)
+})
+
+it.each([false, true])(
+  "a click's checks and comments replace pre-click reads on screen (old reply first: %s)",
+  async (oldFirst) => {
+    const pr = makePR({ number: 42, headSha: 'head-a' })
+    const running: PRCheckDetail[] = [
+      { name: 'build', status: 'in_progress', conclusion: null, url: null }
+    ]
+    const passed: PRCheckDetail[] = [
+      { name: 'build', status: 'completed', conclusion: 'success', url: null }
+    ]
+    const comment = (body: string): PRComment => ({
+      id: 1,
+      author: 'octocat',
+      authorAvatarUrl: '',
+      body,
+      createdAt: '2026-10-30T12:00:00Z',
+      url: ''
+    })
+    const oldChecks = Promise.withResolvers<PRCheckDetail[]>()
+    const newChecks = Promise.withResolvers<PRCheckDetail[]>()
+    const oldComments = Promise.withResolvers<PRComment[]>()
+    const newComments = Promise.withResolvers<PRComment[]>()
+    const gh = {
+      refreshPRNow: vi.fn(async () => ({ kind: 'found', pr, fetchedAt: Date.now() })),
+      prChecks: vi.fn().mockReturnValueOnce(oldChecks.promise).mockReturnValue(newChecks.promise),
+      prComments: vi
+        .fn()
+        .mockReturnValueOnce(oldComments.promise)
+        .mockReturnValue(newComments.promise)
+    }
+    vi.stubGlobal('api', { gh })
+    const key = getGitHubPRCacheKey(repo.path, repo.id, 'main')
+    useAppStore.setState({ prCache: { [key]: { data: pr, fetchedAt: 1 } }, prRefreshStates: {} })
+    const store = useAppStore.getState()
+    const shown: { checks: PRCheckDetail[]; comments: PRComment[]; checksLoading: boolean } = {
+      checks: [],
+      comments: [],
+      checksLoading: false
+    }
+    const asyncResultKeyRef = {
+      current: checksPanelAsyncResultKey(key, 'main', 42, pr.prRepo, 'head-a')
+    }
+    const input = {
+      ...baseInput(),
+      pr,
+      prCacheKey: key,
+      asyncResultKeyRef,
+      isCurrentAsyncResult: (requestKey: string) => requestKey === asyncResultKeyRef.current,
+      fetchPRForBranch: store.fetchPRForBranch,
+      fetchPRChecks: store.fetchPRChecks,
+      fetchPRComments: store.fetchPRComments,
+      setChecks: vi.fn((next: SetStateAction<PRCheckDetail[]>) => {
+        shown.checks = typeof next === 'function' ? next(shown.checks) : next
+      }),
+      setComments: vi.fn((next: SetStateAction<PRComment[]>) => {
+        shown.comments = typeof next === 'function' ? next(shown.comments) : next
+      }),
+      setChecksLoading: vi.fn((next: SetStateAction<boolean>) => {
+        shown.checksLoading = typeof next === 'function' ? next(shown.checksLoading) : next
+      })
+    }
+    const panel = {
+      ...input,
+      activeWorktree: null,
+      isPanelVisible: false,
+      gitLabProjectRefRef: { current: null },
+      fetchPRCheckDetails: vi.fn(),
+      setChecksError: vi.fn(),
+      setCommentsError: vi.fn()
+    }
+    const { result } = renderHook(() => ({
+      polling: useChecksPanelPolling(panel),
+      reviewData: useChecksPanelReviewData(panel),
+      refresh: useChecksPanelManualRefresh(input)
+    }))
+    let entry: Promise<unknown> = Promise.resolve()
+    let click: Promise<void> = Promise.resolve()
+    act(() => {
+      // Tab entry's forced checks read and the panel's comments load, both begun before the click.
+      entry = Promise.all([
+        result.current.polling.fetchChecks({ force: true, wakeWslDistro: true }),
+        result.current.reviewData.fetchComments()
+      ])
+      click = result.current.refresh.handleRefresh()
+    })
+    try {
+      await vi.waitFor(() => expect(gh.prComments).toHaveBeenCalledTimes(2))
+      expect(gh.prChecks).toHaveBeenCalledTimes(2)
+      expect(gh.prChecks).toHaveBeenLastCalledWith(
+        expect.objectContaining({ noCache: true, userRefresh: true })
+      )
+      if (oldFirst) {
+        oldChecks.resolve(running)
+        oldComments.resolve([comment('old')])
+        await act(async () => {})
+        expect(shown.checksLoading).toBe(true)
+      }
+      newChecks.resolve(passed)
+      newComments.resolve([comment('new')])
+      await act(async () => click)
+      oldChecks.resolve(running)
+      oldComments.resolve([comment('old')])
+      await act(async () => void (await entry))
+      expect(input.setChecks).not.toHaveBeenCalledWith(running)
+      expect(input.setComments).not.toHaveBeenCalledWith([comment('old')])
+      expect(shown).toEqual({ checks: passed, comments: [comment('new')], checksLoading: false })
+    } finally {
+      oldChecks.resolve([])
+      newChecks.resolve([])
+      oldComments.resolve([])
+      newComments.resolve([])
+      await act(async () => void (await Promise.all([entry, click])))
+    }
+  }
+)
+
+it("reports a click's own no-PR answer even if another read fails during its card read", async () => {
+  vi.stubGlobal('api', {
+    gh: { refreshPRNow: vi.fn(async () => ({ kind: 'no-pr', fetchedAt: Date.now() })) }
+  })
+  const key = getGitHubPRCacheKey(repo.path, repo.id, 'main')
+  useAppStore.setState({ prCache: {}, prRefreshStates: {} })
+  const input = {
+    ...baseInput(),
+    prCacheKey: key,
+    fetchPRForBranch: useAppStore.getState().fetchPRForBranch,
+    fetchHostedReviewForBranch: vi.fn(async () => {
+      useAppStore.setState({
+        prRefreshStates: {
+          [key]: { status: 'error', reason: 'visible', updatedAt: Date.now(), errorType: 'network' }
+        }
+      })
+      return null
+    })
+  }
+  const panel = renderPanel(input)
+  await act(async () => panel.result.current.handleRefresh())
+  expect(input.setChecks).toHaveBeenCalledWith([])
+  expect(input.setComments).toHaveBeenCalledWith([])
 })

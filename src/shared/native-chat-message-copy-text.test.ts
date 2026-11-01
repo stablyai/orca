@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { nativeChatMessageCopyText } from './native-chat-message-copy-text'
 
 import { subagentGroupFallbackText } from './native-chat/transcript/native-chat-subagent-summary'
-import type { NativeChatSubagentEntry } from './native-chat-types'
+import type { NativeChatSubagentEntry } from './native-chat/native-chat-types'
 
 describe('nativeChatMessageCopyText', () => {
   it('leaves out the roster twin a drawn subagent group replaces', () => {

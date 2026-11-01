@@ -23,7 +23,6 @@ describe('buildMobileReviewFileRoute', () => {
       expect(route).toContain('/h/host%2Fid/review/repo%3A%3Awork%20tree?')
       expect(firstReviewParam(params.get('file') ?? undefined)).toBe(filePath)
       expect(firstReviewParam(params.get('area') ?? undefined)).toBe('unstaged')
-      expect(firstReviewParam(params.get('scope') ?? undefined)).toBe('all')
       expect(firstReviewParam(params.get('name') ?? undefined)).toBe('My Repo')
     }
   )
@@ -44,4 +43,20 @@ describe('buildMobileReviewFileRoute', () => {
       expect(params.get('area')).toBe(area)
     }
   )
+
+  it('carries the commit for a file opened from a commit', () => {
+    const params = queryParams(
+      buildMobileReviewFileRoute({
+        hostId: 'host',
+        worktreeId: 'wt',
+        worktreeName: '',
+        filePath: 'a.ts',
+        area: 'commit',
+        commitOid: 'c0ffee0123456789abcdef0123456789abcdef01'
+      })
+    )
+
+    expect(params.get('area')).toBe('commit')
+    expect(params.get('commit')).toBe('c0ffee0123456789abcdef0123456789abcdef01')
+  })
 })

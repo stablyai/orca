@@ -1,6 +1,6 @@
 // Skip coalescing requires a fixed, byte-identical sentence for each refusal reason.
 import type { WebContents } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type {
   Automation,
   AutomationDispatchRequest,

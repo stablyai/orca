@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import {
   nativeChatNewRowsMarkerPlacement,

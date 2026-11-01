@@ -4,14 +4,14 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalSubmission,
-  AgentJournalCursor,
   AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryPage,
   type AgentSessionSubscribeEvent
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 
@@ -29,7 +29,7 @@ import {
   resetStructuredAgentSessionReadOwnersForTests
 } from './structured-agent-session-read-owner'
 
-import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../../shared/structured-agent-session-send-evidence'
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../../shared/agent-session/requests/structured-agent-session-send-evidence'
 
 import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../../shared/agent-session/structured-agent-session-coalescer'
 import type { StructuredAgentSessionAdmission } from './structured-agent-session-read-owner-contract'

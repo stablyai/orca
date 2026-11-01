@@ -3,6 +3,7 @@
  * Add/Connect, or when the user switches to one of its workspaces. After a confirmed stop the host is
  * parked: polls and visible work keep it down until the user acts or the distro runs again.
  */
+import { assertWslHostRunAllowed } from './wsl-host-gate'
 import { focusReachability } from './wsl-host-focus-reachability'
 import { ensureWslHostForRuntimeCall } from './wsl-host-runtime-call'
 import type { WslHostDeploymentRecord } from '../../shared/wsl-host-deployment-store'
@@ -20,11 +21,7 @@ import {
   readWslHostRecordsQuietly,
   toWslHostStatus
 } from './wsl-host-connection-record'
-import {
-  sameWslDistro,
-  WSL_HOST_REMOVING_MESSAGE,
-  wslHostRunRefusal
-} from './wsl-host-add-admission'
+import { sameWslDistro, wslHostRunRefusal } from './wsl-host-add-admission'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import { registerWslHost } from './wsl-host-registration'
 import { WslHostStatusBoard } from './wsl-host-status-board'
@@ -36,11 +33,6 @@ import {
   removeWslHostServer
 } from './wsl-host-removal'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
-import {
-  forgetWslHostToWake,
-  forgetWslHostsToWake,
-  rememberWslHostsToWake
-} from './wsl-host-early-wake'
 
 export type {
   WslHostConnector,
@@ -55,6 +47,7 @@ export class WslHostService {
   private visible = new Set<string>()
   private readonly parked = new Set<string>()
   private readonly removing = new Set<string>()
+  private readonly readyGenerations = new Map<string, number>()
   // Invalidate in-flight Adds when disabled so they cannot later publish ready hosts.
   private disableGeneration = 0
 
@@ -151,8 +144,6 @@ export class WslHostService {
       this.connector,
       record
     ).finally(() => this.removing.delete(environmentId))
-    // Removed or pending, nothing may boot it early at the next launch.
-    forgetWslHostToWake(this.deps.userDataPath(), record.distro)
     if (!removal.removed) {
       this.setStatus(this.recordForEnvironment(environmentId) ?? record, { state: 'closed' })
       return removal.serverStop
@@ -164,22 +155,13 @@ export class WslHostService {
     return removal.serverStop
   }
 
-  /** Disable closes connections/watches and releases holders; reenable resumes only hosts needed by visible work. */
+  /**
+   * The setting governs new work only (Stage 1): turning it off refuses an add still in flight,
+   * but saved hosts keep serving their projects, as in serve-only. Turning it on boots nothing.
+   */
   async enabledChanged(enabled: boolean): Promise<void> {
-    const connector = this.connector
-    if (!connector) {
-      return
-    }
-    if (enabled) {
-      // Nothing boots here: the window re-reports its focused host, the only one that may (E9).
-      return
-    }
-    this.disableGeneration += 1
-    forgetWslHostsToWake(this.deps.userDataPath())
-    for (const record of this.records()) {
-      await connector.disconnect(record.distro)
-      await connector.releaseHolder(record.distro)
-      this.setStatus(record, { state: 'closed' })
+    if (!enabled) {
+      this.disableGeneration += 1
     }
   }
 
@@ -198,10 +180,7 @@ export class WslHostService {
     if (!record) {
       throw new Error('This server is not a WSL host.')
     }
-    const refusal = wslHostRunRefusal(this.deps)
-    if (refusal || this.removing.has(environmentId)) {
-      throw new Error(refusal?.message ?? WSL_HOST_REMOVING_MESSAGE)
-    }
+    assertWslHostRunAllowed(this.deps, this.removing, environmentId)
     admitConnectToPendingHost(this.deps.userDataPath(), record, withdrawPendingRemoval)
     this.wsl.forgetPairingFailures?.(environmentId)
     this.parked.delete(environmentId)
@@ -209,14 +188,18 @@ export class WslHostService {
   }
 
   /** A runtime call (a poll, a fetch) never boots a distro (E9); see ensureWslHostForRuntimeCall. */
-  async ensureForRuntimeCall(environmentId: string): Promise<void> {
+  async ensureForRuntimeCall(
+    environmentId: string,
+    isVisible: () => boolean = () => this.visible.has(environmentId)
+  ): Promise<void> {
     await ensureWslHostForRuntimeCall(environmentId, {
       record: this.recordForEnvironment(environmentId),
       connector: this.connector,
       deps: this.deps,
       removing: this.removing,
       parked: this.parked,
-      isVisible: () => this.visible.has(environmentId),
+      isVisible,
+      readyGeneration: () => this.readyGenerations.get(environmentId) ?? 0,
       publishStopped: (record) =>
         this.setStatus(record, { state: 'distro-stopped', terminals: 'exited', recovering: false }),
       publishReady: (record, connection) =>
@@ -226,19 +209,20 @@ export class WslHostService {
   }
 
   /**
-   * The user switched to a workspace on this host (or launch restored it focused): the one
-   * non-explicit act that may boot its distro, and it lifts a park.
+   * A workspace on this host became active: the user switched to it, or a launch restored it. That
+   * is navigation, never a start (E9): it re-checks a park and connects only to a running distro; a
+   * stopped one is published stopped, so its panes show Start. Start and a new terminal boot it.
    */
   focusHost(environmentId: string | null): void {
     const record = environmentId ? this.recordForEnvironment(environmentId) : null
-    const runnable = record !== null && this.mayWake(record)
-    // The next launch starts booting only this distro, early (none when off WSL or not runnable).
-    rememberWslHostsToWake(this.deps.userDataPath(), record && runnable ? [record.distro] : [])
-    if (record && runnable) {
-      this.wake(record).catch((error: unknown) => {
-        console.warn(`[wsl-hosts] Could not connect to ${record.distro}:`, error)
-      })
+    if (!record || !this.mayWake(record)) {
+      return
     }
+    this.parked.delete(record.environmentId)
+    // The focused workspace's work is visible even before the window re-reports it.
+    this.ensureForRuntimeCall(record.environmentId, () => true).catch(() => {
+      // Refused (stopped, settling, unconfirmed): the published status tells the panes.
+    })
   }
 
   /** E9: an enabled automation came due with the host off; boots the distro once, lifting a park. */
@@ -338,6 +322,10 @@ export class WslHostService {
     status: WslOrcadConnectionStatus,
     connection: WslOrcadConnection | null = null
   ): void {
+    if (status.state === 'ready') {
+      const generation = this.readyGenerations.get(record.environmentId) ?? 0
+      this.readyGenerations.set(record.environmentId, generation + 1)
+    }
     this.board.set(toWslHostStatus(record, status, connection))
   }
 

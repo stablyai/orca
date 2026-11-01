@@ -2,13 +2,13 @@ import { isDeepStrictEqual } from 'node:util'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
-  type AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
+  type AgentJournalItemBody
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
 import {
   continuedOutsideNotice,
@@ -34,12 +34,14 @@ import {
   claudeText,
   claudeThinkingIdentity,
   claudeToolIdentity,
+  claudeToolResults,
   claudeToolUses,
   readClaudeMessageEnvelope
-} from './claude-structured-item-translation'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+} from './structured/journal/claude-structured-item-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { createClaudeTranscriptItemReader } from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from './claude-session-state-turn-over'
+import { claudeEnvelopeStopHookFeedbackRow } from './claude-stop-hook-feedback'
 
 /** An isolated projection of final source items, compared with saved historical content. */
 export function createClaudeTranscriptImportPlan(input: {
@@ -189,17 +191,14 @@ export function createClaudeTranscriptImportPlan(input: {
         for (const tool of claudeToolUses(envelope)) {
           matchSource([claudeToolIdentity(envelope.sessionId, tool.id)])
         }
-        for (const part of envelope.content) {
-          const result = claudeRecord(part)
-          const toolUseId = result?.type === 'tool_result' ? claudeText(result.tool_use_id) : null
-          if (toolUseId) {
-            matchSource([claudeToolIdentity(envelope.sessionId, toolUseId)])
-          }
+        for (const result of claudeToolResults(envelope)) {
+          matchSource([claudeToolIdentity(envelope.sessionId, result.toolUseId)])
         }
       }
       const prompt =
         queued ||
         (envelope?.role === 'user' &&
+          !claudeEnvelopeStopHookFeedbackRow(envelope) &&
           envelope.content.some((part) => claudeRecord(part)?.type !== 'tool_result'))
       const decoded = prompt
         ? decodeClaudeTranscriptLine(JSON.stringify(row), `${input.providerSessionId}:${uuid}`)

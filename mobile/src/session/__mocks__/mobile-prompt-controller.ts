@@ -1,16 +1,16 @@
 import './mobile-prompt-render-mocks'
 import { createElement } from 'react'
 import { Pressable } from 'react-native'
-import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatSendOutcome } from '../native-chat/mobile-native-chat-send'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse, ConnectionState } from '../../transport/types'
 import type { MobileNativeChatTab } from '../native-chat/mobile-native-chat-eligibility'
-import type { MobileNativeChatController } from '../mobile-native-chat-controller-contract'
+import type { MobileNativeChatController } from '../native-chat/mobile-native-chat-controller-contract'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { vi } from 'vitest'
-import { useMobileNativeChatController } from '../use-mobile-native-chat-controller'
-import { MobileNativeChatOverlay } from '../MobileNativeChatOverlay'
+import { useMobileNativeChatController } from '../native-chat/use-mobile-native-chat-controller'
+import { MobileNativeChatOverlay } from '../native-chat/MobileNativeChatOverlay'
 import { MobileNativeChatAsk } from '../native-chat/input/MobileNativeChatAsk'
 import type { AskAnswerSelection } from '../../../../src/shared/native-chat-ask-answer'
 import { mobileNativeChatPromptDismissals } from '../native-chat/input/mobile-native-chat-prompt-dismissals'
@@ -52,7 +52,7 @@ vi.mock('../use-mobile-session-view-mode', () => ({
     toggleTabChatView: () => Object.assign(visible, { value: !visible.value })
   })
 }))
-vi.mock('../use-mobile-native-chat-session-lane', () => ({
+vi.mock('../native-chat/use-mobile-native-chat-session-lane', () => ({
   useMobileNativeChatSessionLane: () => ({ session, structuredSession, sessionCommands })
 }))
 setMobileNativeChatDraftText('draft', 'ordinary message')

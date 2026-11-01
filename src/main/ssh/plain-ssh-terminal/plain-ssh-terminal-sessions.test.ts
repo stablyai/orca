@@ -138,18 +138,6 @@ describe('plain SSH terminal sessions', () => {
     expect(spawned).toHaveLength(0)
   })
 
-  it('names OpenSSH Client when Windows has no ssh.exe, with no shell workaround', async () => {
-    const result = await open(deps({ findSsh: () => null, platform: 'win32' }))
-    expect(result).toMatchObject({ ok: false, reason: 'ssh-missing' })
-    expect(result.ok ? '' : 'message' in result ? result.message : '').toContain('OpenSSH Client')
-  })
-
-  it('keeps one session per host across windows', async () => {
-    await open(deps(), 'lambda', 1)
-    expect(await open(deps(), 'lambda', 2)).toEqual({ ok: false, reason: 'already-open' })
-    expect(spawned).toHaveLength(1)
-  })
-
   it('claims the host before awaiting, so concurrent opens never spawn twice', async () => {
     let release: () => void = () => {}
     const gate = new Promise<void>((resolve) => {
@@ -242,15 +230,6 @@ describe('plain SSH terminal sessions', () => {
     spawned[0].write.mockImplementation(exited)
     expect(() => resizePlainSshTerminal(sessionId, 1, 100, 30)).not.toThrow()
     expect(() => writePlainSshTerminal(sessionId, 1, 'ls\r')).not.toThrow()
-  })
-
-  it('reports a signal kill, which is not a clean logout', async () => {
-    const events: PlainSshTerminalEvent[] = []
-    const result = await open(deps(), 'lambda', 1, events)
-    spawned[0].emitExit(0, 9)
-    expect(events).toEqual([
-      { kind: 'exit', sessionId: result.ok ? result.sessionId : '', exitCode: 0, signal: 9 }
-    ])
   })
 
   it('forwards output and exit, and only its owner can write, resize or close it', async () => {

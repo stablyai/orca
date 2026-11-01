@@ -11,15 +11,15 @@ vi.mock('../transport/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
   runRpcOperation: () => doubles.manifest()
 }))
-vi.mock('../transport/mobile-web-bundle-fetch', () => ({
+vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
   fetchMobileWebBundle: () => doubles.fetch()
 }))
 
-import { MobileWebBundleFetchError } from '../transport/mobile-web-bundle-fetch-refusal'
+import { MobileWebBundleFetchError } from '../transport/web-bundle/mobile-web-bundle-fetch-refusal'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
+import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { createGenerationStore, type GenerationStore } from './generation-store'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
 import { deriveHostCacheKey } from './host-cache-key'

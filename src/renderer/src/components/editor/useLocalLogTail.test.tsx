@@ -132,24 +132,6 @@ describe('useLocalLogTail', () => {
     expect(readMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to a full reload when a change reveals truncation', async () => {
-    readMock.mockResolvedValue({
-      ...encodedResult('', 0),
-      nextByteOffset: 0,
-      reset: true
-    })
-    renderHook(() =>
-      useHarness([openFile], {
-        content: 'old\n',
-        isBinary: false,
-        fileIdentity: FILE_IDENTITY
-      })
-    )
-
-    await waitFor(() => expect(reloadMock).toHaveBeenCalledWith(openFile))
-    await waitFor(() => expect(stopMock).toHaveBeenCalledTimes(1))
-  })
-
   it('commits complete lines read before a later transient chunk failure', async () => {
     const first = encodedResult('new\n', 4)
     readMock

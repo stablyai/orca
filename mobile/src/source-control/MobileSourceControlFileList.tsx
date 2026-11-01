@@ -1,4 +1,5 @@
-import { SectionList, Text, View } from 'react-native'
+import { SectionList, View } from 'react-native'
+import { SectionHeader } from '../components/list/ListGroup'
 import {
   BranchCompareHeader,
   BranchFileRow,
@@ -30,10 +31,7 @@ export type FileListState = Pick<
   | 'branchCompareState'
   | 'branchCompareResult'
   | 'busyAction'
-  | 'openingPath'
-  | 'openingBranchPath'
-  | 'openFile'
-  | 'openBranchDiff'
+  | 'openDiffForFile'
   | 'resolveConflict'
   | 'runGitAction'
   | 'setDiscardTarget'
@@ -84,9 +82,8 @@ export function MobileSourceControlFileList({
         section.key === 'committed' ? (
           <BranchCompareHeader state={state} />
         ) : (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <Text style={styles.sectionCount}>{section.data.length}</Text>
+          <View style={styles.sectionHeaderBleed}>
+            <SectionHeader title={section.title} trailing={String(section.data.length)} />
           </View>
         )
       }

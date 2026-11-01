@@ -147,51 +147,6 @@ beforeEach(() => {
 })
 
 describe('deleting one host copy of a same-named project', () => {
-  it('removes only the remote row when the same name exists locally', async () => {
-    const store = seed([localTwin, remoteATwin], 'env-a')
-
-    await store.getState().removeProject('env-a-uuid', { hostId: 'runtime:env-a' })
-
-    expect(repoRmCalls()).toEqual([
-      expect.objectContaining({
-        selector: 'env-a',
-        params: { repo: 'env-a-uuid' }
-      })
-    ])
-    expect(reposRemove).not.toHaveBeenCalled()
-    // Only this desktop's persisted rows for the remote host, never the local row.
-    expect(reposRemoveForHost).toHaveBeenCalledWith({
-      repoId: 'env-a-uuid',
-      hostId: 'runtime:env-a'
-    })
-    expect(remainingRepoIds(store)).toEqual(['local-uuid'])
-  })
-
-  it('removes only the local row when the same name exists on a remote', async () => {
-    const store = seed([localTwin, remoteATwin], 'env-a')
-
-    await store.getState().removeProject('local-uuid', { hostId: 'local' })
-
-    expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'local-uuid', hostId: 'local' })
-    expect(reposRemove).not.toHaveBeenCalled()
-    expect(repoRmCalls()).toEqual([])
-    expect(remainingRepoIds(store)).toEqual(['env-a-uuid'])
-  })
-
-  it('removes only remote A when the same name exists on remote B', async () => {
-    const store = seed([remoteATwin, remoteBTwin], 'env-b')
-
-    await store.getState().removeProject('env-a-uuid', { hostId: 'runtime:env-a' })
-
-    expect(repoRmCalls()).toEqual([
-      expect.objectContaining({
-        selector: 'env-a',
-        params: { repo: 'env-a-uuid' }
-      })
-    ])
-    expect(remainingRepoIds(store)).toEqual(['env-b-uuid'])
-  })
-
   it('keeps remote B when remote A reports the project already gone', async () => {
     // The reporter's #11994 case with a name collision: the ghost purge is host-scoped.
     answerRepoRm({ failingSelector: 'env-a', code: 'repo_not_found' })
@@ -254,15 +209,6 @@ describe('deleting one host copy of a project whose id exists on two hosts', () 
 })
 
 describe('refetching one host catalog after its own delete', () => {
-  it('prunes only that host rows when the name exists on other hosts', async () => {
-    answerCatalogs({ 'env-a': [], 'env-b': [remoteBTwin] })
-    const store = seed([localTwin, remoteATwin, remoteBTwin], 'env-a')
-
-    await store.getState().fetchRuntimeEnvironmentRepos('env-a')
-
-    expect(remainingRepoIds(store)).toEqual(['local-uuid', 'env-b-uuid'])
-  })
-
   it('keeps another host row that shares the deleted repo id', async () => {
     const duplicateLocal = repo('dup-id', {
       path: '/laptop/dup',

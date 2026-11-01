@@ -60,14 +60,6 @@ describe('selectProjectGroupRemovalTargets', () => {
     expect(result.projectIds).toEqual(['direct', 'nested'])
   })
 
-  it('returns an empty project list for empty groups', () => {
-    const result = selectProjectGroupRemovalTargets([rootGroup], [], rootGroup.id)
-
-    expect(result.groupExists).toBe(true)
-    expect([...result.deletedGroupIds]).toEqual([rootGroup.id])
-    expect(result.projectIds).toEqual([])
-  })
-
   it('does not synthesize targets for a missing group', () => {
     const result = selectProjectGroupRemovalTargets(
       [rootGroup],

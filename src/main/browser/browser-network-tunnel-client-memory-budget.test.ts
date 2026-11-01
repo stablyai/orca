@@ -2,6 +2,7 @@ import { once } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import {
   BrowserNetworkTunnelOpcode,
+  decodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelWindowUpdate
 } from '../../shared/browser-network-tunnel-protocol'
@@ -31,7 +32,9 @@ describe('BrowserNetworkTunnelClient aggregate memory', () => {
   it('shares application-write admission across routes on one browser host', async () => {
     const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({
       hostMaxBytes: 10,
-      processMaxBytes: 100
+      processMaxBytes: 100,
+      controlFrameReserveBytes: 0,
+      controlFrameReserveClaims: 0
     })
     const first = createClient(registry.acquire('host-a')!)
     const second = createClient(registry.acquire('host-a')!)
@@ -60,7 +63,9 @@ describe('BrowserNetworkTunnelClient aggregate memory', () => {
   it('retains destination bytes until the browser-facing socket write settles', async () => {
     const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({
       hostMaxBytes: 10,
-      processMaxBytes: 100
+      processMaxBytes: 100,
+      controlFrameReserveBytes: 0,
+      controlFrameReserveClaims: 0
     })
     const route = createClient(registry.acquire('host-a')!)
     const socket = await open(route.client)
@@ -77,10 +82,55 @@ describe('BrowserNetworkTunnelClient aggregate memory', () => {
     route.client.close()
   })
 
+  it('fails only the stream whose destination bytes exceed the shared budget', async () => {
+    const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({
+      hostMaxBytes: 74,
+      processMaxBytes: 1000,
+      controlFrameReserveBytes: 64,
+      controlFrameReserveClaims: 1
+    })
+    const lease = registry.acquire('host-a')!
+    const onClosed = vi.fn()
+    const sent: Uint8Array[] = []
+    const client = new BrowserNetworkTunnelClient({
+      tunnelGeneration: TUNNEL_GENERATION,
+      // A busy transport queues each frame against the same lease before sending it.
+      sendBinary: (bytes) => {
+        const releaseQueued = lease.claimQueuedBytes(bytes.byteLength)
+        if (!releaseQueued) {
+          return false
+        }
+        sent.push(bytes)
+        releaseQueued()
+        return true
+      },
+      outboundMemory: lease,
+      onClosed
+    })
+    const holding = await open(client, 1)
+    const overflowing = await open(client, 2)
+    overflowing.on('error', () => undefined)
+
+    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array(8), 1))
+    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array(8), 2))
+
+    expect(onClosed).not.toHaveBeenCalled()
+    expect(decodeBrowserNetworkTunnelFrame(sent.at(-1)!)).toMatchObject({
+      opcode: BrowserNetworkTunnelOpcode.Error,
+      streamId: 2
+    })
+    expect(overflowing.destroyed).toBe(true)
+    expect(holding.destroyed).toBe(false)
+    expect(registry.evidence().retainedBytes).toBe(8)
+    client.close()
+  })
+
   it('releases a source-write claim only after credited transport handoff', async () => {
     const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({
       hostMaxBytes: 10,
-      processMaxBytes: 100
+      processMaxBytes: 100,
+      controlFrameReserveBytes: 0,
+      controlFrameReserveClaims: 0
     })
     const route = createClient(registry.acquire('host-a')!)
     const socket = await open(route.client)

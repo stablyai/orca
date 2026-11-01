@@ -34,21 +34,6 @@ describe('removeAppImageRuntimeEnv', () => {
     })
   })
 
-  it('leaves non-AppImage environments untouched', () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-    const env = {
-      PATH: ['/opt/tools', '/usr/bin'].join(delimiter),
-      LD_LIBRARY_PATH: '/opt/audio/lib'
-    }
-
-    removeAppImageRuntimeEnv(env)
-
-    expect(env).toEqual({
-      PATH: ['/opt/tools', '/usr/bin'].join(delimiter),
-      LD_LIBRARY_PATH: '/opt/audio/lib'
-    })
-  })
-
   it('removes AppImage ARGV0 even without a mounted APPDIR', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     const env = {

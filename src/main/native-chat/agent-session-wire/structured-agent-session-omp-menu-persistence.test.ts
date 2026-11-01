@@ -2,12 +2,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { it, expect } from 'vitest'
-import { OMP_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-omp'
+import { OMP_SESSION_OPTION_CATALOG } from '../../../shared/agent-session/options/agent-session-option-catalog-omp'
 import {
   applyStructuredAgentSessionOptions,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot
-} from '../../../shared/structured-agent-session-options'
+  createStructuredAgentSessionOptionState
+} from '../../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { recordedOmpOptions } from '../../acp/acp-thinking-options.test-fixture'
 import {
   AgentModelCatalogStore,

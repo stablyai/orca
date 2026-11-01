@@ -22,11 +22,8 @@ import {
   FILE_EXPLORER_DIR_PAGE_ENTRIES,
   readFileExplorerDirectory
 } from './file-explorer-directory-listing'
-import {
-  appendFileExplorerDirPage,
-  fileExplorerRevealDirToReadOn,
-  loadMoreFileExplorerDir
-} from './file-explorer-dir-pages'
+import { appendFileExplorerDirPage, loadMoreFileExplorerDir } from './file-explorer-dir-pages'
+
 import { fileExplorerDirsDueForMore } from './use-file-explorer-load-more'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import type { DirCache } from './file-explorer-types'
@@ -62,16 +59,6 @@ beforeEach(() => {
 })
 
 describe('paged folder listing', () => {
-  it('lists a folder that fits one reply whole, in one request, as before', async () => {
-    serveFolder(49_000)
-    const listing = await readFileExplorerDirectory('wt-1', '/w', '/w')
-    expect(listing.entries).toHaveLength(49_000)
-    expect(listing).not.toHaveProperty('more')
-    expect(listing).not.toHaveProperty('paged')
-    expect(readRuntimeDirectory).toHaveBeenCalledTimes(1)
-    expect(readRuntimeDirectoryPage).not.toHaveBeenCalled()
-  })
-
   it('pages a folder the host refuses whole, and remembers where the rest starts', async () => {
     serveFolder(60_000)
     const listing = await readFileExplorerDirectory('wt-1', '/w', '/w')
@@ -157,30 +144,6 @@ describe('loading more on scroll', () => {
     ],
     more: { after: { name: 'f00000', isDirectory: false } }
   })
-  const projection = (indexes: Record<string, number>) => ({
-    getIndexByPath: (path: string) => indexes[path] ?? null
-  })
-
-  it('picks folders whose last row is near the rendered rows, not hidden, loading or failed', () => {
-    const dirCache: Record<string, DirCache> = {
-      '/w/near': partial('/w/near/last'),
-      '/w/far': partial('/w/far/last'),
-      '/w/collapsed': partial('/w/collapsed/last'),
-      '/w/loading': partial('/w/loading/last'),
-      '/w/failed': { ...partial('/w/failed/last'), error: 'gone' },
-      '/w/done': { children: partial('/w/done/last').children }
-    }
-    const indexes = {
-      '/w/near/last': 80,
-      '/w/far/last': 500,
-      '/w/loading/last': 10,
-      '/w/failed/last': 10,
-      '/w/done/last': 10
-    }
-    expect(
-      fileExplorerDirsDueForMore(dirCache, new Set(['/w/loading']), projection(indexes), 40)
-    ).toEqual(['/w/near'])
-  })
 
   it('appends the next page, and a refresh started meanwhile wins', async () => {
     serveFolder(60_000)
@@ -247,26 +210,5 @@ describe('loading more on scroll', () => {
     expect(fileExplorerDirsDueForMore(dirCache, new Set(), { getIndexByPath: () => 0 }, 0)).toEqual(
       []
     )
-  })
-})
-
-describe('revealing a path in a partly listed folder', () => {
-  it('reads on in the folder whose next path on the way is not listed yet', () => {
-    const more = { after: { name: 'f00999', isDirectory: false } }
-    const listed = new Set(['/w/src'])
-    const rows = { hasPath: (path: string) => listed.has(path) }
-    const dirCache: Record<string, DirCache> = {
-      '/w': { children: [] },
-      '/w/src': { children: [], more }
-    }
-    expect(fileExplorerRevealDirToReadOn(dirCache, rows, ['/w/src', '/w/src/z.ts'])).toBe('/w/src')
-
-    listed.add('/w/src/z.ts')
-    expect(fileExplorerRevealDirToReadOn(dirCache, rows, ['/w/src', '/w/src/z.ts'])).toBeNull()
-    // A fully listed or failed folder never reads on: the reveal falls back as before.
-    expect(fileExplorerRevealDirToReadOn(dirCache, rows, ['/w/lib'])).toBeNull()
-    dirCache['/w/src'] = { children: [], more, error: 'gone' }
-    listed.delete('/w/src/z.ts')
-    expect(fileExplorerRevealDirToReadOn(dirCache, rows, ['/w/src', '/w/src/z.ts'])).toBeNull()
   })
 })

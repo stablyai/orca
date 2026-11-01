@@ -1,11 +1,10 @@
-import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { GitHubPRFallbackSource } from './cache-model'
 import { getHostedReviewCacheKey } from '../slices/hosted-review-cache-identity'
-import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
+import { findRepoForGitHubOwner } from './repository-routing'
 import { prCacheKey } from './cache-identity'
 import { isFresh } from './cache-policy'
 import { buildGitHubPRRefreshStateClearToken } from './pr-refresh-state'
@@ -13,11 +12,8 @@ import { githubHostedReviewFallbackPRNumber, prLookupHintKey } from './pr-result
 import { nextLookupGeneration } from '../lookup-generation-sequence'
 import { inflightPRRequests, prRequestGenerations } from './request-coordination'
 import { getGitHubSourceTarget, settingsForGitHubRepoOwner } from './work-item-routing'
-import { findWorktreeById } from './worktree-refresh'
-import {
-  shouldApplyDivergedLinkedPRClear,
-  shouldClearDivergedLinkedMergedPR
-} from '../../../../shared/github/linked-pr-staleness'
+import { captureLinkedReviewClearScope, clearLinkedReview } from './linked-review-clear'
+import { shouldClearDivergedLinkedMergedPR } from '../../../../shared/github/linked-pr-staleness'
 import { startPullRequestLookup } from './pull-request-execution'
 
 export const createPullRequestActions = (
@@ -25,10 +21,12 @@ export const createPullRequestActions = (
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'fetchPRForBranch'> => ({
   fetchPRForBranch: async (repoPath, branch, options): Promise<PRInfo | null> => {
-    const repoLookup = getGitHubRepoLookupIndex(get().repos)
-    const repo = options?.repoId
-      ? repoLookup.findById(options.repoId)
-      : repoLookup.findByPath(repoPath)
+    const repo = findRepoForGitHubOwner(
+      get(),
+      options?.repoId,
+      repoPath,
+      options?.repoOwnerExecutionHostId
+    )
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = settingsForGitHubRepoOwner(get().settings, repo)
     const cacheKey = prCacheKey(
@@ -72,14 +70,15 @@ export const createPullRequestActions = (
     const lookupHintKey = prLookupHintKey(linkedPRNumber, fallbackPRNumber)
     const linkedRefetch =
       cached?.data === null && (linkedPRNumber !== null || fallbackPRNumber !== null)
-    if (!options?.force && !linkedRefetch && isFresh(cached)) {
+    if (!options?.force && !options?.userRefresh && !linkedRefetch && isFresh(cached)) {
       // Why: even a fresh cache hit carries the head-scoped divergence signal; if a prior clear was declined for a mid-request head move and we're back on that head, clear the durable link.
       if (
         options?.worktreeId &&
         linkedPRNumber != null &&
         cached?.data?.headDivergedFromMergedPRAtOid != null
       ) {
-        const currentHeadOid = findWorktreeById(get(), options.worktreeId)?.head ?? null
+        const scope = captureLinkedReviewClearScope(get(), options.worktreeId, repo)
+        const currentHeadOid = scope?.workspace.head ?? null
         if (
           shouldClearDivergedLinkedMergedPR({
             pr: cached.data,
@@ -87,18 +86,11 @@ export const createPullRequestActions = (
             requestHeadOid: currentHeadOid
           })
         ) {
-          void get().updateWorktreeMeta(
-            options.worktreeId,
-            CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
-            {
-              shouldApply: (worktree) =>
-                shouldApplyDivergedLinkedPRClear({
-                  worktree,
-                  linkedPRNumber,
-                  branch,
-                  requestHeadOid: currentHeadOid
-                })
-            }
+          clearLinkedReview(
+            get,
+            scope,
+            { linkedPRNumber, branch, requestHeadOid: currentHeadOid },
+            'diverged'
           )
         }
       }
@@ -107,6 +99,7 @@ export const createPullRequestActions = (
 
     const inflightRequest = inflightPRRequests.get(cacheKey)
     if (
+      !options?.userRefresh &&
       inflightRequest &&
       (!options?.force || inflightRequest.force) &&
       inflightRequest.lookupHintKey === lookupHintKey &&

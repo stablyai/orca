@@ -25,7 +25,9 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../agent-hooks/managed-agent-hook-controls': {
     removeManagedAgentHooksAsync: vi.fn(async () => [])
   },
-  '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime },
+  '../runtime/agent-session/structured-agent-session-runtime': {
+    stopStructuredAgentSessionRuntime
+  },
   '../runtime/agent-session/structured-agent-session-runtime-teardown': {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
@@ -36,7 +38,9 @@ const dependencies: Record<string, Record<string, unknown>> = {
   },
   '../ipc/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
   '../orca-profiles/profile-cloud-session-owner': { flushUnsavedCloudSessions: idle() },
-  '../browser/browser-manager': { browserManager: { setBrowserGuestStateChangedListener: idle() } },
+  '../browser/browser-manager': {
+    browserManager: { setBrowserGuestStateChangedListener: idle(), setOffscreenTabOpener: idle() }
+  },
   '../browser/browser-session-registry': { browserSessionRegistry: {} },
   '../browser/local-ssh-browser-route': { closeAllLocalSshBrowserRoutes: settled() },
   '../codex/codex-state-db-backfill-recovery': { stopCodexStateDbBackfillRecoveries: settled() },
@@ -53,7 +57,9 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../terminal-history-gc': { cancelHistoryGc: idle() },
   './window-all-closed-quit-policy': { shouldQuitWhenAllWindowsClosed: vi.fn(() => false) },
   './configure-process': { isDevParentShutdownRequested: vi.fn(() => false) },
-  '../persistence': { getCanonicalUserDataPath: vi.fn(() => '/unused') }
+  '../persistence/loading-store/user-data-path': {
+    getCanonicalUserDataPath: vi.fn(() => '/unused')
+  }
 }
 
 afterEach(() => {

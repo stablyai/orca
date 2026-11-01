@@ -70,7 +70,7 @@ vi.mock('../transport/rpc-operation', async (importOriginal) => ({
   ...(await importOriginal<typeof RpcOperationModule>()),
   runRpcOperation: async () => ({ manifest: currentManifest() })
 }))
-vi.mock('../transport/mobile-web-bundle-fetch', () => ({
+vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
   fetchMobileWebBundle: async () => {
     profile.downloads += 1
     return {

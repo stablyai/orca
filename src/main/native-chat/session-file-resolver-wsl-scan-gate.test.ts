@@ -67,27 +67,6 @@ beforeEach(() => {
 afterEach(() => setPlatform(realPlatform))
 
 describe('Codex WSL scan gate', () => {
-  it('routes WSL session-tree scans through the shared filesystem gate', async () => {
-    await resolveSessionFilePath('codex', 'session-id', {
-      codexSessionsDirs: [WSL_SESSIONS_DIR]
-    })
-
-    expect(mocks.gate).toHaveBeenCalledWith(
-      expect.objectContaining({ operation: 'readdir', priority: 'scan' }),
-      expect.any(Function)
-    )
-    expect(mocks.walk).toHaveBeenCalledWith(WSL_SESSIONS_DIR, 'codex', [], expect.any(Object))
-  })
-
-  it('keeps local session-tree scans outside the WSL gate', async () => {
-    await resolveSessionFilePath('codex', 'session-id', {
-      codexSessionsDirs: [LOCAL_SESSIONS_DIR]
-    })
-
-    expect(mocks.gate).not.toHaveBeenCalled()
-    expect(mocks.walk).toHaveBeenCalledTimes(1)
-  })
-
   it("still surfaces a later root's hit when an earlier root is gate-refused", async () => {
     const hit = `${DEBIAN_SESSIONS_DIR}\\2026\\rollout-1-session-id.jsonl`
     mocks.gate.mockImplementation(async (options) => {

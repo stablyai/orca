@@ -40,6 +40,7 @@ function fakeMutations(overrides: Partial<PrActionMutations> = {}): PrActionMuta
     setPRAutoMerge: vi.fn(ok),
     updatePRState: vi.fn(ok),
     markReadyForReview: vi.fn(ok),
+    markDraft: vi.fn(ok),
     requestReviewers: vi.fn(ok),
     removeReviewers: vi.fn(ok),
     rerunChecks: vi.fn(ok),

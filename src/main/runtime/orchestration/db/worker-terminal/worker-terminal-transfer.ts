@@ -1,6 +1,7 @@
 import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { isEquivalentPaneKey } from '../pane-key-match'
+import { createPreviousCustodianLookup } from './worker-custody-read'
 import type { OrchestrationDb } from '../orchestration-db'
 
 // Finds an owned, settled, exact-match resource for an explicitly reused terminal.
@@ -158,6 +159,16 @@ export function listWorkerTerminalResourcesByIncarnationPrefix(
     .all(prefix.length, prefix) as WorkerTerminalResourceRow[]
 }
 
+const IDENTITY_COHORT_SQL =
+  'SELECT * FROM worker_terminal_resources WHERE process_incarnation = ? AND host_scope IS ?'
+
+export function previousCustodianLookup(db: OrchestrationDb) {
+  return createPreviousCustodianLookup({
+    owned: (id) => db.getWorkerTerminalResourceByOwner(id),
+    cohort: (incarnation, host) => readCustodyCohort(db, incarnation, host)
+  })
+}
+
 export type WorkerTerminalTransferMethods = {
   findTransferableWorkerTerminalResource: typeof findTransferableWorkerTerminalResource
   workerTerminalResourceHasIdentityConflict: typeof workerTerminalResourceHasIdentityConflict
@@ -170,4 +181,13 @@ export function attachWorkerTerminalTransfer(ctor: { prototype: object }): void 
     workerTerminalResourceHasIdentityConflict,
     listWorkerTerminalResourcesByIncarnationPrefix
   })
+}
+
+export function readCustodyCohort(
+  db: OrchestrationDb,
+  incarnation: string,
+  host: string | null
+): WorkerTerminalResourceRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The complete table projection is the resource row contract.
+  return db.db.prepare(IDENTITY_COHORT_SQL).all(incarnation, host) as WorkerTerminalResourceRow[]
 }

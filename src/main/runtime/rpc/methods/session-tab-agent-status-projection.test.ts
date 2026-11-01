@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-  AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
 import {
   CLAUDE_STRUCTURED_CHAT_DESKTOP_ONLY_TAB_TITLE,

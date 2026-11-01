@@ -14,11 +14,11 @@ import {
 // must name the thread this session actually proved — never one a caller asks
 // for, which is how a resume becomes a fork wearing a resume's name.
 
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
-import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
+import type { CodexStructuredLaunch } from './codex-structured-session-state'
 import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import {

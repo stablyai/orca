@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import * as worktreePaths from '../git/worktree-path-comparison'
 import {
   acquireWatcherRemovalGate,
   beginTerminalInstall,
@@ -9,24 +10,75 @@ import {
 import { isWorktreeRemovalFenceError } from '../../shared/worktree/removal-fence-error'
 
 describe('watcher removal gate', () => {
-  it('waits for an existing install and rejects later equivalent-path installs', async () => {
-    const finishInstall = beginWatcherInstall('C:\\Repo')
-    const removal = acquireWatcherRemovalGate('c:/repo/')
-    let ready = false
-    void removal.ready.then(() => {
-      ready = true
-    })
+  it.each([
+    ['C:\\Repo', 'c:/repo/', 'C:/REPO'],
+    ['\\\\wsl.localhost\\Ubuntu\\repo', '//wsl$/ubuntu/repo/', '//wsl.localhost/UBUNTU/repo']
+  ])(
+    'waits for an existing install and rejects later equivalent-path installs, %s',
+    async (initial, removing, later) => {
+      const finishInstall = beginWatcherInstall(initial)
+      const removal = acquireWatcherRemovalGate(removing)
+      let ready = false
+      void removal.ready.then(() => {
+        ready = true
+      })
 
-    await Promise.resolve()
-    expect(ready).toBe(false)
-    expect(() => beginWatcherInstall('C:/REPO')).toThrow(WatcherRemovalInProgressError)
+      await Promise.resolve()
+      expect(ready).toBe(false)
+      expect(() => beginWatcherInstall(later)).toThrow(WatcherRemovalInProgressError)
 
-    finishInstall()
-    await removal.ready
-    removal.release()
+      finishInstall()
+      await removal.ready
+      removal.release()
 
-    const finishLaterInstall = beginWatcherInstall('C:/repo')
-    finishLaterInstall()
+      const finishLaterInstall = beginWatcherInstall(initial)
+      finishLaterInstall()
+    }
+  )
+
+  it('drains accepted local aliases without applying local aliases to SSH roots', async () => {
+    const canonical = worktreePaths.canonicalWorktreePath
+    const comparison = vi
+      .spyOn(worktreePaths, 'canonicalWorktreePath')
+      .mockImplementation((value) => canonical(value, 'darwin'))
+    const old = beginWatcherInstall('/tmp/alias-owner/nested')
+    const removal = acquireWatcherRemovalGate('/private/tmp/alias-owner')
+    const remote = acquireWatcherRemovalGate('/private/tmp/alias-owner', 'ssh-a')
+    try {
+      let ready = false
+      void removal.ready.then(() => {
+        ready = true
+      })
+      await Promise.resolve()
+      expect(ready).toBe(false)
+      expect(() => beginWatcherInstall('/tmp/alias-owner/late')).toThrow(
+        WatcherRemovalInProgressError
+      )
+      expect(() => beginTerminalInstall('/tmp/alias-owner')).toThrow(TerminalRemovalInProgressError)
+      expect(() => acquireWatcherRemovalGate('/tmp/alias-owner/nested')).toThrow(
+        'Worktree deletion already in progress'
+      )
+      const remoteTmp = beginWatcherInstall('/tmp/alias-owner', 'ssh-a')
+      const otherHost = beginWatcherInstall('/private/tmp/alias-owner', 'ssh-b')
+      expect(() => beginWatcherInstall('/private/tmp/alias-owner', 'ssh-a')).toThrow(
+        WatcherRemovalInProgressError
+      )
+      remoteTmp()
+      otherHost()
+      removal.abandonPendingInstalls()
+      await removal.ready
+      expect(old.isCurrent()).toBe(false)
+    } finally {
+      old()
+      removal.release()
+      remote.release()
+      comparison.mockRestore()
+    }
+    const fresh = beginWatcherInstall('/tmp/alias-owner/nested')
+    old()
+    expect(old.isCurrent()).toBe(false)
+    expect(fresh.isCurrent()).toBe(true)
+    fresh()
   })
 
   it('drops abandoned install fences so a later removal is not fenced by a wedged install', async () => {

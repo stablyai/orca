@@ -1,13 +1,13 @@
 // Key notices by matching death/replacement proof so settlement retries cannot duplicate them.
 
-import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalRenderItem,
   AgentJournalStatusItem
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-death-evidence'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session/agent-session-replaced-runtime'
 import { orcaStopRowBody } from './structured-agent-session-orca-stop-row'
 

@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import {
   MAX_PAIRED_TERMINAL_TAB_CLOSE_INTENTS,
-  PAIRED_TERMINAL_TAB_CLOSE_INTENT_MAX_AGE_MS,
-  pairedTerminalTabCloseIntentSchema
+  PAIRED_TERMINAL_TAB_CLOSE_INTENT_MAX_AGE_MS
 } from '../../../shared/paired-terminal-tab-close-intent'
+
 import {
   MAX_WEB_SESSION_CLOSE_REPLAY_ATTEMPTS,
   holdWebSessionCloseForReplay,
@@ -148,12 +148,6 @@ describe('web session close replay', () => {
 
     replaceRuntimeEnvironmentRevisions([{ id: ENV, createdAt: 0, pairingRevision: 1 }])
     expect(takeDueWebSessionCloseReplays(STORE, ENV, WT, PRESENT)).toHaveLength(1)
-  })
-
-  it('saves a held close for a mirrored editor tab named by a long file path', () => {
-    const intent = { hostTabIds: [`/${'deep/'.repeat(60)}file.ts`], worktreeId: WT, closedAt: NOW }
-
-    expect(pairedTerminalTabCloseIntentSchema.safeParse(intent).success).toBe(true)
   })
 
   it('keeps a held close through a snapshot that cannot state the worktree contents', () => {

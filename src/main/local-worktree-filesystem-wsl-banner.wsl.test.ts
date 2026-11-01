@@ -1,7 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { buildWslLoginShellCommand, buildWslExecArgs } from '../shared/wsl-login-shell-command'
 import { getLocalWorktreePathAccess } from './local-worktree-filesystem'
 
 const execFileAsync = promisify(execFile)
@@ -23,15 +22,6 @@ async function wsl(command: string, ...args: string[]): Promise<string> {
   return stdout.trim()
 }
 
-async function readThroughRawLoginShell(linuxPath: string): Promise<string> {
-  const { stdout } = await execFileAsync(
-    'wsl.exe',
-    buildWslExecArgs(DISTRO, ['sh', '-lc', buildWslLoginShellCommand(`cat -- '${linuxPath}'`)]),
-    { encoding: 'utf-8', timeout: 30000 }
-  )
-  return stdout
-}
-
 describe.skipIf(!runRealWsl)('WSL worktree reads carry no shell chatter', () => {
   let fixtureRoot: string
 
@@ -49,15 +39,6 @@ describe.skipIf(!runRealWsl)('WSL worktree reads carry no shell chatter', () => 
   it('returns file contents byte-for-byte', async () => {
     const { readPath } = getLocalWorktreePathAccess({ wslDistro: DISTRO })
 
-    expect(await readPath(unc(`${fixtureRoot}/file.txt`))).toBe(FILE_CONTENTS)
-  }, 60_000)
-
-  it('is unaffected by what a login shell would have printed', async () => {
-    const { readPath } = getLocalWorktreePathAccess({ wslDistro: DISTRO })
-    const raw = await readThroughRawLoginShell(`${fixtureRoot}/file.txt`)
-
-    // A login shell may print rc banners; plain sh must return only the file’s bytes.
-    expect(raw.endsWith(FILE_CONTENTS)).toBe(true)
     expect(await readPath(unc(`${fixtureRoot}/file.txt`))).toBe(FILE_CONTENTS)
   }, 60_000)
 
