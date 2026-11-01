@@ -137,7 +137,11 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
             process.exitCode = prior
             callMock.mockResolvedValue(worktreeListFixture(rows))
             await main([...args, ...(json ? ['--json'] : [])], root.path)
-            const output = (json ? log : err).mock.calls.flat().join('\n')
+            // Concise orchestration failures put the one-line error on stderr and the detail on stdout.
+            const output = (json ? log : err).mock.calls
+              .concat(json ? [] : log.mock.calls)
+              .flat()
+              .join('\n')
             expect(process.exitCode, JSON.stringify({ args, output })).toBe(1)
             if (json) {
               expect(JSON.parse(output).error.code, JSON.stringify(args)).toBe('selector_ambiguous')
@@ -163,9 +167,13 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
               expect(
                 output.match(/More than one Orca workspace matched the current directory/g)
               ).toHaveLength(1)
+              expect(log).toHaveBeenCalledTimes(1)
+              expect(err.mock.calls).toEqual([
+                [
+                  'error: selector_ambiguous: More than one Orca workspace matched the current directory. Choose an exact workspace.'
+                ]
+              ])
               if (json) {
-                expect(log).toHaveBeenCalledTimes(1)
-                expect(err).not.toHaveBeenCalled()
                 expect(JSON.parse(output).error.data.workspaces).toEqual(
                   rows.map((row) => ({
                     id: row.id,
@@ -175,8 +183,6 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
                   }))
                 )
               } else {
-                expect(err).toHaveBeenCalledTimes(1)
-                expect(log).not.toHaveBeenCalled()
                 expect(output.match(/Workspace choices \(JSON data\):/g)).toHaveLength(1)
               }
             } else {
@@ -283,14 +289,15 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
               const response = JSON.parse(output)
               expect(response.ok).toBe(true)
               if (identity === 'terminal') {
-                expect(response.result.messages).toEqual([message])
-                expect(response.result.count).toBe(1)
+                expect(response.result.messages).toMatchObject([
+                  { id: message.id, from: own, subject: message.subject }
+                ])
               } else {
-                expect(response.result.run).toEqual(run)
+                expect(response.result).toMatchObject({ runId: run.id, objective: run.objective })
               }
             } else {
               expect(output).toContain(
-                identity === 'terminal' ? message.subject : `${run.id} ${run.objective}`
+                identity === 'terminal' ? message.subject : `runId=${run.id}`
               )
             }
             expect(callMock).not.toHaveBeenCalledWith('worktree.list', expect.anything())
