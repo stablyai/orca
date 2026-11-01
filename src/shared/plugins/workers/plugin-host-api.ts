@@ -1,7 +1,17 @@
 import { z } from 'zod'
-import type { PluginCapabilityKind } from '../capabilities/plugin-capabilities'
 import type { PluginSurface } from '../frames/plugin-protocol'
 import * as stored from './plugin-host-api-storage-schemas'
+import { PLUGIN_PANEL_BRIDGE_API } from './plugin-host-api-panel-methods'
+import {
+  ALL_SURFACES,
+  FRAMES_ONLY,
+  pluginHostMethodSinceFor,
+  spec,
+  WORKER_ONLY,
+  type PluginHostMethodSpec
+} from './plugin-host-method-spec'
+
+export type { PluginHostMethodSpec } from './plugin-host-method-spec'
 
 /**
  * Host API 1 (`pluginApi: 1`) — the separately-versioned public facade plugins call. Every
@@ -26,7 +36,8 @@ export const PLUGIN_WORKSPACE_LABEL_MAX_LENGTH = 512
 export const PLUGIN_TERMINAL_ID_MAX_LENGTH = 1024
 
 const workspaceReadContextParams = z.strictObject({}).optional()
-const workspaceReadContextResult = z
+/** What `workspace.readContext` answers and `workspace.changed` carries. */
+export const pluginWorkspaceContextSchema = z
   .object({
     branch: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
     displayName: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
@@ -36,7 +47,9 @@ const workspaceReadContextResult = z
       .array(
         z
           .object({
-            id: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH)
+            id: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH),
+            /** The pane's name, or its terminal title; absent when it has neither. */
+            title: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH).optional()
           })
           .strict()
       )
@@ -44,6 +57,7 @@ const workspaceReadContextResult = z
   })
   .strict()
   .nullable()
+const workspaceReadContextResult = pluginWorkspaceContextSchema
 
 const terminalSendTextParams = z.strictObject({
   /** Explicit target prevents delayed writes following focus changes into another pane. */
@@ -83,7 +97,11 @@ const shellOpenExternalParams = z.strictObject({
     .max(PLUGIN_EXTERNAL_URL_MAX_LENGTH)
     .refine(isPluginExternalUrl, 'url must be an http:, https: or mailto: URL')
 })
-const shellOpenExternalResult = z.object({ opened: z.boolean() })
+/** `reason`, when not opened: the person said no, or nobody could be asked (Orca's window hidden). */
+const shellOpenExternalResult = z.object({
+  opened: z.boolean(),
+  reason: z.enum(['cancelled', 'consent-unavailable']).optional()
+})
 
 const saveAsDataSchema = z.union([
   z.string().max(PLUGIN_SAVE_AS_MAX_BYTES),
@@ -112,38 +130,6 @@ export function isPluginExternalUrl(url: string): boolean {
     return false
   }
 }
-
-export type PluginHostMethodSpec<
-  P extends z.ZodType = z.ZodType,
-  R extends z.ZodType = z.ZodType
-> = {
-  /** One line for the generated reference. */
-  summary: string
-  /** Host API minor the method appeared in (`0` for the first set); `api.minor` is the highest. */
-  since: number
-  /** Minor that deprecated it; it keeps working until the next major. */
-  deprecatedSince?: number
-  /** Machine-readable resource boundary enforced by the host binding. */
-  scope: 'active-workspace' | 'explicit-terminal' | 'plugin-private' | 'desktop'
-  /** Null: no capability; consent and the surface still gate the call. */
-  capability: PluginCapabilityKind | null
-  /** Runs only on transient user activation in the calling frame, checked by the frame host. */
-  userActivation?: true
-  /** Mutations are audit-logged with actor `plugin:<id>`. */
-  mutation: boolean
-  /** Where plugin code may call it; any other surface gets `not_permitted`. */
-  surfaces: readonly PluginSurface[]
-  params: P
-  result: R
-}
-
-const ALL_SURFACES = ['worker', 'panel', 'editor'] as const
-const WORKER_ONLY = ['worker'] as const
-const FRAMES_ONLY = ['panel', 'editor'] as const
-
-const spec = <P extends z.ZodType, R extends z.ZodType>(
-  entry: PluginHostMethodSpec<P, R>
-): PluginHostMethodSpec<P, R> => entry
 
 export const PLUGIN_HOST_API = {
   'workspace.readContext': spec({
@@ -184,7 +170,8 @@ export const PLUGIN_HOST_API = {
     scope: 'plugin-private',
     capability: 'storage:own',
     mutation: false,
-    surfaces: WORKER_ONLY,
+    framesSince: 2,
+    surfaces: ALL_SURFACES,
     params: stored.storageGetParams,
     result: stored.storageGetResult
   }),
@@ -194,7 +181,8 @@ export const PLUGIN_HOST_API = {
     scope: 'plugin-private',
     capability: 'storage:own',
     mutation: true,
-    surfaces: WORKER_ONLY,
+    framesSince: 2,
+    surfaces: ALL_SURFACES,
     params: stored.storageSetParams,
     result: stored.storageSetResult
   }),
@@ -204,7 +192,8 @@ export const PLUGIN_HOST_API = {
     scope: 'plugin-private',
     capability: 'storage:own',
     mutation: true,
-    surfaces: WORKER_ONLY,
+    framesSince: 2,
+    surfaces: ALL_SURFACES,
     params: stored.storageDeleteParams,
     result: stored.storageDeleteResult
   }),
@@ -214,7 +203,8 @@ export const PLUGIN_HOST_API = {
     scope: 'plugin-private',
     capability: 'storage:own',
     mutation: false,
-    surfaces: WORKER_ONLY,
+    framesSince: 2,
+    surfaces: ALL_SURFACES,
     params: stored.storageKeysParams,
     result: stored.storageKeysResult
   }),
@@ -224,7 +214,8 @@ export const PLUGIN_HOST_API = {
     scope: 'plugin-private',
     capability: 'secrets:own',
     mutation: false,
-    surfaces: WORKER_ONLY,
+    framesSince: 2,
+    surfaces: ALL_SURFACES,
     params: stored.secretsGetParams,
     result: stored.secretsGetResult
   }),
@@ -234,7 +225,8 @@ export const PLUGIN_HOST_API = {
     scope: 'plugin-private',
     capability: 'secrets:own',
     mutation: true,
-    surfaces: WORKER_ONLY,
+    framesSince: 2,
+    surfaces: ALL_SURFACES,
     params: stored.secretsSetParams,
     result: stored.secretsSetResult
   }),
@@ -244,7 +236,8 @@ export const PLUGIN_HOST_API = {
     scope: 'plugin-private',
     capability: 'secrets:own',
     mutation: true,
-    surfaces: WORKER_ONLY,
+    framesSince: 2,
+    surfaces: ALL_SURFACES,
     params: stored.secretsDeleteParams,
     result: stored.secretsDeleteResult
   }),
@@ -255,7 +248,8 @@ export const PLUGIN_HOST_API = {
     scope: 'plugin-private',
     capability: 'secrets:own',
     mutation: false,
-    surfaces: WORKER_ONLY,
+    framesSince: 2,
+    surfaces: ALL_SURFACES,
     params: stored.secretsProtectionParams,
     result: stored.secretsProtectionResult
   }),
@@ -265,7 +259,8 @@ export const PLUGIN_HOST_API = {
     scope: 'plugin-private',
     capability: 'settings:own',
     mutation: false,
-    surfaces: WORKER_ONLY,
+    framesSince: 2,
+    surfaces: ALL_SURFACES,
     params: stored.settingsGetParams,
     result: stored.settingsGetResult
   }),
@@ -275,7 +270,8 @@ export const PLUGIN_HOST_API = {
     scope: 'plugin-private',
     capability: 'settings:own',
     mutation: true,
-    surfaces: WORKER_ONLY,
+    framesSince: 2,
+    surfaces: ALL_SURFACES,
     params: stored.settingsSetParams,
     result: stored.settingsSetResult
   }),
@@ -302,7 +298,8 @@ export const PLUGIN_HOST_API = {
     surfaces: FRAMES_ONLY,
     params: filesSaveAsParams,
     result: filesSaveAsResult
-  })
+  }),
+  ...PLUGIN_PANEL_BRIDGE_API
 }
 
 export type PluginHostApi = typeof PLUGIN_HOST_API
@@ -342,6 +339,12 @@ export function pluginFrameMethodsFor(
 }
 
 /** The minor a frame reports: the newest method it is actually offered, so iframes stay at 0. */
-export function pluginHostApiMinorFor(methods: readonly PluginHostMethodName[]): number {
-  return Math.max(0, ...methods.map((name) => PLUGIN_HOST_API[name].since))
+export function pluginHostApiMinorFor(
+  methods: readonly PluginHostMethodName[],
+  surface: PluginSurface = 'panel'
+): number {
+  return Math.max(
+    0,
+    ...methods.map((name) => pluginHostMethodSinceFor(PLUGIN_HOST_API[name], surface))
+  )
 }

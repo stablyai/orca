@@ -18,3 +18,4 @@ config/scripts/pr-code-change-scope.mjs src/shared/agent-session-provider-handle
 config/scripts/pr-code-change-scope.mjs src/shared/agent-session-record
 config/scripts/pr-code-change-scope.mjs src/shared/agent-session-resume-marker
 config/scripts/pr-code-change-scope.mjs src/shared/agent-session-turn-record
+tests/e2e/cross-version-wire/released-chat-writers.ts src/main/claude/claude-structured-journal-translation.ts

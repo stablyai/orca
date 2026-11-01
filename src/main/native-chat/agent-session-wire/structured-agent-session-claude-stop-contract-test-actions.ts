@@ -9,7 +9,7 @@ import {
   claudeFrame as frame,
   claudeWasSent as wrote,
   type FakeConnection
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import { invokeCanUseTool } from '../../claude/claude-can-use-tool-test-support'
 import {
   HOST_TEST_SESSION as SESSION,

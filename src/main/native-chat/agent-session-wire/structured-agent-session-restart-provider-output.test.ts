@@ -1,7 +1,7 @@
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { codexStreamingJournalItem } from '../../codex/codex-structured-item-translation'
-import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'

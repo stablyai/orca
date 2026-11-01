@@ -5,12 +5,12 @@ import type { AgentJournalSubmission } from '../../../../../shared/agent-session
 import {
   launchStructuredAgentSession,
   type StructuredLaunchHostSeedListener
-} from '@/lib/structured-agent-session-launch-create-call'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-create-call'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { readStructuredSessionTabInventory } from '@/runtime/structured-session-tab-inventory'
-import { publishStructuredAgentSessionCreateHydration } from '../../structured-agent-session-create-hydration'
+import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 
 export type StructuredAgentLaunchReceipt = {
   sessionId: string
