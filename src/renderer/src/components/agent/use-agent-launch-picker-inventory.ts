@@ -80,7 +80,8 @@ export function useAgentLaunchPickerInventory(
           model.rows,
           model.detection.detectedIds ?? [],
           (agent) => agentPickerChoiceSeeds(agent, defaults),
-          formatAgentTypeLabel
+          formatAgentTypeLabel,
+          model.defaultTuiAgent
         )
       : []
   const fallback = useMemo(
