@@ -1,6 +1,8 @@
 // One English table for Orca-authored Agent Session History scan copy: main builds the wire `message`, the renderer translates by code.
 export const AI_VAULT_SCAN_ISSUE_COPY = {
   issuesOmitted: 'Additional scan issues were omitted.',
+  oversizedTranscriptRecords:
+    'Skipped {{count}} oversized records in one chat ({{limit}} MiB limit). The rest of the session was read.',
   sessionMetadataUnreadable: 'Session metadata could not be read this scan.',
   openCodeScannerUnavailable:
     'OpenCode history was skipped because its background scanner could not start; the app remains responsive.',
@@ -41,7 +43,9 @@ export const AI_VAULT_SCAN_ISSUE_COPY = {
 
 /** English singular forms for the count-bearing codes above. */
 export const AI_VAULT_SCAN_ISSUE_COPY_ONE = {
-  invalidResultsSkipped: 'Skipped {{count}} invalid Agent Session History result entry.'
+  invalidResultsSkipped: 'Skipped {{count}} invalid Agent Session History result entry.',
+  oversizedTranscriptRecords:
+    'Skipped {{count}} oversized record in one chat ({{limit}} MiB limit). The rest of the session was read.'
 } as const
 
 export type AiVaultScanIssueCode = keyof typeof AI_VAULT_SCAN_ISSUE_COPY
@@ -60,6 +64,9 @@ type TemplateValues = {
 }
 
 function englishTemplate(code: AiVaultScanIssueCode, count: unknown): string {
+  if (code === 'oversizedTranscriptRecords' && count === 1) {
+    return AI_VAULT_SCAN_ISSUE_COPY_ONE.oversizedTranscriptRecords
+  }
   return code === 'invalidResultsSkipped' && count === 1
     ? AI_VAULT_SCAN_ISSUE_COPY_ONE.invalidResultsSkipped
     : AI_VAULT_SCAN_ISSUE_COPY[code]

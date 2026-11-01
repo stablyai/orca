@@ -8,6 +8,7 @@ import {
 } from './ai-vault-scan-issue-state'
 import { translate } from '@/i18n/i18n'
 import { aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
+import { AiVaultScanNotices } from './AiVaultScanNotices'
 
 // Coded scanner copy is translated; other scanner-authored messages carry host/path details verbatim.
 export function AiVaultScanIssueBanners({
@@ -18,9 +19,11 @@ export function AiVaultScanIssueBanners({
   const blocking = blockingAiVaultScanIssue(scanResult)
   const skippedTranscriptCount = skippedAiVaultTranscriptCount(scanResult)
 
-  const notices = aiVaultScanNoticeIssues(scanResult)
+  const issues = aiVaultScanNoticeIssues(scanResult)
+  const notices = issues.filter((issue) => issue.kind === 'notice')
+  const failures = issues.filter((issue) => issue.kind !== 'notice')
   const reasons = skippedAiVaultTranscriptReasons(scanResult)
-  const hasNoticeRows = notices.length > 0 || skippedTranscriptCount > 0 || reasons.length > 0
+  const hasNoticeRows = failures.length > 0 || skippedTranscriptCount > 0 || reasons.length > 0
 
   return (
     <>
@@ -29,13 +32,14 @@ export function AiVaultScanIssueBanners({
           {aiVaultScanIssueDisplayText(blocking)}
         </div>
       ) : null}
+      <AiVaultScanNotices key={JSON.stringify(notices)} issues={notices} />
       {hasNoticeRows ? (
         // Why bounded: one notice per partly-read session can outgrow the panel and hide the list.
         <div
           data-testid="ai-vault-scan-notices"
           className="scrollbar-sleek max-h-24 shrink-0 overflow-y-auto"
         >
-          {notices.map((issue) => (
+          {failures.map((issue) => (
             <div
               // Include message identity: one host may report multiple notices for the same path.
               key={`${issue.executionHostId ?? 'local'}:${issue.kind}:${issue.agent}:${issue.path}:${issue.message}`}

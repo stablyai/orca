@@ -132,7 +132,11 @@ it('still lists a session with an oversized record and reports the loss', async 
       agent: 'claude',
       kind: 'notice',
       path,
-      message: expect.stringContaining('Skipped 1 oversized transcript record')
+      message:
+        'Skipped 1 oversized record in one chat (10 MiB limit). The rest of the session was read.',
+      messageCode: 'oversizedTranscriptRecords',
+      messageParams: { count: 1, limit: 10 },
+      messageDetail: expect.stringContaining('Skipped 1 oversized transcript record')
     }
   ])
 })

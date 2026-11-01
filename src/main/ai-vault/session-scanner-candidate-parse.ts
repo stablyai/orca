@@ -1,3 +1,4 @@
+import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import { isConversationNameRequestSession } from './conversation-name-request-sessions'
 import { candidateFileTime } from './antigravity-transcript-candidates'
@@ -16,7 +17,10 @@ import {
   noteSessionParseCacheListed,
   sessionParseCacheKey
 } from './session-parse-cache-store'
-import { describeSkippedTranscriptRecords } from './session-transcript-record-budget'
+import {
+  MAX_SESSION_TRANSCRIPT_RECORD_BYTES,
+  describeSkippedTranscriptRecords
+} from './session-transcript-record-budget'
 import { canStopParsingSessions } from './session-scan-cutoff'
 import type { SessionFileCandidate, SessionParseResult } from './session-scanner-types'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
@@ -171,7 +175,7 @@ function skippedRecordIssue(
   )
   const skipped = entry?.resume?.skippedRecords ?? entry?.skippedRecords
   const message = skipped ? describeSkippedTranscriptRecords(skipped) : null
-  if (message === null) {
+  if (message === null || !skipped) {
     return null
   }
   return {
@@ -179,7 +183,10 @@ function skippedRecordIssue(
     agent: candidate.agent,
     kind: 'notice',
     path: candidate.file.path,
-    message
+    ...aiVaultScanIssueText('oversizedTranscriptRecords', {
+      params: { count: skipped.length, limit: MAX_SESSION_TRANSCRIPT_RECORD_BYTES / (1024 * 1024) },
+      detail: message
+    })
   }
 }
 
