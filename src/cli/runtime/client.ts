@@ -208,7 +208,8 @@ export class RuntimeClient {
       return Math.max(resolveWorkerStartClientTimeoutMs(), this.requestTimeoutMs)
     }
     if (
-      (method === 'orchestration.check' && isWaitingCheck(params)) ||
+      ((method === 'orchestration.check' || method === 'orchestration.lockAcquire') &&
+        isWaitingCheck(params)) ||
       method === 'terminal.wait'
     ) {
       const inner = Number(getTimeoutMsParam(params))
