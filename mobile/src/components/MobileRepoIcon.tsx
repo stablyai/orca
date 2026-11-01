@@ -63,20 +63,29 @@ type Props = {
 export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSecondary }: Props) {
   useMobileColorScheme()
   const [imageFailed, setImageFailed] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
   const imageSrc = repoIcon?.type === 'image' ? repoIcon.src : undefined
 
   useEffect(() => {
     setImageFailed(false)
+    setImageLoaded(false)
   }, [imageSrc])
 
   if (repoIcon?.type === 'image' && !imageFailed) {
     return (
-      <Image
-        source={{ uri: repoIcon.src }}
-        style={{ width: size, height: size, borderRadius: radii.mark }}
-        accessibilityLabel={repoIcon.label}
-        onError={() => setImageFailed(true)}
-      />
+      <View style={[styles.glyph, { width: size, height: size }]}>
+        {!imageLoaded && <Folder size={size} color={color} strokeWidth={2} />}
+        <Image
+          source={{ uri: repoIcon.src }}
+          style={[
+            { width: size, height: size, borderRadius: radii.mark },
+            !imageLoaded && styles.loadingImage
+          ]}
+          accessibilityLabel={repoIcon.label}
+          onLoad={() => setImageLoaded(true)}
+          onError={() => setImageFailed(true)}
+        />
+      </View>
     )
   }
   if (repoIcon?.type === 'emoji') {
@@ -97,5 +106,9 @@ const styles = StyleSheet.create({
   glyph: {
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  loadingImage: {
+    position: 'absolute',
+    opacity: 0
   }
 })

@@ -37,6 +37,32 @@ describe('MobileRepoIcon', () => {
     expect(image.props.accessibilityLabel).toBe('Repo')
   })
 
+  it('renders Folder placeholder while loading and reveals image after onLoad', () => {
+    let renderer: ReturnType<typeof createRenderer>
+    act(() => {
+      renderer = createRenderer(
+        createElement(MobileRepoIcon, {
+          repoIcon: { type: 'image', src: 'https://github.com/avatar.png', label: 'Repo' },
+          size: 16
+        })
+      )
+    })
+    const image = renderer!.root.findByType(Image)
+    expect(image.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ position: 'absolute', opacity: 0 })])
+    )
+
+    act(() => {
+      image.props.onLoad()
+    })
+    expect(image.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ width: 16, height: 16 })])
+    )
+    expect(image.props.style).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ position: 'absolute', opacity: 0 })])
+    )
+  })
+
   it('falls back to Folder icon when Image triggers onError', () => {
     let renderer: ReturnType<typeof createRenderer>
     act(() => {

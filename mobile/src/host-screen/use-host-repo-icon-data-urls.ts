@@ -57,11 +57,21 @@ export function useHostRepoIconDataUrls(
         .catch(() => ({ kind: 'failed' as const }))
         .then((reply) => {
           if (reply.kind === 'failed') {
-            // Asked again on the next feed install; a host without the method is not.
+            const failTime = Date.now()
             batch.forEach((id) => {
-              asked.delete(id)
-              failedAt.set(id, Date.now())
+              failedAt.set(id, failTime)
             })
+            if (failedAt.size > MAX_TRACKED_ICON_IDS) {
+              const toRemove = failedAt.size - MAX_TRACKED_ICON_IDS
+              const keys = failedAt.keys()
+              for (let i = 0; i < toRemove; i++) {
+                const k = keys.next().value
+                if (k) {
+                  failedAt.delete(k)
+                  asked.delete(k)
+                }
+              }
+            }
           }
           if (reply.kind !== 'answered' || stateRef.current.client !== client) {
             return
@@ -84,6 +94,19 @@ export function useHostRepoIconDataUrls(
                 const k = keys.next().value
                 if (k) {
                   next.delete(k)
+                  asked.delete(k)
+                  failedAt.delete(k)
+                }
+              }
+            }
+            if (failedAt.size > MAX_TRACKED_ICON_IDS) {
+              const toRemove = failedAt.size - MAX_TRACKED_ICON_IDS
+              const keys = failedAt.keys()
+              for (let i = 0; i < toRemove; i++) {
+                const k = keys.next().value
+                if (k) {
+                  failedAt.delete(k)
+                  asked.delete(k)
                 }
               }
             }
