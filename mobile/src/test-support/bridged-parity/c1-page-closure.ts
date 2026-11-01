@@ -4,6 +4,25 @@
 import type { PageClosurePins } from './page-closure'
 
 export const C1_PAGE_CLOSURE: PageClosurePins = {
+  'settings-agent-read': {
+    'matrix-settings-agent-read-preflight.detectremoteagents-1': 'result-absent-settlement',
+    'matrix-settings-agent-read-repo.list-1': 'result-absent-settlement',
+    'matrix-settings-agent-read-settings.get-1': 'result-absent-settlement',
+    'probe-new-tab-both-refused': 'identical',
+    'probe-new-tab-null-sibling-refused': 'identical',
+    'probe-new-tab-refused-sibling-rejects': 'identical',
+    'probe-new-tab-rejects-sibling-refused': 'identical',
+    'schedules-settings-new-tab-ssh': 'identical',
+    'settings-new-tab-refused': 'identical',
+    'settings-new-tab-ssh': 'identical',
+    'settings-new-tab-transport-error': 'identical'
+  },
+  'settings.new-tab-local-agents': {
+    'matrix-settings.new-tab-local-agents-preflight.detectagents-1': 'result-absent-settlement',
+    'matrix-settings.new-tab-local-agents-repo.list-1': 'result-absent-settlement',
+    'matrix-settings.new-tab-local-agents-settings.get-1': 'result-absent-settlement',
+    'new-tab-local-agents': 'identical'
+  },
   'settings.repo-metadata': {
     'matrix-settings.repo-metadata-host.platform-1': 'result-absent-settlement',
     'matrix-settings.repo-metadata-repo.list-1': 'result-absent-settlement',

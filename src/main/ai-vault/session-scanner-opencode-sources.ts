@@ -12,6 +12,7 @@ import { listOpenCode2SqliteSessionsViaWorker } from './session-scanner-opencode
 import { isOpenCodeV2DatabaseName } from '../../shared/opencode-database-name'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 import { scopeWalksAgentFiles } from './session-scope-cwd'
+import { isSelectedSessionFile } from './session-scanner-selection'
 
 type OpenCodeSource = {
   storageDir: string
@@ -35,6 +36,7 @@ export function opencodeDiscoveries(
           limitPerAgent: limit,
           issues,
           scopePaths: options.scopePaths,
+          selectedSessionId: options.selectedSessionId,
           signal: options.signal
         })
       ),
@@ -100,6 +102,7 @@ async function discoverOpenCode2Sessions(
       limit,
       issues,
       scopePaths,
+      selectedSessionId: options.selectedSessionId,
       signal: options.signal
     }).then((candidates) => candidates.map((candidate) => candidate.file))
   const [files, scopeFiles] = await Promise.all([
@@ -110,6 +113,9 @@ async function discoverOpenCode2Sessions(
     agent: 'opencode2' as const,
     rootDir: storageDir,
     files,
+    selectedFiles: files.filter((file) =>
+      isSelectedSessionFile(options.selectedSessionId, 'opencode2', file.path)
+    ),
     ...(scopeFiles ? { scopeFiles } : {})
   }
 }

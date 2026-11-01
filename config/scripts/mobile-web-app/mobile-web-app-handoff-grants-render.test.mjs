@@ -94,7 +94,7 @@ async function openHostRoute({
   awaitText = SHELL_HOST.name,
   ownsHostArea = false
 }) {
-  const page = await browser.newPage({ viewport })
+  const page = await browser.newPage({ viewport, locale: 'en-US' })
   await page.addInitScript(installShellDouble, {
     version: bridgeVersion,
     sessionId: SHELL_SESSION_ID,
@@ -133,6 +133,11 @@ async function openHostRoute({
     timeout: 30_000,
     polling: 250
   })
+  const menu = page.getByRole('button', { name: 'More options', exact: true })
+  if (route === HOST_ROUTE) {
+    await menu.click()
+    await page.getByText('Advanced: workspaces', { exact: true }).click()
+  }
   return { page, errors, jsResponses }
 }
 

@@ -44,6 +44,8 @@ export function antigravityDiscoveries(
       filePredicate: isAntigravityTranscriptPath,
       directoryPredicate: shouldDescendAntigravityBrainDirectory,
       keepScopeFiles: scopeWalksAgentFiles('antigravity', options.scopePaths),
+      selectedSessionId: options.selectedSessionId,
+      executionHostId: options.executionHostId,
       signal: options.signal
     }).then((discovery) => completeAntigravityTranscriptPairs(discovery, issues))
   )

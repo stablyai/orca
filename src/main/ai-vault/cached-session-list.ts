@@ -143,7 +143,12 @@ export async function listAiVaultSessions(
     cachedList.expiresAt > now &&
     aiVaultCachedDepthServes(cachedList.depth, depth, args?.scopePaths)
   ) {
-    return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
+    return truncateAiVaultListResult(
+      cachedList.result,
+      depth,
+      args?.scopePaths,
+      args?.selectedSessionId
+    )
   }
   // Capture before the coordinator's start microtask so intervening invalidation still rejects the result.
   const startGeneration = cacheGeneration
@@ -169,6 +174,7 @@ export async function listAiVaultSessions(
       const scanned = await scanAiVaultSessionsInBackground(
         {
           includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
+          selectedSessionId: args?.selectedSessionId,
           limit: args?.limit,
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths ? scope.scanScopePaths : undefined,

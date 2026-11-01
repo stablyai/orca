@@ -1,3 +1,7 @@
+import {
+  SetConversationPreferenceParams,
+  updateConversationPreference
+} from '../../../../shared/conversation-navigation-preferences'
 import { normalizeJiraQuickFilterState } from '../../../../shared/jira/jira-quick-filters'
 import { JiraQuickFilterStateParam } from '../../../../shared/rpc-contract/jira-quick-filter-params'
 import {
@@ -43,6 +47,19 @@ function uiForCaller(
 }
 
 export const CLIENT_UI_METHODS = [
+  defineMethod({
+    name: 'ui.setConversationPreference',
+    permission: 'workspace',
+    params: SetConversationPreferenceParams,
+    handler: (params, { runtime }) => ({
+      preferences: runtime.updateUIState({
+        conversationPreferences: updateConversationPreference(
+          runtime.getUIState().conversationPreferences,
+          params
+        )
+      }).conversationPreferences
+    })
+  }),
   defineMethod({
     name: 'ui.getJiraQuickFilters',
     permission: 'workspace',

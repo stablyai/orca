@@ -20,6 +20,8 @@ type Props = {
   resumeActionStateBySessionId?: ReadonlyMap<string, MobileAgentHistoryResumeActionState>
   onResume?: (session: AiVaultSession) => void | Promise<void>
   onRefresh: () => void
+  initialExpandedId?: string
+  hideSectionHeaders?: boolean
   /** Clears the bottom search bar floating over the list. */
   bottomPadding?: number
 }
@@ -32,10 +34,12 @@ export function MobileAgentSessionHistoryList({
   resumeActionStateBySessionId,
   onResume,
   onRefresh,
-  bottomPadding = 0
+  bottomPadding = 0,
+  initialExpandedId,
+  hideSectionHeaders = false
 }: Props) {
   const colorScheme = useMobileColorScheme()
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(initialExpandedId ?? null)
 
   const toggleExpanded = useCallback((id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))
@@ -77,13 +81,15 @@ export function MobileAgentSessionHistoryList({
           tintColor={colors.textSecondary}
         />
       }
-      renderSectionHeader={({ section }) => (
-        <SectionHeader
-          title={section.label}
-          trailing={String(section.data.length)}
-          first={section === sections[0]}
-        />
-      )}
+      renderSectionHeader={({ section }) =>
+        hideSectionHeaders ? null : (
+          <SectionHeader
+            title={section.label}
+            trailing={String(section.data.length)}
+            first={section === sections[0]}
+          />
+        )
+      }
       renderItem={renderItem}
       ItemSeparatorComponent={RowSeparator}
       keyboardDismissMode="on-drag"

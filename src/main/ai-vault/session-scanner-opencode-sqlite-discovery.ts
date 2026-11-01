@@ -5,6 +5,7 @@ import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-
 import { listOpenCodeSqliteSessionsViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { scopeWalksAgentFiles } from './session-scope-cwd'
+import { isSelectedSessionFile } from './session-scanner-selection'
 
 export { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
 
@@ -18,6 +19,7 @@ export async function discoverOpenCodeSessions(args: {
   dbPaths: readonly string[]
   limitPerAgent: number
   issues: AiVaultScanIssue[]
+  selectedSessionId?: string
   scopePaths?: readonly string[]
   signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
@@ -28,6 +30,7 @@ export async function discoverOpenCodeSessions(args: {
       limit: args.limitPerAgent,
       issues: args.issues,
       scopePaths,
+      selectedSessionId: args.selectedSessionId,
       signal: args.signal
     })
   const [fileDiscovery, sqliteCandidates, sqliteScopeCandidates] = await Promise.all([
@@ -38,6 +41,7 @@ export async function discoverOpenCodeSessions(args: {
       issues: args.issues,
       extensions: ['.json'],
       keepScopeFiles: walksScope,
+      selectedSessionId: args.selectedSessionId,
       signal: args.signal
     }),
     listSqlite(),
@@ -63,6 +67,12 @@ export async function discoverOpenCodeSessions(args: {
     agent: 'opencode' as const,
     rootDir: fileDiscovery.rootDir,
     files: [...withoutSqliteDuplicates(fileDiscovery.files), ...sqliteFiles],
+    selectedFiles: [
+      ...withoutSqliteDuplicates(fileDiscovery.selectedFiles ?? []),
+      ...sqliteFiles.filter((file) =>
+        isSelectedSessionFile(args.selectedSessionId, 'opencode', file.path)
+      )
+    ],
     ...(scopeFiles ? { scopeFiles } : {})
   }
 }

@@ -1,5 +1,6 @@
 // Which live workspace owns a saved session's cwd, on the host that recorded it; shared by desktop and mobile.
 
+import { createNormalizedAiVaultScopeCwdMatcher } from './ai-vault-scope-cwd-match'
 import { parseWslUncPath } from './wsl-paths'
 import { splitWorktreeIdForFilesystem } from './worktree/id'
 import {
@@ -9,7 +10,6 @@ import {
   type ExecutionHostId
 } from './execution-host'
 import {
-  createNormalizedPathInsideOrEqualMatcher,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
@@ -47,7 +47,7 @@ type WorktreeCandidate = {
   status: Exclude<AiVaultSessionWorktreeStatus, 'current'>
   source: 'current-path' | 'prior-path'
   // Precomputed so a 500-session scan doesn't re-normalize ~500 roots per session.
-  ownsNormalizedCwd: (normalizedCwd: string) => boolean
+  ownsNormalizedCwd: ReturnType<typeof createNormalizedAiVaultScopeCwdMatcher>
   normalizedPathLength: number
   normalizedPath: string
 }
@@ -250,7 +250,7 @@ function makeWorktreeCandidates(
     hostId,
     status: worktree.isArchived ? 'archived' : 'active',
     source,
-    ownsNormalizedCwd: createNormalizedPathInsideOrEqualMatcher(cwdPath),
+    ownsNormalizedCwd: createNormalizedAiVaultScopeCwdMatcher([path]),
     normalizedPath: normalizeRuntimePathForComparison(cwdPath),
     normalizedPathLength: normalizeRuntimePathForComparison(path).length
   }))

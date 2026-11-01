@@ -37,14 +37,16 @@ export async function handleOpenCodeSqliteRequest(
               dbPaths: request.dbPaths,
               limit: request.limit ?? Infinity,
               issues,
-              scopePaths: request.scopePaths
+              scopePaths: request.scopePaths,
+              selectedSessionId: request.selectedSessionId
             })
           : await listOpenCodeSqliteSessions({
               dbPaths: request.dbPaths,
               limit: request.limit ?? Infinity,
               issues,
               agent: request.agent === 'zcode' ? 'zcode' : 'opencode',
-              scopePaths: request.scopePaths
+              scopePaths: request.scopePaths,
+              selectedSessionId: request.selectedSessionId
             })
       return { id: request.id, ok: true, value: { candidates, issues } }
     }

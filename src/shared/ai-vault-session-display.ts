@@ -47,7 +47,9 @@ export function sessionDetailConversationTurns(
 }
 
 /** Prompt text with enough provenance for the renderer to avoid overclaiming. */
-export function sessionPromptPreview(session: AiVaultSession): AiVaultSessionPromptPreview | null {
+export function sessionPromptPreview<
+  T extends Pick<AiVaultSession, 'firstUserPrompt' | 'previewMessages'>
+>(session: T): AiVaultSessionPromptPreview | null {
   const stored = session.firstUserPrompt?.trim()
   if (stored) {
     return { text: stored, source: 'first-user-prompt' }

@@ -44,7 +44,9 @@ export function restampAiVaultListResult(
   result: AiVaultListResult,
   executionHostId: ExecutionHostId
 ): AiVaultListResult {
+  const { scanId: _localScanId, ...remoteResult } = result
   return {
+    ...remoteResult,
     sessions: result.sessions.map((session) =>
       session.executionHostId === executionHostId
         ? session
@@ -54,8 +56,7 @@ export function restampAiVaultListResult(
             id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
           }
     ),
-    issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
-    scannedAt: result.scannedAt
+    issues: result.issues.map((issue) => ({ ...issue, executionHostId }))
   }
 }
 
@@ -63,7 +64,8 @@ export function mergeAiVaultListResults(
   results: readonly AiVaultListResult[],
   rawLimit: number | undefined,
   unlimited = false,
-  scopePaths: readonly string[] = []
+  scopePaths: readonly string[] = [],
+  selectedSessionId?: string
 ): AiVaultListResult {
   const depth = requestedAiVaultSessionDepth({ limit: rawLimit, unlimited })
   const byId = new Map<string, AiVaultSession>()
@@ -84,7 +86,8 @@ export function mergeAiVaultListResults(
       scannedAt: latestAiVaultScannedAt(results)
     },
     depth,
-    scopePaths
+    scopePaths,
+    selectedSessionId
   )
 }
 

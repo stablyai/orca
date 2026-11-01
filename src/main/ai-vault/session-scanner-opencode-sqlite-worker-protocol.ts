@@ -12,6 +12,7 @@ export type OpenCodeSqliteListRequest = {
   dbPaths: readonly string[]
   limit: number | null
   agent?: 'opencode2' | 'zcode'
+  selectedSessionId?: string
   /** Lists only sessions whose directory is in scope; an older reader ignores it and lists unfiltered. */
   scopePaths?: readonly string[]
 }

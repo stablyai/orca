@@ -67,3 +67,20 @@ it('routes scoped SQLite reads only to the owning distro and reports a scoped-on
     { agent: 'opencode', kind: 'scope', path: ubuntu, message: 'Scoped read timed out' }
   ])
 })
+
+it('translates the exact selected SQLite identity only within its known WSL source', async () => {
+  mocks.list.mockClear().mockResolvedValue([])
+  const path = String.raw`\\wsl.localhost\Ubuntu\home\ada\opencode.db`
+  await listOpenCodeSqliteSessionsViaWorker({
+    dbPaths: [path],
+    limit: 1,
+    issues: [],
+    selectedSessionId: `local:opencode:old:${path}#old`
+  })
+  expect(mocks.list).toHaveBeenCalledWith(
+    expect.objectContaining({
+      selectedSessionId: 'local:opencode:old:/home/ada/opencode.db#old',
+      limit: 1
+    })
+  )
+})

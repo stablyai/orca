@@ -17,7 +17,8 @@ vi.mock('react-native', () => ({
   },
   StyleSheet: { create: (styles: unknown) => styles },
   Text: 'Text',
-  View: 'View'
+  View: 'View',
+  Pressable: 'Pressable'
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
 vi.mock('./host-screen-header', () => ({
@@ -25,6 +26,7 @@ vi.mock('./host-screen-header', () => ({
   HostConnectionStatus: 'HostConnectionStatus'
 }))
 vi.mock('./host-workspace-list', () => ({ HostWorkspaceList: 'HostWorkspaceList' }))
+vi.mock('./HostConversations', () => ({ HostConversations: 'HostConversations' }))
 vi.mock('./host-bottom-bar', () => ({ HostBottomBar: 'HostBottomBar' }))
 vi.mock('../components/nav-bar/PageTitle', () => ({
   PageTitle: 'PageTitle',
@@ -109,12 +111,15 @@ describe('a removal that failed', () => {
   it('keeps the list, the header and the overlays on screen', () => {
     // The reopened confirm lives in overlays; early-returning the screen would hide the action needed to recover.
     const tree = render({ error: '', actionError: 'Could not remove host. Please try again.' })
+    expect(byName(tree, 'HostConversations')).toHaveLength(1)
+    expect(byName(tree, 'HostScreenOverlays')).toHaveLength(1)
+    expect(byName(tree, 'Text')).toEqual([])
+    act(() => byName(tree, 'HostConversations')[0]?.props.onWorkspaces())
     expect(byName(tree, 'SafeAreaView')).toHaveLength(1)
     expect(byName(tree, 'HostScreenHeader')).toHaveLength(1)
     expect(byName(tree, 'HostWorkspaceList')).toHaveLength(1)
     expect(byName(tree, 'HostBottomBar')).toHaveLength(1)
     expect(byName(tree, 'HostScreenOverlays')).toHaveLength(1)
-    expect(byName(tree, 'Text')).toEqual([])
   })
 
   it('still lets the identity error take the whole screen, which is what it is for', () => {

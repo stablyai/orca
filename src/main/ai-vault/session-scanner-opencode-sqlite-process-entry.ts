@@ -43,6 +43,8 @@ function validRequest(value: unknown): value is OpenCodeSqliteWorkerRequest {
   }
   if (value.kind === 'list') {
     return (
+      (!('selectedSessionId' in value) ||
+        (typeof value.selectedSessionId === 'string' && value.selectedSessionId.length <= 8192)) &&
       'dbPaths' in value &&
       Array.isArray(value.dbPaths) &&
       value.dbPaths.every((path) => typeof path === 'string') &&

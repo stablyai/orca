@@ -641,3 +641,29 @@ describe('parseOpenCodeSqliteSession', () => {
     expect(session!.firstUserPrompt).toBe('the real typed ask')
   })
 })
+
+it('adds only the exact selected SQLite identity beyond the recent cap', async () => {
+  const { db, path } = createTempDb()
+  applyMinimalOpenCodeSchema(db)
+  db.prepare('INSERT INTO session VALUES (?, ?, ?)').run('old', 1, 1)
+  db.prepare('INSERT INTO session VALUES (?, ?, ?)').run('new', 2, 2)
+  db.close()
+  const selectedSessionId = `local:opencode:old:${buildOpenCodeSqliteCandidatePath(path, 'old')}`
+  const listed = await listOpenCodeSqliteSessions({
+    dbPaths: [path],
+    limit: 1,
+    issues: [],
+    selectedSessionId
+  })
+  expect(listed.map((candidate) => candidate.file.path)).toEqual([
+    buildOpenCodeSqliteCandidatePath(path, 'new'),
+    buildOpenCodeSqliteCandidatePath(path, 'old')
+  ])
+  const foreign = await listOpenCodeSqliteSessions({
+    dbPaths: [path],
+    limit: 1,
+    issues: [],
+    selectedSessionId: selectedSessionId.replace('local:', 'runtime:other:')
+  })
+  expect(foreign).toHaveLength(1)
+})

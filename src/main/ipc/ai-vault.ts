@@ -5,8 +5,6 @@ import {
 import { app, ipcMain } from 'electron'
 import {
   configureAiVaultSessionSources,
-  listAiVaultSessions as listCachedLocalAiVaultSessions,
-  AiVaultLocalScanError,
   resetAiVaultSessionListCacheForTests,
   type AiVaultSessionSources
 } from '../ai-vault/cached-session-list'
@@ -18,7 +16,6 @@ import {
   mergeAiVaultListResults
 } from '../ai-vault/session-list-results'
 import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
-import { classifyAiVaultScanError } from '../../shared/ai-vault-scan-error-message'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   isAiVaultScanCancelledError,
@@ -65,6 +62,7 @@ import {
 } from '../ai-vault/structured-session-ownership'
 import { allHostsRuntimeScanTimeoutMs } from './ai-vault-all-host-timeouts'
 import { registerAiVaultScanProgressBroadcast } from './ai-vault-scan-progress-broadcast'
+import { scanLocalAiVaultSessionsAsIssue } from './ai-vault-local-scan'
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
@@ -117,6 +115,7 @@ async function listAiVaultSessions(
         ? [...new Set(scopePaths)].sort()
         : scopePaths,
     executionHostScope,
+    selectedSessionId: args?.selectedSessionId,
     includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true
   })
   const depth = requestedAiVaultSessionDepth(args)
@@ -143,6 +142,7 @@ async function listAiVaultSessions(
           dependency,
           depth,
           scopePaths,
+          selectedSessionId: args?.selectedSessionId,
           force: args?.force === true,
           afterFingerprint,
           scan
@@ -175,6 +175,7 @@ async function scanAiVaultSessionsByHostScope(
           dependency: dependency?.forHost(hostInfo.environmentId),
           depth,
           scopePaths,
+          selectedSessionId: args?.selectedSessionId,
           force: args?.force === true,
           scan: () =>
             scanRuntimeAiVaultSessions({
@@ -193,7 +194,8 @@ async function scanAiVaultSessionsByHostScope(
       [...scannedResults, ...runtimeResults],
       args?.limit,
       args?.unlimited,
-      scopePaths
+      scopePaths,
+      args?.selectedSessionId
     )
   }
 
@@ -223,29 +225,6 @@ export function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryRe
     path: 'runtime environments',
     fallbackMessage: 'Runtime hosts are unavailable.'
   })
-}
-
-// Like remote failures, local scanner/cache/WSL failures must degrade to issues without discarding healthy hosts.
-async function scanLocalAiVaultSessionsAsIssue(
-  args: AiVaultListArgs | undefined,
-  signal: AbortSignal | undefined
-): Promise<AiVaultListResult> {
-  try {
-    return await listCachedLocalAiVaultSessions(args, { signal })
-  } catch (error) {
-    if (isAiVaultScanCancelledError(error)) {
-      throw error
-    }
-    // Keep raw supervision details in logs; show an actionable host issue.
-    const raw = error instanceof Error ? error.message : 'Local session scan failed.'
-    console.error('[ai-vault] local session scan failed:', raw)
-    const result = aiVaultScanIssueResult({
-      executionHostId: LOCAL_EXECUTION_HOST_ID,
-      path: 'this computer',
-      ...classifyAiVaultScanError(raw)
-    })
-    return error instanceof AiVaultLocalScanError ? { ...result, scanId: error.scanId } : result
-  }
 }
 
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {

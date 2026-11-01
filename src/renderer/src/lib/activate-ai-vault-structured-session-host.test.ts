@@ -87,9 +87,11 @@ beforeEach(() => {
   })
 })
 
-it.each([false, true])(
-  'keeps the known host through lineage/refresh/reveal/activation without applying its snapshot as local; older lookup=%s',
-  async (olderLookup) => {
+it.each(
+  [false, true].flatMap((olderLookup) => [false, true].map((rowHost) => ({ olderLookup, rowHost })))
+)(
+  'keeps the known host through lineage/refresh/reveal/activation without applying its snapshot as local; case=%j',
+  async ({ olderLookup, rowHost }) => {
     if (olderLookup) {
       const call = mocks.call.getMockImplementation()!
       mocks.call.mockImplementation(async (...args) => {
@@ -102,10 +104,11 @@ it.each([false, true])(
     await expect(
       activateAiVaultStructuredSession(
         {
-          structuredSession: { workspaceId: 'workspace', sessionId: 'sender' }
+          structuredSession: { workspaceId: 'workspace', sessionId: 'sender' },
+          ...(rowHost ? { executionHostId: 'runtime:remote-2' as const } : {})
         },
         undefined,
-        TARGET
+        rowHost ? undefined : TARGET
       )
     ).resolves.toBe(true)
     expect(mocks.supports).toHaveBeenCalledWith(

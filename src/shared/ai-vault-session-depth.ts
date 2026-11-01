@@ -42,7 +42,8 @@ export function aiVaultCachedDepthServes(
 export function truncateAiVaultListResult(
   result: AiVaultListResult,
   depth: AiVaultSessionDepth,
-  scopePaths: readonly string[] = []
+  scopePaths: readonly string[] = [],
+  selectedSessionId?: string
 ): AiVaultListResult {
   if (depth === 'unlimited') {
     return result
@@ -51,7 +52,9 @@ export function truncateAiVaultListResult(
   let outOfScopeCount = 0
   const sessions = result.sessions.filter(
     (session) =>
-      (inScope !== null && aiVaultSessionInScope(inScope, session)) || outOfScopeCount++ < depth
+      session.id === selectedSessionId ||
+      (inScope !== null && aiVaultSessionInScope(inScope, session)) ||
+      outOfScopeCount++ < depth
   )
   return {
     ...result,
