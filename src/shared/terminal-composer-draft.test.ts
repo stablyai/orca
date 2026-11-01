@@ -5,7 +5,10 @@ import {
 } from './terminal-composer-draft'
 
 describe('detectTerminalComposerDraft', () => {
-  it('keeps rule-prefixed draft rows inside a labelled composer', () => {
+  it.each([
+    { cursorHidden: false },
+    { cursorHidden: true, activeBuffer: 'normal' as const, cursorInverse: false }
+  ])('keeps rule-prefixed draft rows inside a labelled composer with %o', (cursor) => {
     expect(
       detectTerminalComposerDraft({
         rows: ['──────── ultracode ─', '❯ review the results'],
@@ -16,13 +19,72 @@ describe('detectTerminalComposerDraft', () => {
         beforeCursor: '❯ review',
         afterCursor: ' the results',
         rawAfterCursor: ' the results',
-        cursorHidden: false,
-        cursorViewportRow: 4
+        cursorViewportRow: 4,
+        ...cursor
       })
     ).toMatchObject({
       text: 'review the results\n-------- coverage --------',
       promptRow: 4,
       endRow: 5
+    })
+  })
+
+  describe("with Claude's hidden native cursor", () => {
+    const hiddenCaret = {
+      rows: ['────────', '❯ review the results'],
+      typedRows: ['────────', '❯ review the results'],
+      promptGlyphBoldRows: [false, false],
+      rowsBelow: ['────────'],
+      typedRowsBelow: ['────────'],
+      beforeCursor: '❯ review',
+      afterCursor: ' the results',
+      rawAfterCursor: ' the results',
+      cursorHidden: true,
+      cursorViewportRow: 4
+    }
+
+    it('accepts caret paint at the cursor on the alternate screen', () => {
+      expect(
+        detectTerminalComposerDraft({
+          ...hiddenCaret,
+          activeBuffer: 'alternate',
+          cursorInverse: true
+        })?.text
+      ).toBe('review the results')
+    })
+
+    it.each([
+      { case: 'an unknown buffer without caret paint', overrides: {} },
+      {
+        case: 'a cursor left of the prompt glyph',
+        overrides: {
+          activeBuffer: 'normal' as const,
+          beforeCursor: '',
+          afterCursor: '❯ review the results'
+        }
+      },
+      {
+        case: 'a box without a closing rule',
+        overrides: { activeBuffer: 'normal' as const, rowsBelow: [], typedRowsBelow: [] }
+      },
+      {
+        case: 'a closing rule after a blank row',
+        overrides: {
+          activeBuffer: 'normal' as const,
+          rowsBelow: ['', '────────'],
+          typedRowsBelow: ['', '────────']
+        }
+      },
+      {
+        case: 'an ordinary shell prompt',
+        overrides: {
+          activeBuffer: 'normal' as const,
+          rows: ['~/repo main', '❯ review the results'],
+          typedRows: ['~/repo main', '❯ review the results']
+        }
+      }
+    ])('leaves $case alone', ({ overrides }) => {
+      expect(detectTerminalComposerDraft({ ...hiddenCaret, ...overrides })).toBeNull()
     })
   })
 

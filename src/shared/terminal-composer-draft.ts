@@ -12,6 +12,9 @@ export type TerminalCursorContext = {
   rawAfterCursor: string
   cursorHidden: boolean
   cursorViewportRow: number
+  /** Read only while the native cursor is hidden; absent means unknown. */
+  activeBuffer?: 'normal' | 'alternate'
+  cursorInverse?: boolean
 }
 
 export type TerminalComposerDraft = {
@@ -128,17 +131,33 @@ function isStockPlaceholder(
   return /^Try\s+["\u201C]/.test(text) || STOCK_PLACEHOLDERS.has(text)
 }
 
+// Why: Claude's default caret hides the native cursor and parks it at a painted caret cell. That paint
+// drops on focus-out, so it is required only where another program's alternate-screen frame could
+// mimic the box; a complete frame with the cursor inside is always required.
+function isHiddenComposerCaret(
+  context: TerminalCursorContext,
+  cursorOnPromptRow: boolean,
+  closedByFrame: boolean
+): boolean {
+  return (
+    closedByFrame &&
+    (!cursorOnPromptRow || /^\s*\u276F/.test(context.beforeCursor)) &&
+    (context.activeBuffer === 'normal' || context.cursorInverse === true)
+  )
+}
+
 function detectTerminalComposer(
   context: TerminalCursorContext | null | undefined
 ): TerminalComposerMatch | null {
-  if (!context || context.cursorHidden || context.rows.length === 0) {
+  if (!context || context.rows.length === 0) {
     return null
   }
   const cursorIndex = context.rows.length - 1
   const codexFooterIndex = findCodexFooterIndex(context)
   let afterCursor = context.afterCursor || context.rawAfterCursor
   let continuationRows = composerContinuationRows(context, afterCursor, codexFooterIndex)
-  const continuationEndIndex = continuationRows.length
+  // Why: the continuation walk stops at the row that would close the frame, so no second scan.
+  const closedByFrame = COMPOSER_FRAME_LINE.test(context.rowsBelow[continuationRows.length] ?? '')
   const placeholder = isStockPlaceholder(afterCursor, continuationRows)
   if (placeholder) {
     afterCursor = ''
@@ -153,18 +172,17 @@ function detectTerminalComposer(
       if (glyph === '❯') {
         const top = context.rows[index - 1] ?? ''
         if (
-          !COMPOSER_FRAME_LINE.test(top) &&
-          (!COMPOSER_TOP_FRAME_PREFIX.test(top.trimStart()) ||
-            !COMPOSER_FRAME_LINE.test(
-              context.rowsBelow.slice(continuationEndIndex).find((row) => row.trim()) ?? ''
-            ))
+          (!COMPOSER_FRAME_LINE.test(top) &&
+            (!COMPOSER_TOP_FRAME_PREFIX.test(top.trimStart()) || !closedByFrame)) ||
+          (context.cursorHidden &&
+            !isHiddenComposerCaret(context, index === cursorIndex, closedByFrame))
         ) {
           return null
         }
-      }
-      if (
-        (glyph === '›' || glyph === '»') &&
-        (context.promptGlyphBoldRows[index] !== true || codexFooterIndex === -1)
+      } else if (
+        context.cursorHidden ||
+        context.promptGlyphBoldRows[index] !== true ||
+        codexFooterIndex === -1
       ) {
         return null
       }

@@ -70,10 +70,10 @@ describe('orca terminal read --screen', () => {
     spawnMock
   })
 
-  it('reports a recorded labelled draft separately from screen output', async () => {
+  it('reports a recorded default-caret labelled draft separately from screen output', async () => {
     const emulator = new HeadlessEmulator({ cols: 100, rows: 30 })
     try {
-      await emulator.write(readRuntimeFixture('claude-2-1-316-labelled-draft'))
+      await emulator.write(readRuntimeFixture('claude-2-1-316-default-labelled-middle'))
       const projection = projectTerminalVisibleLines(emulator)
       queueFixtures(
         callMock,
@@ -84,9 +84,12 @@ describe('orca terminal read --screen', () => {
       await main(['terminal', 'read', '--terminal', 'term_abc', '--screen', '--json'], '/tmp/repo')
 
       const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
-      expect(printed.result.terminal.draft).toBe('Refactor the login page so that it')
+      expect(printed.result.terminal.draft).toBe(
+        'Refactor the login page so that it preserves the existing authentication behavior and includes\nthe coverage report'
+      )
       expect(printed.result.terminal.tail).toContain('❯')
       expect(printed.result.terminal.tail.join('\n')).not.toContain('Refactor the login page')
+      expect(printed.result.terminal.tail.join('\n')).not.toContain('coverage report')
     } finally {
       emulator.dispose()
     }
