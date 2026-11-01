@@ -12,6 +12,7 @@ const drawnPanelSchema = z.object({
   rect: rectSchema,
   ui: z.enum(['components', 'html']),
   guestUrl: z.string().max(8192).nullable(),
+  guestRect: rectSchema.optional(),
   issue: z.string().max(4000).nullable(),
   colorScheme: z.enum(['light', 'dark']),
   themeApplied: z.boolean(),

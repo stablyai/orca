@@ -179,6 +179,33 @@ describe('open-panel with a capture', () => {
   })
 })
 
+describe('open-panel for an html panel', () => {
+  it("reports the guest webview's rect so main can capture the guest itself", async () => {
+    const surface = mountSurface({ x: 900, y: 40, width: 360, height: 700 })
+    const guest = document.createElement('webview')
+    guest.getBoundingClientRect = () => DOMRect.fromRect({ x: 900, y: 72, width: 360, height: 668 })
+    surface.append(guest)
+    const pending = handlePluginViewRequest({
+      requestId: 'r',
+      kind: 'open-panel',
+      pluginKey: KEY,
+      panelId: 'todos',
+      capture: { guestRevision: null, timeoutMs: 5_000 }
+    })
+    reportPluginPanelDraw(TAB, {
+      ui: 'html',
+      guestUrl: 'g',
+      drawn: true,
+      issue: null,
+      failure: null
+    })
+    await expect(pending).resolves.toMatchObject({
+      ok: true,
+      panel: { ui: 'html', guestRect: { x: 900, y: 72, width: 360, height: 668 } }
+    })
+  })
+})
+
 describe('open-panel with ifShown', () => {
   it('never opens or switches: another tab or a closed sidebar answers not_shown', async () => {
     useAppStore.setState({ rightSidebarOpen: true, rightSidebarTab: 'explorer' })

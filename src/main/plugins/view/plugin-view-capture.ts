@@ -60,12 +60,54 @@ export function pluginPanelCaptureRect(
   return { x, y, width: Math.round(rect.width * zoom), height: Math.round(rect.height * zoom) }
 }
 
-/** The PNG of exactly that rect, at one image pixel per window point. */
+type CaptureRect = { x: number; y: number; width: number; height: number }
+
+/** Creates an image from raw pixels; `nativeImage.createFromBitmap` in the app. */
+export type BitmapImageFactory = (
+  bitmap: Buffer,
+  size: { width: number; height: number }
+) => NativeImage
+
+/** One image pixel per window point: HiDPI captures come back 2x. */
+function atSize(image: NativeImage, width: number, height: number): NativeImage {
+  const size = image.getSize()
+  return size.width === width && size.height === height
+    ? image
+    : image.resize({ width, height, quality: 'best' })
+}
+
+/** Copies `top` (same pixel format) onto `base` at (x, y), clipped to `base`. */
+export function compositeBitmap(
+  base: { bitmap: Buffer; width: number; height: number },
+  top: { bitmap: Buffer; width: number; height: number },
+  x: number,
+  y: number
+): Buffer {
+  const out = Buffer.from(base.bitmap)
+  const left = Math.max(0, x)
+  const right = Math.min(base.width, x + top.width)
+  for (let row = Math.max(0, y); row < Math.min(base.height, y + top.height); row += 1) {
+    if (right <= left) {
+      break
+    }
+    const from = ((row - y) * top.width + (left - x)) * 4
+    top.bitmap.copy(out, (row * base.width + left) * 4, from, from + (right - left) * 4)
+  }
+  return out
+}
+
+/**
+ * The PNG of exactly that rect, at one image pixel per window point. Why the guest separately:
+ * on Linux the window capture leaves a `<webview>` guest blank, so an html panel's guest is
+ * captured from its own webContents and drawn over the window capture at its rect.
+ */
 export async function capturePluginPanelPng(
   contents: WebContents,
-  rect: PluginViewDrawnPanel['rect']
+  rect: PluginViewDrawnPanel['rect'],
+  guest?: { contents: WebContents; rect: CaptureRect; fromBitmap: BitmapImageFactory }
 ): Promise<{ png: Buffer; width: number; height: number }> {
-  const target = pluginPanelCaptureRect(rect, contents.getZoomFactor())
+  const zoom = contents.getZoomFactor()
+  const target = pluginPanelCaptureRect(rect, zoom)
   if (target.width < 1 || target.height < 1) {
     throw new Error('The panel has no area to capture; is the right sidebar collapsed?')
   }
@@ -73,10 +115,20 @@ export async function capturePluginPanelPng(
   if (image.isEmpty()) {
     throw new Error('Orca drew nothing to capture; try again once its window has loaded.')
   }
-  const size = image.getSize()
-  if (size.width !== target.width || size.height !== target.height) {
-    // Why scale down: HiDPI captures are 2x, and agents read the panel at its on-screen size.
-    image = image.resize({ width: target.width, height: target.height, quality: 'best' })
+  image = atSize(image, target.width, target.height)
+  if (guest && !guest.contents.isDestroyed()) {
+    const area = pluginPanelCaptureRect(guest.rect, zoom)
+    const shot = area.width > 0 && area.height > 0 ? await guest.contents.capturePage() : null
+    if (shot && !shot.isEmpty()) {
+      const top = atSize(shot, area.width, area.height)
+      const bitmap = compositeBitmap(
+        { bitmap: image.toBitmap(), ...target },
+        { bitmap: top.toBitmap(), width: area.width, height: area.height },
+        area.x - target.x,
+        area.y - target.y
+      )
+      image = guest.fromBitmap(bitmap, { width: target.width, height: target.height })
+    }
   }
   const png = image.toPNG()
   if (png.byteLength > PLUGIN_SHOT_MAX_PNG_BYTES) {

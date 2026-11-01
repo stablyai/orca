@@ -62,3 +62,16 @@ export function measurePluginPanelSurface(
   const { x, y, width, height } = surface.getBoundingClientRect()
   return width > 0 && height > 0 ? { x, y, width, height } : null
 }
+
+/** An html panel's guest `<webview>` rect in CSS pixels, so main can capture the guest itself. */
+export function measurePluginPanelGuest(
+  tabKey: string
+): { x: number; y: number; width: number; height: number } | null {
+  const surface = document.querySelector(`[data-plugin-panel-surface="${CSS.escape(tabKey)}"]`)
+  const guest = surface?.querySelector('webview')
+  if (!guest) {
+    return null
+  }
+  const { x, y, width, height } = guest.getBoundingClientRect()
+  return width > 0 && height > 0 ? { x, y, width, height } : null
+}

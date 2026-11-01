@@ -19,6 +19,7 @@ import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
 import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
+  measurePluginPanelGuest,
   measurePluginPanelSurface,
   nextPaintedFrames,
   waitForPluginPanelDraw
@@ -111,6 +112,7 @@ async function capturePanel(
     return fail(requestId, 'panel_hidden', 'The plugin panel is not on screen.')
   }
   const dark = document.documentElement.classList.contains('dark')
+  const guestRect = status.value?.ui === 'html' ? measurePluginPanelGuest(tabKey) : null
   return {
     requestId,
     ok: true,
@@ -118,6 +120,7 @@ async function capturePanel(
       rect,
       ui: status.value?.ui ?? 'components',
       guestUrl: status.value?.guestUrl ?? null,
+      ...(guestRect ? { guestRect } : {}),
       issue: status.value?.issue ?? null,
       colorScheme: dark ? 'dark' : 'light',
       themeApplied: wantDark !== null && dark === wantDark,

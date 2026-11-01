@@ -67,6 +67,7 @@ function deps(overrides: Partial<PluginViewDesktopDeps> = {}): PluginViewDesktop
           }
         : { lines: [], cursor: 'n:5' },
     guestsOf: () => [],
+    imageFromBitmap: vi.fn(),
     ...overrides
   }
 }

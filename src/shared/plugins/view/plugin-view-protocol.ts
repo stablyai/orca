@@ -34,6 +34,8 @@ export type PluginViewDrawnPanel = {
   rect: { x: number; y: number; width: number; height: number }
   ui: 'components' | 'html'
   guestUrl: string | null
+  /** An html panel's guest `<webview>`, in the same CSS pixels as `rect`. */
+  guestRect?: { x: number; y: number; width: number; height: number }
   /** The panel's own error banner (a components render or load error), if it shows one. */
   issue: string | null
   colorScheme: PluginViewColorScheme

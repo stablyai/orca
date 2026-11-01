@@ -2,6 +2,7 @@ import type { NativeImage, WebContents } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 import {
   capturePluginPanelPng,
+  compositeBitmap,
   pluginPanelCaptureRect,
   PLUGIN_SHOT_MAX_PNG_BYTES,
   settlePluginFrameGuest,
@@ -103,5 +104,57 @@ describe('settlePluginFrameGuest', () => {
     const executeJavaScript = vi.fn().mockRejectedValue(new Error('navigated'))
     await expect(settlePluginFrameGuest(contents({ executeJavaScript }))).resolves.toBeUndefined()
     expect(executeJavaScript).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('compositeBitmap', () => {
+  const solid = (width: number, height: number, value: number) => ({
+    bitmap: Buffer.alloc(width * height * 4, value),
+    width,
+    height
+  })
+
+  it('draws the guest over the window capture at its offset, clipped to the panel', () => {
+    const out = compositeBitmap(solid(4, 3, 0), solid(3, 2, 9), 2, 1)
+    const at = (x: number, y: number) => out[(y * 4 + x) * 4]
+    expect([at(0, 0), at(1, 1), at(2, 1), at(3, 1), at(3, 2), at(2, 0)]).toEqual([0, 0, 9, 9, 9, 0])
+    expect(out.byteLength).toBe(4 * 3 * 4)
+  })
+})
+
+describe('capturePluginPanelPng with an html guest', () => {
+  function bitmapImage(size: { width: number; height: number }, value: number): NativeImage {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: capture reads only these NativeImage members.
+    return {
+      isEmpty: () => size.width === 0,
+      getSize: () => size,
+      resize: (target: { width: number; height: number }) => bitmapImage(target, value),
+      toBitmap: () => Buffer.alloc(size.width * size.height * 4, value),
+      toPNG: () => Buffer.from(`png-${value}`)
+    } as unknown as NativeImage
+  }
+
+  it("captures the guest's own contents and composites it, since Linux leaves it blank", async () => {
+    const host = contents({
+      capturePage: vi.fn(async () => bitmapImage({ width: 20, height: 10 }, 0))
+    })
+    const guest = contents({
+      capturePage: vi.fn(async () => bitmapImage({ width: 32, height: 16 }, 200))
+    })
+    const fromBitmap = vi.fn((bitmap: Buffer, size: { width: number; height: number }) => {
+      expect(size).toEqual({ width: 20, height: 10 })
+      // Guest rect (2, 2, 16x8) inside the panel at (0, 0): its pixels replace the host's there.
+      expect(bitmap[(0 * 20 + 0) * 4]).toBe(0)
+      expect(bitmap[(3 * 20 + 3) * 4]).toBe(200)
+      return bitmapImage(size, 7)
+    })
+    const shot = await capturePluginPanelPng(
+      host,
+      { x: 0, y: 0, width: 20, height: 10 },
+      { contents: guest, rect: { x: 2, y: 2, width: 16, height: 8 }, fromBitmap }
+    )
+    expect(guest.capturePage).toHaveBeenCalledWith()
+    expect(fromBitmap).toHaveBeenCalledOnce()
+    expect(shot).toEqual({ png: Buffer.from('png-7'), width: 20, height: 10 })
   })
 })

@@ -9,6 +9,7 @@ import {
 import { PluginCliError } from '../../../shared/plugins/approval/plugin-cli-approval'
 import {
   capturePluginPanelPng,
+  type BitmapImageFactory,
   settlePluginFrameGuest,
   withPaintingWhileHidden
 } from './plugin-view-capture'
@@ -77,6 +78,8 @@ export type PluginViewDesktopDeps = {
     cursor?: string
   ): { lines: readonly { level: string; line: string }[]; cursor: string }
   guestsOf(pluginKey: string): WebContents[]
+  /** `nativeImage.createFromBitmap`, to draw an html panel's guest over the window capture. */
+  imageFromBitmap: BitmapImageFactory
 }
 
 const OPEN_TIMEOUT_MS = 10_000
@@ -179,12 +182,18 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
           if (!drawn) {
             throw new Error('Orca did not report where the panel is drawn.')
           }
-          if (drawn.ui === 'html') {
-            await settlePluginFrameGuest(
-              deps.guestsOf(pluginKey).find((guest) => guest.getURL() === drawn.guestUrl)
-            )
-          }
-          const image = await capturePluginPanelPng(contents, drawn.rect)
+          const guest =
+            drawn.ui === 'html'
+              ? deps.guestsOf(pluginKey).find((each) => each.getURL() === drawn.guestUrl)
+              : undefined
+          await settlePluginFrameGuest(guest)
+          const image = await capturePluginPanelPng(
+            contents,
+            drawn.rect,
+            guest && drawn.guestRect
+              ? { contents: guest, rect: drawn.guestRect, fromBitmap: deps.imageFromBitmap }
+              : undefined
+          )
           const logged = deps
             .logsSince(pluginKey, cursor)
             .lines.filter((line) => line.level === 'error')
