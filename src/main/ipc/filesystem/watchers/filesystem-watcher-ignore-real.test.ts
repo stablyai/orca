@@ -7,11 +7,26 @@ import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesyst
 
 const DELIVERY_TIMEOUT_MS = 8_000
 
+// Retry writes until observed to tolerate native delivery gaps under CI load.
+async function writeUntilSeen(events: Event[], files: string[]): Promise<void> {
+  await vi.waitFor(
+    async () => {
+      const missing = files.filter((file) => !events.some((event) => event.path === file))
+      await Promise.all(missing.map((file) => writeFile(file, 'source')))
+      expect(missing).toEqual([])
+    },
+    { timeout: DELIVERY_TIMEOUT_MS, interval: 200 }
+  )
+}
+
 describe('filesystem watcher native ignores', () => {
   let root: string | null = null
   let subscription: AsyncSubscription | null = null
+  let worktreeSubscription: AsyncSubscription | null = null
 
   afterEach(async () => {
+    await worktreeSubscription?.unsubscribe()
+    worktreeSubscription = null
     await subscription?.unsubscribe()
     subscription = null
     if (root) {
@@ -24,9 +39,12 @@ describe('filesystem watcher native ignores', () => {
     root = await realpath(await mkdtemp(join(tmpdir(), 'orca-watch-ignore-')))
     const rootModules = join(root, 'node_modules')
     const nestedModules = join(root, 'packages', 'app', 'node_modules')
+    const rootWorktrees = join(root, '.worktrees', 'task', 'src')
+    const nestedWorktrees = join(root, 'packages', 'app', '.worktrees', 'task', 'src')
+    const ignoredDirectories = [rootModules, nestedModules, rootWorktrees, nestedWorktrees]
     const nestedSource = join(root, 'packages', 'app', 'src')
     await Promise.all(
-      [rootModules, nestedModules, nestedSource].map((directory) =>
+      [...ignoredDirectories, nestedSource].map((directory) =>
         mkdir(directory, { recursive: true })
       )
     )
@@ -43,28 +61,15 @@ describe('filesystem watcher native ignores', () => {
       },
       buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
     )
-    const seen = (file: string): boolean => events.some((event) => event.path === file)
-    // Retry writes until observed to tolerate native delivery gaps under CI load.
-    const writeUntilSeen = async (files: string[]): Promise<void> => {
-      await vi.waitFor(
-        async () => {
-          const missing = files.filter((file) => !seen(file))
-          await Promise.all(missing.map((file) => writeFile(file, 'source')))
-          expect(missing).toEqual([])
-        },
-        { timeout: DELIVERY_TIMEOUT_MS, interval: 200 }
-      )
-    }
-
     // Prove both watch levels are live before checking ignored events.
-    await writeUntilSeen([join(root, 'ready.ts'), join(nestedSource, 'ready.ts')])
+    await writeUntilSeen(events, [join(root, 'ready.ts'), join(nestedSource, 'ready.ts')])
 
     const generatedNames = Array.from({ length: 20 }, (_, index) => `generated-${index}.js`)
     // Windows forbids control characters in filenames.
     if (process.platform !== 'win32') {
       generatedNames.push('generated\nnewline.js')
     }
-    const generatedFiles = [rootModules, nestedModules].flatMap((directory) =>
+    const generatedFiles = ignoredDirectories.flatMap((directory) =>
       generatedNames.map((name) => join(directory, name))
     )
     await Promise.all(generatedFiles.map((file) => writeFile(file, 'generated')))
@@ -72,12 +77,56 @@ describe('filesystem watcher native ignores', () => {
     if (process.platform !== 'win32') {
       sourceFiles.push(join(root, 'source\nnewline.ts'), join(nestedSource, 'source\nnewline.ts'))
     }
-    await writeUntilSeen(sourceFiles)
+    await writeUntilSeen(events, sourceFiles)
     // A post-storm sentinel at each level proves prior events arrived without a fixed sleep.
-    await writeUntilSeen([join(root, 'sentinel.ts'), join(nestedSource, 'sentinel.ts')])
+    await writeUntilSeen(events, [join(root, 'sentinel.ts'), join(nestedSource, 'sentinel.ts')])
 
     expect(errors).toEqual([])
     const generatedPaths = new Set(generatedFiles)
     expect(events.filter((event) => generatedPaths.has(event.path))).toEqual([])
+  })
+
+  it('delivers nested worktree edits to its own watcher without waking the parent', async () => {
+    root = await realpath(await mkdtemp(join(tmpdir(), 'orca-watch-worktree-')))
+    const worktreeRoot = join(root, '.worktrees', 'task')
+    await mkdir(join(worktreeRoot, 'src'), { recursive: true })
+
+    const parentEvents: Event[] = []
+    const worktreeEvents: Event[] = []
+    const errors: Error[] = []
+    const options = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
+    subscription = await subscribe(
+      root,
+      (error, batch) => {
+        if (error) {
+          errors.push(error)
+        }
+        parentEvents.push(...batch)
+      },
+      options
+    )
+    worktreeSubscription = await subscribe(
+      worktreeRoot,
+      (error, batch) => {
+        if (error) {
+          errors.push(error)
+        }
+        worktreeEvents.push(...batch)
+      },
+      options
+    )
+
+    const parentSource = join(root, 'source.ts')
+    const worktreeSource = join(worktreeRoot, 'src', 'source.ts')
+    await Promise.all([
+      writeUntilSeen(parentEvents, [parentSource]),
+      writeUntilSeen(worktreeEvents, [worktreeSource])
+    ])
+    await Promise.all([
+      writeUntilSeen(parentEvents, [join(root, 'sentinel.ts')]),
+      writeUntilSeen(worktreeEvents, [join(worktreeRoot, 'src', 'sentinel.ts')])
+    ])
+    expect(errors).toEqual([])
+    expect(parentEvents.filter((event) => event.path === worktreeSource)).toEqual([])
   })
 })
