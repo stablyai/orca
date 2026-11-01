@@ -1320,7 +1320,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "ワークスペース外のファイルは、ペアリングされたサーバーではまだプレビューできません。",
           "webClientUnavailable": "Web クライアントではドキュメントのプレビューを利用できません。"
         }
       },
@@ -5888,7 +5887,9 @@
           "9a5381eb09": "ワークスペースフォルダーを開けませんでした。",
           "0bed8727db": "移動または削除された可能性があります。ワークスペースを更新するか、Orca からワークスペースを削除します。",
           "3921d3d9a5": "ワークスペースフォルダーが見つかりませんでした。",
+          "pathNotFound": "ファイルまたはフォルダーが見つかりません。移動または削除された可能性があります。",
           "f387af445b": "ワークスペースパスは有効なローカルパスではありません。",
+          "pathInvalid": "パスは有効なローカルパスではありません。",
           "localOnly": "ローカルのみ",
           "remoteSsh": "リモート SSH",
           "remoteRuntimeUnsupported": "このパスをローカルアプリで開くことはできません。",
@@ -5903,8 +5904,8 @@
           "remoteEditorUnsupportedDetail": "VS Code、Cursor、Zed のいずれかを選択するか、アプリをローカルで使用してください。",
           "remotePathInvalid": "このパスは SSH ホストでは無効です。",
           "remotePathInvalidDetail": "ワークスペースを更新してから、もう一度お試しください。",
-          "remoteLaunchFailed": "エディターでパスを開けませんでした。",
-          "remoteLaunchFailedDetail": "このマシンで設定されているエディターのコマンドを確認してください。",
+          "pathLaunchFailed": "エディターでパスを開けませんでした。",
+          "pathLaunchFailedDetail": "このマシンで設定されているエディターのコマンドを確認してください。",
           "wsl": "WSL",
           "remoteEditorHint": "SSH ホスト上のフォルダーを開くことができるのは VS Code、Cursor、Zed のみです。",
           "remoteRuntimeEditorHint": "このコンピュータ上のアプリは、Orca が SSH を介してサーバーに到達した場合にのみ、このサーバーのファイルを開くことができます。"
@@ -6511,12 +6512,14 @@
           "added": "すでにホストです",
           "running": "実行中",
           "stopped": "停止中",
+          "unverifiable": "不明",
           "title": "WSL ディストリビューションを追加",
           "description": "Orca はディストリビューション内でサーバーを実行するため、git、ファイル、ターミナルは Linux 上でネイティブに動作します。このディストリビューション内で \\\\wsl.localhost 経由で開いたプロジェクトは、ターミナルがアイドル状態になると自動的にこのホストへ移動します。Windows ドライブ (/mnt/…) 上のプロジェクトはこのコンピューターに残ります。移動したプロジェクトはサイドバーから戻せます。",
           "distro": "ディストリビューション",
           "loading": "WSL ディストリビューションを探しています…",
           "placeholder": "ディストリビューションを選択",
           "stoppedHint": "{{value0}} は停止しています。追加すると起動します。",
+          "unverifiableHint": "WSL から {{value0}} が実行中かどうかの応答がありません。追加すると必要に応じて起動します。",
           "addingHint": "ディストリビューション内に Orca サーバーをインストールして起動しています。初回は 1 分ほどかかることがあります。",
           "adding": "セットアップ中…",
           "startAndAdd": "起動して追加",
@@ -6930,14 +6933,13 @@
           "932ff1fbff": "テーマ",
           "leftSidebarAppearance": {
             "title": "左サイドバーの外観",
-            "rowDescription": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
             "default": "デフォルト",
-            "matchTerminal": "ターミナルに合わせる",
             "tinted": "色合い",
             "tintColor": "サイドバーの色合い",
             "tintColorDescription": "左サイドバーの表面に混ぜる色です。",
             "tintOpacity": "色合いの強さ",
-            "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。"
+            "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。",
+            "tintDescription": "左サイドバーをデフォルトのままにするか、色合いを付けます。ターミナルに合わせるには、ライトまたはダークのテーマで「ターミナルに合わせる」を選択します。"
           },
           "2edf606c46": "閉じるときにトレイへ最小化",
           "b707773a0d": "有効にすると、ウィンドウを閉じても Orca は終了せず、システムトレイで実行を続けます。",
@@ -8680,10 +8682,7 @@
           "1afcc1d973": "垂直パディング",
           "25e2f8e8e1": "ターミナルグリッドの周囲の水平方向のパディング (ピクセル単位)。",
           "36b8402015": "水平方向のパディング",
-          "53ce336e15": "Orca を再起動して、ウィンドウのぼかしの変更を適用します。",
           "c65bb9ce63": "再起動が必要です",
-          "97950bb087": "ターミナルウィンドウに背景のぼかしを適用します。再起動が必要です。",
-          "2b82242f43": "ウィンドウのぼかし",
           "809f37738d": "ターミナルの背景の透明度を制御します。 1 は完全に不透明、0 は完全に透明です。",
           "ea7b1a158e": "背景の不透明度",
           "03acb60aa0": "ターミナルの背景の透明度を制御します。",
@@ -9110,11 +9109,10 @@
             },
             "leftSidebarAppearance": {
               "title": "左サイドバーの外観",
-              "description": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
               "project": "プロジェクト",
-              "terminal": "ターミナル",
               "background": "背景",
-              "tint": "色合い"
+              "tint": "色合い",
+              "tintDescription": "左サイドバーをデフォルトのままにするか、色合いを付けます。ターミナルに合わせるには、ライトまたはダークのテーマで「ターミナルに合わせる」を選択します。"
             },
             "workspaceCardLayout": {
               "title": "ワークスペースカードのレイアウト",
@@ -9169,7 +9167,8 @@
             "zcodeUsageDescription": "ZCode コーディングプランのクォータの使用状況をステータスバーに表示します。",
             "zcode": "zコード",
             "zai": "ザイ",
-            "glm": "グルム"
+            "glm": "グルム",
+            "matchTerminal": "ターミナルに合わせる"
           }
         },
         "auto": {
@@ -10345,8 +10344,6 @@
             "f6dd9ff606": "背景",
             "71eb45e293": "ぼかし",
             "0838b3717b": "ウィンドウ",
-            "bc2054657a": "ターミナルウィンドウに背景のぼかしを適用します。再起動が必要です。",
-            "72d0482137": "ウィンドウのぼかし",
             "7db59c4738": "アルファ",
             "46d99ef4bb": "不透明度",
             "4c643695aa": "ターミナルの背景の透明度を制御します。",
@@ -12177,7 +12174,7 @@
         "wslHosts": {
           "title": "WSL ホスト",
           "experimental": "実験的機能",
-          "description": "Orca は各ディストリビューション内でサーバーを実行します。停止中のディストリビューションは、そのプロジェクトを開くか、ここで接続したときにのみ起動します。",
+          "description": "Orca は各ディストリビューション内でサーバーを実行します。プロジェクトを開いても、停止中のディストリビューションは起動しません。[起動] をクリックするか、新しいターミナルを開くか、ここで接続してください。",
           "add": "WSL ディストリビューションを追加",
           "connect": "接続",
           "turnOn": "実験的機能でオンにする",
@@ -12396,7 +12393,9 @@
           "noMatches": "一致するビルドはありません。"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "このテーマのターミナル配色を使う"
+          "useTerminalTheme": "このテーマのターミナル配色を使う",
+          "matchTerminal": "ターミナルに合わせる",
+          "dynamic": "動的"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -12581,7 +12580,9 @@
           "light": "ライト",
           "languageIncomplete": "{{value0}}% 翻訳済み。Orca の言語として使うには不完全です",
           "languageCoverage": "インターフェース言語 · {{value0}}% 翻訳済み",
-          "newFileMenu": "+ メニューに追加"
+          "newFileMenu": "+ メニューに追加",
+          "editorReplacesViewer": "Orca のビューアーの代わりに {{value0}} を開きます",
+          "editorMayReplaceViewer": "Orca のビューアーの代わりに {{value0}} を開く場合があります"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "その他のアクセスはありません",
@@ -15491,16 +15492,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "ズームイン",
-          "6c89c73d9f": "ズームをリセットする",
           "be27304574": "ズームアウト",
-          "77bfc9b35a": "ポップアップで画像を開く",
           "3ef9551ba2": "プレビューを読み込んでいます…",
-          "d9d2944855": "ファイルプレビューのロードに失敗しました"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Escを押して閉じます",
-          "535f4e2b56": "閉じる",
-          "9e27b2ecaf": "フルサイズの画像プレビュー"
+          "d9d2944855": "ファイルプレビューのロードに失敗しました",
+          "fitToView": "画面に合わせる",
+          "actualSize": "実際のサイズ",
+          "expand": "画像を拡大表示"
         },
         "IpynbViewer": {
           "859bf9fc21": "セルを実行する",
@@ -15621,7 +15618,10 @@
           "zoomOut": "ズームアウト",
           "zoomIn": "ズームイン",
           "fit": "画面に合わせる",
-          "close": "閉じる"
+          "close": "閉じる",
+          "copyPng": "PNG としてコピー",
+          "copiedPng": "PNG としてコピーしました",
+          "copyPngFailed": "画像をコピーできませんでした"
         },
         "MermaidBlock": {
           "dcc132e691": "図のエラー:",
@@ -18814,9 +18814,7 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "チャット UI で続けるには、このホストの Orca を更新してください。",
-        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。",
-        "exitUnconfirmedFromTerminal": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じてから、セッション履歴でこの会話を開いてください。",
-        "exitUnconfirmed": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じてから、セッション履歴でこの会話を開いてください。"
+        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。"
       },
       "state": {
         "loading": {
@@ -19020,6 +19018,8 @@
         "unnamedSender": "Agent",
         "messageFromCoordinator": "コーディネーターからのメッセージ",
         "startedWorker": "ワーカーを開始しました",
+        "handedOffToAgent": "Agentに引き継ぎました",
+        "startedAgent": "Agentを開始しました",
         "taskFromCoordinator": "コーディネーターからのタスク",
         "updateFromWorker": "ワーカーからの更新"
       },
@@ -19109,13 +19109,15 @@
         "stopped": "{{distro}} は停止しています",
         "start": "起動",
         "unverifiable": "Orca は {{distro}} が実行中かどうかを確認できませんでした",
-        "startToSend": "送信するには {{distro}} を開始してください。"
+        "startToSend": "送信するには {{distro}} を開始してください。",
+        "startDistro": "{{distro}} を開始"
       },
       "interruptedContinue": {
         "continue": "続行",
         "failed": "このチャットを続行できませんでした。もう一度試すか、メッセージを送信してください。",
         "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。",
-        "unconfirmed": "{{agent}} が続行を受信したかどうかを確認できませんでした。もう一度試す前にチャットを確認してください。"
+        "unconfirmed": "{{agent}} が続行を受信したかどうかを確認できませんでした。もう一度試す前にチャットを確認してください。",
+        "usageLimitExplanation": "中断したところから続けるよう Agent に依頼します。上限がリセットされてから使ってください。"
       },
       "rewind": {
         "unsupported": "このチャットは以前のメッセージに戻れません。",
@@ -19297,6 +19299,13 @@
         "effortPickerFailed": "推論レベル選択画面を開けませんでした。",
         "modelApplyFailed": "モデル {{value}} を適用できませんでした。",
         "effortApplyFailed": "推論レベル {{value}} を適用できませんでした。"
+      },
+      "usageLimitActions": {
+        "continueNow": "今すぐ続ける",
+        "leadIn": "待たずにこのチャットを続ける：",
+        "switchAccount": "アカウントを切り替え",
+        "addAccount": "アカウントを追加…",
+        "accountUnavailable": "このチャットは別のアカウントに移せません。別の Agent に引き継いでください。"
       }
     },
     "tab": {
@@ -20206,8 +20215,7 @@
       "quitDuringMoveConfirm": "終了する"
     },
     "startupWorktreeRefresh": {
-      "loading": "ワークスペースを検出中…",
-      "description": "ローカルおよびリモートのプロジェクトを読み込む間に、さらにワークスペースが表示されることがあります。"
+      "loading": "ワークスペースを検出中…"
     },
     "createProject": {
       "errors": {
@@ -20230,6 +20238,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} はすでにホストです。",
         "distroStopped": "一覧の読み取り後に {{distro}} が停止しました。「起動して追加」を選択して起動してください。",
+        "distroUnverifiable": "WSL から {{distro}} が実行中かどうかの応答がありませんでした。一覧を更新するか、ダイアログから追加してください（必要に応じて起動します）。",
         "wsl1": "{{distro}} は Orca がサポートを終了した WSL 1 を使用しています。Windows のターミナルで次のコマンドを実行し、WSL 2 に変換してください: {{command}}",
         "notRegistered": "{{distro}} はインストール済みの WSL ディストリビューションではありません。Windows のターミナルで {{command}} を実行してインストール済みのものを確認するか、再インストールしてからやり直してください。",
         "sshManaged": "{{distro}} ではすでに「{{server}}」の Orca サーバーが実行されており、このコンピューターは SSH 経由で接続しています。先にそのサーバーを削除してください。WSL ホストへの移行はまだサポートされていません。"
@@ -20294,7 +20303,8 @@
     "wslHostOffer": {
       "title": "{{distro}} をホストとして実行（推奨）",
       "why": "Git、ファイル、ターミナルが Windows のファイル共有を経由せず、Linux 上でネイティブに動作します。",
-      "accept": "ホストとして実行"
+      "accept": "ホストとして実行",
+      "projectNotFound": "移動する追加済みのプロジェクトが見つかりませんでした。サイドバーのプロジェクトで「{{distro}} ホストへ移動…」を使用してください。"
     }
   },
   "editor": {
@@ -21675,12 +21685,8 @@
       "refreshBeforeEnd": "PTY を更新するまで終了できません。",
       "endUnsupported": "このターミナルは終了できません。ホストが必要な安全チェックをサポートしていません。タブまたはホスト上で閉じてください。",
       "checkingTabs": "タブを確認中…",
-      "endTitle": "{{terminal}} を終了しますか？",
-      "endDescription": "このターミナルとその子プロセスを終了します。未保存の作業が失われる可能性があります。",
       "lastProcess": "最後に確認されたプロセス: {{process}}",
-      "cancel": "キャンセル",
       "ending": "終了中…",
-      "end": "ターミナルを終了",
       "unassigned": "未割り当て",
       "thisComputer": "このコンピューター",
       "localOwnedCount_one": "このコンピューターの Orca PTY {{count}} 個",

@@ -3,18 +3,20 @@ import {
   exerciseRecordedChatOpen,
   type createChatRendererBridge
 } from './automation-chat-renderer-test-harness'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, vi, type Mock } from 'vitest'
+import { gitExecFileAsync } from '../../../src/main/git/runner'
+import { getRepoMainWorktreeId } from '../../../src/shared/worktree/id'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { createRuntimeAutomationService } from '../../../src/main/automations/runtime-automation-service'
 import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'
 import type { AutomationChatLaunchRequest } from '../../../src/main/automations/automation-chat-agent-launch'
 import { automationRunOperationId } from '../../../src/main/automations/automation-run-operation'
-import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../src/shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   HOST_TEST_NOW,
   HOST_TEST_THREAD,
@@ -45,21 +47,24 @@ export async function exerciseBusyChatReuse(
 ): Promise<void> {
   const sessionId = 'codex_automation_reuse'
   vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW)
-  const rig = await createQueuedMessageTestRig({ restartable: true, sessionId })
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-34332-accepted-')))
+  const repo = { ...target.repo, path: root, executionHostId: 'local' as const }
+  const location = { ...HOST_TEST_LOCATION, workspaceId: getRepoMainWorktreeId(repo) }
+  const rig = await createQueuedMessageTestRig({ restartable: true, sessionId, location })
   controls.setHost(rig.host)
-  const root = mkdtempSync(join(tmpdir(), 'orca-34332-accepted-'))
   testState.dir = root
   const disk = createStore()
   let service: ReturnType<typeof createRuntimeAutomationService> | undefined
   const intervals = vi.spyOn(globalThis, 'setInterval')
   const cleared = vi.spyOn(globalThis, 'clearInterval')
   try {
+    await gitExecFileAsync(['init', '--quiet'], { cwd: root })
     const working = await rig.workingSend()
-    disk.addRepo(target.repo)
+    disk.addRepo(repo)
     const saved = disk.createAutomation({
       ...automation,
       agentId: 'codex',
-      workspaceId: HOST_TEST_LOCATION.workspaceId,
+      workspaceId: location.workspaceId,
       launchSetupPatch: { surface: 'chat' },
       reuseSession: true,
       enabled: false,

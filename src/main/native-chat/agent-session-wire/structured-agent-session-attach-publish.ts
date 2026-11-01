@@ -3,7 +3,7 @@ import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model
 // the session's events go through, and its open begins.
 
 import type { AttachedJournal } from './structured-agent-session-attach'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AttachedOwner } from './structured-agent-session-attach-flow'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'

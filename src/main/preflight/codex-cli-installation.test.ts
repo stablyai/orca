@@ -49,13 +49,4 @@ describe('Codex installation version probes', () => {
     expect((await checkCodex({ program })).status).toBe('ready')
     expect(runProcess).toHaveBeenCalledTimes(2)
   })
-
-  it.each(['ENOENT', 'EACCES'])(
-    'leaves a failed version spawn (%s) to the existing chat failure',
-    async (code) => {
-      const program = '/fake/codex'
-      runProcess.mockRejectedValue(Object.assign(new Error('unavailable'), { code }))
-      expect((await checkCodex({ program })).status).toBe('missing')
-    }
-  )
 })

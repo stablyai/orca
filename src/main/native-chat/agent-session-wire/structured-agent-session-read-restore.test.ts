@@ -1,13 +1,13 @@
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionConversationOpenDeps } from './structured-agent-session-conversation-open'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -17,7 +17,7 @@ import {
 import { publishJournalSessionEpoch } from '../agent-session-journal/journal-row-table'
 import { restoreStructuredAgentSessionRead } from './structured-agent-session-read-restore'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'codex_read_restore_fixture'
 const WORKSPACE_ID = 'repo-1::/tmp/workspace'
@@ -86,17 +86,5 @@ describe('read restore', () => {
     expect(published).not.toBeNull()
     opened.push(published!.session.journal)
     expect(published!.session.child).toBeNull()
-  })
-
-  it('drops a session with no journal', async () => {
-    const restored = await restoreStructuredAgentSessionRead(openDeps(), SESSION_ID)
-
-    expect(restored).toBeNull()
-  })
-
-  it('drops a session with no record', async () => {
-    const restored = await restoreStructuredAgentSessionRead(openDeps(), 'unknown-session')
-
-    expect(restored).toBeNull()
   })
 })

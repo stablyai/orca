@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { FlatList, StyleSheet, View } from 'react-native'
 
-import { triggerSelection } from '../platform/haptics'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
-import { LIST_LEADING_INSET, LIST_ROW_PADDING } from './list/ListGroup'
-import { ListRow } from './list/ListRow'
+import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListRow } from './list/ListGroup'
 import { SheetHeader } from './nav-bar/SheetHeader'
 
 type PickerListItem = { id: string; label: string; detail?: string }
@@ -94,10 +92,7 @@ export function PickerListDrawer<T extends PickerListItem>({
             subtitle={item.detail || undefined}
             leading={renderIcon ? (renderIcon(item) ?? null) : undefined}
             selected={item.id === selectedId}
-            onPress={() => {
-              triggerSelection()
-              closeThenSelect(item)
-            }}
+            onPress={() => closeThenSelect(item)}
           />
         )}
       />

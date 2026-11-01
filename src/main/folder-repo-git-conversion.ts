@@ -9,7 +9,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
 } from '../shared/execution-host'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 import { isFolderRepo } from '../shared/repo-kind'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import { getGitRepoRootAsync, isGitRepoAsync } from './git/repo'

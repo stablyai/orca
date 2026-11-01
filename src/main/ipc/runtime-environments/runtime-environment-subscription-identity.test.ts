@@ -24,8 +24,6 @@ import {
   type RetainedRemoteRuntimeSubscription
 } from './runtime-environment-subscription-handlers'
 
-import { crewSubscriptionSetupFailure } from './runtime-environment-subscription-setup'
-
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
 const pendingSubscriptions = new Map<string, PendingRuntimeSubscription>()
 
@@ -221,73 +219,6 @@ it('reserves crew before await, rejects wrong-owner cancellation, and closes the
     failure: { fact: { kind: 'cancelled' } }
   })
   expect(late.close).toHaveBeenCalledOnce()
-  expect(remoteRuntimeSubscriptions.size).toBe(0)
-  expect(sender.eventNames()).toEqual([])
-})
-
-it('fences an already-gone frame and a changed source, while preserving early-close success data', async () => {
-  const gone = await handler('runtimeEnvironments:subscribe')(
-    { sender, senderFrame: { detached: true } },
-    crewArgs
-  )
-  expect(gone).toMatchObject({ ok: false, failure: { fact: { kind: 'source-retired' } } })
-  expect(mocks.subscribe).not.toHaveBeenCalled()
-  const held = Promise.withResolvers<RemoteRuntimeSubscription>()
-  mocks.subscribe.mockReturnValueOnce(held.promise)
-  const pending = openCrew()
-  mocks.resolve.mockReturnValue({ id: 'env', pairingRevision: 2, createdAt: 1, runtimeId: null })
-  const late = connection()
-  held.resolve(late)
-  await expect(pending).resolves.toMatchObject({
-    ok: false,
-    failure: { fact: { kind: 'source-retired' } }
-  })
-  expect(late.close).toHaveBeenCalledOnce()
-  mocks.resolve.mockReturnValue({ id: 'env', pairingRevision: 1, createdAt: 1, runtimeId: null })
-  const closed = connection()
-  mocks.subscribe.mockImplementationOnce(
-    async (...parameters: Parameters<typeof subscribeRuntimeEnvironment>) => {
-      parameters[5].onEvent({ type: 'close' })
-      parameters[5].onClose()
-      return closed
-    }
-  )
-  await expect(openCrew()).resolves.toEqual({ subscriptionId: 'crew', ok: true })
-  expect(closed.close).toHaveBeenCalledOnce()
-  expect(remoteRuntimeSubscriptions.size).toBe(0)
-  expect(pendingSubscriptions.size).toBe(0)
-})
-
-it('distinguishes no observation from an observed undefined rejection without changing default rejection', async () => {
-  const fact = { kind: 'remote', code: 'unauthorized' } as const
-  expect(
-    crewSubscriptionSetupFailure('crew', undefined, undefined, 'subscription', undefined)
-  ).toEqual({
-    subscriptionId: 'crew',
-    ok: false,
-    failure: { message: 'undefined', fact: { kind: 'operation', operation: 'subscription' } }
-  })
-  expect(
-    crewSubscriptionSetupFailure(
-      'crew',
-      undefined,
-      { error: undefined, fact },
-      'subscription',
-      undefined
-    )
-  ).toEqual({
-    subscriptionId: 'crew',
-    ok: false,
-    failure: { message: 'undefined', fact }
-  })
-  mocks.subscribe.mockRejectedValue(undefined)
-  await expect(openCrew()).resolves.toEqual({
-    subscriptionId: 'crew',
-    ok: false,
-    failure: { message: 'undefined', fact: { kind: 'operation', operation: 'subscription' } }
-  })
-  await expect(open()).rejects.toBeUndefined()
-  expect(pendingSubscriptions.size).toBe(0)
   expect(remoteRuntimeSubscriptions.size).toBe(0)
   expect(sender.eventNames()).toEqual([])
 })

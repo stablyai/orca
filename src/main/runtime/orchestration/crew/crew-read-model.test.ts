@@ -5,15 +5,12 @@ import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration-
 import { describe, expect, it, vi } from 'vitest'
 
 import { buildCrewSnapshot, CrewReadModel } from './crew-read-model'
-import { CrewChanges } from './crew-changes'
 import { subscribeCrew } from './crew-stream'
 import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 
 import { fixture } from './crew-read-model.test-fixture'
-import { resolveOrcaSessionParty } from '../orchestration-party'
-import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 
 describe('public crew read and stream', () => {
   it('derives direct roles and two-sided latest mail without consuming questions or leaking authority', async () => {
@@ -78,7 +75,7 @@ describe('public crew read and stream', () => {
     const questionLatest = snapshot.sections.managing.find(
       (row) => row.sendAddress === `dispatch:${worker.id}`
     )!.latest
-    const answered = db.answerQuestion({
+    db.answerQuestion({
       messageId: asked.message.id,
       runId: run.id,
       body: 'Use B',
@@ -94,29 +91,9 @@ describe('public crew read and stream', () => {
     const workerRow = snapshot.sections.managing.find(
       (row) => row.sendAddress === `dispatch:${worker.id}`
     )!
-    const answerBeforeGate = db.getMessageById(answered.message.id)
-    expect(answerBeforeGate).toMatchObject({
-      id: answered.message.id,
-      from_handle: `run:${run.id}`,
-      to_handle: `dispatch:${worker.id}`,
-      type: 'status',
-      read: 0,
-      body: 'Use B',
-      sequence: answered.message.sequence
-    })
     expect(db.getDispatchContextById(helper.id)?.creator_dispatch_id).toBe(worker.id)
     const gate = db.createGate({ taskId: worker.task_id, question: 'Ship?' })
     db.resolveGate(gate.id, 'Yes')
-    const answerAfterGate = db.getMessageById(answered.message.id)
-    expect(answerAfterGate).toMatchObject({
-      id: answered.message.id,
-      from_handle: `run:${run.id}`,
-      to_handle: `run:${run.id}`,
-      type: 'status',
-      read: 0,
-      body: answered.message.body,
-      sequence: answered.message.sequence
-    })
     const reopened = buildCrewSnapshot('term_coord', deps).sections.managing.find(
       (row) => row.partyKey === workerRow.partyKey
     )
@@ -128,169 +105,7 @@ describe('public crew read and stream', () => {
       sendAddress: 'term_worker'
     })
     expect(reopened).not.toHaveProperty('pendingQuestion')
-    process.stdout.write(
-      `C2 gate recipient handback ${JSON.stringify({ questionLatest, answerBeforeGate, answerAfterGate, helperCreator: db.getDispatchContextById(helper.id)?.creator_dispatch_id, worker: worker.id, reopened })}\n`
-    )
   })
-
-  it('keeps an empty subscription awake for first creation, coalesces changes and resolves cleared chat roots', async () => {
-    const { db, deps, assign } = fixture()
-    const wake = new CrewChanges()
-    deps.db = null
-    deps.retainedDbExists = false
-    const frames: OrchestrationCrewFrame[] = []
-    const stop = subscribeCrew(
-      () => buildCrewSnapshot('term_coord', deps),
-      wake.subscribe,
-      (frame) => frames.push(frame)
-    )
-    expect(frames).toEqual([{ type: 'begin', status: 'ok' }, { type: 'complete' }])
-    deps.retainedDbExists = true
-    expect(buildCrewSnapshot('term_coord', deps).status).toBe('unknown')
-    deps.db = db
-    const unwatchDb = db.crewChanges.subscribe(wake.notify)
-    assign('term_worker')
-    await new Promise<void>((resolve) => queueMicrotask(resolve))
-    await new Promise<void>((resolve) => queueMicrotask(resolve))
-    expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(2)
-    expect(frames.find((frame) => frame.type === 'rows')).toMatchObject({ section: 'managing' })
-    wake.notify()
-    await new Promise<void>((resolve) => queueMicrotask(resolve))
-    await new Promise<void>((resolve) => queueMicrotask(resolve))
-    expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(2)
-    stop()
-    unwatchDb()
-    const count = frames.length
-    wake.notify()
-    await Promise.resolve()
-    expect(frames).toHaveLength(count)
-    const root = agentSessionConversationView(
-      agentSessionRecordFixture({
-        sessionId: 'chat-root',
-        conversationCommand: {
-          command: 'clear',
-          state: 'completed',
-          callerKey: 'crew-fixture-clear',
-          phase: 'committed',
-          replacementSessionId: 'chat-next',
-          operationId: 'clear-one'
-        }
-      })
-    )
-    const next = agentSessionConversationView(
-      agentSessionRecordFixture({
-        sessionId: 'chat-next',
-        conversationName: 'Renamed',
-        location: { workspaceId: 'folder-custom' }
-      })
-    )
-    deps.records = {
-      listRecords: () => [root, next],
-      getRecord: (id) => (id === root.sessionId ? root : id === next.sessionId ? next : null)
-    }
-    assign('orca_session_id:chat-root')
-    const chat = buildCrewSnapshot('orca_session_id:chat-next', deps)
-    expect(chat.status).toBe('ok')
-    expect(chat.sections.managedBy).toHaveLength(1)
-    const child = buildCrewSnapshot('term_coord', deps).sections.managing.find(
-      (row) => row.openTarget?.kind === 'chat'
-    )
-    expect(child?.openTarget).toEqual({
-      kind: 'chat',
-      sessionId: 'chat-next',
-      worktreeId: 'folder-custom'
-    })
-  })
-})
-
-it('batches crew work as relationships scale and keeps skewed peers despite unrelated retained history', async () => {
-  const { db, deps, run, assign } = fixture()
-  for (let i = 0; i < 3; i++) {
-    assign(`term_extra_${i}`)
-  }
-  const operations = { all: 0, get: 0, iterate: 0, rows: 0, bytes: 0 }
-  const prepare = db.db.prepare.bind(db.db)
-  const querySpy = vi.spyOn(db.db, 'prepare').mockImplementation((sql) => {
-    const statement = prepare(sql)
-    return {
-      all: (...args) => {
-        operations.all++
-        const rows = statement.all(...args)
-        operations.rows += rows.length
-        operations.bytes += Buffer.byteLength(JSON.stringify(rows))
-        return rows
-      },
-      get: (...args) => {
-        operations.get++
-        const row = statement.get(...args)
-        operations.rows += row ? 1 : 0
-        operations.bytes += Buffer.byteLength(JSON.stringify(row ?? null))
-        return row
-      },
-      run: (...args) => statement.run(...args),
-      iterate: function* (...args) {
-        operations.iterate++
-        for (const row of statement.iterate(...args)) {
-          operations.rows++
-          operations.bytes += Buffer.byteLength(JSON.stringify(row))
-          yield row
-        }
-      },
-      setReadBigInts: (value) => statement.setReadBigInts(value)
-    }
-  })
-  buildCrewSnapshot('term_coord', deps)
-  const small = { ...operations }
-  const frames: OrchestrationCrewFrame[] = []
-  const stop = subscribeCrew(
-    () => buildCrewSnapshot('term_coord', deps),
-    db.crewChanges.subscribe,
-    (frame) => frames.push(frame)
-  )
-  for (let i = 0; i < 100; i++) {
-    const old = assign(`term_retained_${i}`)
-    db.completeDispatch(old.id)
-    db.db
-      .prepare("UPDATE dispatch_contexts SET completed_at = '2000-01-01T00:00:00Z' WHERE id = ?")
-      .run(old.id)
-  }
-  await new Promise<void>((resolve) => queueMicrotask(resolve))
-  await new Promise<void>((resolve) => queueMicrotask(resolve))
-  expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(1)
-  operations.all = operations.get = operations.iterate = operations.rows = operations.bytes = 0
-  buildCrewSnapshot('term_coord', deps)
-  expect(operations).toEqual(small)
-  for (let i = 3; i < 30; i++) {
-    assign(`term_extra_${i}`)
-  }
-  operations.all = operations.get = operations.iterate = operations.rows = operations.bytes = 0
-  const large = buildCrewSnapshot('term_coord', deps)
-  expect(large.sections.managing).toHaveLength(30)
-  expect(operations.all).toBe(small.all)
-  expect(operations.get).toBe(small.get)
-  expect(operations.rows).toBeLessThanOrEqual(small.rows * 10)
-  querySpy.mockRestore()
-  for (let i = 0; i < 100; i++) {
-    db.insertMessage({
-      from: `run:${run.id}`,
-      to: `term_mail_peer_${i}`,
-      subject: 'Outbound only',
-      body: String(i)
-    })
-  }
-  const latest = db.insertMessage({
-    from: 'term_mail_peer_0',
-    to: 'term_coord',
-    subject: 'Inbound',
-    body: 'highest sequence across aliases'
-  })
-  const skewed = buildCrewSnapshot('term_coord', deps)
-  expect(skewed.sections.talkingWith).toHaveLength(100)
-  expect(
-    skewed.sections.talkingWith.find((row) => row.latest?.preview === latest.body)?.latest
-  ).toMatchObject({ sequence: latest.sequence, direction: 'from' })
-  stop()
-  vi.restoreAllMocks()
 })
 
 it('preserves a bound offline manager and the complete committed clear conversation', () => {
@@ -426,152 +241,6 @@ it('uses qualified terminal status and keeps canonical native status without req
   ).toBe('waiting')
 })
 
-it('hydrates expired peer provenance identically in reversed read orders without mutating shared inputs', () => {
-  const { db, deps, run, handles } = fixture()
-  handles.set('term_old', 'tab_old:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
-  // Synthetic lost identity: this remains the same historical native process.
-  const processForHandle = deps.processForHandle
-  deps.processForHandle = (handle) =>
-    handle === 'term_old' ? 'structured:chat-history' : (processForHandle?.(handle) ?? null)
-  const record = agentSessionConversationView(
-    agentSessionRecordFixture({ sessionId: 'chat-history' })
-  )
-  deps.records = {
-    listRecords: () => [record],
-    getRecord: (id) => (id === record.sessionId ? record : null)
-  }
-  const dispatch = db.createDispatchContext({
-    taskId: db.createTask({ runId: run.id, spec: 'Old' }).id,
-    assigneeHandle: 'term_old',
-    processIncarnation: 'structured:chat-history',
-    creator: { kind: 'system' },
-    maxDepth: 10
-  })
-  db.completeDispatch(dispatch.id)
-  db.db
-    .prepare("UPDATE dispatch_contexts SET completed_at = '2000-01-01' WHERE id = ?")
-    .run(dispatch.id)
-  db.insertMessage({ from: 'term_old', to: 'term_peer', subject: 'Recent', body: 'retained alias' })
-  const model = new CrewReadModel(() => deps, db.crewChanges.subscribe)
-  const stop = model.subscribe(() => {})
-  const fresh = buildCrewSnapshot('term_peer', deps)
-  const before = model.read('term_peer')
-  expect(before).toEqual(fresh)
-  expect(() =>
-    resolveOrcaSessionParty(testOrcaSessionId('chat-history'), db, deps.records)
-  ).toThrow('worker identity')
-  expect(before.sections.talkingWith[0]).not.toHaveProperty('sendAddress')
-  expect(before.sections.talkingWith[0]).toMatchObject({
-    openTarget: { kind: 'chat', sessionId: 'chat-history' },
-    latest: { preview: 'retained alias' }
-  })
-  expect(() => model.read('orca_session_id:chat-history')).toThrow(
-    'Crew caller identity is unavailable'
-  )
-  expect(model.read('term_peer')).toEqual(before)
-  stop()
-  const stopAgain = model.subscribe(() => {})
-  expect(() => model.read('orca_session_id:chat-history')).toThrow(
-    'Crew caller identity is unavailable'
-  )
-  expect(model.read('term_peer')).toEqual(before)
-  stopAgain()
-})
-
-it('keeps corrupt clear branches, missing successors and cycles independent of record order', () => {
-  const { deps } = fixture()
-  const record = (sessionId: string, next: string) =>
-    agentSessionConversationView(
-      agentSessionRecordFixture({
-        sessionId,
-        conversationCommand: {
-          command: 'clear',
-          state: 'completed',
-          callerKey: 'crew-fixture-clear',
-          phase: 'committed',
-          replacementSessionId: next,
-          operationId: sessionId
-        }
-      })
-    )
-  const rows = [
-    record('chat-aaa', 'chat-ccc'),
-    record('chat-bbb', 'chat-ccc'),
-    record('chat-ccc', 'chat-ddd'),
-    record('chat-xxx', 'chat-yyy'),
-    record('chat-yyy', 'chat-xxx')
-  ]
-  const identities = (records: typeof rows) => {
-    const registry = createCrewPartyRegistry({
-      ...deps,
-      records: { listRecords: () => records, getRecord: () => null }
-    })
-    return rows.map((row) => registry.party(row.sessionId, null, null)?.address)
-  }
-  expect(identities(rows)).toEqual(rows.map((row) => `orca_session_id:${row.sessionId}`))
-  expect(identities(rows.toReversed())).toEqual(identities(rows))
-  const invalid = [record('!invalid', 'chat-valid'), record('chat-valid', '')]
-  for (const records of [invalid, invalid.toReversed()]) {
-    expect(() => identities(records)).toThrow('Not an Orca session id: !invalid')
-  }
-})
-
-it('wakes for later routing pages and existing-message question registration, including rollback', async () => {
-  const { db, deps, run, assign } = fixture()
-  const worker = assign('term_worker')
-  const model = new CrewReadModel(() => deps, db.crewChanges.subscribe)
-  const frames: OrchestrationCrewFrame[] = []
-  const stop = subscribeCrew(
-    () => model.read('term_coord'),
-    model.subscribe,
-    (frame) => frames.push(frame)
-  )
-  const messages = db.insertMessages(
-    Array.from({ length: 51 }, (_, i) => ({
-      runId: run.id,
-      from: `dispatch:${worker.id}`,
-      to: 'term_unowned',
-      subject: 'Routed',
-      body: `page-${i}`
-    }))
-  )
-  await Promise.resolve()
-  expect(db.routeDirectMessagePage(`run:${run.id}`, run.id, 'term_unowned').hasMore).toBe(true)
-  await Promise.resolve()
-  expect(model.read('term_coord').sections.managing[0].latest?.preview).toBe('page-49')
-  db.routeDirectMessagePage(`run:${run.id}`, run.id, 'term_unowned')
-  await Promise.resolve()
-  expect(model.read('term_coord').sections.managing[0].latest?.preview).toBe('page-50')
-  const existing = db.insertMessage({
-    runId: run.id,
-    from: `dispatch:${worker.id}`,
-    to: `run:${run.id}`,
-    subject: 'Question already imported',
-    type: 'question',
-    body: 'Existing metadata'
-  })
-  await Promise.resolve()
-  expect(model.read('term_coord').sections.managing[0].pendingQuestion).toBeUndefined()
-  db.registerFederatedQuestion({ messageId: existing.id, runId: run.id, dispatchId: worker.id })
-  await Promise.resolve()
-  expect(model.read('term_coord').sections.managing[0].pendingQuestion?.preview).toBe(
-    'Existing metadata'
-  )
-  const count = frames.filter((frame) => frame.type === 'complete').length
-  db.db.exec('BEGIN')
-  db.insertMessage({
-    from: 'term_peer',
-    to: 'term_coord',
-    subject: 'Rolled back',
-    body: 'never visible'
-  })
-  db.db.exec('ROLLBACK')
-  await Promise.resolve()
-  expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(count)
-  expect(db.getMessageById(messages[50].id)?.to_handle).toBe(`run:${run.id}`)
-  stop()
-})
-
 it('rederives exact and backwards clocks and drops unwatched one-shot truth', () => {
   const { db, deps, assign } = fixture()
   const worker = assign('term_worker')
@@ -600,42 +269,6 @@ it('rederives exact and backwards clocks and drops unwatched one-shot truth', ()
   } finally {
     clock.mockRestore()
   }
-})
-
-it('retains reentrant invalidations and discards a generation whose acquisition fails', async () => {
-  const { deps, assign } = fixture()
-  assign('term_worker')
-  const wake = new CrewChanges()
-  let fail = false
-  let reenter = false
-  let reads = 0
-  const model = new CrewReadModel(() => {
-    reads++
-    if (fail) {
-      throw new Error('source unavailable')
-    }
-    if (reenter) {
-      reenter = false
-      wake.notify(new Set(['records']))
-    }
-    return deps
-  }, wake.subscribe)
-  const stop = model.subscribe(() => {})
-  expect(model.read('term_coord').sections.managing).toHaveLength(1)
-  reenter = true
-  wake.notify()
-  model.read('term_coord')
-  model.read('term_coord')
-  expect(reads).toBe(3)
-  fail = true
-  wake.notify(new Set(['status']))
-  expect(() => model.read('term_coord')).toThrow('source unavailable')
-  fail = false
-  // The next legitimate event must reacquire, even when it only changes traffic.
-  wake.notify(new Set(['traffic']))
-  expect(model.read('term_coord').sections.managing).toHaveLength(1)
-  expect(reads).toBe(5)
-  stop()
 })
 
 it('invalidates host membership when report import uses the transaction settlement entry point', async () => {

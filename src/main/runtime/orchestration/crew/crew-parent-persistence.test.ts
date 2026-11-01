@@ -64,7 +64,6 @@ it('reconstructs old-writer stub parents after real receipt pruning and reopen, 
       expect(before[0]).toMatchObject({ role: 'manager' })
       expect(before[0]).not.toHaveProperty('sendAddress')
       expect(before[0].openTarget).toBeUndefined()
-      console.info('Crew persisted terminal parent', { workerProcess, stub, before })
       db.resetMessages()
       await Promise.resolve()
       await Promise.resolve()

@@ -1,6 +1,6 @@
 import type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 export type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
-import { useAgentLaunchPickerInventory } from '../agent/use-agent-launch-picker-inventory'
+import { useAgentLaunchPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -11,7 +11,6 @@ import { requestNativeChatComposerFocus } from '@/components/native-chat/use-nat
 import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
-import { buildAgentPickerLaunchOptions } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { buildWindowsShellMenuEntries } from './tab-bar-windows-shell-options'
@@ -76,14 +75,13 @@ export function useTabBarCreateMenuController({
     { wakeOnOpen: true }
   )
   const [selectedPickerAgent, selectPickerAgent] = useState<AgentPickerEntry['agent']>()
-  const agentPickerEntries = useAgentLaunchPickerInventory(
+  // Why: subscribed inside the open menu only; catalog reads landing here would re-render the tab bar.
+  const agentPickerInventory = useAgentLaunchPickerInventorySource(
     worktreeId,
     agentMenu,
     newTabMenuOpen && showAgentLaunchItems,
     selectedPickerAgent
   )
-  const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
-  const agentLaunchOptions = buildAgentPickerLaunchOptions(agentPickerEntries, commandOverrides)
   const pendingNewTabMenuFocusRef = useRef<{ focus: () => void; synchronous?: true } | null>(null)
   const pendingNewTabMenuFocusAnimationRef = useRef<number | null>(null)
   const pendingNewTabMenuFocusRetryRef = useRef<number | null>(null)
@@ -277,8 +275,7 @@ export function useTabBarCreateMenuController({
   }, [newTabMenuOpen])
   return {
     agentMenu,
-    agentLaunchOptions,
-    agentPickerEntries,
+    agentPickerInventory,
     selectPickerAgent,
     launchAgentRow,
     newTabMenuOpen,

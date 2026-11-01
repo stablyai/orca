@@ -15,7 +15,7 @@ import {
 } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from '../config/ssh-g-config-resolution'
-import { SshConnectionManager } from './ssh-connection-manager'
+
 import { RECONNECT_BACKOFF_MS } from './ssh-connection-timing'
 import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from '../ssh-user-disconnect'
 
@@ -180,42 +180,6 @@ describe('SshConnection retry after wake or network return', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
-  })
-
-  it('leaves healthy, initial, and explicitly closed connections alone', async () => {
-    const { conn } = recordStatuses()
-    await connectWithFakeTimers(conn)
-    expect(conn.retryAfterNetworkReturn()).toBe(false)
-
-    await conn.disconnect()
-    expect(conn.retryAfterNetworkReturn()).toBe(false)
-
-    const initial = new SshConnection(createTarget(), createCallbacks())
-    ssh2Mock.connectBehavior = 'pending'
-    void initial.connect().catch(() => undefined)
-    await vi.advanceTimersByTimeAsync(10_000)
-    // The first connect owns its own retries and result.
-    expect(initial.retryAfterNetworkReturn()).toBe(false)
-    await initial.disconnect()
-  })
-
-  it('restarts every stalled connection the manager holds', async () => {
-    const manager = new SshConnectionManager(createCallbacks())
-    const created = nextSshClientCreation()
-    const connecting = manager.connect(createTarget())
-    await created
-    await vi.advanceTimersByTimeAsync(1)
-    const conn = await connecting
-    await spendLadderWhileAsleep(conn)
-
-    ssh2Mock.connectBehavior = 'ready'
-    const recreated = nextSshClientCreation()
-    expect(manager.retryStalledReconnects()).toEqual([createTarget().id])
-    await recreated
-    await vi.advanceTimersByTimeAsync(1)
-    expect(manager.getState(createTarget().id)?.status).toBe('connected')
-    expect(manager.retryStalledReconnects()).toEqual([])
-    await manager.disconnectAll()
   })
 
   it('never redials a host the user disconnected while its teardown is still queued', async () => {

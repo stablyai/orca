@@ -4,13 +4,13 @@ import {
   namedSubagents,
   subagentFallbackText
 } from './native-chat-subagent-items'
-import { projectNativeChatTranscriptMessages } from '../../native-chat-transcript-projection'
+import { projectNativeChatTranscriptMessages } from './native-chat-transcript-projection'
 import { formatWorkerTranscriptMessage } from '../../worker-transcript-text'
 import type {
   NativeChatMessage,
   NativeChatSubagentBlock,
   NativeChatSubagentGroupBlock
-} from '../../native-chat-types'
+} from '../native-chat-types'
 
 function subagent(
   id: string,

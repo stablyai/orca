@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { useAppStore, type AppState } from '@/store'
 import { hasAwakeStructuredChat } from '@/store/slices/structured-chat-slept-at'
 import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
 import { EMPTY_BROWSER_TABS, EMPTY_TABS } from './WorktreeCardHelpers'
@@ -45,6 +45,20 @@ function hasStoppedWslHost(state: {
   return false
 }
 
+export function selectWorktreeActivityPtyIds(
+  state: AppState,
+  worktreeId: string
+): Record<string, string[]> {
+  const ptyIds = selectLivePtyIdsForWorktree(state, worktreeId)
+  if (!hasStoppedWslHost(state)) {
+    return ptyIds
+  }
+  const owner = selectWorkspaceRuntimeEnvironmentId(state, worktreeId)
+  return owner && selectStoppedWslDistro(state, owner) !== null
+    ? withoutStoppedHostPtys(ptyIds, owner)
+    : ptyIds
+}
+
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
   const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS)
@@ -54,19 +68,8 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const runtimePaneTitlesForWorktree = useAppStore(
     useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktreeId))
   )
-  // Why one selector: a second subscription per card costs a store listener on every workspace.
   const ptyIdsForWorktree = useAppStore(
-    useShallow((s) => {
-      const ptyIds = selectLivePtyIdsForWorktree(s, worktreeId)
-      if (!hasStoppedWslHost(s)) {
-        return ptyIds
-      }
-      // A stopped distro ended its terminals, whatever bindings the panes keep for its Start.
-      const owner = selectWorkspaceRuntimeEnvironmentId(s, worktreeId)
-      return owner && selectStoppedWslDistro(s, owner) !== null
-        ? withoutStoppedHostPtys(ptyIds, owner)
-        : ptyIds
-    })
+    useShallow((s) => selectWorktreeActivityPtyIds(s, worktreeId))
   )
   const terminalLayoutRootsByTabId = useAppStore(
     useShallow((s) => selectTerminalLayoutRootsForWorktree(s, worktreeId))

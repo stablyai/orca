@@ -4,7 +4,7 @@ import { useRouter, useSegments, type ErrorBoundaryProps } from 'expo-router'
 import { discardInitialLaunchIntent } from '../navigation/initial-launch-intent'
 import { recordNativeRenderError } from '../diagnostics/native-render-log'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -23,14 +23,18 @@ export function NativeScreenRecovery({ error, retry }: ErrorBoundaryProps) {
       <Text style={styles.title}>
         {t('components.nativeScreenRecovery.title', 'Something went wrong')}
       </Text>
-      <Pressable accessibilityRole="button" style={styles.retryButton} onPress={() => void retry()}>
+      <Pressable
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.retryButton, pressed && pressedStyle]}
+        onPress={() => void retry()}
+      >
         <Text style={styles.retryText}>
           {t('components.nativeScreenRecovery.tryAgain', 'Try again')}
         </Text>
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        style={styles.homeButton}
+        style={({ pressed }) => [styles.homeButton, pressed && pressedStyle]}
         onPress={() => {
           discardInitialLaunchIntent()
           router.replace('/')

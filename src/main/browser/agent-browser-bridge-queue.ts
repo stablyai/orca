@@ -21,6 +21,7 @@ import {
   captureRemoteCliBrowserScope,
   runOutsideRemoteCliBrowserScope
 } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+import { getActiveRpcCaller } from '../runtime/rpc/rpc-active-caller'
 
 export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEffects {
   // Serialize tab switches behind commands targeting the current tab.
@@ -97,6 +98,8 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
     assertNoJavaScriptDialog(webContentsId, pageId, assertNotRevoked)
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
     const agentCommand = this.browserManager.beginAgentCommand(pageId)
+    // Queued commands run under the caller ahead of them, so read this one's caller now.
+    const caller = getActiveRpcCaller()
     // Decided at enqueue: a queued command runs under the caller of the command ahead of it.
     const reportEffects = options.reportEffects === true && agentCommand.agent
 
@@ -156,7 +159,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
             )
           return origin.run(() => {
             started = true
-            return agentCommand.run(run)
+            return this.browserManager.runPageCommand(pageId, caller, () => agentCommand.run(run))
           })
         },
         resolve: resolve as (value: unknown) => void,

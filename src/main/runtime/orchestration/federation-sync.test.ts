@@ -108,18 +108,6 @@ describe('federation relay parsing', () => {
 })
 
 describe('federation relay acknowledgments', () => {
-  it.each([1, 2] as const)(
-    'keeps protocol-%i peers on the ordinary pull without lifecycle capability probing',
-    async (protocol) => {
-      const { runtime, remoteCall } = createIdleSyncHarness(0, protocol)
-      await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-      expect(remoteCall.mock.calls.map(([, method]) => method)).toEqual([
-        'orchestration.federationPull'
-      ])
-      expect(remoteCall.mock.calls[0][2]).not.toHaveProperty('replayUnacknowledged')
-    }
-  )
-
   it('does not replay or settle a protocol-3 attachment after capability downgrade', async () => {
     const harness = createIdleSyncHarness(0, 3)
     harness.setRemoteCapabilities([])

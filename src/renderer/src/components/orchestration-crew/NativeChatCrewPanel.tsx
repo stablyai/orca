@@ -21,3 +21,23 @@ export function NativeChatCrewPanel({
   }
   return <OrchestrationCrewPanel target={target} party={party} isVisible={isVisible} />
 }
+
+/** The chat body below the pane header; the crew panel overlays it, never the header's buttons. */
+export function NativeChatCrewFrame({
+  pane,
+  children
+}: {
+  pane: { target: RuntimeClientTarget; sessionId: string; isVisible: boolean }
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <NativeChatCrewPanel
+        target={pane.target}
+        sessionId={pane.sessionId}
+        isVisible={pane.isVisible}
+      />
+      {children}
+    </div>
+  )
+}

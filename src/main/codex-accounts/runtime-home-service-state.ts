@@ -1,5 +1,5 @@
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { CodexCredentialAbsenceGrace } from './codex-credential-absence-grace'
 import type {
   CodexMirroredHomeStatus,

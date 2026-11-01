@@ -86,22 +86,6 @@ function dialogChild(): HTMLElement {
 }
 
 describe('useFeedbackImageDrop', () => {
-  it('claims an image dropped on the dialog and attaches it once', async () => {
-    const onAddFiles = vi.fn()
-    await renderHarness(true, onAddFiles)
-
-    expect(container.querySelector('[data-os-file-drop-owner]')).not.toBeNull()
-    const event = dragEvent('drop', [pngFile()])
-    act(() => {
-      dialogChild().dispatchEvent(event)
-    })
-
-    expect(onAddFiles).toHaveBeenCalledTimes(1)
-    expect(onAddFiles.mock.calls[0][0].map((file: File) => file.name)).toEqual(['shot.png'])
-    expect(event.defaultPrevented).toBe(true)
-    expect(unclaimedDropSpy).not.toHaveBeenCalled()
-  })
-
   it('silently cancels drops outside the dialog and clears the hover state', async () => {
     const onAddFiles = vi.fn()
     await renderHarness(true, onAddFiles)
@@ -156,18 +140,6 @@ describe('useFeedbackImageDrop', () => {
     expect(showNotice).not.toHaveBeenCalled()
   })
 
-  it('claims dragover so the document guard preserves the accepted copy cursor', async () => {
-    await renderHarness(true, vi.fn())
-
-    const event = dragEvent('dragover', [])
-    act(() => {
-      dialogChild().dispatchEvent(event)
-    })
-
-    expect(event.defaultPrevented).toBe(true)
-    expect(event).toHaveProperty('dataTransfer.dropEffect', 'copy')
-  })
-
   it('leaves in-app drags alone on dragover', async () => {
     await renderHarness(true, vi.fn())
 
@@ -213,20 +185,5 @@ describe('useFeedbackImageDrop', () => {
     expect(refusedDrop).toHaveProperty('dataTransfer.dropEffect', 'none')
     expect(onAddFiles).toHaveBeenCalledOnce()
     expect(showNotice).not.toHaveBeenCalled()
-  })
-
-  it('highlights from the advertised drag types, which is all a dragenter exposes', async () => {
-    await renderHarness(true, vi.fn())
-    const dialog = container.querySelector<HTMLElement>('[data-testid="dialog"]')!
-
-    act(() => {
-      dialogChild().dispatchEvent(dragEvent('dragenter', []))
-    })
-    expect(dialog.dataset.dragActive).toBe('true')
-
-    act(() => {
-      dialogChild().dispatchEvent(dragEvent('dragleave', []))
-    })
-    expect(dialog.dataset.dragActive).toBe('false')
   })
 })

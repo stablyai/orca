@@ -72,6 +72,7 @@ function orchestratorOverDriver(): {
     now: () => clock.now,
     appVersion: '1.0.0',
     autoMoveEnabled: () => true,
+    autoMovesBridgeProjects: () => true,
     prepareHost: async () => 'ready',
     hostRemovalPending: () => false,
     hasHost: () => true,

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitMerge, Link2Off } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { GitHubPRMergeMethod, PRInfo } from '../../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../../transport/rpc-client'
@@ -23,6 +23,8 @@ type Props = {
   // Refetch after unlinking so the view returns to the create/link empty state.
   onUnlinked: () => void
   onRecheck: () => void
+  /** False where a next-step bar already offers Merge and auto-merge. */
+  showMerge?: boolean
 }
 
 type Confirm =
@@ -38,7 +40,8 @@ export function PRActionsSection({
   client,
   worktreeId,
   onUnlinked,
-  onRecheck
+  onRecheck,
+  showMerge = true
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -64,7 +67,7 @@ export function PRActionsSection({
   const autoMergeBusy = actions.isBusy({ kind: 'autoMerge' })
   const stateBusy = actions.isBusy({ kind: 'state' })
   const unlinkBusy = unlinking || mergeBusy || autoMergeBusy || stateBusy
-  const showAutoMerge = merge.showAutoMerge
+  const showAutoMerge = showMerge && merge.showAutoMerge
   const showSecondary = avail.canClose || avail.canReopen || avail.canUnlink
   const actionError = unlinkError
     ? unlinkError.kind === 'host'
@@ -141,12 +144,13 @@ export function PRActionsSection({
 
   return (
     <View style={styles.actionsBlock}>
-      {avail.canMerge ? (
+      {showMerge && avail.canMerge ? (
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.actionButton,
             styles.actionButtonMerge,
-            (mergeBusy || !merge.enabled) && styles.actionButtonDisabled
+            (mergeBusy || !merge.enabled) && styles.actionButtonDisabled,
+            pressed && pressedStyle
           ]}
           onPress={() => {
             setUnlinkError(null)
@@ -168,11 +172,12 @@ export function PRActionsSection({
           <Text style={[styles.actionButtonText, styles.actionButtonTextMerge]}>{merge.label}</Text>
         </Pressable>
       ) : null}
-      {avail.canMerge && merge.hint ? (
+      {showMerge && avail.canMerge && merge.hint ? (
         <View style={styles.hintRow}>
           <Text style={styles.actionHint}>{merge.hint}</Text>
           {/* No mobile surface polls PR state, so a blocked Merge needs its own recheck. */}
           <Pressable
+            style={({ pressed }) => pressed && pressedStyle}
             onPress={() => onRecheck()}
             hitSlop={8}
             accessibilityRole="button"
@@ -190,10 +195,11 @@ export function PRActionsSection({
 
       {showMarkReady ? (
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.actionButton,
             styles.secondaryButton,
-            stateBusy && styles.actionButtonDisabled
+            stateBusy && styles.actionButtonDisabled,
+            pressed && pressedStyle
           ]}
           onPress={() => {
             setUnlinkError(null)
@@ -219,7 +225,11 @@ export function PRActionsSection({
             {t('pullRequest.prActionsSection.autoMergeLabel', 'Auto-merge when ready')}
           </Text>
           <Pressable
-            style={[styles.togglePill, autoMerge && styles.togglePillOn]}
+            style={({ pressed }) => [
+              styles.togglePill,
+              autoMerge && styles.togglePillOn,
+              pressed && pressedStyle
+            ]}
             onPress={() => {
               setUnlinkError(null)
               actions.setAutoMerge(!autoMerge, effectiveMethod)
@@ -249,10 +259,11 @@ export function PRActionsSection({
         <View style={styles.secondaryRow}>
           {avail.canClose || avail.canReopen ? (
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.actionButton,
                 styles.secondaryButton,
-                stateBusy && styles.actionButtonDisabled
+                stateBusy && styles.actionButtonDisabled,
+                pressed && pressedStyle
               ]}
               onPress={() => {
                 setUnlinkError(null)
@@ -284,10 +295,11 @@ export function PRActionsSection({
           ) : null}
           {avail.canUnlink ? (
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.actionButton,
                 styles.secondaryButton,
-                unlinkBusy && styles.actionButtonDisabled
+                unlinkBusy && styles.actionButtonDisabled,
+                pressed && pressedStyle
               ]}
               onPress={() => void unlink()}
               disabled={unlinkBusy}

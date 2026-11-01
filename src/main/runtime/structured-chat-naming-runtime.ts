@@ -10,14 +10,14 @@ import {
 import { chatNamingAgentTarget } from './structured-chat-naming-agent-launch'
 import type { AgentLaunchProfileSettings } from '../../shared/tui-agent-launch-defaults'
 import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
-import { agentSessionCurrentContextRows } from '../../shared/agent-session-context-clear'
+import { agentSessionCurrentContextRows } from '../../shared/agent-session/agent-session-context-clear'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { StructuredChatNamingDeps } from '../native-chat/structured-chat-naming'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { firstStructuredChatNamingPrompt } from '../../shared/structured-chat-naming-eligibility'
-import { firstStructuredAgentSessionPrompt } from '../../shared/structured-agent-session-first-prompt'
+import { firstStructuredAgentSessionPrompt } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
 import {
   generateConversationNameFromContext,

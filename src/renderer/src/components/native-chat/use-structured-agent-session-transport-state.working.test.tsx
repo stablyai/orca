@@ -4,13 +4,13 @@
 
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionHistoryPage } from '../../../../shared/agent-session/agent-session-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../../../shared/structured-agent-session-reducer'
+} from '../../../../shared/agent-session/structured-agent-session-reducer'
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
 
 afterEach(cleanup)

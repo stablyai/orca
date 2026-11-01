@@ -1,7 +1,7 @@
 import type {
   AgentJournalDispatchState,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 export type AgentJournalDispatchObservation = {
   state: AgentJournalDispatchState

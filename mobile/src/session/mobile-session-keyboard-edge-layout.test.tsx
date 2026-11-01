@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 const layout = vi.hoisted(() => ({ sideRail: false, padAvailable: false, os: 'ios' }))
 vi.mock('react-native', () => ({ Platform: { OS: 'web' } }))
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
 vi.mock('../platform/host-os', () => ({ hostOs: () => layout.os }))
 vi.mock('../layout/use-shell-side-rail', () => ({
   useShellSideRail: () => layout.sideRail,

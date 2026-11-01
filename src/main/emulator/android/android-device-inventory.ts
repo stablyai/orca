@@ -60,13 +60,19 @@ export async function listAndroidDevices(
   runner: AndroidCommandRunner,
   sdk: AndroidSdkPaths
 ): Promise<EmulatorDevice[]> {
-  const [running, avdsResult] = await Promise.all([
+  const [running, avds] = await Promise.all([
     listRunningAdbDevices(runner, sdk),
-    runner(sdk.emulator, listAvdsArgs)
+    listAvdNames(runner, sdk)
   ])
-  const avds = parseAvdList(avdsResult.stdout)
   const runningAvdBySerial = await resolveRunningAvdNames(runner, sdk, running)
   return mergeAndroidDevices(running, avds, runningAvdBySerial)
+}
+
+export async function listAvdNames(
+  runner: AndroidCommandRunner,
+  sdk: AndroidSdkPaths
+): Promise<string[]> {
+  return sdk.emulator ? parseAvdList((await runner(sdk.emulator, listAvdsArgs)).stdout) : []
 }
 
 // adb appends an OK status after the AVD name.

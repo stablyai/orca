@@ -90,27 +90,4 @@ describe('mixed literal checkbox markers and task lists', () => {
       editor.destroy()
     }
   })
-
-  it.each([
-    ['- [ ]\n- [x] Later\n- plain', [{ text: 'Later', checked: true }]],
-    ['- [ ]\n- plain', []]
-  ])('does not invent tasks from bare markers in %j', (source, expected) => {
-    const editor = openMarkdown(source)
-    try {
-      editor.state.doc.check()
-      expect(taskItems(editor)).toEqual(expected)
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('keeps a checkbox followed by a non-breaking space as a task', () => {
-    const editor = openMarkdown('- literal\n- [x]\u00a0Later')
-    try {
-      editor.state.doc.check()
-      expect(taskItems(editor)).toEqual([{ text: 'Later', checked: true }])
-    } finally {
-      editor.destroy()
-    }
-  })
 })

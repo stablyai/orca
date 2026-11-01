@@ -1,8 +1,8 @@
 import type {
   AgentSessionModelCatalogResult,
-  AgentSessionOptionResult,
-  AgentSessionOptionsResult
-} from './agent-session-wire'
+  AgentSessionOptionResult
+} from './agent-session/agent-session-wire'
+import type { AgentSessionOptionsResult } from './agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from './native-chat/input/native-chat-session-options'
 
 export type PiRefreshHarness = {

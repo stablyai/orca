@@ -1,15 +1,13 @@
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { StructuredAgentSessionJournalProjections } from './structured-agent-session-status-journal-projection'
 import { MAX_RETAINED_SESSION_ACTIVITIES } from './structured-agent-session-activity-retention'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import * as journalReducer from '../agent-session-journal/journal-reducer'
 
 import {

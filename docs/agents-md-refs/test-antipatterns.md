@@ -6,6 +6,7 @@ Tests that:
 - Have no meaningful assertions, such as `expect(true).toBe(true)`.
 - Assert only mock calls or values supplied by their own mocks.
 - Promise inputs or behavior their setup never exercises.
+- Claim pixel or interaction coverage from static markup.
 - Duplicate coverage without faster feedback or clearer failures, including private predicates and provider replays.
 - Copy inventories, manifests, exports, imports, or strings instead of proving behavior.
 - Check persistence at a path the code never writes.
@@ -15,6 +16,7 @@ Tests that:
 
 Mocks and fixtures that:
 
+- Fake React hooks while ignoring effect dependencies or cleanup.
 - Hide incorrect tables, fields, joins, filters, or arguments behind mocked internal chains.
 - Contradict real producers or source contracts.
 - Implement the behavior under test or treat distinct APIs as equivalent.

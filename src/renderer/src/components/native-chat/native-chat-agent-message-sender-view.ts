@@ -7,7 +7,7 @@ import {
 import type { AppState } from '@/store/types'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { structuredAgentSessionOwnerInputs } from '@/runtime/structured-agent-session-owner'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -128,7 +128,7 @@ export function useAgentMessageSenderView(
       ),
     [address, sessionId, handle, chatWorktreeId, targetKind, environmentId]
   )
-  return useAgentMessageSenderSource(locate)
+  return useAgentMessageSenderSource(locate, sender?.agent)
 }
 
 /** List form of the card avatar's view: one subscription for every sender in `inputs`. */
@@ -138,17 +138,18 @@ export function useAgentMessageSenderViews(
 ) {
   const targetKind = target?.kind
   const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
-  const locates = useMemo(() => {
+  const lookups = useMemo(() => {
     const stable = stableRuntimeTarget(targetKind, environmentId)
-    return inputs.map(({ sender, worktreeId }) =>
-      senderLocator(
+    return inputs.map(({ sender, worktreeId }) => ({
+      locate: senderLocator(
         sender?.party.address,
         sender?.party.orcaSessionId,
         sender?.party.terminalHandle,
         worktreeId,
         stable
-      )
-    )
+      ),
+      savedAgent: sender?.agent
+    }))
   }, [inputs, targetKind, environmentId])
-  return useAgentMessageSenderSources(locates)
+  return useAgentMessageSenderSources(lookups)
 }

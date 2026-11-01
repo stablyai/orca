@@ -4,20 +4,18 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionStatusSummary
-} from '../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from '../codex/app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
+import type { openCodexAppServerConnection } from '../codex/app-server/codex-app-server-connection'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
@@ -27,7 +25,7 @@ import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-sess
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'

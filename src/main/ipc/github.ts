@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
 import { registerGitHubAccountHandlers } from './github-account-handlers'
 import { registerGitHubIssueMutationHandlers } from './github-issue-mutation-handlers'

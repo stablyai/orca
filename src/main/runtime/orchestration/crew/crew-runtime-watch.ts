@@ -10,7 +10,7 @@ import type { RuntimeOrchestrationSenderNames } from '../../runtime-orchestratio
 import type { OrchestrationDb } from '../db'
 import type { CrewReadDependencies } from './crew-read-model'
 import { conversationRecordReader } from '../structured-session-lineage'
-import { peekOpenedAgentSessionRecordStore } from '../../agent-session-record-store-slot'
+import { peekOpenedAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-slot'
 import { isDeepStrictEqual } from 'node:util'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'

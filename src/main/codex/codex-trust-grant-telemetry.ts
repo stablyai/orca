@@ -1,4 +1,4 @@
-import type { CodexTrustGrantSessionVerifyClass } from './codex-app-server-client'
+import type { CodexTrustGrantSessionVerifyClass } from './app-server/codex-app-server-client'
 import { WSL_CODEX_NOT_FOUND_MESSAGE } from '../codex-accounts/wsl-codex-command'
 
 /** Retain legacy lanes for the telemetry schema and dashboards. */

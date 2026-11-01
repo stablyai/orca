@@ -124,17 +124,24 @@ export function richMarkdownEditorStyle(): string {
       color: var(--muted-foreground);
       background: color-mix(in srgb, var(--foreground) 2%, transparent);
     }
+    /* Block table scrolls sideways instead of squeezing columns to fit the phone (#36412). */
     table {
-      width: 100%;
+      display: block;
+      overflow-x: auto;
       margin: 1em 0;
       border-collapse: collapse;
       font-size: 0.95em;
     }
+    /* break-word and keep-all size columns to whole words, CJK runs too (#editor's anywhere wraps letters); max-width caps unbreakable runs like URLs; 1% cells still stretch a narrow table to full width. */
     th, td {
+      width: 1%;
+      max-width: 16em;
       padding: 8px 14px;
       border: 1px solid var(--border);
       text-align: left;
       vertical-align: top;
+      overflow-wrap: break-word;
+      word-break: keep-all;
     }
     th {
       font-weight: 600;

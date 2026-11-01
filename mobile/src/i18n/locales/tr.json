@@ -21,7 +21,6 @@
     "panel": {
       "all": "Tümü",
       "emptyScope": "Bu kapsamda geçmiş ajan oturumu yok.",
-      "loadFailed": "Yüklenemedi",
       "missingResumeId": "Bu oturumun devam ettirme kimliği eksik.",
       "noSearchResults": "Aramanızla eşleşen oturum yok.",
       "noSessions": "Ajan oturumu yok",
@@ -526,6 +525,10 @@
       "disconnected": "Eklenemedi (bağlantı yok)",
       "imageTooLarge": "Görsel eklenemeyecek kadar büyük",
       "permissionDenied": "Fotoğraf erişim izni reddedildi"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Ajana devredildi",
+      "startedAgent": "Ajan başlatıldı"
     }
   },
   "common": {
@@ -658,17 +661,14 @@
       "loadingDiff": "Diff yükleniyor…",
       "loadingReview": "İnceleme yükleniyor…",
       "noReviewableChanges": "İncelenebilir Değişiklik Yok",
-      "retryLabel": "İncelemeyi yeniden yükle",
       "reviewUnavailable": "İnceleme Kullanılamıyor",
       "selectFile": "İncelemek için bir dosya seçin.",
-      "tooLargeMessage": "Bu diff, mobil önizleme için çok büyük.",
-      "tryDifferentFilter": "Farklı bir inceleme filtresi deneyin."
+      "tooLargeMessage": "Bu diff, mobil önizleme için çok büyük."
     },
     "diffReviewDrawers": {
       "addNote": "Not Ekle",
       "cancelNote": "Notu iptal et",
       "clearSentNotes": "Gönderilen Notları Temizle",
-      "completeTitle": "İnceleme Tamamlandı",
       "copyNotes": "Notları Kopyala",
       "deleteNote": "Notu sil",
       "discard": "At",
@@ -676,13 +676,8 @@
       "discardTitle": "Dosya Değişikliklerini At",
       "editNote": "Notu Düzenle",
       "fileNote": "Dosya notu",
-      "fileSummary_one": "{{fileCount}} dosya incelendi, {{count}} not",
-      "fileSummary_other": "{{fileCount}} dosya incelendi, {{count}} not",
-      "filesSummary_one": "{{fileCount}} dosya incelendi, {{count}} not",
-      "filesSummary_other": "{{fileCount}} dosya incelendi, {{count}} not",
       "lineNumber": "Satır {{lineNumber}}",
       "loadingSessions": "Ajan oturumları yükleniyor…",
-      "markUnreviewed": "İncelenmedi Olarak İşaretle",
       "newAgentSession": "Yeni Ajan Oturumu",
       "openInSession": "Oturumda Aç",
       "reviewNote": "İnceleme notu",
@@ -690,11 +685,6 @@
       "sendNotes": "Notları Gönder",
       "sendNotesLabel": "Notları ajana gönder",
       "sendUnsentNotes": "Gönderilmemiş Notları Gönder",
-      "stageReviewed": "İncelenenleri Stage Et",
-      "stageReviewedFiles": "İncelenen Dosyaları Stage Et",
-      "stageReviewedLabel": "İncelenen dosyaları stage et",
-      "stageableFiles_one": "İncelenen ve henüz stage edilmemiş {{count}} dosya stage edilebilir",
-      "stageableFiles_other": "İncelenen ve henüz stage edilmemiş {{count}} dosya stage edilebilir",
       "statusUnreadable": "Bu sunucunun durumu okunamadı. Yeniden deneniyor…",
       "terminal": "Terminal",
       "terminalLabel": "{{title}} ({{id}})",
@@ -703,57 +693,17 @@
       "updateRequired": "Bilgisayarınızdaki Orca'yı güncelleyin"
     },
     "diffReviewFileSummary": {
-      "branch": "Branch",
-      "branchFrom": "Branch · önceki yol: {{oldPath}}",
       "changed": "Değişti",
       "editFileNote": "Dosya notunu düzenle",
-      "hunk": "Blok",
-      "nextHunk": "Sonraki değişiklik bloğu",
-      "notes_one": "{{count}} not",
-      "notes_other": "{{count}} not",
-      "previousHunk": "Önceki değişiklik bloğu",
-      "reviewed": "İncelendi",
-      "staged": "Hazırlanmış",
-      "stagedFrom": "Hazırlanmış · önceki yol: {{oldPath}}",
-      "stale": "Güncel Değil",
-      "staleCount": "{{count}} güncel olmayan not",
-      "unstaged": "Hazırlanmamış",
-      "unstagedFrom": "Hazırlanmamış · önceki yol: {{oldPath}}"
+      "stale": "Güncel Değil"
     },
     "diffReviewFooter": {
-      "addFileNote": "Dosya notu ekle",
-      "discard": "At",
-      "discardFile": "Dosya değişikliklerini at",
-      "markFileReviewed": "Dosyayı incelendi olarak işaretle",
-      "markReviewed": "İncelendi Olarak İşaretle",
       "nextFile": "Sonraki dosya",
-      "note": "Not",
-      "previousFile": "Önceki dosya",
-      "reviewed": "İncelendi",
-      "stage": "Stage Et",
-      "stageFile": "Dosyayı stage et",
-      "unstage": "Stage'den Çıkar",
-      "unstageFile": "Dosyayı stage'den çıkar"
+      "previousFile": "Önceki dosya"
     },
     "diffReviewHeader": {
-      "filterAll": "Tümü",
-      "filterBranch": "Branch",
-      "filterNotes": "Notlar",
-      "filterStaged": "Hazırlanmış",
-      "filterUnreviewed": "İncelenmedi",
-      "filterUnstaged": "Hazırlanmamış",
-      "openPullRequestSidebar": "Pull request kenar çubuğunu aç",
       "openReviewActions": "İnceleme işlemlerini aç",
-      "reviewedProgress": "{{reviewedCount}}/{{queueLength}} incelendi",
-      "showAllFiles": "İncelemedeki tüm dosyaları göster",
-      "showBranchFiles": "Branch'teki dosyaları göster",
-      "showNotesFiles": "Not içeren dosyaları göster",
-      "showStagedFiles": "Hazırlanmış dosyaları göster",
-      "showUnreviewedFiles": "İncelenmemiş dosyaları göster",
-      "showUnstagedFiles": "Hazırlanmamış dosyaları göster",
-      "title": "Değişiklikler",
-      "unsentNotes_one": "{{count}} gönderilmemiş not",
-      "unsentNotes_other": "{{count}} gönderilmemiş not"
+      "title": "Değişiklikler"
     },
     "diffReviewLine": {
       "addNoteOnLine": "{{number}}. satıra not ekle",
@@ -852,10 +802,8 @@
       "selectRunTarget": "Çalıştırma yerini seçin"
     },
     "prSidebar": {
-      "loadFailed": "Bir sorun oluştu.",
       "loading": "Pull request yükleniyor…",
-      "notPermitted": "İzin verilmiyor — GitHub hesabınız bağlı değil.",
-      "retryLoading": "Pull request'i yüklemeyi yeniden dene"
+      "notPermitted": "İzin verilmiyor — GitHub hesabınız bağlı değil."
     },
     "protocolBlockScreen": {
       "backToHosts": "Sunucular bölümüne dön",
@@ -1004,6 +952,16 @@
       "title": "Bir sorun oluştu",
       "tryAgain": "Tekrar dene",
       "home": "Ana sayfa"
+    },
+    "svgPreview": {
+      "drawFailed": "Bu SVG çizilemiyor",
+      "label": "{{title}} çizimi",
+      "previewDrawing": "Çizimi önizle",
+      "viewSource": "SVG kaynağını görüntüle"
+    },
+    "mermaidDiagram": {
+      "expand": "Diyagramı genişlet",
+      "label": "Mermaid diyagramı"
     }
   },
   "connection": {
@@ -2406,9 +2364,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "Kaynak kontrolü işlemi gerçekleştirilemedi",
-      "reviewedFilesStaged_one": "İncelenen {{count}} dosya stage'e eklendi",
-      "reviewedFilesStaged_other": "İncelenen {{count}} dosya stage'e eklendi",
-      "stageResults": "{{staged}} stage'e eklendi, {{failed}} eklenemedi",
       "waitingForDesktop": "Masaüstü bekleniyor…"
     },
     "useDiffReviewInteractions": {
@@ -2842,12 +2797,6 @@
       "baseBranchUnavailable": "Karşılaştırma için temel branch belirlenemedi.",
       "loadFailed": "Commit'lenen değişiklikler yüklenemedi"
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Commit'lenmiş diff önizlemesini kapat",
-      "committedOnBranch": "Branch'e commit'lendi",
-      "loadFailed": "Diff Yüklenemedi",
-      "truncated": "Diff, mobil önizleme için kısaltıldı."
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "Commit'leri push etmeden önce bir branch'i checkout edin",
       "checkOutBranchToSync": "Commit'leri senkronize etmeden önce bir branch'i checkout edin",
@@ -2901,7 +2850,6 @@
       "emptyMessage": "Çalışma ağacı temiz.",
       "emptyTitle": "Yerel değişiklik yok",
       "generateMessage": "Commit mesajını AI ile oluştur",
-      "noStagedFiles": "Stage edilmiş dosya yok",
       "openActions": "Kaynak kontrolü eylemlerini aç",
       "reconnecting": "Masaüstüne yeniden bağlanılıyor…",
       "regenerateHint": "Yeniden oluşturmak için mesajı temizleyin.",
@@ -3042,9 +2990,7 @@
       "pushBeforeCreateFailed": "Push işlemi yapılamadı. Push hatasını giderip tekrar deneyin."
     },
     "hubTab": {
-      "changes": "Değişiklikler",
-      "commits": "Commit'ler",
-      "pullRequest": "Pull Request"
+      "changes": "Değişiklikler"
     },
     "loaders": {
       "connectingToDesktop": "Masaüstüne bağlanılıyor…",
@@ -3063,13 +3009,7 @@
       "prCreatedTitle": "Pull Request Oluşturuldu",
       "switchBranchTitle": "Branch Değiştir"
     },
-    "openers": {
-      "openDiffFailed": "Diff açılamadı",
-      "tabNotReady": "Dosya açıldı ancak sekmesi henüz hazır değil. Yeniden deneyin.",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
-    },
     "panel": {
-      "loadFailedTitle": "Yüklenemedi",
       "unavailableTitle": "Kaynak Kontrolü Kullanılamıyor"
     },
     "prChip": {
@@ -3110,7 +3050,6 @@
       "publishBranch": "Branch'i Yayınla",
       "pull": "Pull",
       "push": "Push",
-      "stageAll": "Tümünü Stage Et",
       "sync": "Senkronize Et"
     },
     "remoteDropdown": {
@@ -3897,8 +3836,7 @@
       "noFilterMatches": "Filtrelerle eşleşen çalışma alanı yok",
       "noMatches": "Eşleşen çalışma alanı yok",
       "reopen": "Güncellemek için yeniden açın",
-      "reopenDetail": "Bu sunucu, çalışma alanlarını bu sayfanın henüz tanımadığı bir biçimde listeliyor.",
-      "retrying": "worktree.ps tamamlanamadı ({{error}}) — otomatik olarak yeniden deneniyor"
+      "reopenDetail": "Bu sunucu, çalışma alanlarını bu sayfanın henüz tanımadığı bir biçimde listeliyor."
     },
     "workspaceListSections": {
       "all": "Tümü",

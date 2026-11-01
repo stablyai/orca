@@ -1,10 +1,10 @@
 import { ensureAgentSessionFeatureRequirement } from '../agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
-import type { RuntimeAgentSessionRpcCaller } from '../../../../shared/agent-session-host-authority'
 import {
+  type RuntimeAgentSessionRpcCaller,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import { defineMethod, type RpcContext } from '../core'
 import {
   CreateAgentSessionParams,

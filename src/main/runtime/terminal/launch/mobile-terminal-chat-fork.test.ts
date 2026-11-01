@@ -7,7 +7,7 @@ import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project
 import '../../orca-runtime-test-lifecycle.spec'
 import { committingSpawn } from '../../bind-first-pane.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 vi.mock('../../../ai-vault/structured-chat-cli-fork', () => ({
   prepareStructuredChatCliFork: vi.fn(),
   isStructuredChatCliForkSourceCurrent: vi.fn(() => true)

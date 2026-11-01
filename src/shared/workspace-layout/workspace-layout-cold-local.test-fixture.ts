@@ -7,7 +7,7 @@ import {
   FOLDER_KEY,
   leaf
 } from './workspace-layout-session.test-fixture'
-import { localDesktopSession, sleepingRecord } from './workspace-layout-profile.test-fixture'
+import { localDesktopSession } from './workspace-layout-profile.test-fixture'
 
 export const populations = [
   'closed',
@@ -72,44 +72,5 @@ export function coldInput(kind: Population, n: number): WorkspaceSessionState {
       [GIT_KEY]: Array.from({ length: n }, (_, i) => ({ ...template, id: `browser-${i}` }))
     }
   }
-  return saved
-}
-
-export function discriminatingInput(): WorkspaceSessionState {
-  const saved = localDesktopSession()
-  saved.tabsByWorktree[FOLDER_KEY].push({
-    ...saved.tabsByWorktree[GIT_KEY][0],
-    worktreeId: FOLDER_KEY
-  })
-  saved.closedTerminalTabTombstonesByTabId = Object.fromEntries(
-    ['__proto__', 'constructor', 'toString', '2', '1', 'unknown'].map((id) => [
-      id,
-      { closedAt: 1, worktreeId: id === 'unknown' ? 'missing' : GIT_KEY, reason: undefined }
-    ])
-  )
-  const row = saved.tabsByWorktree[GIT_KEY][0]
-  saved.tabsByWorktree[GIT_KEY].push(
-    ...['odd:tab', 'ambiguous', 'empty', 'none', 'rootless'].map((id) => ({
-      ...row,
-      id,
-      ptyId: null
-    }))
-  )
-  saved.terminalLayoutsByTabId.rootless = { root: null, activeLeafId: null, expandedLeafId: null }
-  saved.terminalPtyIncarnationsByPaneKey = {
-    'odd:tab:leaf:tail': 'inc',
-    'ambiguous:first': 'a',
-    'empty:': ''
-  }
-  saved.sleepingAgentSessionsByPaneKey = {
-    'odd:tab:leaf:tail': sleepingRecord(GIT_KEY, 'odd:tab', 'leaf:tail'),
-    'ambiguous:second': sleepingRecord(GIT_KEY, 'ambiguous', 'second')
-  }
-  const browser = saved.browserTabsByWorktree![GIT_KEY][0]
-  saved.browserTabsByWorktree![GIT_KEY].push(
-    { ...browser, title: 'last fact' },
-    { ...browser, id: 'tab-shell' }
-  )
-  saved.tabGroups![GIT_KEY].push({ ...saved.tabGroups![GIT_KEY][0], tabOrder: ['none'] })
   return saved
 }

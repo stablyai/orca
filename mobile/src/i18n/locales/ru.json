@@ -21,7 +21,6 @@
     "panel": {
       "all": "Все",
       "emptyScope": "В выбранной области нет предыдущих сессий агентов.",
-      "loadFailed": "Не удалось загрузить",
       "missingResumeId": "У этой сессии нет идентификатора для продолжения.",
       "noSearchResults": "По вашему запросу сессий не найдено.",
       "noSessions": "Нет сессий агентов",
@@ -596,6 +595,10 @@
       "disconnected": "Не удалось прикрепить (нет соединения)",
       "imageTooLarge": "Изображение слишком большое для прикрепления",
       "permissionDenied": "Нет доступа к фото"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Передано агенту",
+      "startedAgent": "Агент запущен"
     }
   },
   "common": {
@@ -730,17 +733,14 @@
       "loadingDiff": "Загрузка различий…",
       "loadingReview": "Загрузка данных проверки…",
       "noReviewableChanges": "Нет изменений для проверки",
-      "retryLabel": "Повторить загрузку данных проверки",
       "reviewUnavailable": "Проверка недоступна",
       "selectFile": "Выберите файл для проверки.",
-      "tooLargeMessage": "Объём изменений слишком велик для предпросмотра на мобильном устройстве.",
-      "tryDifferentFilter": "Попробуйте другой фильтр проверки."
+      "tooLargeMessage": "Объём изменений слишком велик для предпросмотра на мобильном устройстве."
     },
     "diffReviewDrawers": {
       "addNote": "Добавить заметку",
       "cancelNote": "Отменить ввод заметки",
       "clearSentNotes": "Удалить отправленные заметки",
-      "completeTitle": "Проверка завершена",
       "copyNotes": "Скопировать заметки",
       "deleteNote": "Удалить заметку",
       "discard": "Отменить изменения",
@@ -748,17 +748,8 @@
       "discardTitle": "Отменить изменения в файле",
       "editNote": "Изменить заметку",
       "fileNote": "Заметка к файлу",
-      "fileSummary_few": "Проверен {{fileCount}} файл; {{count}} заметки",
-      "fileSummary_many": "Проверен {{fileCount}} файл; {{count}} заметок",
-      "fileSummary_one": "Проверен {{fileCount}} файл; {{count}} заметка",
-      "fileSummary_other": "Проверен {{fileCount}} файл; {{count}} заметки",
-      "filesSummary_few": "Проверено файлов: {{fileCount}}; {{count}} заметки",
-      "filesSummary_many": "Проверено файлов: {{fileCount}}; {{count}} заметок",
-      "filesSummary_one": "Проверено файлов: {{fileCount}}; {{count}} заметка",
-      "filesSummary_other": "Проверено файлов: {{fileCount}}; {{count}} заметки",
       "lineNumber": "Строка {{lineNumber}}",
       "loadingSessions": "Загрузка сессий агентов…",
-      "markUnreviewed": "Отметить непроверенным",
       "newAgentSession": "Новая сессия агента",
       "openInSession": "Открыть в сессии",
       "reviewNote": "Заметка по проверке",
@@ -766,13 +757,6 @@
       "sendNotes": "Отправить заметки",
       "sendNotesLabel": "Отправить заметки агенту",
       "sendUnsentNotes": "Отправить неотправленные заметки",
-      "stageReviewed": "Добавить проверенные в индекс",
-      "stageReviewedFiles": "Добавить проверенные файлы в индекс",
-      "stageReviewedLabel": "Добавить проверенные файлы в индекс",
-      "stageableFiles_few": "В индекс можно добавить {{count}} проверенных файла с изменениями не в индексе",
-      "stageableFiles_many": "В индекс можно добавить {{count}} проверенных файлов с изменениями не в индексе",
-      "stageableFiles_one": "В индекс можно добавить {{count}} проверенный файл с изменениями не в индексе",
-      "stageableFiles_other": "В индекс можно добавить {{count}} проверенного файла с изменениями не в индексе",
       "statusUnreadable": "Не удалось получить статус этого сервера. Повторная попытка…",
       "terminal": "Терминал",
       "terminalLabel": "{{title}} ({{id}})",
@@ -783,61 +767,17 @@
       "updateRequired": "Обновите Orca на компьютере"
     },
     "diffReviewFileSummary": {
-      "branch": "Ветка",
-      "branchFrom": "Ветка · из {{oldPath}}",
       "changed": "Изменён",
       "editFileNote": "Изменить заметку к файлу",
-      "hunk": "Фрагмент",
-      "nextHunk": "Следующий фрагмент изменений",
-      "notes_few": "{{count}} заметки",
-      "notes_many": "{{count}} заметок",
-      "notes_one": "{{count}} заметка",
-      "notes_other": "{{count}} заметки",
-      "previousHunk": "Предыдущий фрагмент изменений",
-      "reviewed": "Проверен",
-      "staged": "В индексе",
-      "stagedFrom": "В индексе · из {{oldPath}}",
-      "stale": "Устарела",
-      "staleCount": "Устаревших: {{count}}",
-      "unstaged": "Не в индексе",
-      "unstagedFrom": "Не в индексе · из {{oldPath}}"
+      "stale": "Устарела"
     },
     "diffReviewFooter": {
-      "addFileNote": "Добавить заметку к файлу",
-      "discard": "Отменить изменения",
-      "discardFile": "Отменить изменения в файле",
-      "markFileReviewed": "Отметить файл как проверенный",
-      "markReviewed": "Отметить проверенным",
       "nextFile": "Следующий файл",
-      "note": "Заметка",
-      "previousFile": "Предыдущий файл",
-      "reviewed": "Проверен",
-      "stage": "Добавить в индекс",
-      "stageFile": "Добавить файл в индекс",
-      "unstage": "Убрать из индекса",
-      "unstageFile": "Убрать файл из индекса"
+      "previousFile": "Предыдущий файл"
     },
     "diffReviewHeader": {
-      "filterAll": "Все",
-      "filterBranch": "Ветка",
-      "filterNotes": "Заметки",
-      "filterStaged": "В индексе",
-      "filterUnreviewed": "Непроверенные",
-      "filterUnstaged": "Не в индексе",
-      "openPullRequestSidebar": "Открыть боковую панель пул-реквеста",
       "openReviewActions": "Открыть меню проверки",
-      "reviewedProgress": "Проверено {{reviewedCount}}/{{queueLength}}",
-      "showAllFiles": "Показать все файлы для проверки",
-      "showBranchFiles": "Показать файлы с изменениями в ветке",
-      "showNotesFiles": "Показать файлы с заметками",
-      "showStagedFiles": "Показать файлы с изменениями в индексе",
-      "showUnreviewedFiles": "Показать непроверенные файлы",
-      "showUnstagedFiles": "Показать файлы с изменениями не в индексе",
-      "title": "Изменения",
-      "unsentNotes_few": "{{count}} неотправленные заметки",
-      "unsentNotes_many": "{{count}} неотправленных заметок",
-      "unsentNotes_one": "{{count}} неотправленная заметка",
-      "unsentNotes_other": "{{count}} неотправленной заметки"
+      "title": "Изменения"
     },
     "diffReviewLine": {
       "addNoteOnLine": "Добавить заметку к строке {{number}}",
@@ -936,10 +876,8 @@
       "selectRunTarget": "Выберите сервер для запуска"
     },
     "prSidebar": {
-      "loadFailed": "Что-то пошло не так.",
       "loading": "Загрузка пул-реквеста…",
-      "notPermitted": "Доступ запрещён — ваша учётная запись GitHub не подключена.",
-      "retryLoading": "Повторить загрузку пул-реквеста"
+      "notPermitted": "Доступ запрещён — ваша учётная запись GitHub не подключена."
     },
     "protocolBlockScreen": {
       "backToHosts": "Вернуться к серверам",
@@ -1090,6 +1028,16 @@
       "title": "Что-то пошло не так",
       "tryAgain": "Повторить",
       "home": "Главная"
+    },
+    "svgPreview": {
+      "drawFailed": "Не удалось отобразить этот SVG",
+      "label": "Рисунок {{title}}",
+      "previewDrawing": "Просмотр рисунка",
+      "viewSource": "Показать исходный код SVG"
+    },
+    "mermaidDiagram": {
+      "expand": "Развернуть диаграмму",
+      "label": "Диаграмма Mermaid"
     }
   },
   "connection": {
@@ -2554,11 +2502,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "Не удалось выполнить действие управления версиями",
-      "reviewedFilesStaged_few": "{{count}} проверенных файла добавлены в индекс",
-      "reviewedFilesStaged_many": "{{count}} проверенных файлов добавлено в индекс",
-      "reviewedFilesStaged_one": "{{count}} проверенный файл добавлен в индекс",
-      "reviewedFilesStaged_other": "{{count}} проверенного файла добавлено в индекс",
-      "stageResults": "Добавлено в индекс: {{staged}}, не удалось: {{failed}}",
       "waitingForDesktop": "Ожидание подключения к компьютеру…"
     },
     "useDiffReviewInteractions": {
@@ -3008,12 +2951,6 @@
       "baseBranchUnavailable": "Не удалось определить базовую ветку для сравнения.",
       "loadFailed": "Не удалось загрузить закоммиченные изменения"
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Закрыть предпросмотр закоммиченных изменений",
-      "committedOnBranch": "Закоммичено в ветке",
-      "loadFailed": "Не удалось загрузить различия",
-      "truncated": "В мобильном предпросмотре показана часть различий."
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "Переключитесь на ветку перед отправкой коммитов",
       "checkOutBranchToSync": "Переключитесь на ветку перед синхронизацией коммитов",
@@ -3067,7 +3004,6 @@
       "emptyMessage": "В рабочем дереве нет изменений.",
       "emptyTitle": "Нет локальных изменений",
       "generateMessage": "Создать сообщение коммита с помощью ИИ",
-      "noStagedFiles": "В индексе нет файлов",
       "openActions": "Открыть меню управления версиями",
       "reconnecting": "Переподключение к компьютеру…",
       "regenerateHint": "Очистите сообщение для повторного создания.",
@@ -3232,9 +3168,7 @@
       "pushBeforeCreateFailed": "Не удалось отправить изменения. Устраните причину ошибки отправки, затем повторите попытку."
     },
     "hubTab": {
-      "changes": "Изменения",
-      "commits": "Коммиты",
-      "pullRequest": "Пул-реквест"
+      "changes": "Изменения"
     },
     "loaders": {
       "connectingToDesktop": "Подключение к компьютеру…",
@@ -3253,13 +3187,7 @@
       "prCreatedTitle": "Пул-реквест создан",
       "switchBranchTitle": "Переключиться на ветку"
     },
-    "openers": {
-      "openDiffFailed": "Не удалось открыть сравнение",
-      "tabNotReady": "Файл открыт, но его вкладка ещё не готова. Повторите попытку.",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
-    },
     "panel": {
-      "loadFailedTitle": "Не удалось загрузить",
       "unavailableTitle": "Управление версиями недоступно"
     },
     "prChip": {
@@ -3302,7 +3230,6 @@
       "publishBranch": "Опубликовать ветку",
       "pull": "Получить и слить",
       "push": "Отправить",
-      "stageAll": "Добавить всё в индекс",
       "sync": "Синхронизировать"
     },
     "remoteDropdown": {
@@ -4113,8 +4040,7 @@
       "noFilterMatches": "Нет рабочих пространств, соответствующих фильтрам",
       "noMatches": "Подходящие рабочие пространства не найдены",
       "reopen": "Откройте заново для обновления",
-      "reopenDetail": "Этот сервер возвращает список рабочих пространств в формате, который эта страница пока не поддерживает.",
-      "retrying": "Сбой worktree.ps ({{error}}) — автоматическая повторная попытка"
+      "reopenDetail": "Этот сервер возвращает список рабочих пространств в формате, который эта страница пока не поддерживает."
     },
     "workspaceListSections": {
       "all": "Все",
