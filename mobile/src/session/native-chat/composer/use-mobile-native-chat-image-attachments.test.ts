@@ -15,20 +15,26 @@ const ids = vi.hoisted(() => ({ next: 0 }))
 vi.mock('../../../../../src/shared/uuid-v4', () => ({ createUuidV4: () => `img-${++ids.next}` }))
 vi.mock('../../../platform/media-picker', () => ({ useMediaPicker: () => ({ pickImages: pick }) }))
 
-function ok(id: string, result: unknown): RpcSuccess {
-  return { id, ok: true, result, _meta: { runtimeId: 'r' } }
-}
-function methodNotFound(id: string): RpcResponse {
-  return {
-    id,
-    ok: false,
-    error: { code: 'method_not_found', message: 'no' },
-    _meta: { runtimeId: 'r' }
-  }
-}
-function sendResult(accepted: boolean): RpcSuccess {
-  return { id: 'send', ok: true, result: { send: { accepted } }, _meta: { runtimeId: 'r' } }
-}
+import { CameraPermissionError } from '../../../platform/media-picker-contract'
+
+const ok = (id: string, result: unknown): RpcSuccess => ({
+  id,
+  ok: true,
+  result,
+  _meta: { runtimeId: 'r' }
+})
+const methodNotFound = (id: string): RpcResponse => ({
+  id,
+  ok: false,
+  error: { code: 'method_not_found', message: 'no' },
+  _meta: { runtimeId: 'r' }
+})
+const sendResult = (accepted: boolean): RpcSuccess => ({
+  id: 'send',
+  ok: true,
+  result: { send: { accepted } },
+  _meta: { runtimeId: 'r' }
+})
 
 function makeClient(responses: (RpcResponse | Promise<RpcResponse>)[]): Pick<
   RpcClient,
@@ -874,5 +880,13 @@ describe('useMobileNativeChatImageAttachments', () => {
       await attach
     })
     expect(showToast).toHaveBeenCalledWith('Attach failed (disconnected)', 1500)
+  })
+
+  it('toasts Camera permission denied when camera access is rejected', async () => {
+    const showToast = vi.fn()
+    mount(baseArgs({ client: makeClient([]) as unknown as RpcClient, showToast }))
+    pick.mockRejectedValue(new CameraPermissionError())
+    await act(() => hook!.attachImage('camera'))
+    expect(showToast).toHaveBeenCalledWith('Camera permission denied', 1500)
   })
 })

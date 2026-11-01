@@ -12,7 +12,7 @@ import {
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, type TextInput, Text, View } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { Camera, Plus } from 'lucide-react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -81,6 +81,7 @@ type Props = MobileNativeChatMicProps & {
   agent?: string | null
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
   onAttachImage?: () => void
+  onTakePhoto?: () => void
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
@@ -116,6 +117,7 @@ export function MobileNativeChatComposer({
   structured = null,
   sessionOptions,
   onAttachImage,
+  onTakePhoto,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
   isAttaching = false,
@@ -332,6 +334,16 @@ export function MobileNativeChatComposer({
                 )}
               </Pressable>
             ) : null}
+            {!structured && onTakePhoto ? (
+              <Pressable
+                accessibilityLabel="Take photo"
+                style={({ pressed }) => [inputStyles.controlButton, pressed && inputStyles.pressed]}
+                onPress={onTakePhoto}
+                disabled={isAttaching || disabled}
+              >
+                <Camera size={19} color={colors.textPrimary} strokeWidth={2} />
+              </Pressable>
+            ) : null}
             {sessionOptions ? (
               <MobileNativeChatSessionOptionPickers
                 {...sessionOptions}
@@ -350,14 +362,16 @@ export function MobileNativeChatComposer({
             <View style={inputStyles.actionSpacer} />
             {onMicPress ? (
               <MobileNativeChatComposerMic
-                onMicPress={onMicPress}
-                micActive={micActive}
-                micStarting={micStarting}
-                micProcessing={micProcessing}
-                dictationMode={dictationMode}
-                onMicPressIn={onMicPressIn}
-                onMicPressOut={onMicPressOut}
-                disabled={disabled}
+                {...{
+                  onMicPress,
+                  micActive,
+                  micStarting,
+                  micProcessing,
+                  dictationMode,
+                  onMicPressIn,
+                  onMicPressOut,
+                  disabled
+                }}
               />
             ) : null}
             {editSession ? (
@@ -410,6 +424,7 @@ export function MobileNativeChatComposer({
           onClose={() => setAttachOpen(false)}
           actions={mobileNativeChatAttachActions({
             onPhotos: onAttachImage,
+            onTakePhoto,
             onFiles: structured.onAttachFiles,
             onWorkspaceFile: menu.openFileMenu,
             onSkills: () => menu.openSlashMenu('skill'),

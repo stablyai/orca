@@ -3,6 +3,8 @@ import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-
 
 vi.mock('expo-image-picker', () => ({
   UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
+  requestCameraPermissionsAsync: vi.fn(),
+  launchCameraAsync: vi.fn(),
   requestMediaLibraryPermissionsAsync: vi.fn(),
   launchImageLibraryAsync: vi.fn()
 }))
@@ -14,6 +16,7 @@ vi.mock('expo-file-system', () => ({
 }))
 
 import {
+  CameraPermissionError,
   ImageLibraryPermissionError,
   pickMobileImage,
   pickMobileImages,
@@ -58,6 +61,47 @@ function fileFactory(
 
 describe('pickMobileImage', () => {
   afterEach(() => vi.restoreAllMocks())
+
+  it('captures a photo from the camera and reads its URI into base64', async () => {
+    const bytes = new Uint8Array([9, 8, 7, 6])
+    const file = fileFactory(bytes)
+    const launchCamera = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///camera-shot.jpg', fileSize: bytes.length }]
+    })
+    const result = await pickMobileImage('camera', {
+      requestCameraPermission: vi.fn().mockResolvedValue(granted),
+      launchCamera,
+      createFile: file.createFile
+    })
+
+    expect(result).toEqual({
+      base64: Buffer.from(bytes).toString('base64'),
+      uri: 'file:///camera-shot.jpg'
+    })
+    expect(launchCamera).toHaveBeenCalledWith(
+      expect.objectContaining({ mediaTypes: ['images'], base64: false, quality: 1 })
+    )
+    expect(file.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws CameraPermissionError when camera permission is denied', async () => {
+    await expect(
+      pickMobileImage('camera', {
+        requestCameraPermission: vi.fn().mockResolvedValue(denied),
+        launchCamera: vi.fn()
+      })
+    ).rejects.toBeInstanceOf(CameraPermissionError)
+  })
+
+  it('returns null when camera capture is cancelled', async () => {
+    const result = await pickMobileImage('camera', {
+      requestCameraPermission: vi.fn().mockResolvedValue(granted),
+      launchCamera: vi.fn().mockResolvedValue({ canceled: true, assets: null })
+    })
+
+    expect(result).toBeNull()
+  })
 
   it('reads a photo URI without relying on React Native fetch', async () => {
     const bytes = new Uint8Array([0, 1, 2, 3])

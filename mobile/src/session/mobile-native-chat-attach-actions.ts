@@ -1,10 +1,11 @@
-import { AtSign, Image, Package, Paperclip, Terminal } from 'lucide-react-native'
+import { AtSign, Camera, Image, Package, Paperclip, Terminal } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { translate } from '../i18n/mobile-i18n'
 
 // Dismiss the sheet before opening pickers because iOS cannot present them over its Modal.
 export function mobileNativeChatAttachActions(args: {
   onPhotos: (() => void) | undefined
+  onTakePhoto?: (() => void) | undefined
   onFiles: (() => void) | undefined
   onWorkspaceFile: () => void
   onSkills: () => void
@@ -19,6 +20,14 @@ export function mobileNativeChatAttachActions(args: {
       icon: Image,
       closeBeforePress: true,
       onPress: args.onPhotos
+    })
+  }
+  if (args.onTakePhoto) {
+    actions.push({
+      label: 'Take photo',
+      icon: Camera,
+      closeBeforePress: true,
+      onPress: args.onTakePhoto
     })
   }
   if (args.onFiles) {
