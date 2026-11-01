@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { bundledSkillNudgeEntries } from '../../../shared/bundled-skill-summary'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import { nativeBundledSkillFilesystem, type BundledSkillFilesystem } from './filesystem'
-import { autoUpdateInstalledBundledSkills, previewBundledSkillInstall } from './service'
+import {
+  autoUpdateInstalledBundledSkills,
+  installBundledSkills,
+  previewBundledSkillInstall
+} from './service'
 import {
   makeSkillHome,
   removeSkillHomes,
@@ -34,6 +38,20 @@ function input(home: SkillHome, filesystem: BundledSkillFilesystem = nativeBundl
 
 async function readSkill(home: SkillHome, root: 'shared' | 'claude', name: string) {
   return readFile(join(skillPath(home, root, name), 'SKILL.md'), 'utf8').catch(() => 'missing')
+}
+
+/** An editor holding SKILL.md open saves into the folder the swap just moved aside. */
+function lateWriterFilesystem(home: SkillHome): BundledSkillFilesystem {
+  const target = skillPath(home, 'shared', 'alpha')
+  return {
+    ...nativeBundledSkillFilesystem,
+    rename: async (source, destination) => {
+      await nativeBundledSkillFilesystem.rename(source, destination)
+      if (source === target && basename(destination).startsWith('.alpha.orca-old')) {
+        await writeFile(join(destination, 'SKILL.md'), text('alpha', 'late edit'))
+      }
+    }
+  }
 }
 
 describe('per-skill silent update of unedited Orca copies', () => {
@@ -116,18 +134,8 @@ describe('per-skill silent update of unedited Orca copies', () => {
 
   it('reports a backup when a writer saves SKILL.md after the final verification', async () => {
     const home = await makeSkillHome()
-    const target = skillPath(home, 'shared', 'alpha')
-    await writeCopy(target, text('alpha', 'old'))
-    const lateWriter: BundledSkillFilesystem = {
-      ...nativeBundledSkillFilesystem,
-      rename: async (source, destination) => {
-        await nativeBundledSkillFilesystem.rename(source, destination)
-        // An editor holding the file open saves into the moved-aside folder.
-        if (source === target && basename(destination).startsWith('.alpha.orca-old')) {
-          await writeFile(join(destination, 'SKILL.md'), text('alpha', 'late edit'))
-        }
-      }
-    }
+    await writeCopy(skillPath(home, 'shared', 'alpha'), text('alpha', 'old'))
+    const lateWriter = lateWriterFilesystem(home)
 
     const result = await autoUpdateInstalledBundledSkills({
       ...input(home, lateWriter),
@@ -140,5 +148,42 @@ describe('per-skill silent update of unedited Orca copies', () => {
       text('alpha', 'late edit')
     )
     expect(await readSkill(home, 'shared', 'alpha')).toBe(text('alpha', 'new'))
+  })
+
+  it('reports where unpreservable edits remain and never deletes them', async () => {
+    const home = await makeSkillHome()
+    await writeCopy(skillPath(home, 'shared', 'alpha'), text('alpha', 'old'))
+    // The shared backup directory refuses writes, as when it is not writable by this user.
+    const unwritableBackups = (filesystem: BundledSkillFilesystem): BundledSkillFilesystem => ({
+      ...filesystem,
+      moveToBackup: async () => {
+        throw Object.assign(new Error('denied'), { code: 'EACCES' })
+      }
+    })
+
+    const result = await autoUpdateInstalledBundledSkills({
+      ...input(home, unwritableBackups(lateWriterFilesystem(home))),
+      names: ['alpha']
+    })
+
+    const outcome = result.skills[0]?.ops[0]
+    expect(outcome).toMatchObject({ status: 'failed', error: 'EACCES' })
+    const stranded = outcome?.strandedPath ?? ''
+    expect(basename(stranded)).toMatch(/^\.alpha\.orca-old/u)
+    expect(await readFile(join(stranded, 'SKILL.md'), 'utf8')).toBe(text('alpha', 'late edit'))
+    expect(await readSkill(home, 'shared', 'alpha')).toBe(text('alpha', 'new'))
+
+    const plan = await previewBundledSkillInstall(input(home))
+    expect(plan.skills[0]?.ops[0]?.cleanup).toEqual([
+      expect.objectContaining({ path: stranded, action: 'backup' })
+    ])
+    expect(bundledSkillNudgeEntries(plan).map((entry) => entry.name)).toEqual(['alpha'])
+
+    // Settling that cleanup while backups stay unwritable must leave the edit in place.
+    await installBundledSkills(
+      input(home, unwritableBackups(nativeBundledSkillFilesystem)),
+      plan.planDigest
+    )
+    expect(await readFile(join(stranded, 'SKILL.md'), 'utf8')).toBe(text('alpha', 'late edit'))
   })
 })

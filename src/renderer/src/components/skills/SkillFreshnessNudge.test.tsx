@@ -6,9 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
 import { bundledSkillNudgeKey } from '../../../../shared/bundled-skill-summary'
 import { SkillFreshnessNudge } from './SkillFreshnessNudge'
-import { _resetSkillFreshnessAutoUpdate } from './skill-freshness-auto-update'
+import {
+  _resetSkillFreshnessAutoUpdate,
+  _skillFreshnessAutoUpdateAttemptCount
+} from './skill-freshness-auto-update'
 import {
   _resetSkillUpdateRunStore,
+  acknowledgeSkillUpdateRun,
+  getLatestSkillUpdateRun,
   getSkillUpdateRun,
   startSkillUpdateRun
 } from './skill-update-run-store'
@@ -380,5 +385,110 @@ describe('SkillFreshnessNudge', () => {
 
     expect(mocks.toastInfo).toHaveBeenCalledTimes(3)
     expect(mocks.toastDismiss).toHaveBeenCalledTimes(2)
+  })
+
+  it('warns where edits remain when Orca could not back them up', async () => {
+    const strandedPath = '/home/u/.agents/skills/.orca-cli.orca-old-1'
+    mocks.execute.mockResolvedValue({
+      scope: 'global',
+      skills: [
+        {
+          name: 'orca-cli',
+          status: 'ran',
+          ops: [
+            {
+              path: '/home/u/.agents/skills/orca-cli',
+              kind: 'update',
+              status: 'failed',
+              error: 'EACCES',
+              strandedPath
+            }
+          ]
+        }
+      ]
+    })
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+
+    await renderNudge()
+    await act(async () => {})
+
+    expect(mocks.toastWarning).toHaveBeenCalledTimes(1)
+    expect(mocks.toastWarning.mock.calls[0]?.[1].description).toContain(strandedPath)
+    expect(mocks.toastWarning.mock.calls[0]?.[1].duration).toBe(Number.POSITIVE_INFINITY)
+  })
+
+  it('nudges about an old copy whose edits still await a backup', async () => {
+    mocks.plan = planOf([
+      sharedEntry('orca-cli', 'keep', {
+        cleanup: [
+          {
+            path: '/home/u/.agents/skills/.orca-cli.orca-old-1',
+            action: 'backup',
+            observed: { kind: 'folder', entries: ['SKILL.md:file'], skillDigest: null }
+          }
+        ]
+      })
+    ])
+
+    await renderNudge()
+
+    expect(mocks.execute).not.toHaveBeenCalled()
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+  })
+
+  it('never replaces an unacknowledged manual result with a silent run', async () => {
+    mocks.manualExecute.mockRejectedValue(new Error('disk full'))
+    await startSkillUpdateRun({
+      target: { kind: 'local' },
+      names: ['x'],
+      planDigest: 'd',
+      force: []
+    })
+    expect(getSkillUpdateRun('local').state).toBe('error')
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+
+    await renderNudge()
+    await act(async () => {})
+
+    expect(mocks.execute).not.toHaveBeenCalled()
+    expect(getSkillUpdateRun('local')).toMatchObject({ state: 'error', message: 'disk full' })
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a silent run out of the status bar after an acknowledged manual run', async () => {
+    mocks.manualExecute.mockResolvedValue({ scope: 'global', skills: [] })
+    await startSkillUpdateRun({
+      target: { kind: 'local' },
+      names: ['x'],
+      planDigest: 'd',
+      force: []
+    })
+    acknowledgeSkillUpdateRun('local')
+    mocks.execute.mockReturnValue(new Promise(() => {}))
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+
+    await renderNudge()
+
+    expect(getSkillUpdateRun('local').state).toBe('running')
+    expect(getLatestSkillUpdateRun().state).toBe('idle')
+  })
+
+  it('prunes attempts for states no longer observed but still suppresses unchanged retries', async () => {
+    mocks.execute.mockResolvedValue(null)
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update'), sharedEntry('orca-linear', 'update')])
+    await renderNudge()
+    await act(async () => {})
+    expect(_skillFreshnessAutoUpdateAttemptCount()).toBe(2)
+
+    // Unchanged states stay settled: no retry.
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update'), sharedEntry('orca-linear', 'keep')])
+    await rerenderNudge()
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+    expect(_skillFreshnessAutoUpdateAttemptCount()).toBe(1)
+
+    mocks.plan = planOf([sharedEntry('orca-cli', 'keep'), sharedEntry('orca-linear', 'keep')])
+    await rerenderNudge()
+    expect(_skillFreshnessAutoUpdateAttemptCount()).toBe(0)
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
   })
 })

@@ -12,7 +12,23 @@ import { autoUpdateBundledSkillsOnTarget } from '@/runtime/runtime-bundled-skill
 import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-store'
 
 // Why per skill and observed bytes: a failed or raced update re-plans identically and must fall back to the nudge, without blocking other skills.
-const attempts = new Map<string, 'running' | 'settled'>()
+type AttemptState = 'running' | 'settled'
+// Keyed by target; each scan prunes what it no longer observes, so the map stays plan-sized.
+const attemptsByTarget = new Map<string, Map<string, AttemptState>>()
+
+/** Drop settled attempts for states this scan no longer sees; running ones still own their skills. */
+function pruneAttempts(targetKey: string, liveKeys: ReadonlySet<string>): void {
+  for (const [key, attempts] of attemptsByTarget) {
+    for (const [attemptKey, state] of attempts) {
+      if (state === 'settled' && (key !== targetKey || !liveKeys.has(attemptKey))) {
+        attempts.delete(attemptKey)
+      }
+    }
+    if (attempts.size === 0 && key !== targetKey) {
+      attemptsByTarget.delete(key)
+    }
+  }
+}
 
 function attemptKey(targetKey: string, entry: BundledSkillPlanEntry): string | null {
   const ops = entry.ops.filter(isBundledSkillAutoUpdateOp)
@@ -23,28 +39,41 @@ function attemptKey(targetKey: string, entry: BundledSkillPlanEntry): string | n
   return `${targetKey}:${entry.name}@${entry.digest}:${JSON.stringify(observed)}`
 }
 
-/** A write that raced the update is kept as a backup; never let that pass as a silent success. */
+function warnAboutEdits(title: string, description: string): void {
+  toast.warning(title, { description, duration: Number.POSITIVE_INFINITY })
+}
+
+/** A write that raced the update is kept aside; never let that pass as a silent success. */
 function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
   for (const skill of result?.skills ?? []) {
     for (const op of skill.ops) {
-      if (!op.backupPath) {
-        continue
-      }
-      toast.warning(
-        translate(
-          'auto.components.skills.skillFreshnessAutoUpdate.preservedTitle',
-          'Your edits to {{value0}} were saved separately',
-          { value0: skill.name }
-        ),
-        {
-          description: translate(
+      if (op.strandedPath) {
+        warnAboutEdits(
+          translate(
+            'auto.components.skills.skillFreshnessAutoUpdate.strandedTitle',
+            "Orca couldn't back up your edits to {{value0}}",
+            { value0: skill.name }
+          ),
+          translate(
+            'auto.components.skills.skillFreshnessAutoUpdate.strandedDescription',
+            'Your edits are still in {{value0}}. Copy them somewhere safe before updating again.',
+            { value0: op.strandedPath }
+          )
+        )
+      } else if (op.backupPath) {
+        warnAboutEdits(
+          translate(
+            'auto.components.skills.skillFreshnessAutoUpdate.preservedTitle',
+            'Your edits to {{value0}} were saved separately',
+            { value0: skill.name }
+          ),
+          translate(
             'auto.components.skills.skillFreshnessAutoUpdate.preservedDescription',
             'Orca updated the skill and saved your edits to {{value0}}.',
             { value0: op.backupPath }
-          ),
-          duration: Number.POSITIVE_INFINITY
-        }
-      )
+          )
+        )
+      }
     }
   }
 }
@@ -62,12 +91,18 @@ export function autoUpdateUnmodifiedSkills(
     return owned
   }
   const targetKey = bundledSkillTargetKey(target)
-  // A manual update owns the target; its re-plan decides what is left.
-  const canStart = getSkillUpdateRun(targetKey).state !== 'running'
+  // A manual update or its unacknowledged result owns the target; the nudge covers the rest meanwhile.
+  const canStart = getSkillUpdateRun(targetKey).state === 'idle'
+  const entries = plan.skills.map((entry) => ({ entry, key: attemptKey(targetKey, entry) }))
+  pruneAttempts(targetKey, new Set(entries.flatMap(({ key }) => (key ? [key] : []))))
+  let attempts = attemptsByTarget.get(targetKey)
+  if (!attempts) {
+    attempts = new Map()
+    attemptsByTarget.set(targetKey, attempts)
+  }
   const started: string[] = []
   const keys: string[] = []
-  for (const entry of plan.skills) {
-    const key = attemptKey(targetKey, entry)
+  for (const { entry, key } of entries) {
     const attempt = key ? attempts.get(key) : undefined
     if (!key || attempt === 'settled' || (!attempt && !canStart)) {
       continue
@@ -87,8 +122,10 @@ export function autoUpdateUnmodifiedSkills(
       .then((ran) => reportPreservedEdits(ran?.value ?? null))
       .catch(() => undefined)
       .finally(() => {
+        const settled = attemptsByTarget.get(targetKey) ?? new Map<string, AttemptState>()
+        attemptsByTarget.set(targetKey, settled)
         for (const key of keys) {
-          attempts.set(key, 'settled')
+          settled.set(key, 'settled')
         }
         notifyInstalledAgentSkillsChanged()
       })
@@ -98,5 +135,10 @@ export function autoUpdateUnmodifiedSkills(
 
 /** @internal - tests need a clean module between cases. */
 export function _resetSkillFreshnessAutoUpdate(): void {
-  attempts.clear()
+  attemptsByTarget.clear()
+}
+
+/** @internal - lets tests prove the attempt map stays bounded. */
+export function _skillFreshnessAutoUpdateAttemptCount(): number {
+  return [...attemptsByTarget.values()].reduce((total, attempts) => total + attempts.size, 0)
 }

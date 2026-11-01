@@ -153,6 +153,10 @@ export function isBundledSkillAutoUpdateOp(op: Pick<BundledSkillOp, 'kind' | 'cl
 }
 
 function opNeedsConsent(op: BundledSkillOp, autoUpdating: boolean): boolean {
+  // An old copy holding edits Orca has not yet backed up waits on the user, never on deletion.
+  if (op.cleanup.some((item) => item.action === 'backup')) {
+    return true
+  }
   if (op.kind === 'leave') {
     return op.reason === 'edited'
   }

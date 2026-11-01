@@ -108,6 +108,8 @@ export type BundledSkillOpOutcome = {
   error?: string
   /** Where Replace or a non-released old copy was moved. */
   backupPath?: string
+  /** The new copy is in, but edits saved during the swap could not be backed up and remain here. */
+  strandedPath?: string
 }
 
 export type BundledSkillOutcome = {
