@@ -9,7 +9,10 @@ import {
 import type { RuntimeStore } from './runtime-store-contract'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
-import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
+import {
+  recipeForTypedAgentPermissionLaunch,
+  resolveBareAgentLaunchCommand
+} from './runtime-agent-launch-resolution'
 import {
   buildExecutionHostAgentStartupPlan,
   planExecutionHostStartupWithPromptCandidate
@@ -109,6 +112,12 @@ export async function resolveAgentTerminalCreateOptions(
     }
     if (!isTuiAgentEnabled(opts.startupAgent, store.getSettings().disabledTuiAgents)) {
       throw new Error(`Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`)
+    }
+  }
+  if (!launchAgent && !callerSuppliedLaunch && opts.command) {
+    const typed = recipeForTypedAgentPermissionLaunch(opts.command)
+    if (typed) {
+      return { ...opts, launchAgent: typed.agent, launchConfig: typed.launchConfig }
     }
   }
   if (!launchAgent || !store) {

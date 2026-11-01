@@ -156,7 +156,8 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         {
           agentCommand: 'codex',
           agentArgs: '',
-          agentEnv: {}
+          agentEnv: {},
+          unrecorded: true
         },
         {
           agentType: 'codex',

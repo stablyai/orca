@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { admitProviderReattachLaunchIdentity } from './launch-authority'
+import {
+  admitProviderReattachLaunchIdentity,
+  admitRendererAgentLaunchAuthority
+} from './launch-authority'
 
 describe('admitProviderReattachLaunchIdentity', () => {
   it('binds provider launch identity to a valid reattach incarnation', () => {
@@ -36,5 +39,41 @@ describe('admitProviderReattachLaunchIdentity', () => {
     expect(
       admitProviderReattachLaunchIdentity({ isReattach, launchAgent, incarnationId })
     ).toBeNull()
+  })
+})
+
+describe('admitRendererAgentLaunchAuthority', () => {
+  it('returns a copy of the admitted launch recipe', () => {
+    const launchConfig = {
+      agentCommand: 'claude',
+      agentArgs: '--dangerously-skip-permissions',
+      agentEnv: { A: '1' }
+    }
+    const admitted = admitRendererAgentLaunchAuthority({
+      launchToken: 'token',
+      spawnEnv: { ORCA_AGENT_LAUNCH_TOKEN: 'token' },
+      launchAgent: 'claude',
+      launchConfig,
+      isReattach: false,
+      hasStablePaneOwner: false,
+      incarnationId: 'incarnation'
+    })
+    expect(admitted?.launchConfig).toEqual(launchConfig)
+    expect(admitted?.launchConfig).not.toBe(launchConfig)
+    expect(admitted?.launchConfig?.agentEnv).not.toBe(launchConfig.agentEnv)
+  })
+
+  it('keeps an unrecorded resume recipe off the main pty record', () => {
+    const admitted = admitRendererAgentLaunchAuthority({
+      launchToken: 'token',
+      spawnEnv: { ORCA_AGENT_LAUNCH_TOKEN: 'token' },
+      launchAgent: 'claude',
+      launchConfig: { agentArgs: '', agentEnv: {}, unrecorded: true },
+      isReattach: false,
+      hasStablePaneOwner: false,
+      incarnationId: 'incarnation'
+    })
+    expect(admitted).toMatchObject({ launchToken: 'token', launchAgent: 'claude' })
+    expect(admitted?.launchConfig).toBeUndefined()
   })
 })

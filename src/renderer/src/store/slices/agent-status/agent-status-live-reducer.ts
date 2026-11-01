@@ -51,19 +51,29 @@ export function reduceAgentStatusLiveUpdate(
   }
   let nextSleepingAgentSessions = state.sleepingAgentSessionsByPaneKey
   let nextLaunchConfigs = state.agentLaunchConfigByPaneKey
-  if (
-    registryMatched &&
-    registryEntry &&
-    providerSession &&
-    !agentProviderSessionsEqual(
-      entry.agentType,
-      registryEntry.identity.providerSession,
-      providerSession
-    )
-  ) {
-    nextLaunchConfigs = {
-      ...nextLaunchConfigs,
-      [paneKey]: { ...registryEntry, identity: { ...registryEntry.identity, providerSession } }
+  if (registryMatched && registryEntry) {
+    const sessionRebound =
+      providerSession !== undefined &&
+      !agentProviderSessionsEqual(
+        entry.agentType,
+        registryEntry.identity.providerSession,
+        providerSession
+      )
+    // Why: only a hook row carrying the matching token proves the pane; recovery captures have no token of their own.
+    const tokenNewlyProven =
+      registryEntry.identity.launchToken !== undefined && !registryEntry.launchTokenProven
+    if (sessionRebound || tokenNewlyProven) {
+      nextLaunchConfigs = {
+        ...nextLaunchConfigs,
+        [paneKey]: {
+          ...registryEntry,
+          ...(tokenNewlyProven ? { launchTokenProven: true as const } : {}),
+          identity: {
+            ...registryEntry.identity,
+            ...(sessionRebound ? { providerSession } : {})
+          }
+        }
+      }
     }
   }
   // Launch tokens authorize only the session they started; a completed turn or changed provider id consumes them.

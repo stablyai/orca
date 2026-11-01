@@ -23,7 +23,7 @@ import type {
   AgentStatusRouting,
   AgentStatusTiming
 } from './agent-status-contract'
-import { registryEntryMatchesStatus } from './agent-status-launch-config'
+import { recordedRecipe, registryEntryMatchesStatus } from './agent-status-launch-config'
 import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
@@ -187,7 +187,6 @@ export function buildAgentStatusLiveEntry(
     existingProviderSession,
     providerSessionChanged
   })
-  const matchedRegistryLaunchConfig = registryMatched ? registryEntry?.launchConfig : undefined
   const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
   const retainsResumableRecoveryIdentity = statusRetainsResumableIdentity(
     { agentType: identity.agentType, state: payload.state },
@@ -204,7 +203,7 @@ export function buildAgentStatusLiveEntry(
     (payload.state !== 'done' && !providerSessionChanged && metadata?.launchToken
       ? metadata?.launchConfig
       : undefined) ??
-    matchedRegistryLaunchConfig ??
+    recordedRecipe(registryMatched ? registryEntry : undefined) ??
     matchedSleepingLaunchConfig
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const programStatus =

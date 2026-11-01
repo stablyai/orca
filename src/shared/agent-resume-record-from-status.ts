@@ -41,7 +41,8 @@ export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAge
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
     agentEnv: { ...config.agentEnv },
-    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
+    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {}),
+    ...(config.unrecorded ? { unrecorded: true as const } : {})
   }
 }
 
@@ -83,7 +84,9 @@ export function resumeRecordFromStatus(args: {
     ...(args.entry.lastAssistantMessage
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
-    ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
+    ...(args.launchConfig && !args.launchConfig.unrecorded
+      ? { launchConfig: copyLaunchConfig(args.launchConfig) }
+      : {}),
     ...agentVerdictFields(args.entry),
     ...(args.origin ? { origin: args.origin } : {})
   }

@@ -310,8 +310,9 @@ export function composeAgentLaunchProfile(
 export function resolveResumeLaunchRecipe(
   launchConfig: SleepingAgentLaunchConfig | undefined
 ): SleepingAgentLaunchConfig {
-  if (!launchConfig) {
-    return { agentArgs: '', agentEnv: {} }
+  if (!launchConfig || launchConfig.unrecorded) {
+    // Why: a missing recipe is unknown, not flagless; the marker keeps the bare resume from being recorded as one.
+    return { agentArgs: '', agentEnv: {}, unrecorded: true }
   }
   return {
     agentArgs: launchConfig.agentArgs,

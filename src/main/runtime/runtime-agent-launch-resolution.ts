@@ -16,6 +16,7 @@ import {
 } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { recognizeAgentLaunchCommand } from '../../shared/agent-command-line-intent'
+import { agentArgsSetPermission } from '../../shared/agent-permission-args'
 
 export function mergeTerminalEnvDeletionKeys(
   first: readonly string[] | undefined,
@@ -49,7 +50,8 @@ export function copySleepingAgentLaunchConfig(
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
     agentEnv: { ...config.agentEnv },
-    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
+    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {}),
+    ...(config.unrecorded ? { unrecorded: true as const } : {})
   }
 }
 
@@ -111,6 +113,18 @@ export function resolveLaunchedAgent(
     return recognized
   }
   return isTuiAgent(plannedAgent) ? plannedAgent : null
+}
+
+/** Records a typed agent command only when its own text already sets a permission mode; the recipe is exactly what the user passed. */
+export function recipeForTypedAgentPermissionLaunch(
+  command: string | null | undefined
+): { agent: TuiAgent; launchConfig: SleepingAgentLaunchConfig } | null {
+  const trimmed = command?.trim()
+  const agent = resolveLaunchedAgent(trimmed, null)
+  if (!trimmed || !agent || !agentArgsSetPermission(agent, trimmed)) {
+    return null
+  }
+  return { agent, launchConfig: { agentCommand: trimmed, agentArgs: '', agentEnv: {} } }
 }
 
 export function inferCapturedClaudeAgentTeamsMode(

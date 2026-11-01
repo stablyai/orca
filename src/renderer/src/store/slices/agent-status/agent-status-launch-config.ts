@@ -46,6 +46,13 @@ export function launchConfigRegistryEntriesEqual(
   )
 }
 
+/** The recipe a pane was launched with; an unrecorded resume registers identity only. */
+export function recordedRecipe(
+  entry: AgentLaunchConfigRegistryEntry | undefined
+): SleepingAgentLaunchConfig | undefined {
+  return entry && !entry.launchConfig.unrecorded ? entry.launchConfig : undefined
+}
+
 export function registryEntryMatchesStatus(args: {
   entry: AgentLaunchConfigRegistryEntry | undefined
   paneKey: string
@@ -118,12 +125,12 @@ export function getLaunchConfigForEntry(
     agentType: entry.agentType,
     tabId: entry.tabId ?? getTabIdFromPaneKey(entry.paneKey) ?? undefined,
     terminalHandle: entry.terminalHandle,
-    launchToken: undefined,
+    launchToken: registryEntry?.launchTokenProven ? registryEntry.identity.launchToken : undefined,
     providerSession: entry.providerSession,
     existingProviderSession: entry.providerSession,
     providerSessionChanged: false
   })
-    ? registryEntry?.launchConfig
+    ? recordedRecipe(registryEntry)
     : undefined
   if (registryLaunchConfig) {
     return registryLaunchConfig

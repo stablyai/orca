@@ -6,6 +6,7 @@ import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './pty-handle-invalidation'
 import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -42,7 +43,11 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       incarnationId?: PtyIncarnationId
       /** Handle allocated for the replacement incarnation, when one is known. */
       terminalHandle?: string
-      agentLaunchAuthority?: { launchToken: string; launchAgent: TuiAgent }
+      agentLaunchAuthority?: {
+        launchToken: string
+        launchAgent: TuiAgent
+        launchConfig?: SleepingAgentLaunchConfig
+      }
       /** The agent a fresh spawn's launch command starts, whose submits wait for its composer. */
       launchedAgent?: TuiAgent
       providerReattachLaunchIdentity?: {
@@ -153,6 +158,10 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       pty.launchToken = agentLaunchAuthority.launchToken
       pty.launchIncarnationId = binding.incarnationId
       pty.launchAgent = agentLaunchAuthority.launchAgent
+      // Why: main-side sleep, hook and quit captures read pty.launchConfig, not the renderer registry.
+      if (agentLaunchAuthority.launchConfig) {
+        pty.launchConfig = agentLaunchAuthority.launchConfig
+      }
     }
     this.watchLaunchComposer(ptyId, binding?.launchedAgent ?? null)
     const providerReattachLaunchIdentity = binding?.providerReattachLaunchIdentity

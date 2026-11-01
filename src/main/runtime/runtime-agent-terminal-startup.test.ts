@@ -166,4 +166,26 @@ describe('host agent planner', () => {
     const launch = await resolveAgentTerminalCreateOptions(share, opts, planHost)
     expect(launch.launchRuntime?.pty.shellOverride).toBe('wsl.exe')
   })
+
+  it.each([
+    ['claude --dangerously-skip-permissions', true],
+    ['claude --model opus', false],
+    ['claude --print --dangerously-skip-permissions', false],
+    ['npm test', false]
+  ])(
+    'records a typed %s launch recipe only when it sets permissions: %s',
+    async (command, recorded) => {
+      const planned = await resolveAgentTerminalCreateOptions(workspace, { command }, host)
+
+      if (recorded) {
+        expect(planned).toMatchObject({
+          launchAgent: 'claude',
+          launchConfig: { agentCommand: command, agentArgs: '', agentEnv: {} }
+        })
+      } else {
+        expect(planned.launchConfig).toBeUndefined()
+        expect(planned.launchAgent).toBeUndefined()
+      }
+    }
+  )
 })

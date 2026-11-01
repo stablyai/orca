@@ -54,6 +54,8 @@ export type SleepingAgentLaunchConfig = {
   agentArgs: string
   agentEnv: Record<string, string>
   ompResumeFilePath?: string
+  /** Transient: the resume had no recorded recipe, so this carries only the bare command and must never be captured as one. */
+  unrecorded?: true
 }
 
 export type SleepingAgentSessionRecord = {
