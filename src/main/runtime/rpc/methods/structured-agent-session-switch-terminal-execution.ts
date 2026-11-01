@@ -37,10 +37,9 @@ export async function executeStructuredSessionTerminalSwitch(
     nativeConversationContent(await host.journalSnapshot(sessionId)) === 'saved'
       ? await prepareSwitchCliTranscript(ctx.runtime, sessionId, record.location.workspaceId, true)
       : undefined
-  // Admission before the chat stops, as in the other direction: the create's ownership decision
-  // refuses now where it would refuse after the stop, and a live agent the status store shows
-  // holding this conversation (a CLI resumed by hand) refuses. The one terminal that decision
-  // would adopt (an earlier attempt's) is not another writer.
+  // Admission before the chat stops: the create's own ownership decision. The switch checks only
+  // its own tab (Brennan 11-01, temporary; a cross-tab check is a follow-up), so a terminal
+  // elsewhere holding this conversation refuses nothing; the new terminal then opens unclaimed.
   const adoption = providerSessionId
     ? await ctx.runtime.switchTerminalAdoption(record.location.workspaceId, {
         agent,
@@ -49,13 +48,6 @@ export async function executeStructuredSessionTerminalSwitch(
         signal: deadline.signal
       })
     : {}
-  if (providerSessionId) {
-    await ctx.runtime.assertNoCliWriterOutsideSwitchSource(
-      agent,
-      providerSessionId,
-      adoption.ownerPaneKey
-    )
-  }
   deadline.check()
   const workCurrent = await host.stopForSwitch(
     sessionId,
@@ -93,8 +85,9 @@ export async function executeStructuredSessionTerminalSwitch(
       commandOverride: execution?.commandOverride,
       options: record.options,
       signal: deadline.signal,
-      // The answer the admission took: the spawn carries a claim exactly when that pane was spared.
-      resumeSupported: adoption.resumeSupported
+      // The answer the admission took, so the spawn decides the claim the same way.
+      resumeSupported: adoption.resumeSupported,
+      ...(adoption.unclaimed ? { unclaimed: true } : {})
     })
   )
   let placed: Awaited<ReturnType<typeof ctx.runtime.placeSwitchTerminal>>

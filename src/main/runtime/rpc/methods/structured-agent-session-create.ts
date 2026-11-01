@@ -70,6 +70,8 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   atRest?: boolean
+  /** A switch's create, which checks only the tab it stopped (Brennan 11-01, temporary). */
+  switchedTabOnly?: boolean
 }): Promise<PreparedStructuredAgentSessionCreate> {
   const structuredAgentCliSourceEvidence =
     args.structuredAgentCliSourceEvidence ??
@@ -89,7 +91,8 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     callerKey: args.caller.callerKey,
     structuredAgentCliSourceEvidence,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
-    ...(args.pinnedAdoption ? { pinnedAdoption: args.pinnedAdoption } : {})
+    ...(args.pinnedAdoption ? { pinnedAdoption: args.pinnedAdoption } : {}),
+    ...(args.switchedTabOnly ? { switchedTabOnly: true } : {})
   })
   const attachFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',

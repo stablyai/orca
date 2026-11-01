@@ -48,6 +48,8 @@ export type StructuredAgentSessionCreateIntentInput = {
    * record still founds the chat, instead of refusing before any chat exists.
    */
   pinnedAdoption?: StructuredAgentSessionAdoption
+  /** A switch's create: the switch proved its own tab exited and checks no other (Brennan 11-01). */
+  switchedTabOnly?: boolean
 }
 
 export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {

@@ -50,49 +50,9 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-// The chat-to-terminal checks before the chat stops: readable history, the create's own ownership
-// decision, and admission by the status store that spares only the terminal that decision adopts.
-
-it('refuses before stopping the chat while the status store shows a CLI holding its conversation', async () => {
-  await savedTranscript(rig)
-  const nativeId = rig.store.getRecord(id)!.providerHandleChain.at(-1)!.handle.nativeId
-  const { runtime } = setupMainOwnedWorkspace({
-    runtimeDeps: {
-      readHookCliWriterObservation: () => ({
-        current: () => true,
-        presence: async () => 'live',
-        topology: 'pane-owned'
-      })
-    }
-  })
-  // The user resumed this conversation by hand in another terminal.
-  vi.spyOn(runtime, 'getAgentProviderSessionRows').mockReturnValue([
-    {
-      paneKey: 'other-tab:other-leaf',
-      worktreeId: WORKTREE_ID,
-      connectionId: null,
-      agentType: 'codex',
-      receivedAt: 1,
-      stateStartedAt: 1,
-      state: 'done',
-      prompt: '',
-      providerSession: { key: 'session_id', id: nativeId }
-    }
-  ])
-  const stop = vi.spyOn(rig.host, 'stopForSwitch')
-  const spawn = vi.spyOn(runtime, 'spawnSwitchTerminal')
-  const result = await executeStructuredSessionSwitch(
-    { sessionId: id, execution: { invocationId: 'to-terminal-held' } },
-    { runtime },
-    'terminal'
-  )
-  expect(result).toMatchObject({
-    status: 'refused',
-    refusal: { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
-  })
-  expect(stop).not.toHaveBeenCalled()
-  expect(spawn).not.toHaveBeenCalled()
-})
+// The chat-to-terminal checks before the chat stops: readable history and the create's own
+// ownership decision. The switch checks only its own tab (Brennan 11-01, temporary): a terminal
+// elsewhere holding the conversation refuses nothing, and the new terminal opens unclaimed.
 
 it('refuses a chat whose saved history it cannot read before stopping the chat', async () => {
   const { runtime } = setupMainOwnedWorkspace()
@@ -260,28 +220,6 @@ const foreign = (claim: AgentSessionExecutionClaim) => ({
 })
 it.each([
   {
-    held: 'another worktree\u2019s terminal whose agent exited',
-    code: 'agent_session_conflict',
-    seed: (claim: AgentSessionExecutionClaim, r: ExecutionOwnerRig) => {
-      r.list(ownerOf(foreign(claim), 'foreign-pty'))
-      r.row('foreign-pty-tab:foreign-pty-leaf', 'other-worktree', 'exited')
-    }
-  },
-  {
-    held: 'two terminals (a recorded conflict)',
-    code: 'agent_session_conflict',
-    seed: (claim: AgentSessionExecutionClaim, r: ExecutionOwnerRig) => {
-      r.list(ownerOf(claim, 'conflict-a'))
-      r.list(ownerOf(claim, 'conflict-b'))
-    }
-  },
-  {
-    held: 'another worktree\u2019s create still starting',
-    code: 'agent_session_conflict',
-    seed: (claim: AgentSessionExecutionClaim, r: ExecutionOwnerRig) =>
-      r.pendingCreate(foreign(claim))
-  },
-  {
     held: 'an unreadable ownership listing',
     code: 'agent_session_owner_restart_failed',
     seed: (_claim: AgentSessionExecutionClaim, r: ExecutionOwnerRig) => r.failListing()
@@ -306,20 +244,56 @@ it.each([
 })
 
 it.each([
-  { control: 'another live holder beside that terminal', supportsClaims: true },
-  { control: 'an execution owner that cannot attest claims', supportsClaims: false }
-])('the status store still refuses a retry: $control', async (c) => {
+  {
+    held: 'a CLI the status store shows live in another terminal',
+    claimed: true,
+    seed: (_claim: AgentSessionExecutionClaim, r: ExecutionOwnerRig) =>
+      r.row('other-tab:other-leaf')
+  },
+  {
+    held: 'another worktree\u2019s terminal whose agent exited',
+    claimed: false,
+    seed: (claim: AgentSessionExecutionClaim, r: ExecutionOwnerRig) => {
+      r.list(ownerOf(foreign(claim), 'foreign-pty'))
+      r.row('foreign-pty-tab:foreign-pty-leaf', 'other-worktree', 'exited')
+    }
+  },
+  {
+    held: 'two terminals (a recorded conflict)',
+    claimed: false,
+    seed: (claim: AgentSessionExecutionClaim, r: ExecutionOwnerRig) => {
+      r.list(ownerOf(claim, 'conflict-a'))
+      r.list(ownerOf(claim, 'conflict-b'))
+    }
+  },
+  {
+    held: 'another worktree\u2019s create still starting',
+    claimed: false,
+    seed: (claim: AgentSessionExecutionClaim, r: ExecutionOwnerRig) =>
+      r.pendingCreate(foreign(claim))
+  }
+])('checks only the switched tab: $held refuses nothing', async (c) => {
+  const r = await switchRig({ seed: (claim) => c.seed(claim, r) })
+  expect(await r.run('to-terminal-elsewhere')).toMatchObject({ status: 'completed', sessionId: id })
+  expect(r.stop).toHaveBeenCalledOnce()
+  expect(r.started()).toBe(1)
+  // It takes the claim only where no other terminal holds it; never a second owner.
+  expect(r.owners().some((listed) => listed.ptyId === 'switch-pty-1')).toBe(c.claimed)
+})
+
+it.each([
+  { control: 'another live holder beside that terminal', supportsClaims: true, started: 1 },
+  // No claim to adopt by: the retry starts a second CLI, which the user can close.
+  { control: 'an execution owner that cannot attest claims', supportsClaims: false, started: 2 }
+])('a retry checks only the switched tab: $control', async (c) => {
   const r = await switchRig({ supportsClaims: c.supportsClaims })
   await lostFirstAttempt(r)
   if (c.supportsClaims) {
     r.row('other-tab:other-leaf')
   }
-  expect(await r.run('to-terminal-retry')).toMatchObject({
-    status: 'refused',
-    refusal: { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
-  })
-  expect(r.stop).toHaveBeenCalledTimes(1)
-  expect(r.started()).toBe(1)
+  expect(await r.run('to-terminal-retry')).toMatchObject({ status: 'completed', sessionId: id })
+  expect(r.stop).toHaveBeenCalledTimes(2)
+  expect(r.started()).toBe(c.started)
 })
 
 it.each([
@@ -338,24 +312,12 @@ it.each([
     return stop(...args)
   })
   const retried = await r.run('to-terminal-retry')
-  // A holder that appeared during the stop reads as it would have before it.
-  expect(retried).toMatchObject(
-    c.completes
-      ? { status: 'completed' }
-      : {
-          status: 'refused',
-          refusal: {
-            code: 'agent_session_conflict',
-            details: { reason: 'conversationHeldElsewhere' }
-          }
-        }
-  )
-  // Never the stale terminal, never two owners of the claim; a refusal keeps the source tab.
-  expect(r.spawned.map((terminal) => terminal.ptyId)).toEqual(
-    c.completes ? [t1.ptyId, 'switch-pty-2'] : [t1.ptyId]
-  )
+  // A holder that appeared during the stop takes nothing from the switch: its terminal opens
+  // unclaimed, never as a second owner of the claim.
+  expect(retried).toMatchObject({ status: 'completed' })
+  expect(r.spawned.map((terminal) => terminal.ptyId)).toEqual([t1.ptyId, 'switch-pty-2'])
   expect(r.owners().map((listed) => listed.ptyId)).toEqual([
     c.completes ? 'switch-pty-2' : 'foreign-pty'
   ])
-  expect(r.place).toHaveBeenCalledTimes(c.completes ? 2 : 1)
+  expect(r.place).toHaveBeenCalledTimes(2)
 })

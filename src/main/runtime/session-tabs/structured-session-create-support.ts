@@ -72,7 +72,9 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         })
       } catch (ownerConflict) {
         // Refuse transfer from a live terminal or the chat's first send starts a second writer.
-        await this.assertStructuredAdoptionTerminalWritersExited(input.agent, providerSessionId)
+        if (!input.switchedTabOnly) {
+          await this.assertStructuredAdoptionTerminalWritersExited(input.agent, providerSessionId)
+        }
         throw ownerConflict
       }
     }
@@ -176,7 +178,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       return committedReplay
     }
     const resumeFrom = input.resumeFrom
-    if (purpose === 'launch' && resumeFrom) {
+    if (purpose === 'launch' && resumeFrom && !input.switchedTabOnly) {
       await this.assertStructuredAdoptionTerminalWritersExited(
         input.agent,
         resumeFrom.providerSessionId

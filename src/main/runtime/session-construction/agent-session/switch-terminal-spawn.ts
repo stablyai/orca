@@ -11,7 +11,6 @@ import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { MobileTerminalCommand } from '../../terminal/launch/mobile-terminal-startup'
 import { canonicalizeAgentSessionIdentity } from '../../agent-session/ownership/agent-session-claim-identity'
-import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './get-agent-session-execution-namespace'
 
 export type SwitchTerminalSpawn = {
@@ -23,15 +22,14 @@ export type SwitchTerminalSpawn = {
   signal?: AbortSignal
   /** The execution owner's answer the admission already took, so the spawn carries the same claim. */
   resumeSupported?: boolean
+  /** Another worktree's terminal holds the conversation's claim: open this one without it. */
+  unclaimed?: boolean
 }
 
-/** Another worktree's terminal, or several, own the conversation's claim: met before the stop by
- *  the admission or at the spawn by a holder that appeared during it, the same refusal. */
-function refuseClaimHeldElsewhere(error: unknown): never {
-  throw error instanceof Error && error.message === 'agent_session_conflict'
-    ? agentSessionRefusalError('agent_session_conflict', { reason: 'conversationHeldElsewhere' })
-    : error
-}
+/** Another worktree's terminal, or several, own the conversation's claim. The switch checks only
+ *  its own tab (Brennan 11-01, temporary): it opens its terminal unclaimed instead of refusing. */
+const isClaimHeldElsewhere = (error: unknown): boolean =>
+  error instanceof Error && error.message === 'agent_session_conflict'
 
 export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWithGetAgentSessionExecutionNamespace {
   protected abstract resolveMobileSessionTerminalCommand(
@@ -58,6 +56,7 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
     // retry after a lost reply there starts a second CLI, which the user can close.
     const claim =
       providerSession &&
+      !args.unclaimed &&
       (args.resumeSupported ??
         (await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume', args.signal)))
         ? this.switchTerminalClaim(workspace, args.agent, providerSession)
@@ -65,39 +64,46 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
     if (args.signal?.aborted) {
       throw new Error('client_disconnected')
     }
-    return await this.createTerminal(`id:${workspace.id}`, {
-      wslUserAct: true,
-      command: startup.command,
-      env: startup.env,
-      envToDelete: startup.envToDelete,
-      launchConfig: startup.launchConfig,
-      startupCommandDelivery:
-        'startupCommandDelivery' in startup ? startup.startupCommandDelivery : undefined,
-      launchAgent: args.agent,
-      launchRuntime,
-      ...(providerSession ? { resumeProviderSession: providerSession } : {}),
-      resumeOrigin: 'switch',
-      presentation: 'background',
-      tabId: randomUUID(),
-      leafId: randomUUID(),
-      ...(claim ? { agentSessionClaim: claim } : {}),
-      persistHostSessionBinding: true,
-      deferMobileSessionPublish: true,
-      signal: args.signal
-    }).catch(refuseClaimHeldElsewhere)
+    const create = (agentSessionClaim: typeof claim) =>
+      this.createTerminal(`id:${workspace.id}`, {
+        wslUserAct: true,
+        command: startup.command,
+        env: startup.env,
+        envToDelete: startup.envToDelete,
+        launchConfig: startup.launchConfig,
+        startupCommandDelivery:
+          'startupCommandDelivery' in startup ? startup.startupCommandDelivery : undefined,
+        launchAgent: args.agent,
+        launchRuntime,
+        ...(providerSession ? { resumeProviderSession: providerSession } : {}),
+        resumeOrigin: 'switch',
+        presentation: 'background',
+        tabId: randomUUID(),
+        leafId: randomUUID(),
+        ...(agentSessionClaim ? { agentSessionClaim } : {}),
+        persistHostSessionBinding: true,
+        deferMobileSessionPublish: true,
+        signal: args.signal
+      })
+    // A holder that took the claim during the stop: its refusal precedes any spawn.
+    return await create(claim).catch((error: unknown) => {
+      if (claim && isClaimHeldElsewhere(error)) {
+        return create(undefined)
+      }
+      throw error
+    })
   }
 
   /**
    * The switch's create decided before the chat stops, by the create's own ownership preparation:
-   * a refusal it would give after the stop rejects now, and the owner it would adopt or join (a
-   * first attempt's terminal whose answer was lost) is returned, only when the create will carry
-   * the claim. `resumeSupported` is the execution owner's one answer, which the spawn then reuses;
-   * the spawn still decides again, so nothing here outlives the stop.
+   * a refusal it would give after the stop rejects now, and a claim another worktree's terminal
+   * holds makes the create unclaimed. `resumeSupported` is the execution owner's one answer, which
+   * the spawn then reuses; the spawn still decides again, so nothing here outlives the stop.
    */
   async switchTerminalAdoption(
     workspaceId: string,
     args: SwitchTerminalSpawn
-  ): Promise<{ resumeSupported?: boolean; ownerPaneKey?: string }> {
+  ): Promise<{ resumeSupported?: boolean; unclaimed?: boolean }> {
     const { workspace, providerSession } = args.source
       ? await this.switchTerminalLaunch(workspaceId, args)
       : {}
@@ -112,13 +118,17 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
     const claim = resumeSupported
       ? this.switchTerminalClaim(workspace, args.agent, providerSession)
       : undefined
-    const owner = claim
-      ? await this.ptyController?.prepareAgentSessionOwner?.(claim).catch(refuseClaimHeldElsewhere)
-      : null
-    return {
-      resumeSupported,
-      ...(owner ? { ownerPaneKey: `${owner.surface.tabId}:${owner.surface.leafId}` } : {})
+    try {
+      if (claim) {
+        await this.ptyController?.prepareAgentSessionOwner?.(claim)
+      }
+    } catch (error) {
+      if (isClaimHeldElsewhere(error)) {
+        return { resumeSupported, unclaimed: true }
+      }
+      throw error
     }
+    return { resumeSupported }
   }
 
   private async switchTerminalLaunch(workspaceId: string, args: SwitchTerminalSpawn) {

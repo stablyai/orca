@@ -153,12 +153,8 @@ async function switchToChat(
       throw new AgentSessionRefusalError(opened.openRefusal)
     }
   }
-  // Admission: only a live agent the status store shows holding this conversation outside the
-  // pane being closed refuses.
-  const agent = create?.agent ?? host.deps.store.getRecord(sessionId)?.provider
-  if (agent && providerSessionId) {
-    await ctx.runtime.assertNoCliWriterOutsideSwitchSource(agent, providerSessionId, paneKey)
-  }
+  // The switch checks only its own tab (Brennan 11-01, temporary; a cross-tab check is a
+  // follow-up): another terminal holding this conversation refuses nothing here.
   const retainedSource =
     !adopt && source
       ? await prepareSwitchCliTranscript(
@@ -212,6 +208,7 @@ async function switchToChat(
         atRest: true,
         ensureHost: async () => host,
         structuredAgentCliSourceEvidence: sourceEvidence,
+        switchedTabOnly: true,
         // After a stop, the transcript read before it: the stop's record founds even if it moved.
         pinnedAdoption:
           adopt?.transcriptPath && stopped

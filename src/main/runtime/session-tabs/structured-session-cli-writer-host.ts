@@ -33,25 +33,6 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
       : 'native-local'
   }
 
-  /** A switch admits before it stops its own source pane, so only a holder elsewhere refuses. */
-  async assertNoCliWriterOutsideSwitchSource(
-    agent: StructuredAgentId,
-    providerSessionId: string,
-    sourcePaneKey: string | undefined
-  ): Promise<void> {
-    const source = sourcePaneKey ? this.getPtyRecordForPaneKey(sourcePaneKey) : null
-    const elsewhere = (paneKey: string) =>
-      paneKey !== sourcePaneKey && (!source || this.getPtyRecordForPaneKey(paneKey) !== source)
-    await assertCliConversationWritersExited(
-      {
-        rows: () => this.getAgentProviderSessionRows().filter((row) => elsewhere(row.paneKey)),
-        observation: (row) => this.readHookCliWriterObservationFn?.(row) ?? null
-      },
-      agent,
-      providerSessionId
-    )
-  }
-
   rememberSavedTerminalLaunchResult(ptyId: string, result: TerminalLaunchResult): void {
     const pty = this.ptysById.get(ptyId)
     if (pty && result.savedResumeDecision) {
