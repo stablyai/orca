@@ -531,6 +531,38 @@ describe('adopting a conversation recorded outside Orca', () => {
     expect(resolveStructuredAgentSessionLocation).not.toHaveBeenCalled()
   })
 
+  it('seeds a Hermes ACP load from a hook session id without a transcript', async () => {
+    const providerSessionId = '20261031_144415_71256d'
+    const runtime = new OrcaRuntimeService(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create intent only reads getSettings from the store.
+      { getSettings: () => ({ agentDefaultEnv: {} }) } as never
+    )
+    vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
+      supported: true
+    })
+    Object.assign(runtime, {
+      resolveStructuredAgentSessionLocation: vi.fn(async () => ({
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: 'workspace-1',
+        workspaceKind: 'git-worktree' as const
+      })),
+      resolveRuntimeFileTarget: vi.fn(async () => ({ worktree: { path: '/repos/workspace-1' } }))
+    })
+
+    const intent = await runtime.resolveStructuredAgentSessionCreateIntent({
+      envelope: { sessionId: 'hermes_chat_1', clientOperationId: 'operation-1' },
+      worktree: 'id:workspace-1',
+      agent: 'hermes',
+      resumeFrom: { providerSessionId }
+    })
+
+    expect(intent.acpLoadSessionId).toBe(providerSessionId)
+    expect(intent.adopt).toBeUndefined()
+    expect(intent.accountHome).toMatchObject({ variable: 'HERMES_HOME' })
+    expect(attachFingerprintFields(intent)).toMatchObject({ acpLoadSessionId: providerSessionId })
+  })
+
   it('adopts the original Pi file into a folder workspace and refuses another folder', async () => {
     const accountHome = await mkdtemp(join(await realpath(tmpdir()), 'orca-pi-adopt-intent-'))
     vi.stubEnv('PI_CODING_AGENT_DIR', accountHome)

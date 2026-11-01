@@ -15,6 +15,7 @@ import { MobileDictationSetupSheet } from '../components/MobileDictationSetupShe
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import { MobileBrowserTabActionSheet } from './MobileBrowserTabActionSheet'
 import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
+import { hermesTerminalActionFields } from './mobile-hermes-terminal-chat-switch'
 import { useMobileStructuredChatLaunch } from './use-mobile-structured-chat-launch'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -213,9 +214,11 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
           tabs: sessionTabs.filter((tab) => tab.type === 'terminal'),
           isTabChatView: nativeChatController.isTabChatView,
           nativeChatTranscriptIsLocalReadable: controller.nativeChatTranscriptIsLocalReadable,
-          structuredAgents: structuredChat?.canRequestSurface
-            ? structuredChat.registeredAgents
-            : [],
+          structuredAgents: structuredChat?.registeredAgents ?? [],
+          ...hermesTerminalActionFields({
+            controller, sessionTabs, handle: actionTarget?.handle,
+            closeTerminalTab: handleCloseSessionTab, showToast
+          }),
           onDismiss: () => setActionTarget(null),
           onToggleChat: toggleTabChatView,
           isPhoneMode: (handle) => isTerminalPhoneDisplayMode(handle, terminalModes),
