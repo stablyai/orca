@@ -12,7 +12,7 @@ import type { NativeChatMessage } from '../../../../../src/shared/native-chat/na
 import {
   foldMobileNativeChatAgentMessages,
   type MobileNativeChatPendingItem
-} from '../../mobile-native-chat-render-data'
+} from '../mobile-native-chat-render-data'
 import type { OlderPagePhase } from '../../use-mobile-older-page-loader'
 import {
   useMobileNativeChatSubagentPage,
