@@ -505,4 +505,46 @@ describe('rich markdown round trip', () => {
     const input = '```\n[[not-a-link]]\n```\n'
     expect(roundTripMarkdown(input)).toBe('```\n[[not-a-link]]\n```')
   })
+
+  it('does not encode <> placeholders inside a second fenced code block (#13307)', () => {
+    const input = [
+      '```python',
+      'msg = "hello"',
+      '```',
+      '',
+      '```bash',
+      'run_tool <input.json> <start> <end>',
+      '```',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(
+      [
+        '```python',
+        'msg = "hello"',
+        '```',
+        '',
+        '```bash',
+        'run_tool <input.json> <start> <end>',
+        '```'
+      ].join('\n')
+    )
+  })
+
+  it('inline HTML between two fences reaches the parser (no silent skip, #13307 reverse)', () => {
+    const input = [
+      '```python',
+      'x = 1',
+      '```',
+      '',
+      'A real <br> tag in prose.',
+      '',
+      '```bash',
+      'echo hi',
+      '```',
+      ''
+    ].join('\n')
+    const result = roundTripMarkdown(input)
+    expect(result).toContain('A real')
+    expect(result).toContain('<br>')
+  })
 })
