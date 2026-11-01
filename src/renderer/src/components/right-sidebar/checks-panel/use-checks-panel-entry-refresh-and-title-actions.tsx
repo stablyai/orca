@@ -319,23 +319,18 @@ export function useChecksPanelEntryRefreshAndTitleActions(
         })
         if (!result.ok) {
           toast.error(codeHostErrorText(result))
-          return
         }
-        await refreshHostedReviewAfterMutation()
       } else {
         if (!pr) {
           return
         }
-        const ok = await window.api.gh.updatePRTitle({
+        await window.api.gh.updatePRTitle({
           repoPath: repo.path,
           repoId: repo.id,
           prNumber: pr.number,
           title: nextTitle,
           prRepo: pr.prRepo ?? null
         })
-        if (ok) {
-          await refreshHostedReviewAfterMutation()
-        }
       }
     } finally {
       clearTitleInputFocusTimer()
@@ -343,6 +338,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
         setTitleSaving(false)
         setEditingTitle(false)
       }
+      await refreshHostedReviewAfterMutation().catch(() => {})
     }
   }, [
     activeReview,

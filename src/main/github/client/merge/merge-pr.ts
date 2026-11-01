@@ -65,9 +65,6 @@ export async function mergePR(
         headSha: restData.headRefOid,
         ghOptions
       })
-      if (result.ok) {
-        invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
-      }
       return result
     }
     const mergeBlocker = await getPRMergeBlocker(
@@ -91,13 +88,13 @@ export async function mergePR(
       ...ghOptions,
       env: { ...process.env, GH_PROMPT_DISABLED: '1' }
     })
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
     return { ok: false, error: message }
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     if (concurrencySlotHeld) {
       release()
     }

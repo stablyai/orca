@@ -217,9 +217,6 @@ export async function setPRAutoMerge(
         ghOptions,
         githubPRStackExecutionScope(connectionId, localGitOptions)
       )
-      if (result.ok) {
-        invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
-      }
       return result
     }
     const args = ['pr', 'merge', String(prNumber), '--disable-auto']
@@ -230,13 +227,13 @@ export async function setPRAutoMerge(
       ...ghOptions,
       env: { ...process.env, GH_PROMPT_DISABLED: '1' }
     })
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
     return classifySetAutoMergeError(message, enabled)
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }

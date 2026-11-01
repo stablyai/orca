@@ -142,6 +142,41 @@ describe('refreshHostedReviewAfterMutation', () => {
   )
 })
 
+it.each(['github', 'gitlab'] as const)(
+  '%s title save re-reads after a returned failure even when the read is unavailable',
+  async (provider) => {
+    vi.stubGlobal('api', {
+      gh: { updatePRTitle: vi.fn().mockResolvedValue(false) },
+      gl: { updateMR: vi.fn().mockResolvedValue({ ok: false, error: 'Connection lost' }) }
+    })
+    const input = makeInput({ ...gitLabReview, provider })
+    input.titleDraft = 'New title'
+    input.pr = {
+      number: 7,
+      title: 'Old title',
+      state: 'open',
+      url: 'https://github.com/acme/widgets/pull/7',
+      checksStatus: 'success',
+      mergeable: 'UNKNOWN',
+      updatedAt: '2026-10-30'
+    }
+    input.fetchPRForBranch = vi.fn().mockRejectedValue(new Error('read unavailable'))
+    input.fetchHostedReviewForBranch = vi.fn().mockRejectedValue(new Error('read unavailable'))
+    const { result } = renderHook(() => useChecksPanelEntryRefreshAndTitleActions(input))
+
+    await act(async () => result.current.handleSaveTitle())
+
+    const read = provider === 'gitlab' ? input.fetchHostedReviewForBranch : input.fetchPRForBranch
+    expect(read).toHaveBeenCalledWith(
+      repo.path,
+      'main',
+      expect.objectContaining({ force: true, userRefresh: true })
+    )
+    expect(input.setTitleSaving).toHaveBeenLastCalledWith(false)
+    expect(input.setEditingTitle).toHaveBeenLastCalledWith(false)
+  }
+)
+
 it('GitHub post-write refresh cannot reuse a pre-write PR read', async () => {
   const pr = (state: PRInfo['state'], headSha: string): PRInfo => ({
     number: 12,
