@@ -20,8 +20,6 @@ export type AutomationTargetAvailability =
         | 'ssh-auth-needed'
         | 'ssh-unavailable'
         | 'ssh-connecting'
-        | 'source-auth-needed'
-        | 'source-tool-unavailable'
         | 'source-provider-unsupported'
         | 'source-host-unavailable'
       message: string

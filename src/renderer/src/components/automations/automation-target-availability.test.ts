@@ -573,31 +573,34 @@ describe('automation target availability', () => {
     ).toBe('ssh-connecting')
   })
 
-  it('blocks manual runs when the saved source account needs provider auth', () => {
-    expect(
-      getAutomationTargetAvailability({
-        automation: makeAutomation({
-          sourceContext: {
-            kind: 'task-source',
-            provider: 'github',
-            projectId: 'github:stablyai/orca',
-            hostId: 'local',
-            repoId: 'repo-1',
-            providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
-          }
-        }),
-        repo: makeRepo(),
-        workspace: makeWorkspace(),
-        projectHostSetups: [],
-        sshConnectionStates: new Map(),
-        sourceHostAvailability: [{ hostId: 'local', reason: 'missing-provider-auth' }]
+  it.each(['missing-provider-auth', 'unavailable-source-tool'] as const)(
+    'allows manual runs when repository source metadata reports %s',
+    (reason) => {
+      expect(
+        getAutomationTargetAvailability({
+          automation: makeAutomation({
+            sourceContext: {
+              kind: 'task-source',
+              provider: 'github',
+              projectId: 'github:stablyai/orca',
+              hostId: 'local',
+              repoId: 'repo-1',
+              providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+            }
+          }),
+          repo: makeRepo(),
+          workspace: makeWorkspace(),
+          projectHostSetups: [],
+          sshConnectionStates: new Map(),
+          sourceHostAvailability: [{ hostId: 'local', reason }]
+        })
+      ).toMatchObject({
+        canRunNow: true,
+        reason: 'available',
+        message: null
       })
-    ).toMatchObject({
-      canRunNow: false,
-      reason: 'source-auth-needed',
-      message: 'Connect the saved GitHub source account before running manually.'
-    })
-  })
+    }
+  )
 
   it('blocks manual runs when the saved source host cannot support the provider', () => {
     expect(
