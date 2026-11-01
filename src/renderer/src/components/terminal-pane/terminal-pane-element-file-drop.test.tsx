@@ -15,11 +15,14 @@ import {
   useNativeChatPaneFileDropClaim
 } from '@/components/native-chat/NativeChatPaneFileDropSurface'
 import { TerminalPaneSurface } from './TerminalPaneSurface'
+import type { TerminalLinkActionRequest } from './terminal-link-action-request'
+import type { FileLinkTarget } from './terminal-file-link-target'
+import { TerminalLinkFilePreview } from './file-peek/TerminalLinkFilePreview'
 import { installOsFileDropCancellationGuard } from '@/lib/os-file-drop-cancellation-guard'
 
 const mocks = vi.hoisted(() => ({
   state: {
-    settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+    settings: { activeRuntimeEnvironmentId: 'focused-runtime', terminalLinkMenuFilePreview: true },
     projects: [],
     repos: [],
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Every fixture record has the declared catalog shape.
@@ -31,6 +34,7 @@ const mocks = vi.hoisted(() => ({
     folderWorkspaces: [],
     sshConnectionStates: new Map([['target', { connectionGeneration: 4, remotePlatform: 'linux' }]])
   },
+  linkActionPopover: vi.fn((_props: { preview?: React.ReactNode }) => null),
   prepare: vi.fn(),
   importPaths: vi.fn(),
   resolvePaths: vi.fn(),
@@ -80,7 +84,9 @@ vi.mock('./terminal-pane-recovery', () => ({ requestTerminalPaneRecovery: vi.fn(
 vi.mock('./TerminalSessionStateSaveFailureDialog', () => ({
   TerminalSessionStateSaveFailureDialog: () => null
 }))
-vi.mock('@/components/link-actions/LinkActionPopover', () => ({ LinkActionPopover: () => null }))
+vi.mock('@/components/link-actions/LinkActionPopover', () => ({
+  LinkActionPopover: mocks.linkActionPopover
+}))
 vi.mock('./TerminalAgentSessionForkDialog', () => ({ TerminalAgentSessionForkDialog: () => null }))
 vi.mock('./SessionRestoredBannerPortals', () => ({ SessionRestoredBannerPortals: () => null }))
 vi.mock('./TerminalQuickCommandEditorDialog', () => ({
@@ -139,6 +145,7 @@ function mountSurface(
     runtime?: string
     cwd?: string
     worktreeId?: string
+    terminalLinkActionRequest?: TerminalLinkActionRequest
   } = {}
 ) {
   const internalPanes = [makePane(1), makePane(2)]
@@ -175,6 +182,7 @@ function mountSurface(
     cwd: options.cwd,
     isActive: true,
     terminalContentVisible: true,
+    terminalLinkActionRequest: options.terminalLinkActionRequest ?? null,
     hiddenStartupStyle: {},
     terminalContainerStyle: {},
     paneCount: 2,
@@ -249,6 +257,7 @@ beforeEach(() => {
   })
   mocks.chatPane = null
   mocks.chatDisabled = false
+  mocks.state.settings.terminalLinkMenuFilePreview = true
   mocks.state.worktreesByRepo = {
     repo: [{ id: 'wt-1', repoId: 'repo', path: '/owner/workspace', hostId: 'local' }]
   }
@@ -276,6 +285,56 @@ afterEach(() => {
   disposeGuard?.()
   cleanup()
   vi.unstubAllGlobals()
+})
+
+describe('terminal surface file preview gating', () => {
+  const filePreviewTarget: FileLinkTarget = {
+    absolutePath: '/owner/workspace/file.ts',
+    line: 12,
+    column: null,
+    fileContext: {
+      target: { kind: 'local' },
+      worktreeId: 'wt-1',
+      worktreePath: '/owner/workspace',
+      sourceHostResolved: true
+    },
+    isRemoteRuntimePath: false,
+    cacheKey: 'active\0/owner/workspace/file.ts',
+    isKnownWorktreeRoot: false
+  }
+  const request: TerminalLinkActionRequest = {
+    paneId: 1,
+    anchorX: 100,
+    anchorY: 200,
+    destination: '/owner/workspace/file.ts',
+    kind: 'file',
+    primary: { label: 'Open file', run: vi.fn() },
+    restoreFocus: vi.fn()
+  }
+
+  it('supplies the preview slot for a resolved target when enabled', () => {
+    mountSurface({ terminalLinkActionRequest: { ...request, filePreviewTarget } })
+
+    expect(mocks.linkActionPopover.mock.lastCall?.[0].preview).toEqual(
+      expect.objectContaining({
+        type: TerminalLinkFilePreview,
+        props: { target: filePreviewTarget }
+      })
+    )
+  })
+
+  it('supplies no preview slot when the setting is off', () => {
+    mocks.state.settings.terminalLinkMenuFilePreview = false
+    mountSurface({ terminalLinkActionRequest: { ...request, filePreviewTarget } })
+
+    expect(mocks.linkActionPopover.mock.lastCall?.[0].preview).toBeUndefined()
+  })
+
+  it('supplies no preview slot without a resolved target', () => {
+    mountSurface({ terminalLinkActionRequest: request })
+
+    expect(mocks.linkActionPopover.mock.lastCall?.[0].preview).toBeUndefined()
+  })
 })
 
 describe('terminal element file drops', () => {

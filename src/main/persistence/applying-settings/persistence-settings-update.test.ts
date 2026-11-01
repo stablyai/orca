@@ -99,19 +99,19 @@ describe('Store', () => {
     expect(updated.branchPrefix).toBe('git-username')
   })
 
-  it('normalizes the agent skill sharing capability to an exact boolean', async () => {
-    const store = await createStore()
+  it.each(['agentSkillSharingEnabled', 'terminalLinkMenuFilePreview'] as const)(
+    'normalizes %s to an exact boolean',
+    async (setting) => {
+      const store = await createStore()
 
-    expect(store.updateSettings({ agentSkillSharingEnabled: true }).agentSkillSharingEnabled).toBe(
-      true
-    )
-    expect(
-      store.updateSettings({ agentSkillSharingEnabled: 'yes' as never }).agentSkillSharingEnabled
-    ).toBe(false)
-    expect(
-      store.updateSettings({ agentSkillSharingEnabled: 1 as never }).agentSkillSharingEnabled
-    ).toBe(false)
-  })
+      expect(store.updateSettings({ [setting]: true })[setting]).toBe(true)
+      expect(store.updateSettings({ [setting]: false })[setting]).toBe(false)
+      expect(store.updateSettings(JSON.parse(`{"${setting}":"true"}`))[setting]).toBe(false)
+      expect(store.updateSettings(JSON.parse(`{"${setting}":"yes"}`))[setting]).toBe(false)
+      expect(store.updateSettings(JSON.parse(`{"${setting}":1}`))[setting]).toBe(false)
+      expect(store.updateSettings(JSON.parse(`{"${setting}":null}`))[setting]).toBe(false)
+    }
+  )
 
   it('expands a leading ~ in the worktree location on load and every settings write', async () => {
     writeDataFile({ settings: { workspaceDir: '~/source/.orca/worktrees' } })

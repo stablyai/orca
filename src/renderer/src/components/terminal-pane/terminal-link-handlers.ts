@@ -152,7 +152,9 @@ export function createFilePathLinkProvider(
                       sourceTabId: deps.sourceTabId,
                       onOpenFailure: (failure) => showFileLinkOpenFailureToast(mappedPath, failure)
                     },
-                    deps.getLinkActionContext?.(paneId)
+                    deps.getLinkActionContext?.(paneId),
+                    undefined,
+                    target
                   )
                 ) {
                   pane.terminal.clearSelection?.()

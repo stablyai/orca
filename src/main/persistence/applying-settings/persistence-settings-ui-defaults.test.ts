@@ -88,6 +88,7 @@ describe('Store', () => {
     expect(settings.localAccountRuntimeDefaultedToAutoForAllUsers).toBe(true)
     expect(settings.terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
     expect(settings.terminalUseSeparateLightTheme).toBe(true)
+    expect(settings.terminalLinkMenuFilePreview).toBe(true)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
     expect(settings.showAutomationsButton).toBe(true)
@@ -161,6 +162,28 @@ describe('Store', () => {
       reloaded.updateSettings({ nativeChatQueueFollowUps: true })
       reloaded.flush()
       expect(readDataFile()).toHaveProperty('settings.nativeChatQueueFollowUps', true)
+    }
+  )
+
+  it.each([
+    { saved: undefined, enabled: true, toggled: false },
+    { saved: false, enabled: false, toggled: true },
+    { saved: true, enabled: true, toggled: false }
+  ])(
+    'round-trips the link menu file preview preference saved as $saved',
+    async ({ saved, enabled, toggled }) => {
+      writeDataFile({
+        settings: saved === undefined ? {} : { terminalLinkMenuFilePreview: saved }
+      })
+      const store = await createStore()
+      expect(store.getSettings().terminalLinkMenuFilePreview).toBe(enabled)
+
+      store.updateSettings({ terminalLinkMenuFilePreview: toggled })
+      store.flush()
+      expect(readDataFile()).toHaveProperty('settings.terminalLinkMenuFilePreview', toggled)
+
+      const reloaded = await createStore()
+      expect(reloaded.getSettings().terminalLinkMenuFilePreview).toBe(toggled)
     }
   )
 

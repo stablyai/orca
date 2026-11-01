@@ -73,6 +73,9 @@ export function updateSettings(
   if ('showMenuBarIcon' in updates) {
     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
   }
+  if ('terminalLinkMenuFilePreview' in updates) {
+    sanitizedUpdates.terminalLinkMenuFilePreview = updates.terminalLinkMenuFilePreview === true
+  }
   if ('artifactSharingEnabled' in updates) {
     sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
   }

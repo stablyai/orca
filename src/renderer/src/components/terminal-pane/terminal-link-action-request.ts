@@ -1,4 +1,5 @@
 import type { TerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
+import type { FileLinkTarget } from './terminal-file-link-target'
 import {
   isTerminalLinkActionActivation,
   isTerminalMiddleClickActivation
@@ -16,7 +17,10 @@ export type TerminalLinkActionKind = LinkActionKind
 
 export type TerminalLinkAction = LinkAction
 
-export type TerminalLinkActionRequest = LinkActionRequest & { paneId: number }
+export type TerminalLinkActionRequest = LinkActionRequest & {
+  paneId: number
+  filePreviewTarget?: FileLinkTarget
+}
 
 export type TerminalLinkActionRequester = (request: TerminalLinkActionRequest) => void
 
@@ -41,7 +45,13 @@ export function closeTerminalLinkActionRequest(
 
 type LinkActionDetails = Pick<
   TerminalLinkActionRequest,
-  'destination' | 'copyValue' | 'kind' | 'primary' | 'alternate' | 'secondaryActions'
+  | 'destination'
+  | 'copyValue'
+  | 'kind'
+  | 'primary'
+  | 'alternate'
+  | 'secondaryActions'
+  | 'filePreviewTarget'
 >
 
 export function requestTerminalLinkAction(

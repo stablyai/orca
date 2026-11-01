@@ -371,5 +371,6 @@ describe('terminal link action routing', () => {
       copyValue: '/repo/my file.ts',
       kind: 'file'
     })
+    expect(request.mock.calls[0][0]).not.toHaveProperty('filePreviewTarget')
   })
 })

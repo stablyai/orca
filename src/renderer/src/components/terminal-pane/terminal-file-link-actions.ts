@@ -1,4 +1,6 @@
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
+import type { FileLinkTarget } from './terminal-file-link-target'
+import { canPeekTerminalFileTarget } from './file-peek/terminal-file-peek-content'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { buildHttpLinkActions } from '@/lib/http-link-destinations'
 import {
@@ -48,7 +50,8 @@ export function handleTerminalFileLink(
   event: MouseEvent | undefined,
   deps: TerminalFileLinkActionDeps,
   actionContext?: TerminalLinkActionContext | null,
-  actionDestination?: string
+  actionDestination?: string,
+  filePreviewTarget?: FileLinkTarget
 ): boolean {
   if (isTerminalLinkDirectActivation(event)) {
     event?.preventDefault?.()
@@ -62,7 +65,10 @@ export function handleTerminalFileLink(
   return requestTerminalLinkAction(event, actionContext, {
     ...actions,
     destination: actionDestination ?? actions.destination,
-    copyValue: actions.destination
+    copyValue: actions.destination,
+    ...(filePreviewTarget && canPeekTerminalFileTarget(filePreviewTarget)
+      ? { filePreviewTarget }
+      : {})
   })
 }
 

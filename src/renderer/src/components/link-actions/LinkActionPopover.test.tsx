@@ -67,6 +67,38 @@ afterEach(() => {
 })
 
 describe('LinkActionPopover', () => {
+  it('places an optional preview between the header and actions, widening only for rendered content', () => {
+    const request: LinkActionRequest = {
+      anchorX: 100,
+      anchorY: 200,
+      destination: '/repo/src/main.ts',
+      kind: 'file',
+      primary: { label: 'Open file', run: vi.fn() },
+      restoreFocus: vi.fn()
+    }
+    const { rerender } = render(
+      <LinkActionPopover
+        request={request}
+        onClose={vi.fn()}
+        preview={<section>File preview</section>}
+      />
+    )
+    const preview = screen.getByText('File preview')
+    const previewSlot = preview.parentElement
+    const content = previewSlot?.parentElement
+    const hasPreview = ':has(> [data-slot="link-action-preview"]:not(:empty))'
+
+    expect(previewSlot?.previousElementSibling?.textContent).toContain('/repo/src/main.ts')
+    expect(previewSlot?.nextElementSibling?.textContent).toContain('Open file')
+    expect(content?.matches(hasPreview)).toBe(true)
+    expect(content?.className).toContain(']:w-[min(32rem,calc(100vw-1rem))]')
+
+    rerender(<LinkActionPopover request={request} onClose={vi.fn()} preview={null} />)
+    expect(screen.queryByText('File preview')).toBeNull()
+    expect(content?.matches(hasPreview)).toBe(false)
+    expect(content?.className).toBe('w-max min-w-52 max-w-[min(21rem,calc(100vw-1rem))] p-1')
+  })
+
   it('shows the full destination and runs the selected action', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const onClose = vi.fn()

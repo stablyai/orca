@@ -13,6 +13,7 @@ import { openTerminalBesideTab } from './open-terminal-beside-tab'
 import { AgentLaunchPaneNoticePortal } from './AgentLaunchPaneNotice'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
+import { TerminalLinkFilePreview } from './file-peek/TerminalLinkFilePreview'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
@@ -127,6 +128,8 @@ export function TerminalPaneSurface({
   const paneOnClient = useAppStore(
     (state) => getKnownExecutionHostIdForWorktree(state, worktreeId) === LOCAL_EXECUTION_HOST_ID
   )
+  const previewEnabled = useAppStore((state) => state.settings?.terminalLinkMenuFilePreview ?? true)
+  const filePreviewTarget = previewEnabled && terminalLinkActionRequest?.filePreviewTarget
   const errorReplacedByStartCard = useWslHostStartCardReplacesPaneError(
     worktreeId,
     activePane
@@ -311,7 +314,13 @@ export function TerminalPaneSurface({
         canCopyAgentSessionId={menuAgentSessionId !== null}
         onCopyAgentSessionId={() => void contextMenu.onCopyAgentSessionId()}
       />
-      <LinkActionPopover request={terminalLinkActionRequest} onClose={closeTerminalLinkActions} />
+      <LinkActionPopover
+        request={terminalLinkActionRequest}
+        onClose={closeTerminalLinkActions}
+        preview={
+          filePreviewTarget ? <TerminalLinkFilePreview target={filePreviewTarget} /> : undefined
+        }
+      />
       {quickCommandEditorOpen ? (
         <TerminalQuickCommandEditorDialog
           command={quickCommandDraft}
