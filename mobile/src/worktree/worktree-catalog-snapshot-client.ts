@@ -140,6 +140,11 @@ export class WorktreeCatalogSnapshotClient {
     }
   }
 
+  /** Whether a catalog this client confirmed is held for this client and host. */
+  holdsRows(client: RpcClient, hostId: string): boolean {
+    return this.client === client && this.hostId === hostId && this.confirmedWorktrees !== null
+  }
+
   /** The confirmed host catalog to apply, or null when there is nothing to apply. */
   admit(pending: PendingWorktreeCatalog | null): Worktree[] | null {
     if (!pending) {
