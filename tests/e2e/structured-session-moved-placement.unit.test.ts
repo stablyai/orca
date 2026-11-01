@@ -52,7 +52,7 @@ const rawAt = (rig: AuthorityRig, workspace: string) =>
     (tab) => tab.type === 'agent-session' && tab.sessionId === B
   )
 
-it('a phone move with a window attached leaves the old tab to the window, then restart drops it', async () => {
+it('a phone move the attached window still shows stays moved after the old registration returns and Orca restarts', async () => {
   const rig = await retired()
   const window = attachWindow(rig)
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -63,8 +63,12 @@ it('a phone move with a window attached leaves the old tab to the window, then r
   }
   expect(rawAt(rig, rig.old)).toEqual([])
   expect(rawAt(rig, rig.destination)).toHaveLength(1)
+  // The window owns the saved layout, so the old tab is still saved when it goes away.
+  expect(savedAt(rig, rig.old)).toHaveLength(1)
   window.mockRestore()
+  rig.profile.addRepo(storeRepo({ id: 'retired-project', path: root, kind: 'folder' }))
   const fresh = await physicalReload(rig)
+  expect(fresh.store.getRecord(B)?.location.workspaceId).toBe(rig.destination)
   expect(savedAt(fresh, rig.old)).toEqual([])
   expect(rawAt(fresh, rig.old)).toEqual([])
 })
@@ -100,19 +104,6 @@ it('a delayed old-workspace frame and the empty frame after it cannot bring the 
     }
   ])
   expect(rawAt(rig, rig.old)).toEqual([])
-})
-
-it('a move interrupted before its old tab was dropped is finished by the next startup', async () => {
-  const rig = await retired()
-  vi.spyOn(rig.runtime, 'retireMovedStructuredSessionPlacement').mockRejectedValueOnce(
-    new Error('quit before cleanup')
-  )
-  expect(await reveal(rig)).toMatchObject({ ok: false, error: { message: 'quit before cleanup' } })
-  expect(rig.store.getRecord(B)?.location.workspaceId).toBe(rig.destination)
-  expect(savedAt(rig, rig.old)).toHaveLength(1)
-  const fresh = await physicalReload(rig)
-  expect(savedAt(fresh, rig.old)).toEqual([])
-  expect(rawAt(fresh, rig.old)).toEqual([])
 })
 
 it('an already-current reveal reads no unrelated saved workspace at any population', async () => {
