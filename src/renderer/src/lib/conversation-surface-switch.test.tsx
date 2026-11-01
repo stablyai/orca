@@ -406,11 +406,37 @@ it.each([
 })
 
 it.each([
-  ['structured_agent_session_unsupported', 'hostUnsupported'],
-  ['agent_session_operation_invalid', 'notSignedIn'],
-  ['agent_session_operation_invalid', 'cliMissing'],
-  ['agent_session_operation_invalid', 'historyInOtherAccount']
-] as const)('says why a %s %s refusal will refuse again, with no retry', async (code, reason) => {
+  ['structured_agent_session_unsupported', 'hostUnsupported', /can.t run this agent/i],
+  ['structured_agent_session_unsupported', 'hostDisabled', /isn.t available/i],
+  ['structured_agent_session_unsupported', 'clientCapabilityMissing', /isn.t available/i],
+  ['agent_session_operation_invalid', 'notSignedIn', /sign.in|signed in/i],
+  ['agent_session_operation_invalid', 'cliMissing', /install/i],
+  ['agent_session_operation_invalid', 'historyInOtherAccount', /account/i]
+] as const)(
+  'says why a %s %s refusal will refuse again, with no retry',
+  async (code, reason, why) => {
+    mocks.capture.mockResolvedValue({
+      handle: 'terminal-source',
+      incarnationId: 'incarnation',
+      presentation: { identity: { tabId: fromPane.tabId }, holders: [] }
+    })
+    mocks.call.mockResolvedValue({
+      status: 'refused',
+      sessionId: 'chat',
+      refusal: { code, details: { reason } }
+    })
+    await expect(
+      runConversationSwitch({ direction: 'chat', ...fromPane, source: fromPane })
+    ).resolves.toBe(false)
+    expect(mocks.error).toHaveBeenCalledOnce()
+    const text = mocks.error.mock.calls[0]![0]
+    expect(text).toMatch(/could not switch to chat\./)
+    expect(text).toMatch(why)
+    expect(text).not.toMatch(/try again|Switch to Chat UI|history couldn.t be loaded/i)
+  }
+)
+
+it('keeps the retry after the cause of a refusal a retry can get past', async () => {
   mocks.capture.mockResolvedValue({
     handle: 'terminal-source',
     incarnationId: 'incarnation',
@@ -419,13 +445,14 @@ it.each([
   mocks.call.mockResolvedValue({
     status: 'refused',
     sessionId: 'chat',
-    refusal: { code, details: { reason } }
+    refusal: { code: 'agent_session_operation_invalid', details: { reason: 'providerStartFailed' } }
   })
   await expect(
     runConversationSwitch({ direction: 'chat', ...fromPane, source: fromPane })
   ).resolves.toBe(false)
-  expect(mocks.error).toHaveBeenCalledOnce()
-  expect(mocks.error.mock.calls[0]![0]).not.toMatch(/try again|Switch to Chat UI/i)
+  expect(mocks.error.mock.calls[0]![0]).toMatch(
+    /could not switch to chat\. .+ Use Switch to Chat UI to try again\.$/
+  )
 })
 
 it.each([true, false])(

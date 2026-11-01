@@ -1,17 +1,11 @@
 import { translate } from '@/i18n/i18n'
 import { structuredLaunchFailure } from './agent-session/launch/structured-agent-session-launch-failure'
 import { agentLabel } from '../../../shared/ai-vault-session-filters'
-import { agentSessionWriteFailureText } from '@/components/native-chat/agent-session-write-notice-text'
+import { agentSessionWriteNoticeText } from '@/components/native-chat/agent-session-write-notice-text'
+import { agentSessionRefusalCauseParts } from '../../../shared/agent-session/failures/agent-session-refusal-notice'
+import { agentSessionRefusalReasonWords } from '../../../shared/agent-session/failures/agent-session-refusal-reason-words'
+import { joinSentences } from '../../../shared/sentence-joining'
 import type { AiVaultAgent } from '../../../shared/ai-vault-types'
-
-const REFUSES_AGAIN: ReadonlySet<string> = new Set([
-  'hostUnsupported',
-  'hostDisabled',
-  'clientCapabilityMissing',
-  'notSignedIn',
-  'cliMissing',
-  'historyInOtherAccount'
-])
 
 export function conversationSwitchFailureText(
   error: unknown,
@@ -76,10 +70,6 @@ export function conversationSwitchFailureText(
       values
     )
   }
-  // A refusal that would only refuse again says why and what to do, never "try again".
-  if (failure && reason && REFUSES_AGAIN.has(reason)) {
-    return agentSessionWriteFailureText(failure, 'read-history')
-  }
   // From a terminal, the retry is the Switch to Chat UI its pane (or Session History) still offers.
   const fromTerminal = args.direction === 'chat' && args.source !== undefined
   // A split pane closes when its switch fails after the stop (Brennan 11-01), taking that
@@ -104,6 +94,46 @@ export function conversationSwitchFailureText(
           "{{agent}} couldn't open this conversation's history. Check that its saved conversation is available, then try again.",
           values
         )
+  }
+  // A refusal the shared words explain says why, as a failed chat start does, and says "try again"
+  // only for a reason whose remedy is a retry: signing in or installing the CLI comes first.
+  const cause = failure
+    ? (failure.causeText ??
+      agentSessionWriteNoticeText(
+        agentSessionRefusalCauseParts(failure, { agentName: values.agent })
+      ))
+    : ''
+  if (failure && cause) {
+    const retries = agentSessionRefusalReasonWords(failure)?.action === 'retry'
+    return joinSentences(
+      [
+        args.direction === 'chat'
+          ? translate(
+              'components.tab.bar.switch.chatSwitchFailedLead',
+              '{{agent}} could not switch to chat.',
+              values
+            )
+          : translate(
+              'components.tab.bar.switch.terminalSwitchFailedLead',
+              '{{agent}} could not switch to a terminal.',
+              values
+            ),
+        cause,
+        fromSplitPane
+          ? translate(
+              'components.tab.bar.switch.continueFromSessionHistory',
+              'Open this conversation from Session History to continue.'
+            )
+          : !retries
+            ? ''
+            : fromTerminal
+              ? translate(
+                  'components.tab.bar.switch.retryFromTerminal',
+                  'Use Switch to Chat UI to try again.'
+                )
+              : translate('components.tab.bar.switch.retry', 'Try again.')
+      ].filter(Boolean)
+    )
   }
   if (fromSplitPane) {
     return translate(
