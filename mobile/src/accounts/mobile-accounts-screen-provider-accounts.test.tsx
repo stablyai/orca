@@ -11,6 +11,8 @@ const dependencies = vi.hoisted(() => ({
   snapshot: null as unknown,
   capabilities: [] as string[],
   antigravity: null as unknown,
+  hostId: 'host-1',
+  subscriptions: [] as Array<(payload: unknown) => void>,
   requests: [] as Array<{ method: string; params: unknown }>
 }))
 
@@ -37,7 +39,7 @@ vi.mock('expo-router', async () => {
     useFocusEffect(effect: () => void | (() => void)): void {
       React.useEffect(effect, [effect])
     },
-    useLocalSearchParams: () => ({ hostId: 'host-1' })
+    useLocalSearchParams: () => ({ hostId: dependencies.hostId })
   }
 })
 
@@ -60,7 +62,8 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 vi.mock('../transport/host-store', () => ({
-  loadHosts: async () => [{ id: 'host-1', name: 'Desk' }]
+  loadHosts: async () => [{ id: 'host-1', name: 'Desk' }],
+  peekHosts: () => null
 }))
 
 vi.mock('../transport/host-client-hooks', () => {
@@ -76,11 +79,12 @@ vi.mock('../transport/host-client-hooks', () => {
       return { id: method, ok: true, result: dependencies.snapshot }
     },
     subscribe: (_method: string, _params: unknown, onData: (payload: unknown) => void) => {
+      dependencies.subscriptions.push(onData)
       onData({ type: 'ready', snapshot: dependencies.snapshot })
       return () => {}
     }
   }
-  return { useHostClient: () => ({ client, state: 'connected' }) }
+  return { useHostClient: () => ({ client, state: 'connected' }), useForceReconnect: () => null }
 })
 
 vi.mock('../components/AgentIcons', () => ({
@@ -96,7 +100,7 @@ function limitWindow(usedPercent: number, windowMinutes: number) {
   return { usedPercent, windowMinutes, resetsAt: null, resetDescription: null }
 }
 
-function snapshot(): unknown {
+function snapshot(label = 'Work'): unknown {
   return {
     claude: { accounts: [], activeAccountId: null },
     codex: { accounts: [], activeAccountId: null },
@@ -104,7 +108,7 @@ function snapshot(): unknown {
       accounts: [
         {
           id: OPENCODE_ACCOUNT,
-          label: 'Work',
+          label,
           integrations: ['github'],
           createdAt: 10
         }
@@ -183,6 +187,24 @@ async function renderAccounts(): Promise<ReactTestRenderer> {
 }
 
 describe('mobile accounts for desktop providers', () => {
+  it('ignores late snapshots from the previous host', async () => {
+    dependencies.hostId = 'host-1'
+    dependencies.subscriptions = []
+    dependencies.snapshot = snapshot('Old host')
+    const renderer = await renderAccounts()
+    const oldSubscription = dependencies.subscriptions[0]
+    dependencies.hostId = 'host-2'
+    dependencies.snapshot = snapshot('New host')
+    await act(async () => {
+      renderer.update(createElement(MobileAccountsScreen))
+      await Promise.resolve()
+    })
+    act(() => oldSubscription({ type: 'snapshot', snapshot: snapshot('Old host') }))
+    expect(visibleText(renderer)).toContain('New host')
+    expect(visibleText(renderer)).not.toContain('Old host')
+    act(() => renderer.unmount())
+    dependencies.hostId = 'host-1'
+  })
   it('shows configured desktop providers and can select a managed OpenCode account', async () => {
     dependencies.snapshot = snapshot()
     dependencies.capabilities = []

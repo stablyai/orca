@@ -264,7 +264,7 @@ function standardWindows(limits: ProviderRateLimits): UsageMeter[] {
   if (limits.fableWeekly) {
     meters.push(meterFromWindow('fableWeekly', limits.fableWeekly, 'Fable'))
   }
-  if (limits.monthly && !limits.session && !limits.weekly) {
+  if (limits.monthly) {
     meters.push(meterFromWindow('monthly', limits.monthly, null))
   }
   return meters

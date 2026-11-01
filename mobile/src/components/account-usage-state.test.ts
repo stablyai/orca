@@ -373,6 +373,8 @@ describe('desktop provider usage on mobile', () => {
     const opencodeGo = makeLimits({
       provider: 'opencode-go',
       status: 'ok',
+      session: limitWindow(10, 300),
+      weekly: limitWindow(20, 10080),
       monthly: limitWindow(33, 43200)
     })
 
@@ -382,6 +384,8 @@ describe('desktop provider usage on mobile', () => {
       expect.objectContaining({ key: 'monthly', title: 'MCP monthly', chip: '', usedPercent: 30 })
     ])
     expect(collectProviderUsageMeters('opencodeGo', opencodeGo)).toEqual([
+      expect.objectContaining({ key: 'session', usedPercent: 10 }),
+      expect.objectContaining({ key: 'weekly', usedPercent: 20 }),
       expect.objectContaining({ key: 'monthly', chip: 'mo', title: null, usedPercent: 33 })
     ])
   })
