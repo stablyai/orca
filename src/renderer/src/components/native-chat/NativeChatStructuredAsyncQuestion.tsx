@@ -4,6 +4,8 @@ import { structuredAgentSessionHostKey } from '../../runtime/structured-agent-se
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 import { nativeChatAskDismissKey } from '../../../../shared/native-chat-ask-dismiss-key'
+import { useMemo, useState } from 'react'
+import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import { formatAskAnswer } from '../../../../shared/native-chat-ask-answer'
 import { nativeChatAnswerSendIntent } from '../../../../shared/native-chat-follow-up-behavior'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
@@ -19,7 +21,8 @@ export function NativeChatStructuredAsyncQuestion({
   sourceScope,
   blocked = false,
   send,
-  sendFollowUp
+  sendFollowUp,
+  queuedCards
 }: {
   paneKey: string
   sourceKey: string
@@ -28,14 +31,18 @@ export function NativeChatStructuredAsyncQuestion({
   session: Pick<NativeChatLiveSession, 'messages' | 'readPhase'>
   send: NativeChatStructuredComposerTransport['send']
   sendFollowUp?: NativeChatStructuredComposerTransport['sendFollowUp']
+  queuedCards?: readonly Pick<QueuedMessageCard, 'text'>[]
 }): React.JSX.Element | null {
+  const [submitting, setSubmitting] = useState(false)
+  const queuedTexts = useMemo(() => queuedCards?.map((card) => card.text), [queuedCards])
   const { prompt, dismiss, ownerKey } = useNativeChatAsyncQuestions({
     paneKey,
     sourceKey,
     sourceScope,
     viewKey: paneKey,
     messages: session.messages,
-    settled: session.readPhase === 'ready' && !blocked
+    settled: session.readPhase === 'ready' && !blocked,
+    queuedTexts
   })
   if (!prompt) {
     return null
@@ -44,16 +51,17 @@ export function NativeChatStructuredAsyncQuestion({
     <NativeChatQuestionCard
       key={JSON.stringify([ownerKey, nativeChatAskDismissKey(prompt)])}
       prompt={prompt}
+      isSubmitting={submitting}
       onAnswer={(selections) => {
-        // Send admission can precede delivery; canonical transcript rows retire questions.
-        const sent = send(
-          formatAskAnswer(prompt, selections),
-          [],
-          nativeChatAnswerSendIntent(sendFollowUp)
-        )
-        // Stop or a waiting command can still queue it; no row lands until the turn ends.
-        if (sent === 'queued') {
-          dismiss()
+        // Delivered rows retire questions, and a queued answer holds them; this only blocks resubmits until settled.
+        // The card keeps a returned answer's question, so the text never lands in the composer draft.
+        const sent = send(formatAskAnswer(prompt, selections), [], {
+          ...nativeChatAnswerSendIntent(sendFollowUp),
+          callerKeepsText: true,
+          onSettled: () => setSubmitting(false)
+        })
+        if (sent) {
+          setSubmitting(true)
         }
       }}
       onCancel={dismiss}
@@ -65,7 +73,8 @@ export function nativeChatStructuredAsyncQuestion(
   props: Pick<NativeChatStructuredViewProps, 'target' | 'agent' | 'sessionId' | 'tabId'>,
   controller: Pick<ReturnType<typeof useStructuredAgentSession>, 'epoch' | 'prompts'>,
   session: Pick<NativeChatLiveSession, 'messages' | 'readPhase'>,
-  transport: Pick<NativeChatStructuredComposerTransport, 'send' | 'sendFollowUp'>
+  transport: Pick<NativeChatStructuredComposerTransport, 'send' | 'sendFollowUp'>,
+  queuedCards: readonly Pick<QueuedMessageCard, 'text'>[]
 ): React.JSX.Element {
   const { agent, sessionId } = props
   const { epoch } = controller
@@ -75,6 +84,7 @@ export function nativeChatStructuredAsyncQuestion(
       session={session}
       send={transport.send}
       sendFollowUp={transport.sendFollowUp}
+      queuedCards={queuedCards}
       blocked={controller.prompts[0] != null}
       sourceKey={JSON.stringify([
         'journal',

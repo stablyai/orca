@@ -458,8 +458,7 @@ describe('async occurrences through the phone controller and rendered card actio
         finish(outcome)
         await answer
       })
-      // A queued answer posts no row until the turn ends; only its captured occurrence hides.
-      expect(titles()).toEqual(outcome === 'queued' ? ['Q2?'] : ['Q1?', 'Q2?'])
+      expect(titles()).toEqual(['Q1?', 'Q2?'])
       session.messages = [
         q1,
         row('two', 'Q2?'),

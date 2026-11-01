@@ -110,7 +110,11 @@ describe('NativeChatStructuredAsyncQuestion', () => {
       ).toBe('Green')
       act(() => vi.runAllTimers())
 
-      expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [], undefined)
+      expect(send).toHaveBeenCalledWith(
+        '> Which color?\n\nBlue',
+        [],
+        expect.objectContaining({ callerKeepsText: true })
+      )
       expect(container.textContent).toContain('Which color?')
       render([
         asked,
@@ -187,7 +191,11 @@ describe('NativeChatStructuredAsyncQuestion', () => {
       )
       act(() => blue?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
       act(() => vi.runAllTimers())
-      expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [], undefined)
+      expect(send).toHaveBeenCalledWith(
+        '> Which color?\n\nBlue',
+        [],
+        expect.objectContaining({ callerKeepsText: true })
+      )
       expect(container.textContent).toContain('Which color?')
 
       render([
@@ -361,7 +369,7 @@ describe('NativeChatStructuredAsyncQuestion', () => {
     let settle = () => {}
     const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _images, request) => {
       settle = () => request?.onSettled?.('unconfirmed')
-      return true
+      return 'queued'
     })
     const render = () =>
       act(() =>
@@ -396,39 +404,42 @@ describe('NativeChatStructuredAsyncQuestion', () => {
     act(settle)
     render()
     expect(container.textContent).not.toContain('Which color?')
-    expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [], undefined)
+    expect(send).toHaveBeenCalledWith(
+      '> Which color?\n\nBlue',
+      [],
+      expect.objectContaining({ callerKeepsText: true })
+    )
   })
 
-  it.each([
-    [false, true],
-    [true, true],
-    ['queued', false]
-  ] as const)('hides the card only for a queued answer (admission: %s)', (admission, shown) => {
-    const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => admission)
-    act(() =>
-      root.render(
-        <NativeChatStructuredAsyncQuestion
-          paneKey="tab-1:structured"
-          sourceKey="host"
-          sourceScope="journal/session/epoch"
-          session={{ messages: [asked], readPhase: 'ready' }}
-          send={send}
-        />
+  it.each([false, true, 'queued'] as const)(
+    'does not make %s admission a retained hide',
+    (admission) => {
+      const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => admission)
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="tab-1:structured"
+            sourceKey="host"
+            sourceScope="journal/session/epoch"
+            session={{ messages: [asked], readPhase: 'ready' }}
+            send={send}
+          />
+        )
       )
-    )
-    act(() =>
-      [...container.querySelectorAll('button[aria-pressed]')]
-        .find((node) => node.textContent?.includes('Blue'))!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    )
-    act(() => vi.runAllTimers())
-    expect(container.textContent?.includes('Which color?')).toBe(shown)
-  })
+      act(() =>
+        [...container.querySelectorAll('button[aria-pressed]')]
+          .find((node) => node.textContent?.includes('Blue'))!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      )
+      act(() => vi.runAllTimers())
+      expect(container.textContent).toContain('Which color?')
+    }
+  )
   it.each([
-    [{ action: 'queue', offersChoice: true }, { alternate: true }],
+    [{ action: 'queue', offersChoice: true }, true],
     [{ action: 'queue', offersChoice: false }, undefined],
     [{ action: 'steer', offersChoice: true }, undefined]
-  ] as const)('steers the answer into the running turn (follow-up: %j)', (followUp, request) => {
+  ] as const)('steers the answer into the running turn (follow-up: %j)', (followUp, alternate) => {
     const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => true)
     act(() =>
       root.render(
@@ -448,7 +459,40 @@ describe('NativeChatStructuredAsyncQuestion', () => {
         .dispatchEvent(new MouseEvent('click', { bubbles: true }))
     )
     act(() => vi.runAllTimers())
-    expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [], request)
+    expect(send.mock.calls[0]?.[2]?.alternate).toBe(alternate)
+  })
+
+  it('holds the question while a queued card answers it, across remounts, until that card is gone', () => {
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => 'queued')
+    const render = (queuedCards: { text: string }[]) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="tab-1:structured"
+            sourceKey="host"
+            sourceScope="journal/session/epoch"
+            session={{ messages: [asked], readPhase: 'ready' }}
+            send={send}
+            queuedCards={queuedCards}
+          />
+        )
+      )
+    render([{ text: 'earlier follow-up' }])
+    act(() =>
+      [...container.querySelectorAll('button[aria-pressed]')]
+        .find((node) => node.textContent?.includes('Blue'))!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    act(() => vi.runAllTimers())
+    const queued = [{ text: 'earlier follow-up' }, { text: '> Which color?\n\nBlue' }]
+    render(queued)
+    expect(container.textContent).not.toContain('Which color?')
+    act(() => root.unmount())
+    root = createRoot(container)
+    render(queued)
+    expect(container.textContent).not.toContain('Which color?')
+    render([{ text: 'earlier follow-up' }])
+    expect(container.textContent).toContain('Which color?')
   })
 
   it('resets pending choices when host ownership changes with the same portable definition', () => {

@@ -130,9 +130,14 @@ describe('useMobileNativeChatPrompts transcript asks', () => {
 })
 
 describe('useMobileNativeChatPrompts in a structured chat', () => {
-  it.each(['accepted', 'queued', 'unknown', 'rejected'] as const)(
+  it.each([
+    ['accepted', true],
+    ['queued', true],
+    ['unknown', true],
+    ['rejected', false]
+  ] as const)(
     'answers a Codex async question through an ordinary %s send',
-    async (outcome) => {
+    async (outcome, accepted) => {
       const sendWithOutcome = vi.fn(async () => outcome)
       const questions = [{ title: 'Which color?', options: ['Red', 'Blue'] }]
       const message: NativeChatMessage = {
@@ -200,7 +205,7 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
       expect(ask).toEqual(initialAsk)
       expect(ask?.questions[0]?.options.map((option) => option.label)).toEqual(['Red', 'Blue'])
       await expect(ask && captured?.structuredAnswer?.(ask, [{ indices: [1] }])).resolves.toBe(
-        outcome
+        accepted
       )
       expect(sendWithOutcome).toHaveBeenCalledWith(
         '> Which color?\n\nBlue',
@@ -224,6 +229,53 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
       expect(captured?.ask).toBeNull()
     }
   )
+})
+
+describe('useMobileNativeChatPrompts queued answers', () => {
+  it('holds a question while a queued card quotes it and returns it once that card is gone', () => {
+    const message: NativeChatMessage = {
+      id: 'ask',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'request_user_input_async',
+          input: { questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }] }
+        }
+      ],
+      timestamp: null,
+      source: 'transcript'
+    }
+    let cards = [{ text: 'unrelated follow-up' }, { text: '> Which color?\n\nBlue' }]
+    let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
+    function Probe(): null {
+      captured = useMobileNativeChatPrompts({
+        asyncSourceScope: 'host/session/epoch',
+        hiddenAsyncIds: new Set(),
+        enabled: true,
+        structured: {
+          permission: null,
+          question: null,
+          sendWithOutcome: vi.fn(async () => 'queued' as const),
+          sendFollowUp: null,
+          queued: { cards }
+        },
+        status: null,
+        messages: [message],
+        transcriptLoading: false
+      })
+      return null
+    }
+    let renderer: ReactTestRenderer
+    TestRenderer.act(() => {
+      renderer = TestRenderer.create(createElement(Probe))
+      renderers.push(renderer)
+    })
+    expect(captured?.ask).toBeNull()
+    cards = [{ text: 'unrelated follow-up' }]
+    TestRenderer.act(() => renderer.update(createElement(Probe)))
+    expect(captured?.ask?.questions[0]?.question).toBe('Which color?')
+  })
 })
 
 describe('addressed phone hide subscriptions', () => {
