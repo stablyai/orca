@@ -213,6 +213,89 @@ describe('latestNativeChatTaskList', () => {
       ])?.tasks
     ).toEqual([])
   })
+
+  it('reads a Grok todo_write list and a later status merge, then a Gemini replacement', () => {
+    const snapshot = [
+      message('grok', [
+        {
+          type: 'tool-call',
+          name: 'todo_write',
+          input: {
+            merge: false,
+            todos: [
+              {
+                id: 'install-18-pro',
+                content: 'Install the Ad Hoc build on iPhone 18 Pro',
+                status: 'in_progress'
+              },
+              {
+                id: 'confirm-duo',
+                content: 'Confirm iPhone Duo is running the new Ad Hoc build',
+                status: 'pending'
+              },
+              {
+                id: 'check-ota',
+                content: 'Open the RoamRun page and confirm Orca 0.0.61 is listed',
+                status: 'pending'
+              },
+              {
+                id: 'dev-server',
+                content: 'Confirm the dev server is still listening on port 6769',
+                status: 'completed'
+              },
+              {
+                id: 'skip-gateway',
+                content: 'Leave the push gateway running and do not restart it',
+                status: 'cancelled'
+              }
+            ]
+          }
+        }
+      ])
+    ]
+    const listed = latestNativeChatTaskList(snapshot)
+    expect(listed?.tasks.map((entry) => entry.status)).toEqual([
+      'in_progress',
+      'pending',
+      'pending',
+      'completed',
+      'cancelled'
+    ])
+    expect(listed?.tasks.filter((entry) => entry.status === 'completed')).toHaveLength(1)
+    const merged = latestNativeChatTaskList([
+      ...snapshot,
+      message('touch', [
+        {
+          type: 'tool-call',
+          name: 'todo_write',
+          input: { todos: [{ id: 'install-18-pro', status: 'completed' }] }
+        }
+      ])
+    ])
+    expect(merged?.tasks[0]).toEqual({
+      content: 'Install the Ad Hoc build on iPhone 18 Pro',
+      status: 'completed'
+    })
+    expect(merged?.tasks).toHaveLength(5)
+    expect(
+      latestNativeChatTaskList([
+        message('old', [
+          {
+            type: 'tool-call',
+            name: 'TodoWrite',
+            input: { todos: [{ content: 'Old', status: 'pending' }] }
+          }
+        ]),
+        message('gemini', [
+          {
+            type: 'tool-call',
+            name: 'write_todos',
+            input: { todos: [{ description: 'Scan the project', status: 'in_progress' }] }
+          }
+        ])
+      ])
+    ).toEqual({ tasks: [{ content: 'Scan the project', status: 'in_progress' }] })
+  })
 })
 
 describe('nativeChatVisibleTaskList', () => {

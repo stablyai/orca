@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyNativeChatTaskListCall,
   diffNativeChatTaskLists,
   nativeChatTaskLabel,
+  nativeChatTaskListTool,
   normalizeNativeChatTaskList,
+  readNativeChatTaskListCall,
   type NativeChatTask,
   type NativeChatTaskList
 } from './native-chat-task-list'
@@ -72,6 +75,67 @@ describe('normalizeNativeChatTaskList', () => {
     expect(normalizeNativeChatTaskList('mcp__server__TodoWrite', { todos: [] })).toBeNull()
     expect(normalizeNativeChatTaskList('ExitPlanMode', { plan: [] })).toBeNull()
     expect(normalizeNativeChatTaskList('update_plan', { todos: [] })).toBeNull()
+  })
+
+  it('accepts Grok, Gemini, OpenCode, and Codex spellings', () => {
+    expect(nativeChatTaskListTool('todo_write')).toBe('todowrite')
+    expect(nativeChatTaskListTool('todoWrite')).toBe('todowrite')
+    expect(nativeChatTaskListTool('TodoWrite')).toBe('todowrite')
+    expect(nativeChatTaskListTool('todowrite')).toBe('todowrite')
+    expect(nativeChatTaskListTool('write_todos')).toBe('todowrite')
+    expect(nativeChatTaskListTool('updatePlan')).toBe('update_plan')
+    expect(nativeChatTaskListTool('update_plan')).toBe('update_plan')
+    expect(nativeChatTaskListTool('mcp__server__TodoWrite')).toBeNull()
+    expect(
+      normalizeNativeChatTaskList('write_todos', {
+        todos: [{ description: 'Scan the project', status: 'cancelled' }]
+      })
+    ).toEqual(list(task('Scan the project', 'cancelled')))
+    expect(
+      normalizeNativeChatTaskList('todo_write', {
+        merge: false,
+        todos: [{ id: 'a', content: 'One', status: 'completed' }]
+      })
+    ).toEqual(list(task('One', 'completed')))
+    expect(
+      normalizeNativeChatTaskList('todo_write', {
+        todos: [{ id: 'a', status: 'completed' }]
+      })
+    ).toBeNull()
+  })
+
+  it('merges Grok status-only rows by id and skips a new id that has no text', () => {
+    const previous = {
+      tasks: [
+        { id: 'a', content: 'Keep', status: 'pending' as const },
+        { id: 'b', content: 'Stay', status: 'in_progress' as const }
+      ]
+    }
+    const call = readNativeChatTaskListCall('todo_write', {
+      todos: [
+        { id: 'a', status: 'completed' },
+        { id: 'c', status: 'pending' }
+      ]
+    })
+    expect(call).toEqual({
+      mode: 'merge',
+      edits: [
+        { id: 'a', status: 'completed' },
+        { id: 'c', status: 'pending' }
+      ]
+    })
+    expect(call && applyNativeChatTaskListCall(previous, call)).toEqual({
+      tasks: [
+        { id: 'a', content: 'Keep', status: 'completed' },
+        { id: 'b', content: 'Stay', status: 'in_progress' }
+      ]
+    })
+    expect(
+      readNativeChatTaskListCall('TodoWrite', {
+        todos: [{ content: 'Only', status: 'pending' }]
+      })
+    ).toEqual({ mode: 'replace', list: { tasks: [{ content: 'Only', status: 'pending' }] } })
+    expect(applyNativeChatTaskListCall(previous, { mode: 'merge', edits: [] })).toBe(previous)
   })
 })
 
