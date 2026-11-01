@@ -299,3 +299,78 @@ for (const theme of ['dark', 'light'] as const) {
     await expect(mobilePane).toBeVisible()
   })
 }
+
+test('closing a dialog opened by a modal-safe toast action returns focus to the modal draft', async ({
+  electronApp,
+  orcaPage: page
+}) => {
+  await page.evaluate(() => {
+    const store = window.__store!.getState()
+    store.openSettingsPage()
+    store.openSettingsTarget({ pane: 'browser', repoId: null })
+  })
+  await page.getByRole('button', { name: 'Add Profile', exact: true }).click()
+  const profileDialog = page.getByRole('dialog', { name: 'New Browser Profile' })
+  const nameField = profileDialog.getByRole('textbox')
+  await nameField.fill('Draft')
+  const reviewDialog = page.getByRole('dialog', { name: 'Update skills' })
+
+  const dismissals = {
+    close: () => reviewDialog.getByRole('button', { name: 'Close', exact: true }).click(),
+    minimize: () => reviewDialog.getByRole('button', { name: 'Minimize', exact: true }).click(),
+    // Radix arms a just-opened sibling dialog's Escape a render late; until then Escape is a
+    // no-op (never closes the draft beneath), so retry until the review dialog takes it.
+    escape: () =>
+      expect(async () => {
+        await page.keyboard.press('Escape')
+        await expect(reviewDialog).toBeHidden({ timeout: 500 })
+        await expect(profileDialog).toBeVisible()
+      }).toPass()
+  }
+  for (const [dismissal, dismiss] of Object.entries(dismissals)) {
+    // A synthetic outdated-skill plan; a fresh digest per round so the nudge shows again.
+    await electronApp.evaluate(({ app, ipcMain }, digest) => {
+      ipcMain.removeHandler('skills:bundledPlan')
+      ipcMain.handle('skills:bundledPlan', () => ({
+        scope: 'global',
+        homeDirectory: app.getPath('home'),
+        planDigest: `plan-${digest}`,
+        skills: [
+          {
+            name: 'orca-cli',
+            digest,
+            ops: [
+              {
+                kind: 'update',
+                path: `${app.getPath('home')}/.agents/skills/orca-cli`,
+                role: 'shared',
+                agents: [],
+                observed: { kind: 'folder', entries: ['SKILL.md:file'], skillDigest: 'old' },
+                content: 'files',
+                cleanup: []
+              }
+            ]
+          }
+        ]
+      }))
+    }, `digest-${dismissal}`)
+    await page.evaluate(() =>
+      window.dispatchEvent(new Event('orca:installed-agent-skills-changed'))
+    )
+    const update = page
+      .locator('[data-sonner-toast]')
+      .filter({ hasText: 'An installed Orca skill is out of date' })
+      .getByRole('button', { name: 'Update skill' })
+    await expect(update).toBeVisible()
+    await expect(update).not.toHaveAttribute('aria-disabled')
+    await update.click()
+    await expect(reviewDialog).toBeVisible()
+
+    await dismiss()
+    await expect(reviewDialog).toBeHidden()
+    await expect(profileDialog).toBeVisible()
+    await expect(nameField, `${dismissal} returns focus to the draft`).toBeFocused()
+    await page.keyboard.type(` ${dismissal}`)
+  }
+  await expect(nameField).toHaveValue('Draft close minimize escape')
+})

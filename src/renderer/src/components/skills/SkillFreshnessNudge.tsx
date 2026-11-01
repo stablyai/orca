@@ -11,7 +11,7 @@ import {
   summarizeBundledSkillPlan
 } from '../../../../shared/bundled-skill-summary'
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
-import { modalSafeToastActionLabel } from '@/lib/toast-modal-lock'
+import { captureDialogReturnFocus, modalSafeToastActionLabel } from '@/lib/toast-modal-lock'
 
 const MAX_DISMISSED_FRESHNESS_NUDGES = 512
 const NO_DISMISSED_FRESHNESS_NUDGES: string[] = []
@@ -152,12 +152,14 @@ export function SkillFreshnessNudge(): null {
             </span>
           ),
           onClick: () => {
+            // Capture before the dialog mounts: above a modal, focus is still in that modal's draft.
+            const returnFocus = captureDialogReturnFocus()
             // Sonner action closure skips onDismiss; clear ownership so later inventory cannot retain a closed toast.
             nextActive.persistDismissal = false
             if (activeNudgeRef.current === nextActive) {
               activeNudgeRef.current = null
             }
-            requestSkillFreshnessUpdateDialog()
+            requestSkillFreshnessUpdateDialog(undefined, returnFocus)
           }
         }
       }

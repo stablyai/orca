@@ -61,3 +61,15 @@ export function syncToastModalLockAttributes(root: Element): void {
     }
   }
 }
+
+/** For a modal-safe action that opens a trigger-less dialog: pass the result as that dialog's
+ *  onCloseAutoFocus so focus returns to the modal underneath instead of falling to body. */
+export function captureDialogReturnFocus(): (event: Event) => void {
+  const previous = document.activeElement
+  return (event) => {
+    if (previous instanceof HTMLElement && previous.isConnected) {
+      event.preventDefault()
+      previous.focus({ preventScroll: true })
+    }
+  }
+}

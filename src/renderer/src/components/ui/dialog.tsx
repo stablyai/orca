@@ -86,7 +86,23 @@ function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }
   )
 }
 
+// Portals mount in order, so a dialog later in the body opened above this one.
+const OPEN_MODAL_CONTENT_SELECTOR =
+  "[data-slot='dialog-content'][data-state='open'], [data-slot='sheet-content'][data-state='open']"
+
+function isBeneathAnotherOpenModal(content: HTMLElement | null): boolean {
+  if (!content) {
+    return false
+  }
+  return Array.from(content.ownerDocument.querySelectorAll(OPEN_MODAL_CONTENT_SELECTOR)).some(
+    (other) =>
+      other !== content &&
+      Boolean(content.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING)
+  )
+}
+
 function DialogContent({
+  ref,
   className,
   children,
   overlayClassName,
@@ -106,10 +122,23 @@ function DialogContent({
     /** The whole dialog scrolls within the viewport instead of growing past it. */
     scrollable?: boolean
   }) {
+  const contentRef = React.useRef<HTMLDivElement | null>(null)
+  const composedRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      contentRef.current = node
+      if (typeof ref === 'function') {
+        ref(node)
+      } else if (ref) {
+        ref.current = node
+      }
+    },
+    [ref]
+  )
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
+        ref={composedRef}
         data-slot="dialog-content"
         data-size={size}
         // Match dropdown surface/border/shadow tokens for dark-mode contrast; minmax(0,1fr) prevents long tokens from widening the grid and pushing footers outside.
@@ -120,7 +149,15 @@ function DialogContent({
           className
         )}
         {...props}
-        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
+        onEscapeKeyDown={(event) => {
+          // Radix marks a newly opened sibling dialog topmost a render late; meanwhile Escape
+          // would close this one beneath it and drop its draft.
+          if (isBeneathAnotherOpenModal(contentRef.current)) {
+            event.preventDefault()
+            return
+          }
+          handleImeOverlayEscape(event, props.onEscapeKeyDown)
+        }}
       >
         {children}
         {showCloseButton && <DialogContentCloseButton variant={closeButtonVariant} />}
