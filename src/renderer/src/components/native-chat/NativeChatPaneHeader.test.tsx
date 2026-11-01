@@ -86,3 +86,23 @@ it('offers the terminal header action order and targets Resume and Close at the 
     target: { kind: 'tab', worktreeId: source.worktreeId, tabId: source.id }
   })
 })
+
+async function splitTooltipText(): Promise<string | null> {
+  const trigger = screen.getByRole('button', { name: 'Split Chat Right' })
+  fireEvent.pointerMove(trigger, { pointerType: 'mouse' })
+  return (await screen.findByRole('tooltip')).textContent
+}
+
+it('shows the effective split-right shortcut in the Split Chat Right tooltip', async () => {
+  useAppStore.setState({ keybindings: { 'terminal.splitRight': ['Mod+Alt+K'] } })
+  renderHeader()
+  const shortcut = navigator.userAgent.includes('Mac') ? '⌘⌥K' : 'Ctrl+Alt+K'
+  expect(await splitTooltipText()).toBe(`Split Chat Right${shortcut}`)
+  expect(screen.getByRole('button', { name: 'Split Chat Right' })).toBeTruthy()
+})
+
+it('omits the shortcut from the Split Chat Right tooltip when split-right is unbound', async () => {
+  useAppStore.setState({ keybindings: { 'terminal.splitRight': [] } })
+  renderHeader()
+  expect(await splitTooltipText()).toBe('Split Chat Right')
+})
