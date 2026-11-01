@@ -1,3 +1,4 @@
+import type { NativeChatSettledTurns } from '../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import { createElement as h, Fragment, useMemo, type ReactElement, type ReactNode } from 'react'
 import {
   act,
@@ -289,7 +290,7 @@ function Chat(props: {
   joined?: number
   runs?: boolean
   status?: boolean
-  settledTurns?: import('../../../src/shared/native-chat/transcript/native-chat-turn-status').NativeChatSettledTurns
+  settledTurns?: NativeChatSettledTurns
 }): ReactElement {
   const folded = useMemo(
     () => foldMobileNativeChatMessages(props.messages, 'claude'),
@@ -355,7 +356,7 @@ function mount(
     live: boolean
     runs?: boolean
     status?: boolean
-    settledTurns?: import('../../../src/shared/native-chat/transcript/native-chat-turn-status').NativeChatSettledTurns
+    settledTurns?: NativeChatSettledTurns
   } = {
     following: false,
     live: false
