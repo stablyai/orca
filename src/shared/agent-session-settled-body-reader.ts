@@ -15,7 +15,7 @@ import {
   reserveRemoteRuntimeRetainedBytes,
   subscribeRemoteRuntimeAdmissionRelease
 } from './remote-runtime/requests/remote-runtime-prepared-request-admission'
-import { createReconnectScheduler } from './structured-agent-session-reconnect'
+import { createReconnectScheduler } from './agent-session/structured-agent-session-reconnect'
 import { readAgentSessionErrorRefusal } from './agent-session-write-failure'
 
 export type SettledBodyReadState =
