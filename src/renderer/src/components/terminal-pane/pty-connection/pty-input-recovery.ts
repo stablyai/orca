@@ -191,12 +191,15 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       session.pendingVisibleRemoteViewportClaim = true
     }
   }
-  session.unsubscribeRemoteDesktopActivationClaim = onOverrideChange((event) => {
+  session.unsubscribeFitOverrideChange = onOverrideChange((event) => {
     if (event.ptyId !== session.transport.getPtyId()) {
       return
     }
     if (event.mode === 'desktop-fit') {
       session.catchUpMode2031()
+    } else {
+      // The holder may have reported its own appearance; re-send ours once on release.
+      session.deps.paneLastThemeModeRef.current.delete(session.pane.id)
     }
     if (!isRemoteRuntimePtyId(event.ptyId)) {
       return

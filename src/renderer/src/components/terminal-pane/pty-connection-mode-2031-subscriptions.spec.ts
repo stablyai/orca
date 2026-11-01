@@ -140,6 +140,20 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         setFitOverride('pty-id', 'desktop-fit', 0, 0)
         setFitOverride('pty-id', 'desktop-fit', 0, 0)
         expect(replies(transport)).toEqual(['\x1b[?997;1n'])
+        // A repeated DECSET while held must not cancel the owed report.
+        setFitOverride('pty-id', 'mobile-fit', 40, 20)
+        mockStoreState = {
+          ...mockStoreState,
+          settings: { ...mockStoreState.settings, theme: 'light' }
+        }
+        emit('\x1b[?2031h')
+        setFitOverride('pty-id', 'desktop-fit', 0, 0)
+        expect(replies(transport)).toEqual(['\x1b[?997;1n', '\x1b[?997;2n'])
+        // The holder may have told the program something else, so release re-sends even an unchanged mode.
+        setFitOverride('pty-id', 'remote-desktop-fit', 40, 20)
+        setFitOverride('pty-id', 'desktop-fit', 0, 0)
+        reconnect()
+        expect(replies(transport)).toEqual(['\x1b[?997;1n', '\x1b[?997;2n', '\x1b[?997;2n'])
         dispose()
       })
 
