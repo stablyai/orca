@@ -13,13 +13,21 @@ const noSpawn: TerminalSpawnDispatch = {
 }
 
 describe('launchFailureWithoutEffectsCode', () => {
-  it('treats a disabled agent as a definite refusal, not an unknown outcome', () => {
+  it('treats a disabled agent on an existing workspace as a definite refusal', () => {
     const refusal = Object.assign(new Error('Agent opencode is disabled.'), {
       code: AGENT_LAUNCH_DISABLED_CODE
     })
     expect(launchFailureWithoutEffectsCode(refusal, 'existing', noSpawn)).toBe(
       AGENT_LAUNCH_DISABLED_CODE
     )
+  })
+
+  it('keeps a disabled refusal on a creation target unknown, since its workspace may exist', () => {
+    const refusal = Object.assign(new Error('Agent opencode is disabled.'), {
+      code: AGENT_LAUNCH_DISABLED_CODE
+    })
+    expect(launchFailureWithoutEffectsCode(refusal, 'create-folder-workspace', noSpawn)).toBeNull()
+    expect(launchFailureWithoutEffectsCode(refusal, 'create-worktree', noSpawn)).toBeNull()
   })
 
   it('leaves an uncoded error unknown', () => {

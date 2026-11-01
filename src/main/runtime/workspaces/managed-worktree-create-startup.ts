@@ -1,7 +1,7 @@
 import { applyRemoteViewerLaunchEnv } from '../remote-viewer-launch-env'
 import type { RuntimeManagedWorktreeCreateArgs } from '../runtime-managed-worktree-create-types'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import { AGENT_LAUNCH_DISABLED_CODE } from '../../shared/agent-launch-disabled'
+import { AGENT_LAUNCH_DISABLED_CODE } from '../../../shared/agent-launch-disabled'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   type buildWorktreeStartupForDraft,

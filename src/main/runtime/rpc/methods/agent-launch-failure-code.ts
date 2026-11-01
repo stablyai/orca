@@ -43,12 +43,14 @@ export function agentLaunchFailureCode(error: unknown): string {
 
 /** A coded refusal's own words, kept beside its code so a replay says the same; bounded likewise. */
 export function agentLaunchFailureMessage(error: unknown): string | undefined {
-  return (
-    formatTerminalStartFailure(error) ??
-    (error instanceof OrchestrationError
-      ? error.message.slice(0, REFUSAL_TEXT_MAX_LENGTH)
-      : undefined)
-  )
+  const formatted = formatTerminalStartFailure(error)
+  if (formatted !== undefined) {
+    return formatted
+  }
+  // Coded refusals keep their own words: a replay must say what the first answer said.
+  return error instanceof OrchestrationError || errorCodeOf(error) === AGENT_LAUNCH_DISABLED_CODE
+    ? (error as Error).message.slice(0, REFUSAL_TEXT_MAX_LENGTH)
+    : undefined
 }
 
 /** Keep a refused folder's full path or only its code; truncating the path would name a different folder. */
@@ -70,8 +72,10 @@ export function launchFailureWithoutEffectsCode(
   if (error instanceof WorktreeCreateCollisionError) {
     return WORKTREE_CREATE_COLLISION_CODE
   }
-  // Refused before any spawn: a definite refusal, never an unknown outcome with retry guidance (#37045).
-  if (errorCodeOf(error) === AGENT_LAUNCH_DISABLED_CODE) {
+  // A disabled agent on an existing workspace is refused before any effect. Creation targets
+  // may already have created their workspace by the time the terminal guard fires, so they stay
+  // unknown rather than claiming a definite no-effect refusal (#37045).
+  if (errorCodeOf(error) === AGENT_LAUNCH_DISABLED_CODE && targetKind === 'existing') {
     return AGENT_LAUNCH_DISABLED_CODE
   }
   if (error instanceof FolderWorkspaceCreateRefusedError) {
