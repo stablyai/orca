@@ -1,7 +1,7 @@
 import { createElement, useLayoutEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 
 const fetchGithubRepoSlugMock = vi.fn()
 
@@ -41,11 +41,7 @@ async function flush(): Promise<void> {
 }
 
 describe('useMobilePrSidebarController repo probe', () => {
-  const client = {
-    sendRequest: vi.fn(),
-    getState: () => 'connected',
-    onStateChange: () => () => {}
-  } as unknown as RpcClient
+  const client = createFakeRpcClient()
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
