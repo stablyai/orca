@@ -43,6 +43,34 @@ describe('resolveMobileBranchCompareBaseRef', () => {
     expect(calls.map((call) => call.method)).toEqual(['worktree.show', 'repo.list'])
   })
 
+  it('prefers repo origin/master over a stale local worktree master pin', async () => {
+    const { client } = clientWith([
+      ok({ worktree: { baseRef: 'master' } }),
+      ok({ repos: [{ id: 'repo-1', worktreeBaseRef: 'origin/master' }] })
+    ])
+
+    await expect(resolveMobileBranchCompareBaseRef(client, 'repo-1::/tmp/wt')).resolves.toBe(
+      'origin/master'
+    )
+  })
+
+  it('prefers git-resolved origin/master over a bare local worktree pin when the repo has no pin', async () => {
+    const { client, calls } = clientWith([
+      ok({ worktree: { baseRef: 'master' } }),
+      ok({ repos: [{ id: 'repo-1' }] }),
+      ok({ defaultBaseRef: 'origin/master' })
+    ])
+
+    await expect(resolveMobileBranchCompareBaseRef(client, 'repo-1::/tmp/wt')).resolves.toBe(
+      'origin/master'
+    )
+    expect(calls.map((call) => call.method)).toEqual([
+      'worktree.show',
+      'repo.list',
+      'repo.baseRefDefault'
+    ])
+  })
+
   it('falls back to repo worktreeBaseRef when the worktree has no pinned base', async () => {
     const { client } = clientWith([
       ok({ worktree: { baseRef: null } }),
@@ -69,6 +97,18 @@ describe('resolveMobileBranchCompareBaseRef', () => {
       'repo.list',
       'repo.baseRefDefault'
     ])
+  })
+
+  it('keeps the worktree base when mobile git is unavailable', async () => {
+    const { client } = clientWith([
+      ok({ worktree: { baseRef: 'origin/release' } }),
+      ok({ repos: [{ id: 'repo-1', worktreeBaseRef: null }] }),
+      fail('git is not available to mobile clients')
+    ])
+
+    await expect(resolveMobileBranchCompareBaseRef(client, 'repo-1::/tmp/wt')).resolves.toBe(
+      'origin/release'
+    )
   })
 
   it('compares against the upstream but rebases from the default when nothing is pinned', async () => {
