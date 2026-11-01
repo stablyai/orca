@@ -73,9 +73,10 @@ export function findWorktreeById(
 export function findWorktreeReviewOwner(
   state: AppState,
   worktreeId: string,
-  executionHostId?: string
+  executionHostId?: string,
+  lookupIndex = getWorktreeLookupIndex(state)
 ): { worktree: Worktree; repo: Repo } | null {
-  const worktree = findWorktreeById(state, worktreeId, executionHostId)
+  const worktree = findWorktreeById(state, worktreeId, executionHostId, lookupIndex)
   if (!worktree) {
     return null
   }

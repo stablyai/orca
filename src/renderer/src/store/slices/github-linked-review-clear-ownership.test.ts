@@ -3,6 +3,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import { createWorktreeIdentity } from '../../../../shared/worktree/identity'
 import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { forgeOwnerHostIdForWorkspace } from '../../runtime/forge-credential-target'
+import {
+  _clearGitHubPRRefreshStartedEntriesForTest,
+  prRefreshStartedLinkedReviewScopes
+} from '../github/request-coordination'
 import { bumpHostedReviewLinkMutationGeneration } from './worktrees/metadata/hosted-review-link-mutation'
 import { createUpdateWorktreeMeta } from './worktrees/metadata/update-worktree-meta'
 import { findKnownWorktreeById } from './worktrees/listing/detected-worktree-meta'
@@ -112,6 +116,7 @@ describe('linked review clearing retains workspace and credential identities', (
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(NOW)
     vi.clearAllMocks()
+    _clearGitHubPRRefreshStartedEntriesForTest()
     resetRemoteRuntimeMocks()
     runtimeEnvironmentCall.mockImplementation(({ method }) => ({
       id: method,
@@ -125,6 +130,49 @@ describe('linked review clearing retains workspace and credential identities', (
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
+
+  it.each([100, 1000])(
+    'bounds accepted refresh-start repository reads with %s repositories and overlapping SSH routes',
+    (population) => {
+      const { store, workspace, alias } = setup(false)
+      let reads = 0
+      const repos = Array.from({ length: population - 2 }, (_, index) => ({
+        ...repository,
+        get id() {
+          reads++
+          return `unrelated-${index}`
+        }
+      }))
+      const direct: Repo = { ...repository, executionHostId: 'ssh:builder' }
+      const directAlias = {
+        ...alias,
+        cacheKey: `ssh:builder::${repository.id}::${branch}`,
+        executionHostId: direct.executionHostId
+      }
+      store.setState({
+        repos: [...repos, repository, direct],
+        worktreesByRepo: { project: [workspace] }
+      })
+      const start = (sequence: number) =>
+        store.getState().applyGitHubPRRefreshEvent({
+          sequence,
+          reason: 'swr',
+          aliases: [directAlias],
+          status: 'in-flight',
+          requestStartedAt: NOW
+        })
+      start(1)
+      reads = 0
+      for (let sequence = 2; sequence <= 101; sequence++) {
+        start(sequence)
+      }
+      expect(store.getState().prRefreshSequences[directAlias.cacheKey]).toBe(101)
+      expect(prRefreshStartedLinkedReviewScopes.get(directAlias.cacheKey)?.scope.workspace).toBe(
+        workspace
+      )
+      expect(reads).toBe(0)
+    }
+  )
 
   it.each([100, 1000])(
     'bounds linked SSH request-start reads across %s workspaces',

@@ -346,6 +346,83 @@ describe('visible hosted review refresh targets', () => {
     }
   )
 
+  it.each([
+    { activeHost: 'ssh:builder', focusedServer: null, selectedHost: 'ssh:builder' },
+    {
+      activeHost: 'runtime:owner-server',
+      focusedServer: null,
+      selectedHost: 'runtime:owner-server'
+    },
+    { activeHost: null, focusedServer: 'owner-server', selectedHost: 'runtime:owner-server' }
+  ] as const)(
+    'gives only the resolved $selectedHost copy foreground polling (active: $activeHost)',
+    async ({ activeHost, focusedServer, selectedHost }) => {
+      const direct: Repo = { ...repo, connectionId: 'builder' }
+      const paired: Repo = { ...direct, executionHostId: 'runtime:owner-server' }
+      const directKey = `ssh:builder::${repo.id}::${worktree.branch}`
+      const pairedKey = `runtime:owner-server::${repo.id}::${worktree.branch}`
+      const selectedKey = `${selectedHost}::${repo.id}::${worktree.branch}`
+      const store = setup(direct)
+      store.setState({
+        repos: [paired, direct],
+        worktreesByRepo: {
+          [repo.id]: [
+            { ...worktree, hostId: 'ssh:builder', linkedGitLabMR: 8 },
+            {
+              ...worktree,
+              hostId: 'ssh:builder',
+              runtimeOwnerEnvironmentId: 'owner-server',
+              linkedGitLabMR: 9
+            }
+          ]
+        },
+        activeWorktreeId: worktree.id,
+        activeWorkspaceExecutionHostId: activeHost,
+        settings: createGlobalSettingsFixture({ activeRuntimeEnvironmentId: focusedServer }),
+        hostedReviewCache: {
+          [directKey]: { data: review, fetchedAt: Date.now() },
+          [pairedKey]: { data: { ...review, number: 9 }, fetchedAt: Date.now() }
+        },
+        sshConnectionStates: new Map([
+          [
+            'builder',
+            { targetId: 'builder', status: 'connected', error: null, reconnectAttempt: 0 }
+          ]
+        ])
+      })
+
+      const rows = targets(store)
+      expect(rows).toHaveLength(2)
+      expect(rows.filter((row) => row.selected).map((row) => row.key)).toEqual([selectedKey])
+      runtimeEnvironmentCall.mockResolvedValue({ id: 'review', ok: true, result: review })
+      for (const row of rows) {
+        expect(row.intervalMs).toBe(row.key === selectedKey ? 60_000 : 120_000)
+        await row.refresh()
+      }
+      expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          admissionTier: selectedHost === 'ssh:builder' ? 'interactive' : 'background'
+        })
+      )
+      expect(mockApi.hostedReview.forBranch.mock.lastCall?.[0]).toEqual(
+        selectedHost === 'ssh:builder'
+          ? expect.objectContaining({ active: true })
+          : expect.not.objectContaining({ active: true })
+      )
+      expect(
+        getVisibleHostedReviewRefreshTargets(store.getState(), store.getState, {
+          selectedOnly: true
+        }).map((row) => row.key)
+      ).toEqual([selectedKey])
+      store.setState({ visibleWorkspaceHostIds: ['local'] })
+      expect(targets(store).map((row) => row.key)).toEqual([selectedKey])
+      store.setState({ visibleWorkspaceHostIds: [selectedHost] })
+      expect(targets(store).map((row) => row.key)).toEqual(
+        selectedHost === 'ssh:builder' ? [directKey, pairedKey] : [pairedKey]
+      )
+    }
+  )
+
   it.each(['ssh:builder', 'runtime:owner-server'] as const)(
     'rejects duplicate explicit %s worktree owners while retaining the other copy',
     (hostId) => {
@@ -671,6 +748,28 @@ describe('visible hosted review refresh targets', () => {
     expect(
       getVisibleHostedReviewRefreshTargets(store.getState(), store.getState, { selectedOnly: true })
     ).toEqual([])
+  })
+
+  it('retains selection for a workspace published only in the detected catalog', () => {
+    const store = setup()
+    store.setState({
+      activeWorktreeId: worktree.id,
+      activeWorkspaceExecutionHostId: 'local',
+      worktreesByRepo: {},
+      detectedWorktreesByRepo: {
+        [repo.id]: {
+          repoId: repo.id,
+          authoritative: true,
+          source: 'git',
+          worktrees: [{ ...worktree, ownership: 'external', selectedCheckout: true, visible: true }]
+        }
+      }
+    })
+    expect(
+      [...getVisibleHostedReviewWorkspaces(store.getState(), { selectedOnly: true })].map(
+        ({ worktree, selected }) => ({ id: worktree.id, selected })
+      )
+    ).toEqual([{ id: worktree.id, selected: true }])
   })
 
   it.each<Partial<AppState>>([

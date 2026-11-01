@@ -38,14 +38,32 @@ export function* getVisibleHostedReviewWorkspaces(
       ? [state.workspaceHostScope]
       : null)
   for (const id of options?.worktreeIds ?? state.visibleReviewWorktreeIds) {
-    const selectedOwner = id === state.activeWorktreeId ? findWorktreeReviewOwner(state, id) : null
-    const owners = new Set(getWorktreeLookupIndex(state).byId.get(id)?.owners)
+    const lookupIndex = getWorktreeLookupIndex(state)
+    const trackedOwners = lookupIndex.byId.get(id)?.owners
+    const owners = new Set(trackedOwners)
     for (const detected of findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), id)) {
       const workspace = findKnownWorktreeById(state, id, detected.hostId ?? 'local')
       if (workspace) {
         owners.add(workspace)
       }
     }
+    const selectedOwner =
+      id === state.activeWorktreeId
+        ? findWorktreeReviewOwner(
+            state,
+            id,
+            state.activeWorkspaceExecutionHostId ??
+              (owners.size === 1 ? undefined : getSettingsFocusedExecutionHostId(state.settings)),
+            owners.size === (trackedOwners?.length ?? 0)
+              ? lookupIndex
+              : {
+                  ...lookupIndex,
+                  byId: new Map([
+                    [id, { owners: [...owners], unique: owners.size === 1 ? [...owners][0] : null }]
+                  ])
+                }
+          )
+        : null
     for (const worktree of owners) {
       if (worktree.isArchived || worktree.isBare) {
         continue
@@ -75,18 +93,13 @@ export function* getVisibleHostedReviewWorkspaces(
       ) {
         continue
       }
-      // Why: an older paired SSH row stamps only ssh:<target>; its recovered server owner still selects it.
       const hostIds =
         worktree.hostId || worktree.runtimeOwnerEnvironmentId
           ? [...new Set([...worktreeOwnerHostIds(worktree), hostId])]
           : [hostId]
-      const activeHost = state.activeWorkspaceExecutionHostId
       const selected =
-        id === state.activeWorktreeId &&
-        (activeHost
-          ? hostIds.includes(activeHost)
-          : owners.size === 1 ||
-            hostIds.includes(getSettingsFocusedExecutionHostId(state.settings)))
+        selectedOwner?.worktree === worktree &&
+        getRepoExecutionHostId(selectedOwner.repo) === hostId
       if (
         (options?.selectedOnly && !selected) ||
         (!selected && visibleHosts && !hostIds.some((hostId) => visibleHosts.includes(hostId)))

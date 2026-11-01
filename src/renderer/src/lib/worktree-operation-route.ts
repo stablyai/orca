@@ -1,6 +1,5 @@
 import type { AppState } from '@/store/types'
 import {
-  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
@@ -11,6 +10,7 @@ import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
+  findIndexedRepoOwnerForHost,
   findIndexedWorktreeOwners,
   hasIndexedDetectedWorktree,
   resolveIndexedRepoOwner,
@@ -124,11 +124,7 @@ function isDirectListing(
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   return (
     hubOwners.environmentIds.size === 0 &&
-    Boolean(
-      state.repos?.some(
-        (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === executionHostId
-      )
-    )
+    Boolean(findIndexedRepoOwnerForHost(state.repos, repoId, executionHostId))
   )
 }
 
