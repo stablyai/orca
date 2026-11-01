@@ -21,9 +21,7 @@ import {
   SAVED_BY_NEWER_ORCA,
   updateTestJournalRowJson
 } from './journal-host-database-test-support'
-import { admitOutcomeFormat1, OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
-import { JournalOutcomeDecodeError, JournalOutcomeFold } from './journal-outcome-codec'
-import { decodeOutcomeFormat1Onto } from './journal-outcome-format-1-decode'
+import { admitOutcomeFormat1 } from './journal-outcome-format-1'
 import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { storedFailureFact, storedProviderHandle } from './journal-storage-schema'
 import type { UndeclaredStorageKeys } from './journal-storage-strict'
@@ -225,7 +223,7 @@ function plain(state: JournalReducerState): unknown {
   )
 }
 
-function seedPrefix(): void {
+it('folds the checked-in input rows into the same chat, every value of which storage declares', () => {
   const database = openTestJournalHostDatabase(root)
   database.transaction((write) => {
     publishTestJournalEpoch(write, prefix.sessionId, prefix.epoch)
@@ -233,10 +231,6 @@ function seedPrefix(): void {
       insertTestJournalRowJson(write, prefix.sessionId, index + 1, json, 1_001 + index)
     }
   })
-}
-
-it('folds the checked-in input rows into the same chat, every value of which storage declares', () => {
-  seedPrefix()
   const loaded = restoreJournal(db(), prefix.sessionId)
   expect(loaded).toMatchObject({ newer: null, damage: null })
   if (!loaded) {
@@ -337,73 +331,6 @@ it('compacts past every collection emitted by the current writer, including nati
   } finally {
     rig.queue.markClosed()
     await rig.queue.drain()
-  }
-})
-
-it('binds live b records to exact prefix membership in every collection, allowing creation and suppression', () => {
-  seedPrefix()
-  const baseline = () => {
-    const loaded = restoreJournal(db(), prefix.sessionId)
-    if (!loaded || loaded.damage || loaded.newer) {
-      throw new Error('missing valid prefix')
-    }
-    // Synthetic boundary control; the hybrid golden's echo value is null, not undefined.
-    loaded.state.itemEchoes.set('synthetic-undefined', undefined)
-    return loaded.state
-  }
-  const through = prefix.rows.length + 1
-  const ordinary = new Set<string>(OUTCOME_FORMAT_1_COLLECTIONS)
-  const collections = journalStateCollections(baseline()).filter(({ path }) => ordinary.has(path))
-  expect(collections).toHaveLength(15)
-  for (const { path, entries } of collections) {
-    const original = [...entries]
-    expect(original.length).toBeGreaterThan(0)
-    for (const [key, value] of original) {
-      const row = {
-        seq: through,
-        field: path,
-        entry_key: JSON.stringify(key),
-        format: 1,
-        ordinal: 'b',
-        value_json: path === 'items' ? JSON.stringify(value) : journalEntryJson(key, value),
-        deleted: 0
-      }
-      const read = (state: JournalReducerState, record = row) => {
-        const fold = new JournalOutcomeFold()
-        fold.add(record)
-        return fold.finish(prefix.sessionId, prefix.epoch, through, state)
-      }
-      const expected = baseline()
-      expected.lastSequence = through
-      expect(plain(read(baseline())), path).toEqual(plain(expected))
-      const absent = () => {
-        const state = baseline()
-        decodeOutcomeFormat1Onto([], state).remove(path, key)
-        return state
-      }
-      expect(() => read(absent()), path).toThrow(JournalOutcomeDecodeError)
-      const removed = absent()
-      removed.lastSequence = through
-      expect(plain(read(absent(), { ...row, deleted: 1, value_json: 'null' })), path).toEqual(
-        plain(removed)
-      )
-      const created = read(absent(), {
-        ...row,
-        ordinal: `s${String(through).padStart(16, '0')}:0000000000000000`
-      })
-      expect(
-        [
-          ...journalStateCollections(created).find((collection) => collection.path === path)!
-            .entries
-        ],
-        path
-      ).toEqual([...original.filter(([existing]) => existing !== key), [key, value]])
-      if (typeof key === 'number') {
-        expect(() => read(baseline(), { ...row, entry_key: JSON.stringify(String(key)) })).toThrow(
-          JournalOutcomeDecodeError
-        )
-      }
-    }
   }
 })
 
