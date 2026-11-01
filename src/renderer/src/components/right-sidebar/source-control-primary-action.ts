@@ -45,7 +45,7 @@ function toRendererPrimaryAction(
     inputs.isRemoteOperationActive &&
     inputs.isRemoteOperationInAnotherWorktree &&
     !inputs.isCommitting &&
-    !inputs.isPrIntentInFlight
+    !(inputs.isPrIntentInFlight && decision.kind === 'create_pr_intent')
   ) {
     return {
       kind: decision.kind,

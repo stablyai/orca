@@ -325,6 +325,30 @@ describe('resolvePrimaryAction Create PR intent', () => {
     })
   })
 
+  it('shows commit-area waiting feedback during PR preparation when another workspace is busy', () => {
+    const input = inputs({
+      isPrIntentInFlight: true,
+      isRemoteOperationActive: true,
+      isRemoteOperationInAnotherWorktree: true,
+      upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
+    })
+
+    expect(resolvePrimaryAction(input)).toEqual({
+      kind: 'create_pr_intent',
+      label: 'Create PR',
+      title: 'Preparing branch for review…',
+      disabled: true
+    })
+    expect(resolveCommitAreaPrimaryAction(input)).toEqual({
+      kind: 'publish',
+      label: 'Git operation running elsewhere',
+      title:
+        "Another workspace is running a Git operation, such as push, pull, or force push. Wait for it to finish before using this action, so the two operations don't overlap.",
+      disabled: true,
+      isWaitingForRemoteOperation: true
+    })
+  })
+
   it.each(['azure-devops', 'gitea'] as const)(
     'returns Create PR intent for a %s branch that needs a safe push before review',
     (provider) => {
