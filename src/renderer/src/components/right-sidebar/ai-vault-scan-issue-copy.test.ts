@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import es from '@/i18n/locales/es.json'
+import ru from '@/i18n/locales/ru.json'
 import { aiVaultScanIssueText } from '../../../../shared/ai-vault-scan-issue-copy'
 import { aiVaultScanErrorText, aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
 
@@ -46,4 +47,17 @@ describe('aiVaultScanIssueDisplayText', () => {
       'Permission denied: /home/ada/.codex'
     )
   })
+})
+
+it('distinguishes skipped records within a chat from skipped chats in Russian', async () => {
+  i18n.addResourceBundle('ru', 'translation', ru)
+  await i18n.changeLanguage('ru')
+  const issue = aiVaultScanIssueText('oversizedTranscriptRecords', {
+    params: { count: 2, limit: 10 },
+    detail: '10.0 MiB at byte 1248001757'
+  })
+  expect(aiVaultScanIssueDisplayText(issue)).toBe(
+    'В одном чате пропущены 2 слишком большие записи (ограничение — 10 МиБ). Остальная история прочитана.'
+  )
+  expect(issue.messageDetail).toBe('10.0 MiB at byte 1248001757')
 })
