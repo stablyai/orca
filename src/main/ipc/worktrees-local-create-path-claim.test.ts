@@ -88,6 +88,10 @@ describe('desktop concurrent creates on one name', () => {
   const addedNames = (): string[] =>
     addWorktreeMock.mock.calls.map((call) => basename(String(call[1])))
 
+  let firstAdding: Promise<void>
+  let addsInFlight = 0
+  let maxAddsInFlight = 0
+
   beforeEach(() => {
     setupWorktreeHandlers()
     describeCreatedWorktreeMock.mockImplementation(async (_repo, path, branch) => ({
@@ -98,39 +102,95 @@ describe('desktop concurrent creates on one name', () => {
       isMainWorktree: false
     }))
     let reached = 0
+    addsInFlight = 0
+    maxAddsInFlight = 0
+    let notifyFirstAdding: () => void = () => {}
+    firstAdding = new Promise<void>((resolve) => (notifyFirstAdding = resolve))
     let bothAdding: () => void = () => {}
     const gate = new Promise<void>((resolveGate) => (bothAdding = resolveGate))
     // Hold both creates inside Git's add, where neither checkout exists on disk yet.
     addWorktreeMock.mockImplementation(async () => {
-      if (++reached === 2) {
+      addsInFlight += 1
+      maxAddsInFlight = Math.max(maxAddsInFlight, addsInFlight)
+      if (++reached === 1) {
+        notifyFirstAdding()
+      }
+      if (reached === 2) {
         bothAdding()
       }
       await gate
+      addsInFlight -= 1
       return {}
     })
   })
 
-  it.each([
-    { request: { name: 'improve-dashboard' }, second: 'improve-dashboard-2' },
-    { request: { name: 'nautilus', nameWasGenerated: true }, second: null }
-  ])(
-    'gives concurrent creates of $request.name distinct candidates',
-    async ({ request, second }) => {
-      const create = () => handlers['worktrees:create'](null, { repoId: 'repo-1', ...request })
-      await Promise.all([create(), create()])
-      const names = addedNames()
-      expect(names).toHaveLength(2)
-      expect(names).toContain(request.name)
-      expect(new Set(names).size).toBe(2)
-      if (second) {
-        expect(names).toContain(second)
-      } else {
-        expect(names.filter((name) => name !== request.name).map(creatureNameTier)).toEqual([2])
+  describe.each([
+    { schedule: 'uncoordinated concurrent starts', controlled: false },
+    { schedule: 'overlapping creates after the first claim', controlled: true }
+  ])('$schedule', ({ controlled }) => {
+    it.each([
+      { request: { name: 'improve-dashboard' }, second: 'improve-dashboard-2' },
+      { request: { name: 'nautilus', nameWasGenerated: true }, second: null }
+    ])(
+      'gives concurrent creates of $request.name distinct candidates',
+      async ({ request, second }) => {
+        const create = () => handlers['worktrees:create'](null, { repoId: 'repo-1', ...request })
+        const first = create()
+        if (controlled) {
+          await firstAdding
+          expect(addedNames()).toEqual([request.name])
+          expect(addsInFlight).toBe(1)
+        }
+        const results = await Promise.all([first, create()])
+        const names = addedNames()
+        expect(names).toHaveLength(2)
+        expect(names).toContain(request.name)
+        expect(new Set(names).size).toBe(2)
+        expect(maxAddsInFlight).toBe(2)
+        expect(addsInFlight).toBe(0)
+        if (second) {
+          expect(names).toContain(second)
+        } else {
+          expect(names.filter((name) => name !== request.name).map(creatureNameTier)).toEqual([2])
+        }
+        if (controlled) {
+          for (const [index, result] of results.entries()) {
+            const candidate = names[index]
+            const path = `/workspace/${candidate}`
+            expect(result).toMatchObject({
+              worktree: {
+                id: `repo-1::${path}`,
+                path,
+                branch: `refs/heads/${candidate}`
+              }
+            })
+            expect(addWorktreeMock).toHaveBeenNthCalledWith(
+              index + 1,
+              '/workspace/repo',
+              path,
+              candidate,
+              'origin/main',
+              false,
+              false,
+              {}
+            )
+          }
+          expect(results[0]).not.toMatchObject({ worktree: { path: `/workspace/${names[1]}` } })
+        }
+        // Both claims settled with their creates, so the name is free to check again.
+        addWorktreeMock.mockResolvedValue({})
+        const reused = await create()
+        expect(addedNames()[2]).toBe(request.name)
+        if (controlled) {
+          expect(reused).toMatchObject({
+            worktree: {
+              id: `repo-1::/workspace/${request.name}`,
+              path: `/workspace/${request.name}`,
+              branch: `refs/heads/${request.name}`
+            }
+          })
+        }
       }
-      // Both claims settled with their creates, so the name is free to check again.
-      addWorktreeMock.mockResolvedValue({})
-      await create()
-      expect(addedNames()[2]).toBe(request.name)
-    }
-  )
+    )
+  })
 })
