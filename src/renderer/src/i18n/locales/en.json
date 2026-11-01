@@ -7782,6 +7782,11 @@
           "showPinnedWorktreesInGroups": {
             "title": "Also show pinned worktrees in their original lists",
             "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."
+          },
+          "collapsedGroupCountBadge": {
+            "off": "Off",
+            "attention": "Needs you",
+            "all": "All"
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -10018,7 +10023,18 @@
                 "cursor": "cursor"
               }
             },
-            "matchTerminal": "match terminal"
+            "matchTerminal": "match terminal",
+            "collapsedGroupCountBadge": {
+              "title": "Collapsed Group Count",
+              "description": "Collapsed sidebar groups can show no count, only workspaces waiting on you, or the total with the waiting count.",
+              "collapsed": "collapsed",
+              "count": "count",
+              "badge": "badge",
+              "attention": "attention",
+              "needsYou": "needs you",
+              "project": "project",
+              "workspace": "workspace"
+            }
           }
         },
         "auto": {

@@ -1,6 +1,11 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { buildAttentionWorkspaceIds, type AttentionWorkspaceState } from './attention-workspaces'
+import {
+  collapsedGroupCountBadgeNeedsAttention,
+  resolveCollapsedGroupCountBadgeMode,
+  type CollapsedGroupCountBadgeMode
+} from '../../../../shared/collapsed-group-count-badge'
 
 const EMPTY_ATTENTION_WORKSPACE_IDS: ReadonlySet<string> = new Set()
 
@@ -93,4 +98,16 @@ export function useAttentionWorkspaceIds(enabled: boolean): ReadonlySet<string> 
   return useAppStore((s) =>
     enabled ? selectAttentionWorkspaceIds(s) : EMPTY_ATTENTION_WORKSPACE_IDS
   )
+}
+
+/** The collapsed-header badge mode and, unless it is `off`, the attention set it intersects. */
+export function useCollapsedGroupCountBadge(settings: AppState['settings']): {
+  countBadgeMode: CollapsedGroupCountBadgeMode
+  attentionWorkspaceIds: ReadonlySet<string>
+} {
+  const countBadgeMode = resolveCollapsedGroupCountBadgeMode(settings)
+  const attentionWorkspaceIds = useAttentionWorkspaceIds(
+    collapsedGroupCountBadgeNeedsAttention(countBadgeMode)
+  )
+  return { countBadgeMode, attentionWorkspaceIds }
 }

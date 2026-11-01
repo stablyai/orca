@@ -11,10 +11,8 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
-import {
-  createTitleFallbackLeafResolver,
-  titleStatusToRowState
-} from './worktree-title-derived-agent-rows'
+import { createTitleFallbackLeafResolver } from './title-fallback-leaf-resolver'
+import { titleStatusToRowState } from './worktree-title-derived-agent-rows'
 import {
   resolveAttentionWorkspaceKeys,
   type UnmirroredAttentionRow
