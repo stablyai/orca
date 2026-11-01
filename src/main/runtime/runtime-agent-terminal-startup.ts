@@ -111,7 +111,8 @@ export async function resolveAgentTerminalCreateOptions(
     if (!isTuiAgentEnabled(opts.startupAgent, store.getSettings().disabledTuiAgents)) {
       throw new OrchestrationError(
         'agent_unconfigured',
-        `Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`
+        `Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`,
+        { retrySafe: false }
       )
     }
   }
