@@ -128,14 +128,16 @@ export async function readDocPreviewRenderedText(
       const guestSelector = entryFileName
         ? `webview[src^="orca-preview://"][src$=${JSON.stringify(`/${encodeURIComponent(entryFileName)}`)}]`
         : 'webview[src^="orca-preview://"]'
-      const guest = document.querySelector(guestSelector) as {
-        executeJavaScript?: (code: string) => Promise<unknown>
-      } | null
-      if (!guest?.executeJavaScript) {
+      const guest = document.querySelector(guestSelector)
+      if (
+        !guest ||
+        !('executeJavaScript' in guest) ||
+        typeof guest.executeJavaScript !== 'function'
+      ) {
         return null
       }
       try {
-        const text = await guest.executeJavaScript(
+        const text: unknown = await guest.executeJavaScript(
           `document.querySelector(${JSON.stringify(targetSelector)})?.textContent ?? null`
         )
         return typeof text === 'string' ? text : null
