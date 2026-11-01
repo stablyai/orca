@@ -28,6 +28,7 @@ import {
   CLIENT_LOCAL_FILE_TARGET,
   hostGrantedEditorFields,
   resolveHostWorkspaceFile,
+  revealHostWorkspaceRoot,
   type HostWorkspaceFile
 } from './terminal-host-workspace-file'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
@@ -222,6 +223,8 @@ export function openDetectedFilePath(
       }
       if (canOpenWithSystemDefault) {
         await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)
+      } else if (hostWorkspaceFile) {
+        revealHostWorkspaceRoot(hostWorkspaceFile)
       }
       return
     }
