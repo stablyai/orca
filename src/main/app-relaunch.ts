@@ -10,7 +10,6 @@ export type AppRelaunchReason =
   | 'profile-switch'
   | 'profile-transfer'
   | 'renderer-request'
-  | 'windows-administrator'
   | 'wsl-drive-conversion'
 
 export function relaunchApp(

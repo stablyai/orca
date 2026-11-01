@@ -74,7 +74,6 @@
         "administratorDialogScope": "这会更改整个应用的权限。SSH 和 WSL 保留各自的权限。",
         "administratorDocumentation": "阅读指南",
         "administratorLabel": "管理员模式",
-        "administratorPromptCancellation": "取消 Windows 的提示后，Orca 会带着保留的终端重新打开。SSH 和 WSL 的权限仍由其主机控制。",
         "administratorRestartConsequences": "请先保存您的工作。批准后，当前本地终端主机上的终端和智能体会关闭。已恢复的标签页会打开新的管理员 shell。",
         "administratorRestartFailed": "Orca 无法重启。请重试，或使用手动说明。",
         "administratorScope": "Orca 应用的权限。现有终端可能有所不同。",
@@ -101,7 +100,9 @@
         "returnStandardHelp": "标准模式指南",
         "runAdministratorHelp": "管理员指南",
         "standardStatus": "标准用户",
-        "unknownAdministrator": "无法确定"
+        "unknownAdministrator": "无法确定",
+        "administratorPromptCancellationKeepsOpen": "如果取消 Windows 的提示，Orca 会保持打开并保留其终端。SSH 和 WSL 的权限仍由其主机控制。",
+        "administratorRestartCanceled": "Windows 批准已取消。Orca 及其终端仍在运行。"
       },
       "limit": {
         "label": "运行中终端的最大数量",

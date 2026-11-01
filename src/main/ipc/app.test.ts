@@ -19,7 +19,7 @@ const {
   trustFloatingWorkspaceDirectoryMock,
   registerRendererShutdownCheckpointHandlerMock,
   registerMacKeyboardLayoutChangeNotificationsMock,
-  prepareWindowsAdministratorRestartMock
+  requestWindowsAdministratorRestartMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
@@ -36,7 +36,7 @@ const {
   trustFloatingWorkspaceDirectoryMock: vi.fn(),
   registerRendererShutdownCheckpointHandlerMock: vi.fn(),
   registerMacKeyboardLayoutChangeNotificationsMock: vi.fn(),
-  prepareWindowsAdministratorRestartMock: vi.fn()
+  requestWindowsAdministratorRestartMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
@@ -117,7 +117,7 @@ vi.mock('../app-relaunch', async (importOriginal) => ({
 }))
 
 vi.mock('../windows/windows-administrator-restart', () => ({
-  prepareWindowsAdministratorRestart: prepareWindowsAdministratorRestartMock
+  requestWindowsAdministratorRestart: requestWindowsAdministratorRestartMock
 }))
 
 vi.mock('./floating-workspace-directory', () => ({
@@ -174,7 +174,7 @@ describe('registerAppHandlers', () => {
     setMainUiLanguageMock.mockReset()
     relaunchAppMock.mockReset()
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
-    prepareWindowsAdministratorRestartMock.mockReset()
+    requestWindowsAdministratorRestartMock.mockReset()
     showOpenDialogMock.mockReset()
     trustFloatingWorkspaceDirectoryMock.mockReset()
     registerRendererShutdownCheckpointHandlerMock.mockReset()
@@ -262,9 +262,8 @@ describe('registerAppHandlers', () => {
     }
   })
 
-  it('checkpoints before scheduling the native administrator restart and quits normally', async () => {
-    const plan = { execPath: 'C:\\Orca\\resources\\bin\\orca.exe', args: ['restart'] }
-    prepareWindowsAdministratorRestartMock.mockReturnValue(plan)
+  it('quits only after Windows approval and leaves the relaunch to the elevated launcher', async () => {
+    requestWindowsAdministratorRestartMock.mockResolvedValue('approved')
     let finishCleanup!: () => void
     const onBeforeRelaunch = vi.fn(
       () =>
@@ -274,25 +273,32 @@ describe('registerAppHandlers', () => {
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this handler never reads the store.
     registerAppHandlers({} as never, { onBeforeRelaunch })
-    const pending = Promise.resolve(handlers.get('app:restartAsAdministrator')?.(null))
+    const pending = Promise.resolve(handlers.get('app:restartAsAdministrator')?.({ sender: {} }))
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appQuitMock).not.toHaveBeenCalled()
+    finishCleanup()
+    await expect(pending).resolves.toBe(true)
     await vi.advanceTimersByTimeAsync(150)
     expect(relaunchAppMock).not.toHaveBeenCalled()
-    finishCleanup()
-    await pending
-    await vi.advanceTimersByTimeAsync(150)
-    expect(relaunchAppMock).toHaveBeenCalledWith('windows-administrator', undefined, plan)
     expect(appQuitMock).toHaveBeenCalledOnce()
     expect(appExitMock).not.toHaveBeenCalled()
   })
 
-  it('keeps the desktop open if the native restart is unavailable', async () => {
-    prepareWindowsAdministratorRestartMock.mockImplementation(() => {
-      throw new Error('Unavailable')
-    })
+  it.each([
+    ['canceled', () => requestWindowsAdministratorRestartMock.mockResolvedValue('cancelled')],
+    [
+      'unavailable',
+      () => requestWindowsAdministratorRestartMock.mockRejectedValue(new Error('Unavailable'))
+    ]
+  ])('keeps the desktop and its terminals when approval is %s', async (outcome, arrange) => {
+    arrange()
     const onBeforeRelaunch = vi.fn()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this handler never reads the store.
     registerAppHandlers({} as never, { onBeforeRelaunch })
-    await expect(handlers.get('app:restartAsAdministrator')?.(null)).rejects.toThrow('Unavailable')
+    const pending = Promise.resolve(handlers.get('app:restartAsAdministrator')?.({ sender: {} }))
+    await (outcome === 'canceled'
+      ? expect(pending).resolves.toBe(false)
+      : expect(pending).rejects.toThrow('Unavailable'))
     await vi.advanceTimersByTimeAsync(150)
     expect(onBeforeRelaunch).not.toHaveBeenCalled()
     expect(relaunchAppMock).not.toHaveBeenCalled()

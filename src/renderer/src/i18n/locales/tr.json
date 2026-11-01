@@ -537,7 +537,6 @@
         "confirmAdministratorRestart": "Yönetici olarak yeniden başlatılsın mı?",
         "administratorRestartConsequences": "Önce çalışmanızı kaydedin. Onaydan sonra mevcut yerel terminal ana makinesindeki terminaller ve ajanlar kapanır. Geri yüklenen sekmelerde yeni yönetici kabukları açılır.",
         "administratorDialogScope": "Bu işlem tüm uygulamanın izinlerini değiştirir. SSH ve WSL kendi izinlerini korur.",
-        "administratorPromptCancellation": "Windows istemini iptal etmek, Orca'yı korunan terminalleriyle yeniden açar. SSH ve WSL izinleri kendi ana makinelerinde denetlenmeye devam eder.",
         "closeLocalSessions": "Çalışmanızı kaydedin, tüm yerel terminal oturumlarını kapatın ve ardından Orca'dan çıkın.",
         "launchStandard": "Orca'yı Windows Başlat menüsünden normal şekilde açın.",
         "launchAdministrator": "Windows Başlat menüsünde Orca'ya sağ tıklayın ve Yönetici olarak çalıştır'ı seçin. Windows istemini her zamanki hesabınızla onaylayın.",
@@ -550,7 +549,9 @@
         "restartingAdministrator": "Yeniden başlatılıyor…",
         "openManageSessions": "Oturumları Yönet'i aç",
         "administratorSearchDescription": "Orca'nın Windows izinlerini görüntüleyin veya yönetici onayıyla yeniden başlatın.",
-        "administratorApproval": "Windows onay isteyecek. Her zamanki hesabınızı kullanın."
+        "administratorApproval": "Windows onay isteyecek. Her zamanki hesabınızı kullanın.",
+        "administratorPromptCancellationKeepsOpen": "Windows istemini iptal ederseniz Orca açık kalır ve terminallerini korur. SSH ve WSL izinleri kendi ana makinelerinde denetlenmeye devam eder.",
+        "administratorRestartCanceled": "Windows onayı iptal edildi. Orca ve terminalleri çalışmaya devam ediyor."
       }
     },
     "appearance": {
