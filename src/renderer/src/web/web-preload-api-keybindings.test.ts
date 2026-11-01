@@ -56,6 +56,7 @@ describe('web keybindings preload API', () => {
     })
     expect(saved.overrides['worktree.palette']).toEqual(aliases)
     expect(getEffectiveKeybindingsForAction(toggle, saved.platform, saved.overrides)).toEqual([
+      'Mod+Shift+F11',
       'Mod+Shift+J'
     ])
   })

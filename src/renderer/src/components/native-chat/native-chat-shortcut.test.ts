@@ -10,8 +10,15 @@ import { matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 it.each(['win32', 'linux'] as const)(
   'keeps the default chat toggle separate from the %s worktree palette',
   (platform) => {
-    const toggleInput = { key: 'j', ctrlKey: true, altKey: true, shiftKey: true }
+    const toggleInput = { key: 'F11', code: 'F11', ctrlKey: true, shiftKey: true }
     expect(matchesNativeChatToggleShortcut(toggleInput, platform, {})).toBe(true)
+    // IME composition reports key 'Process'; the physical F11 code must still match.
+    expect(matchesNativeChatToggleShortcut({ ...toggleInput, key: 'Process' }, platform, {})).toBe(
+      true
+    )
+    expect(matchesNativeChatToggleShortcut({ ...toggleInput, altKey: true }, platform, {})).toBe(
+      false
+    )
     expect(matchesNativeChatToggleShortcut({ key: 'j', ctrlKey: true }, platform, {})).toBe(false)
     expect(
       keybindingMatchesAction('worktree.palette', { key: 'j', ctrlKey: true }, platform, {})

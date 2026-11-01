@@ -74,7 +74,7 @@ describe('keybinding-file', () => {
         'win32',
         readKeybindingFile(filePath, 'win32').overrides
       )
-    ).toEqual(['Mod+Shift+J'])
+    ).toEqual(['Mod+Shift+F11', 'Mod+Shift+J'])
   })
 
   it('resolves the user-facing keybindings path under ~/.orca', () => {
