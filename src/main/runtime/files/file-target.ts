@@ -62,11 +62,18 @@ export function requireLocalRuntimeFileRoute(target: {
 
 export function requireRuntimeFileProvider(
   target: { executionHostId: ExecutionHostId },
-  host: RuntimeLocalFileHost
+  host: RuntimeLocalFileHost,
+  extraRoots?: readonly string[]
 ): LocalFilesystemProvider {
   return requireLocalRuntimeFileRoute(target).createProvider({
     requireStore: () => host.requireStore(),
-    resolveAuthorizedPath: resolveRuntimeAuthorizedPath
+    resolveAuthorizedPath: (targetPath, store, options) =>
+      resolveRuntimeAuthorizedPath(targetPath, store, {
+        ...options,
+        ...(extraRoots?.length
+          ? { extraRoots: [...(options?.extraRoots ?? []), ...extraRoots] }
+          : {})
+      })
   })
 }
 

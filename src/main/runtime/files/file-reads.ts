@@ -30,6 +30,7 @@ import { resolveLocalFileRequestPath } from '../../ipc/local-file-access-resolut
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { filePreviewForPath } from '../../../shared/file-preview-kind'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
+import type { ResolveAuthorizedPathOptions } from '../../ipc/filesystem/filesystem-auth'
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
@@ -266,9 +267,12 @@ async function readLocalMobileFile(filePath: string, store: RuntimeStore): Promi
 export async function readLocalRuntimeFilePrefix(
   filePath: string,
   store: RuntimeStore,
-  maxBytes: number
+  maxBytes: number,
+  options: ResolveAuthorizedPathOptions = {}
 ): Promise<{ bytes: Buffer; size: number }> {
-  const authorizedPath = windowsFsPath(await resolveRuntimeAuthorizedPath(filePath, store))
+  const authorizedPath = windowsFsPath(
+    await resolveRuntimeAuthorizedPath(filePath, store, options)
+  )
   const fileStat = await stat(authorizedPath)
   const readLimit = Math.min(fileStat.size, maxBytes)
   const handle = await open(authorizedPath, 'r')
