@@ -120,7 +120,7 @@ it('serves concurrent fresh recordless RPCs through real runtime dependencies, s
     requireStore: () => ({
       getSettings: () => ({
         nativeChatProviders: { pi: true },
-        agentCmdOverrides: { pi: 'pi --catalog-fixture' }
+        agentCmdOverrides: { pi: `"${process.execPath}" --catalog-fixture` }
       })
     }),
     resolveStructuredAgentAccountHome: async () => ({
@@ -170,6 +170,7 @@ it('serves concurrent fresh recordless RPCs through real runtime dependencies, s
   }
   expect(native.connect).toHaveBeenCalledOnce()
   expect(native.connect.mock.calls[0]?.[0]).toMatchObject({
+    command: process.execPath,
     args: expect.arrayContaining(['--catalog-fixture', '--no-session']),
     env: { PI_CODING_AGENT_DIR: join(root, 'pi') }
   })
