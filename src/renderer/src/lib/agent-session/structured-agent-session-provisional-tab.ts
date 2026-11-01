@@ -80,7 +80,7 @@ export type ProvisionalLaunchArgs = {
   /** Allow workspace reveal before host acquisition, when the launch has no session ID or owned chat tab yet. */
   beforeOpen?: (sessionId?: string) => boolean | void
   /** The published tab, or null when the layout owner refuses or the launch ends without a chat. */
-  onTabOpenSettled?: (tabId: string | null) => void
+  onTabOpenSettled?: (tabId: string | null, reason?: 'layout-refused') => void
   /** The terminal the host's "no" opens; a caller without one gets a new agent tab's. */
   onHostDeclined?: (
     target: RuntimeClientTarget,
@@ -230,8 +230,10 @@ function beginLocalProvisionalLaunch(
       }
       if (shown === null) {
         handle.cancel()
+        args.onTabOpenSettled?.(null, 'layout-refused')
+      } else {
+        args.onTabOpenSettled?.(shown)
       }
-      args.onTabOpenSettled?.(shown)
     })
     return { ...handle, tab }
   } catch (error) {

@@ -102,6 +102,7 @@ export async function launchStructuredWorktreeSession(
     // What the user left unsent in the chat shown while the worktree was created.
     draftFromScope: pendingCreationChatDraftScopeKey(args.creationId)
   })
+  let layoutRefused = false
   const abandoned = new AbortController()
   const tabOpen = Promise.withResolvers<string | null>()
   const stopWaiting = (): void => tabOpen.resolve(null)
@@ -124,7 +125,10 @@ export async function launchStructuredWorktreeSession(
               openBackgroundDeclinedTerminal(args, host, pending?.heldChatMessage)
           }),
       beforeOpen: () => !abandoned.signal.aborted && !isCancelled(),
-      onTabOpenSettled: tabOpen.resolve
+      onTabOpenSettled: (tabId, reason) => {
+        layoutRefused = reason === 'layout-refused'
+        tabOpen.resolve(tabId)
+      }
     })
     if (launch && args.shouldActivateOnCompletion) {
       // Keep the pending chat until the layout owner's answering frame provides its replacement.
@@ -133,14 +137,42 @@ export async function launchStructuredWorktreeSession(
         launch.cancel()
         return { ...settled, cancelled: true, activation, primaryTabId }
       }
-      const state = useAppStore.getState()
-      if (
-        !activation &&
-        state.activeView === 'terminal' &&
-        state.activePendingCreationId === args.creationId
-      ) {
+      const stillVisible = (): boolean => {
+        const state = useAppStore.getState()
+        return (
+          !activation &&
+          state.activeView === 'terminal' &&
+          state.activePendingCreationId === args.creationId
+        )
+      }
+      let recoveryProvidesSurface = false
+      if (primaryTabId === null && plan.prompt && layoutRefused) {
+        const { launchAgentInNewTabWithOutcome } = await import('@/lib/launch-agent-in-new-tab')
+        if (abandoned.signal.aborted || isCancelled()) {
+          launch.cancel()
+          return { ...settled, cancelled: true, activation, primaryTabId }
+        }
+        const fallback = launchAgentInNewTabWithOutcome({
+          agent,
+          worktreeId: args.worktreeId,
+          prompt: plan.prompt,
+          promptDelivery: plan.promptDelivery,
+          activate: stillVisible(),
+          agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
+            route: 'terminal-tui',
+            requestId: args.creationId,
+            agent,
+            worktreeId: args.worktreeId
+          })
+        })
+        if (fallback && !('refused' in fallback)) {
+          recoveryProvidesSurface = true
+          primaryTabId = fallback.surface.kind === 'local-terminal' ? fallback.surface.tabId : null
+        }
+      }
+      if (stillVisible()) {
         activation = activateAndRevealWorktree(args.worktreeId, {
-          providesInitialSurface: primaryTabId !== null,
+          providesInitialSurface: primaryTabId !== null || recoveryProvidesSurface,
           worktreeCreationId: args.creationId
         })
         primaryTabId ??= activation === false ? null : activation.primaryTabId

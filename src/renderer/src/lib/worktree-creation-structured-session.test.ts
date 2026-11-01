@@ -5,7 +5,7 @@ type PendingCreationListener = (state: PendingCreationState) => void
 type BeginArgs = {
   beforeOpen?: (sessionId: string) => boolean | void
   hooks?: { signal?: AbortSignal }
-  onTabOpenSettled?: (tabId: string | null) => void
+  onTabOpenSettled?: (tabId: string | null, reason?: 'layout-refused') => void
   plan?: { prompt?: string; promptDelivery?: string; draftFromScope?: string }
 }
 const mocks = vi.hoisted(() => {
@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
       listener = value
     },
     unsubscribe: vi.fn<() => void>(),
+    launchAgentInNewTabWithOutcome: vi.fn(),
     beginStructuredAgentSessionProvisionalLaunch: vi.fn<
       (args: BeginArgs) => {
         sessionId: string
@@ -55,6 +56,10 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
   beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch
+}))
+
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTabWithOutcome
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
@@ -99,6 +104,7 @@ describe('launchStructuredWorktreeSession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.state.pendingWorktreeCreations = Object.fromEntries([['creation-1', {}]])
+    mocks.launchAgentInNewTabWithOutcome.mockReturnValue(null)
     mocks.listener = null
     mocks.state.activePendingCreationId = 'creation-1'
     mocks.state.activeView = 'terminal'
@@ -124,6 +130,37 @@ describe('launchStructuredWorktreeSession', () => {
       providesInitialSurface: false,
       worktreeCreationId: 'creation-1'
     })
+  })
+
+  it.each([true, false])('recovers a held prompt after no tab, visible: %s', async (visible) => {
+    mocks.state.pendingWorktreeCreations = {
+      'creation-1': { phase: 'creating', heldChatMessage: 'Add a test', request }
+    }
+    if (!visible) {
+      mocks.state.activePendingCreationId = null
+    }
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      args.onTabOpenSettled?.(null, 'layout-refused')
+      return launchHandle()
+    })
+    mocks.launchAgentInNewTabWithOutcome.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'recovered-terminal' }
+    })
+
+    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
+      primaryTabId: 'recovered-terminal'
+    })
+    expect(mocks.launchAgentInNewTabWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: 'Add a test',
+        promptDelivery: 'auto-submit',
+        activate: visible,
+        agentSessionLaunchPlan: expect.objectContaining({ route: 'terminal-tui' })
+      })
+    )
+    if (!visible) {
+      expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    }
   })
 
   it.each(['workspace', 'view'] as const)(

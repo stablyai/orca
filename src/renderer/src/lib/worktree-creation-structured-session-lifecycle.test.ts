@@ -179,6 +179,34 @@ describe('creation chat handoff', () => {
     }
   )
 
+  it.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)(
+    'preserves the held first message in a terminal when layout refuses the chat',
+    async () => {
+      const emptyRequest = { ...request, quickPrompt: '' }
+      useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
+        request: emptyRequest,
+        heldChatMessage: 'Recover this first message'
+      })
+      layoutApplyTestTransport.answerWith((command) =>
+        command.type === 'openAgentSessionTab'
+          ? { ok: false, code: 'pane_structure_changed' }
+          : 'apply'
+      )
+
+      await executeWorktreeCreation('creation-1', emptyRequest)
+      await main.settle()
+
+      const state = useAppStore.getState()
+      expect(state.pendingWorktreeCreations['creation-1']).toBeUndefined()
+      expect(state.tabsByWorktree[worktree.id]).toHaveLength(1)
+      expect(state.getActiveTab(worktree.id)?.contentType).toBe('terminal')
+      const tabId = state.tabsByWorktree[worktree.id]![0]!.id
+      expect(state.pendingStartupByTabId[tabId]).toMatchObject({
+        command: expect.stringContaining('Recover this first message')
+      })
+    }
+  )
+
   it('finishes creation when the host opens a terminal instead of a chat', async () => {
     mocks.admission.mockResolvedValue({ kind: 'declined' })
 
