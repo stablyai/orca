@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
-import { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
+import { terminateProviderProcessTree } from '../../provider-process/provider-process-teardown'
 import type * as ProcessTreeKill from './codex-app-server-process-tree-kill'
 import {
   killCodexAppServerProcessTree,
@@ -10,7 +10,7 @@ import {
 } from './codex-app-server-process-tree-kill'
 import { CodexAppServerTimeoutError, runCodexAppServerSession } from './codex-app-server-session'
 
-vi.mock('../provider-process/provider-process-teardown', () => ({
+vi.mock('../../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: vi.fn(async () => 'exited' as const)
 }))
 vi.mock('./codex-app-server-process-tree-kill', async (importOriginal) => ({

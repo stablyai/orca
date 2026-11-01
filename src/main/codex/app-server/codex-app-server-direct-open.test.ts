@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
+import { createFakePipedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 
 afterEach(() => vi.useRealTimers())

@@ -6,12 +6,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   PROVIDER_STDIN_END_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS
-} from '../provider-process/provider-process-supervisor'
+} from '../../provider-process/provider-process-supervisor'
 import type { CodexAppServerSpawn } from './codex-app-server-process-tree-kill'
 import { CodexAppServerTimeoutError, runCodexAppServerSession } from './codex-app-server-session'
-import { classifyCodexTrustGrantError } from './codex-trust-grant-telemetry'
-import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
-import { alive, createSupervisedProbeRig, waitFor } from './supervised-probe-owner.test-fixture'
+import { classifyCodexTrustGrantError } from '../codex-trust-grant-telemetry'
+import { PROVIDER_SPAWN_FAILURE_MARKER } from '../../provider-process/provider-spawn-failure-report'
+import { alive, createSupervisedProbeRig, waitFor } from '../supervised-probe-owner.test-fixture'
 
 // Answers initialize, then nothing; it ignores its stdin end, as a wedged Codex can.
 const WEDGED_APP_SERVER = String.raw`

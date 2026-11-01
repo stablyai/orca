@@ -2,7 +2,7 @@ import { providerStartupFailureFact } from '../native-chat/agent-session-wire/st
 import { describe, expect, it, vi } from 'vitest'
 import { CodexAppServerFrameSizeError } from './app-server/codex-app-server-frame-size-error'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
-import { openCodexAppServerConnection } from './codex-app-server-connection'
+import { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { openCodexThread } from './codex-structured-thread-open'

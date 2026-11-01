@@ -1,18 +1,18 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { spawnManagedProviderProcess } from '../provider-process/managed-provider-process'
-import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
-import { stderrIndicatesMissingAppServer } from './app-server/codex-app-server-capability-signal'
-import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
+import { resolveProviderChildEnv } from '../../provider-process/provider-process-launch'
+import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
+import { withCliRuntimeOnPath } from '../../../shared/node-cli-command-resolution'
 import {
   providerStderrForDisplay,
   supervisedProviderSpawnFailure
-} from '../provider-process/provider-spawn-failure-report'
+} from '../../provider-process/provider-spawn-failure-report'
 import {
   killCodexAppServerProcessTree,
   spawnCodexAppServerProcess,
   type CodexAppServerSpawn
 } from './codex-app-server-process-tree-kill'
-import { createProviderRecordReader } from '../provider-process/provider-record-reader'
+import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
 
 export type CodexAppServerInvocation = {
   command: string

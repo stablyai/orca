@@ -8,7 +8,7 @@ import {
 } from './structured-agent-session-handing-over'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
-import { CodexAppServerTimeoutError } from '../../codex/codex-app-server-session'
+import { CodexAppServerTimeoutError } from '../../codex/app-server/codex-app-server-session'
 import {
   CODEX_INPUT_FINALIZATION_OWNER_OUTCOMES,
   HOST_TEST_SESSION as SESSION,

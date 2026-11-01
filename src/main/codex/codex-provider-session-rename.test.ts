@@ -9,7 +9,7 @@ import { resolveProviderChildEnv } from '../provider-process/provider-process-la
 import { resolveHiddenProbeCwd } from '../rate-limits/hidden-probe-cwd'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS as tail } from '../codex-cli/codex-read-only-app-server-args'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import * as appServer from './codex-app-server-session'
+import * as appServer from './app-server/codex-app-server-session'
 import { renameCodexProviderSession } from './codex-provider-session-rename'
 
 vi.mock('node:fs/promises', { spy: true })

@@ -2,11 +2,11 @@ import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { spawnProcess } from '@orca/process-host'
-import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
-import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
+import type { DescendantTreeVerdict } from '../../pty-descendant-exit-verification'
+import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
-import { codexTurnLifecycleRig } from './codex-structured-dispatch-test-support'
+import { codexTurnLifecycleRig } from '../codex-structured-dispatch-test-support'
 
 const teardown = vi.hoisted(() => {
   const state: { verdict: DescendantTreeVerdict; rootExits: () => void } = {
@@ -15,7 +15,7 @@ const teardown = vi.hoisted(() => {
   }
   return state
 })
-vi.mock('../claude/claude-agent-sdk-exit-proof', () => ({
+vi.mock('../../claude/claude-agent-sdk-exit-proof', () => ({
   createClaudeChildTreeReaper: () => ({
     capture: async () => {},
     refresh: async () => {},

@@ -9,7 +9,7 @@ import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from '../codex/app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
+import type { openCodexAppServerConnection } from '../codex/app-server/codex-app-server-connection'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
