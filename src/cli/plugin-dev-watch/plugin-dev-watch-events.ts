@@ -40,6 +40,8 @@ export type PluginDevWatchEvent =
   | ({ type: 'check'; pluginKey: string } & PluginDevWatchCheckResult)
   /** `--shot`: a PNG of one panel after the load and after each reload that left it running. */
   | ({ type: 'shot'; pluginKey: string } & PluginDevWatchShot)
+  /** `--shot`: the person switched away from the panel; once per time away, never switched back. */
+  | { type: 'shot_skipped'; pluginKey: string; panelId: string; reason: string }
   | { type: 'warning'; message: string }
   | { type: 'disconnected'; message: string }
   | { type: 'unloaded'; pluginKey: string; path: string; removed: boolean }
@@ -85,6 +87,8 @@ export function formatPluginDevWatchEvent(event: PluginDevWatchEvent): string {
         `shot ${event.path} (${event.width}x${event.height})${event.settled ? '' : ', not finished drawing'}`,
         ...event.errors.map((error) => `  error: ${error}`)
       ].join('\n')
+    case 'shot_skipped':
+      return `shot skipped: ${event.reason}, so ${event.panelId} is not on screen; open it again to resume`
     case 'warning':
       return `warning: ${event.message}`
     case 'disconnected':

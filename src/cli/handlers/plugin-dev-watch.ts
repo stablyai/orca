@@ -16,8 +16,11 @@ import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 import { writeStdoutLine } from '../stdout-line'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
 import { checkPluginDevFolder } from '../plugin-dev-watch/plugin-dev-watch-check'
-import { shootPluginPanels } from '../plugin-dev-watch/plugin-dev-watch-shot'
-import { defaultPluginShotPath, resolveLocalShotPath, takePluginShot } from './plugin-view'
+import {
+  pluginDevWatchShotPanel,
+  type PluginDevWatchShotHost
+} from '../plugin-dev-watch/plugin-dev-watch-shot'
+import { defaultPluginShotPath, resolveLocalShotPath, takePluginShotIfShown } from './plugin-view'
 import {
   callPlugins,
   refreshDevTypes,
@@ -61,6 +64,32 @@ async function pollHost<T>(ctx: HandlerContext, method: string, params?: unknown
   }
 }
 
+function bindShotHost(
+  ctx: HandlerContext,
+  shotDir: string,
+  shotPanel: string | boolean | undefined
+): PluginDevWatchShotHost {
+  return {
+    panelOf: (entry) =>
+      pluginDevWatchShotPanel(entry, typeof shotPanel === 'string' ? shotPanel : undefined),
+    open: async (pluginKey, panelId) => {
+      await callPlugins(ctx, 'plugins.open', { pluginKey, panelId })
+    },
+    take: async (pluginKey, panelId) => {
+      const shot = await takePluginShotIfShown(ctx, {
+        pluginKey,
+        panelId,
+        outFor: (id) => defaultPluginShotPath(shotDir, pluginKey, id)
+      })
+      if ('notShown' in shot) {
+        return { notShown: shot.notShown }
+      }
+      const { path: file, width, height, settled, errors } = shot
+      return { panelId, path: file, width, height, settled, errors }
+    }
+  }
+}
+
 export function bindPluginDevWatchHost(ctx: HandlerContext, path: string): PluginDevWatchHost {
   const approve = ctx.flags.get('approve')
   const check = ctx.flags.get('check') === true
@@ -73,28 +102,13 @@ export function bindPluginDevWatchHost(ctx: HandlerContext, path: string): Plugi
   }
   const shotFlag = ctx.flags.get('shot')
   const shotDir = typeof shotFlag === 'string' ? resolveLocalShotPath(ctx, shotFlag) : null
+  const shotPanel = ctx.flags.get('shot-panel')
+  if (shotPanel !== undefined && shotDir === null) {
+    throw new RuntimeClientError('invalid_argument', '--shot-panel needs --shot <out-dir>.')
+  }
   return {
     ...(check ? { check: () => checkPluginDevFolder(path) } : {}),
-    ...(shotDir
-      ? {
-          shot: async (pluginKey: string) => {
-            const list = await pollHost<PluginHostListEntry[]>(ctx, 'plugins.list')
-            const panels = list.find((entry) => entry.pluginKey === pluginKey)?.panels ?? []
-            return shootPluginPanels(
-              panels.map((panel) => panel.id),
-              async (panelId) => {
-                const shot = await takePluginShot(ctx, {
-                  pluginKey,
-                  panelId,
-                  outFor: (id) => defaultPluginShotPath(shotDir, pluginKey, id)
-                })
-                const { path: file, width, height, settled, errors } = shot
-                return { panelId, path: file, width, height, settled, errors }
-              }
-            )
-          }
-        }
-      : {}),
+    ...(shotDir ? { shot: bindShotHost(ctx, shotDir, shotPanel) } : {}),
     refreshTypes: () => refreshDevTypes(ctx, path),
     devLoad: () =>
       callPlugins<DevLoadResult>(ctx, 'plugins.devLoad', {

@@ -47,6 +47,16 @@ describe('plugins.open / plugins.shot params', () => {
     }
   })
 
+  it('takes an optional ifShown flag', () => {
+    expect(PluginShotParams.parse({ pluginKey: 'acme.todos', ifShown: true })).toEqual({
+      pluginKey: 'acme.todos',
+      ifShown: true
+    })
+    expect(PluginShotParams.safeParse({ pluginKey: 'acme.todos', ifShown: 'yes' }).success).toBe(
+      false
+    )
+  })
+
   it('ignores fields a newer client adds', () => {
     expect(PluginShotParams.safeParse({ pluginKey: 'acme.todos', futureFlag: true }).success).toBe(
       true

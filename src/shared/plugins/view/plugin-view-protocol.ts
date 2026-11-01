@@ -16,6 +16,8 @@ export type PluginViewCapture = {
   width?: number
   /** Paint Orca in this mode for this capture only; the setting is not changed. */
   colorScheme?: PluginViewColorScheme
+  /** Capture only if the panel is already the open right-sidebar tab; never open or switch. */
+  ifShown?: boolean
   timeoutMs: number
 }
 
@@ -46,3 +48,6 @@ export type PluginViewReply =
 
 /** The renderer could not show the view; `code` is a stable reason callers may branch on. */
 export const PLUGIN_VIEW_NO_WORKSPACE_CODE = 'no_workspace'
+
+/** An `ifShown` capture found another tab, a closed sidebar or another view on screen. */
+export const PLUGIN_VIEW_NOT_SHOWN_CODE = 'not_shown'

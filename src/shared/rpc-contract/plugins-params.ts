@@ -91,5 +91,7 @@ export const PluginShotParams = z.object({
   pluginKey: pluginKeyParam,
   panelId: contributionIdParam.optional(),
   colorScheme: z.enum(['light', 'dark']).optional(),
-  width: z.number().int().min(PLUGIN_SHOT_MIN_WIDTH).max(PLUGIN_SHOT_MAX_WIDTH).optional()
+  width: z.number().int().min(PLUGIN_SHOT_MIN_WIDTH).max(PLUGIN_SHOT_MAX_WIDTH).optional(),
+  /** Capture only while the panel is the open right-sidebar tab; never open or switch to it. */
+  ifShown: z.boolean().optional()
 })

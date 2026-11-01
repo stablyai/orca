@@ -11,9 +11,9 @@ import {
   type PluginDevWatchCheckResult
 } from './plugin-dev-watch-check'
 import {
-  isLastingShotFailure,
+  createPluginDevWatchShooter,
   PLUGIN_DEV_WATCH_SHOOTABLE,
-  type PluginDevWatchShot
+  type PluginDevWatchShotHost
 } from './plugin-dev-watch-shot'
 
 /** What the loop asks of the Orca host; the handler binds it to RPC for one folder. */
@@ -27,8 +27,8 @@ export type PluginDevWatchHost = {
   devUnload(): Promise<void>
   /** `--check` only: validates the folder and renders its components panels once. */
   check?: () => Promise<PluginDevWatchCheckResult>
-  /** `--shot` only: a PNG of each of the plugin's panels as Orca draws it now. */
-  shot?: (pluginKey: string) => Promise<PluginDevWatchShot[]>
+  /** `--shot` only: a PNG of one panel after each good reload, while it stays on screen. */
+  shot?: PluginDevWatchShotHost
 }
 
 export type PluginDevWatchDeps = {
@@ -87,6 +87,31 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** `--shot`: picks the panel once; an unknown `--shot-panel` unloads what this run loaded and fails. */
+async function startShooter(
+  host: PluginDevWatchHost,
+  loaded: DevLoadResult,
+  emit: (event: PluginDevWatchEvent) => void
+): Promise<(() => Promise<void>) | null> {
+  if (!host.shot) {
+    return null
+  }
+  let panelId: string | null
+  try {
+    panelId = host.shot.panelOf(loaded.plugin)
+  } catch (error) {
+    if (loaded.added) {
+      await host.devUnload().catch(() => undefined)
+    }
+    throw error
+  }
+  if (panelId === null) {
+    emit({ type: 'warning', message: `${loaded.pluginKey} has no panel for --shot to capture` })
+    return null
+  }
+  return createPluginDevWatchShooter(host.shot, loaded.pluginKey, panelId, emit)
+}
+
 /** Loads the folder, then streams its logs and reload status until interrupted. Returns the exit
  *  code. A failed first load throws (approval_required exits 3 like `orca plugin dev load`). */
 export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<number> {
@@ -116,10 +141,10 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
     stop.abort()
   })
   const runCheck = host.check
-  let runShot = host.shot
+  const shoot = await startShooter(host, loaded, emit)
   // Check, then shot: one at a time, and saves during a run coalesce into one more.
   const afterLoad =
-    runCheck || runShot
+    runCheck || shoot
       ? createPluginDevWatchCheckQueue(async () => {
           if (runCheck) {
             try {
@@ -128,22 +153,8 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
               emit({ type: 'warning', message: `check could not run: ${errorMessage(error)}` })
             }
           }
-          if (!runShot || !PLUGIN_DEV_WATCH_SHOOTABLE.has(snapshot.status)) {
-            return
-          }
-          try {
-            for (const shot of await runShot(pluginKey)) {
-              emit({ type: 'shot', pluginKey, ...shot })
-            }
-          } catch (error) {
-            const lasting = isLastingShotFailure(error)
-            emit({
-              type: 'warning',
-              message: `shot could not run${lasting ? ', so --shot is off' : ''}: ${errorMessage(error)}`
-            })
-            if (lasting) {
-              runShot = undefined
-            }
+          if (shoot && PLUGIN_DEV_WATCH_SHOOTABLE.has(snapshot.status)) {
+            await shoot()
           }
         })
       : null

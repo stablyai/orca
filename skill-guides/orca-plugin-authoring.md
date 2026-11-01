@@ -120,17 +120,21 @@ secrets or state the worker also uses; a panel alone needs none of it.
 2. Start `ORCA plugin dev watch ./my-plugin --check --shot ./my-plugin/.orca/shots --json` in a
    background terminal and keep reading it. It loads the folder, refreshes `.orca/types`, then
    prints one JSON object per line: `loaded`, `log`, `reloaded`, `status` (with `errored` or
-   `invalid` and the error), `approval`, `check` (with `--check`), `shot` (with `--shot`),
-   `warning`, `disconnected`, `unloaded`. A first load that needs consent exits `3`; see
+   `invalid` and the error), `approval`, `check` (with `--check`), `shot` and `shot_skipped`
+   (with `--shot`), `warning`, `disconnected`, `unloaded`. A first load that needs consent exits `3`; see
    [Approval](#approval).
 3. Edit and save. Each save prints `reloaded`, then a `check` with what each panel drew or threw,
-   then a `shot` per panel: `{ path, width, height, settled, errors }`. Read the PNG at `path` to
+   then a `shot` of the panel it opened at start (the first, or `--shot-panel <id>`):
+   `{ path, width, height, settled, errors }`. Read the PNG at `path` to
    see the panel exactly as Orca draws it, and fix what looks wrong. Console errors and uncaught
    exceptions arrive as `log` lines `[frame] <file>:<line> <message>` at your source line, and in
    the shot's `errors`. Fix every one, and run `ORCA plugin test <dir> --json` after changes.
+   The watch never switches the sidebar back: `shot_skipped` means the user is looking at
+   something else, so leave it; shots resume when they show the panel again.
 4. Off the watch, `ORCA plugin shot <plugin-key> [--panel <id>] [--theme light|dark] [--width <px>]
-   --json` captures one panel (default `<cwd>/.orca/shots/<plugin-key>-<panel>.png`; check both
-   themes and a narrow width), `ORCA plugin logs <plugin-key> --json` shows the same lines,
+   --json` captures one panel (default `<cwd>/.orca/shots/<plugin-key>-<panel>.png`; check a
+   narrow width, and both themes: `--theme` applies only while Orca's window is hidden or
+   minimized, else `themeApplied` is false with a `themeReason`), `ORCA plugin logs <plugin-key> --json` shows the same lines,
    `ORCA plugin restart <plugin-key>` reruns a worker's startup code, and
    `ORCA plugin dev reload <dir>` catches a missed save or re-checks changed commands and shortcuts.
 5. To show the user, `ORCA plugin open <plugin-key> [--panel <id>]` opens the panel in Orca's right

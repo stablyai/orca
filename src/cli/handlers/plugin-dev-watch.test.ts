@@ -111,39 +111,55 @@ describe('plugin dev watch --check', () => {
 })
 
 describe('plugin dev watch --shot', () => {
-  it('shoots each listed panel into the folder, also from a remote host', async () => {
+  it('parses --shot-panel and needs --shot with it', () => {
+    const parsed = parse(['plugin', 'dev', 'watch', '.', '--shot', 'out', '--shot-panel', 'stats'])
+    expect(parsed.flags.get('shot-panel')).toBe('stats')
+    const ctx = context(vi.fn())
+    ctx.flags.set('shot-panel', 'stats')
+    expect(() => bindPluginDevWatchHost(ctx, '/work/notes')).toThrow(/needs --shot/)
+  })
+
+  it('opens once by RPC, then shoots only while shown, also from a remote host', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-watch-shot-'))
     try {
       const png = Buffer.from('png').toString('base64')
-      const call = vi.fn(async (method: string, params?: { panelId?: string }) => ({
-        result:
-          method === 'plugins.list'
-            ? [{ pluginKey: 'acme.notes', panels: [{ id: 'a' }, { id: 'b' }] }]
-            : {
-                pluginKey: 'acme.notes',
-                panelId: params?.panelId,
-                png,
-                width: 300,
-                height: 500,
-                colorScheme: 'dark',
-                themeApplied: false,
-                settled: true,
-                errors: []
-              }
+      const replies = [
+        {
+          pluginKey: 'acme.notes',
+          panelId: 'a',
+          png,
+          width: 300,
+          height: 500,
+          colorScheme: 'dark',
+          themeApplied: false,
+          settled: true,
+          errors: []
+        },
+        {
+          pluginKey: 'acme.notes',
+          panelId: 'a',
+          title: 'A',
+          notShown: 'the right sidebar is closed'
+        }
+      ]
+      const call = vi.fn(async (method: string, _params?: unknown) => ({
+        result: method === 'plugins.open' ? { kind: 'panel' } : replies.shift()
       }))
       const ctx = context(call)
       ctx.flags.set('shot', dir)
-      const host = bindPluginDevWatchHost(ctx, '/work/notes')
-      const shots = await host.shot?.('acme.notes')
-      expect(shots?.map((shot) => shot.path)).toEqual([
-        join(dir, 'acme.notes-a.png'),
-        join(dir, 'acme.notes-b.png')
-      ])
-      expect(await readFile(join(dir, 'acme.notes-b.png'), 'utf8')).toBe('png')
-      expect(call.mock.calls.map(([method]) => method)).toEqual([
-        'plugins.list',
-        'plugins.shot',
-        'plugins.shot'
+      const shot = bindPluginDevWatchHost(ctx, '/work/notes').shot
+      await shot?.open('acme.notes', 'a')
+      await expect(shot?.take('acme.notes', 'a')).resolves.toMatchObject({
+        path: join(dir, 'acme.notes-a.png')
+      })
+      await expect(shot?.take('acme.notes', 'a')).resolves.toEqual({
+        notShown: 'the right sidebar is closed'
+      })
+      expect(await readFile(join(dir, 'acme.notes-a.png'), 'utf8')).toBe('png')
+      expect(call.mock.calls.map(([method, params]) => [method, params])).toEqual([
+        ['plugins.open', { pluginKey: 'acme.notes', panelId: 'a' }],
+        ['plugins.shot', { pluginKey: 'acme.notes', panelId: 'a', ifShown: true }],
+        ['plugins.shot', { pluginKey: 'acme.notes', panelId: 'a', ifShown: true }]
       ])
     } finally {
       await rm(dir, { recursive: true, force: true })

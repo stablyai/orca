@@ -32,8 +32,8 @@ export const PLUGIN_VIEW_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Shows the panel like `orca plugin open`, waits until it has drawn (a components panel: its first tree from the current code; an html panel: its page loaded), then captures exactly the panel, with the window hidden or behind others. It never shows, raises or focuses the window, and it does not leave Settings or another full-page view.',
       'Writes <cwd>/.orca/shots/<plugin-key>-<panel>.png unless --out names a file; the image is in CSS pixels. Read the image file to see the panel.',
-      '--width sets the panel width for this capture only. --theme paints Orca light or dark for this capture only (a visible window shows it for about a second) and puts your theme back; the setting never changes. The result says which theme it shows and whether --theme took effect (themeApplied).',
-      '--json prints { path, width, height, theme, themeApplied, settled, errors }. errors lists the error banner the panel shows and the errors it logged (`orca plugin logs`) during the capture; settled is false when it had not finished drawing after 15s.',
+      '--width sets the panel width for this capture only. --theme paints Orca light or dark for this capture only, and only while its window is hidden or minimized, then puts your theme back; the setting never changes. With the window on screen it captures in the current theme rather than repaint the app in front of you. The result says which theme it shows, whether --theme took effect (themeApplied) and why not (themeReason).',
+      '--json prints { path, width, height, theme, themeApplied, themeReason?, settled, errors }. errors lists the error banner the panel shows and the errors it logged (`orca plugin logs`) during the capture; settled is false when it had not finished drawing after 15s.',
       'Desktop app only: a server with no window (`orca serve`) refuses it. With --environment the PNG (at most 5 MiB; it shows only the plugin panel) comes back to this machine and is written here.'
     ],
     examples: [

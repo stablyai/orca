@@ -4,6 +4,7 @@ import { listPluginsForClients } from '../plugin-client-list'
 import type { PluginService } from '../plugin-service'
 import { livePluginFrameGuests } from '../panels/plugin-frame-guest-diagnostics'
 import { createPluginViewDesktop } from './plugin-view-desktop'
+import { isPluginShotWindowShown } from './plugin-shot-policy'
 
 /** `plugins.open` / `plugins.shot` for the desktop app; a headless serve leaves them refusing. */
 export function bindPluginViewForRpc(options: {
@@ -21,6 +22,10 @@ export function bindPluginViewForRpc(options: {
       rendererContents: () => {
         const window = options.getMainWindow()
         return window && !window.isDestroyed() ? window.webContents : null
+      },
+      windowShown: () => {
+        const window = options.getMainWindow()
+        return window !== null && isPluginShotWindowShown(window)
       },
       source: {
         list: () => listPluginsForClients(service),

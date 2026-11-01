@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { orcaCliResult } from './helpers/compiled-orca-cli'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import { disablePluginSystem, enableDevPlugins } from './helpers/plugin-smoke'
 import { ISOLATED_FRAMES_E2E } from './helpers/plugin-frame-guest'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -170,7 +171,7 @@ test('plugin shot captures a components panel at the asked width and theme, hidd
   }
 })
 
-test('plugin shot includes an html panel guest and plugin open shows a panel', async ({
+test('plugin shot includes an html panel guest, plugin open shows a panel, and ifShown never switches', async ({
   electronApp,
   orcaPage
 }) => {
@@ -228,6 +229,24 @@ test('plugin shot includes an html panel guest and plugin open shows a panel', a
     expect(shot).toMatchObject({ panelId: 'page', settled: true })
     // The guest is a separate process; its page is in the capture, not a blank box.
     expect((await pngStats(electronApp, shot.path)).redShare).toBeGreaterThan(0.8)
+
+    // `dev watch --shot` asks with ifShown: another tab on screen is skipped, never switched.
+    const client = new RuntimeClient(userDataDir, 30_000, null, null)
+    const pageTab = `plugin:${pluginKey}/page`
+    const away = await client.call<{ notShown?: string }>('plugins.shot', {
+      pluginKey,
+      panelId: 'other',
+      ifShown: true
+    })
+    expect(away.result.notShown).toBe('the right sidebar shows another tab')
+    expect(await orcaPage.evaluate(() => window.__store?.getState().rightSidebarTab)).toBe(pageTab)
+    const shown = await client.call<{ png?: string; panelId: string }>('plugins.shot', {
+      pluginKey,
+      panelId: 'page',
+      ifShown: true
+    })
+    expect(shown.result).toMatchObject({ panelId: 'page' })
+    expect(shown.result.png?.length).toBeGreaterThan(0)
   } finally {
     await disablePluginSystem(orcaPage).catch(() => undefined)
     await rm(tempRoot, { recursive: true, force: true })

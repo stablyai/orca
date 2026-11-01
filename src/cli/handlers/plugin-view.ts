@@ -21,9 +21,14 @@ export type PluginShotReply = {
   height: number
   colorScheme: 'light' | 'dark'
   themeApplied: boolean
+  /** Absent on hosts that predate it. */
+  themeReason?: string
   settled: boolean
   errors: string[]
 }
+
+/** `ifShown` and the panel was not on screen: the host opened, switched and captured nothing. */
+export type PluginShotNotShown = { pluginKey: string; panelId: string; notShown: string }
 
 export type PluginShotSaved = {
   path: string
@@ -33,6 +38,7 @@ export type PluginShotSaved = {
   height: number
   theme: 'light' | 'dark'
   themeApplied: boolean
+  themeReason?: string
   settled: boolean
   errors: string[]
 }
@@ -79,21 +85,28 @@ function parseTheme(ctx: HandlerContext): 'light' | 'dark' | undefined {
   throw new RuntimeClientError('invalid_argument', '--theme takes light or dark.')
 }
 
-/** Captures one panel on the host and writes it to `outFor(panelId)` here. */
-export async function takePluginShot(
+type PluginShotRequest = {
+  pluginKey: string
+  panelId?: string
+  colorScheme?: 'light' | 'dark'
+  width?: number
+  outFor: (panelId: string) => string
+}
+
+async function shoot(
   ctx: HandlerContext,
-  request: {
-    pluginKey: string
-    panelId?: string
-    colorScheme?: 'light' | 'dark'
-    width?: number
-    outFor: (panelId: string) => string
-  }
-): Promise<PluginShotSaved> {
+  request: PluginShotRequest & { ifShown?: true }
+): Promise<PluginShotSaved | PluginShotNotShown> {
   const { outFor, ...params } = request
-  const reply = await callPlugins<PluginShotReply>(ctx, 'plugins.shot', params, {
-    timeoutMs: SHOT_RPC_TIMEOUT_MS
-  })
+  const reply = await callPlugins<PluginShotReply | PluginShotNotShown>(
+    ctx,
+    'plugins.shot',
+    params,
+    { timeoutMs: SHOT_RPC_TIMEOUT_MS }
+  )
+  if ('notShown' in reply) {
+    return { pluginKey: reply.pluginKey, panelId: reply.panelId, notShown: reply.notShown }
+  }
   const path = outFor(reply.panelId)
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, Buffer.from(reply.png, 'base64'))
@@ -105,16 +118,39 @@ export async function takePluginShot(
     height: reply.height,
     theme: reply.colorScheme,
     themeApplied: reply.themeApplied,
+    ...(reply.themeReason ? { themeReason: reply.themeReason } : {}),
     settled: reply.settled,
     errors: reply.errors
   }
+}
+
+/** Shows the panel, captures it on the host and writes it to `outFor(panelId)` here. */
+export async function takePluginShot(
+  ctx: HandlerContext,
+  request: PluginShotRequest
+): Promise<PluginShotSaved> {
+  const shot = await shoot(ctx, request)
+  if ('notShown' in shot) {
+    throw new RuntimeClientError('runtime_error', `The panel is not shown: ${shot.notShown}.`)
+  }
+  return shot
+}
+
+/** Captures only while the panel is the open right-sidebar tab; never opens or switches it. */
+export function takePluginShotIfShown(
+  ctx: HandlerContext,
+  request: PluginShotRequest
+): Promise<PluginShotSaved | PluginShotNotShown> {
+  return shoot(ctx, { ...request, ifShown: true })
 }
 
 export function formatPluginShot(shot: PluginShotSaved, requestedTheme?: string): string {
   return [
     `Saved ${shot.path} (${shot.width}x${shot.height}, ${shot.theme} theme)`,
     ...(requestedTheme && !shot.themeApplied
-      ? [`  note: Orca could not paint ${requestedTheme} for the capture; it shows ${shot.theme}.`]
+      ? [
+          `  note: ${requestedTheme} was not applied (${shot.themeReason ?? 'Orca could not paint it'}); it shows ${shot.theme}.`
+        ]
       : []),
     ...(shot.settled
       ? []

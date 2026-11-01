@@ -18,7 +18,7 @@
 - `ORCA plugin system on [--json]`: Turn plugins on for the Orca host
 - `ORCA plugin system off [--json]`: Turn plugins off for the Orca host
 - `ORCA plugin restart <plugin-key> [--json]`: Stop a plugin's worker so its next command or event starts it fresh
-- `ORCA plugin dev watch <dir> [--check] [--shot <out-dir>] [--approve <fingerprint>] [--json]`: Load a plugin folder, then stream its logs and reloads until Ctrl-C
+- `ORCA plugin dev watch <dir> [--check] [--shot <out-dir> [--shot-panel <id>]] [--approve <fingerprint>] [--json]`: Load a plugin folder, then stream its logs and reloads until Ctrl-C
 - `ORCA plugin dev load <dir> [--approve <fingerprint>] [--json]`: Load a plugin folder into Orca as a development plugin
 - `ORCA plugin dev reload [<dir>] [--approve <fingerprint>] [--json]`: Reload development plugins now, or one folder and re-check its approval
 - `ORCA plugin dev inspect <plugin-key> [--json]`: Open DevTools for a plugin's open panels and editors

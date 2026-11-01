@@ -2,6 +2,7 @@ import { pluginPanelTabKey } from '../../../../../shared/plugins/frames/plugin-t
 import { toWorktreeRelativePath } from '../../../../../shared/terminal-links'
 import {
   PLUGIN_VIEW_NO_WORKSPACE_CODE,
+  PLUGIN_VIEW_NOT_SHOWN_CODE,
   type PluginViewCapture,
   type PluginViewReply,
   type PluginViewRequest
@@ -16,11 +17,13 @@ import {
 } from '@/store/plugin-custom-editors'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
 import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
   measurePluginPanelSurface,
   nextPaintedFrames,
   waitForPluginPanelDraw
 } from './plugin-view-panel-settle'
+import { pluginPanelNotShownReason } from './plugin-view-shown'
 
 type Failure = Extract<PluginViewReply, { ok: false }>
 
@@ -62,6 +65,13 @@ async function openPanel(
     )
   if (!known) {
     return fail(requestId, 'panel_unavailable', `This window does not list ${tabKey} yet.`)
+  }
+  if (capture?.ifShown) {
+    // Never open or switch: the person may have moved on to another tab.
+    const away = pluginPanelNotShownReason(useAppStore.getState(), tabKey)
+    return away
+      ? fail(requestId, PLUGIN_VIEW_NOT_SHOWN_CODE, away)
+      : capturePanel(requestId, tabKey, capture)
   }
   const blocked = showWorkspace(requestId, capture === undefined)
   if (blocked) {
@@ -137,7 +147,7 @@ async function openEditor(
   }
   const state = useAppStore.getState()
   const worktreeId = state.activeWorktreeId ?? ''
-  const worktreePath = getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)?.path
+  const worktreePath = getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(worktreeId)?.path
   const fileId = state.openFile(
     {
       filePath,

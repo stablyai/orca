@@ -54,6 +54,7 @@ function deps(overrides: Partial<PluginViewDesktopDeps> = {}): PluginViewDesktop
   const entry = { pluginKey: KEY, status: 'idle' } as PluginHostListEntry
   return {
     rendererContents: () => contents,
+    windowShown: () => false,
     source: { list: async () => [entry], findValidPlugin: (key) => (key === KEY ? plugin : null) },
     logsSince: (_key, cursor) =>
       cursor
@@ -185,5 +186,50 @@ describe('plugins.shot on the desktop', () => {
     expect(relay.requestPluginViewFromRenderer.mock.calls.at(-1)?.[1]).toEqual({
       kind: 'end-capture'
     })
+  })
+
+  it('captures in the current theme while the window is on screen, without repainting', async () => {
+    relay.requestPluginViewFromRenderer.mockImplementation(
+      answer({ ...DRAWN, panel: { ...DRAWN.panel!, colorScheme: 'dark', themeApplied: false } })
+    )
+    const shot = await createPluginViewDesktop(deps({ windowShown: () => true })).shot({
+      pluginKey: KEY,
+      colorScheme: 'light'
+    })
+    expect(shot).toMatchObject({
+      colorScheme: 'dark',
+      themeApplied: false,
+      themeReason:
+        'the Orca window is visible; capturing in the current theme so the app is not repainted'
+    })
+    const capture = relay.requestPluginViewFromRenderer.mock.calls[0]?.[1]
+    expect(capture).toMatchObject({ kind: 'open-panel' })
+    expect(capture?.kind === 'open-panel' && capture.capture?.colorScheme).toBeUndefined()
+  })
+
+  it('answers not shown for ifShown instead of failing, and asks the renderer not to switch', async () => {
+    relay.requestPluginViewFromRenderer.mockImplementation(
+      answer({
+        requestId: 'r',
+        ok: false,
+        code: 'not_shown',
+        message: 'the right sidebar is closed'
+      })
+    )
+    await expect(
+      createPluginViewDesktop(deps()).shot({ pluginKey: KEY, ifShown: true })
+    ).resolves.toEqual({
+      pluginKey: KEY,
+      panelId: 'todos',
+      title: 'Todos',
+      notShown: 'the right sidebar is closed'
+    })
+    expect(relay.requestPluginViewFromRenderer.mock.calls[0]?.[1]).toMatchObject({
+      capture: { ifShown: true }
+    })
+    // Without ifShown the same reply is an error.
+    await expect(createPluginViewDesktop(deps()).shot({ pluginKey: KEY })).rejects.toThrow(
+      'the right sidebar is closed'
+    )
   })
 })

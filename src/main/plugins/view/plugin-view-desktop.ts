@@ -1,6 +1,7 @@
 import type { WebContents } from 'electron'
 import {
   PLUGIN_VIEW_NO_WORKSPACE_CODE,
+  PLUGIN_VIEW_NOT_SHOWN_CODE,
   type PluginViewColorScheme,
   type PluginViewDrawnPanel,
   type PluginViewReply
@@ -12,6 +13,7 @@ import {
   withPaintingWhileHidden
 } from './plugin-view-capture'
 import { requestPluginViewFromRenderer } from './plugin-view-renderer-relay'
+import { pluginShotThemeDecision } from './plugin-shot-policy'
 import {
   resolvePluginViewEditor,
   resolvePluginViewPanel,
@@ -33,10 +35,20 @@ export type PluginShotResult = {
   height: number
   colorScheme: PluginViewColorScheme
   themeApplied: boolean
+  /** Why `--theme` was not applied, when it was asked for and not applied. */
+  themeReason?: string
   /** False when the panel had not finished drawing by the timeout. */
   settled: boolean
   /** Errors the panel logged during the capture and the banner it shows, if any. */
   errors: string[]
+}
+
+/** `ifShown` and the panel was not on screen: nothing was opened, switched or captured. */
+export type PluginShotNotShown = {
+  pluginKey: string
+  panelId: string
+  title: string
+  notShown: string
 }
 
 export type PluginViewDesktop = {
@@ -50,12 +62,15 @@ export type PluginViewDesktop = {
     panelId?: string
     colorScheme?: PluginViewColorScheme
     width?: number
-  }): Promise<PluginShotResult>
+    ifShown?: boolean
+  }): Promise<PluginShotResult | PluginShotNotShown>
 }
 
 export type PluginViewDesktopDeps = {
   /** The main window's renderer, or null when Orca has no window open. */
   rendererContents(): WebContents | null
+  /** The main window is on screen: visible and not minimized. */
+  windowShown(): boolean
   source: PluginViewSource
   logsSince(
     pluginKey: string,
@@ -125,9 +140,10 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
       return { pluginKey, kind: 'panel', panelId: panel.panelId, title: panel.title }
     },
 
-    shot: async ({ pluginKey, panelId, colorScheme, width }) => {
+    shot: async ({ pluginKey, panelId, colorScheme: requested, width, ifShown }) => {
       const panel = await resolvePluginViewPanel(deps.source, pluginKey, panelId)
       const contents = requireContents()
+      const { colorScheme, themeReason } = pluginShotThemeDecision(requested, deps.windowShown())
       const { cursor } = deps.logsSince(pluginKey)
       return withPaintingWhileHidden([contents, ...deps.guestsOf(pluginKey)], async () => {
         try {
@@ -141,11 +157,20 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
                 guestRevision: panel.guestRevision,
                 ...(width === undefined ? {} : { width }),
                 ...(colorScheme === undefined ? {} : { colorScheme }),
+                ...(ifShown ? { ifShown: true } : {}),
                 timeoutMs: RENDER_TIMEOUT_MS
               }
             },
             RENDER_TIMEOUT_MS + REPLY_GRACE_MS
           )
+          if (ifShown && !reply.ok && reply.code === PLUGIN_VIEW_NOT_SHOWN_CODE) {
+            return {
+              pluginKey,
+              panelId: panel.panelId,
+              title: panel.title,
+              notShown: reply.message
+            }
+          }
           const error = failed(reply)
           if (error) {
             throw error
@@ -174,6 +199,7 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
             height: image.height,
             colorScheme: drawn.colorScheme,
             themeApplied: drawn.themeApplied,
+            ...(themeReason ? { themeReason } : {}),
             settled: drawn.settled,
             errors: [...(drawn.issue ? [drawn.issue] : []), ...logged].slice(0, MAX_ERRORS)
           }

@@ -207,6 +207,7 @@ describe('orca plugin shot', () => {
         height: 600,
         theme: 'dark',
         themeApplied: false,
+        themeReason: 'the Orca window is visible; capturing in the current theme',
         settled: false,
         errors: ['src/panel.tsx:4 boom']
       },
@@ -215,7 +216,7 @@ describe('orca plugin shot', () => {
     expect(text).toBe(
       [
         'Saved /w/a.png (300x600, dark theme)',
-        '  note: Orca could not paint light for the capture; it shows dark.',
+        '  note: light was not applied (the Orca window is visible; capturing in the current theme); it shows dark.',
         '  note: the panel had not finished drawing; this is what it showed.',
         '  error: src/panel.tsx:4 boom'
       ].join('\n')

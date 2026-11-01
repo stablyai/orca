@@ -179,6 +179,55 @@ describe('open-panel with a capture', () => {
   })
 })
 
+describe('open-panel with ifShown', () => {
+  it('never opens or switches: another tab or a closed sidebar answers not_shown', async () => {
+    useAppStore.setState({ rightSidebarOpen: true, rightSidebarTab: 'explorer' })
+    const request = {
+      requestId: 'r',
+      kind: 'open-panel' as const,
+      pluginKey: KEY,
+      panelId: 'todos',
+      capture: { guestRevision: null, ifShown: true, timeoutMs: 5_000 }
+    }
+    await expect(handlePluginViewRequest(request)).resolves.toEqual({
+      requestId: 'r',
+      ok: false,
+      code: 'not_shown',
+      message: 'the right sidebar shows another tab'
+    })
+    expect(useAppStore.getState()).toMatchObject({
+      rightSidebarOpen: true,
+      rightSidebarTab: 'explorer'
+    })
+    useAppStore.setState({ rightSidebarOpen: false, rightSidebarTab: TAB })
+    await expect(handlePluginViewRequest(request)).resolves.toMatchObject({
+      message: 'the right sidebar is closed'
+    })
+    expect(useAppStore.getState().rightSidebarOpen).toBe(false)
+  })
+
+  it('captures when the panel is the open tab', async () => {
+    useAppStore.setState({ rightSidebarOpen: true, rightSidebarTab: TAB })
+    mountSurface({ x: 0, y: 0, width: 300, height: 500 })
+    reportPluginPanelDraw(TAB, {
+      ui: 'components',
+      guestUrl: 'g?rev=r1',
+      drawn: true,
+      issue: null,
+      failure: null
+    })
+    await expect(
+      handlePluginViewRequest({
+        requestId: 'r',
+        kind: 'open-panel',
+        pluginKey: KEY,
+        panelId: 'todos',
+        capture: { guestRevision: 'r1', ifShown: true, timeoutMs: 5_000 }
+      })
+    ).resolves.toMatchObject({ ok: true, panel: { settled: true } })
+  })
+})
+
 describe('open-editor', () => {
   it('opens the file in the active workspace with the plugin editor chosen', async () => {
     const openFile = vi.fn().mockReturnValue('file-1')
