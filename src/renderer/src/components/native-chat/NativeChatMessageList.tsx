@@ -37,7 +37,6 @@ import {
 import { useNativeChatTranscriptSlots } from './use-native-chat-transcript-slots'
 import { useNativeChatTranscriptWindow } from './use-native-chat-transcript-window'
 import { useNativeChatSubagentSections } from './use-native-chat-subagent-sections'
-import { toggleNativeChatExpandedKey } from './native-chat-expanded-keys'
 import { useNativeChatTurnMembership } from './use-native-chat-turn-membership'
 import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
 import { useNativeChatNewRowsMarker } from './native-chat-new-rows-marker'
@@ -133,11 +132,7 @@ export function NativeChatMessageList({
   )
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<string>>(new Set())
   const disclosures = useNativeChatDisclosures()
-  const toggleExpandedTurn = useCallback((turnKey: string) => {
-    setExpandedTurnIds((current) => toggleNativeChatExpandedKey(current, turnKey))
-  }, [])
 
   const { hasMore, loadingEarlier, loadEarlier } = session
   // Pending/failed reads cannot page; recovery remounts the sentinel to recheck its range.
@@ -189,9 +184,15 @@ export function NativeChatMessageList({
   })
   // Only unshown prompts need a waiting tail row; prompt cards explain their own wait.
   const tailRow = transcriptTailRow(isWorking, awaitingInput)
-  const lifecycleWorking = session.transcriptLifecycle?.state === 'working'
   const { measureContent, typography } = useNativeChatRowTypography(contentRef)
-  const { slots: allSlots, liveLine } = useNativeChatTranscriptSlots({
+  const {
+    slots: allSlots,
+    liveLine,
+    expandedTurnKeys: historyExpandedTurns,
+    toggleExpandedTurn
+  } = useNativeChatTranscriptSlots({
+    scopeKey: `${session.agent}:${session.sessionId ?? ''}`,
+    historyHead: journalItems?.[0]?.itemId,
     typography,
     messages: rows,
     unresolvedRowIds: turnRows.unresolvedRowIds,
@@ -200,9 +201,8 @@ export function NativeChatMessageList({
     receipts,
     turnStatuses,
     turnDiffs,
-    expandedTurnKeys: expandedTurnIds,
     isWorking,
-    lifecycleWorking,
+    lifecycleWorking: session.transcriptLifecycle?.state === 'working',
     subagentSections,
     subagentChoices,
     line: {
@@ -227,11 +227,13 @@ export function NativeChatMessageList({
   const { marker: newRowsMarker, dismiss } = useNativeChatNewRowsMarker(
     slots,
     waitingSlots,
-    isVisible && session.readCurrent === true
+    isVisible && session.readCurrent === true,
+    navigationSequence
   )
   const transcriptWindow = useNativeChatTranscriptWindow({
     scrollRef,
     slots,
+    messages: session.messages,
     isVisible,
     // Rail jumps and diff reveals share one mutually exclusive pin.
     revealIndex: nativeChatSlotIndexOf(slots, railJump?.messageId ?? revealedDiff?.messageId),
@@ -285,6 +287,7 @@ export function NativeChatMessageList({
   // Abort paging navigation before any new jump so late history cannot pull the reader back.
   const selectRailItem = useCallback(
     (item: NativeChatRailItem) => {
+      navigationSequence.current += 1
       beginNavigation()
       readerLeavesEnd()
       if (item.slotIndex === null) {
@@ -309,11 +312,16 @@ export function NativeChatMessageList({
     [beginNavigation, readerLeavesEnd, openSubagentSections]
   )
   const jumpToLatest = useCallback(() => {
+    navigationSequence.current += 1
     beginNavigation()
     scrollToBottom()
   }, [beginNavigation, scrollToBottom])
+  const onReaderScroll = useCallback(() => {
+    navigationSequence.current += 1
+    beginNavigation()
+  }, [beginNavigation])
   const readerInput = useNativeChatReaderScrollInput(scrollRef, {
-    onReaderScroll: beginNavigation,
+    onReaderScroll,
     onTakeScroll: transcriptWindow.cancelAlign,
     onLeaveEnd: readerLeavesEnd,
     onScrollGesture: transcriptScroll.forwardedGesture
@@ -334,7 +342,7 @@ export function NativeChatMessageList({
     expandSignal,
     revealedDiff,
     taskListPredecessors,
-    expandedTurnIds,
+    expandedTurnIds: historyExpandedTurns,
     deliveryNotices,
     allowFileUriLinks,
     runtimeContext,

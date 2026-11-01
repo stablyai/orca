@@ -349,9 +349,8 @@ export function MobileNativeChatView({
               <GestureDetector gesture={pinchGesture}>
                 <MobileNativeChatRowList
                   {...{ tail, rowKeys, renderItem, footer, emptyStateView, onScroll, layoutKey }}
-                  {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
+                  {...{ header, onNearTop: loadEarlierNearTop }}
                   rows={turns.listMessages}
-                  runs={turns.presentation.workRuns.heads}
                   roots={disclosures.roots}
                   contentContainerStyle={styles.listContent}
                 />

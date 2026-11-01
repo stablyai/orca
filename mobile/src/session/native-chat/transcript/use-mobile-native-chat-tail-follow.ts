@@ -8,12 +8,11 @@ function listReportsGestures(): boolean {
   return Platform.OS !== 'web'
 }
 
-/** Holds the first visible row in place when rows above it change. The header is not a row. */
-const ANCHOR_BELOW_HEADER = { minIndexForVisible: 1 } as const
+// VirtualizedList adds its header offset; this index addresses message data only.
 const ANCHOR_AT_FIRST_ROW = { minIndexForVisible: 0 } as const
 
-export function mobileNativeChatRowAnchor(hasHeader: boolean): { minIndexForVisible: number } {
-  return hasHeader ? ANCHOR_BELOW_HEADER : ANCHOR_AT_FIRST_ROW
+export function mobileNativeChatRowAnchor(): { minIndexForVisible: number } {
+  return ANCHOR_AT_FIRST_ROW
 }
 
 function distanceFromTail(event: NativeScrollEvent): number {
