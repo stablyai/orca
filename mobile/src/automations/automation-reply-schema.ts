@@ -1,7 +1,6 @@
 import { z } from 'zod'
-import { isTuiAgent } from '../../../src/shared/tui-agent-config'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { salvagingArray } from '../../../src/shared/zod-salvage'
 
 const hostId = z.string().transform((value, ctx) => {
   const parsed = normalizeExecutionHostId(value)
@@ -11,7 +10,6 @@ const hostId = z.string().transform((value, ctx) => {
   ctx.addIssue({ code: 'custom', message: 'Invalid execution host' })
   return z.NEVER
 })
-const agentId = z.custom<TuiAgent>(isTuiAgent)
 export const ownerSelectorSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('self') }),
   z.object({
@@ -25,7 +23,8 @@ export const automationSchema = z.looseObject({
   id: z.string().min(1),
   name: z.string(),
   prompt: z.string(),
-  agentId,
+  // Open so a newer host's agent keeps its row; the host validates the agent on every write.
+  agentId: z.string().min(1),
   surface: z.enum(['chat', 'terminal']).optional(),
   projectId: z.string(),
   workspaceMode: z.enum(['existing', 'new_per_run']),
@@ -52,33 +51,29 @@ export const automationSchema = z.looseObject({
     })
     .nullish()
 })
+const ownerItemSchema = z.object({
+  automationId: z.string().min(1),
+  selector: ownerSelectorSchema,
+  usageSummary: z
+    .object({ lastRunStatus: z.string().nullish(), lastRunAt: z.number().nullish() })
+    .nullish()
+})
+// Read row by row like the desktop reader: a row this build can't read is left out, never the list.
 export const automationListSchema = z
   .object({
-    automations: z.array(automationSchema),
-    items: z.array(
-      z.object({
-        automationId: z.string().min(1),
-        selector: ownerSelectorSchema,
-        usageSummary: z
-          .object({ lastRunStatus: z.string().nullish(), lastRunAt: z.number().nullish() })
-          .nullish()
-      })
-    )
+    automations: salvagingArray(automationSchema),
+    items: salvagingArray(ownerItemSchema)
   })
-  .transform((reply, ctx) => {
-    const owners = new Map(reply.items.map((item) => [item.automationId, item]))
-    if (
-      owners.size !== reply.items.length ||
-      reply.automations.some((entry) => !owners.has(entry.id))
-    ) {
-      ctx.addIssue({ code: 'custom', message: 'Automation ownership is missing or ambiguous' })
-      return z.NEVER
+  .transform((reply) => {
+    // Only exactly one readable owner attributes a row to this host; duplicates leave the row out.
+    const owners = new Map<string, z.output<typeof ownerItemSchema> | null>()
+    for (const item of reply.items) {
+      owners.set(item.automationId, owners.has(item.automationId) ? null : item)
     }
-    return reply.automations.map((automation) => ({
-      automation,
-      // The check above proves presence without attributing an unqualified row to this host.
-      item: owners.get(automation.id)!
-    }))
+    return reply.automations.flatMap((automation) => {
+      const item = owners.get(automation.id)
+      return item ? [{ automation, item }] : []
+    })
   })
 export const runSchema = z.looseObject({
   id: z.string().min(1),
@@ -107,16 +102,16 @@ export const runSchema = z.looseObject({
   runContext: z.object({ hostId, repoId: z.string(), path: z.string() }).nullish()
 })
 export const runsPageSchema = z.object({
-  runs: z.array(runSchema),
+  runs: salvagingArray(runSchema),
   nextCursor: z.string().nullish()
 })
 export const projectInventorySchema = z.object({
-  projects: z.array(
+  projects: salvagingArray(
     z.object({ id: z.string(), displayName: z.string(), kind: z.string().optional() })
   )
 })
 export const setupInventorySchema = z.object({
-  setups: z.array(
+  setups: salvagingArray(
     z.object({
       id: z.string(),
       projectId: z.string(),
@@ -139,7 +134,7 @@ export const workspaceSchema = z.object({
   isArchived: z.boolean().optional()
 })
 export const sshInventorySchema = z.object({
-  targets: z.array(
+  targets: salvagingArray(
     z.object({
       id: z.string(),
       label: z.string(),

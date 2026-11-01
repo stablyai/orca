@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { isTuiAgent } from '../../../src/shared/tui-agent-config'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { salvagedOptional } from '../../../src/shared/zod-salvage'
 import {
   automationListSchema,
   automationSchema,
@@ -132,9 +133,13 @@ export const automationAgentSettingsRead = bindDeferredRpcOperation(
       'agent-policy',
       z.object({
         settings: z.object({
-          defaultTuiAgent: z
-            .custom<TuiAgent | 'blank'>((value) => isTuiAgent(value) || value === 'blank')
-            .nullish(),
+          // A newer host's default agent reads as unset, so agent discovery still loads.
+          defaultTuiAgent: salvagedOptional(
+            'defaultTuiAgent',
+            z
+              .custom<TuiAgent | 'blank'>((value) => isTuiAgent(value) || value === 'blank')
+              .nullable()
+          ),
           disabledTuiAgents: z.array(z.string()).optional()
         })
       })

@@ -1,6 +1,6 @@
 import { translate } from '../i18n/mobile-i18n'
 import { assertAutomationExtraAgentArgs } from '../../../src/shared/automation-extra-agent-args-record'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import { isTuiAgent } from '../../../src/shared/tui-agent-config'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import type { MobileAutomation } from './automation-reply-schema'
 import type { AutomationTargets } from './automation-target-inventory'
@@ -20,7 +20,7 @@ export type AutomationDraft = {
   setupDecisionEdited?: boolean
   name: string
   prompt: string
-  agentId: TuiAgent | null
+  agentId: MobileAutomation['agentId'] | null
   surface?: MobileAutomation['surface']
   setupId: string
   workspaceId: string
@@ -76,11 +76,13 @@ export function validateAutomationDraft(
       'Choose an existing workspace.'
     )
   }
+  // The host checks arguments for agents this build doesn't know.
   if (
-    !saved ||
-    draft.agentId !== saved.agentId ||
-    draft.extraAgentArgs !== (saved.extraAgentArgs ?? '') ||
-    draft.reuseSession !== (saved.reuseSession ?? false)
+    isTuiAgent(draft.agentId) &&
+    (!saved ||
+      draft.agentId !== saved.agentId ||
+      draft.extraAgentArgs !== (saved.extraAgentArgs ?? '') ||
+      draft.reuseSession !== (saved.reuseSession ?? false))
   ) {
     try {
       assertAutomationExtraAgentArgs({ ...draft, agentId: draft.agentId })
@@ -193,7 +195,9 @@ export function automationCreateParams(
   if (!setup || !draft.agentId) {
     throw new AutomationDraftValidationError('project')
   }
-  assertAutomationExtraAgentArgs({ ...draft, agentId: draft.agentId })
+  if (isTuiAgent(draft.agentId)) {
+    assertAutomationExtraAgentArgs({ ...draft, agentId: draft.agentId })
+  }
   const workspace = targets.workspaces.find(
     (entry) => entry.worktreeId === draft.workspaceId && workspaceMatchesSetup(entry, setup)
   )

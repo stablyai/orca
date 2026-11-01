@@ -1,7 +1,7 @@
 import { Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
+import { mobileTuiAgentLabel } from '../tasks/mobile-tui-agents'
 import { AutomationMetadata } from './AutomationControls'
 import type { AutomationDraft } from './automation-draft'
 import type { AutomationTargets } from './automation-target-inventory'
@@ -30,7 +30,7 @@ export function AutomationDraftReview({
         label={t('automations.mobile.agent', 'Agent')}
         value={
           draft.agentId
-            ? MOBILE_TUI_AGENT_LABELS[draft.agentId]
+            ? mobileTuiAgentLabel(draft.agentId)
             : t('automations.mobile.chooseAnAgent', 'Choose an agent')
         }
       />

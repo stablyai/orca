@@ -14,7 +14,8 @@ import {
   AutomationCreate,
   AutomationUpdate
 } from '../../../src/shared/rpc-contract/automation-params'
-import { automationListSchema, runSchema } from './automation-reply-schema'
+import { automationListSchema, runSchema, runsPageSchema } from './automation-reply-schema'
+import { mobileTuiAgentLabel } from '../tasks/mobile-tui-agents'
 import {
   automationCreateParams,
   automationDraftPatch,
@@ -290,15 +291,57 @@ describe('mobile automation host contracts', () => {
       reuseSession: true
     })
   })
-  it('refuses missing or duplicate owners instead of attributing rows to this host', () => {
-    const automations = [savedAutomation()]
-    const item = { automationId: automations[0]!.id, selector: { kind: 'self' } }
-    expect(automationListSchema.safeParse({ automations }).success).toBe(false)
-    expect(automationListSchema.safeParse({ automations, items: [] }).success).toBe(false)
-    expect(automationListSchema.safeParse({ automations, items: [item, item] }).success).toBe(false)
+  it('keeps every row a newer host sends that this build can read, never the whole list', () => {
+    const row = (id: string, fields: Record<string, unknown> = {}) => ({
+      ...savedAutomation(),
+      id,
+      ...fields
+    })
+    const owner = (automationId: string, selector: unknown = { kind: 'self' }) => ({
+      automationId,
+      selector
+    })
+    const rows = automationListSchema.parse({
+      automations: [
+        row('known'),
+        row('newer-agent', { agentId: 'future-agent' }),
+        row('newer-surface', { surface: 'canvas' }),
+        row('newer-owner'),
+        row('duplicate-owner'),
+        row('missing-owner')
+      ],
+      items: [
+        owner('known'),
+        owner('newer-agent'),
+        owner('newer-surface'),
+        owner('newer-owner', { kind: 'cloud' }),
+        owner('duplicate-owner'),
+        owner('duplicate-owner')
+      ]
+    })
+    expect(rows.map((entry) => entry.automation.id)).toEqual(['known', 'newer-agent'])
+    expect(rows[0]?.automation.futureField).toBe('keep me')
+    expect(mobileTuiAgentLabel(rows[1]!.automation.agentId)).toBe('future-agent')
+    expect(automationListSchema.safeParse({ automations: [] }).success).toBe(false)
+    const newerHost = {
+      ...savedRun('newer-host'),
+      runContext: { hostId: 'cloud:1', repoId: 'r', path: '/r' }
+    }
     expect(
-      automationListSchema.parse({ automations, items: [item] })[0]?.automation.futureField
-    ).toBe('keep me')
+      runsPageSchema.parse({ runs: [savedRun(), newerHost] }).runs.map((run) => run.id)
+    ).toEqual(['run-old'])
+  })
+
+  it('edits a newer agent automation without a phone-side argument check or rewriting its agent', () => {
+    const saved = { ...savedAutomation(), agentId: 'future-agent', reuseSession: false }
+    const original = newAutomationDraft(saved)
+    const revised = { ...original, name: 'Renamed', extraAgentArgs: '--future-flag' }
+    expect(validateAutomationDraft(revised, 2, saved)).toBeNull()
+    const params = automationUpdateParams(saved.id, revised, original, automationTargets())
+    expect(AutomationUpdate.parse(params).updates).toEqual({
+      name: 'Renamed',
+      extraAgentArgs: '--future-flag'
+    })
   })
 })
 
