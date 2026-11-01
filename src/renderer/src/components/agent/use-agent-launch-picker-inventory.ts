@@ -58,6 +58,7 @@ export function useAgentLaunchPickerInventory(
         executionHostId,
         model.state === 'settled' ? model.rows : [],
         model.state === 'settled' ? model.detection.detectedIds : [],
+        model.state === 'settled' ? model.defaultTuiAgent : undefined,
         settings && {
           agentDefaultArgs: settings.agentDefaultArgs,
           agentLaunchChoices: settings.agentLaunchChoices,
