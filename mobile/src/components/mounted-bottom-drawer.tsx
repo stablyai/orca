@@ -47,6 +47,8 @@ export type MountedBottomDrawerProps = {
   fillAvailable?: boolean
   // Pinned-under sheet preserves size but must not receive touches, backdrop or keyboard lift.
   interactive?: boolean
+  /** False holds the sheet up while it works: Back, the backdrop and drags leave it in place. */
+  dismissible?: boolean
   zIndex?: number
   /** When this changes to a non-null value the content scrolls back to its top, e.g. a new page. */
   scrollResetKey?: string | null
@@ -61,6 +63,7 @@ export function MountedBottomDrawer({
   contentScrollable = true,
   fillAvailable = false,
   interactive = true,
+  dismissible = true,
   zIndex = 1000,
   scrollResetKey = null
 }: MountedBottomDrawerProps) {
@@ -176,12 +179,12 @@ export function MountedBottomDrawer({
 
   const dismiss = useCallback(() => {
     // Never restart hide mid-close: cancellation prevents onHidden and leaves invisible Modal swallowing taps (Android Back).
-    if (!visible) {
+    if (!visible || !dismissible) {
       return
     }
     Keyboard.dismiss()
     hideDrawer(motion, onClose)
-  }, [onClose, motion, visible])
+  }, [dismissible, onClose, motion, visible])
 
   // Top interactive sheet claims native/shell Back so Android closes drawer rather than screen; pinned-under sheet never owns key.
   useBackClaim(
@@ -195,7 +198,7 @@ export function MountedBottomDrawer({
   useBottomDrawerModalHostBackClaim(visible && interactive ? dismiss : null)
 
   const { scrollHandler, scrollGesture, handlePanGesture, contentPanGesture } = useBottomDrawerDrag(
-    { ...motion, sheetHeight, screenHeight, scrollOffsetY, onDismiss: onClose }
+    { ...motion, sheetHeight, screenHeight, scrollOffsetY, onDismiss: onClose, dismissible }
   )
 
   const drawerStyle = useAnimatedStyle(() => {

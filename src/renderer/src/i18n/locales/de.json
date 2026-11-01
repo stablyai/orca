@@ -844,6 +844,8 @@
       "claudeRemoveFolder": "Orca löscht den Claude-Ordner dieses Kontos und dessen Anmeldung von diesem Computer. Der mit „Systemstandard“ geteilte Chat-Verlauf bleibt erhalten. Falls dieses Konto ausgewählt ist, verwendet der nächste Claude-Start „Systemstandard“."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Git-Vorgang läuft anderswo",
+      "remoteOperationInAnotherWorkspace": "In einem anderen Arbeitsbereich läuft ein Git-Vorgang, etwa Push, Pull oder erzwungener Push. Warte, bis er abgeschlossen ist, bevor du diese Aktion verwendest, damit sich die Vorgänge nicht überschneiden.",
       "actionModel": {
         "on": "Ein",
         "off": "Aus",
@@ -22964,12 +22966,14 @@
       "serveSimUnavailable": "serve-sim ist nicht verfügbar.",
       "serveSimNoEndpoints": "serve-sim hat keine Stream-Endpunkte zurückgegeben.",
       "serveSimEndpointUnreachable": "serve-sim wurde gestartet, aber der Stream-Endpunkt ist nicht erreichbar.",
+      "deviceHubInputBlocked": "Device Hub von Xcode hat die Eingabe für diesen Simulator übernommen, daher kommen Tippen und Texteingabe nicht an. Beende Device Hub und verbinde den Simulator erneut.",
       "androidSdkMissing": "Android SDK nicht gefunden. Android Studio installieren und ANDROID_HOME setzen.",
       "adbUnavailable": "adb ist nicht verfügbar.",
       "noAndroidDevices": "Keine Android-Geräte oder AVDs gefunden. Eines in Android Studio erstellen.",
       "androidDeviceNotRunning": "Android-Gerät „{{device}}“ läuft nicht. Zuerst starten.",
       "unknownDeviceOrAvd": "„{{device}}“ ist weder ein laufendes Gerät noch ein bekanntes AVD.",
       "avdBootTimeout": "AVD „{{avdName}}“ wurde nicht rechtzeitig vollständig gestartet.",
+      "avdExitedBeforeBoot": "AVD „{{avdName}}“ wurde beendet, bevor der Start abgeschlossen war: {{detail}}",
       "scrcpyDownloadFailed": "scrcpy-Server konnte nicht heruntergeladen werden: {{detail}}",
       "scrcpyServerInvalid": "Der heruntergeladene scrcpy-Server war ungültig oder unvollständig."
     },

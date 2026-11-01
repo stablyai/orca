@@ -3,12 +3,12 @@ import type { SshConnectionStatus } from '../../../src/shared/ssh-types'
 import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from './workspace-ssh-gate'
 import {
   detectedAgentIdsSchema,
-  repoBaseRefSearchSchema,
   repoSetupHooksSchema,
   repoSparsePresetListSchema,
   repoSparsePresetSaveSchema,
   sshConnectionStateSchema
 } from './workspace-source-reply-schema'
+import { repoBaseRefSearchSchema } from '../source-control/mobile-repo-base-ref-operations'
 
 const connected = {
   targetId: 'ssh-1',

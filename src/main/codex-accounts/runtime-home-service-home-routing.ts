@@ -246,12 +246,14 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   }
 
   // A skipped poll needs a distinct result: null routes the fetcher to system default (#STA-4422).
-  prepareForRateLimitFetch(target?: CodexAccountSelectionTarget): CodexRateLimitHomeResolution {
+  prepareForRateLimitFetch(
+    target?: CodexAccountSelectionTarget,
+    pinnedWslDistro?: string
+  ): CodexRateLimitHomeResolution {
     if (target?.runtime === 'wsl') {
-      const wslTarget = this.resolveWslDefaultTarget(target)
       return {
         kind: 'ready',
-        codexHomePath: this.getPreparedWslRateLimitHomePath(wslTarget)
+        codexHomePath: this.getPreparedWslRateLimitHomePath(target, pinnedWslDistro)
       }
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()

@@ -1567,44 +1567,19 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "Требуется действие",
-      "cancelled": "Отменено",
-      "checkDetails": "Сведения о проверке {{name}}",
-      "failed": "Ошибка",
       "failing": "С ошибкой: {{count}}",
-      "failingChecks_few": "{{count}} проверки с ошибками",
-      "failingChecks_many": "{{count}} проверок с ошибками",
-      "failingChecks_one": "{{count}} проверка с ошибками",
-      "failingChecks_other": "{{count}} проверки с ошибками",
-      "fix": "Исправить",
-      "fixFailing": "Исправить ошибки проверок с ИИ",
-      "inProgress": "Выполняется",
-      "inspectOrFix": "Изучите сведения или запустите исправление с ИИ.",
-      "loadDetailsFailed": "Не удалось загрузить сведения о проверке",
-      "neutral": "Нейтрально",
-      "neutralCount": "Нейтрально: {{count}}",
       "noChecks": "Нет проверок",
       "openOnWeb": "Открыть {{name}} в браузере",
       "passed": "Успешно: {{count}}",
-      "pending": "Ожидает",
-      "pendingCount": "В ожидании: {{count}}",
-      "queued": "В очереди",
-      "rerunFailing": "Перезапустить проверки с ошибками",
-      "skipped": "Пропущена",
-      "successful": "Успешно",
-      "timedOut": "Время ожидания истекло",
-      "title": "Проверки",
-      "unavailable": "Проверки недоступны"
+      "title": "Проверки"
     },
     "commentCard": {
       "daysAgo_few": "{{count}} дн. назад",
       "daysAgo_many": "{{count}} дн. назад",
       "daysAgo_one": "{{count}} дн. назад",
       "daysAgo_other": "{{count}} дн. назад",
-      "deleteComment": "Удалить комментарий",
       "deleteConfirmMessage": "Комментарий на GitHub будет удалён безвозвратно.",
       "deleteConfirmTitle": "Удалить комментарий?",
-      "editComment": "Изменить комментарий",
       "editPlaceholder": "Измените комментарий…",
       "hoursAgo_few": "{{count}} ч назад",
       "hoursAgo_many": "{{count}} ч назад",
@@ -1619,39 +1594,21 @@
       "monthsAgo_many": "{{count}} мес. назад",
       "monthsAgo_one": "{{count}} мес. назад",
       "monthsAgo_other": "{{count}} мес. назад",
-      "openOnGitHub": "Открыть комментарий на GitHub",
       "reply": "Ответить",
-      "replyPlaceholder": "Напишите ответ…",
-      "replyToComment": "Ответить на комментарий",
       "resolve": "Закрыть",
-      "resolveThread": "Закрыть обсуждение",
-      "resolved": "обсуждение закрыто",
       "unresolve": "Открыть заново",
-      "unresolveThread": "Открыть обсуждение заново",
       "yearsAgo_few": "{{count}} года назад",
       "yearsAgo_many": "{{count}} лет назад",
       "yearsAgo_one": "{{count}} год назад",
       "yearsAgo_other": "{{count}} года назад"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "Добавить комментарий…",
-      "all": "Все",
-      "bots": "Боты",
       "comment": "Добавить комментарий",
-      "commentsLoadFailed": "Не удалось загрузить комментарии. Нажмите кнопку обновления, чтобы повторить попытку.",
       "description": "Описание",
       "descriptionLoadFailed": "Не удалось загрузить описание. Нажмите кнопку обновления, чтобы повторить попытку.",
-      "humans": "Люди",
-      "noBotComments": "Комментариев ботов нет.",
       "noComments": "Комментариев пока нет.",
       "noDescription": "Описание не добавлено.",
-      "noHumanComments": "Комментариев людей нет.",
-      "resolvedCommentCount": "Закрытый комментарий от {{author}} ({{count}})",
-      "resolvedCommentSingle": "Закрытый комментарий от {{author}}",
-      "resolvedThreadCount": "Закрытое обсуждение от {{author}} ({{count}})",
-      "resolvedThreadSingle": "Закрытое обсуждение от {{author}}",
       "showMore": "Показать ещё {{count}}",
-      "showMoreOf": "Показать ещё {{count}} из {{remaining}}",
       "title": "Комментарии"
     },
     "conflictingFilesSection": {
@@ -1682,27 +1639,14 @@
       "details": "Подробности"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "Переключить автослияние",
-      "autoMergeLabel": "Автослияние по готовности",
-      "autoMergeOff": "Выключено",
-      "autoMergeOn": "Включено",
-      "closeAccessibilityLabel": "Закрыть пул-реквест",
       "closeConfirmMessage": "Пул-реквест #{{number}} будет закрыт без слияния.",
       "closeConfirmTitle": "Закрыть пул-реквест?",
-      "markReadyAccessibilityLabel": "Отметить пул-реквест как готовый к проверке",
       "markReadyButton": "Передать на проверку",
-      "mergeAccessibilityLabel": "Слить пул-реквест",
-      "mergeButton": "Слить",
-      "mergeConfirmTitle": "Слить пул-реквест?",
-      "recheckAccessibilityLabel": "Повторно проверить статус слияния",
-      "recheckButton": "Проверить снова",
       "reopenAccessibilityLabel": "Открыть пул-реквест заново",
       "reopenButton": "Открыть заново",
       "reopenConfirmMessage": "Пул-реквест #{{number}} будет открыт заново.",
       "reopenConfirmTitle": "Открыть пул-реквест заново?",
-      "unlinkAccessibilityLabel": "Отвязать пул-реквест",
-      "unlinkButton": "Отвязать",
-      "unlinkFailed": "Не удалось отвязать пул-реквест."
+      "unlinkButton": "Отвязать"
     },
     "prActionsState": {
       "behindHint": "Обновите ветку перед слиянием",
@@ -1807,25 +1751,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "Ветка {{branch}} не связана с открытым PR.",
-      "branchRequired": "Переключитесь на ветку перед созданием пул-реквеста.",
-      "createFailed": "Не удалось создать пул-реквест.",
-      "createPr": "Создать PR",
-      "createPullRequest": "Создать пул-реквест",
       "currentBranchNotLinked": "Текущая ветка не связана с открытым PR.",
-      "linkExistingPr": "Связать с существующим PR",
       "linkExistingPullRequest": "Связать с существующим пул-реквестом",
       "linkedPrUnavailable": "Связанный PR #{{number}} недоступен",
-      "noOpenPullRequest": "Нет открытого пул-реквеста",
-      "refreshOrCreate": "Обновите данные, чтобы проверить ещё раз, или создайте новый PR для этой ветки.",
-      "refreshPullRequest": "Обновить пул-реквест",
-      "title": "Пул-реквест"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "Отменить изменение заголовка",
-      "editTitle": "Изменить заголовок пул-реквеста",
-      "openInBrowser": "Открыть пул-реквест #{{number}} в браузере",
-      "openOnWeb": "Открыть пул-реквест #{{number}} в браузере",
-      "saveTitle": "Сохранить заголовок"
+      "refreshOrCreate": "Обновите данные, чтобы проверить ещё раз, или создайте новый PR для этой ветки."
     },
     "prViewPanel": {
       "branchUnavailable": "Текущая ветка недоступна.",
@@ -1833,20 +1762,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Не удалось загрузить пользователей",
-      "noMatches": "Подходящие пользователи не найдены",
-      "removeReviewer": "Убрать {{login}} из рецензентов",
-      "requestReviewer": "Запросить проверку у {{login}}",
-      "searchPeople": "Поиск пользователей",
-      "title": "Рецензенты"
+      "noMatches": "Подходящие пользователи не найдены"
     },
     "reviewersSection": {
-      "addOrRemove": "Добавить или удалить рецензентов",
       "approved": "Одобрено",
       "changesRequested": "Запрошены изменения",
       "commented": "Оставлен комментарий",
       "dismissed": "Проверка отозвана",
-      "loadFailed": "Не удалось загрузить рецензентов. Нажмите кнопку обновления, чтобы повторить попытку.",
-      "loading": "Загрузка рецензентов…",
       "noReviewers": "Нет запросов на проверку",
       "pending": "Ожидает отправки",
       "removeReviewer": "Удалить {{login}}",
@@ -2562,8 +2484,7 @@
       "actionFailed": "Не удалось выполнить действие с комментарием"
     },
     "usePrTitleAction": {
-      "disconnected": "Нет подключения к компьютеру.",
-      "updateFailed": "Не удалось обновить заголовок."
+      "disconnected": "Нет подключения к компьютеру."
     },
     "useQuickCommands": {
       "loadFailed": "Не удалось загрузить быстрые команды",
@@ -3377,9 +3298,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "Не удалось сгенерировать сообщение коммита"
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "Перед созданием пул-реквеста переключитесь на ветку."
     },
     "useMobileGitRequests": {
       "actionFailed": "Не удалось выполнить операцию управления версиями",
