@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import type { ManagedRuntime, ManagedRuntimePin } from '../node-runtime/managed-runtime-release'
 import { probeAntigravityAcpServer } from './antigravity-acp-runtime-probe'
 
-// 1.4.3 materializes a built-in skill in the process working directory.
+// 1.4.2 through 1.4.5 are reported to write skills/system/run-workflow/SKILL.md into the chat's
+// workspace when a session starts; check a newer release in an empty folder before moving this pin.
 const VERSION = '1.4.1'
 const RELEASES = 'https://dl.google.com/agy-extensions/releases'
 const COMMAND = 'agy_acp_server.par'
