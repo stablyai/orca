@@ -9,7 +9,10 @@ import {
   startupAcquisitionRefusal
 } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { providerSpawnAbsent } from '../../provider-process/provider-executable-missing'
-import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
+import {
+  claudeSessionHasTurnWork,
+  settledClaudeTurnEndLeaf
+} from './claude-structured-resume-point'
 import { claudeHeldSends } from '../claude-command-lifecycle'
 import { claudeCloseReport, settleClaudeExitedSession } from './claude-structured-session-close'
 import {
@@ -49,7 +52,7 @@ export function observeClaudeSessionExit(
   // Run tree cleanup before recovery; an exit callback proves only root exit.
   const cleanup = session.connection.close().catch(() => false)
   const closePromise =
-    session.dispatchSequence === 0 && providerExitObserved(error)
+    claudeStartDied(session) && providerExitObserved(error)
       ? withTimeout(cleanup, 2_000, false)
       : cleanup
   const exit: ClaudeSessionExit = {
@@ -74,6 +77,12 @@ export function observeClaudeSessionExit(
     .catch(() => undefined)
 }
 
+/** Exited before initialize answered and before any turn; turns can settle without an Orca dispatch. */
+function claudeStartDied(session: ClaudeSession): boolean {
+  // Startup arms later refusals for the published session once initialize facts apply.
+  return session.initialization.proof.onRefusal === null && !claudeSessionHasTurnWork(session)
+}
+
 export function settleClaudeUnexpectedExit(
   lifecycle: ClaudeExitLifecycle,
   sessionId: string,
@@ -86,8 +95,8 @@ export function settleClaudeUnexpectedExit(
       settleClaudeExitedSession(exit.session)
       return
     }
-    // Without a dispatch, acquisition's saved cursor is still authoritative.
-    if (exit.session.dispatchSequence !== 0) {
+    // A dead start's host open is still waiting on this exit, and nothing advanced acquisition's cursor.
+    if (!claudeStartDied(exit.session)) {
       await persistClaudeSessionHandle(sessionId, exit.session, deps).catch((error: unknown) => {
         console.warn('[claude-resume-point] exit cursor was not persisted:', { sessionId, error })
       })
@@ -99,8 +108,9 @@ export function settleClaudeUnexpectedExit(
     exits.delete(sessionId)
     const report = claudeCloseReport(exit.connection, true, exit.error)
     lifecycle.settledExitErrors.set(sessionId, report ?? exit.error)
-    const startupFailure =
-      exit.session.dispatchSequence === 0 ? exit.connection.startupFailure?.() : undefined
+    const startupFailure = claudeSessionHasTurnWork(exit.session)
+      ? undefined
+      : exit.connection.startupFailure?.()
     const ended: ClaudeStructuredSessionEvent = {
       type: 'ended',
       sessionId,

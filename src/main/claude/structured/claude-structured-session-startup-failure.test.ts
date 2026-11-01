@@ -8,8 +8,11 @@ import { withObservedProviderExit } from '../../native-chat/agent-session-wire/s
 import {
   PROVIDER_SESSION_ID,
   adapterAtPublishFor,
+  adapterFor,
   fakeClaude,
-  identityFor
+  identityFor,
+  recordingJournalSink,
+  tick
 } from './claude-structured-session-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
@@ -108,6 +111,42 @@ it('retains a failed result before a stalled SDK transcript flush and never wait
   expect(retryableStructuredAgentSessionStart(error)).toBe(false)
   expect(persist).not.toHaveBeenCalled()
   expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
+  claude.dispose()
+  await adapter.closeAll()
+})
+
+it('treats a turn that settled without an Orca dispatch as past startup on exit', async () => {
+  const claude = fakeClaude()
+  const persistedHandles: unknown[] = []
+  const events: ClaudeStructuredSessionEvent[] = []
+  const adapter = adapterFor(claude, {}, events, persistedHandles)
+  await adapter.acquire({
+    identity: identityFor(),
+    fence: 7,
+    spawnToken: 'undispatched',
+    events: { ...recordingJournalSink(), written: async () => ({ ok: true }) }
+  })
+  const connection = claude.connections[0]
+  // No send ran, so the startup observer still holds a later failed result.
+  connection.startupFailure = () =>
+    Object.assign(new Error('claude reported a failed result during startup'), {
+      errorClass: 'error_result'
+    })
+  const frame = (message: Record<string, unknown>) =>
+    connection.handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
+  frame({
+    type: 'assistant',
+    uuid: 'undispatched-leaf',
+    message: { role: 'assistant', content: [{ type: 'text', text: 'answer' }] }
+  })
+  frame({ type: 'result' })
+  connection.handlers.onExit?.(withObservedProviderExit(new Error('exited')), { expected: false })
+  await tick()
+
+  expect(persistedHandles).toContainEqual(
+    expect.objectContaining({ leafUuid: 'undispatched-leaf' })
+  )
+  expect(events.at(-1)).toMatchObject({ type: 'ended', failure: { kind: 'providerExited' } })
   claude.dispose()
   await adapter.closeAll()
 })
