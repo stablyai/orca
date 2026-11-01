@@ -396,6 +396,7 @@ async function directVerdict(id: string, family: string, scenarios: readonly Rec
       throw run.thrown
     }
     const view = comparison(
+      input.scenarios,
       expected.recording,
       run.recording,
       scenarios,
