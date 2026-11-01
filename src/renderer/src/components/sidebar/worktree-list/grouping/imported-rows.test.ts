@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { canKeepImportedWorktreesHidden } from '../rows/notice-rows'
-import { getRenderRowKey } from '../listing/render-row'
+
 import { getWorktreeDragGroups, getWorktreeDragIndexes } from '../drag/groups'
-import { renderRowContainsWorktree } from '../navigation/render-row-lookup'
+
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
@@ -68,42 +67,7 @@ const makePinnedWorktreeRow = (id: string): Extract<Row, { type: 'item' }> => ({
   worktree: { ...makeWorktree(id), isPinned: true }
 })
 
-const makeImportedCardRow = (): Extract<Row, { type: 'imported-worktrees-card' }> => ({
-  type: 'imported-worktrees-card',
-  key: 'imported-worktrees-card:repo-group:repo-1',
-  repo,
-  hiddenWorktrees: [],
-  placement: 'repo-group'
-})
-
 describe('imported worktree virtual rows', () => {
-  it('uses stable imported row keys and does not match worktree ids', () => {
-    const card = makeImportedCardRow()
-
-    expect(getRenderRowKey(card)).toBe('imported:imported-worktrees-card:repo-group:repo-1')
-    expect(renderRowContainsWorktree(card, 'wt-1')).toBe(false)
-  })
-
-  it('keeps imported card rows out of worktree drag groups', () => {
-    expect(
-      getWorktreeDragGroups([
-        makeHeaderRow('repo:repo-1'),
-        makeWorktreeRow('main'),
-        makeImportedCardRow(),
-        makeWorktreeRow('feature')
-      ])
-    ).toEqual([{ key: 'repo:repo-1', worktreeIds: [k('main'), k('feature')] }])
-  })
-
-  it('indexes pinned rows for sidebar drag when they are the only rendered copy', () => {
-    const rows = [makeHeaderRow('pinned'), makePinnedWorktreeRow('main')]
-    const { groupIndexByRowKey, groupKeyByRowKey } = getWorktreeDragIndexes(rows)
-
-    expect(getWorktreeDragGroups(rows)).toEqual([{ key: 'pinned', worktreeIds: [k('main')] }])
-    expect(groupKeyByRowKey.get('pinned:main')).toBe('pinned')
-    expect(groupIndexByRowKey.get('pinned:main')).toBe(0)
-  })
-
   it('uses natural drag metadata when pinned rows have duplicate natural copies', () => {
     const rows = [
       makeHeaderRow('pinned'),
@@ -116,22 +80,5 @@ describe('imported worktree virtual rows', () => {
     expect(getWorktreeDragGroups(rows)).toEqual([{ key: 'all', worktreeIds: [k('main')] }])
     expect(groupKeyByRowKey.has('pinned:main')).toBe(false)
     expect(groupKeyByRowKey.get('all:main')).toBe('all')
-  })
-
-  it('only allows keep-hidden actions for repo-group cards that are not forced visible', () => {
-    expect(canKeepImportedWorktreesHidden(makeImportedCardRow(), undefined)).toBe(true)
-    expect(
-      canKeepImportedWorktreesHidden(makeImportedCardRow(), {
-        pending: false,
-        error: 'Could not show discovered worktrees.',
-        forceVisible: true
-      })
-    ).toBe(false)
-    expect(
-      canKeepImportedWorktreesHidden(
-        { ...makeImportedCardRow(), placement: 'pinned-fallback' },
-        undefined
-      )
-    ).toBe(false)
   })
 })

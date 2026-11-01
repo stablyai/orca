@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { AgentSessionCommandsResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionCommandsResult } from '../../../../shared/agent-session/agent-session-wire'
 import { startAgentSessionCommandMenuQuery } from '../../../../shared/agent-session-command-menu-query'
 import { getStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
 

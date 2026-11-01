@@ -3,7 +3,7 @@ import path from 'node:path'
 import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
-} from '../agent-session-resume'
+} from '../agent-session/lifecycle/agent-session-resume'
 import type { AgentHookEventPayload } from './listener-event'
 import { scanFileRegionsBackward } from './reverse-file-region-scan'
 import { TRANSCRIPT_CHUNK_BYTES } from './transcript-reader'

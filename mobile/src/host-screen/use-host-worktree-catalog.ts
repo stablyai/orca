@@ -51,6 +51,7 @@ export function useHostWorktreeCatalog(args: {
     syncViewSettingsFromDesktop
   } = args
   const {
+    catalogError,
     clientRef,
     fetchWorktreesInFlightRef,
     newWorktreeModalVisibleRef,
@@ -63,12 +64,20 @@ export function useHostWorktreeCatalog(args: {
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
-    worktreeCatalogRef
+    worktreeCatalogRef,
+    worktrees,
+    worktreesLoaded
   } = state
   // Keyed by client: a fetch still running on a replaced client must not skip the new one's.
   const serverFetchInFlightRef = useRef<RpcClient | null>(null)
   const firstPageRef = useRef<Worktree[] | null>(null)
   const serverRowSnapshotsRef = useRef<ServerRowSnapshots | null>(null)
+  // A first page only helps a never-loaded empty screen whose full read is not already failing.
+  const firstPageUseful = !worktreesLoaded && worktrees.length === 0 && catalogError === null
+  const firstPageUsefulRef = useRef(firstPageUseful)
+  useEffect(() => {
+    firstPageUsefulRef.current = firstPageUseful
+  }, [firstPageUseful])
 
   // Fetch server rows separately so a slow server cannot delay desktop rows.
   const fetchServerRows = useCallback(
@@ -83,13 +92,13 @@ export function useHostWorktreeCatalog(args: {
       }
       serverFetchInFlightRef.current = requestClient
       try {
-        // Only a desktop advertising server-row deltas accepts the snapshot fields; its params are strict.
-        const snapshots = hostCapabilities.includes(
+        const deltas = hostCapabilities.includes(
           MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY
         )
-          ? (serverRowSnapshotsRef.current ??= new ServerRowSnapshots())
-          : null
-        const fetched = await fetchServerWorkspaces(requestClient, snapshots)
+        if (serverRowSnapshotsRef.current?.deltas !== deltas) {
+          serverRowSnapshotsRef.current = new ServerRowSnapshots(deltas)
+        }
+        const fetched = await fetchServerWorkspaces(requestClient, serverRowSnapshotsRef.current)
         if (fetched && clientRef.current === requestClient) {
           setServerWorkspaces((previous) => applyServerWorkspaces(previous, fetched))
         }
@@ -125,7 +134,7 @@ export function useHostWorktreeCatalog(args: {
       void fetchServerRows(requestClient)
       // With nothing to show yet, draw the host's first rows while the full catalog arrives.
       let fullSettled = false
-      if (!worktreeCatalogRef.current.holdsRows(requestClient, requestHostId)) {
+      if (firstPageUsefulRef.current) {
         void readWorktreeFirstPage(requestClient)
           .then((rows) => {
             const current = clientRef.current === requestClient && hostId === requestHostId
@@ -160,6 +169,7 @@ export function useHostWorktreeCatalog(args: {
         }
         if (fetched.pending.admission.kind === 'invalid') {
           setCatalogError('invalid_response')
+          dropFirstPage()
         }
         // Even unchanged replies reassert host truth over optimistic local edits.
         const confirmed = worktreeCatalogRef.current.admit(fetched.pending)

@@ -1,6 +1,7 @@
 import type { RpcClient } from '../../transport/rpc-client'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from '../bridge-host'
 import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
+import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge-caps'
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import type { BridgeNativeVerb } from './bridge-native-verbs'
 import { MOBILE_WEB_SHELL_GRANTS } from '../page-route-policy'
@@ -302,4 +303,20 @@ export function createFakeBridgePortPair(
   options: Omit<BridgePortPairOptions<FakeRpcClient>, 'rpc'> & { rpc?: FakeRpcClient } = {}
 ): BridgePortPair<FakeRpcClient> {
   return createBridgePortPair({ ...options, rpc: options.rpc ?? createFakeRpcClient() })
+}
+
+// Send desktop calls until one is refused, by whichever side refuses first; resolves to how many were admitted.
+export async function fillFreeDesktopSlots(pair: BridgePortPair): Promise<number> {
+  for (let admitted = 0; admitted <= BRIDGE_MAX_PENDING_REQUESTS; admitted += 1) {
+    let refused = false
+    const pending = pair.client.sendRequest('worktree.list').catch(() => {
+      refused = true
+    })
+    await pair.flush()
+    if (refused) {
+      await pending
+      return admitted
+    }
+  }
+  return BRIDGE_MAX_PENDING_REQUESTS + 1
 }

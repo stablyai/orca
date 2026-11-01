@@ -3,7 +3,7 @@ import {
   AGENT_SESSION_FAILURE_COPY as COPY,
   type AgentSessionFailureCopyId,
   type AgentSessionFailureCopyValues
-} from '../../../../shared/agent-session-failure-copy'
+} from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 
 export const PROVIDER_RETRY_PIECES = {
   providerRateLimited: (values) =>

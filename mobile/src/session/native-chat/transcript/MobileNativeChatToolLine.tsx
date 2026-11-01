@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { MobileNativeChatOwnedScrollView } from '../../MobileNativeChatOwnedScrollView'
+import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { ChevronRight } from 'lucide-react-native'
 import {
   diffFromText,
@@ -26,7 +26,7 @@ import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { highlightMobileCode } from '../../mobile-file-syntax'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
-import { MobileNativeChatToolOutput } from '../../MobileNativeChatFullContent'
+import { MobileNativeChatToolOutput } from '../MobileNativeChatFullContent'
 import { MobileNativeChatToolInvocation } from './MobileNativeChatToolInvocation'
 import { useMobileNativeChatOpenedDetail } from '../visual/mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'

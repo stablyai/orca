@@ -10,7 +10,7 @@ import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButt
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { MobileNativeChatOwnedScrollView } from '../../MobileNativeChatOwnedScrollView'
+import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
 
 export function MobileNativeChatToolInvocation({

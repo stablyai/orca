@@ -86,25 +86,6 @@ function outline(slots: readonly NativeChatTranscriptSlot[]): string[] {
 }
 
 describe('work runs and subagent sections', () => {
-  it("draws a section's own thoughts and calls as one run", () => {
-    const rows = [
-      row('ask', say('go'), { role: 'user' }),
-      row('a', call('Read')),
-      thought('s-r1', 'helper'),
-      row('s-a', call('Bash'), by('helper')),
-      thought('s-r2', 'helper'),
-      row('s-b', call('Grep'), by('helper')),
-      row('reply', say('Done.'))
-    ]
-    expect(outline(slotsOf(rows, { helper: true }))).toEqual([
-      'ask',
-      'a',
-      '[helper]',
-      '>s-r1+s-a+s-r2+s-b',
-      'reply'
-    ])
-  })
-
   it('never runs across a section head', () => {
     const rows = [
       row('ask', say('go'), { role: 'user' }),

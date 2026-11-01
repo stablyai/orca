@@ -9,17 +9,9 @@ import type {
 } from './emulator-backend'
 import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
 import { AndroidSdkState } from '../android/android-sdk-state'
-import { parseWmSize, wmSizeArgs } from '../android/adb-devices'
 import { emuKillArgs } from '../android/avd-manager'
-import type { DeviceScreenSize } from '../android/android-input-mapping'
-import {
-  androidButton,
-  androidExec,
-  androidRotate,
-  androidSwipe,
-  androidTap,
-  androidTypeText
-} from '../android/android-input-commands'
+import { androidExec, androidRotate } from '../android/android-input-commands'
+import { AndroidDeviceInput } from '../android/android-device-input'
 import {
   execFileAndroidCommandRunner,
   type AndroidCommandRunner
@@ -83,8 +75,8 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   private readonly ensureJar: () => Promise<string>
   private readonly startStreamSession: StartAndroidStream
   private readonly streamMaxSize: number
-  private readonly screenSizes = new Map<string, DeviceScreenSize>()
   private readonly streams: AndroidStreamController
+  private readonly input: AndroidDeviceInput
 
   constructor(options: AndroidEmulatorBackendOptions = {}) {
     this.runner = options.runner ?? execFileAndroidCommandRunner
@@ -101,6 +93,12 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
       ensureJar: this.ensureJar,
       startStreamSession: this.startStreamSession,
       maxSize: this.streamMaxSize
+    })
+    this.input = new AndroidDeviceInput({
+      runner: this.runner,
+      sdk: () => this.requireSdk(),
+      resolveSerial: (deviceId) => this.resolveDeviceId(deviceId),
+      sleep: this.sleep
     })
   }
 
@@ -185,7 +183,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   async shutdownDevice(deviceId: string): Promise<void> {
     const sdk = this.requireSdk()
     const serial = await this.resolveDeviceId(deviceId)
-    this.screenSizes.delete(serial)
+    this.input.forgetScreenSize(serial)
     ensureAdbOk(await this.runner(sdk.adb, emuKillArgs(serial)), 'adb emulator shutdown')
   }
 
@@ -195,8 +193,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   }
 
   async tap(deviceId: string, x: number, y: number): Promise<void> {
-    const serial = await this.resolveDeviceId(deviceId)
-    await androidTap(this.runner, this.requireSdk(), serial, x, y, await this.getScreenSize(serial))
+    await this.input.tap(deviceId, x, y)
   }
 
   async gesture(
@@ -204,32 +201,20 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     points: EmulatorGesturePoint[],
     _wsUrl: string | null
   ): Promise<void> {
-    const serial = await this.resolveDeviceId(deviceId)
-    await androidSwipe(
-      this.runner,
-      this.requireSdk(),
-      serial,
-      points,
-      await this.getScreenSize(serial)
-    )
+    await this.input.gesture(deviceId, points)
   }
 
   async type(deviceId: string, text: string): Promise<void> {
-    await androidTypeText(
-      this.runner,
-      this.requireSdk(),
-      await this.resolveDeviceId(deviceId),
-      text
-    )
+    await this.input.type(deviceId, text)
   }
 
   async button(deviceId: string, name: string): Promise<void> {
-    await androidButton(this.runner, this.requireSdk(), await this.resolveDeviceId(deviceId), name)
+    await this.input.button(deviceId, name)
   }
 
   async rotate(deviceId: string, orientation: string): Promise<void> {
     const serial = await this.resolveDeviceId(deviceId)
-    this.screenSizes.delete(serial)
+    this.input.forgetScreenSize(serial)
     await androidRotate(this.runner, this.requireSdk(), serial, orientation)
   }
 
@@ -297,21 +282,6 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
       pollIntervalMs: this.pollIntervalMs,
       sleep: this.sleep
     })
-  }
-
-  private async getScreenSize(serial: string): Promise<DeviceScreenSize> {
-    const cached = this.screenSizes.get(serial)
-    if (cached) {
-      return cached
-    }
-    const sdk = this.requireSdk()
-    const result = await this.runner(sdk.adb, wmSizeArgs(serial))
-    const size = parseWmSize(result.stdout)
-    if (!size) {
-      throw new EmulatorError('emulator_error', `Could not read screen size for ${serial}.`)
-    }
-    this.screenSizes.set(serial, size)
-    return size
   }
 
   private requireSdk(): AndroidSdkPaths {

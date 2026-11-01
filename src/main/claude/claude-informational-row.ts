@@ -5,8 +5,8 @@ import {
   type AgentSessionHookOutcome
 } from '../../shared/agent-session-hook-outcome'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../shared/agent-session-turn-notice'
-import type { AgentJournalStatusItem } from '../../shared/agent-session-journal-types'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import type { AgentJournalStatusItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { claudeRecord, claudeText } from './structured/journal/claude-structured-item-translation'
 
 export const CLAUDE_INFORMATIONAL_FRAME_KIND = 'message:system:informational'
 

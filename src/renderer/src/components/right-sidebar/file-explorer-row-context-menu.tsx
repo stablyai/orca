@@ -36,6 +36,7 @@ import {
 } from '@/lib/reveal-in-file-manager'
 import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { OpenInContextSubmenu } from './open-in-context-submenu'
 import type { FileExplorerRowProps } from './FileExplorerRow'
 import {
   shouldShowCollapseFolderAction,
@@ -275,6 +276,7 @@ export function FileExplorerRowContextMenu({
           ) : null}
         </ContextMenuItem>
       )}
+      <OpenInContextSubmenu path={node.path} workspaceId={activeWorktreeId} owner={revealOwner} />
       <ContextMenuItem
         disabled={revealBlocked}
         onSelect={() => void revealInFileManager(node.path, revealOwner)}

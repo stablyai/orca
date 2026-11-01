@@ -2,9 +2,9 @@
 // Deferred writes resolve from current journal state, preserving other writers’ answers and Stops.
 // Each provider child gets a fresh assembler and generation.
 
-import type { AgentType } from '../../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import type { AgentType } from '../../../shared/agent-status-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { StructuredAgentSessionCommandRun } from '../agent-session-wire/structured-agent-session-adapter'
 import type { AgentSessionDeltaCoalescerDeps } from '../agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/structured-agent-session-event-sink'
