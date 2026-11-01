@@ -72,5 +72,5 @@ export function registerRepoHandlers(
   registerSparsePresetHandlers(mainWindow, store)
   registerRepoFolderPickerHandlers(mainWindow)
   registerRepoCloneHandlers(mainWindow, store)
-  registerBaseRefQueryHandlers(store)
+  registerBaseRefQueryHandlers(store, runtime)
 }
