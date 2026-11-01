@@ -28,6 +28,10 @@ import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
 import { normalizeMachineName } from '../../../shared/machine-name'
+import {
+  normalizeWindowTitleSeparator,
+  normalizeWindowTitleTemplate
+} from '../../../shared/window-title-format'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   addMobilePairingCustomAddress,
@@ -205,6 +209,14 @@ export function updateSettings(
   }
   if ('machineName' in updates) {
     sanitizedUpdates.machineName = normalizeMachineName(updates.machineName)
+  }
+  if ('windowTitleTemplate' in updates) {
+    sanitizedUpdates.windowTitleTemplate = normalizeWindowTitleTemplate(updates.windowTitleTemplate)
+  }
+  if ('windowTitleSeparator' in updates) {
+    sanitizedUpdates.windowTitleSeparator = normalizeWindowTitleSeparator(
+      updates.windowTitleSeparator
+    )
   }
   if ('mobilePairingCustomAddress' in updates) {
     sanitizedUpdates.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(

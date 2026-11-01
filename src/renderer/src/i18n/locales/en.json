@@ -701,6 +701,15 @@
           "remote": "remote",
           "gpu": "gpu"
         }
+      },
+      "windowTitle": {
+        "title": "Show project, branch, and session in window title",
+        "description": "Shows the active project, branch, and focused session in the window title so time trackers like ActivityWatch, Timing, WakaTime, and RescueTime can attribute your time. Screen recorders and apps with accessibility access can read window titles.",
+        "templateLabel": "Title format",
+        "templateHelp": "Tokens: ${project} ${branch} ${workspace} ${tab} ${agent} ${app} ${separator}. Empty values drop their separator.",
+        "preview": "Preview",
+        "reset": "Reset",
+        "separatorLabel": "Separator"
       }
     },
     "browser": {

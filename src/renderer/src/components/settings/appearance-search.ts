@@ -9,6 +9,7 @@ import { getStatusBarToggles } from './appearance-status-bar-search'
 import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
+import { getWindowTitleEntries } from './appearance-window-title-search'
 
 export {
   getMenuBarIconEntries,
@@ -300,6 +301,7 @@ export function getAppearancePaneSearchEntries(
     ...getLayoutEntries(),
     ...getTitlebarEntries(),
     ...getReduceVisualEffectsEntries(),
+    ...getWindowTitleEntries(),
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
     ...getAppIconEntries(),
