@@ -31,6 +31,8 @@ export function frameWithoutHostLine(facts: {
 
 function bridgeDiagnosticDetail(diagnostic: BridgeHostDiagnostic): string | undefined {
   switch (diagnostic.kind) {
+    case 'native-media-pick-refused':
+      return `source=${diagnostic.source} stage=${diagnostic.stage} reason=${diagnostic.reason}`
     case 'refused':
       return diagnostic.refusal
     case 'notify-refused':

@@ -2,6 +2,9 @@ import type { BridgeHostDiagnostic } from './bridge-host'
 
 // Deduplicate by kind except refused notify names/reasons and backlog stream ids; otherwise distinct faults and terminals hide each other.
 function diagnosticKey(diagnostic: BridgeHostDiagnostic): string {
+  if (diagnostic.kind === 'native-media-pick-refused') {
+    return `${diagnostic.kind}:${diagnostic.source}:${diagnostic.stage}:${diagnostic.reason}`
+  }
   if (diagnostic.kind === 'notify-refused' || diagnostic.kind === 'navigate-back-refused') {
     return `${diagnostic.kind}:${diagnostic.why}`
   }
@@ -22,6 +25,14 @@ export function createBridgeDiagnosticReporter(
     }
     reported.add(key)
     onReported?.(diagnostic)
+    if (diagnostic.kind === 'native-media-pick-refused') {
+      console.warn('[web-shell-bridge] a native media pick was refused', {
+        source: diagnostic.source,
+        stage: diagnostic.stage,
+        reason: diagnostic.reason
+      })
+      return
+    }
     if (diagnostic.kind === 'refused') {
       console.warn('[web-shell-bridge] refused a page frame', diagnostic.refusal)
       return
