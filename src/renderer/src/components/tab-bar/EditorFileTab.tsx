@@ -208,7 +208,6 @@ export default function EditorFileTab({
   )
 
   const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
-  const tabLabel = getEditorDisplayLabel(file)
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -338,7 +337,7 @@ export default function EditorFileTab({
               openRenameInput()
             }}
           >
-            {tabLabel}
+            {getEditorDisplayLabel(file)}
           </span>
         )}
         {isMissingFileMutation && !isRenaming && (
