@@ -371,7 +371,7 @@ export function MobileSourceControlPanel({
       {ready ? (
         <MobileSourceControlNextStepBar
           view={nextStep.view}
-          notice={nextStep.notice}
+          notice={nextStep.notice ?? prTab.unlinkError}
           agentNotice={nextStep.agentNotice}
           mergeConfirm={nextStep.mergeConfirm}
           composer={state}
