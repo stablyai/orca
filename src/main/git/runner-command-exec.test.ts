@@ -682,4 +682,17 @@ describe('translateWslOutputPaths', () => {
       })
     ).toBe('worktree C:\\Users\\me\\repo-feature\n')
   })
+
+  it('keeps drvfs worktrees of a repo inside the distro on the distro UNC path', async () => {
+    const output = await withPlatform('win32', async () =>
+      translateWslOutputPaths(
+        'worktree /home/me/repo\nworktree /mnt/c/Projects/repo-content\n',
+        '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
+      )
+    )
+    expect(output).toBe(
+      'worktree \\\\wsl.localhost\\Ubuntu\\home\\me\\repo\n' +
+        'worktree \\\\wsl.localhost\\Ubuntu\\mnt\\c\\Projects\\repo-content\n'
+    )
+  })
 })

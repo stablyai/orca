@@ -1,4 +1,4 @@
-import { isDrvfsLinuxPath, toWindowsWslUncPath } from '../../../shared/wsl-paths'
+import { toWindowsWslUncPath } from '../../../shared/wsl-paths'
 import { parseWslPath, toWindowsWslPath } from '../../wsl'
 
 /** Windows arguments need Linux spellings for WSL Git: UNC paths become native and drives map under /mnt. */
@@ -34,8 +34,10 @@ export function translateWslOutputPaths(
     return output
   }
 
-  // A repo saved under the distro's view of a drive keeps that spelling: its worktree ids use it.
-  const toWindows = wsl && isDrvfsLinuxPath(wsl.linuxPath) ? toWindowsWslUncPath : toWindowsWslPath
+  // Why: a repo saved under the distro's view, in the distro or on a drive, keeps its /mnt/<drive>
+  // worktrees there: worktree ids use that spelling, and their terminals, git and agent sessions stay
+  // in WSL. A drive repo routed through WSL git keeps drive paths.
+  const toWindows = wsl ? toWindowsWslUncPath : toWindowsWslPath
   return output.replace(/(?<=worktree )(\/.+)$/gm, (_match, linuxPath: string) =>
     toWindows(linuxPath, distro)
   )
