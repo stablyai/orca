@@ -1,5 +1,3 @@
-import { DISMISSED_SUBAGENTS_STORAGE_PREFIX } from '../storage/dismissed-subagents'
-
 /**
  * Which of the app's stored keys the page may read and write, and how much of each.
  *
@@ -48,6 +46,8 @@ export const PAGE_STORAGE_EXACT_KEYS = [
 export const NEGOTIATED_PAGE_STORAGE_KEYS = ['orca:terminalSplitLayout'] as const
 
 /** Prefixes added after pages stopped sharing one allowlist. Declared as the prefix, not each id. */
+const DISMISSED_SUBAGENTS_STORAGE_PREFIX = 'orca:dismissedSubagents:'
+
 export const NEGOTIATED_PAGE_STORAGE_PREFIXES = [DISMISSED_SUBAGENTS_STORAGE_PREFIX] as const
 
 function negotiatedPageStorageKey(key: string): boolean {
