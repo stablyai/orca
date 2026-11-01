@@ -42,6 +42,11 @@ import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
 )
+const DefaultAgentStatusSegment = lazyWithRetry(() =>
+  import('./DefaultAgentStatusSegment').then((module) => ({
+    default: module.DefaultAgentStatusSegment
+  }))
+)
 const ResourceUsageStatusSegment = lazyWithRetry(() =>
   import('./ResourceUsageStatusSegment').then((module) => ({
     default: module.ResourceUsageStatusSegment
@@ -302,6 +307,8 @@ export function StatusBarSurface({
           <NativeChatResumeStatusSegment iconOnly={segmentsIconOnly} />
           <UpdateStatusSegment compact={compact} iconOnly={segmentsIconOnly} />
           <React.Suspense fallback={null}>
+            {/* Why: always on (not statusBarItems) so switching default agent is one click, matching Settings > Agents without a dig through the pane. */}
+            <DefaultAgentStatusSegment iconOnly={segmentsIconOnly} />
             {petEnabled ? <PetStatusSegment /> : null}
             {showResourceUsage ? (
               <ResourceUsageStatusSegment compact={compact} iconOnly={segmentsIconOnly} />
