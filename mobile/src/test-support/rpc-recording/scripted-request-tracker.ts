@@ -35,7 +35,7 @@ export function createScriptedRequestTracker(owner: ScriptedRpcTransport) {
         if (child.allocation) {
           throw new Error('Actual unary allocation repeated')
         }
-        child.allocation = { id, ordinal: owner.nextWriteOrdinal() }
+        child.allocation = { id, ordinal: owner.internalOrdinal() }
       } catch (error) {
         owner.fault.report('actual unary allocation', error)
       }
@@ -49,7 +49,7 @@ export function createScriptedRequestTracker(owner: ScriptedRpcTransport) {
         if (child.wait) {
           throw new Error('Actual native connection wait repeated')
         }
-        child.wait = { ordinal: owner.nextWriteOrdinal(), startedAt: owner.now() }
+        child.wait = { ordinal: owner.internalOrdinal(), startedAt: owner.now() }
       } catch (error) {
         owner.fault.report('actual native wait entry', error)
       }
@@ -66,7 +66,7 @@ export function createScriptedRequestTracker(owner: ScriptedRpcTransport) {
           }
           child.wait.outcome = {
             status: 'fulfilled',
-            ordinal: owner.nextWriteOrdinal(),
+            ordinal: owner.internalOrdinal(),
             at: owner.now()
           }
         } catch (error) {
@@ -79,7 +79,7 @@ export function createScriptedRequestTracker(owner: ScriptedRpcTransport) {
           }
           child.wait.outcome = {
             status: 'rejected',
-            ordinal: owner.nextWriteOrdinal(),
+            ordinal: owner.internalOrdinal(),
             at: owner.now(),
             error: captureError(error)
           }

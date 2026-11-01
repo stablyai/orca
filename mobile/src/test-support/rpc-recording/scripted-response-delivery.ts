@@ -191,7 +191,7 @@ export function scriptedComplete(
   binding.completed = true
   if (owner.causality.isBridgeChild(binding.child)) {
     binding.child.completion = {
-      ordinal: owner.nextWriteOrdinal(),
+      ordinal: owner.internalOrdinal(),
       reply: captureValue(reply),
       resolved
     }
@@ -222,7 +222,7 @@ export function scriptedLateReply(
       throw new Error('Late reply unexpectedly resolved a live request')
     }
     ;(binding.child.lateReplies ??= []).push({
-      ordinal: owner.nextWriteOrdinal(),
+      ordinal: owner.internalOrdinal(),
       reply: captureValue(reply),
       resolved: false
     })

@@ -30,7 +30,7 @@ export function scriptedNativeRequest(
           child.afterArgs = captureArguments(args)
         }
         if (owner.causality.isBridgeChild(child) && state.status !== 'pending') {
-          child.terminalOrdinal = owner.nextWriteOrdinal()
+          child.terminalOrdinal = owner.internalOrdinal()
         }
       },
       (error) => owner.fault.report('native settlement', error)

@@ -57,6 +57,9 @@ export class ScriptedRpcTransport {
   stoppedGuard: { error: unknown; evidence: RecordedValue } | undefined
   readonly requests: AttemptObservation[] = []
   readonly payloads: { name: string; ordinal: number; json: string }[] = []
+  // Internal native/bridge observations count apart, so recorded request/payload/effect ordinals stay
+  // those of the requests, frames and effects alone.
+  readonly internalOrdinal: WriteOrdinal = createWriteOrdinal()
   readonly client: RpcClient
   readonly logical
   readonly wrapperCleanup: (() => void | Promise<void>)[] = []
@@ -91,7 +94,7 @@ export class ScriptedRpcTransport {
     onAcquired?: (transport: ScriptedRpcTransport) => void
   ) {
     this.fault = fault
-    this.causality = new RecordingCausality(fault, nextWriteOrdinal, now)
+    this.causality = new RecordingCausality(fault, this.internalOrdinal, now)
     onAcquired?.(this)
     const session = this.session()
     this.logical = createStableLogicalRpcClient(session, 'lan')
