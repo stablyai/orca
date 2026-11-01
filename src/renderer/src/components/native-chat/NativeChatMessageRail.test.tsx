@@ -63,14 +63,14 @@ const preview = (): HTMLElement | null =>
   document.querySelector<HTMLElement>('[data-slot="hover-card-content"]')
 
 describe('message rail interaction', () => {
-  it('previews only the hovered tick: its message and the reply to it', async () => {
+  it('previews only the hovered tick: only its human-authored message', async () => {
     render(<Rail />)
     fireEvent.pointerEnter(tick('Prompt 1'), { pointerType: 'mouse' })
     await waitFor(() => expect(preview()).not.toBeNull())
-    expect(preview()?.textContent).toBe('Prompt 1Reply 1')
+    expect(preview()?.textContent).toBe('Prompt 1')
 
     fireEvent.pointerEnter(tick('Prompt 0'), { pointerType: 'mouse' })
-    await waitFor(() => expect(preview()?.textContent).toBe('Prompt 0Reply 0'))
+    await waitFor(() => expect(preview()?.textContent).toBe('Prompt 0'))
   })
 
   it('previews the message alone while the agent has not replied', async () => {
@@ -109,11 +109,11 @@ describe('message rail interaction', () => {
     await user.tab()
     expect(document.activeElement).toBe(tick('Prompt 1'))
     await waitFor(() => expect(preview()).not.toBeNull())
-    expect(preview()?.textContent).toBe('Prompt 1Reply 1')
+    expect(preview()?.textContent).toBe('Prompt 1')
 
     await user.keyboard('{ArrowUp}')
     expect(document.activeElement).toBe(tick('Prompt 0'))
-    await waitFor(() => expect(preview()?.textContent).toBe('Prompt 0Reply 0'))
+    await waitFor(() => expect(preview()?.textContent).toBe('Prompt 0'))
     await user.keyboard('{End}{Enter}')
     expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: 'prompt-2' }))
 
@@ -134,7 +134,7 @@ describe('message rail interaction', () => {
     expect(document.activeElement).toBe(tick('Prompt 0'))
     await user.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(tick('Prompt 1'))
-    await waitFor(() => expect(preview()?.textContent).toBe('Prompt 1Reply 1'))
+    await waitFor(() => expect(preview()?.textContent).toBe('Prompt 1'))
     await user.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(tick('Prompt 2'))
   })

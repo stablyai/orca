@@ -1,3 +1,8 @@
+import { readAgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
+import {
+  ORCHESTRATION_NOTICE_SOURCE,
+  ORCHESTRATION_NOTICE_TEXT
+} from '../../../../shared/native-chat-orchestration-notice.test-fixture'
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS,
@@ -336,4 +341,45 @@ describe('outline preview truncation', () => {
     expect(truncateOutlinePreview(emoji, 3)).toBe('ab')
     expect(truncateOutlinePreview(emoji, 4)).toBe('ab\u{1F600}')
   })
+})
+
+it('retains only human authors in authoritative history and loaded rows, including future agent shapes', () => {
+  const newer = readAgentMessageSource({
+    kind: 'agent',
+    senders: [],
+    orchestration: { message: 'future' }
+  })
+  expect(newer?.kind).toBe('agent')
+  const journal = [
+    user(1, [{ type: 'text', text: ORCHESTRATION_NOTICE_TEXT }]),
+    row(2, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: ORCHESTRATION_NOTICE_TEXT }],
+      from: ORCHESTRATION_NOTICE_SOURCE
+    }),
+    row(3, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Substantive task' }],
+      from: { ...ORCHESTRATION_NOTICE_SOURCE, orchestration: null }
+    }),
+    row(4, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Future agent message' }],
+      from: newer
+    }),
+    user(5, [{ type: 'image-ref', path: '/tmp/human.png' }])
+  ]
+  expect(
+    projectAgentSessionConversationOutline(journal, []).map(({ itemId, sequence }) => ({
+      itemId,
+      sequence
+    }))
+  ).toEqual([
+    { itemId: 'item-1', sequence: 1 },
+    { itemId: 'item-5', sequence: 5 }
+  ])
+  expect(loadedRailItems(journal, []).map(({ id }) => id)).toEqual(['item-1', 'item-5'])
 })

@@ -1654,6 +1654,7 @@
         "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
         "orcaStopUnnamedServer": "the remote server",
         "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
+        "orchestrationMail": "Orchestration mail",
         "plan": "Plan",
         "stoppedBeforeStart": "Stopped manually"
       },

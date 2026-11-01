@@ -142,15 +142,15 @@ test.describe('Native chat message rail', () => {
       animations: 'disabled'
     })
 
-    // Hovering one tick previews that message and the reply to it, not the whole thread.
+    // Hovering a tick previews only the human prompt.
     const tick = rail.getByRole('button', { name: 'Question 5:', exact: false })
     await tick.hover()
     const preview = orcaPage.locator('[data-slot="hover-card-content"]')
     await expect(preview).toBeVisible({ timeout: 10_000 })
     await expect(preview).toContainText('Question 5:')
     await expect(preview).not.toContainText('Question 6:')
-    await expect(preview).toContainText('Answer for turn 5')
-    await expect(preview.locator('p')).toHaveCount(2)
+    await expect(preview).not.toContainText('Answer for turn 5')
+    await expect(preview.locator('p')).toHaveCount(1)
     await orcaPage.screenshot({
       path: path.join(SHOT_DIR, 'rail-02-preview.png'),
       animations: 'disabled'
