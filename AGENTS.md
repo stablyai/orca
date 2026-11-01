@@ -1,9 +1,12 @@
-# Useful Commands
 
-- **Validation**: Keep tests focused, including relevant existing consumer suites for changed behavior. Shared imports alone don’t justify broad suites. Code handoff also needs touched-file lint/format, appropriate TS/TSX project typecheck, and applicable CI gates—not just a passing test. Read-only reviews and docs-only edits need no code suites.
+
+# Useful Commands
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
 - **Test**: `pnpm test [path/to/file.test.ts] --maxWorkers=2`; incremental: `pnpm test:changed [path] --maxWorkers=2` ([details](.github/CONTRIBUTING.md#targeting-local-tests)). Separate rendered UI E2E checks need explicit, reproducible viewport/state.
 - **Lint/format**: Basic: `pnpm exec oxlint <files>`; full lint gate: `pnpm lint`; formatting: `pnpm exec oxfmt --check <files>` (fix: `--write`). Applicable gates include `pnpm check:code-quality:changed <base>` and `pnpm check:flaky-test-pattern-ratchet`.
+
+> [!IMPORTANT]
+> Always lint changed files before making/pushing-to PRs (so CI will never on it)
 
 Optional: `pnpm check:changed --maxWorkers=2`; if selection fans out excessively, use scoped checks and report limits. Use the PR base (default `origin/main`; `ORCA_CODE_QUALITY_BASE=<ref>` for stacks). `--base=HEAD` and dirty-only checks provide incremental evidence only.
 
