@@ -13,6 +13,9 @@ import {
 import { useFileExplorerOpenInApp } from './use-file-explorer-open-in-app'
 
 const openInExternalEditor = vi.fn()
+const openInOrca = vi.fn()
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 type OpenInChosenApp = ReturnType<typeof useFileExplorerOpenInApp>
 
@@ -24,7 +27,9 @@ function Harness({
   onReady: (open: OpenInChosenApp) => void
 }): null {
   const open = useFileExplorerOpenInApp('wt-1', owner)
-  useEffect(() => onReady(open), [open, onReady])
+  useEffect(() => {
+    onReady(open)
+  }, [open, onReady])
   return null
 }
 
@@ -55,6 +60,7 @@ function renderHook(owner: LocalPathOpenOwner): OpenInChosenApp {
 beforeEach(() => {
   openInExternalEditor.mockReset()
   openInExternalEditor.mockResolvedValue({ ok: true })
+  openInOrca.mockReset()
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: { shell: { openInExternalEditor } }
@@ -70,25 +76,41 @@ afterEach(() => {
 })
 
 describe('useFileExplorerOpenInApp', () => {
-  it('launches the chosen app once and takes the repeated click without relaunching', () => {
+  it('launches the chosen app once and takes the repeated click without relaunching', async () => {
     chooseApp('zed', 'app')
     const open = renderHook(LOCAL_EXECUTION_HOST_ID)
 
-    expect(open('/repo/a.ts')).toBe(true)
-    expect(open('/repo/a.ts', true)).toBe(true)
+    await act(async () => {
+      expect(open('/repo/a.ts', { repeated: false, openInOrca })).toBe(true)
+      expect(open('/repo/a.ts', { repeated: true, openInOrca })).toBe(true)
+    })
 
     expect(openInExternalEditor).toHaveBeenCalledTimes(1)
     expect(openInExternalEditor).toHaveBeenCalledWith(
       expect.objectContaining({ path: '/repo/a.ts', command: 'zed' })
     )
+    expect(openInOrca).not.toHaveBeenCalled()
+  })
+
+  it('opens the file in the Orca editor once when the launch fails', async () => {
+    chooseApp('zed', 'app')
+    openInExternalEditor.mockResolvedValue({ ok: false, reason: 'launch-failed' })
+    const open = renderHook(LOCAL_EXECUTION_HOST_ID)
+
+    await act(async () => {
+      expect(open('/repo/a.ts', { repeated: false, openInOrca })).toBe(true)
+      expect(open('/repo/a.ts', { repeated: true, openInOrca })).toBe(true)
+    })
+
+    expect(openInOrca).toHaveBeenCalledTimes(1)
   })
 
   it('leaves the file to the Orca editor when no app is chosen', () => {
     chooseApp('zed', null)
     const open = renderHook(LOCAL_EXECUTION_HOST_ID)
 
-    expect(open('/repo/a.ts')).toBe(false)
-    expect(open('/repo/a.ts', true)).toBe(false)
+    expect(open('/repo/a.ts', { repeated: false, openInOrca })).toBe(false)
+    expect(open('/repo/a.ts', { repeated: true, openInOrca })).toBe(false)
     expect(openInExternalEditor).not.toHaveBeenCalled()
   })
 
@@ -96,8 +118,8 @@ describe('useFileExplorerOpenInApp', () => {
     chooseApp('subl', 'app')
     const open = renderHook(getConnectionExecutionHostId('conn-1'))
 
-    expect(open('/repo/a.ts')).toBe(false)
-    expect(open('/repo/a.ts', true)).toBe(false)
+    expect(open('/repo/a.ts', { repeated: false, openInOrca })).toBe(false)
+    expect(open('/repo/a.ts', { repeated: true, openInOrca })).toBe(false)
     expect(openInExternalEditor).not.toHaveBeenCalled()
   })
 })

@@ -13,6 +13,7 @@ import {
 } from './file-explorer-operation-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import { fileExplorerNodeTabRelativePath } from './file-explorer-directory-listing'
+import type { ChosenAppClick } from './use-file-explorer-open-in-app'
 
 type UseFileExplorerHandlersParams = {
   activeWorktreeId: string | null
@@ -33,7 +34,7 @@ type UseFileExplorerHandlersParams = {
     }
   ) => void
   makePreviewFilePermanent: (filePath: string) => void
-  openFileInChosenApp?: (filePath: string, repeatedClick?: boolean) => boolean
+  openFileInChosenApp?: (filePath: string, click: ChosenAppClick) => boolean
   toggleDir: (worktreeId: string, dirPath: string) => void
   canToggleDirectories?: boolean
   loadDir: (
@@ -68,7 +69,7 @@ export async function activateFileExplorerNode(args: {
   activeWorktreeId: string | null
   runtimeEnvironmentId?: string | null
   openFile: (params: OpenFileParams, options?: OpenFileOptions) => void
-  openFileInChosenApp?: (filePath: string) => boolean
+  openFileInChosenApp?: (filePath: string, openInOrca: () => void) => boolean
   toggleDir: (worktreeId: string, dirPath: string) => void
   canToggleDirectories?: boolean
   loadDir: UseFileExplorerHandlersParams['loadDir']
@@ -140,27 +141,29 @@ export async function activateFileExplorerNode(args: {
     toast.error(getFileExplorerOwnerUnresolvedMessage())
     return
   }
-  if (openFileInChosenApp?.(node.path)) {
+  const openInOrca = (): void =>
+    openFile(
+      {
+        filePath: node.path,
+        // Outside-project links use user-named absolute paths so reopening after restart preserves authorization.
+        relativePath: escapesWorktree ? node.path : fileExplorerNodeTabRelativePath(node),
+        worktreeId: activeWorktreeId,
+        runtimeEnvironmentId: fileRuntimeEnvironmentId ?? undefined,
+        language: detectLanguage(node.name),
+        mode: 'edit'
+      },
+      {
+        preview: true,
+        // Hand focus to the editor even if rich-editor mounting finishes after the row takes browser focus.
+        focusEditor: true,
+        // Suppress runtime fallback for explicit local opens.
+        suppressActiveRuntimeFallback: fileRuntimeEnvironmentId === null
+      }
+    )
+  if (openFileInChosenApp?.(node.path, openInOrca)) {
     return
   }
-  openFile(
-    {
-      filePath: node.path,
-      // Outside-project links use user-named absolute paths so reopening after restart preserves authorization.
-      relativePath: escapesWorktree ? node.path : fileExplorerNodeTabRelativePath(node),
-      worktreeId: activeWorktreeId,
-      runtimeEnvironmentId: fileRuntimeEnvironmentId ?? undefined,
-      language: detectLanguage(node.name),
-      mode: 'edit'
-    },
-    {
-      preview: true,
-      // Hand focus to the editor even if rich-editor mounting finishes after the row takes browser focus.
-      focusEditor: true,
-      // Suppress runtime fallback for explicit local opens.
-      suppressActiveRuntimeFallback: fileRuntimeEnvironmentId === null
-    }
-  )
+  openInOrca()
 }
 
 export function useFileExplorerHandlers({
@@ -192,7 +195,8 @@ export function useFileExplorerHandlers({
         // Only a row click opens in the chosen app; "View File" and the keyboard keep the Orca editor.
         openFileInChosenApp:
           rowClick && openFileInChosenApp
-            ? (filePath: string) => openFileInChosenApp(filePath, rowClick.repeated)
+            ? (filePath: string, openInOrca: () => void) =>
+                openFileInChosenApp(filePath, { repeated: rowClick.repeated, openInOrca })
             : undefined,
         toggleDir,
         canToggleDirectories,

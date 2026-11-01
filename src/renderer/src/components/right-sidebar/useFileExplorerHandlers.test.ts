@@ -178,7 +178,7 @@ describe('activateFileExplorerNode', () => {
 
     async function activate(
       node: TreeNode,
-      openFileInChosenApp: (path: string) => boolean
+      openFileInChosenApp: (path: string, openInOrca: () => void) => boolean
     ): Promise<{ openFile: ReturnType<typeof vi.fn>; toggleDir: ReturnType<typeof vi.fn> }> {
       const openFile = vi.fn()
       const toggleDir = vi.fn()
@@ -207,8 +207,23 @@ describe('activateFileExplorerNode', () => {
 
       const { openFile } = await activate(fileNode, openFileInChosenApp)
 
-      expect(openFileInChosenApp).toHaveBeenCalledWith('/repo/main.ts')
+      expect(openFileInChosenApp).toHaveBeenCalledWith('/repo/main.ts', expect.any(Function))
       expect(openFile).not.toHaveBeenCalled()
+    })
+
+    it('gives the app a way to open the file in the Orca editor if its launch fails', async () => {
+      const openFileInChosenApp = vi.fn((_path: string, openInOrca: () => void) => {
+        openInOrca()
+        return true
+      })
+
+      const { openFile } = await activate(fileNode, openFileInChosenApp)
+
+      expect(openFile).toHaveBeenCalledTimes(1)
+      expect(openFile).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: '/repo/main.ts' }),
+        expect.anything()
+      )
     })
 
     it('opens the Orca editor when the app cannot take the file', async () => {
