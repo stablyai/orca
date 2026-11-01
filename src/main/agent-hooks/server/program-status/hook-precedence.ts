@@ -9,7 +9,8 @@ export const HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS = 2 * 60 * 1000
 export function programStatusHookYieldEndsAt(
   previous: EnrichedAgentHookEventPayload | undefined,
   payload: ParsedAgentStatusPayload,
-  programWorkingSince?: number
+  programWorkingSince?: number,
+  renewsProgramStatusLease?: true
 ): number | undefined {
   if (previous?.observation?.origin !== 'hook' || previous.providerSessionOnly === true) {
     return undefined
@@ -36,15 +37,36 @@ export function programStatusHookYieldEndsAt(
       ? undefined
       : Infinity
   }
-  // A question sends no hooks while open, so a `working` that began before it (e.g. re-sent by the
-  // lease renewal) proves nothing; a working transition after it keeps the silence fallback.
+  // A question sends no hooks while open, so a `working` that began before it proves nothing when it
+  // is only re-sent by the lease renewal (#32066). A fresh report of that same run (#37003) shows the
+  // program resumed — a declined Claude permission emits no hook — so the silence fallback may take
+  // the row once the hooks stay silent.
   if (
     (previous.payload.state === 'waiting' || previous.payload.state === 'blocked') &&
     payload.state === 'working' &&
     programWorkingSince !== undefined &&
-    programWorkingSince <= previous.receivedAt
+    programWorkingSince <= previous.receivedAt &&
+    renewsProgramStatusLease === true
   ) {
     return Infinity
   }
   return previous.receivedAt + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS
+}
+
+/** The ingest entry: only program-status reports yield to hook precedence, and the lease marker rides beside them. */
+export function programStatusReportYieldEndsAt(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  payload: ParsedAgentStatusPayload,
+  programWorkingSince: number | undefined,
+  event: { fromProgramStatus?: true; renewsProgramStatusLease?: true }
+): number | undefined {
+  if (event.fromProgramStatus !== true) {
+    return undefined
+  }
+  return programStatusHookYieldEndsAt(
+    previous,
+    payload,
+    programWorkingSince,
+    event.renewsProgramStatusLease
+  )
 }

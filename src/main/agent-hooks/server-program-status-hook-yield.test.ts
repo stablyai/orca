@@ -325,6 +325,54 @@ describe('OSC 7501 status beside hooks', () => {
     })
   })
 
+  describe('a Claude permission wait beside a program still reporting working (#37003)', () => {
+    // The reported Claude keeps OSC 7501 `working` across the permission dialog: the working run
+    // began before the PermissionRequest, and after the decline fresh reports keep arriving.
+    function claudeWorking(msg: string): void {
+      server.ingestProgramStatusFacet({
+        paneKey: PANE,
+        facet: { state: 'working', message: msg, observedAt: Date.now() }
+      })
+      programStatus({ state: 'working', agentType: 'claude', toolInput: msg })
+    }
+
+    async function claudePermissionRequest(): Promise<void> {
+      const response = await postHookEvent(
+        server,
+        buildBody({
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'Read',
+          tool_input: { file_path: '/etc/hosts' }
+        })
+      )
+      expect(response.status).toBe(204)
+    }
+
+    it('takes the row once hooks fall silent after fresh working reports resume', async () => {
+      claudeWorking('Fixing the parser')
+      await claudePermissionRequest()
+      expect(paneRow()).toMatchObject({ state: 'waiting', toolName: 'Read' })
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      vi.advanceTimersByTime(1_000)
+      // The prompt was declined; Claude resumed the turn and its OSC messages keep updating.
+      claudeWorking('Running the test suite')
+      expect(paneRow()?.state).toBe('waiting')
+      vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+      expect(paneRow()?.state).toBe('working')
+      expect(paneRow()?.toolName).toBeUndefined()
+    })
+
+    it('keeps the wait through the lease renewal of the pre-wait working run', async () => {
+      claudeWorking('Fixing the parser')
+      await claudePermissionRequest()
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      vi.advanceTimersByTime(10 * 60 * 1000)
+      programStatus({ state: 'working', agentType: 'claude' }, { renewsProgramStatusLease: true })
+      vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+      expect(paneRow()?.state).toBe('waiting')
+    })
+  })
+
   describe('hybrid: the program facet rides whichever producer owns the row', () => {
     const facet = {
       state: 'working' as const,
