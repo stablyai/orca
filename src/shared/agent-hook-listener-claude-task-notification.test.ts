@@ -351,6 +351,15 @@ describe('Claude owed task notifications outside the captures', () => {
       'done'
     ],
     [
+      'a launch hook arrives after an inventory dropped its shell',
+      [
+        { hook_event_name: 'Stop', background_tasks: [shell('b1')] },
+        { hook_event_name: 'Stop', background_tasks: [] },
+        launch('b1')
+      ],
+      'done'
+    ],
+    [
       'a new shell starts after a listed one ends',
       [
         { hook_event_name: 'Stop', background_tasks: [shell('b1')] },

@@ -15,12 +15,18 @@ export function updateClaudeRunningNonAgentTask(
   } else {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   }
-  // Why: ids are unique per launch, so ended can outlive inventories, complete or not.
+  const previous = state.claudeRunningNonAgentTaskIdsByPaneKey.get(paneKey)
+  const running = inventory.allRunningNonAgentTasksListed
+    ? new Set(inventory.runningNonAgentTaskIds)
+    : undefined
+  // Why: ids are unique per launch, so ended outlives inventories; one a complete inventory drops has ended too.
+  const dropped = running ? [...(previous?.running ?? [])].filter((id) => !running.has(id)) : []
   state.claudeRunningNonAgentTaskIdsByPaneKey.set(paneKey, {
-    running: inventory.allRunningNonAgentTasksListed
-      ? new Set(inventory.runningNonAgentTaskIds)
-      : undefined,
-    ended: state.claudeRunningNonAgentTaskIdsByPaneKey.get(paneKey)?.ended ?? new Set()
+    running,
+    ended:
+      dropped.length > 0
+        ? new Set([...(previous?.ended ?? []), ...dropped])
+        : (previous?.ended ?? new Set())
   })
 }
 
