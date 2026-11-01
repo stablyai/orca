@@ -19,7 +19,7 @@ import { shutdownManagedSimulatorIfNoPane } from '@/lib/simulator-pane-shutdown-
 import { buildPrelaunchedEmulatorSessionState } from './emulator-prelaunched-session'
 import { useEmulatorPaneManualLaunchEvents } from './use-emulator-pane-manual-launch-events'
 import { buildEmulatorPaneSessionView } from './emulator-pane-session-view'
-import { resolveEmulatorAttachTarget } from './emulator-attach-target'
+import { emulatorAttachDevice, resolveEmulatorAttachTarget } from './emulator-attach-target'
 import { useEmulatorPaneLifecycle } from './use-emulator-pane-lifecycle'
 import { useEmulatorPaneShutdown } from './use-emulator-pane-shutdown'
 import {
@@ -161,7 +161,10 @@ export function useEmulatorPaneSession({
   )
 
   // Unlike iOS MJPEG, a dead Android stream never reconnects itself; show it disconnected so Connect restarts it.
-  const markStreamLost = useCallback(() => setSession((s) => s && { ...s, attached: false }), [])
+  const markStreamLost = useCallback(() => {
+    liveTargetRef.current = null
+    setSession((s) => s && { ...s, attached: false })
+  }, [])
 
   const attach = useCallback(
     async (deviceTarget?: string) => {
@@ -202,7 +205,7 @@ export function useEmulatorPaneSession({
           resetVisualOrientation()
         }
         const res = (await callRuntimeRpc({ kind: 'local' }, 'emulator.attach', {
-          device: target,
+          device: emulatorAttachDevice(list, target),
           worktree: worktreeId,
           focus: false
         })) as { attached?: boolean; info?: EmulatorPaneSession['info'] }
@@ -297,13 +300,11 @@ export function useEmulatorPaneSession({
     devices,
     selectedUdid,
     setSelectedUdid,
-    session,
     loading,
     error,
     attach,
     markStreamLost,
     shutdown,
-    refreshDevices,
     sendTap,
     sendButton,
     sendGesture,
@@ -313,7 +314,6 @@ export function useEmulatorPaneSession({
     previewUrl: view.previewUrl,
     wsUrl: view.wsUrl,
     streamKey: streamKey ?? undefined,
-    isLive: view.isLive,
-    selectedDevice: view.selectedDevice
+    isLive: view.isLive
   }
 }
