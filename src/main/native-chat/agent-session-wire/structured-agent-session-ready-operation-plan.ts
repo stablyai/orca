@@ -1,4 +1,4 @@
-import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionMutationResult } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionDeliveryPlace } from './structured-agent-session-delivery-order'
 import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'

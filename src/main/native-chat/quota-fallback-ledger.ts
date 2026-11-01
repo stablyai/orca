@@ -123,4 +123,18 @@ export class QuotaFallbackLedger {
       entry.status = status
     })
   }
+
+  release(operationId: string): void {
+    const key = createHash('sha256').update(operationId).digest('hex')
+    this.transaction((state) => {
+      const entry = state[key]
+      if (!entry) {
+        return
+      }
+      if (entry.status !== 'claimed') {
+        throw new Error('Cannot release a dispatched fallback operation')
+      }
+      delete state[key]
+    })
+  }
 }

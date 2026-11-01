@@ -63,8 +63,14 @@ export function createNativeQuotaLease(context: () => NativeQuotaLeaseContext) {
         ) {
           return null
         }
+        if (!ctx.deps.store.getConversation(cut.sessionId)) {
+          return null
+        }
         await ctx.deps.assertNoTerminalWriter?.(record)
-        if (!allowed(cut.sessionId, cut.turnItemId)) {
+        if (
+          !allowed(cut.sessionId, cut.turnItemId) ||
+          !ctx.deps.store.getConversation(cut.sessionId)
+        ) {
           return null
         }
         reserve()
@@ -94,7 +100,13 @@ export function createNativeQuotaLease(context: () => NativeQuotaLeaseContext) {
   }
 }
 
-export function nativeQuotaLeaseForHost(host: StructuredAgentSessionHost) {
+export function nativeQuotaLeaseForHost(
+  host: StructuredAgentSessionHost,
+  delivery: {
+    childWorkIncomplete: (sessionId: string) => boolean
+    childWorkOpen: (sessionId: string) => boolean
+  }
+) {
   return createNativeQuotaLease(() => {
     const ports = host.collaboratorsForTests()
     return {
@@ -102,8 +114,7 @@ export function nativeQuotaLeaseForHost(host: StructuredAgentSessionHost) {
       sessions: ports.sessions,
       serialize: ports.serialize,
       work: host.currentWork,
-      childrenPending: (id) =>
-        ports.clientDelivery.childWorkIncomplete(id) || ports.clientDelivery.childWorkOpen(id),
+      childrenPending: (id) => delivery.childWorkIncomplete(id) || delivery.childWorkOpen(id),
       stop: (id) => ports.lifetime.stopAgent(id, { cause: 'evict', resting: true }),
       wake: (id) => ports.conversationDelivery.loop.wake(id)
     }

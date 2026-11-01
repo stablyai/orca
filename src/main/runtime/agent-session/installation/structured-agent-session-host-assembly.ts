@@ -91,7 +91,12 @@ export async function installOnJournal(
     resolveWorkspacePath: deps.resolveWorkspacePath,
     logger: deps.logger,
     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
-    ...(deps.quotaFallback?.enabled ? { onConfirmedQuotaCut: quotaFallback.onCut } : {}),
+    ...(deps.quotaFallback?.enabled
+      ? {
+          onConfirmedQuotaCut: quotaFallback.onCut,
+          quotaFallbackShouldInspect: quotaFallback.shouldInspect
+        }
+      : {}),
     quotaFallbackSendAllowed: quotaFallback.sendAllowed,
     quotaFallbackDeliveryAllowed: quotaFallback.deliveryAllowed,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),

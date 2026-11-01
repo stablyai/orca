@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
-import { NativeQuotaContinuationController } from './quota-fallback-native-controller'
+import {
+  HELD_QUOTA_CUT_RETRY_INTERVAL_MS,
+  NativeQuotaContinuationController
+} from './quota-fallback-native-controller'
 import type { NativeQuotaFallbackConfig } from './quota-fallback-native-config'
 import { confirmedQuotaCut } from './quota-fallback-journal-cut'
 import {
@@ -161,10 +164,17 @@ it('rechecks expiry and personal Stop after asynchronous secret retrieval', asyn
 it('requires an enforced budget and exact account binding', async () => {
   const cut = await quotaCut()
   const verify = config.verify
-  config.verify = async (input) => ({ ...(await verify(input))!, billingProof: null })
+  config.verify = vi.fn<NativeQuotaFallbackConfig['verify']>(async (input) => ({
+    ...(await verify(input))!,
+    billingProof: null
+  }))
   await controller.onCut(cut)
   expect(rig.dispatch).not.toHaveBeenCalled()
+  expect(config.verify).toHaveBeenCalledTimes(1)
   config.verify = verify
+  await controller.onCut(cut)
+  expect(rig.dispatch).not.toHaveBeenCalled()
+  now += HELD_QUOTA_CUT_RETRY_INTERVAL_MS
   await controller.onCut(cut)
   config.verify = async (input) => ({ ...(await verify(input))!, credentialRef: 'other-key' })
   await expect(controller.credentials(SESSION)).rejects.toThrow('cap')
@@ -288,4 +298,65 @@ it('rejects a cap that expires while fetching the secret even when the credit re
     return 'fake-key'
   })
   await expect(controller.credentials(SESSION)).rejects.toThrow('credential unavailable')
+})
+
+it('throttles held quota cut re-verification across idle journal publications until the retry window elapses', async () => {
+  rig.host.deps.onConfirmedQuotaCut = controller.onCut
+  rig.host.deps.quotaFallbackShouldInspect = controller.shouldInspect
+  const baseVerify = config.verify
+  let allowProof = false
+  const verifySpy = vi.fn<NativeQuotaFallbackConfig['verify']>(async (input) => {
+    const value = (await baseVerify(input))!
+    return allowProof ? value : { ...value, billingProof: null }
+  })
+  config.verify = verifySpy
+  await quotaCut()
+  await eventually(() => {
+    expect(verifySpy).toHaveBeenCalledTimes(1)
+    expect(config.report).toHaveBeenCalledTimes(1)
+  })
+  expect(config.report).toHaveBeenCalledWith(SESSION, 'noVerifiedCreditCap')
+
+  rig.host.publishWorkChanged(SESSION)
+  rig.host.publishWorkChanged(SESSION)
+  await Promise.resolve()
+  expect(verifySpy).toHaveBeenCalledTimes(1)
+  expect(config.report).toHaveBeenCalledTimes(1)
+
+  allowProof = true
+  now += HELD_QUOTA_CUT_RETRY_INTERVAL_MS
+  rig.host.publishWorkChanged(SESSION)
+  await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))
+  expect(verifySpy).toHaveBeenCalledTimes(2)
+  expect(config.report).toHaveBeenCalledWith(SESSION, 'submitted')
+})
+
+it('releases pre-dispatch reservation failures without locking the session, while keeping post-dispatch failures unknown', async () => {
+  const cut = await quotaCut()
+  const originalReserve = rig.host.quotaContinuation.reserve
+  rig.host.quotaContinuation.reserve = async (targetCut, reserve) => {
+    const fence = await originalReserve(targetCut, reserve)
+    controller.dispose()
+    return fence
+  }
+  await controller.onCut(cut)
+  expect(config.report).not.toHaveBeenCalledWith(SESSION, 'unknown')
+
+  rig.host.quotaContinuation.reserve = originalReserve
+  controller = makeController()
+  rig.host.deps.quotaFallbackSendAllowed = controller.sendAllowed
+  rig.host.deps.quotaFallbackDeliveryAllowed = controller.deliveryAllowed
+  expect(controller.sendAllowed(SESSION, 'user-op', 'client')).toBe(true)
+
+  const originalSend = rig.host.send
+  rig.host.send = async () => {
+    throw new Error('simulated post-dispatch transport failure')
+  }
+  try {
+    await controller.onCut(cut)
+  } finally {
+    rig.host.send = originalSend
+  }
+  expect(config.report).toHaveBeenCalledWith(SESSION, 'unknown')
+  expect(controller.sendAllowed(SESSION, 'user-op', 'client')).toBe(false)
 })

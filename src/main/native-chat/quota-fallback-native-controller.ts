@@ -1,20 +1,27 @@
-import { readVerifiedQuotaBilling } from './quota-fallback-billing-proof'
-import { reportQuotaOutcome } from './quota-fallback-native-config'
-import type { NativeQuotaFallbackConfig, NativeQuotaHost } from './quota-fallback-native-config'
+import {
+  buildQuotaContinuationSendMutation,
+  isQuotaContinuationSubmissionSettled,
+  prepareQuotaContinuationReservation,
+  reportQuotaOutcome,
+  type NativeQuotaFallbackConfig,
+  type NativeQuotaHost
+} from './quota-fallback-native-config'
 import { verifyNativeQuotaCredential } from './quota-fallback-native-credential'
-import { createHash } from 'node:crypto'
 import { join } from 'node:path'
-import { structuredAgentSessionMessageSendMutation } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { latestNativeChatTurnSinceRequest } from '../../shared/native-chat/native-chat-orca-stop-cut'
-import { decideQuotaFallback } from './quota-fallback-policy'
+import type { AgentJournalCursor } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { QuotaFallbackLedger } from './quota-fallback-ledger'
 import {
   NativeQuotaReservationStore,
   type NativeQuotaReservation
 } from './quota-fallback-native-store'
 import type { NativeQuotaApiCredential } from './quota-fallback-native-auth'
-import type { ConfirmedQuotaCut } from './quota-fallback-journal-cut'
+import {
+  HELD_QUOTA_CUT_RETRY_INTERVAL_MS,
+  HeldQuotaCutRetryTracker,
+  type ConfirmedQuotaCut
+} from './quota-fallback-journal-cut'
 
+export { HELD_QUOTA_CUT_RETRY_INTERVAL_MS }
 export const QUOTA_CONTINUATION_CALLER = 'trusted-local:quota-fallback'
 
 export class NativeQuotaContinuationController {
@@ -25,6 +32,7 @@ export class NativeQuotaContinuationController {
   private readonly active = new Set<string>()
   private readonly observing = new Set<string>()
   private readonly subscriptions = new Map<string, () => void>()
+  private readonly heldCuts: HeldQuotaCutRetryTracker
   constructor(
     private readonly deps: {
       stateDirectory: string
@@ -37,6 +45,10 @@ export class NativeQuotaContinuationController {
     const directory = join(deps.stateDirectory, 'quota-fallback')
     this.reservations = new NativeQuotaReservationStore(directory)
     this.ledger = new QuotaFallbackLedger(directory)
+    this.heldCuts = new HeldQuotaCutRetryTracker(
+      () => this.now(),
+      () => this.deps.config?.heldRetryIntervalMs
+    )
   }
   private now(): number {
     return (this.deps.now ?? Date.now)()
@@ -44,6 +56,25 @@ export class NativeQuotaContinuationController {
   private report(sessionId: string, outcome: string): void {
     reportQuotaOutcome(this.deps.config, sessionId, outcome)
   }
+  private async releasePreDispatch(
+    sessionId: string,
+    reservation: NativeQuotaReservation
+  ): Promise<void> {
+    this.reservations.release(sessionId, reservation.operationId)
+    this.ledger.release(reservation.claimId)
+    if (!this.disposed) {
+      await this.deps
+        .host()
+        ?.quotaContinuation.finish(sessionId, () => {})
+        .catch(() => {})
+    }
+  }
+  readonly shouldInspect = (sessionId: string, cursor: AgentJournalCursor): boolean =>
+    !this.disposed &&
+    Boolean(this.deps.config?.enabled) &&
+    !this.preparing.has(sessionId) &&
+    !this.reservations.read(sessionId) &&
+    this.heldCuts.shouldInspect(sessionId, cursor)
   readonly restoreOpenaiSubscription = (sessionId: string): boolean =>
     this.reservations.completedOpenai(sessionId)
   readonly sendAllowed = (sessionId: string, operationId: string, caller: string): boolean => {
@@ -67,15 +98,18 @@ export class NativeQuotaContinuationController {
         entry.phase === 'dispatching')
     )
   }
-  readonly onCut = async (cut: ConfirmedQuotaCut): Promise<void> => {
+  readonly onCut = async (cut: ConfirmedQuotaCut, cursor?: AgentJournalCursor): Promise<void> => {
+    const config = this.deps.config
     if (
       this.disposed ||
-      !this.deps.config?.enabled ||
+      !config?.enabled ||
       this.preparing.has(cut.sessionId) ||
-      this.reservations.read(cut.sessionId)
+      this.reservations.read(cut.sessionId) ||
+      this.heldCuts.isHeld(cut.sessionId, cut.turnItemId, cursor)
     ) {
       return
     }
+    let dispatchAttempted = false
     this.preparing.add(cut.sessionId)
     try {
       const host = this.deps.host()
@@ -83,112 +117,70 @@ export class NativeQuotaContinuationController {
       if (!host || !record || (record.provider !== 'claude' && record.provider !== 'codex')) {
         return
       }
-      const verified = await readVerifiedQuotaBilling(this.deps.config, { record, cut }, () =>
-        this.now()
-      )
-      if (this.disposed) {
-        return
-      }
-      if (!verified || !verified.billingProof) {
-        this.report(cut.sessionId, 'noVerifiedCreditCap')
-        return
-      }
-      if (
-        verified.candidates.some(
-          (candidate) => candidate.route === 'antigravity-opus' && candidate.available
-        )
-      ) {
-        this.report(cut.sessionId, 'antigravityAdapterUnavailable')
-      }
-      const decision = decideQuotaFallback({
-        enabled: true,
-        provider: record.provider,
-        billing: verified.billing,
-        errorCode: cut.errorCode,
-        turnId: cut.turnItemId,
-        currentTurnId: cut.turnItemId,
-        settled: true,
-        pending: false,
-        candidates: verified.candidates.filter(
-          (candidate) => candidate.route !== 'antigravity-opus'
-        ),
-        now: this.now()
+      const prepared = await prepareQuotaContinuationReservation({
+        config,
+        hostId: this.deps.hostId,
+        record: { ...record, provider: record.provider },
+        cut,
+        now: () => this.now(),
+        isDisposed: () => this.disposed
       })
-      if (decision.kind === 'hold') {
-        this.report(cut.sessionId, decision.reason)
+      if (prepared.kind === 'aborted') {
         return
       }
-      const candidate = verified.candidates.find((item) => item.route === decision.route)
-      if (decision.route === 'antigravity-opus' || !candidate?.credit) {
+      if (prepared.kind === 'held') {
+        this.heldCuts.hold(cut, cursor)
+        if (prepared.outcome) {
+          this.report(cut.sessionId, prepared.outcome)
+        }
         return
       }
-      const claimId = `quota-${createHash('sha256')
-        .update(JSON.stringify([this.deps.hostId, cut.sessionId, cut.turnItemId]))
-        .digest('hex')}`
-      const operationId = `${this.now()}-${claimId.slice(6, 38)}`
-      const reservation: NativeQuotaReservation = {
-        operationId,
-        claimId,
-        credentialRef: verified.credentialRef,
-        sessionId: cut.sessionId,
-        sourceTurnId: cut.turnItemId,
-        errorCode: cut.errorCode,
-        route: decision.route,
-        pool: verified.pool,
-        maxDebitUsd: candidate.credit.maxDebitUsd,
-        phase: 'reserved'
-      }
+      const { reservation, remainingUsd } = prepared
       const fence = await host.quotaContinuation.reserve(cut, () => {
         if (this.disposed) {
           throw new Error('Quota controller stopped')
         }
-        const claim = this.ledger.claim({
-          operationId: claimId,
-          sessionId: cut.sessionId,
-          route: decision.route,
-          pool: verified.pool,
-          maxDebitUsd: candidate.credit!.maxDebitUsd,
-          remainingUsd: candidate.credit!.remainingUsd
-        })
-        if (claim !== 'claimed') {
-          throw new Error('Quota continuation already claimed or budget unavailable')
+        const { claimId: operationId, route, pool, maxDebitUsd } = reservation
+        if (
+          this.ledger.claim({
+            operationId,
+            sessionId: cut.sessionId,
+            route,
+            pool,
+            maxDebitUsd,
+            remainingUsd
+          }) !== 'claimed'
+        ) {
+          throw new Error('Quota continuation unavailable')
         }
         this.reservations.write(reservation)
       })
       if (fence === null) {
+        const pending = this.reservations.read(cut.sessionId)
+        if (pending) {
+          await this.releasePreDispatch(cut.sessionId, pending)
+        }
+        this.heldCuts.hold(cut, cursor)
         this.report(cut.sessionId, 'sourceMovedOn')
         return
       }
       if (this.disposed) {
         throw new Error('Quota controller stopped')
       }
-      this.active.add(cut.sessionId)
-      this.reservations.write({ ...reservation, phase: 'dispatching' })
-      this.ledger.settle(claimId, 'unknown')
+      this.heldCuts.delete(cut.sessionId)
+      dispatchAttempted = true
       this.subscriptions.set(
         cut.sessionId,
         host.observeJournalPublications(cut.sessionId, () => {
           void this.observe(cut.sessionId)
         })
       )
+      this.active.add(cut.sessionId)
+      this.reservations.write({ ...reservation, phase: 'dispatching' })
+      this.ledger.settle(reservation.claimId, 'unknown')
       const sent = await host.send(
         { callerKey: QUOTA_CONTINUATION_CALLER },
-        structuredAgentSessionMessageSendMutation({
-          sessionId: cut.sessionId,
-          clientOperationId: operationId,
-          expectedRuntimeFence: fence,
-          usageLimitContinuationOfTurnItemId: cut.turnItemId,
-          body: {
-            kind: 'message',
-            role: 'user',
-            blocks: [
-              {
-                type: 'text',
-                text: 'Continue where you left off. Preserve existing approvals and do not repeat completed operations.'
-              }
-            ]
-          }
-        })
+        buildQuotaContinuationSendMutation(cut, reservation.operationId, fence)
       )
       if (!sent.ok) {
         await this.finish(cut.sessionId, reservation)
@@ -198,11 +190,20 @@ export class NativeQuotaContinuationController {
       await this.observe(cut.sessionId)
     } catch {
       const reservation = this.reservations.read(cut.sessionId)
-      if (reservation) {
-        this.reservations.write({ ...reservation, phase: 'unknown' })
-      }
       this.active.delete(cut.sessionId)
-      this.report(cut.sessionId, 'unknown')
+      if (!dispatchAttempted) {
+        if (reservation) {
+          await this.releasePreDispatch(cut.sessionId, reservation).catch(() => {})
+        }
+        if (!this.disposed) {
+          this.heldCuts.hold(cut, cursor)
+        }
+      } else {
+        if (reservation) {
+          this.reservations.write({ ...reservation, phase: 'unknown' })
+        }
+        this.report(cut.sessionId, 'unknown')
+      }
     } finally {
       this.preparing.delete(cut.sessionId)
     }
@@ -253,25 +254,20 @@ export class NativeQuotaContinuationController {
         return
       }
       const snapshot = await host.journalSnapshot(sessionId)
-      const submission = snapshot.submissions.find(
-        (value) => value.clientMessageId === reservation.operationId
+      const settled = isQuotaContinuationSubmissionSettled(
+        snapshot.items,
+        snapshot.submissions,
+        reservation.operationId,
+        reservation.sourceTurnId
       )
-      if (
-        !submission ||
-        submission.dispatchState === 'pending' ||
-        submission.dispatchState === 'unknown'
-      ) {
+      if (settled === null) {
         return
       }
       const work = host.currentWork(sessionId)
       if (!work || work.working() || work.owesAnySend() || work.hasActionablePrompt()) {
         return
       }
-      const latest = latestNativeChatTurnSinceRequest(snapshot.items, snapshot.submissions)
-      if (
-        submission.dispatchState === 'rejected' ||
-        (latest?.verdict && latest.turnItem.itemId !== reservation.sourceTurnId)
-      ) {
+      if (settled) {
         await this.finish(sessionId, reservation)
       }
     } catch {
@@ -297,5 +293,6 @@ export class NativeQuotaContinuationController {
     this.subscriptions.forEach((unsubscribe) => unsubscribe())
     this.subscriptions.clear()
     this.active.clear()
+    this.heldCuts.clear()
   }
 }

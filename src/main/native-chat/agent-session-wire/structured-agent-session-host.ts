@@ -17,7 +17,6 @@ import * as lifetime from './structured-agent-session-conversation-lifetime'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { createStructuredAgentSessionTabSurface as createTabs } from './structured-agent-session-host-tabs'
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
-import { nativeQuotaLeaseForHost } from '../quota-fallback-native-lease'
 import type * as HostTypes from './structured-agent-session-host-types'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel as BackgroundTasks } from './structured-agent-session-background-task-channel'
@@ -267,7 +266,7 @@ export class StructuredAgentSessionHost {
       now: () => this.now()
     })
 
-  readonly quotaContinuation = nativeQuotaLeaseForHost(this)
+  readonly quotaContinuation = usageLimit.quotaLease(this, this.clientDelivery)
 
   send = this.conversationCommands.send
 
@@ -350,7 +349,6 @@ export class StructuredAgentSessionHost {
   collaboratorsForTests = () => ({
     sessions: this.sessions,
     subscribers: this.subscribers,
-    clientDelivery: this.clientDelivery,
     runtimeState: this.runtimeState,
     conversationDelivery: this.conversationDelivery,
     lifetime: this.lifetime,

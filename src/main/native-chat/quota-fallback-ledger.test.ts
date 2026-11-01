@@ -53,3 +53,12 @@ it('does not admit unlimited API reservations', () => {
     expect(() => ledger.claim({ ...claim, maxDebitUsd })).toThrow()
   }
 })
+it('releases an undispatched claim without freeing settled or unknown operations', () => {
+  const { ledger, directory } = fixture()
+  expect(ledger.claim(claim)).toBe('claimed')
+  ledger.release(claim.operationId)
+  const reloaded = new QuotaFallbackLedger(directory)
+  expect(reloaded.claim(claim)).toBe('claimed')
+  reloaded.settle(claim.operationId, 'unknown')
+  expect(() => reloaded.release(claim.operationId)).toThrow('dispatched')
+})

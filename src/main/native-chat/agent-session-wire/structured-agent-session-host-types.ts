@@ -206,7 +206,11 @@ export type StructuredAgentSessionHostDeps = {
   onRequestFailure?: (failure: StructuredAgentSessionRequestFailure) => void
   quotaFallbackSendAllowed?: (sessionId: string, operationId: string, callerKey: string) => boolean
   quotaFallbackDeliveryAllowed?: (sessionId: string, operationId: string) => boolean
-  onConfirmedQuotaCut?: (cut: ConfirmedQuotaCut) => void | Promise<void>
+  quotaFallbackShouldInspect?: (sessionId: string, cursor: AgentJournalCursor) => boolean
+  onConfirmedQuotaCut?: (
+    cut: ConfirmedQuotaCut,
+    cursor?: AgentJournalCursor
+  ) => void | Promise<void>
   /** replay distinguishes restored/projected state from fresh journal events. */
   onSessionStatusChanged?: (
     summary: AgentSessionStatusSummary,

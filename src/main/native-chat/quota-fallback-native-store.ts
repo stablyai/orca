@@ -49,13 +49,7 @@ export class NativeQuotaReservationStore {
     const entry = this.state[sessionId]
     return entry && entry.phase !== 'completed' ? { ...entry } : null
   }
-  write(entry: NativeQuotaReservation): void {
-    const parsed = Reservation.parse(entry)
-    const existing = this.read(entry.sessionId)
-    if (existing && existing.operationId !== entry.operationId) {
-      throw new Error('Continuation already reserved')
-    }
-    const next = { ...this.state, [entry.sessionId]: parsed }
+  private persist(next: z.infer<typeof Reservations>): void {
     const temporary = `${this.file}.tmp`
     writeFileSync(temporary, JSON.stringify(next), { mode: 0o600, flush: true })
     renameSync(temporary, this.file)
@@ -68,5 +62,27 @@ export class NativeQuotaReservationStore {
       }
     }
     this.state = next
+  }
+
+  write(entry: NativeQuotaReservation): void {
+    const parsed = Reservation.parse(entry)
+    const existing = this.read(entry.sessionId)
+    if (existing && existing.operationId !== entry.operationId) {
+      throw new Error('Continuation already reserved')
+    }
+    this.persist({ ...this.state, [entry.sessionId]: parsed })
+  }
+
+  release(sessionId: string, operationId: string): void {
+    const existing = this.state[sessionId]
+    if (!existing || existing.phase === 'completed') {
+      return
+    }
+    if (existing.operationId !== operationId || existing.phase !== 'reserved') {
+      throw new Error('Cannot release a dispatched continuation reservation')
+    }
+    const next = { ...this.state }
+    delete next[sessionId]
+    this.persist(next)
   }
 }
