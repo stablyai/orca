@@ -8,6 +8,20 @@ import type { SessionNotification } from './generated/acp-protocol.generated'
 import { acpNamedTextKey } from './acp-turn-messages'
 
 /** Updates that open the turn they belong to. */
+/** Marks the plan checklist. Unknown statuses stay open so a newer word is not shown as done or cancelled. */
+export function planCheckbox(status: string): 'x' | '~' | '-' | ' ' {
+  if (status === 'completed') {
+    return 'x'
+  }
+  if (status === 'in_progress') {
+    return '~'
+  }
+  if (status === 'cancelled' || status === 'canceled' || status === 'deleted') {
+    return '-'
+  }
+  return ' '
+}
+
 export const ACP_SUBSTANTIVE_UPDATES = [
   'user_message_chunk',
   'agent_message_chunk',
@@ -77,10 +91,7 @@ export function acpSessionUpdate(
             kind: 'status',
             presentation: 'plan-document',
             text: update.entries
-              .map(
-                (entry) =>
-                  `- [${entry.status === 'completed' ? 'x' : entry.status === 'in_progress' ? '~' : ' '}] ${entry.content}`
-              )
+              .map((entry) => `- [${planCheckbox(entry.status)}] ${entry.content}`)
               .join('\n')
           },
           ...join

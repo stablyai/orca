@@ -56,6 +56,27 @@ describe('ACP values newer than this build', () => {
     ).toEqual([expect.objectContaining({ presentation: 'plan-document', text: '- [ ] Wait' })])
   })
 
+  it('marks a cancelled plan entry without treating an unknown status as cancelled', async () => {
+    const { rig, translator, apply, update } = await genericRig()
+    apply(translator.openPrompt('send-1', 1000).events)
+    update({
+      sessionUpdate: 'plan',
+      entries: [
+        { content: 'Skip', status: 'cancelled', priority: 'low' },
+        { content: 'Wait', status: 'blocked', priority: 'high' }
+      ]
+    })
+    apply(translator.promptResult('send-1', { stopReason: 'end_turn' }, 1200))
+    expect(
+      (await rig.rows()).filter((row) => row.body.kind !== 'turn').map((row) => row.body)
+    ).toEqual([
+      expect.objectContaining({
+        presentation: 'plan-document',
+        text: '- [-] Skip\n- [ ] Wait'
+      })
+    ])
+  })
+
   it('ends a turn with a newer stop reason without inventing an outcome', async () => {
     const { rig, translator, apply } = await genericRig()
     apply(translator.openPrompt('send-1', 1000).events)

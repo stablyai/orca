@@ -2821,7 +2821,32 @@
       "reset": "Marked pending: {{task}}",
       "updated": "Updated {{task}}",
       "unchanged": "Tasks unchanged",
-      "showAll": "Full task list"
+      "showAll": "Full task list",
+      "cancelled": "Cancelled",
+      "cancelledTask": "Cancelled {{task}}"
+    },
+    "activity": {
+      "taskPill": "{{completed}}/{{count}} task",
+      "tasksPill": "{{completed}}/{{count}} tasks",
+      "subagentPill": "{{count}} subagent",
+      "subagentsPill": "{{count}} subagents",
+      "openTasks": "Tasks, {{label}}",
+      "openSubagents": "Subagents, {{label}}",
+      "subagentsTitle": "Subagents",
+      "viewingSubagent": "Viewing {{name}}",
+      "composerStays": "The composer still sends to the main agent.",
+      "backToMain": "Main agent",
+      "backToConversation": "Back to the conversation",
+      "noActivity": "No activity yet",
+      "noMessages": "No messages from this subagent yet",
+      "state": {
+        "working": "Working",
+        "completed": "Completed",
+        "idle": "Idle",
+        "failed": "Failed",
+        "stopped": "Stopped",
+        "unavailable": "Status unavailable"
+      }
     },
     "sessionOptionCopy": {
       "on": "On",

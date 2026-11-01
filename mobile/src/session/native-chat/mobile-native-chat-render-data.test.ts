@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import {
   buildMobileNativeChatTransientData,
+  foldMobileNativeChatAgentMessages,
   foldMobileNativeChatMessages,
   mobileNativeChatEmptyState
 } from './mobile-native-chat-render-data'
@@ -406,5 +407,31 @@ describe("mobile shows the conversation, never a subagent's rows", () => {
 
     expect(folded.map((message) => message.id)).toEqual(['ask', 'spawn', 'answer'])
     expect(folded[2]?.blocks).toEqual([{ type: 'text', text: 'Delegated; nothing to fix.' }])
+  })
+
+  it('keeps a subagent transcript when that agent is the one being folded', () => {
+    const child = { agentId: 'task-1', producerKind: 'agent' as const }
+    const rows = [
+      user('ask', 'review the PR'),
+      { ...assistant('child-said', 'The PR is CLEAN.'), ...child },
+      {
+        id: 'child-grep',
+        role: 'assistant' as const,
+        blocks: [{ type: 'tool-call' as const, name: 'Grep', input: {} }],
+        timestamp: 0,
+        source: 'transcript' as const,
+        ...child
+      }
+    ]
+    expect(fold(rows).map((message) => message.id)).toEqual(['ask'])
+    const agentFold = foldMobileNativeChatAgentMessages(rows, 'claude')
+    expect(agentFold.map((message) => message.id)).toContain('child-said')
+    expect(
+      agentFold.some(
+        (message) =>
+          message.id === 'child-grep' ||
+          message.blocks.some((block) => block.type === 'tool-call' && block.name === 'Grep')
+      )
+    ).toBe(true)
   })
 })
