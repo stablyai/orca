@@ -42,7 +42,12 @@ afterEach(() => {
 })
 
 it.each([25, 250])('bounds desired-home reads with %i managed accounts', async (accounts) => {
-  for (const signedIn of [true, false]) {
+  for (const [signedIn, concurrent] of [
+    [true, false],
+    [false, false],
+    [true, true],
+    [false, true]
+  ]) {
     for (const deliveries of [10, 100]) {
       const root = fs.mkdtempSync(join(tmpdir(), 'orca-account-read-perf-'))
       roots.push(root)
@@ -118,16 +123,24 @@ it.each([25, 250])('bounds desired-home reads with %i managed accounts', async (
       accountVisits = 0
       selectionReads = 0
       const record = agentSessionRecordFixture()
-      let answer: AgentSessionAccountHome | null = null
+      const deliver = () => runtime.resolveStructuredAgentLaunchAccountHome(record)
+      const answers: (AgentSessionAccountHome | null)[] = []
       const started = performance.now()
-      for (let delivery = 0; delivery < deliveries; delivery += 1) {
-        answer = await runtime.resolveStructuredAgentLaunchAccountHome(record)
+      if (concurrent) {
+        // Many chats reading at once on a cold cache, before any read has finished.
+        answers.push(...(await Promise.all(Array.from({ length: deliveries }, deliver))))
+      } else {
+        for (let delivery = 0; delivery < deliveries; delivery += 1) {
+          answers.push(await deliver())
+        }
       }
       const elapsedMs = performance.now() - started
-      expect(answer).toEqual({
-        variable: 'CLAUDE_CONFIG_DIR',
-        path: signedIn ? selectedHome : systemHome
-      })
+      expect(answers).toEqual(
+        Array(deliveries).fill({
+          variable: 'CLAUDE_CONFIG_DIR',
+          path: signedIn ? selectedHome : systemHome
+        })
+      )
       const stats = vi.mocked(fsp.stat).mock.calls.length
       const stateReads = vi.mocked(fsp.readFile).mock.calls.length
       expect(reads).toHaveBeenCalledTimes(deliveries)
@@ -143,12 +156,20 @@ it.each([25, 250])('bounds desired-home reads with %i managed accounts', async (
       ]) {
         expect(spy).not.toHaveBeenCalled()
       }
-      expect(stateReads).toBe(1) // Cold first read, then metadata-validated login cache.
+      // Cold first read (shared by concurrent readers), then metadata-validated login cache.
+      expect(stateReads).toBe(1)
       expect(vi.mocked(fsp.readFile).mock.calls[0][0]).toBe(stateFile)
+      if (concurrent) {
+        // Claude rewrote the file: one more read for the new revision, however many readers.
+        fs.writeFileSync(stateFile, `${state} `)
+        await Promise.all(Array.from({ length: deliveries }, deliver))
+        expect(vi.mocked(fsp.readFile).mock.calls.length).toBe(2)
+      }
       console.info('account-home-perf', {
         accounts,
         deliveries,
         signedIn,
+        concurrent,
         selectionReads,
         accountVisits,
         stats,
