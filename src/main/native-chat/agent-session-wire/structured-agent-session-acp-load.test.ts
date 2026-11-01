@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isAgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
+import { isAgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   attachFingerprintFields,
   reserveRequestFor,
