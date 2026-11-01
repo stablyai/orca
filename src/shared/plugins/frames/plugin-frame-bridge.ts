@@ -24,7 +24,9 @@ export const FRAME_EVENTS = {
   /** frame → host: a modifier chord, so Orca's save shortcut works inside an editor. */
   editorKeydown: 'editor.keydown',
   /** host → frame: the document, on ready and whenever it changes outside the frame. */
-  editorDocument: 'editor.document'
+  editorDocument: 'editor.document',
+  /** host → frame, payload `PluginPanelPush`: a worker post, an event or a data change. */
+  push: 'plugin.push'
 } as const
 
 /** Frame-local methods a custom editor handles or calls on the same envelope. */

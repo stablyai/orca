@@ -13,6 +13,7 @@ import {
   type OrcaRuntimeOptions
 } from './declarative-renderer'
 import { createOrcaSdk } from './declarative-sdk'
+import { createOrcaDataSdk } from './declarative-data-sdk'
 
 export { atom, derived, read, set, update } from './declarative-atoms'
 export { Fragment, h, jsx, jsx as jsxs, jsx as jsxDEV } from './declarative-elements'
@@ -80,6 +81,9 @@ const sdk = createOrcaSdk({
 })
 
 export const { host, api, env, shell, files, on, ui } = sdk
+export const { plugin, storage, settings, secrets } = createOrcaDataSdk(
+  () => runtime?.bridge ?? globalBridge()
+)
 
 // Catalog tags: JSX `<Stack>` compiles to a reference, so authors import these by name.
 export const Stack = 'Stack'

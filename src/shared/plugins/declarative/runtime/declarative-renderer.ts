@@ -28,6 +28,7 @@ import {
 } from './declarative-renderer-support'
 import { readHostMessage } from './declarative-host-messages'
 import { createPanelContext } from './declarative-panel-context'
+import { createDeclarativeStorageSync } from './declarative-storage-sync'
 
 export type { OrcaWireNode } from './declarative-evaluate'
 export type {
@@ -192,9 +193,15 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
     }
   }
 
+  const storageSync = createDeclarativeStorageSync({ bridge, report })
   const persistQueue = createPersistQueue({
     report,
-    post: (entries) => post(PLUGIN_DECLARATIVE_MESSAGES.persist, { document, entries })
+    post: (all) => {
+      const entries = storageSync.write(all)
+      if (entries.length > 0) {
+        post(PLUGIN_DECLARATIVE_MESSAGES.persist, { document, entries })
+      }
+    }
   })
   const flushPersist = persistQueue.flush
   watchPersistedAtoms(persistQueue.add)
@@ -237,6 +244,7 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
     document,
     async boot(module) {
       await panel.hydrated
+      await storageSync.loaded()
       if (isCallable(module.setup)) {
         const cleanup = module.setup(context)
         setupCleanup = isCallable(cleanup) ? () => void cleanup() : null
@@ -298,6 +306,7 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
       scheduled = false
       unsubscribeAll()
       watchPersistedAtoms(null)
+      storageSync.dispose()
       for (const subscription of [...bridgeSubscriptions, ...context.subscriptions]) {
         try {
           subscription.dispose()

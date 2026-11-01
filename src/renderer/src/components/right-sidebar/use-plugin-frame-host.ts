@@ -5,6 +5,7 @@ import {
   PLUGIN_FRAME_KEY_CHANNEL
 } from '../../../../shared/plugins/frames/plugin-frame-guest'
 import { pluginEvent } from '../../../../shared/plugins/frames/plugin-protocol'
+import { pluginPanelPushSchema } from '../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import {
   createPluginFrameEnvelopeHandler,
   createPluginFrameMessageHandler,
@@ -129,6 +130,20 @@ export function usePluginFrameHost(options: {
     surface,
     watchdog
   ])
+
+  // Worker posts, subscribed events and data changes for this panel, while its document lives.
+  useEffect(() => {
+    const subscribe = window.api?.plugins?.subscribePanelPush
+    if (!frameKey || !sessionToken || !subscribe) {
+      return
+    }
+    return subscribe(sessionToken, (raw) => {
+      const push = pluginPanelPushSchema.safeParse(raw)
+      if (push.success) {
+        getFrameWindow()?.postMessage(pluginEvent(FRAME_EVENTS.push, push.data), '*')
+      }
+    })
+  }, [frameKey, getFrameWindow, sessionToken])
 
   useEffect(() => {
     if (!frameKey || loadedFrameKey !== frameKey) {

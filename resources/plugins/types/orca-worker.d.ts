@@ -8,7 +8,15 @@ declare module 'orca/worker' {
     HostApi,
     HostApiVersion,
     PluginEventName,
-    PluginEvents
+    PluginEvents,
+    PluginPanelEventName,
+    PluginPanelEventPayload,
+    PluginRequestInput,
+    PluginRequestName,
+    PluginRequestOutput,
+    SecretsApi,
+    SettingsApi,
+    StorageApi
   } from 'orca/host'
 
   export type {
@@ -22,6 +30,29 @@ declare module 'orca/worker' {
 
   /** `signal` aborts when Orca stops waiting for the command. */
   export type CommandContext = { signal: AbortSignal }
+  /** The open panel or editor that asked; `id` stays the same while it stays open. */
+  export type PanelCaller = { id: string; surface: 'panel' | 'editor'; contributionId: string }
+  /** `signal` aborts when the request times out or its panel closes. */
+  export type PanelRequestContext = { panel: PanelCaller; signal: AbortSignal }
+  export type PanelsApi = {
+    /** Answers a panel's `plugin.request(name, input)` with a JSON value. A thrown error whose
+     *  `code` is a host error code (`invalid_params`, `conflict`, ...) reaches the panel with it;
+     *  any other is `action_failed`. */
+    handle<K extends PluginRequestName>(
+      name: K,
+      handler: (
+        input: PluginRequestInput<K>,
+        context: PanelRequestContext
+      ) => PluginRequestOutput<K> | Promise<PluginRequestOutput<K>>
+    ): Disposable
+    /** To every open panel of this plugin, or one (`panel` from a request's context). Fire and
+     *  forget: at most 256 KiB, 200 per 10 s. */
+    post<K extends PluginPanelEventName>(
+      event: K,
+      payload: PluginPanelEventPayload<K>,
+      options?: { panel?: string }
+    ): void
+  }
   export type OrcaWorkerApi = {
     readonly api: HostApiVersion
     readonly commands: {
@@ -39,6 +70,14 @@ declare module 'orca/worker' {
       ): Disposable
     }
     readonly host: HostApi<'worker'>
+    /** This plugin's panels and custom editors. */
+    readonly panels: PanelsApi
+    /** Same store as panels' `storage` (`storage:own`); `onDidChange` hears their writes too. */
+    readonly storage: StorageApi
+    /** `settings:own`; `onDidChange` also hears the person changing them in Settings. */
+    readonly settings: SettingsApi
+    /** `secrets:own`. */
+    readonly secrets: SecretsApi
     /** Consented capability kinds; informational, the host re-checks every call. */
     readonly grantedCapabilities: readonly string[]
     /** Lands in `orca plugin logs`. */

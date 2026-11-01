@@ -24,54 +24,22 @@ import {
   type PluginRequest,
   type PluginResponse
 } from '../../../shared/plugins/frames/plugin-protocol'
-import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
-import { PLUGIN_V1_EVENT_ALIASES } from '../../../shared/plugins/contributions/plugin-event-contribution'
 import {
-  PLUGIN_HOST_API_MINOR,
-  pluginHostMethodsFor
-} from '../../../shared/plugins/workers/plugin-host-api'
-import { PLUGIN_HOST_API_MAJOR } from '../../../shared/plugins/workers/plugin-host-api-major'
+  pluginDataChangedSchema,
+  pluginWorkerPanelRequestParamsSchema
+} from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
+import {
+  createPluginWorkerApiTables,
+  createPluginWorkerOrcaApi,
+  type PluginWorkerOrcaApi
+} from './plugin-worker-orca-api'
 
-/** A failed host call or command: the same `{ code, message, retryable }` frames get. */
-// Why: format 1 handlers read `worktreeId`; newer payloads name it `workspaceId`.
-function withV1WorktreeId(payload: unknown): unknown {
-  if (typeof payload !== 'object' || payload === null || !('workspaceId' in payload)) {
-    return payload
-  }
-  return 'worktreeId' in payload ? payload : { ...payload, worktreeId: payload.workspaceId }
-}
+export type { PluginDisposable, PluginWorkerOrcaApi } from './plugin-worker-orca-api'
 
 export type PluginHostCallError = Error & {
   code: PluginErrorCode
   retryable: boolean
   retryAfterMs?: number
-}
-
-export type PluginDisposable = { dispose(): void }
-
-/** API surface handed to a plugin's `activate(orca)` export (host API 1). */
-export type PluginWorkerOrcaApi = {
-  api: { readonly major: number; readonly minor: number }
-  commands: {
-    register(
-      commandId: string,
-      handler: (args: unknown, context: { signal: AbortSignal }) => unknown
-    ): PluginDisposable
-  }
-  events: {
-    on(
-      event: PluginEventName,
-      handler: (payload: unknown) => void | Promise<void>
-    ): PluginDisposable
-  }
-  host: {
-    call(method: string, params?: unknown, options?: { signal?: AbortSignal }): Promise<unknown>
-    /** Whether this host implements `method` for workers. */
-    has(method: string): boolean
-  }
-  /** Consented capability kinds (informational — the host re-gates). */
-  grantedCapabilities: readonly string[]
-  log(message: string): void
 }
 
 export type PluginWorkerRuntimeOptions = {
@@ -100,7 +68,14 @@ function hostCallError(error: PluginResponse['error']): PluginHostCallError {
 
 const CANCELLED = pluginError('cancelled', 'cancelled')
 
-const WORKER_METHOD_NAMES: ReadonlySet<string> = new Set(pluginHostMethodsFor('worker'))
+/** A handler's own `{ code }` (a known one) reaches the panel; anything else is `action_failed`. */
+function handlerFailure(error: unknown) {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : null
+  return pluginError(
+    normalizePluginErrorCode(code),
+    error instanceof Error ? error.message : String(error)
+  )
+}
 
 export function createPluginWorkerRuntime(
   options: PluginWorkerRuntimeOptions
@@ -108,11 +83,9 @@ export function createPluginWorkerRuntime(
   const send = options.send
   const importModule = options.importModule ?? ((specifier: string) => import(specifier))
   const exit = options.exit ?? ((code: number) => process.exit(code))
-  const commandHandlers = new Map<
-    string,
-    (args: unknown, context: { signal: AbortSignal }) => unknown
-  >()
-  const eventHandlers = new Map<string, Set<(payload: unknown) => void | Promise<void>>>()
+  const tables = createPluginWorkerApiTables()
+  const commandHandlers = tables.commands
+  const eventHandlers = tables.events
   const pendingHostCalls = new Map<number, (response: PluginResponse) => void>()
   const runningCommands = new Map<number, AbortController>()
   let nextHostCallId = 0
@@ -163,47 +136,12 @@ export function createPluginWorkerRuntime(
       throw new Error(`plugin entry ${input.mainEntry} has a non-function deactivate export`)
     }
     deactivate = deactivateExport === undefined ? null : () => deactivateExport()
-    const orca: PluginWorkerOrcaApi = Object.freeze({
-      api: Object.freeze({ major: PLUGIN_HOST_API_MAJOR, minor: PLUGIN_HOST_API_MINOR }),
-      commands: Object.freeze({
-        register(
-          commandId: string,
-          handler: Parameters<PluginWorkerOrcaApi['commands']['register']>[1]
-        ) {
-          commandHandlers.set(commandId, handler)
-          return {
-            dispose: () => {
-              commandHandlers.delete(commandId)
-            }
-          }
-        }
-      }),
-      events: Object.freeze({
-        on(event: PluginEventName, handler: (payload: unknown) => void | Promise<void>) {
-          // Why: format 1 workers still listen under the old worktree.* names.
-          const name = PLUGIN_V1_EVENT_ALIASES.get(event) ?? event
-          const handlers = eventHandlers.get(name) ?? new Set()
-          eventHandlers.set(name, handlers)
-          const v1Payload = name !== event || event === 'agent.status.changed'
-          const entry = (payload: unknown): void | Promise<void> =>
-            handler(v1Payload ? withV1WorktreeId(payload) : payload)
-          handlers.add(entry)
-          return {
-            dispose: () => {
-              handlers.delete(entry)
-            }
-          }
-        }
-      }),
-      host: Object.freeze({
-        call: (method: string, params?: unknown, callOptions?: { signal?: AbortSignal }) =>
-          hostCall(method, params, callOptions?.signal),
-        has: (method: string) => WORKER_METHOD_NAMES.has(method)
-      }),
-      grantedCapabilities: Object.freeze([...input.grantedCapabilities]),
-      log(message: string) {
-        send(pluginWorkerLog('info', String(message)))
-      }
+    const orca: PluginWorkerOrcaApi = createPluginWorkerOrcaApi({
+      tables,
+      hostCall: (method, params, callOptions) => hostCall(method, params, callOptions?.signal),
+      postToPanels: (post) => send(pluginEvent(WORKER_EVENTS.panelPost, post)),
+      log: (message) => send(pluginWorkerLog('info', message)),
+      grantedCapabilities: input.grantedCapabilities
     })
     await activate(orca)
     send(pluginEvent(WORKER_EVENTS.ready, { commands: [...commandHandlers.keys()] }))
@@ -235,6 +173,10 @@ export function createPluginWorkerRuntime(
       }
       return
     }
+    if (request.method === WORKER_METHODS.panelRequest) {
+      await answerPanelRequest(request)
+      return
+    }
     if (request.method === WORKER_METHODS.deliverEvent) {
       const parsed = pluginWorkerDeliverParamsSchema.safeParse(request.params)
       for (const handler of parsed.success ? (eventHandlers.get(parsed.data.event) ?? []) : []) {
@@ -250,6 +192,39 @@ export function createPluginWorkerRuntime(
     send(
       pluginFailure(request.id, pluginError('unknown_method', `unknown request ${request.method}`))
     )
+  }
+
+  async function answerPanelRequest(request: PluginRequest): Promise<void> {
+    const parsed = pluginWorkerPanelRequestParamsSchema.safeParse(request.params)
+    const handler = parsed.success ? tables.panelRequests.get(parsed.data.name) : undefined
+    if (!parsed.success || !handler) {
+      const name = parsed.success ? parsed.data.name : '(invalid)'
+      send(
+        pluginFailure(request.id, pluginError('unknown_method', `no panel handler named ${name}`))
+      )
+      return
+    }
+    const controller = new AbortController()
+    runningCommands.set(request.id, controller)
+    try {
+      const { input, panel } = parsed.data
+      send(pluginResult(request.id, await handler(input, { panel, signal: controller.signal })))
+    } catch (error) {
+      send(pluginFailure(request.id, handlerFailure(error)))
+    } finally {
+      runningCommands.delete(request.id)
+    }
+  }
+
+  function notifyDataChanged(payload: unknown): void {
+    const change = pluginDataChangedSchema.safeParse(payload)
+    for (const listener of change.success ? tables.dataListeners[change.data.area] : []) {
+      try {
+        listener({ key: change.success ? change.data.key : '' })
+      } catch (error) {
+        send(pluginWorkerLog('error', toErrorMessage(error)))
+      }
+    }
   }
 
   async function shutdown(): Promise<void> {
@@ -277,6 +252,10 @@ export function createPluginWorkerRuntime(
           case 'evt': {
             if (message.event === WORKER_EVENTS.shutdown) {
               await shutdown()
+              return
+            }
+            if (message.event === WORKER_EVENTS.dataChanged) {
+              notifyDataChanged(message.payload)
               return
             }
             const init =

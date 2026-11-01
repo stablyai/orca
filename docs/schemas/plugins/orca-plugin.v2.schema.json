@@ -305,6 +305,16 @@
             "$ref": "#/$defs/NewFileContribution"
           }
         },
+        "settings": {
+          "default": [],
+          "description": "Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.",
+          "x-orca-since": "1.4.246",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SettingContribution"
+          }
+        },
         "agentHarnesses": {
           "description": "Reserved for coding-agent harness definitions; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
@@ -342,13 +352,6 @@
         },
         "connections": {
           "description": "Reserved for account connections; must be empty until their format is defined.",
-          "x-orca-since": "1.4.245",
-          "maxItems": 0,
-          "type": "array",
-          "items": {}
-        },
-        "settings": {
-          "description": "Reserved for plugin settings; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
           "maxItems": 0,
           "type": "array",
@@ -1130,6 +1133,130 @@
       ],
       "additionalProperties": false,
       "description": "A kind of untitled file the user can create from the tab bar + menu or the command palette, in the active workspace."
+    },
+    "SettingContribution": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$",
+          "description": "Key code reads and writes, unique in this plugin.",
+          "x-orca-since": "1.4.246",
+          "examples": [
+            "apiUrl"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Label shown in Settings.",
+          "x-orca-since": "1.4.246",
+          "examples": [
+            "Server URL"
+          ]
+        },
+        "description": {
+          "description": "Help text shown under the label.",
+          "x-orca-since": "1.4.246",
+          "type": "string",
+          "maxLength": 1000
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "string",
+            "number",
+            "integer",
+            "boolean"
+          ],
+          "description": "JSON Schema type of the value.",
+          "x-orca-since": "1.4.246",
+          "examples": [
+            "string"
+          ]
+        },
+        "default": {
+          "description": "Value read while the person has not set one.",
+          "x-orca-since": "1.4.246",
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 10000
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "enum": {
+          "description": "Allowed values; Settings shows a picker.",
+          "x-orca-since": "1.4.246",
+          "minItems": 1,
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "number"
+              }
+            ]
+          }
+        },
+        "enumLabels": {
+          "description": "Picker labels, one per `enum` value.",
+          "x-orca-since": "1.4.246",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "minimum": {
+          "description": "Numbers: smallest value.",
+          "x-orca-since": "1.4.246",
+          "type": "number"
+        },
+        "maximum": {
+          "description": "Numbers: largest value.",
+          "x-orca-since": "1.4.246",
+          "type": "number"
+        },
+        "maxLength": {
+          "description": "Strings: most characters.",
+          "x-orca-since": "1.4.246",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "multiline": {
+          "description": "Strings: a multi-line text box.",
+          "x-orca-since": "1.4.246",
+          "type": "boolean"
+        },
+        "placeholder": {
+          "description": "Strings and numbers: hint shown while empty.",
+          "x-orca-since": "1.4.246",
+          "type": "string",
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "type"
+      ],
+      "additionalProperties": false,
+      "description": "A setting shown under the plugin in Settings. Requires the `settings:own` capability, which is also how code reads it."
     },
     "Capability": {
       "type": "object",

@@ -9,6 +9,8 @@ export const PLUGIN_DERIVED_PUBLISHER_SINCE = '1.4.246'
 export const PLUGIN_PANEL_UI_SINCE = '1.4.246'
 /** Build-less `.ts/.tsx/.mts/.jsx` panel and editor files ship with components panels. */
 export const PLUGIN_SOURCE_MODULES_SINCE = PLUGIN_PANEL_UI_SINCE
+/** Panels reach their worker, storage, settings and events; `contributes.settings` arrives. */
+export const PLUGIN_PANEL_BRIDGE_SINCE = PLUGIN_PANEL_UI_SINCE
 
 type PluginFieldDoc = {
   description: string

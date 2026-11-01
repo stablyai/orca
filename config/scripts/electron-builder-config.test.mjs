@@ -320,6 +320,7 @@ describe('electron-builder config', () => {
       join('/app', 'resources', 'plugins', 'types', 'orca-host.d.ts'),
       join('/app', 'resources', 'plugins', 'types', 'orca-frame.d.ts'),
       join('/app', 'resources', 'plugins', 'types', 'orca-worker.d.ts'),
+      join('/app', 'resources', 'plugins', 'types', 'orca-services.d.ts'),
       join('/app', 'resources', 'plugins', 'types', 'orca-testing.d.ts'),
       // `orca plugin test` and `check` run these from a Node process.
       join('/app', 'resources', 'plugins', 'declarative', 'orca-runtime.mjs'),

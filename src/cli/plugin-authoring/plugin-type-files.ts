@@ -13,6 +13,7 @@ const PLUGIN_SURFACE_TYPINGS = [
   { dir: 'orca-host', file: 'orca-host.d.ts' },
   { dir: 'orca-frame', file: 'orca-frame.d.ts' },
   { dir: 'orca-worker', file: 'orca-worker.d.ts' },
+  { dir: 'orca-services', file: 'orca-services.d.ts' },
   { dir: 'orca-testing', file: 'orca-testing.d.ts' }
 ] as const
 

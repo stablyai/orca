@@ -23,7 +23,12 @@ import {
   PLUGIN_PANEL_ENTRY_MAX_BYTES,
   readContainedPluginArtifactText
 } from '../plugin-artifact-validation'
-import { PluginPanelSessions, type PluginPanelSessionBinding } from './plugin-panel-sessions'
+import {
+  PluginPanelSessions,
+  type PluginPanelSessionBinding,
+  type ResolvedPluginPanelSession
+} from './plugin-panel-sessions'
+import type { PluginPanelCaller } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 
 type PluginPanelControllerOptions = {
   resolveApprovedPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
@@ -37,6 +42,8 @@ type PluginPanelControllerOptions = {
   ) => Promise<PluginHostCallOutcome>
   log: (pluginKey: string) => (line: string) => void
   panelAdmission?: PluginPanelCallAdmission
+  /** A session's public id once it can no longer be used (its panel's requests stop). */
+  onSessionClosed?: (panelId: string) => void
 }
 
 type FrameOpenOptions = { shell?: boolean }
@@ -47,12 +54,24 @@ type LoadedPluginPanel = {
 }
 
 export class PluginPanelController {
-  private readonly sessions = new PluginPanelSessions()
+  private readonly sessions: PluginPanelSessions
   private readonly boundOwnerSignals = new WeakSet<AbortSignal>()
   private readonly panelAdmission: PluginPanelCallAdmission
 
   constructor(private readonly options: PluginPanelControllerOptions) {
     this.panelAdmission = options.panelAdmission ?? createPluginPanelCallAdmission()
+    this.sessions = new PluginPanelSessions((panelId) => options.onSessionClosed?.(panelId))
+  }
+
+  /** The live, still-approved panel behind an owner's session: what its push channel serves. */
+  sessionCaller(
+    ownerKey: string,
+    sessionToken: string
+  ): { pluginKey: string; caller: PluginPanelCaller } | null {
+    const binding = this.sessions.resolve(ownerKey, sessionToken)
+    return binding && this.isCurrent(binding)
+      ? { pluginKey: binding.pluginKey, caller: panelCaller(binding) }
+      : null
   }
 
   async readEntry(pluginKey: string, panelId: string): Promise<{ html: string } | null> {
@@ -135,13 +154,7 @@ export class PluginPanelController {
     if (!parsed.success) {
       return { ok: false, code: 'invalid_request', error: 'malformed panel action call' }
     }
-    const plugin = this.options.resolveApprovedPlugin(binding.pluginKey)
-    if (
-      !plugin ||
-      plugin.rootDir !== binding.rootDir ||
-      JSON.stringify(plugin.manifest) !== binding.manifestRevision ||
-      !findFrameContribution(plugin, binding.surface, binding.contributionId)
-    ) {
+    if (!this.isCurrent(binding)) {
       return { ok: false, code: 'unavailable', error: 'panel session is no longer available' }
     }
     return this.options.executeHostCall(
@@ -149,7 +162,20 @@ export class PluginPanelController {
       parsed.data.action,
       parsed.data.params,
       binding.surface,
-      origin.desktop ? { webContentsId: origin.callerWebContentsId } : undefined
+      {
+        ...(origin.desktop ? { webContentsId: origin.callerWebContentsId } : {}),
+        panel: panelCaller(binding)
+      }
+    )
+  }
+
+  private isCurrent(binding: PluginPanelSessionBinding): boolean {
+    const plugin = this.options.resolveApprovedPlugin(binding.pluginKey)
+    return (
+      plugin !== null &&
+      plugin.rootDir === binding.rootDir &&
+      JSON.stringify(plugin.manifest) === binding.manifestRevision &&
+      findFrameContribution(plugin, binding.surface, binding.contributionId) !== null
     )
   }
 
@@ -281,6 +307,10 @@ export class PluginPanelController {
       return null
     }
   }
+}
+
+function panelCaller(binding: ResolvedPluginPanelSession): PluginPanelCaller {
+  return { id: binding.publicId, surface: binding.surface, contributionId: binding.contributionId }
 }
 
 function findFrameContribution(

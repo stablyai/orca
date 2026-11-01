@@ -1,4 +1,5 @@
 import type { PluginErrorCode } from '../../../shared/plugins/frames/plugin-protocol'
+import type { PluginPanelCaller } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 
 /**
  * What one admitted call carries to its side effect. `assertActive` throws once the plugin was
@@ -11,6 +12,8 @@ export type PluginHostCallScope = {
   callerWebContentsId?: number
   /** The plugin's display name, for prompts Orca shows on its behalf. */
   pluginName?: string
+  /** The open panel or editor that made the call; absent for workers. */
+  panel?: PluginPanelCaller
 }
 
 export const UNSCOPED_PLUGIN_HOST_CALL: PluginHostCallScope = { assertActive: () => {} }

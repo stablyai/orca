@@ -190,9 +190,16 @@ describe('host API surfaces and strict params', () => {
     })
 
   it('lets each surface call only the methods that list it', async () => {
-    await expect(call('storage.keys', {}, 'editor')).resolves.toMatchObject({
+    await expect(
+      call('terminal.sendText', { terminalId: 't', text: 'x' }, 'editor')
+    ).resolves.toMatchObject({
       ok: false,
       code: 'not_permitted'
+    })
+    // Panels and editors share the plugin's own storage, behind the same capability.
+    await expect(call('storage.keys', {}, 'editor')).resolves.toEqual({
+      ok: true,
+      value: { keys: [] }
     })
     await expect(call('storage.keys', {}, 'worker')).resolves.toEqual({
       ok: true,

@@ -1,6 +1,12 @@
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../shared/plugins/workers/plugin-host-api'
 import type { PluginHostServices } from './plugin-host-methods'
 import type { PluginDesktopFrameServices } from './plugin-host-method-bindings'
+import type { PluginPanelBridgeServices } from './plugin-host-panel-method-bindings'
+import {
+  pluginSettingValueIssue,
+  type PluginSettingContribution
+} from '../../../shared/plugins/contributions/plugin-settings-contribution'
+import { pluginSettingDefaults } from '../../../shared/plugins/contributions/plugin-settings-values'
 import { PluginSecretsStore, pluginSecretsProtection } from '../plugin-secrets-store'
 import { PluginKvStore } from '../plugin-storage-store'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
@@ -33,10 +39,15 @@ export function bindPluginHostServices(input: {
   delegate: PluginRuntimeDelegate
   pluginsDataDir: string
   desktop?: PluginDesktopFrameServices | null
+  panels?: PluginPanelBridgeServices | null
+  /** The calling plugin's `contributes.settings`: defaults and value checks. */
+  declaredSettings?: readonly PluginSettingContribution[]
 }): PluginHostServices {
+  const declared = new Map((input.declaredSettings ?? []).map((setting) => [setting.key, setting]))
   const { delegate, pluginsDataDir } = input
   return {
     desktop: input.desktop ?? null,
+    panels: input.panels ?? null,
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
       if (!context) {
@@ -79,9 +90,17 @@ export function bindPluginHostServices(input: {
       protection: () => (pluginSecretsProtection().level === 'os' ? 'os-keyring' : 'unavailable')
     },
     settings: {
-      getAll: (key) => new PluginKvStore(pluginsDataDir, key, 'settings.json').getAll(),
-      set: (key, itemKey, value) =>
-        new PluginKvStore(pluginsDataDir, key, 'settings.json').set(itemKey, value)
+      getAll: (key) => ({
+        ...pluginSettingDefaults(declared.values()),
+        ...new PluginKvStore(pluginsDataDir, key, 'settings.json').getAll()
+      }),
+      set: (key, itemKey, value) => {
+        const setting = declared.get(itemKey)
+        const issue = setting ? pluginSettingValueIssue(setting, value) : null
+        return issue
+          ? { ok: false, error: `${itemKey} ${issue}` }
+          : new PluginKvStore(pluginsDataDir, key, 'settings.json').set(itemKey, value)
+      }
     }
   }
 }

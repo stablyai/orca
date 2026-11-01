@@ -181,6 +181,8 @@ export type PluginsApi = {
   }) => Promise<PluginHostCallOutcome>
   /** A components panel's persisted atoms (desktop only); see plugin-panel-state.ts. */
   panelState?: (args: PluginPanelStateRequest) => Promise<PluginPanelStateResult>
+  /** One open panel's pushes (`PluginPanelPush`, unvalidated); desktop only. Returns unsubscribe. */
+  subscribePanelPush?: (sessionToken: string, listener: (push: unknown) => void) => () => void
   /** Pins a Git install input to an exact commit without downloading it. */
   resolveGitSource: (args: { url: string; ref: string }) => Promise<PluginGitSourceResolution>
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>

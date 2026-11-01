@@ -7,10 +7,6 @@ import type {
   PluginActivationState,
   PluginConsentLists
 } from '../../shared/plugins/approval/plugin-consent-state'
-import type {
-  PluginHostCallOutcome,
-  PluginSurface
-} from '../../shared/plugins/frames/plugin-protocol'
 import {
   discoverPlugins,
   getPluginsDataDir,
@@ -19,13 +15,15 @@ import {
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
 import { PluginAuditLog, type PluginAuditEntry } from './plugin-audit-log'
-import { executePluginHostCallRequest } from './workers/plugin-host-call-adapter'
 import { PluginContentVerifier } from './plugin-content-integrity'
 import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
 import {
+  createPluginServiceHostCall,
+  pluginPanelBridgeServices,
   resolvePluginServiceHostCallPolicy,
-  type PluginHostCaller
+  type PluginServiceHostCall
 } from './plugin-service-host-call'
+import { PluginPanelBridge } from './panels/plugin-panel-bridge'
 import { PluginPanelController } from './panels/plugin-panel-controller'
 import { PluginWorkerController } from './workers/plugin-worker-controller'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
@@ -44,7 +42,7 @@ import { PluginContentPackRegistry } from './contributions/plugin-content-pack-r
 import type { PluginServiceOptions } from './plugin-service-options'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
 import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
-import { assertPluginWorkerCommand } from './plugin-command-invocation'
+import { invokePluginWorkerCommand } from './plugin-command-invocation'
 import { deliverPluginEvent } from './plugin-event-delivery'
 import { PluginInstallationState } from './installation/plugin-installation-state'
 
@@ -55,6 +53,8 @@ export class PluginService {
   private readonly contentVerifier = new PluginContentVerifier()
   readonly contentPacks: PluginContentPackRegistry
   readonly panels: PluginPanelController
+  readonly panelBridge: PluginPanelBridge
+  private readonly hostCall: PluginServiceHostCall
   private readonly changeListeners = new Set<(event: PluginChangeEvent) => void>()
   private readonly housekeeping = new PluginServiceHousekeeping()
   private runtimeDelegate: PluginRuntimeDelegate | null = null
@@ -76,12 +76,33 @@ export class PluginService {
     this.audit = new PluginAuditLog(getPluginsDataDir(options.userDataPath))
     const resolveApproved = (pluginKey: string, allowRefreshPause = false) =>
       this.findApprovedPlugin(pluginKey, allowRefreshPause)
+    this.panelBridge = new PluginPanelBridge({
+      findApprovedPlugin: (pluginKey) => resolveApproved(pluginKey),
+      grantedCapabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
+      ensureWorker: (plugin) => this.workerController.ensure(plugin),
+      runningWorker: (pluginKey) => this.workerController.runningHandle(pluginKey),
+      log: (pluginKey) => this.installed.captureLog(pluginKey, 'warn')
+    })
+    const panelServices = pluginPanelBridgeServices(this.panelBridge)
+    this.hostCall = createPluginServiceHostCall((pluginKey, caller) =>
+      resolvePluginServiceHostCallPolicy({
+        pluginKey,
+        caller,
+        findApprovedPlugin: resolveApproved,
+        runtimeDelegate: this.runtimeDelegate,
+        pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
+        desktop: this.options.getDesktopFrameServices?.(),
+        panels: panelServices,
+        audit: this.audit
+      })
+    )
     this.panels = new PluginPanelController({
       resolveApprovedPlugin: resolveApproved,
       contentVerifier: this.contentVerifier,
       executeHostCall: (pluginKey, method, params, surface, caller) =>
         this.executeHostCall(pluginKey, method, params, surface, caller),
-      log: (pluginKey) => this.installed.captureLog(pluginKey, 'error')
+      log: (pluginKey) => this.installed.captureLog(pluginKey, 'error'),
+      onSessionClosed: (panelId) => this.panelBridge.close(panelId)
     })
     this.workerController = new PluginWorkerController({
       entryPath: options.hostEntryPath ?? '',
@@ -94,6 +115,7 @@ export class PluginService {
       isApprovalKept: (spec) => isApprovedWorkerSpec(spec, resolveApproved(spec.pluginKey, true)),
       executeHostCall: (pluginKey, method, params) =>
         this.executeHostCall(pluginKey, method, params, 'worker'),
+      onPanelPost: (pluginKey, post) => this.panelBridge.onWorkerPost(pluginKey, post),
       log: (pluginKey) => this.installed.logs.capture(pluginKey),
       onStateChanged: () => this.notifyChanged(false)
     })
@@ -247,42 +269,13 @@ export class PluginService {
     return plugin ? capabilityKinds(plugin.manifest.capabilities) : null
   }
 
-  async executeHostCall(
-    pluginKey: string,
-    method: string,
-    params: unknown,
-    surface: PluginSurface,
-    caller?: PluginHostCaller
-  ): Promise<PluginHostCallOutcome> {
-    return executePluginHostCallRequest({
-      pluginKey,
-      request: { method, params },
-      surface,
-      resolvePolicy: (boundPluginKey) =>
-        resolvePluginServiceHostCallPolicy({
-          pluginKey: boundPluginKey,
-          caller,
-          findApprovedPlugin: (key, allowRefreshPause) =>
-            this.findApprovedPlugin(key, allowRefreshPause),
-          runtimeDelegate: this.runtimeDelegate,
-          pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
-          desktop: this.options.getDesktopFrameServices?.(),
-          audit: this.audit
-        })
-    })
+  executeHostCall(...args: Parameters<PluginServiceHostCall>): ReturnType<PluginServiceHostCall> {
+    return this.hostCall(...args)
   }
 
-  async invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
-    const plugin = this.findValidPlugin(pluginKey)
-    if (!plugin || !this.canStartPluginWork(plugin)) {
-      throw new Error(`plugin ${pluginKey} is not enabled`)
-    }
-    assertPluginWorkerCommand(plugin, commandId)
-    const handle = await this.workerController.ensure(plugin)
-    if (!handle.commands.includes(commandId)) {
-      throw new Error(`plugin ${pluginKey} registered no handler for ${commandId}`)
-    }
-    return handle.invokeCommand(commandId, args)
+  invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
+    const plugin = this.findApprovedPlugin(pluginKey)
+    return invokePluginWorkerCommand(pluginKey, plugin, this.workerController, commandId, args)
   }
 
   emitEvent(event: PluginEventName, payload: unknown): void {
@@ -298,6 +291,7 @@ export class PluginService {
       grantedCapabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
       logWarning: (pluginKey) => this.installed.captureLog(pluginKey, 'warn')
     })
+    this.panelBridge.publishEvent(event, payload)
   }
 
   removePlugin(pluginKey: string, remove: () => Promise<void>): Promise<void> {
@@ -333,6 +327,7 @@ export class PluginService {
     this.disposed = true
     this.housekeeping.dispose()
     this.panels.dispose()
+    this.panelBridge.dispose()
     // Why stop workers first: a refresh may be waiting on a worker slot only shutdown releases.
     await Promise.all([this.workerController.dispose(), this.refreshChain.catch(() => undefined)])
     await this.audit.flush()
