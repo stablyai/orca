@@ -1,4 +1,4 @@
-import type { NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatMessage } from '../native-chat-types'
 import { describe, expect, it } from 'vitest'
 import {
   nativeChatHistoryTurnFold,
