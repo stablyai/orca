@@ -1,3 +1,4 @@
+import { isCatalogObject } from '../../i18n-catalog-object'
 import type { PluginArtifactStrictness } from './plugin-theme-artifact'
 import {
   translatablePluginChrome,
@@ -92,14 +93,7 @@ type CatalogFrame = {
   depth: number
 }
 
-export function isCatalogObject(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.getPrototypeOf(value) === Object.prototype
-  )
-}
+export { isCatalogObject }
 
 /** Security copy that no language pack may replace. */
 export function isProtectedPluginTranslationPath(path: string): boolean {
