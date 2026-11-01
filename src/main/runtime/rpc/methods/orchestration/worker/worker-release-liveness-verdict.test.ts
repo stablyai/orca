@@ -83,6 +83,124 @@ describe('orchestration worker release liveness verdict', () => {
     )
   })
 
+  it('settles a host-certified exit whose close stops no PTY instead of wedging release_unknown', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial fixture with only the fields this release path reads; a full WorkerTerminalResourceRow is not needed here.
+    const resource = {
+      id: 'resource-1',
+      terminal_handle: 'term_worker',
+      host_scope: JSON.stringify({ kind: 'ssh', targetId: 'target-1' }),
+      archive_source: 'terminal',
+      archive_status: 'captured',
+      ownership_state: 'owned',
+      release_state: 'requested'
+    } as WorkerTerminalResourceRow
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial test double supplying exactly the runtime methods this release path calls; a full OrcaRuntimeService cannot be constructed in a unit test.
+    const runtime = {
+      showTerminal: vi.fn(async () => ({ handle: 'term_worker', connected: false })),
+      getTerminalPaneKey: vi.fn(() => 'tab-worker:leaf-worker'),
+      getTerminalProcessIncarnation: vi.fn(() => 'pty-worker:incarnation-1'),
+      getTerminalLivenessVerdict: vi.fn(() => ({ status: 'exited' })),
+      getOrchestrationDispatchAuthority: vi.fn(() => ({
+        hostScope: { kind: 'ssh', targetId: 'target-1' }
+      })),
+      // The process already exited, so the close finds nothing left to kill.
+      closeTerminal: vi.fn(async () => ({
+        handle: 'term_worker',
+        tabId: 'tab-worker',
+        ptyKilled: false
+      })),
+      notifyMessageArrived: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const markWorkerTerminalReleaseUnknown = vi.fn(() => ({
+      ...resource,
+      release_state: 'unknown'
+    }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial test double supplying exactly the DB methods this release path calls; a full OrchestrationDb cannot be constructed in a unit test.
+    const db = {
+      getWorkerDispatch: vi.fn(() => ({
+        agent_terminal_handle: 'term_worker',
+        created_at: '2026-08-16T00:00:00.000Z'
+      })),
+      isDispatchProcessCurrent: vi.fn(() => true),
+      workerTerminalResourceHasIdentityConflict: vi.fn(() => false),
+      getWorkerTerminalArchive: vi.fn(() => ({ kind: 'transcript_pin' })),
+      commitWorkerTerminalArchiveForRelease: vi.fn(() => ({
+        ...resource,
+        release_state: 'releasing'
+      })),
+      settleWorkerTerminalRelease: vi.fn(() => ({ ...resource, release_state: 'released' })),
+      markWorkerTerminalReleaseUnknown,
+      recordWorkerTerminalRecoveryAttempt: vi.fn()
+    } as unknown as OrchestrationDb
+
+    await expect(
+      completeWorkerTerminalRelease({ runtime, db, dispatchId: 'ctx-worker', resource })
+    ).resolves.toMatchObject({
+      state: 'released',
+      processAction: 'closed_exited_terminal'
+    })
+    expect(markWorkerTerminalReleaseUnknown).not.toHaveBeenCalled()
+  })
+
+  it('does not release a worker whose exited verdict came only from a disconnected terminal', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial fixture with only the fields this release path reads; a full WorkerTerminalResourceRow is not needed here.
+    const resource = {
+      id: 'resource-1',
+      terminal_handle: 'term_worker',
+      host_scope: JSON.stringify({ kind: 'local', hostId: 'local' }),
+      archive_source: 'terminal',
+      archive_status: 'captured',
+      ownership_state: 'owned',
+      release_state: 'requested'
+    } as WorkerTerminalResourceRow
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial test double supplying exactly the runtime methods this release path calls; a full OrcaRuntimeService cannot be constructed in a unit test.
+    const runtime = {
+      showTerminal: vi.fn(async () => ({ handle: 'term_worker', connected: false })),
+      getTerminalPaneKey: vi.fn(() => 'tab-worker:leaf-worker'),
+      getTerminalProcessIncarnation: vi.fn(() => 'pty-worker:incarnation-1'),
+      // No earned verdict: a disconnected terminal is lost contact, not proof the process ended.
+      getTerminalLivenessVerdict: vi.fn(() => null),
+      getOrchestrationDispatchAuthority: vi.fn(() => ({
+        hostScope: { kind: 'local', hostId: 'local' }
+      })),
+      closeTerminal: vi.fn(async () => ({
+        handle: 'term_worker',
+        tabId: 'tab-worker',
+        ptyKilled: false
+      })),
+      notifyMessageArrived: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const markWorkerTerminalReleaseUnknown = vi.fn(() => ({
+      ...resource,
+      release_state: 'unknown'
+    }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial test double supplying exactly the DB methods this release path calls; a full OrchestrationDb cannot be constructed in a unit test.
+    const db = {
+      getWorkerDispatch: vi.fn(() => ({
+        agent_terminal_handle: 'term_worker',
+        created_at: '2026-08-16T00:00:00.000Z'
+      })),
+      getDispatchContextById: vi.fn(() => ({ host_scope: resource.host_scope })),
+      isDispatchProcessCurrent: vi.fn(() => true),
+      workerTerminalResourceHasIdentityConflict: vi.fn(() => false),
+      getWorkerTerminalArchive: vi.fn(() => ({ kind: 'transcript_pin' })),
+      commitWorkerTerminalArchiveForRelease: vi.fn(() => ({
+        ...resource,
+        release_state: 'releasing'
+      })),
+      markWorkerTerminalReleaseUnknown,
+      recordWorkerTerminalRecoveryAttempt: vi.fn()
+    } as unknown as OrchestrationDb
+
+    await expect(
+      completeWorkerTerminalRelease({ runtime, db, dispatchId: 'ctx-worker', resource })
+    ).resolves.toMatchObject({
+      state: 'release_unknown',
+      processAction: 'closed_agent_terminal'
+    })
+    expect(markWorkerTerminalReleaseUnknown).toHaveBeenCalled()
+  })
+
   it.each([
     { name: 'a stale handle', error: 'terminal_handle_stale', state: 'released' },
     { name: 'a lost endpoint', error: 'endpoint is not connected', state: 'release_pending' }
