@@ -112,6 +112,17 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     streaming: false
   },
   {
+    id: 'whisper-medium-int8',
+    label: 'Whisper Medium (int8)',
+    description: '90+ languages. Much higher accuracy than Tiny, optional ~946MB download.',
+    type: 'whisper',
+    provider: 'local',
+    language: 'multilingual',
+    ...getSpeechModelDownloadMetadata('whisper-medium-int8'),
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
     id: 'sense-voice-zh-en-ja-ko-yue',
     label: 'SenseVoice',
     description:
