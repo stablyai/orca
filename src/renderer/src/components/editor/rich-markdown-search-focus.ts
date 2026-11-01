@@ -1,15 +1,29 @@
 import type { EditorView } from '@tiptap/pm/view'
-import { CellSelection } from '@tiptap/pm/tables'
+import type { Editor } from '@tiptap/core'
+import { completeRichMarkdownSelection } from './drag-selection-guard'
+
+export function prepareRichMarkdownSearchClose(
+  editor: Editor | null,
+  searchInput: HTMLElement | null
+): void {
+  if (!editor || editor.isDestroyed || !editor.view.dom.isConnected) {
+    return
+  }
+  const view = editor.view
+  const panel = searchInput?.closest('.rich-markdown-search')
+  if (panel?.contains(view.root.activeElement)) {
+    view.focus()
+  } else if (view.hasFocus()) {
+    // Capture-handled Escape bypasses the editor's keydown completion before highlights are removed.
+    completeRichMarkdownSelection(view)
+  }
+}
 
 export function focusRichMarkdownEditorFromSearch(
   event: MouseEvent,
-  view: Pick<EditorView, 'dom' | 'focus' | 'state'> | null
+  view: Pick<EditorView, 'dom' | 'focus'> | null
 ): void {
-  if (
-    !view ||
-    event.button !== 0 ||
-    (event.defaultPrevented && !(view.state.selection instanceof CellSelection))
-  ) {
+  if (!view || event.button !== 0 || event.defaultPrevented) {
     return
   }
 
@@ -34,11 +48,6 @@ export function focusRichMarkdownEditorFromSearch(
     return
   }
 
-  if (event.shiftKey || event.defaultPrevented) {
-    // Shift extends the current selection; handled cell selection has no browser default.
-    view.focus()
-  } else {
-    // Native focus preserves the browser's upcoming click or drag selection.
-    editorDom.focus({ preventScroll: true })
-  }
+  // Restore the anchor before ProseMirror starts a native gesture that can defer selection sync.
+  view.focus()
 }

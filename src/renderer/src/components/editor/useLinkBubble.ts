@@ -9,6 +9,7 @@ import {
   type RichMarkdownHtmlSuperscriptLinkContext
 } from './rich-markdown-html-superscript-link-context'
 import { copyRichMarkdownLink } from './rich-markdown-link-clipboard'
+import { flushPendingProseMirrorSelection } from './rich-markdown-selection-flush'
 
 // Keep state in the parent so callbacks created during editor initialization can access its setters.
 export function useLinkBubble(
@@ -105,6 +106,7 @@ export function useLinkBubble(
     if (!editor) {
       return
     }
+    flushPendingProseMirrorSelection(editor)
     editor.chain().focus().extendMarkRange('link').unsetLink().run()
     setLinkBubble(null)
     setIsEditingLink(false)
