@@ -18,7 +18,7 @@ type PluginFieldDoc = {
 
 // Why one suffix: these rules are enforced at runtime only (a pattern cannot express them), so
 // every path field states them where an editor shows the field.
-const PATH_RUNTIME_RULES =
+export const PLUGIN_PATH_RUNTIME_RULES =
   'Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.'
 
 /** pluginFieldDoc for a plugin-relative path field. */
@@ -27,7 +27,7 @@ export function pluginPathFieldDoc(
   since: string,
   examples?: readonly unknown[]
 ): PluginFieldDoc {
-  return pluginFieldDoc(`${description} ${PATH_RUNTIME_RULES}`, since, examples)
+  return pluginFieldDoc(`${description} ${PLUGIN_PATH_RUNTIME_RULES}`, since, examples)
 }
 
 /** Metadata the published JSON Schema and the author reference render for one field. */

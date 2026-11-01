@@ -88,6 +88,8 @@
     "verify:acp-protocol": "node config/scripts/acp/generate-protocol.mjs --check",
     "generate:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --write",
     "verify:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --check",
+    "generate:plugin-authoring-skill-references": "node config/scripts/generate-plugin-authoring-skill-references.mjs --write && node config/scripts/generate-bundled-skill-guides.mjs --write",
+    "verify:plugin-authoring-skill-references": "node config/scripts/generate-plugin-authoring-skill-references.mjs --check",
     "generate:skill-bundle-manifest": "node config/scripts/generate-skill-bundle-manifest.mjs --write",
     "verify:skill-bundle-manifest": "node config/scripts/generate-skill-bundle-manifest.mjs",
     "verify:macos-entitlements": "node config/scripts/verify-macos-entitlements.mjs",
