@@ -1,6 +1,6 @@
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { ABANDONED_SWEEP_GRACE_MS } from './forced-sweep-settlement'
 

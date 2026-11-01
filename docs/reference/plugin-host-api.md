@@ -33,7 +33,7 @@ Methods whose capability is `none` need no capability but still need the plugin 
 Branch, name and terminal ids of the focused workspace, or null when none is focused.
 
 ```ts
-(params: {}) => { branch: string; displayName: string; terminals: { id: string }[] } | null
+(params?: {}) => { branch: string; displayName: string; terminals: { id: string }[] } | null
 ```
 
 ### `terminal.sendText`
@@ -81,7 +81,7 @@ Removes a key from the plugin's private store.
 Lists the keys in the plugin's private store.
 
 ```ts
-(params: {}) => { keys: string[] }
+(params?: {}) => { keys: string[] }
 ```
 
 ### `secrets.get`
@@ -113,7 +113,7 @@ Removes a secret from the plugin's encrypted secrets file.
 How secrets are protected at rest: `os-keyring`, or `unavailable` (no OS key store, or Linux `basic_text`), where `secrets.set` fails.
 
 ```ts
-(params: {}) => { status: "os-keyring" | "unavailable" }
+(params?: {}) => { status: "os-keyring" | "unavailable" }
 ```
 
 ### `settings.get`
@@ -121,7 +121,7 @@ How secrets are protected at rest: `os-keyring`, or `unavailable` (no OS key sto
 Reads every setting the plugin owns.
 
 ```ts
-(params: {}) => { settings: Record<string, JSON> }
+(params?: {}) => { settings: Record<string, JSON> }
 ```
 
 ### `settings.set`
@@ -147,6 +147,16 @@ Offers data (a string or ArrayBuffer, up to 64 MiB) in Orca's save dialog; the p
 ```ts
 (params: { suggestedName?: string; mimeType?: string; data: string | ArrayBuffer }) => { status: "saved" | "cancelled" }
 ```
+
+## Events
+
+A worker receives the events its manifest lists in `contributes.events` through `orca.events.on(event, handler)`, which returns `{ dispose() }`. Each needs `main`, the `trusted-worker` profile and its domain's capability (`workspace:read` or `agent:read`). `orca plugin types` writes the payloads as `PluginEvents` in `orca/host`.
+
+| Event | Payload | Summary |
+| --- | --- | --- |
+| `workspace.created` | `{ workspaceId: string; kind: "worktree" \| "folder"; path: string; branch: string }` | A worktree workspace was created. |
+| `workspace.removed` | `{ workspaceId: string; kind: "worktree" \| "folder"; path: string }` | A worktree workspace was removed. |
+| `agent.status.changed` | `{ workspaceId: string \| null; paneKey: string; state: "working" \| "blocked" \| "waiting" \| "done"; receivedAt: number; mainAgent?: { state: "working" \| "blocked" \| "waiting" \| "done"; outcome?: "success" \| "failure" \| "cancellation" \| "superseded" \| "interruption" \| "unconfirmed"; stateStartedAt: number } }` | An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace. |
 
 ## Errors
 

@@ -1,9 +1,9 @@
-import { AgentSessionAssociationObservation } from '../../../../shared/agent-session-status-snapshot-fold'
+import { AgentSessionAssociationObservation } from '../../../../shared/agent-session/view/agent-session-status-snapshot-fold'
 // @vitest-environment happy-dom
 
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type {
   AiVaultListArgs,
   AiVaultListResult,

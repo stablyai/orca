@@ -6,7 +6,7 @@ import { assistantText } from './wsl-orcad-chat-assistant-text'
 import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-wire'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import {

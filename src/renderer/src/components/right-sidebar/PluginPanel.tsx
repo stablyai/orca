@@ -110,7 +110,9 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   if (declarative) {
     return guest && panelFrameKey ? (
       <PluginDeclarativePanel
-        key={panelFrameKey}
+        // A dev save keeps the panel (last good tree, memory atoms) and swaps only its guest.
+        key={guest.dev ? `${tabKey}:dev` : panelFrameKey}
+        hotReload={guest.dev === true}
         panelId={panel.id}
         title={panel.title}
         guest={guest}

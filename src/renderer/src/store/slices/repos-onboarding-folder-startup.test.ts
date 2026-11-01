@@ -10,7 +10,7 @@ import {
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
 

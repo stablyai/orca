@@ -1,5 +1,5 @@
 import { isAbsolute, join, relative, sep } from 'node:path'
-import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from '../../../shared/agent-session-attachments'
+import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from '../../../shared/agent-session/agent-session-attachments'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 export const AGENT_SESSION_ATTACHMENT_PART_FILE = '.upload.part'

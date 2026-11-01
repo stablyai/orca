@@ -1,6 +1,6 @@
 import { projectedAccountHome } from './structured-session-history-account'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { agentSessionOwnerObservationIsLive } from '../../shared/agent-session-lease-adjudication'
+import { agentSessionOwnerObservationIsLive } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import { historyRowFallsBackToChatLabel } from '../../shared/structured-chat-row-name'
@@ -17,7 +17,7 @@ import {
   terminalResumeBlocked,
   type StructuredProviderSessionOwnership
 } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   sessionHistoryBinaryNames,
   type StructuredAgentResumeInvocation,

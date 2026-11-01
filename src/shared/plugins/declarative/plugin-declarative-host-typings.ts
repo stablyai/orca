@@ -1,24 +1,18 @@
-import { pluginHostMethodTypeTexts } from '../workers/plugin-host-api-reference-doc'
-import { PLUGIN_HOST_API, pluginHostMethodsFor } from '../workers/plugin-host-api'
+import { renderPluginHostMethodMembers } from '../authoring/plugin-host-typings'
 
 /** Markers around the generated region of resources/plugins/declarative/orca.d.ts. */
 export const ORCA_HOST_TYPINGS_BEGIN = '  // <generated: host methods, from plugin-host-api.ts>'
 export const ORCA_HOST_TYPINGS_END = '  // </generated>'
 
-/** The panel's host methods as `HostMethods`, so `host.call` is typed from the same table. */
+/** The panel's host methods as `HostMethods`, from the same generator as `.orca/types/orca-host`. */
 export function renderOrcaHostTypings(): string {
-  const lines = [ORCA_HOST_TYPINGS_BEGIN, '  export type HostMethods = {']
-  for (const name of pluginHostMethodsFor('panel')) {
-    const spec = PLUGIN_HOST_API[name]
-    const types = pluginHostMethodTypeTexts(spec.params, spec.result)
-    const text = (value: string): string => value.replace(/\bJSON\b/g, 'JsonValue')
-    // A method without params takes none; `{}` would accept anything.
-    const params = types.params === '{}' ? 'Record<string, never>' : text(types.params)
-    lines.push(`    /** ${spec.summary} */`)
-    lines.push(`    '${name}': { params: ${params}; result: ${text(types.result)} }`)
-  }
-  lines.push('  }', ORCA_HOST_TYPINGS_END)
-  return lines.join('\n')
+  return [
+    ORCA_HOST_TYPINGS_BEGIN,
+    '  export type HostMethods = {',
+    `${renderPluginHostMethodMembers('    ', { surface: 'panel', compact: true }).trimEnd()}`,
+    '  }',
+    ORCA_HOST_TYPINGS_END
+  ].join('\n')
 }
 
 /** `file` with its generated region replaced; throws when the markers are missing. */

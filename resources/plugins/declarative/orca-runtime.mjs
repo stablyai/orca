@@ -7,12 +7,15 @@ var activeTracker = null;
 var ATOM_KEY = /^[A-Za-z0-9_.:-]{1,128}$/;
 var keyed = /* @__PURE__ */ new Map();
 var snapshot = {
+  memory: /* @__PURE__ */ new Map(),
   plugin: /* @__PURE__ */ new Map(),
   workspace: /* @__PURE__ */ new Map()
 };
 var onPersistedChange = null;
+var onMemoryChange = null;
+var writableAtoms = /* @__PURE__ */ new Set();
 function create(initial, fields = {}) {
-  return Object.freeze({
+  const created = Object.freeze({
     [ATOM]: {
       value: initial,
       initial,
@@ -23,9 +26,20 @@ function create(initial, fields = {}) {
       ...fields
     }
   });
+  if (!created[ATOM].readonly) {
+    writableAtoms.add(created[ATOM]);
+  }
+  return created;
+}
+function resetAtoms() {
+  snapshot.plugin = /* @__PURE__ */ new Map();
+  snapshot.workspace = /* @__PURE__ */ new Map();
+  for (const inner of writableAtoms) {
+    inner.value = inner.initial;
+  }
 }
 function stored(inner) {
-  if (!inner.key || inner.persist === "memory") {
+  if (!inner.key) {
     return { found: false };
   }
   const entry = snapshot[inner.persist].get(inner.key);
@@ -35,7 +49,7 @@ function stored(inner) {
   if (entry.version === inner.version) {
     return { found: true, value: entry.value };
   }
-  return inner.migrate ? { found: true, value: inner.migrate(entry.value, entry.version) } : { found: false };
+  return inner.migrate && inner.persist !== "memory" ? { found: true, value: inner.migrate(entry.value, entry.version) } : { found: false };
 }
 function atom(...args) {
   if (args.length === 1) {
@@ -99,11 +113,10 @@ function assign(inner, value, persist) {
   for (const listener of inner.listeners) {
     listener();
   }
-  if (persist && inner.key && inner.persist !== "memory") {
-    const target = keyed.get(inner.key);
-    if (target) {
-      onPersistedChange?.(target);
-    }
+  const target = persist && inner.key ? keyed.get(inner.key) : void 0;
+  const notify = inner.persist === "memory" ? onMemoryChange : onPersistedChange;
+  if (target) {
+    notify?.(target);
   }
 }
 function writable(target, verb) {
@@ -147,6 +160,13 @@ function persistedEntry(target) {
 function watchPersistedAtoms(listener) {
   onPersistedChange = listener;
 }
+function memoryEntry(target) {
+  const inner = state(target);
+  return inner.key && inner.persist === "memory" ? { key: inner.key, version: inner.version, value: inner.value } : null;
+}
+function watchMemoryAtoms(listener) {
+  onMemoryChange = listener;
+}
 function hydrateAtoms(scope, values) {
   snapshot[scope] = new Map(values);
   for (const target of keyed.values()) {
@@ -155,7 +175,9 @@ function hydrateAtoms(scope, values) {
       continue;
     }
     const hydrated = stored(inner);
-    assign(inner, hydrated.found ? hydrated.value : inner.initial, false);
+    if (hydrated.found || scope !== "memory") {
+      assign(inner, hydrated.found ? hydrated.value : inner.initial, false);
+    }
   }
 }
 
@@ -171,12 +193,17 @@ var PLUGIN_DECLARATIVE_MESSAGES = {
   ack: "ui.ack",
   /** guest → host, `{ document }`: the runtime is up and waits for `ui.hydrate` to render. */
   ready: "ui.ready",
-  /** host → guest, `{ panel?, visible?, plugin?, workspace? }`: persisted state and context. */
+  /**
+   * host → guest, `{ panel?, visible?, plugin?, workspace?, memory?, retain? }`: persisted state and
+   * context; `memory` hands keyed memory atoms to a dev hot reload, `retain` asks for `ui.retain`.
+   */
   hydrate: "ui.hydrate",
   /** host → guest, `{ visible }` */
   visibility: "ui.visibility",
   /** guest → host, `{ entries: [{ scope, key, version, value }] }`: persisted atoms changed. */
-  persist: "ui.persist"
+  persist: "ui.persist",
+  /** guest → host, `{ document, entries: [{ key, version, value? }] }`: keyed memory atoms changed. */
+  retain: "ui.retain"
 };
 var PLUGIN_DECLARATIVE_CATALOG_VERSION = 1;
 var PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
@@ -443,6 +470,115 @@ function createPersistQueue(options) {
   };
 }
 
+// src/shared/plugins/declarative/runtime/declarative-memory-retention.ts
+var RETAIN_DEBOUNCE_MS = 50;
+var RETAIN_BATCH = 64;
+function createMemoryRetention(post) {
+  const pending = /* @__PURE__ */ new Set();
+  let timer = null;
+  let started = false;
+  function flush() {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    const entries = [];
+    for (const target of pending) {
+      const entry = memoryEntry(target);
+      if (!entry) {
+        continue;
+      }
+      try {
+        assertPlainJson(entry.value, `atom "${entry.key}"`);
+        entries.push(entry);
+      } catch {
+        entries.push({ key: entry.key, version: entry.version });
+      }
+    }
+    pending.clear();
+    for (let start = 0; start < entries.length; start += RETAIN_BATCH) {
+      post(entries.slice(start, start + RETAIN_BATCH));
+    }
+  }
+  function add(target) {
+    pending.add(target);
+    timer ??= setTimeout(flush, RETAIN_DEBOUNCE_MS);
+  }
+  return {
+    start() {
+      if (!started) {
+        started = true;
+        watchMemoryAtoms(add);
+      }
+    },
+    flush,
+    stop() {
+      if (started) {
+        flush();
+        watchMemoryAtoms(null);
+        started = false;
+      }
+    }
+  };
+}
+
+// src/shared/plugins/declarative/runtime/declarative-error-location.ts
+var ORCA_RESERVED_PATH_PREFIX = "/__orca/";
+var STACK_FRAME_URL = /([a-z][a-z0-9+.-]*:\/\/[^\s()]+):(\d+):(\d+)\)?\s*$/i;
+function pageBase() {
+  return typeof location === "undefined" ? null : new URL("/", location.href).href;
+}
+function pluginErrorLocation(stack, base) {
+  for (const line of stack.split("\n")) {
+    const match = STACK_FRAME_URL.exec(line);
+    const url = match?.[1];
+    if (!match || !url?.startsWith(base)) {
+      continue;
+    }
+    const path = `/${url.slice(base.length).split(/[?#]/)[0] ?? ""}`;
+    if (path.startsWith(ORCA_RESERVED_PATH_PREFIX)) {
+      continue;
+    }
+    try {
+      return `${decodeURIComponent(path.slice(1))}:${match[2]}:${match[3]}`;
+    } catch {
+      return `${path.slice(1)}:${match[2]}:${match[3]}`;
+    }
+  }
+  return null;
+}
+function describePluginError(error, base = pageBase()) {
+  const message = error instanceof Error ? error.message : String(error);
+  const stack = error instanceof Error && typeof error.stack === "string" ? error.stack : "";
+  const at = base ? pluginErrorLocation(stack, base) : null;
+  if (!at) {
+    return message;
+  }
+  const file = at.replace(/:\d+:\d+$/, "");
+  return message.startsWith(`${file}:`) ? message : `${at}: ${message}`;
+}
+
+// src/shared/plugins/declarative/runtime/declarative-renderer-support.ts
+var MIN_RENDER_INTERVAL_MS = 16;
+var MAX_RETAINED_RENDERS = 32;
+var HYDRATION_TIMEOUT_MS = 3e3;
+function errorMessage(error) {
+  return describePluginError(error).slice(0, 4096);
+}
+function defaultSchedule(flush, delayMs) {
+  if (delayMs > 0) {
+    setTimeout(flush, delayMs);
+  } else {
+    queueMicrotask(flush);
+  }
+}
+function newDocumentId(now) {
+  return `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+function isCallable(value) {
+  return typeof value === "function";
+}
+
 // src/shared/plugins/declarative/runtime/declarative-host-messages.ts
 function readHostMessage(payload) {
   if (typeof payload !== "object" || payload === null) {
@@ -461,7 +597,9 @@ function readHostMessage(payload) {
     visible: "visible" in payload ? payload.visible : void 0,
     panelId: typeof panel === "object" && panel !== null && "id" in panel ? panel.id : void 0,
     plugin: "plugin" in payload ? payload.plugin : void 0,
-    workspace: "workspace" in payload ? payload.workspace : void 0
+    workspace: "workspace" in payload ? payload.workspace : void 0,
+    memory: "memory" in payload ? payload.memory : void 0,
+    retain: "retain" in payload ? payload.retain : void 0
   };
 }
 function readStoredValues(raw) {
@@ -482,7 +620,7 @@ function readStoredValues(raw) {
 }
 
 // src/shared/plugins/declarative/runtime/declarative-panel-context.ts
-function createPanelContext() {
+function createPanelContext(onRetain) {
   const visibility = hostAtom(true);
   const lifetime = new AbortController();
   const context = {
@@ -518,11 +656,14 @@ function createPanelContext() {
         context.panel = { id: message.panelId };
       }
       setVisibility(payload);
-      for (const scope of ["plugin", "workspace"]) {
+      for (const scope of ["plugin", "workspace", "memory"]) {
         const values = readStoredValues(message[scope]);
         if (values) {
           hydrateAtoms(scope, values);
         }
+      }
+      if (message.retain === true) {
+        onRetain?.();
       }
       resolve();
     },
@@ -531,25 +672,6 @@ function createPanelContext() {
 }
 
 // src/shared/plugins/declarative/runtime/declarative-renderer.ts
-var MIN_RENDER_INTERVAL_MS = 16;
-var MAX_RETAINED_RENDERS = 32;
-var HYDRATION_TIMEOUT_MS = 3e3;
-function errorMessage(error) {
-  return (error instanceof Error ? error.message : String(error)).slice(0, 4096);
-}
-function defaultSchedule(flush, delayMs) {
-  if (delayMs > 0) {
-    setTimeout(flush, delayMs);
-  } else {
-    queueMicrotask(flush);
-  }
-}
-function newDocumentId(now) {
-  return `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-function isCallable(value) {
-  return typeof value === "function";
-}
 function createOrcaDeclarativeRuntime(options) {
   const { post } = options;
   const bridge = options.bridge ?? null;
@@ -557,7 +679,10 @@ function createOrcaDeclarativeRuntime(options) {
   const now = options.now ?? (() => Date.now());
   const document2 = newDocumentId(now());
   const theme = hostAtom({ colorScheme: options.colorScheme ?? "dark" });
-  const panel = createPanelContext();
+  const retention = createMemoryRetention(
+    (entries) => post(PLUGIN_DECLARATIVE_MESSAGES.retain, { document: document2, entries })
+  );
+  const panel = createPanelContext(retention.start);
   const { context } = panel;
   let component = null;
   let revision = 0;
@@ -594,7 +719,14 @@ function createOrcaDeclarativeRuntime(options) {
     subscriptions = next;
   }
   function report(error) {
-    post(PLUGIN_DECLARATIVE_MESSAGES.error, { document: document2, revision, message: errorMessage(error) });
+    console.error(error instanceof Error && error.stack ? error.stack : String(error));
+    const stack = error instanceof Error && error.stack ? error.stack.slice(0, 8192) : void 0;
+    post(PLUGIN_DECLARATIVE_MESSAGES.error, {
+      document: document2,
+      revision,
+      message: errorMessage(error),
+      ...stack ? { stack } : {}
+    });
   }
   function retain(at, callbacks) {
     renders.set(at, callbacks);
@@ -693,7 +825,8 @@ function createOrcaDeclarativeRuntime(options) {
   ] : [];
   if (options.awaitHydration) {
     post(PLUGIN_DECLARATIVE_MESSAGES.ready, { document: document2 });
-    setTimeout(panel.markHydrated, HYDRATION_TIMEOUT_MS);
+    const fallback = setTimeout(panel.markHydrated, HYDRATION_TIMEOUT_MS);
+    void panel.hydrated.then(() => clearTimeout(fallback));
   } else {
     panel.markHydrated();
   }
@@ -746,12 +879,15 @@ function createOrcaDeclarativeRuntime(options) {
     dispatchEvent,
     acknowledge,
     hydrate: panel.hydrate,
+    rerender: () => render(),
     flush() {
       if (scheduled) {
         render();
       }
       flushPersist();
+      retention.flush();
     },
+    report,
     themeAtom: theme.atom,
     bridge,
     dispose() {
@@ -759,6 +895,7 @@ function createOrcaDeclarativeRuntime(options) {
         return;
       }
       flushPersist();
+      retention.stop();
       disposed = true;
       component = null;
       scheduled = false;
@@ -897,6 +1034,7 @@ function documentColorScheme() {
 }
 function installOrcaDeclarativeRuntime(options) {
   runtime?.dispose();
+  resetAtoms();
   const installed = createOrcaDeclarativeRuntime({
     bridge: globalBridge(),
     colorScheme: documentColorScheme(),

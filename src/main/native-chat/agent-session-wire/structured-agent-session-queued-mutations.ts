@@ -7,7 +7,7 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
   AgentSessionSendResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type {
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult

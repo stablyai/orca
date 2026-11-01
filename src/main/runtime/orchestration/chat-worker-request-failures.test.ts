@@ -18,11 +18,11 @@ import type { StructuredAgentSessionEndedChild } from '../../native-chat/agent-s
 import { hostTestMessage } from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { countChatFailureOperations } from './chat-worker-error-operation-counts.test-support'
 import { settleStructuredAgentSessionChildExit } from '../../native-chat/agent-session-wire/structured-agent-session-child-exit'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 it.each([100, 1000])(
   'bounds real committed observation and one failure with %i saved requests',

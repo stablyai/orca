@@ -1,11 +1,11 @@
 // Persist durable write-failure facts with queued cards; choose words at display via agent-session-refusal-notice.ts.
 
-import type { AgentSessionAccountKind } from '../../agent-session-availability'
+import type { AgentSessionAccountKind } from '../agent-session-availability'
 import {
   readAgentSessionRefusalDetails,
   type AgentSessionRefusalReason
 } from './agent-session-refusal-details'
-import type { AgentSessionRewindReason } from '../../agent-session-rewind'
+import type { AgentSessionRewindReason } from '../lifecycle/agent-session-rewind'
 import type { AgentSessionArgumentProblem } from '../agent-session-argument-problem'
 import type { TuiAgent } from '../../tui-agent'
 import type { CodexInstallationProblem } from '../../codex-cli-installation'

@@ -25,7 +25,7 @@ import {
   structuredAgentSessionHandoverOrigin
 } from './structured-agent-session-command-turn'
 import { carriedStoppedHistory } from './structured-agent-session-stopped-history-selection'
-import { withStoppedHistory } from '../../../shared/agent-session-stopped-history'
+import { withStoppedHistory } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import {
   markStructuredAgentSessionInputUnadmitted,
   beginStructuredAgentSessionHandover,

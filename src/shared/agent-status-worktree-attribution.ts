@@ -1,5 +1,5 @@
 import type { Tab } from './tab-types'
-import { structuredAgentSessionPaneKey } from './structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from './agent-session/view/structured-agent-session-projection'
 import type { AgentStatusEntry, AgentStatusOrchestrationContext } from './agent-status-types'
 import { isWebTerminalSurfaceTabId } from './terminal-surface-id'
 import { parseLegacyNumericPaneKey, parsePaneKey } from './stable-pane-id'

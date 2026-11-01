@@ -9,7 +9,7 @@ import type {
   AgentSessionHistoryPage,
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   backgroundTaskFingerprint,
   emitSubscriberFrame,

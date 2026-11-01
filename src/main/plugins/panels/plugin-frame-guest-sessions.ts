@@ -24,6 +24,7 @@ import {
   installPluginFrameGuestPolicies
 } from './plugin-frame-guest-policies'
 import { setPluginFrameGuestHooks } from './plugin-frame-guest-registry'
+import { installPluginFrameGuestDiagnostics } from './plugin-frame-guest-diagnostics'
 import { currentPluginFrameThemeSnapshot } from './plugin-frame-theme-snapshot'
 
 /**
@@ -215,7 +216,11 @@ export async function preparePluginFrameGuest(
     console.warn(`[plugins] isolated frame session for ${pluginKey} is unavailable:`, error)
     return null
   }
-  return { partition: pluginFramePartition(frameKey), url }
+  return {
+    partition: pluginFramePartition(frameKey),
+    url,
+    ...(plugin.isDev ? { dev: true as const } : {})
+  }
 }
 
 function admitAttach(partition: string, src: string): boolean {
@@ -231,6 +236,10 @@ function attachGuest(guest: WebContents, host: WebContents): boolean {
     return false
   }
   installPluginFrameGuestPolicies(guest, frameKey, host, () => source?.getKeybindings?.())
+  const pluginKey = pluginKeyByFrameKey.get(frameKey)
+  if (pluginKey) {
+    installPluginFrameGuestDiagnostics(guest, frameKey, pluginKey)
+  }
   return true
 }
 

@@ -2,7 +2,7 @@ import {
   AGENT_SESSION_AVAILABILITY_METHOD,
   decodeAgentSessionAvailabilityFrame,
   type AgentSessionAgentAvailability
-} from '../../../shared/agent-session-agent-availability'
+} from '../../../shared/agent-session/agent-session-agent-availability'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
 

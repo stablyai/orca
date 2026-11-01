@@ -15,7 +15,7 @@ import {
 import type { AgentSessionJournal } from './journal-store'
 import { openAgentSessionJournal } from './journal-store-factory'
 import { JournalWriteQueue } from './journal-write-queue'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalWriteQueueTests(): void {
   const IDENTITY = {
