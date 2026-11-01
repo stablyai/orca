@@ -19,6 +19,7 @@ function makeRequest(params: unknown): RpcRequest {
 function makeRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    getTerminalPtyIdForHandle: vi.fn().mockReturnValue('pty-1'),
     waitForGeneratedTerminalInput: vi.fn().mockResolvedValue(true),
     generatedInputScreenIsClear: vi.fn().mockResolvedValue(true),
     generatedInputRefusal: () => new Error('Claude could not take your prompt'),
