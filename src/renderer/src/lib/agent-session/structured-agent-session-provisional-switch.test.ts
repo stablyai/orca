@@ -160,9 +160,15 @@ async function mainLoadsStoreLayout(): Promise<void> {
   main = await drawTabsFromMain(useAppStore)
 }
 
-it.each([false, true])(
-  'opens the chat through real host admission and provisional/layout writers, newer navigation=%s',
-  async (navigate) => {
+it.each([
+  [false, 'kept'],
+  [true, 'kept'],
+  [false, 'before-pick'],
+  [true, 'before-pick'],
+  [true, 'after-pick']
+] as const)(
+  'opens the chat through real host admission and provisional/layout writers, newer navigation=%s, source %s',
+  async (navigate, sourceRemoval) => {
     // A pane with no terminal to capture (its shell exited) stops nothing and opens the chat.
     mocks.captured.current = false
     const source = useAppStore
@@ -242,9 +248,22 @@ it.each([false, true])(
     expect(mocks.stopped).not.toHaveBeenCalled()
     expect(mocks.create).not.toHaveBeenCalled()
     await main.settle()
+    // The shown tab can leave while the host decides (removing it selects a neighbour on its own),
+    // before or after the user picks another tab. This pins the admission wait only.
+    const removeSource = async () => {
+      useAppStore.getState().closeUnifiedTab(source.id)
+      await main.settle()
+    }
+    if (sourceRemoval === 'before-pick') {
+      await removeSource()
+    }
     if (navigate) {
       noteUserWorkspaceSwitch('wt-1')
       useAppStore.getState().activateTab(other.id)
+    }
+    if (sourceRemoval === 'after-pick') {
+      await main.settle()
+      await removeSource()
     }
     admission.resolve({ supported: true })
     await running
