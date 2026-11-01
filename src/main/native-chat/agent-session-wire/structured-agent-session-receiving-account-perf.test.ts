@@ -4,7 +4,7 @@ import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fix
 import { conversationRecordReader } from '../../runtime/orchestration/structured-session-lineage'
 import { structuredSessionMailReach } from '../../runtime/orchestration/structured-session-mail-address'
 import { dispatchReportMailbox } from '../../runtime/orchestration/dispatch-report-mailbox'
-import { structuredMailNotice } from '../../runtime/orchestration/structured-mail-source'
+import { structuredMailMessage } from '../../runtime/orchestration/structured-mail-source'
 import { observeReceivingSql } from './structured-agent-session-receiving-sql.test-support'
 import {
   agentSessionRecordFixture,
@@ -304,14 +304,14 @@ it.each([
       })
       await decide(RECEIVING_A)
       const next = await f.submit(
-        structuredMailNotice({
+        structuredMailMessage({
           db: f.db,
           mailboxHandle: `run:${run.id}`,
           dispatchId: null,
-          batch: { messages: [message], heldDeliveryId: undefined },
+          message,
           cliCommand: 'orca-dev',
           senderSnapshot: () => ({ name: null, agent: null })
-        })
+        }).body
       )
       await decide(RECEIVING_A)
       await f.turn(next.clientMessageId, 'completed')

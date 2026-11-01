@@ -24,7 +24,7 @@ import {
 } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { OrchestrationDb } from '../../runtime/orchestration/db'
 import { structuredNativeWorkReaders } from '../../runtime/structured-native-work-readers'
-import { structuredMailNotice } from '../../runtime/orchestration/structured-mail-source'
+import { structuredMailMessage } from '../../runtime/orchestration/structured-mail-source'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 
 export const RECEIVING_A = { variable: 'CLAUDE_CONFIG_DIR', path: '/qa/claude-profiles/qa-a/home' }
@@ -186,14 +186,14 @@ export async function createReceivingAccountFixture() {
       })
     })
   const body = (message: ReturnType<typeof finish>) =>
-    structuredMailNotice({
+    structuredMailMessage({
       db,
       mailboxHandle: `run:${run.id}`,
       dispatchId: null,
-      batch: { messages: [message], heldDeliveryId: undefined },
+      message,
       cliCommand: 'orca-dev',
       senderSnapshot: () => ({ name: null, agent: null })
-    })
+    }).body
   return {
     rig,
     record,
