@@ -10,7 +10,6 @@ import { findTerminalHttpLinkAtBufferPosition } from '../../../../shared/termina
 import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 import {
   buildHttpLinkActions,
-  httpLinkDirectClickDestination,
   openRoutedHttpLink,
   type HttpLinkActionDestinations,
   type HttpLinkDestination,
@@ -71,12 +70,14 @@ export function handleTerminalHttpLink(
   deps: UrlLinkHitTestDeps
 ): boolean {
   if (isTerminalHttpLinkActivation(event)) {
+    // Shift can invert only when both destinations are available; otherwise honor the sole destination.
     const forceDestination =
-      deps.actionDestinations &&
-      httpLinkDirectClickDestination(deps.actionDestinations, Boolean(event?.shiftKey))
+      event?.shiftKey && deps.actionDestinations?.alternate
+        ? undefined
+        : deps.actionDestinations?.primary
     openRoutedHttpLink(url, {
       ...deps,
-      modifierHeld: forceDestination ? false : Boolean(event?.shiftKey),
+      modifierHeld: Boolean(event?.shiftKey),
       forceDestination
     })
     return true
