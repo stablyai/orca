@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
-import { searchTaskPageJiraIssues } from './task-page-jira-search'
+import { searchScopedTaskPageJiraIssues, searchTaskPageJiraIssues } from './task-page-jira-search'
 
 const ISSUE: JiraIssue = {
   id: '10001',
@@ -34,6 +34,15 @@ describe('searchTaskPageJiraIssues', () => {
     expect(search.mock.calls).toEqual([['key = "ABC-1"']])
   })
 
+  it('looks up a bare issue number in the selected project, then falls back to its text', async () => {
+    const search = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([ISSUE])
+    await expect(searchTaskPageJiraIssues('400', search, 'input', ['PROJ'])).resolves.toEqual({
+      issues: [ISSUE],
+      jqlRejection: null
+    })
+    expect(search.mock.calls).toEqual([['key = "PROJ-400"'], ['text ~ "400*"']])
+  })
+
   it('retries a key-shaped search as text when no issue has that key', async () => {
     const search = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([ISSUE])
     await expect(searchTaskPageJiraIssues('utf-8', search)).resolves.toEqual({
@@ -55,6 +64,22 @@ describe('searchTaskPageJiraIssues', () => {
       jqlRejection: null
     })
     expect(search.mock.calls).toEqual([['key = "ABC-999"'], ['text ~ "abc 999*"']])
+  })
+
+  it('retries a multi-project lookup without the keys Jira says are missing', async () => {
+    const search = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("Error 400: An issue with key 'BET-400' does not exist for field 'key'.")
+      )
+      .mockResolvedValueOnce([ISSUE])
+    await expect(
+      searchTaskPageJiraIssues('400', search, 'input', ['ALP', 'BET', 'CAT'])
+    ).resolves.toEqual({ issues: [ISSUE], jqlRejection: null })
+    expect(search.mock.calls).toEqual([
+      ['key in ("ALP-400", "BET-400", "CAT-400")'],
+      ['key in ("ALP-400", "CAT-400")']
+    ])
   })
 
   it('does not mask a key lookup that failed for another reason', async () => {
@@ -194,4 +219,17 @@ it('surfaces invalid saved JQL without retrying it as a text search', async () =
   const search = vi.fn().mockRejectedValue(error)
   await expect(searchTaskPageJiraIssues('bad syntax', search, 'jql')).rejects.toBe(error)
   expect(search).toHaveBeenCalledTimes(1)
+})
+
+describe('searchScopedTaskPageJiraIssues', () => {
+  it('searches the text alone when the key lookup across projects exceeds the request limit', async () => {
+    const projects = Array.from({ length: 700 }, (_, index) => ({
+      id: String(index),
+      key: `PROJECT${index}`,
+      name: `Project ${index}`
+    }))
+    const search = vi.fn().mockResolvedValue([ISSUE])
+    await searchScopedTaskPageJiraIssues('400', search, 'input', false, null, projects)
+    expect(search.mock.calls).toEqual([['text ~ "400*"']])
+  })
 })

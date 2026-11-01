@@ -262,16 +262,15 @@ export function useSmartWorkspaceSecondarySearches({
       jiraConnectionStatus?.selectedSiteId ??
       jiraConnectionStatus?.activeSiteId ??
       null
-    void searchJiraIssuesByKeyOrText(jiraSearchQuery, (jql) =>
-      searchJiraIssues(
-        jiraProject ? restrictJiraQueryToProject(jql, jiraProject) : jql,
-        RESULT_LIMIT,
-        {
-          sourceContext: jiraSourceContext,
-          siteId,
-          signal: controller.signal
-        }
-      )
+    void searchJiraIssuesByKeyOrText(
+      jiraSearchQuery,
+      (jql) =>
+        searchJiraIssues(
+          jiraProject ? restrictJiraQueryToProject(jql, jiraProject) : jql,
+          RESULT_LIMIT,
+          { sourceContext: jiraSourceContext, siteId, signal: controller.signal }
+        ),
+      jiraProject ? [jiraProject.key] : undefined
     )
       .then((issues) => {
         if (!stale) {

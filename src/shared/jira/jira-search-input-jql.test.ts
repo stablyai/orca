@@ -141,4 +141,27 @@ describe('buildJiraIssueKeyJql', () => {
   it.each(['fix login', 'ABC-', '-12', 'ABC-12x', '', '   '])('is not a key: %j', (input) => {
     expect(buildJiraIssueKeyJql(input)).toBeNull()
   })
+
+  it.each([
+    ['400', 'key = "PROJ-400"'],
+    // A full key names its own project, so the selected one must not prefix it.
+    ['other-5', 'key = "OTHER-5"']
+  ])('within project PROJ: %s -> %s', (input, expected) => {
+    expect(buildJiraIssueKeyJql(input, ['PROJ'])).toBe(expected)
+  })
+
+  it.each([
+    ['400', 'key in ("ALP-400", "BET-400")'],
+    ['other-5', 'key = "OTHER-5"']
+  ])('within projects ALP and BET: %s -> %s', (input, expected) => {
+    expect(buildJiraIssueKeyJql(input, ['ALP', 'BET', 'alp'])).toBe(expected)
+  })
+
+  it.each(['400 crash', '#400', 'v400', '4.0'])('is not a key within a project: %j', (input) => {
+    expect(buildJiraIssueKeyJql(input, ['PROJ'])).toBeNull()
+  })
+
+  it('needs a project to read a bare number as a key', () => {
+    expect(buildJiraIssueKeyJql('400')).toBeNull()
+  })
 })
