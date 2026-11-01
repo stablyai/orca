@@ -16,6 +16,7 @@ import {
   ListAccountsParams,
   RemoveAccountParams,
   SelectAccountParams,
+  SelectClaudeAccountParams,
   SelectCodexAccountForTargetParams,
   HostAccountSignInStartParams,
   HostAccountSignInWaitParams,
@@ -142,8 +143,11 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.selectClaude',
     permission: 'accounts-admin',
-    params: SelectAccountParams,
-    handler: async (params, { runtime }) => runtime.selectClaudeAccount(params.accountId)
+    params: SelectClaudeAccountParams,
+    handler: async (params, { runtime }) =>
+      runtime.selectClaudeAccount(params.accountId, {
+        movesRunningSessions: params.movesRunningSessions
+      })
   }),
   defineMethod({
     name: 'accounts.selectCodex',
