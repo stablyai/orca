@@ -1,63 +1,16 @@
-import { z } from 'zod'
+import type { z } from 'zod'
+import { PLUGIN_EVENT_PAYLOAD_SCHEMAS, PLUGIN_EVENT_SUMMARIES } from '../events/plugin-events'
 import type { PluginErrorCode } from '../frames/plugin-protocol'
+import { PLUGIN_EVENT_NAMES } from '../manifest/plugin-manifest'
 import { PLUGIN_HOST_API_MAJOR } from './plugin-host-api-major'
 import { PLUGIN_HOST_API, PLUGIN_HOST_API_MINOR, PLUGIN_HOST_METHOD_NAMES } from './plugin-host-api'
-
-type JsonSchema = z.core.JSONSchema.BaseSchema
-
-function asSchema(node: z.core.JSONSchema._JSONSchema | undefined): JsonSchema {
-  return typeof node === 'object' ? node : {}
-}
-
-/** TypeScript-like type text, so a method reads as a signature rather than a JSON Schema dump. */
-function typeText(schema: JsonSchema): string {
-  if (schema.const !== undefined) {
-    return JSON.stringify(schema.const)
-  }
-  if (schema.enum) {
-    return schema.enum.map((value) => JSON.stringify(value)).join(' | ')
-  }
-  if (schema.anyOf) {
-    return schema.anyOf.map((node) => typeText(asSchema(node))).join(' | ')
-  }
-  if (schema.type === 'array') {
-    const item = typeText(asSchema(Array.isArray(schema.items) ? undefined : schema.items))
-    return item.includes(' ') && !item.startsWith('{') ? `(${item})[]` : `${item}[]`
-  }
-  if (schema.type === 'object' && schema.properties) {
-    const required = new Set(schema.required ?? [])
-    const fields = Object.entries(schema.properties).map(
-      ([key, node]) => `${key}${required.has(key) ? '' : '?'}: ${typeText(asSchema(node))}`
-    )
-    return fields.length === 0 ? '{}' : `{ ${fields.join('; ')} }`
-  }
-  if (schema.type === 'object' && typeof schema.additionalProperties === 'object') {
-    return `Record<string, ${typeText(schema.additionalProperties)}>`
-  }
-  if (schema.type === 'integer') {
-    return 'number'
-  }
-  if (Array.isArray(schema.type)) {
-    return schema.type.join(' | ')
-  }
-  return schema.type ?? 'JSON'
-}
-
-/** A method's params (as passed) and result (as returned), as TypeScript-like type text. */
-export function pluginHostMethodTypeTexts(
-  params: z.ZodType,
-  result: z.ZodType
-): { params: string; result: string } {
-  const options = { target: 'draft-2020-12', unrepresentable: 'any' } as const
-  return {
-    params: typeText(z.toJSONSchema(params, { ...options, io: 'input' })),
-    result: typeText(z.toJSONSchema(result, { ...options, io: 'output' }))
-  }
-}
+import { REFERENCE_TYPE_TEXT, zodTypeText } from './plugin-schema-type-text'
 
 function signature(params: z.ZodType, result: z.ZodType): string {
-  const types = pluginHostMethodTypeTexts(params, result)
-  return `(params: ${types.params}) => ${types.result}`
+  const input = zodTypeText(params, 'input', REFERENCE_TYPE_TEXT)
+  // Why parse: a top-level `.optional()` is lost in the type text, yet the call may omit params.
+  const omittable = params.safeParse(undefined).success
+  return `(params${omittable ? '?' : ''}: ${input}) => ${zodTypeText(result, 'output', REFERENCE_TYPE_TEXT)}`
 }
 
 // Why a Record: a new error code fails typecheck until it is documented here.
@@ -117,6 +70,19 @@ export function renderPluginHostApiReference(): string {
       '```'
     )
   }
+  lines.push(
+    '',
+    '## Events',
+    '',
+    "A worker receives the events its manifest lists in `contributes.events` through `orca.events.on(event, handler)`, which returns `{ dispose() }`. Each needs `main`, the `trusted-worker` profile and its domain's capability (`workspace:read` or `agent:read`). `orca plugin types` writes the payloads as `PluginEvents` in `orca/host`.",
+    '',
+    '| Event | Payload | Summary |',
+    '| --- | --- | --- |',
+    ...PLUGIN_EVENT_NAMES.map(
+      (name) =>
+        `| \`${name}\` | \`${zodTypeText(PLUGIN_EVENT_PAYLOAD_SCHEMAS[name], 'output', REFERENCE_TYPE_TEXT).replaceAll('|', '\\|')}\` | ${PLUGIN_EVENT_SUMMARIES[name]} |`
+    )
+  )
   lines.push(
     '',
     '## Errors',

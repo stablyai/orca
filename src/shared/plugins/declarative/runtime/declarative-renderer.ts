@@ -106,6 +106,8 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
   }
 
   function report(error: unknown): void {
+    // Why the stack text: main routes guest console errors to `orca plugin logs`, file:line included.
+    console.error(error instanceof Error && error.stack ? error.stack : String(error))
     post(PLUGIN_DECLARATIVE_MESSAGES.error, { document, revision, message: errorMessage(error) })
   }
 

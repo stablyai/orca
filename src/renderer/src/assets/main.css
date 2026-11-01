@@ -33,6 +33,8 @@
 
 /* Gate hover hiding behind can-hover so touch controls remain visible. */
 @custom-variant can-hover (@media (hover: hover));
+/* Set by use-reduce-visual-effects for the setting or OS reduced transparency. */
+@custom-variant reduce-effects (&:where(:root[data-reduce-effects] *));
 
 .theme-transition-disabled *,
 .theme-transition-disabled *::before,
@@ -938,26 +940,40 @@ body[data-modal-overlay-open]
   background-position: center, var(--orca-theme-background-position);
 }
 
+/* The window material (window-material-options.ts) is the backdrop; an opaque body would cover it.
+   A theme image keeps its opaque base so its letterbox and veil never expose the desktop. */
+:root[data-window-material]:not([data-theme-background]) body {
+  background-color: transparent;
+}
+
 /* Only terminal bodies are translucent; other tabs, empty groups and split gutters keep the old base. */
-:root[data-theme-background] [data-tab-group-body-id]:not([data-translucent-tab-body]),
-:root[data-theme-background] .tab-group-split-resize-handle {
+:root:is([data-window-material], [data-theme-background])
+  [data-tab-group-body-id]:not([data-translucent-tab-body]),
+:root:is([data-window-material], [data-theme-background]) .tab-group-split-resize-handle {
   background-color: var(--background);
 }
 
-/* The seam's translucent border blended over the opaque body; keep that base so no image slit shows. */
-:root[data-theme-background] .workspace-sidebar-seam {
+/* The modal blur samples transparent pixels past the window edge; keep it over an opaque base. */
+:root[data-window-material] body:is([data-modal-overlay-open], [data-onboarding-overlay-open]) {
+  background-color: var(--background);
+}
+
+/* The seam's translucent border blended over the backdrop; keep that base so no slit shows. */
+:root:is([data-window-material], [data-theme-background]) .workspace-sidebar-seam {
   background: linear-gradient(var(--background), var(--background)) left / 1px 100% no-repeat
     border-box;
 }
 
 /* Blur source regions independently so status-bar animation cannot re-filter the workspace. */
-body:is([data-modal-overlay-open], [data-onboarding-overlay-open])
+:root:not([data-reduce-effects])
+  body:is([data-modal-overlay-open], [data-onboarding-overlay-open])
   .app-layout
   > :not(.window-controls) {
   filter: blur(2px);
 }
 
-body
+:root:not([data-reduce-effects])
+  body
   > :is(
     [data-slot='dialog-content'],
     [data-slot='command-dialog-content'],
@@ -965,6 +981,18 @@ body
     [data-onboarding-overlay]
   ):has(~ [data-slot='dialog-overlay'], ~ [data-slot='sheet-overlay']) {
   filter: blur(2px);
+}
+
+/* Reduce visual effects (#20936): no blur passes over the workspace, and solid floating surfaces. */
+:root[data-reduce-effects] {
+  --floating-surface: var(--popover);
+  --dialog-surface: var(--background);
+}
+
+:root[data-reduce-effects] *,
+:root[data-reduce-effects] *::before,
+:root[data-reduce-effects] *::after {
+  backdrop-filter: none !important;
 }
 
 /* Why: native windows have a stable content box and need no wake-time viewport reflow. */

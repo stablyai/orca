@@ -266,7 +266,7 @@ export default function TabGroupPanel({
             }`
           : ''
       }`}
-      // Why not over a theme image: group opacity would let it bleed through opaque chrome.
+      // Why not over a window backdrop (material or theme image): group opacity would let it bleed through opaque chrome.
       style={
         hasSplitGroups && !isFocused && !backdropActive
           ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }

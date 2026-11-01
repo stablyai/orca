@@ -15,10 +15,10 @@
     "resources/plugins/declarative/orca.d.ts",
     "examples/plugins/*/dist/**",
     "docs/schemas/plugins/**/*.schema.json",
-    "examples/plugins/*/orca-plugin.v2.schema.json",
     "docs/reference/plugin-manifest.md",
     "docs/reference/plugin-catalog.md",
     "docs/reference/plugin-host-api.md",
+    "resources/plugins/types/orca-host.d.ts",
     "docs/reference/plugin-theme-tokens.md"
   ]
 }

@@ -7,6 +7,7 @@ import type { WatcherProcessSubscription } from '../ipc/filesystem/watcher-proce
 import { resolveWatcherRootPaths } from '../ipc/watcher-event-root-path-rewrite'
 import { watcherDirectoryIdentity } from '../ipc/watcher-directory-identity'
 import { bumpPluginDevRevision } from './plugin-dev-revision'
+import { isIgnoredPluginDevPath, PLUGIN_DEV_WATCH_IGNORE } from './plugin-dev-watcher-ignore'
 
 // Deleted roots can reject unsubscribe after the native stream has stopped.
 function releaseSubscription(subscription: WatcherProcessSubscription): void {
@@ -84,7 +85,10 @@ export class PluginDevWatcher {
       }
       this.subscribe(
         requestedRoot,
-        process.platform === 'win32' ? { backend: 'windows' } : {},
+        {
+          ...(process.platform === 'win32' ? { backend: 'windows' } : {}),
+          ignore: [...PLUGIN_DEV_WATCH_IGNORE]
+        },
         false,
         refresh,
         onWatcherError
@@ -188,6 +192,15 @@ export class PluginDevWatcher {
       path,
       (error, events) => {
         if (!isActive()) {
+          return
+        }
+        // Why: a refresh remounts panels, so churn in folders that never ship must not cause one.
+        if (
+          !error &&
+          !parent &&
+          events.length > 0 &&
+          events.every((event) => isIgnoredPluginDevPath(path, event.path))
+        ) {
           return
         }
         if (error || events.some((event) => event.type === 'delete' && event.path === path)) {

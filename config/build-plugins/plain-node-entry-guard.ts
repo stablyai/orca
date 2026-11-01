@@ -60,8 +60,8 @@ const WORKER_THREAD_ENTRY_NAMES = [
   'usage-scan-worker-entry',
   'workspace-space-scan-worker-entry',
   'claude-profile-setup-worker-entry',
-  'profile-state-backup-worker-entry',
-  'profile-state-writer-worker-entry'
+  ...(['backup', 'writer'] as const).map((kind) => `profile-state-${kind}-worker-entry` as const),
+  'plugin-source-transpile-worker-entry'
 ] as const
 
 export const GUARDED_ENTRY_NAMES = [
