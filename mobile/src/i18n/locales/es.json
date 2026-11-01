@@ -2742,7 +2742,6 @@
       "checkingReviewStatus": "Comprobando estado de revisión.",
       "checkoutBeforePublish": "Haz checkout de una rama antes de publicar commits.",
       "commitStagedChanges": "Haz commit de los cambios preparados.",
-      "commits": "Commits",
       "committing": "Commit en curso.",
       "createPr": "Crear PR",
       "enterCommitMessage": "Introduce un mensaje de commit para hacer commit.",
@@ -2772,25 +2771,11 @@
       "resolveFailed": "No se pudo determinar la base de la rama"
     },
     "branchCard": {
-      "branchCount": "{{count}} en la rama",
-      "changedCount": "{{count}} con cambios",
-      "cherryPickState": "cherry-pick",
-      "mergeState": "merge",
-      "rebaseState": "rebase",
-      "stagedCount": "{{count}} en stage",
       "completingMerge": "Finalizando…",
       "completeMerge": "Completar fusión"
     },
     "branchCompare": {
-      "commits_many": "{{count}} commits",
-      "commits_one": "{{count}} commit",
-      "commits_other": "{{count}} commits",
-      "files_many": "{{count}} archivos",
-      "files_one": "{{count}} archivo",
-      "files_other": "{{count}} archivos",
-      "sectionTitle": "Commits en la rama",
-      "summary": "{{files}} - frente a {{baseRef}}",
-      "summaryWithCommits": "{{files}} - {{commits}} - frente a {{baseRef}}"
+      "sectionTitle": "Commits en la rama"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "No se pudo determinar la rama base para la comparación.",
@@ -2849,11 +2834,8 @@
       "emptyMessage": "El árbol de trabajo está limpio.",
       "emptyTitle": "No hay cambios locales",
       "generateMessage": "Generar mensaje de commit con IA",
-      "openActions": "Abrir acciones de control de código fuente",
       "reconnecting": "Reconectando con el escritorio…",
-      "regenerateHint": "Borre el mensaje para regenerar.",
-      "stageAll": "Hacer stage de todo",
-      "unstageAll": "Quitar todo del stage"
+      "regenerateHint": "Borre el mensaje para regenerar."
     },
     "createPrAction": {
       "checkingStatus": "Comprobando estado de revisión…",
@@ -2889,20 +2871,15 @@
       "titleUnpublishedForcePushCount_one": "Haz force push con lease de {{count}} commit de la rama y configura un upstream si es necesario.",
       "titleUnpublishedForcePushCount_other": "Haz force push con lease de {{count}} commits de la rama y configura un upstream si es necesario."
     },
-    "fileList": {
-      "committedSection": "Commits en la rama"
-    },
     "fileRows": {
       "addedByThem": "Agregado por ellos",
       "addedByUs": "Agregado por nosotros",
       "bothAdded": "Agregado por ambos",
       "bothDeleted": "Eliminado por ambos",
       "bothModified": "Modificado por ambos",
-      "committedSection": "Commits en la rama",
       "committedUnavailable": "Los cambios confirmados no están disponibles.",
       "deletedByThem": "Eliminado por ellos",
       "deletedByUs": "Eliminado por nosotros",
-      "discardFile": "Descartar {{path}}",
       "loadingCommitted": "Cargando cambios confirmados…",
       "openChangedFile": "Abrir archivo modificado {{path}}",
       "openCommittedChange": "Abrir cambio confirmado en {{path}}",
@@ -2940,9 +2917,7 @@
       "waitingForDesktop": "Esperando al escritorio…"
     },
     "gitStatus": {
-      "changes": "Cambios",
-      "conflicts": "Conflictos",
-      "stagedChanges": "Cambios preparados"
+      "conflicts": "Conflictos"
     },
     "header": {
       "backToSession": "Volver a la sesión",
@@ -3010,7 +2985,6 @@
       "waitingForDesktop": "Esperando al escritorio…"
     },
     "modals": {
-      "actionsTitle": "Control de código fuente",
       "currentBranch": "actual",
       "discardButton": "Descartar",
       "discardConfirmMessage": "¿Descartar los cambios de \"{{path}}\"? Esta acción no se puede deshacer.",
@@ -3022,16 +2996,6 @@
     },
     "panel": {
       "unavailableTitle": "Control de código fuente no disponible"
-    },
-    "prChip": {
-      "createPr": "Crear pull request",
-      "loading": "Cargando pull request…",
-      "loadingLabel": "Cargando pull request",
-      "openLabel": "Pull request #{{number}}, {{state}}, {{checks}}. Abrir pull request.",
-      "openWithComments_many": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} comentarios sin resolver. Abrir pull request.",
-      "openWithComments_one": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} comentario sin resolver. Abrir pull request.",
-      "openWithComments_other": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} comentarios sin resolver. Abrir pull request.",
-      "unavailableLabel": "Pull request no disponible: {{message}}"
     },
     "prCreate": {
       "authRequired": "Autentícate antes de crear una {{reviewLabel}}.",
@@ -3120,7 +3084,6 @@
       "noBranch": "Sin rama"
     },
     "state": {
-      "noUpstream": "Sin upstream",
       "syncStatus": "{{ahead}} por delante, {{behind}} por detrás"
     },
     "textGenerationFailure": {

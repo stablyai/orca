@@ -1,22 +1,10 @@
 import type { CliStatusCaller } from '../shared/orchestration-caller-status'
 import type { CliStatusResult } from '../shared/runtime-types'
-import { formatBrowserActionEffects } from './browser-format'
+import { formatBrowserActionEffects } from './browser/browser-format'
 import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcSuccess } from './runtime-client'
 
 export { formatCliError, reportCliError, type CliErrorContext } from './cli-error'
-
-export {
-  formatBrowserProfileList,
-  formatScreenshot,
-  formatSnapshot,
-  formatTabList,
-  formatTabListWithProfiles,
-  formatTabProfileClone,
-  formatTabProfileShow,
-  formatTabShow,
-  saveBrowserScreenshot
-} from './browser-format'
 
 export {
   formatComputerAction,
