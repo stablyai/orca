@@ -84,8 +84,9 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     flex: 1,
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
-    fontSize: 13,
-    lineHeight: 19,
+    // iOS zooms the page when a field under 16px takes focus; a literal, not the seam, avoids an extra shared chunk.
+    fontSize: 16,
+    lineHeight: 22,
     padding: 0
   }
 }))
