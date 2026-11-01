@@ -756,7 +756,12 @@ it('reads and applies the recorded 1.4.1 grouped model and Effort options', asyn
     recording: v141,
     control: (agent, frame) => {
       const { configId, value } = SetSessionConfigOptionRequestSchema.parse(frame.params)
-      const reply = configId === 'model' ? (value === FLASH ? null : 'legacy') : value
+      const reply =
+        configId === 'model'
+          ? value === FLASH
+            ? null
+            : 'legacy'
+          : SessionConfigValueIdSchema.parse(value)
       if (!reply) {
         return false
       }
