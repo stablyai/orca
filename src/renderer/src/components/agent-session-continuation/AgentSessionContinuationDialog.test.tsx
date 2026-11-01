@@ -10,6 +10,11 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useNativeChatHandOff } from '../native-chat/use-native-chat-hand-off'
 import { AgentSessionContinuationDialog } from './AgentSessionContinuationDialog'
 import * as rpc from '@/runtime/runtime-rpc-subscribe'
+import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
@@ -430,7 +435,73 @@ it('ignores a detected agent this build does not know when explaining the exclud
   ).toBeTruthy()
 })
 
-// Last: the host's published chat availability outlives this test.
+it('keeps the no-agents explanation when host preferences disable the desktop-enabled source', async () => {
+  const supports = vi.spyOn(runtimeRpc, 'runtimeEnvironmentSupportsCapability')
+  const call = vi.spyOn(runtimeRpc, 'callRuntimeRpc')
+  supports.mockResolvedValue(true)
+  call.mockResolvedValue({
+    settings: projectAgentLaunchSettings({
+      disabledTuiAgents: getAgentCatalog().map((agent) => agent.id)
+    })
+  })
+  replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 7 }])
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'claude')
+        .map((agent) => agent.id)
+    },
+    runtimeStatusByEnvironmentId: new Map([
+      [
+        'alpha',
+        {
+          status: {
+            runtimeId: 'runtime-1',
+            capabilities: [CHAT],
+            rendererGraphEpoch: 0,
+            graphStatus: 'ready',
+            authoritativeWindowId: null,
+            liveTabCount: 0,
+            liveLeafCount: 0
+          },
+          checkedAt: 1
+        }
+      ]
+    ]),
+    worktreesByRepo: {
+      'repo-1': [
+        makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'runtime:alpha' })
+      ]
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: ['claude'] })
+  try {
+    render(
+      <AgentSessionContinuationDialog
+        open
+        request={{
+          ...request,
+          source: { ...request.source, sourceAgent: 'claude' },
+          avoidSourceAgent: true
+        }}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: TooltipProvider }
+    )
+    await act(async () => {})
+    expect(call).toHaveBeenCalled()
+    expect(screen.getByText('No enabled Agents were detected on this workspace host.')).toBeTruthy()
+    expect(screen.queryByText(/Only Agents sharing/)).toBeNull()
+  } finally {
+    supports.mockRestore()
+    call.mockRestore()
+    clearHostAgentMenuSettingsForTests()
+    replaceRuntimeEnvironmentRevisions([])
+  }
+})
+
+// Last: the host's published chat availability outlives these tests.
 it('explains the excluded family when the source agent is offered only as a chat', async () => {
   setLocalRuntimeCapabilitiesForTests([CHAT, AVAILABILITY])
   vi.spyOn(rpc, 'subscribeRuntimeRpc').mockImplementation(
@@ -474,4 +545,45 @@ it('explains the excluded family when the source agent is offered only as a chat
   expect(
     screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
   ).toBe(true)
+})
+
+it('keeps the no-agents explanation when the source agent only has a chat that cannot open here', async () => {
+  setLocalRuntimeCapabilitiesForTests([CHAT, AVAILABILITY])
+  vi.spyOn(rpc, 'subscribeRuntimeRpc').mockImplementation(
+    async (_target, _method, _params, handlers) => {
+      queueMicrotask(() =>
+        handlers.onEvent({
+          type: 'availability',
+          agents: [{ agent: 'claude', state: 'available', chatProgram: 'available' }]
+        })
+      )
+      return { unsubscribe: () => {} }
+    }
+  )
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'claude')
+        .map((agent) => agent.id)
+    }
+  })
+  // The root offers Claude's chat, but its row here is unavailable (subfolder) and no CLI exists.
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: [] })
+  render(
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'claude' },
+        avoidSourceAgent: true,
+        initialCwd: '/repo/packages/app'
+      }}
+      onOpenChange={vi.fn()}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  await act(async () => {})
+  expect(screen.getByText('No enabled Agents were detected on this workspace host.')).toBeTruthy()
+  expect(screen.queryByText(/Only Agents sharing/)).toBeNull()
 })

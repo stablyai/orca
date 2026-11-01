@@ -96,11 +96,10 @@ export function AgentSessionContinuationDialog({
   const offered = workspace
     ? agentsOfferedForLaunch(useAppStore.getState(), workspace, detectedIds)
     : []
-  const enabledAgents = getAgentCatalog().filter((agent) =>
-    isTuiAgentEnabled(agent.id, disabledAgents)
-  )
-  const agents = enabledAgents.filter((agent) =>
-    isContinuationAgentAllowed(agent.id, request?.source.sourceAgent, request?.avoidSourceAgent)
+  const agents = getAgentCatalog().filter(
+    (agent) =>
+      isTuiAgentEnabled(agent.id, disabledAgents) &&
+      isContinuationAgentAllowed(agent.id, request?.source.sourceAgent, request?.avoidSourceAgent)
   )
   const destinationModel =
     observation.model.state === 'settled'
@@ -119,11 +118,21 @@ export function AgentSessionContinuationDialog({
         offered.includes(agent) &&
         rows.some((row) => row.agent === agent && row.kind !== 'chat-unavailable')
     )
-  // Catalog membership drops ids a newer host reports that this build cannot launch.
-  const offeredEnabledAgents = enabledAgents.filter((agent) => offered.includes(agent.id))
+  // Why: the explanation must read the same host rows the picker shows, before the family filter.
+  const openableRows =
+    observation.model.state === 'settled'
+      ? observation.model.rows.filter((row) => row.kind !== 'chat-unavailable')
+      : []
   const onlySourceFamilyOffered =
-    offeredEnabledAgents.length > 0 &&
-    offeredEnabledAgents.every((agent) => !agents.includes(agent))
+    openableRows.length > 0 &&
+    openableRows.every(
+      (row) =>
+        !isContinuationAgentAllowed(
+          row.agent,
+          request?.source.sourceAgent,
+          request?.avoidSourceAgent
+        )
+    )
   const preparing = request === null
   const controlsDisabled = preparing || detecting || starting
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
