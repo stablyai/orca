@@ -1,11 +1,12 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { DocPreviewGrantLocation } from '@/lib/doc-preview-grants'
+import type { TerminalArtifactGrantTarget } from '@/runtime/runtime-terminal-artifact-grant'
 import { readDocPreviewArtifactRequest } from './doc-preview-artifact-share'
 
 const mocks = vi.hoisted(() => ({ acquire: vi.fn(), call: vi.fn() }))
 vi.mock('@/runtime/runtime-terminal-artifact-grant', () => ({
   acquireTerminalArtifactGrant: mocks.acquire,
-  pinTerminalArtifactGrantTarget: (target: object) => ({
+  pinTerminalArtifactGrantTarget: (target: TerminalArtifactGrantTarget) => ({
     ...target,
     expectedEnvironmentPairingRevision: 12
   })
